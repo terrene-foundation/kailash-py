@@ -1,0 +1,189 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    kubeadm.kubernetes.io/kube-apiserver.advertise-address.endpoint: "0.0.0.0:6443"
+  labels:
+    component: kube-apiserver
+    tier: control-plane
+  name: kube-apiserver
+  namespace: kube-system
+spec:
+  containers:
+  - command:
+    - kube-apiserver
+    # CIS 1.2.1 - Disable anonymous authentication
+    - --anonymous-auth=false
+    # CIS 1.2.2 - Disable token authentication if using other methods
+    - --token-auth-file=""
+    # CIS 1.2.3 - Use kubelet HTTPS
+    - --kubelet-https=true
+    # CIS 1.2.4 - Use kubelet client certificate authentication
+    - --kubelet-client-certificate=/etc/kubernetes/pki/apiserver-kubelet-client.crt
+    - --kubelet-client-key=/etc/kubernetes/pki/apiserver-kubelet-client.key
+    # CIS 1.2.5 - Verify kubelet certificates
+    - --kubelet-certificate-authority=/etc/kubernetes/pki/ca.crt
+    # CIS 1.2.6 - Disable AlwaysAllow authorization mode
+    - --authorization-mode=Node,RBAC
+    # CIS 1.2.7 - Enable admission controllers
+    - --enable-admission-plugins=NodeRestriction,ResourceQuota,PodSecurityPolicy,NamespaceLifecycle,ServiceAccount,DefaultStorageClass,ValidatingAdmissionWebhook,MutatingAdmissionWebhook
+    # CIS 1.2.8 - Disable AlwaysAdmit
+    - --disable-admission-plugins=AlwaysAdmit
+    # CIS 1.2.9 - EventRateLimit admission controller
+    - --admission-control-config-file=/etc/kubernetes/admission/admission-config.yaml
+    # CIS 1.2.10 - AlwaysPullImages admission controller
+    - --enable-admission-plugins=AlwaysPullImages
+    # CIS 1.2.11 - DenyEscalatingExec admission controller
+    - --enable-admission-plugins=DenyEscalatingExec
+    # CIS 1.2.12 - Enable encryption at rest
+    - --encryption-provider-config=/etc/kubernetes/encryption/config.yaml
+    # CIS 1.2.13 - TLS cipher suites
+    - --tls-cipher-suites=TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305,TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+    # CIS 1.2.14 - Strong cryptographic ciphers
+    - --tls-min-version=VersionTLS12
+    # CIS 1.2.15 - Profiling disabled
+    - --profiling=false
+    # CIS 1.2.16 - Repair malformed requests
+    - --repair-malformed-updates=false
+    # CIS 1.2.17 - Service account lookup
+    - --service-account-lookup=true
+    # CIS 1.2.18 - Service account key file
+    - --service-account-key-file=/etc/kubernetes/pki/sa.pub
+    # CIS 1.2.19 - etcd certificate file
+    - --etcd-certfile=/etc/kubernetes/pki/apiserver-etcd-client.crt
+    # CIS 1.2.20 - etcd key file
+    - --etcd-keyfile=/etc/kubernetes/pki/apiserver-etcd-client.key
+    # CIS 1.2.21 - TLS cert file
+    - --tls-cert-file=/etc/kubernetes/pki/apiserver.crt
+    # CIS 1.2.22 - TLS private key file
+    - --tls-private-key-file=/etc/kubernetes/pki/apiserver.key
+    # CIS 1.2.23 - Client certificate authority file
+    - --client-ca-file=/etc/kubernetes/pki/ca.crt
+    # CIS 1.2.24 - etcd certificate authority file
+    - --etcd-cafile=/etc/kubernetes/pki/etcd/ca.crt
+    # CIS 1.2.25 - Request timeout
+    - --request-timeout=300s
+    # CIS 1.2.26 - Service account signing key
+    - --service-account-signing-key-file=/etc/kubernetes/pki/sa.key
+    # CIS 1.2.27 - Service account issuer
+    - --service-account-issuer=https://kubernetes.default.svc.cluster.local
+    # CIS 1.2.28 - API audiences
+    - --api-audiences=https://kubernetes.default.svc.cluster.local
+    # CIS 1.2.29 - Audit log configuration
+    - --audit-log-path=/var/log/audit.log
+    - --audit-log-maxage=30
+    - --audit-log-maxbackup=3
+    - --audit-log-maxsize=100
+    - --audit-policy-file=/etc/kubernetes/audit/audit-policy.yaml
+    # Standard configurations
+    - --advertise-address=NODE_IP
+    - --allow-privileged=true
+    - --bind-address=0.0.0.0
+    - --etcd-servers=https://127.0.0.1:2379
+    - --secure-port=6443
+    - --service-cluster-ip-range=10.96.0.0/12
+    - --service-node-port-range=30000-32767
+    image: registry.k8s.io/kube-apiserver:v1.28.0
+    imagePullPolicy: IfNotPresent
+    livenessProbe:
+      failureThreshold: 8
+      httpGet:
+        host: NODE_IP
+        path: /livez
+        port: 6443
+        scheme: HTTPS
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 15
+    name: kube-apiserver
+    readinessProbe:
+      failureThreshold: 3
+      httpGet:
+        host: NODE_IP
+        path: /readyz
+        port: 6443
+        scheme: HTTPS
+      periodSeconds: 1
+      timeoutSeconds: 15
+    resources:
+      requests:
+        cpu: 250m
+    startupProbe:
+      failureThreshold: 24
+      httpGet:
+        host: NODE_IP
+        path: /livez
+        port: 6443
+        scheme: HTTPS
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      timeoutSeconds: 15
+    volumeMounts:
+    - mountPath: /etc/ssl/certs
+      name: ca-certs
+      readOnly: true
+    - mountPath: /etc/ca-certificates
+      name: etc-ca-certificates
+      readOnly: true
+    - mountPath: /etc/kubernetes/pki
+      name: k8s-certs
+      readOnly: true
+    - mountPath: /usr/local/share/ca-certificates
+      name: usr-local-share-ca-certificates
+      readOnly: true
+    - mountPath: /usr/share/ca-certificates
+      name: usr-share-ca-certificates
+      readOnly: true
+    - mountPath: /etc/kubernetes/audit
+      name: audit-policy
+      readOnly: true
+    - mountPath: /var/log
+      name: audit-log
+    - mountPath: /etc/kubernetes/encryption
+      name: encryption-config
+      readOnly: true
+    - mountPath: /etc/kubernetes/admission
+      name: admission-config
+      readOnly: true
+  hostNetwork: true
+  priorityClassName: system-node-critical
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  volumes:
+  - hostPath:
+      path: /etc/ssl/certs
+      type: DirectoryOrCreate
+    name: ca-certs
+  - hostPath:
+      path: /etc/ca-certificates
+      type: DirectoryOrCreate
+    name: etc-ca-certificates
+  - hostPath:
+      path: /etc/kubernetes/pki
+      type: DirectoryOrCreate
+    name: k8s-certs
+  - hostPath:
+      path: /usr/local/share/ca-certificates
+      type: DirectoryOrCreate
+    name: usr-local-share-ca-certificates
+  - hostPath:
+      path: /usr/share/ca-certificates
+      type: DirectoryOrCreate
+    name: usr-share-ca-certificates
+  - hostPath:
+      path: /etc/kubernetes/audit
+      type: DirectoryOrCreate
+    name: audit-policy
+  - hostPath:
+      path: /var/log
+      type: DirectoryOrCreate
+    name: audit-log
+  - hostPath:
+      path: /etc/kubernetes/encryption
+      type: DirectoryOrCreate
+    name: encryption-config
+  - hostPath:
+      path: /etc/kubernetes/admission
+      type: DirectoryOrCreate
+    name: admission-config

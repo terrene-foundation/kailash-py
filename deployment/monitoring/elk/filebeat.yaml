@@ -1,0 +1,400 @@
+# Filebeat DaemonSet for log collection
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: filebeat
+  namespace: logging
+  labels:
+    app.kubernetes.io/name: filebeat
+    app.kubernetes.io/component: logging
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: filebeat
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: filebeat
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5066"
+    spec:
+      serviceAccountName: filebeat
+      terminationGracePeriodSeconds: 30
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      
+      securityContext:
+        runAsUser: 0
+        fsGroup: 0
+      
+      containers:
+        - name: filebeat
+          image: docker.elastic.co/beats/filebeat:8.11.3
+          args: [
+            "-c", "/etc/filebeat.yml",
+            "-e",
+          ]
+          
+          env:
+            - name: ELASTICSEARCH_HOST
+              value: "kailash-logs-es-http.logging.svc.cluster.local"
+            - name: ELASTICSEARCH_PORT
+              value: "9200"
+            - name: ELASTICSEARCH_USERNAME
+              value: "elastic"
+            - name: ELASTICSEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kailash-logs-es-elastic-user
+                  key: elastic
+            - name: LOGSTASH_HOST
+              value: "logstash.logging.svc.cluster.local"
+            - name: LOGSTASH_PORT
+              value: "5044"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          
+          resources:
+            limits:
+              memory: 200Mi
+              cpu: 100m
+            requests:
+              cpu: 100m
+              memory: 100Mi
+          
+          volumeMounts:
+            - name: config
+              mountPath: /etc/filebeat.yml
+              readOnly: true
+              subPath: filebeat.yml
+            - name: data
+              mountPath: /usr/share/filebeat/data
+            - name: varlibdockercontainers
+              mountPath: /var/lib/docker/containers
+              readOnly: true
+            - name: varlog
+              mountPath: /var/log
+              readOnly: true
+            - name: dockersock
+              mountPath: /var/run/docker.sock
+              readOnly: true
+          
+          securityContext:
+            runAsUser: 0
+            capabilities:
+              add:
+                - DAC_READ_SEARCH
+          
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  #!/usr/bin/env bash -e
+                  curl --fail 127.0.0.1:5066
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - |
+                  #!/usr/bin/env bash -e
+                  filebeat test config
+                  filebeat test output
+            failureThreshold: 3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+      
+      volumes:
+        - name: config
+          configMap:
+            defaultMode: 0640
+            name: filebeat-config
+        - name: varlibdockercontainers
+          hostPath:
+            path: /var/lib/docker/containers
+        - name: varlog
+          hostPath:
+            path: /var/log
+        - name: dockersock
+          hostPath:
+            path: /var/run/docker.sock
+        - name: data
+          hostPath:
+            path: /var/lib/filebeat-data
+            type: DirectoryOrCreate
+
+---
+# Filebeat configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: filebeat-config
+  namespace: logging
+data:
+  filebeat.yml: |-
+    filebeat.inputs:
+    - type: container
+      paths:
+        - /var/log/containers/*.log
+      
+      # Kubernetes metadata enrichment
+      processors:
+        - add_kubernetes_metadata:
+            host: ${NODE_NAME}
+            matchers:
+            - logs_path:
+                logs_path: "/var/log/containers/"
+        
+        # Drop system containers logs
+        - drop_event:
+            when:
+              or:
+                - contains:
+                    kubernetes.container.name: "filebeat"
+                - contains:
+                    kubernetes.container.name: "logstash"
+                - contains:
+                    kubernetes.namespace: "kube-system"
+                - contains:
+                    kubernetes.namespace: "kube-public"
+        
+        # Add custom fields
+        - add_fields:
+            target: ""
+            fields:
+              cluster: "kailash-prod"
+              environment: "production"
+        
+        # Parse JSON logs
+        - decode_json_fields:
+            fields: ["message"]
+            target: ""
+            overwrite_keys: true
+        
+        # Add log source identification
+        - script:
+            lang: javascript
+            id: log_classifier
+            source: >
+              function process(event) {
+                var message = event.Get("message");
+                var namespace = event.Get("kubernetes.namespace");
+                var container = event.Get("kubernetes.container.name");
+                
+                // Classify log types
+                if (namespace === "kailash-app") {
+                  event.Put("log_category", "application");
+                } else if (namespace === "ingress-nginx") {
+                  event.Put("log_category", "ingress");
+                } else if (namespace === "monitoring") {
+                  event.Put("log_category", "monitoring");
+                } else if (namespace === "logging") {
+                  event.Put("log_category", "logging");
+                } else {
+                  event.Put("log_category", "system");
+                }
+                
+                // Detect log levels
+                if (message && typeof message === 'string') {
+                  if (message.match(/\b(ERROR|FATAL|CRITICAL)\b/i)) {
+                    event.Put("log_level", "error");
+                    event.Put("alert_required", true);
+                  } else if (message.match(/\bWARN\b/i)) {
+                    event.Put("log_level", "warning");
+                  } else if (message.match(/\bINFO\b/i)) {
+                    event.Put("log_level", "info");
+                  } else if (message.match(/\bDEBUG\b/i)) {
+                    event.Put("log_level", "debug");
+                  }
+                }
+              }
+    
+    # System logs
+    - type: log
+      paths:
+        - /var/log/audit/audit.log
+      fields:
+        log_source: "audit"
+        log_category: "security"
+      multiline.pattern: '^type='
+      multiline.negate: true
+      multiline.match: after
+    
+    - type: log
+      paths:
+        - /var/log/syslog
+        - /var/log/messages
+      fields:
+        log_source: "system"
+        log_category: "system"
+    
+    # Kubernetes API server audit logs
+    - type: log
+      paths:
+        - /var/log/audit.log
+      fields:
+        log_source: "k8s_audit"
+        log_category: "security"
+      json.keys_under_root: true
+      json.overwrite_keys: true
+    
+    # Output configuration
+    output.logstash:
+      hosts: ["${LOGSTASH_HOST}:${LOGSTASH_PORT}"]
+      loadbalance: true
+      worker: 2
+      compression_level: 3
+      
+      # Bulk settings
+      bulk_max_size: 2048
+      template.name: "filebeat"
+      template.pattern: "filebeat-*"
+    
+    # Alternative direct output to Elasticsearch (disabled by default)
+    # output.elasticsearch:
+    #   hosts: ["https://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}"]
+    #   username: "${ELASTICSEARCH_USERNAME}"
+    #   password: "${ELASTICSEARCH_PASSWORD}"
+    #   ssl.verification_mode: "none"
+    #   index: "filebeat-%{+yyyy.MM.dd}"
+    
+    # Processor configuration
+    processors:
+      - add_host_metadata:
+          when.not.contains.tags: forwarded
+      
+      - add_cloud_metadata: ~
+      
+      - add_docker_metadata: ~
+      
+      # Drop noisy logs
+      - drop_event:
+          when:
+            or:
+              - and:
+                  - regexp:
+                      message: '.*GET /_cluster/health.*'
+                  - equals:
+                      kubernetes.namespace: "logging"
+              - and:
+                  - regexp:
+                      message: '.*GET /health.*'
+                  - equals:
+                      kubernetes.container.name: "kailash-app"
+    
+    # Logging configuration
+    logging.level: info
+    logging.to_files: true
+    logging.files:
+      path: /var/log/filebeat
+      name: filebeat
+      keepfiles: 7
+      permissions: 0644
+    
+    # Monitoring
+    monitoring.enabled: true
+    http.enabled: true
+    http.host: "0.0.0.0"
+    http.port: 5066
+    
+    # ILM settings
+    setup.ilm.enabled: true
+    setup.ilm.rollover_alias: "filebeat"
+    setup.ilm.pattern: "{now/d}-000001"
+    setup.ilm.policy: "filebeat-policy"
+
+---
+# ServiceAccount for Filebeat
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: filebeat
+  namespace: logging
+  labels:
+    app.kubernetes.io/name: filebeat
+
+---
+# ClusterRole for Filebeat
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: filebeat
+  labels:
+    app.kubernetes.io/name: filebeat
+rules:
+- apiGroups: [""]
+  resources:
+  - nodes
+  - namespaces
+  - events
+  - pods
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources:
+    - replicasets
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["batch"]
+  resources:
+    - jobs
+  verbs: ["get", "list", "watch"]
+
+---
+# ClusterRoleBinding for Filebeat
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: filebeat
+subjects:
+- kind: ServiceAccount
+  name: filebeat
+  namespace: logging
+roleRef:
+  kind: ClusterRole
+  name: filebeat
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Service for metrics
+apiVersion: v1
+kind: Service
+metadata:
+  name: filebeat-metrics
+  namespace: logging
+  labels:
+    app.kubernetes.io/name: filebeat
+spec:
+  ports:
+    - port: 5066
+      targetPort: 5066
+      name: http-metrics
+  selector:
+    app.kubernetes.io/name: filebeat
+  clusterIP: None
+
+---
+# ServiceMonitor for Prometheus integration
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: filebeat-metrics
+  namespace: logging
+  labels:
+    prometheus: kailash
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: filebeat
+  endpoints:
+    - port: http-metrics
+      interval: 30s
+      path: /stats

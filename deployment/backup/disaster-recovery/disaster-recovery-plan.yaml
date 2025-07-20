@@ -1,0 +1,569 @@
+# Disaster Recovery Plan and Automation
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: disaster-recovery-plan
+  namespace: velero
+  labels:
+    component: disaster-recovery
+    plan-type: automated
+data:
+  # Recovery Time Objectives and Recovery Point Objectives
+  rto-rpo-matrix.yaml: |
+    recovery_objectives:
+      critical_services:
+        rto: "15_minutes"    # Recovery Time Objective
+        rpo: "1_hour"        # Recovery Point Objective
+        services:
+          - kailash-app
+          - monitoring
+          - logging
+          - vault-system
+      
+      standard_services:
+        rto: "1_hour"
+        rpo: "4_hours"
+        services:
+          - tracing
+          - compliance-system
+          - backup
+      
+      non_critical:
+        rto: "4_hours"
+        rpo: "24_hours"
+        services:
+          - development
+          - testing
+          - documentation
+  
+  # Automated recovery procedures
+  recovery-procedures.yaml: |
+    recovery_scenarios:
+      # Scenario 1: Single namespace corruption
+      namespace_corruption:
+        detection:
+          - health_check_failures
+          - persistent_pod_crashes
+          - data_integrity_issues
+        
+        automated_response:
+          - isolate_namespace
+          - stop_new_deployments
+          - create_incident_backup
+          - restore_from_latest_backup
+        
+        manual_intervention_triggers:
+          - restoration_failures
+          - data_validation_errors
+          - cross_namespace_dependencies
+      
+      # Scenario 2: Cluster-wide failure
+      cluster_failure:
+        detection:
+          - api_server_unreachable
+          - multiple_node_failures
+          - etcd_corruption
+        
+        automated_response:
+          - provision_new_cluster
+          - restore_cluster_state
+          - restore_application_data
+          - update_dns_records
+        
+        recovery_sequence:
+          1. infrastructure_provisioning
+          2. cluster_state_restoration
+          3. persistent_volume_restoration
+          4. application_restoration
+          5. validation_testing
+      
+      # Scenario 3: Data center outage
+      datacenter_outage:
+        detection:
+          - region_wide_connectivity_loss
+          - aws_service_disruption
+          - prolonged_infrastructure_failure
+        
+        automated_response:
+          - activate_dr_region
+          - restore_from_cross_region_backup
+          - update_traffic_routing
+          - notify_stakeholders
+        
+        recovery_locations:
+          primary: "us-east-1"
+          secondary: "us-west-2"
+          tertiary: "eu-west-1"
+  
+  # Backup validation procedures
+  backup-validation.yaml: |
+    validation_procedures:
+      daily_validation:
+        schedule: "0 6 * * *"  # 6 AM UTC daily
+        checks:
+          - backup_completion_status
+          - backup_size_consistency
+          - backup_integrity_verification
+          - storage_accessibility
+        
+        automated_tests:
+          - restore_test_namespace
+          - data_integrity_check
+          - application_functionality_test
+          - cleanup_test_resources
+      
+      weekly_full_validation:
+        schedule: "0 8 * * 0"  # Sunday 8 AM UTC
+        checks:
+          - full_cluster_restore_test
+          - cross_region_backup_verification
+          - disaster_recovery_runbook_test
+          - performance_impact_assessment
+      
+      monthly_disaster_drill:
+        schedule: "0 10 1 * *"  # First day of month, 10 AM UTC
+        procedures:
+          - simulate_cluster_failure
+          - execute_full_recovery_procedure
+          - measure_rto_rpo_metrics
+          - update_recovery_documentation
+  
+  # Monitoring and alerting
+  recovery-monitoring.yaml: |
+    monitoring_rules:
+      backup_failures:
+        alert: "VeleroBackupFailure"
+        severity: "critical"
+        condition: "velero_backup_failure_total > 0"
+        notification_channels:
+          - pagerduty
+          - slack_critical
+          - email_oncall
+      
+      backup_duration_high:
+        alert: "VeleroBackupDurationHigh"
+        severity: "warning"
+        condition: "velero_backup_duration_seconds > 3600"  # 1 hour
+        notification_channels:
+          - slack_monitoring
+      
+      restore_failures:
+        alert: "VeleroRestoreFailure"
+        severity: "critical"
+        condition: "velero_restore_failure_total > 0"
+        notification_channels:
+          - pagerduty
+          - slack_critical
+      
+      rpo_violation:
+        alert: "RPOViolation"
+        severity: "critical"
+        condition: "time() - velero_backup_last_successful_timestamp > 3600"  # 1 hour RPO
+        notification_channels:
+          - pagerduty
+          - email_management
+      
+      storage_capacity:
+        alert: "BackupStorageCapacityHigh"
+        severity: "warning"
+        condition: "aws_s3_bucket_size_bytes{bucket=\"kailash-velero-backups\"} > 85% of quota"
+        notification_channels:
+          - slack_monitoring
+  
+  # Recovery automation scripts
+  automated-recovery.yaml: |
+    automation_workflows:
+      # Quick namespace recovery
+      namespace_recovery:
+        trigger: "manual_or_alert"
+        parameters:
+          - namespace_name
+          - backup_name (optional)
+          - restore_timestamp (optional)
+        
+        steps:
+          1. validate_backup_availability
+          2. create_restore_job
+          3. monitor_restore_progress
+          4. validate_restored_resources
+          5. update_monitoring_dashboards
+          6. notify_completion
+        
+        rollback_procedure:
+          - preserve_failed_restore_logs
+          - revert_to_previous_state
+          - escalate_to_manual_intervention
+      
+      # Full cluster recovery
+      cluster_recovery:
+        trigger: "disaster_detection"
+        prerequisites:
+          - terraform_state_accessible
+          - backup_storage_accessible
+          - dns_management_accessible
+        
+        steps:
+          1. provision_infrastructure
+          2. deploy_base_cluster
+          3. install_velero
+          4. restore_cluster_resources
+          5. restore_persistent_volumes
+          6. restore_applications
+          7. validate_functionality
+          8. update_external_dependencies
+          9. notify_stakeholders
+        
+        validation_checkpoints:
+          - infrastructure_ready
+          - cluster_api_accessible
+          - velero_operational
+          - persistent_storage_mounted
+          - applications_healthy
+          - external_connectivity_verified
+      
+      # Cross-region failover
+      cross_region_failover:
+        trigger: "region_outage_detected"
+        automation_level: "semi_automatic"  # Requires manual approval
+        
+        pre_failover_checks:
+          - verify_dr_region_capacity
+          - confirm_backup_replication
+          - validate_network_connectivity
+          - check_dns_propagation_readiness
+        
+        failover_steps:
+          1. activate_dr_infrastructure
+          2. restore_from_cross_region_backup
+          3. update_load_balancer_configuration
+          4. update_dns_records
+          5. validate_service_availability
+          6. communicate_service_status
+        
+        post_failover_monitoring:
+          - performance_metrics_comparison
+          - error_rate_monitoring
+          - user_experience_validation
+          - cost_impact_tracking
+
+---
+# CronJob for automated backup validation
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: backup-validation
+  namespace: velero
+  labels:
+    component: disaster-recovery
+    job-type: validation
+spec:
+  schedule: "0 6 * * *"  # Daily at 6 AM UTC
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: backup-validation
+        spec:
+          serviceAccountName: backup-validator
+          restartPolicy: OnFailure
+          
+          containers:
+            - name: backup-validator
+              image: velero/velero:v1.12.2
+              command:
+                - /bin/bash
+                - -c
+                - |
+                  set -e
+                  
+                  echo "Starting backup validation at $(date)"
+                  
+                  # Check if backups completed successfully
+                  FAILED_BACKUPS=$(velero backup get --output json | jq -r '.items[] | select(.status.phase != "Completed") | .metadata.name')
+                  
+                  if [ -n "$FAILED_BACKUPS" ]; then
+                    echo "ERROR: Failed backups detected: $FAILED_BACKUPS"
+                    exit 1
+                  fi
+                  
+                  # Get the latest daily backup
+                  LATEST_BACKUP=$(velero backup get --selector backup-tier=critical --output json | jq -r '.items | sort_by(.metadata.creationTimestamp) | reverse | .[0].metadata.name')
+                  
+                  if [ "$LATEST_BACKUP" = "null" ]; then
+                    echo "ERROR: No critical backups found"
+                    exit 1
+                  fi
+                  
+                  echo "Latest backup: $LATEST_BACKUP"
+                  
+                  # Create a test namespace
+                  TEST_NAMESPACE="backup-validation-$(date +%s)"
+                  kubectl create namespace $TEST_NAMESPACE
+                  
+                  # Create a test restore
+                  RESTORE_NAME="validation-restore-$(date +%s)"
+                  velero restore create $RESTORE_NAME \
+                    --from-backup $LATEST_BACKUP \
+                    --namespace-mappings kailash-app:$TEST_NAMESPACE \
+                    --wait
+                  
+                  # Validate restore
+                  RESTORE_STATUS=$(velero restore get $RESTORE_NAME --output json | jq -r '.status.phase')
+                  
+                  if [ "$RESTORE_STATUS" != "Completed" ]; then
+                    echo "ERROR: Restore failed with status: $RESTORE_STATUS"
+                    velero restore logs $RESTORE_NAME
+                    exit 1
+                  fi
+                  
+                  # Validate restored resources
+                  RESTORED_PODS=$(kubectl get pods -n $TEST_NAMESPACE --no-headers | wc -l)
+                  
+                  if [ "$RESTORED_PODS" -eq 0 ]; then
+                    echo "WARNING: No pods restored in test namespace"
+                  else
+                    echo "SUCCESS: $RESTORED_PODS pods restored successfully"
+                  fi
+                  
+                  # Cleanup
+                  kubectl delete namespace $TEST_NAMESPACE
+                  velero restore delete $RESTORE_NAME --confirm
+                  
+                  echo "Backup validation completed successfully at $(date)"
+              
+              resources:
+                requests:
+                  memory: 128Mi
+                  cpu: 100m
+                limits:
+                  memory: 256Mi
+                  cpu: 200m
+              
+              env:
+                - name: AWS_SHARED_CREDENTIALS_FILE
+                  value: /credentials/cloud
+              
+              volumeMounts:
+                - name: cloud-credentials
+                  mountPath: /credentials
+          
+          volumes:
+            - name: cloud-credentials
+              secret:
+                secretName: cloud-credentials
+
+---
+# ServiceAccount for backup validation
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backup-validator
+  namespace: velero
+  labels:
+    component: disaster-recovery
+
+---
+# ClusterRole for backup validation
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: backup-validator
+  labels:
+    component: disaster-recovery
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces", "pods", "services", "configmaps", "secrets"]
+    verbs: ["get", "list", "create", "delete"]
+  - apiGroups: ["velero.io"]
+    resources: ["backups", "restores"]
+    verbs: ["get", "list", "create", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list"]
+
+---
+# ClusterRoleBinding for backup validation
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: backup-validator
+  labels:
+    component: disaster-recovery
+subjects:
+  - kind: ServiceAccount
+    name: backup-validator
+    namespace: velero
+roleRef:
+  kind: ClusterRole
+  name: backup-validator
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# PrometheusRule for backup monitoring
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: velero-backup-monitoring
+  namespace: velero
+  labels:
+    prometheus: kailash
+    component: disaster-recovery
+spec:
+  groups:
+    - name: velero.backup
+      interval: 30s
+      rules:
+        - alert: VeleroBackupFailure
+          expr: increase(velero_backup_failure_total[1h]) > 0
+          for: 0m
+          labels:
+            severity: critical
+            component: backup
+          annotations:
+            summary: "Velero backup failure detected"
+            description: "Backup {{ $labels.schedule }} has failed. Check Velero logs for details."
+        
+        - alert: VeleroBackupPartialFailure
+          expr: increase(velero_backup_partial_failure_total[1h]) > 0
+          for: 0m
+          labels:
+            severity: warning
+            component: backup
+          annotations:
+            summary: "Velero backup partial failure detected"
+            description: "Backup {{ $labels.schedule }} has partial failures. Some resources may not be backed up."
+        
+        - alert: VeleroBackupDurationHigh
+          expr: velero_backup_duration_seconds > 3600
+          for: 5m
+          labels:
+            severity: warning
+            component: backup
+          annotations:
+            summary: "Velero backup taking too long"
+            description: "Backup {{ $labels.schedule }} has been running for more than 1 hour."
+        
+        - alert: VeleroBackupMissing
+          expr: time() - velero_backup_last_successful_timestamp > 86400
+          for: 5m
+          labels:
+            severity: critical
+            component: backup
+          annotations:
+            summary: "Velero backup missing"
+            description: "No successful backup in the last 24 hours for {{ $labels.schedule }}."
+        
+        - alert: VeleroRestoreFailure
+          expr: increase(velero_restore_failed_total[1h]) > 0
+          for: 0m
+          labels:
+            severity: critical
+            component: restore
+          annotations:
+            summary: "Velero restore failure detected"
+            description: "Restore operation has failed. Check Velero logs for details."
+
+---
+# Grafana dashboard for backup monitoring
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: velero-dashboard
+  namespace: velero
+  labels:
+    grafana_dashboard: "1"
+    component: disaster-recovery
+data:
+  velero-backup-monitoring.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Velero Backup & Disaster Recovery",
+        "tags": ["velero", "backup", "disaster-recovery"],
+        "style": "dark",
+        "timezone": "browser",
+        "refresh": "30s",
+        "time": {
+          "from": "now-24h",
+          "to": "now"
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Backup Success Rate",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "rate(velero_backup_success_total[24h]) / (rate(velero_backup_success_total[24h]) + rate(velero_backup_failure_total[24h])) * 100",
+                "legendFormat": "Success Rate %"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "yellow", "value": 95},
+                    {"color": "green", "value": 99}
+                  ]
+                }
+              }
+            },
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Backup Duration",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "velero_backup_duration_seconds",
+                "legendFormat": "Duration - {{schedule}}"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Seconds",
+                "min": 0
+              }
+            ],
+            "gridPos": {"h": 8, "w": 18, "x": 6, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Storage Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "aws_s3_bucket_size_bytes{bucket=\"kailash-velero-backups\"}",
+                "legendFormat": "Backup Storage"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Bytes",
+                "min": 0
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Recovery Time Objective Status",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "velero_backup_last_successful_timestamp",
+                "format": "table"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          }
+        ]
+      }
+    }

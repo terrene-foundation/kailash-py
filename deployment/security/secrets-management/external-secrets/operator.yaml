@@ -1,0 +1,387 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: external-secrets-system
+  labels:
+    name: external-secrets-system
+
+---
+# External Secrets Operator Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: external-secrets
+  namespace: external-secrets-system
+  labels:
+    app.kubernetes.io/name: external-secrets
+    app.kubernetes.io/instance: external-secrets
+    app.kubernetes.io/version: "v0.9.11"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: external-secrets
+      app.kubernetes.io/instance: external-secrets
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: external-secrets
+        app.kubernetes.io/instance: external-secrets
+    spec:
+      serviceAccountName: external-secrets
+      securityContext:
+        fsGroup: 65534
+        runAsGroup: 65534
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: external-secrets
+        image: ghcr.io/external-secrets/external-secrets:v0.9.11
+        imagePullPolicy: IfNotPresent
+        args:
+        - --metrics-addr=:8080
+        - --enable-leader-election
+        - --leader-election-id=external-secrets
+        - --concurrent=1
+        ports:
+        - containerPort: 8080
+          name: metrics
+          protocol: TCP
+        env:
+        - name: POLLER_INTERVAL_MILLISECONDS
+          value: "60000"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 512Mi
+            cpu: 500m
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 1
+          failureThreshold: 3
+      nodeSelector:
+        kubernetes.io/os: linux
+
+---
+# Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: external-secrets
+  namespace: external-secrets-system
+  labels:
+    app.kubernetes.io/name: external-secrets
+    app.kubernetes.io/instance: external-secrets
+
+---
+# ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: external-secrets
+  labels:
+    app.kubernetes.io/name: external-secrets
+    app.kubernetes.io/instance: external-secrets
+rules:
+- apiGroups:
+  - external-secrets.io
+  resources:
+  - externalsecrets
+  - secretstores
+  - clustersecretstores
+  - clusterexternalsecrets
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
+- apiGroups:
+  - external-secrets.io
+  resources:
+  - externalsecrets/status
+  - externalsecrets/finalizers
+  - secretstores/status
+  - clustersecretstores/status
+  - clusterexternalsecrets/status
+  - clusterexternalsecrets/finalizers
+  verbs:
+  - get
+  - update
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - serviceaccounts/token
+  verbs:
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+
+---
+# ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: external-secrets
+  labels:
+    app.kubernetes.io/name: external-secrets
+    app.kubernetes.io/instance: external-secrets
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: external-secrets
+subjects:
+- kind: ServiceAccount
+  name: external-secrets
+  namespace: external-secrets-system
+
+---
+# Service for metrics
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-secrets-metrics
+  namespace: external-secrets-system
+  labels:
+    app.kubernetes.io/name: external-secrets
+    app.kubernetes.io/instance: external-secrets
+spec:
+  selector:
+    app.kubernetes.io/name: external-secrets
+    app.kubernetes.io/instance: external-secrets
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: metrics
+    protocol: TCP
+
+---
+# Webhook deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: external-secrets-webhook
+  namespace: external-secrets-system
+  labels:
+    app.kubernetes.io/name: external-secrets-webhook
+    app.kubernetes.io/instance: external-secrets
+    app.kubernetes.io/version: "v0.9.11"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: external-secrets-webhook
+      app.kubernetes.io/instance: external-secrets
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: external-secrets-webhook
+        app.kubernetes.io/instance: external-secrets
+    spec:
+      serviceAccountName: external-secrets-webhook
+      securityContext:
+        fsGroup: 65534
+        runAsGroup: 65534
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: webhook
+        image: ghcr.io/external-secrets/external-secrets:v0.9.11
+        imagePullPolicy: IfNotPresent
+        args:
+        - webhook
+        - --port=10250
+        - --dns-name=external-secrets-webhook.external-secrets-system.svc
+        - --cert-dir=/tmp/certs
+        - --check-interval=5m
+        - --metrics-addr=:8080
+        ports:
+        - containerPort: 8080
+          name: metrics
+          protocol: TCP
+        - containerPort: 10250
+          name: webhook
+          protocol: TCP
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        resources:
+          requests:
+            memory: 64Mi
+            cpu: 50m
+          limits:
+            memory: 256Mi
+            cpu: 200m
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 20
+          periodSeconds: 5
+        volumeMounts:
+        - name: certs
+          mountPath: /tmp/certs
+          readOnly: false
+      volumes:
+      - name: certs
+        emptyDir: {}
+
+---
+# Webhook Service Account
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: external-secrets-webhook
+  namespace: external-secrets-system
+  labels:
+    app.kubernetes.io/name: external-secrets-webhook
+    app.kubernetes.io/instance: external-secrets
+
+---
+# Webhook Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-secrets-webhook
+  namespace: external-secrets-system
+  labels:
+    app.kubernetes.io/name: external-secrets-webhook
+    app.kubernetes.io/instance: external-secrets
+spec:
+  selector:
+    app.kubernetes.io/name: external-secrets-webhook
+    app.kubernetes.io/instance: external-secrets
+  ports:
+  - name: webhook
+    port: 443
+    targetPort: webhook
+    protocol: TCP
+
+---
+# Validating Webhook Configuration
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionWebhook
+metadata:
+  name: external-secrets-webhook
+  labels:
+    app.kubernetes.io/name: external-secrets-webhook
+    app.kubernetes.io/instance: external-secrets
+webhooks:
+- name: validate.externalsecret.external-secrets.io
+  clientConfig:
+    service:
+      name: external-secrets-webhook
+      namespace: external-secrets-system
+      path: /validate-external-secrets-io-v1beta1-externalsecret
+  rules:
+  - operations:
+    - CREATE
+    - UPDATE
+    apiGroups:
+    - external-secrets.io
+    apiVersions:
+    - v1beta1
+    resources:
+    - externalsecrets
+  admissionReviewVersions:
+  - v1
+  - v1beta1
+  sideEffects: None
+  failurePolicy: Fail
+
+- name: validate.secretstore.external-secrets.io
+  clientConfig:
+    service:
+      name: external-secrets-webhook
+      namespace: external-secrets-system
+      path: /validate-external-secrets-io-v1beta1-secretstore
+  rules:
+  - operations:
+    - CREATE
+    - UPDATE
+    apiGroups:
+    - external-secrets.io
+    apiVersions:
+    - v1beta1
+    resources:
+    - secretstores
+  admissionReviewVersions:
+  - v1
+  - v1beta1
+  sideEffects: None
+  failurePolicy: Fail
+
+- name: validate.clustersecretstore.external-secrets.io
+  clientConfig:
+    service:
+      name: external-secrets-webhook
+      namespace: external-secrets-system
+      path: /validate-external-secrets-io-v1beta1-clustersecretstore
+  rules:
+  - operations:
+    - CREATE
+    - UPDATE
+    apiGroups:
+    - external-secrets.io
+    apiVersions:
+    - v1beta1
+    resources:
+    - clustersecretstores
+  admissionReviewVersions:
+  - v1
+  - v1beta1
+  sideEffects: None
+  failurePolicy: Fail

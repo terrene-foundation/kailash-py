@@ -1,0 +1,181 @@
+# Kubernetes System Alerts
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: kubernetes-alerts
+  namespace: monitoring
+  labels:
+    prometheus: kailash
+    app.kubernetes.io/name: kubernetes-alerts
+spec:
+  groups:
+    - name: kubernetes.rules
+      interval: 30s
+      rules:
+        # Node alerts
+        - alert: NodeDown
+          expr: up{job="kubernetes-nodes"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: node
+          annotations:
+            summary: "Node {{ $labels.node }} is down"
+            description: "Node {{ $labels.node }} has been down for more than 5 minutes."
+            runbook_url: "https://runbooks.yourdomain.com/NodeDown"
+
+        - alert: NodeMemoryPressure
+          expr: kube_node_status_condition{condition="MemoryPressure",status="true"} == 1
+          for: 5m
+          labels:
+            severity: warning
+            component: node
+          annotations:
+            summary: "Node {{ $labels.node }} under memory pressure"
+            description: "Node {{ $labels.node }} is under memory pressure."
+
+        - alert: NodeDiskPressure
+          expr: kube_node_status_condition{condition="DiskPressure",status="true"} == 1
+          for: 5m
+          labels:
+            severity: warning
+            component: node
+          annotations:
+            summary: "Node {{ $labels.node }} under disk pressure"
+            description: "Node {{ $labels.node }} is under disk pressure."
+
+        - alert: NodeHighCPU
+          expr: (1 - avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m]))) > 0.85
+          for: 10m
+          labels:
+            severity: warning
+            component: node
+          annotations:
+            summary: "High CPU usage on node {{ $labels.instance }}"
+            description: "CPU usage is above 85% on node {{ $labels.instance }}."
+
+        # Pod alerts
+        - alert: PodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total[5m]) > 0.05
+          for: 10m
+          labels:
+            severity: critical
+            component: pod
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is crash looping"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has restarted {{ $value }} times in the last 5 minutes."
+
+        - alert: PodNotReady
+          expr: kube_pod_status_ready{condition="false"} == 1
+          for: 10m
+          labels:
+            severity: warning
+            component: pod
+          annotations:
+            summary: "Pod {{ $labels.namespace }}/{{ $labels.pod }} is not ready"
+            description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} has been not ready for 10 minutes."
+
+        - alert: ContainerOOMKilled
+          expr: kube_pod_container_status_last_terminated_reason{reason="OOMKilled"} == 1
+          for: 1m
+          labels:
+            severity: warning
+            component: pod
+          annotations:
+            summary: "Container {{ $labels.container }} was OOM killed"
+            description: "Container {{ $labels.container }} in pod {{ $labels.namespace }}/{{ $labels.pod }} was OOM killed."
+
+        # PVC alerts
+        - alert: PersistentVolumeFillingUp
+          expr: |
+            (
+              kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes < 0.1
+              and
+              predict_linear(kubelet_volume_stats_available_bytes[6h], 4 * 3600) < 0
+            )
+          for: 10m
+          labels:
+            severity: critical
+            component: storage
+          annotations:
+            summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is filling up"
+            description: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is expected to fill up within 4 hours."
+
+        - alert: PersistentVolumeAlmostFull
+          expr: kubelet_volume_stats_available_bytes / kubelet_volume_stats_capacity_bytes < 0.05
+          for: 5m
+          labels:
+            severity: critical
+            component: storage
+          annotations:
+            summary: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} is almost full"
+            description: "PVC {{ $labels.namespace }}/{{ $labels.persistentvolumeclaim }} has less than 5% space available."
+
+        # Deployment alerts
+        - alert: DeploymentReplicasMismatch
+          expr: |
+            kube_deployment_spec_replicas != kube_deployment_status_replicas_available
+          for: 10m
+          labels:
+            severity: warning
+            component: deployment
+          annotations:
+            summary: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} replica mismatch"
+            description: "Deployment {{ $labels.namespace }}/{{ $labels.deployment }} has {{ $value }} replicas available, expected {{ $labels.spec_replicas }}."
+
+        - alert: StatefulSetReplicasMismatch
+          expr: |
+            kube_statefulset_status_replicas_ready != kube_statefulset_status_replicas
+          for: 10m
+          labels:
+            severity: warning
+            component: statefulset
+          annotations:
+            summary: "StatefulSet {{ $labels.namespace }}/{{ $labels.statefulset }} replica mismatch"
+            description: "StatefulSet {{ $labels.namespace }}/{{ $labels.statefulset }} has {{ $value }} ready replicas, expected {{ $labels.replicas }}."
+
+        # Job alerts
+        - alert: JobFailed
+          expr: kube_job_failed > 0
+          for: 5m
+          labels:
+            severity: warning
+            component: job
+          annotations:
+            summary: "Job {{ $labels.namespace }}/{{ $labels.job_name }} failed"
+            description: "Job {{ $labels.namespace }}/{{ $labels.job_name }} has failed."
+
+        - alert: CronJobSuspended
+          expr: kube_cronjob_status_active == 0 and kube_cronjob_spec_suspend == 0
+          for: 1h
+          labels:
+            severity: info
+            component: cronjob
+          annotations:
+            summary: "CronJob {{ $labels.namespace }}/{{ $labels.cronjob }} appears suspended"
+            description: "CronJob {{ $labels.namespace }}/{{ $labels.cronjob }} hasn't run in the last hour."
+
+        # API server alerts
+        - alert: APIServerHighLatency
+          expr: |
+            histogram_quantile(0.99, sum(rate(apiserver_request_duration_seconds_bucket[5m])) by (verb, le)) > 1
+          for: 10m
+          labels:
+            severity: warning
+            component: apiserver
+          annotations:
+            summary: "API server high latency for {{ $labels.verb }} requests"
+            description: "99th percentile latency for {{ $labels.verb }} requests is {{ $value }}s."
+
+        - alert: APIServerErrors
+          expr: |
+            sum(rate(apiserver_request_terminations_total[5m])) > 0.01
+            or
+            sum(rate(apiserver_request_total{code=~"5.."}[5m])) > 0.01
+          for: 10m
+          labels:
+            severity: warning
+            component: apiserver
+          annotations:
+            summary: "API server experiencing errors"
+            description: "API server error rate is {{ $value }} errors per second."

@@ -1,0 +1,33 @@
+# Simple AI Registry MCP Server for testing
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    mcp[cli]>=1.0.0 \
+    fastapi==0.115.0 \
+    uvicorn[standard]>=0.24.0 \
+    pydantic>=2.0
+
+# Copy AI Registry server code
+COPY docker/ai_registry_server.py /app/ai_registry_server.py
+
+# Create non-root user
+RUN useradd -m -u 1000 mcpuser && chown -R mcpuser:mcpuser /app
+USER mcpuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose port
+EXPOSE 8000
+
+# Run the server
+CMD ["python", "/app/ai_registry_server.py"]

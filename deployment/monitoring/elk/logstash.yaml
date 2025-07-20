@@ -1,0 +1,408 @@
+# Logstash for log processing and enrichment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+  namespace: logging
+  labels:
+    app.kubernetes.io/name: logstash
+    app.kubernetes.io/component: logging
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: logstash
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: logstash
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9600"
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsNonRoot: true
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: logstash
+                topologyKey: kubernetes.io/hostname
+      
+      containers:
+        - name: logstash
+          image: docker.elastic.co/logstash/logstash:8.11.3
+          ports:
+            - containerPort: 5044
+              name: beats
+              protocol: TCP
+            - containerPort: 9600
+              name: http-metrics
+              protocol: TCP
+            - containerPort: 5000
+              name: tcp-input
+              protocol: TCP
+          
+          resources:
+            requests:
+              memory: 1Gi
+              cpu: 500m
+            limits:
+              memory: 2Gi
+              cpu: 1
+          
+          env:
+            - name: LS_JAVA_OPTS
+              value: "-Xms1g -Xmx1g"
+            - name: ELASTICSEARCH_HOST
+              value: "kailash-logs-es-http.logging.svc.cluster.local"
+            - name: ELASTICSEARCH_PORT
+              value: "9200"
+            - name: ELASTICSEARCH_USERNAME
+              value: "elastic"
+            - name: ELASTICSEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kailash-logs-es-elastic-user
+                  key: elastic
+          
+          volumeMounts:
+            - name: logstash-config
+              mountPath: /usr/share/logstash/config/logstash.yml
+              subPath: logstash.yml
+            - name: logstash-pipeline
+              mountPath: /usr/share/logstash/pipeline/
+            - name: logstash-patterns
+              mountPath: /usr/share/logstash/patterns/
+          
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9600
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            failureThreshold: 3
+          
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9600
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+      
+      volumes:
+        - name: logstash-config
+          configMap:
+            name: logstash-config
+        - name: logstash-pipeline
+          configMap:
+            name: logstash-pipeline
+        - name: logstash-patterns
+          configMap:
+            name: logstash-patterns
+
+---
+# Logstash configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-config
+  namespace: logging
+data:
+  logstash.yml: |
+    http.host: "0.0.0.0"
+    http.port: 9600
+    
+    # Monitoring
+    monitoring.enabled: true
+    monitoring.elasticsearch.hosts: ["https://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}"]
+    monitoring.elasticsearch.username: "${ELASTICSEARCH_USERNAME}"
+    monitoring.elasticsearch.password: "${ELASTICSEARCH_PASSWORD}"
+    monitoring.elasticsearch.ssl.verification_mode: none
+    
+    # Pipeline settings
+    pipeline.workers: 2
+    pipeline.batch.size: 1000
+    pipeline.batch.delay: 50
+    
+    # Queue settings
+    queue.type: persisted
+    queue.max_bytes: 1gb
+    queue.checkpoint.writes: 1024
+    
+    # Dead letter queue
+    dead_letter_queue.enable: true
+    dead_letter_queue.max_bytes: 1gb
+    
+    # Security
+    xpack.monitoring.enabled: true
+
+---
+# Logstash pipeline configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-pipeline
+  namespace: logging
+data:
+  main.conf: |
+    input {
+      beats {
+        port => 5044
+      }
+      
+      tcp {
+        port => 5000
+        codec => json_lines
+      }
+      
+      # Kubernetes logs via Filebeat
+      beats {
+        port => 5045
+        add_field => { "log_source" => "kubernetes" }
+      }
+    }
+    
+    filter {
+      # Parse Kubernetes logs
+      if [kubernetes] {
+        # Extract namespace and pod information
+        mutate {
+          add_field => { "k8s_namespace" => "%{[kubernetes][namespace]}" }
+          add_field => { "k8s_pod" => "%{[kubernetes][pod][name]}" }
+          add_field => { "k8s_container" => "%{[kubernetes][container][name]}" }
+        }
+        
+        # Parse application logs based on container
+        if [k8s_container] == "kailash-app" {
+          grok {
+            match => { 
+              "message" => "%{TIMESTAMP_ISO8601:timestamp} %{LOGLEVEL:level} %{DATA:logger} - %{GREEDYDATA:log_message}" 
+            }
+            tag_on_failure => ["_grokparsefailure_kailash"]
+          }
+          
+          if ![timestamp] {
+            grok {
+              match => { 
+                "message" => "\[%{TIMESTAMP_ISO8601:timestamp}\] %{WORD:level}: %{GREEDYDATA:log_message}" 
+              }
+              tag_on_failure => ["_grokparsefailure_kailash_alt"]
+            }
+          }
+        }
+        
+        # Parse nginx logs
+        if [k8s_container] == "nginx" {
+          grok {
+            match => { 
+              "message" => "%{NGINXACCESS}" 
+            }
+            tag_on_failure => ["_grokparsefailure_nginx"]
+          }
+        }
+        
+        # Parse ingress controller logs
+        if [k8s_container] == "controller" and [k8s_namespace] == "ingress-nginx" {
+          grok {
+            match => { 
+              "message" => "%{IPORHOST:clientip} - %{DATA:ident} \[%{HTTPDATE:timestamp}\] \"%{WORD:verb} %{DATA:request} HTTP/%{NUMBER:httpversion}\" %{NUMBER:response:int} (?:-|%{NUMBER:bytes:int}) %{QS:referrer} %{QS:agent} %{NUMBER:request_length:int} %{NUMBER:request_time:float} \[%{DATA:proxy_upstream_name}\] \[%{DATA:proxy_alternative_upstream_name}\] %{IPORHOST:upstream_addr}:%{NUMBER:upstream_port} %{NUMBER:upstream_response_length:int} %{NUMBER:upstream_response_time:float} %{NUMBER:upstream_status:int} %{DATA:req_id}" 
+            }
+            tag_on_failure => ["_grokparsefailure_ingress"]
+          }
+        }
+        
+        # Security event detection
+        if [log_message] =~ /(?i)(failed|error|exception|unauthorized|forbidden|denied)/ {
+          mutate {
+            add_tag => ["security_event"]
+            add_field => { "alert_priority" => "medium" }
+          }
+        }
+        
+        if [log_message] =~ /(?i)(attack|malicious|intrusion|breach|compromise)/ {
+          mutate {
+            add_tag => ["security_alert"]
+            add_field => { "alert_priority" => "high" }
+          }
+        }
+      }
+      
+      # Parse audit logs
+      if [log_source] == "audit" {
+        json {
+          source => "message"
+        }
+        
+        if [verb] and [objectRef] {
+          mutate {
+            add_field => { "audit_action" => "%{verb}" }
+            add_field => { "audit_resource" => "%{[objectRef][resource]}" }
+            add_field => { "audit_namespace" => "%{[objectRef][namespace]}" }
+          }
+        }
+        
+        # Detect privileged operations
+        if [verb] in ["create", "delete", "update"] and [objectRef][resource] in ["secrets", "configmaps", "serviceaccounts"] {
+          mutate {
+            add_tag => ["privileged_operation"]
+            add_field => { "alert_priority" => "high" }
+          }
+        }
+      }
+      
+      # Enrich with GeoIP for external IPs
+      if [clientip] and [clientip] !~ /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.127\.)/ {
+        geoip {
+          source => "clientip"
+          target => "geoip"
+        }
+      }
+      
+      # Add environment metadata
+      mutate {
+        add_field => { "environment" => "production" }
+        add_field => { "cluster" => "kailash-prod" }
+        add_field => { "ingestion_timestamp" => "%{[@timestamp]}" }
+      }
+      
+      # Convert timestamps
+      if [timestamp] {
+        date {
+          match => [ "timestamp", "ISO8601", "dd/MMM/yyyy:HH:mm:ss Z" ]
+          target => "@timestamp"
+        }
+      }
+    }
+    
+    output {
+      # Main logs to Elasticsearch
+      elasticsearch {
+        hosts => ["https://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}"]
+        user => "${ELASTICSEARCH_USERNAME}"
+        password => "${ELASTICSEARCH_PASSWORD}"
+        ssl_certificate_verification => false
+        
+        # Index strategy
+        index => "kailash-logs-%{+YYYY.MM.dd}"
+        
+        # Document ID for deduplication
+        document_id => "%{[@metadata][beat]}-%{[@metadata][type]}-%{[@timestamp]}-%{[host][name]}-%{[log][offset]}"
+        
+        # Template management
+        manage_template => true
+        template_name => "kailash-logs"
+        template_pattern => "kailash-logs-*"
+        template => {
+          "index_patterns" => ["kailash-logs-*"]
+          "settings" => {
+            "number_of_shards" => 2
+            "number_of_replicas" => 1
+            "index.lifecycle.name" => "kailash-logs-policy"
+            "index.lifecycle.rollover_alias" => "kailash-logs"
+          }
+          "mappings" => {
+            "properties" => {
+              "@timestamp" => { "type" => "date" }
+              "level" => { "type" => "keyword" }
+              "k8s_namespace" => { "type" => "keyword" }
+              "k8s_pod" => { "type" => "keyword" }
+              "k8s_container" => { "type" => "keyword" }
+              "clientip" => { "type" => "ip" }
+              "response" => { "type" => "integer" }
+              "bytes" => { "type" => "integer" }
+              "request_time" => { "type" => "float" }
+              "geoip.location" => { "type" => "geo_point" }
+              "log_message" => { "type" => "text", "analyzer" => "standard" }
+            }
+          }
+        }
+      }
+      
+      # Security events to dedicated index
+      if "security_event" in [tags] or "security_alert" in [tags] {
+        elasticsearch {
+          hosts => ["https://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}"]
+          user => "${ELASTICSEARCH_USERNAME}"
+          password => "${ELASTICSEARCH_PASSWORD}"
+          ssl_certificate_verification => false
+          index => "security-events-%{+YYYY.MM.dd}"
+        }
+      }
+      
+      # Audit logs to dedicated index
+      if [log_source] == "audit" {
+        elasticsearch {
+          hosts => ["https://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}"]
+          user => "${ELASTICSEARCH_USERNAME}"
+          password => "${ELASTICSEARCH_PASSWORD}"
+          ssl_certificate_verification => false
+          index => "audit-logs-%{+YYYY.MM.dd}"
+        }
+      }
+      
+      # Debug output (remove in production)
+      # stdout { codec => rubydebug { metadata => true } }
+    }
+
+---
+# Custom Grok patterns
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logstash-patterns
+  namespace: logging
+data:
+  nginx: |
+    NGINXACCESS %{IPORHOST:clientip} - %{DATA:ident} \[%{HTTPDATE:timestamp}\] \"%{WORD:verb} %{DATA:request} HTTP/%{NUMBER:httpversion}\" %{NUMBER:response:int} (?:-|%{NUMBER:bytes:int}) %{QS:referrer} %{QS:agent}
+
+---
+# Service for Logstash
+apiVersion: v1
+kind: Service
+metadata:
+  name: logstash
+  namespace: logging
+  labels:
+    app.kubernetes.io/name: logstash
+spec:
+  ports:
+    - port: 5044
+      targetPort: 5044
+      name: beats
+      protocol: TCP
+    - port: 5000
+      targetPort: 5000
+      name: tcp-input
+      protocol: TCP
+    - port: 9600
+      targetPort: 9600
+      name: http-metrics
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: logstash
+  type: ClusterIP
+
+---
+# ServiceMonitor for Prometheus integration
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: logstash-metrics
+  namespace: logging
+  labels:
+    prometheus: kailash
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: logstash
+  endpoints:
+    - port: http-metrics
+      interval: 30s
+      path: /_node/stats

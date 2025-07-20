@@ -1,0 +1,152 @@
+version: '3.8'
+
+services:
+  # Individual MCP Servers
+  ai-registry:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/services/Dockerfile.http_ai_registry
+    container_name: mcp-ai-registry
+    ports:
+      - "8001:8000"
+    environment:
+      - MCP_SERVER_NAME=ai-registry
+      - MCP_PORT=8000
+      - MCP_LOG_LEVEL=INFO
+    volumes:
+      - ../../logs:/app/logs
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # Example Hybrid App
+  example-app:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/services/Dockerfile.example_app
+    container_name: mcp-example-app
+    ports:
+      - "8003:8000"  # Example app API
+    environment:
+      - LOG_LEVEL=INFO
+    volumes:
+      - ../../logs:/app/logs
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # Enhanced Enterprise Gateway with Service Discovery
+  enterprise-gateway:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/services/Dockerfile.enhanced_gateway
+    container_name: mcp-enterprise-gateway
+    ports:
+      - "8000:8000"  # Main gateway API
+    environment:
+      - MCP_LOG_LEVEL=INFO
+    depends_on:
+      - ai-registry
+      - user-management
+      - example-app
+    volumes:
+      - ../../apps:/apps:ro  # Mount apps directory for service discovery
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # User Management Service (Hybrid App)
+  user-management:
+    build:
+      context: ../..
+      dockerfile: deployment/docker/services/Dockerfile.user_management
+    container_name: mcp-user-management
+    ports:
+      - "8002:8000"  # User management API
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DATABASE_URL=postgresql://mcpuser:mcppass@postgres:5432/mcpdb
+      - JWT_SECRET_KEY=your-secret-key-change-in-production
+      - ENABLE_CACHING=true
+      - ENABLE_METRICS=true
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ../../logs:/app/logs
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # Database for enterprise features
+  postgres:
+    image: postgres:15-alpine
+    container_name: mcp-postgres
+    environment:
+      - POSTGRES_DB=mcpdb
+      - POSTGRES_USER=mcpuser
+      - POSTGRES_PASSWORD=mcppass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: mcp-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # Monitoring with Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: mcp-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana:/etc/grafana/provisioning
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  # Metrics collection with Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mcp-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  grafana_data:
+  prometheus_data:
+
+networks:
+  mcp-network:
+    driver: bridge

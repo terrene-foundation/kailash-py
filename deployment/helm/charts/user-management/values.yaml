@@ -1,0 +1,334 @@
+# Default values for kailash-user-management
+# This is a YAML-formatted file.
+
+# Global settings
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# Application configuration
+app:
+  name: user-management
+  version: "1.0.0"
+  
+  # Image configuration
+  image:
+    registry: docker.io
+    repository: kailash/user-management
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+    pullSecrets: []
+  
+  # Replica configuration
+  replicaCount: 3
+  
+  # Environment
+  environment: production
+  
+  # Feature flags
+  features:
+    realTimeNotifications: true
+    aiChatEnabled: true
+    analyticsEnabled: true
+    gdprEnabled: true
+    auditLogging: true
+    mfaEnabled: true
+    passwordPolicyEnabled: true
+    backupEnabled: true
+    metricsEnabled: true
+
+# Service configuration
+service:
+  type: ClusterIP
+  ports:
+    http: 80
+    api: 8000
+    websocket: 8001
+    metrics: 9090
+  
+  # External load balancer (for production)
+  external:
+    enabled: true
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+      service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  
+  hosts:
+    - host: user-management.kailash.company.com
+      paths:
+        - path: /
+          pathType: Prefix
+        - path: /api
+          pathType: Prefix
+        - path: /ws
+          pathType: Prefix
+    - host: api.user-management.kailash.company.com
+      paths:
+        - path: /
+          pathType: Prefix
+  
+  tls:
+    - secretName: user-management-tls-secret
+      hosts:
+        - user-management.kailash.company.com
+        - api.user-management.kailash.company.com
+
+# Resource configuration
+resources:
+  app:
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  
+  nginx:
+    requests:
+      memory: "64Mi"
+      cpu: "50m"
+    limits:
+      memory: "128Mi"
+      cpu: "100m"
+
+# Autoscaling configuration
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  
+  # Custom metrics
+  customMetrics:
+    - type: Pods
+      name: http_requests_per_second
+      targetAverageValue: "100"
+
+# Storage configuration
+persistence:
+  enabled: true
+  storageClass: "gp3"
+  
+  appData:
+    size: 10Gi
+    accessMode: ReadWriteOnce
+  
+  backupStorage:
+    enabled: true
+    size: 100Gi
+    accessMode: ReadWriteMany
+    storageClass: "efs"
+  
+  logStorage:
+    enabled: true
+    size: 20Gi
+    accessMode: ReadWriteMany
+    storageClass: "efs"
+
+# Security configuration
+security:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 2000
+  readOnlyRootFilesystem: true
+  
+  # Pod Security Policy
+  podSecurityPolicy:
+    enabled: true
+  
+  # Network Policies
+  networkPolicy:
+    enabled: true
+
+# RBAC configuration
+rbac:
+  create: true
+  serviceAccountName: ""
+  
+  # AWS IAM Role (for EKS)
+  awsIamRole: ""
+
+# Configuration
+config:
+  # Application settings
+  logLevel: "INFO"
+  debug: false
+  
+  # Performance settings
+  maxConcurrentUsers: 500
+  apiRateLimit: 1000
+  responseTimeout: 30
+  
+  # Security settings
+  sessionTimeout: 3600
+  passwordPolicyEnabled: true
+  
+  # Backup settings
+  backupSchedule: "0 2 * * *"  # Daily at 2 AM
+  backupRetentionDays: 30
+  
+  # Compliance settings
+  dataRetentionDays: 2555  # 7 years
+
+# Secrets (override in production)
+secrets:
+  # Database credentials
+  database:
+    user: "user_mgm_user"
+    password: "SecurePass"
+  
+  # Redis credentials
+  redis:
+    password: "RedisSecret"
+  
+  # JWT secrets
+  jwt:
+    secretKey: "jwt_secret_key_very_secure_2024"
+    refreshTokenSecret: "refresh_token_secret_2024"
+  
+  # Encryption
+  encryption:
+    key: "encryption_key_32_bytes_long_2024"
+  
+  # SMTP
+  smtp:
+    username: "smtp_username"
+    password: "smtp_password"
+  
+  # OAuth2
+  oauth2:
+    clientSecret: "oauth2_client_secret_2024"
+  
+  # MFA
+  mfa:
+    secretKey: "mfa_secret_key_2024"
+
+# PostgreSQL dependency configuration
+postgresql:
+  enabled: true
+  auth:
+    database: "user_management"
+    username: "user_mgm_user"
+    password: "SecurePass"
+  
+  primary:
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: "gp3"
+    
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+# Redis dependency configuration
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: "RedisSecret"
+  
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+      storageClass: "gp3"
+    
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"
+        cpu: "200m"
+
+# Monitoring configuration
+monitoring:
+  enabled: true
+  
+  # Prometheus metrics
+  prometheus:
+    enabled: true
+    port: 9090
+    path: "/metrics"
+  
+  # Health checks
+  healthCheck:
+    enabled: true
+    path: "/health"
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+# Environment-specific overrides
+environments:
+  staging:
+    replicaCount: 1
+    autoscaling:
+      maxReplicas: 5
+    resources:
+      app:
+        requests:
+          memory: "256Mi"
+          cpu: "125m"
+        limits:
+          memory: "512Mi"
+          cpu: "250m"
+    postgresql:
+      primary:
+        persistence:
+          size: 20Gi
+    redis:
+      master:
+        persistence:
+          size: 2Gi
+    ingress:
+      hosts:
+        - host: staging.user-management.kailash.company.com
+      annotations:
+        nginx.ingress.kubernetes.io/auth-type: basic
+        nginx.ingress.kubernetes.io/auth-secret: staging-basic-auth
+  
+  development:
+    replicaCount: 1
+    autoscaling:
+      enabled: false
+    resources:
+      app:
+        requests:
+          memory: "128Mi"
+          cpu: "100m"
+        limits:
+          memory: "256Mi"
+          cpu: "200m"
+    postgresql:
+      primary:
+        persistence:
+          size: 10Gi
+    redis:
+      master:
+        persistence:
+          size: 1Gi
+    ingress:
+      hosts:
+        - host: dev.user-management.kailash.company.com
+      annotations:
+        nginx.ingress.kubernetes.io/ssl-redirect: "false"
+        nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"

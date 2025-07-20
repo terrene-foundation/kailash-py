@@ -1,0 +1,289 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kailash-user-management.fullname" . }}-app
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "kailash-user-management.labels" . | nindent 4 }}
+    component: backend
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.app.replicaCount }}
+  {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "kailash-user-management.selectorLabels" . | nindent 6 }}
+      component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "kailash-user-management.selectorLabels" . | nindent 8 }}
+        component: backend
+        version: {{ .Values.app.version | quote }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secrets.yaml") . | sha256sum }}
+        {{- if .Values.monitoring.prometheus.enabled }}
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.monitoring.prometheus.port | quote }}
+        prometheus.io/path: {{ .Values.monitoring.prometheus.path | quote }}
+        {{- end }}
+    spec:
+      {{- with .Values.app.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "kailash-user-management.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.security | nindent 8 }}
+      containers:
+      - name: {{ .Chart.Name }}
+        image: "{{ .Values.app.image.registry }}/{{ .Values.app.image.repository }}:{{ .Values.app.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.app.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+        - name: websocket
+          containerPort: 8001
+          protocol: TCP
+        {{- if .Values.monitoring.prometheus.enabled }}
+        - name: metrics
+          containerPort: {{ .Values.monitoring.prometheus.port }}
+          protocol: TCP
+        {{- end }}
+        env:
+        - name: ENVIRONMENT
+          value: {{ .Values.app.environment | quote }}
+        - name: LOG_LEVEL
+          value: {{ .Values.config.logLevel | quote }}
+        - name: DEBUG
+          value: {{ .Values.config.debug | quote }}
+        
+        # Database configuration
+        - name: DATABASE_HOST
+          value: "{{ include "kailash-user-management.postgresql.fullname" . }}"
+        - name: DATABASE_PORT
+          value: "5432"
+        - name: DATABASE_NAME
+          value: {{ .Values.postgresql.auth.database | quote }}
+        - name: DATABASE_USER
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kailash-user-management.fullname" . }}-secrets
+              key: database-user
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kailash-user-management.fullname" . }}-secrets
+              key: database-password
+        
+        # Redis configuration
+        - name: REDIS_HOST
+          value: "{{ include "kailash-user-management.redis.fullname" . }}-master"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kailash-user-management.fullname" . }}-secrets
+              key: redis-password
+        
+        # API configuration
+        - name: API_HOST
+          value: "0.0.0.0"
+        - name: API_PORT
+          value: "8000"
+        - name: WEBSOCKET_PORT
+          value: "8001"
+        
+        # Security configuration
+        - name: SESSION_TIMEOUT
+          value: {{ .Values.config.sessionTimeout | quote }}
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kailash-user-management.fullname" . }}-secrets
+              key: jwt-secret-key
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kailash-user-management.fullname" . }}-secrets
+              key: encryption-key
+        - name: MFA_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "kailash-user-management.fullname" . }}-secrets
+              key: mfa-secret-key
+        
+        # Feature flags
+        - name: MFA_ENABLED
+          value: {{ .Values.app.features.mfaEnabled | quote }}
+        - name: PASSWORD_POLICY_ENABLED
+          value: {{ .Values.app.features.passwordPolicyEnabled | quote }}
+        - name: GDPR_ENABLED
+          value: {{ .Values.app.features.gdprEnabled | quote }}
+        - name: AUDIT_LOGGING
+          value: {{ .Values.app.features.auditLogging | quote }}
+        - name: REAL_TIME_NOTIFICATIONS
+          value: {{ .Values.app.features.realTimeNotifications | quote }}
+        - name: AI_CHAT_ENABLED
+          value: {{ .Values.app.features.aiChatEnabled | quote }}
+        - name: ANALYTICS_ENABLED
+          value: {{ .Values.app.features.analyticsEnabled | quote }}
+        
+        # Performance configuration
+        - name: MAX_CONCURRENT_USERS
+          value: {{ .Values.config.maxConcurrentUsers | quote }}
+        - name: API_RATE_LIMIT
+          value: {{ .Values.config.apiRateLimit | quote }}
+        - name: RESPONSE_TIMEOUT
+          value: {{ .Values.config.responseTimeout | quote }}
+        
+        # Backup configuration
+        {{- if .Values.app.features.backupEnabled }}
+        - name: BACKUP_ENABLED
+          value: "true"
+        - name: BACKUP_SCHEDULE
+          value: {{ .Values.config.backupSchedule | quote }}
+        - name: BACKUP_RETENTION_DAYS
+          value: {{ .Values.config.backupRetentionDays | quote }}
+        {{- end }}
+        
+        # Compliance configuration
+        - name: DATA_RETENTION_DAYS
+          value: {{ .Values.config.dataRetentionDays | quote }}
+        
+        # Monitoring configuration
+        {{- if .Values.monitoring.enabled }}
+        - name: METRICS_ENABLED
+          value: "true"
+        - name: MONITORING_PORT
+          value: {{ .Values.monitoring.prometheus.port | quote }}
+        - name: HEALTH_CHECK_PATH
+          value: {{ .Values.monitoring.healthCheck.path | quote }}
+        {{- end }}
+        
+        volumeMounts:
+        {{- if .Values.persistence.enabled }}
+        - name: app-data
+          mountPath: /app/data
+        {{- end }}
+        {{- if .Values.persistence.logStorage.enabled }}
+        - name: logs
+          mountPath: /app/logs
+        {{- end }}
+        - name: tmp
+          mountPath: /tmp
+        
+        resources:
+          {{- toYaml .Values.resources.app | nindent 12 }}
+        
+        {{- if .Values.monitoring.healthCheck.enabled }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.monitoring.healthCheck.path }}
+            port: http
+          initialDelaySeconds: {{ .Values.monitoring.healthCheck.initialDelaySeconds }}
+          periodSeconds: {{ .Values.monitoring.healthCheck.periodSeconds }}
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.monitoring.healthCheck.path }}
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        {{- end }}
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: {{ .Values.security.readOnlyRootFilesystem }}
+          capabilities:
+            drop:
+            - ALL
+      
+      - name: nginx-proxy
+        image: nginx:1.21-alpine
+        ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - name: nginx-cache
+          mountPath: /var/cache/nginx
+        - name: nginx-run
+          mountPath: /var/run
+        resources:
+          {{- toYaml .Values.resources.nginx | nindent 12 }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.monitoring.healthCheck.path }}
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.monitoring.healthCheck.path }}
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      
+      volumes:
+      {{- if .Values.persistence.enabled }}
+      - name: app-data
+        persistentVolumeClaim:
+          claimName: {{ include "kailash-user-management.fullname" . }}-data
+      {{- end }}
+      {{- if .Values.persistence.logStorage.enabled }}
+      - name: logs
+        persistentVolumeClaim:
+          claimName: {{ include "kailash-user-management.fullname" . }}-logs
+      {{- else }}
+      - name: logs
+        emptyDir: {}
+      {{- end }}
+      - name: tmp
+        emptyDir: {}
+      - name: nginx-cache
+        emptyDir: {}
+      - name: nginx-run
+        emptyDir: {}
+      - name: nginx-config
+        configMap:
+          name: {{ include "kailash-user-management.fullname" . }}-nginx-config
+      
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 60
+      
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

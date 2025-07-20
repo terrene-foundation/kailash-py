@@ -1,0 +1,350 @@
+# Velero backup schedules for different data tiers
+---
+# Daily backup of critical namespaces
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: daily-critical-backup
+  namespace: velero
+  labels:
+    backup-tier: critical
+    backup-type: scheduled
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM UTC
+  template:
+    metadata:
+      name: daily-critical-{{.Date}}-{{.Time}}
+      labels:
+        backup-tier: critical
+        backup-type: scheduled
+    spec:
+      # Include critical namespaces
+      includedNamespaces:
+        - kailash-app
+        - monitoring
+        - logging
+        - tracing
+        - vault-system
+        - cert-manager
+        - ingress-nginx
+      
+      # Include cluster-scoped resources
+      includeClusterResources: true
+      
+      # Snapshot persistent volumes
+      snapshotVolumes: true
+      
+      # Default snapshot locations
+      defaultVolumesToRestic: false
+      
+      # Storage location
+      storageLocation: aws-s3
+      volumeSnapshotLocations:
+        - aws-ebs
+      
+      # Retention policy - keep for 30 days
+      ttl: 720h0m0s  # 30 days
+      
+      # Include additional resources
+      includedResources:
+        - persistentvolumes
+        - persistentvolumeclaims
+        - secrets
+        - configmaps
+        - services
+        - ingresses
+        - networkpolicies
+      
+      # Exclude problematic resources
+      excludedResources:
+        - events
+        - events.events.k8s.io
+        - backups.velero.io
+        - restores.velero.io
+        - resticrepositories.velero.io
+      
+      # Hooks for application consistency
+      hooks:
+        resources:
+          - name: elasticsearch-backup-hook
+            includedNamespaces:
+              - logging
+            includedResources:
+              - pods
+            labelSelector:
+              matchLabels:
+                common.k8s.elastic.co/type: elasticsearch
+            pre:
+              - exec:
+                  command:
+                    - /bin/bash
+                    - -c
+                    - |
+                      # Flush and sync Elasticsearch indices
+                      curl -X POST "localhost:9200/_flush/synced?pretty"
+                      curl -X POST "localhost:9200/_refresh?pretty"
+                  timeout: 30s
+                  onError: Continue
+          
+          - name: postgres-backup-hook
+            includedNamespaces:
+              - kailash-app
+            includedResources:
+              - pods
+            labelSelector:
+              matchLabels:
+                app: postgres
+            pre:
+              - exec:
+                  command:
+                    - /bin/bash
+                    - -c
+                    - |
+                      # Ensure PostgreSQL checkpoint
+                      psql -c "CHECKPOINT;" postgres://postgres:${POSTGRES_PASSWORD}@localhost:5432/kailash
+                  timeout: 30s
+                  onError: Continue
+
+---
+# Weekly full cluster backup
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: weekly-full-backup
+  namespace: velero
+  labels:
+    backup-tier: full
+    backup-type: scheduled
+spec:
+  schedule: "0 3 * * 0"  # Weekly on Sunday at 3 AM UTC
+  template:
+    metadata:
+      name: weekly-full-{{.Date}}-{{.Time}}
+      labels:
+        backup-tier: full
+        backup-type: scheduled
+    spec:
+      # Include all namespaces except system ones
+      excludedNamespaces:
+        - kube-system
+        - kube-public
+        - kube-node-lease
+        - local-path-storage
+        - velero
+      
+      # Include cluster-scoped resources
+      includeClusterResources: true
+      
+      # Snapshot all volumes
+      snapshotVolumes: true
+      defaultVolumesToRestic: false
+      
+      # Storage location
+      storageLocation: aws-s3
+      volumeSnapshotLocations:
+        - aws-ebs
+      
+      # Retention policy - keep for 90 days
+      ttl: 2160h0m0s  # 90 days
+      
+      # Exclude backup-related resources
+      excludedResources:
+        - events
+        - events.events.k8s.io
+        - backups.velero.io
+        - restores.velero.io
+        - resticrepositories.velero.io
+        - volumesnapshots.snapshot.storage.k8s.io
+        - volumesnapshotcontents.snapshot.storage.k8s.io
+
+---
+# Hourly backup of highly critical data
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: hourly-hot-backup
+  namespace: velero
+  labels:
+    backup-tier: hot
+    backup-type: scheduled
+spec:
+  schedule: "0 * * * *"  # Every hour
+  template:
+    metadata:
+      name: hourly-hot-{{.Date}}-{{.Time}}
+      labels:
+        backup-tier: hot
+        backup-type: scheduled
+    spec:
+      # Only backup application data
+      includedNamespaces:
+        - kailash-app
+      
+      # Don't include cluster resources for hourly backups
+      includeClusterResources: false
+      
+      # Only backup specific resources
+      includedResources:
+        - persistentvolumeclaims
+        - secrets
+        - configmaps
+      
+      # No volume snapshots for hourly (too expensive)
+      snapshotVolumes: false
+      defaultVolumesToRestic: true
+      
+      # Storage location
+      storageLocation: aws-s3
+      
+      # Short retention - keep for 7 days
+      ttl: 168h0m0s  # 7 days
+
+---
+# Configuration backup (lightweight, frequent)
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: config-backup
+  namespace: velero
+  labels:
+    backup-tier: config
+    backup-type: scheduled
+spec:
+  schedule: "*/30 * * * *"  # Every 30 minutes
+  template:
+    metadata:
+      name: config-{{.Date}}-{{.Time}}
+      labels:
+        backup-tier: config
+        backup-type: scheduled
+    spec:
+      # All namespaces for configuration
+      excludedNamespaces:
+        - kube-system
+        - kube-public
+        - kube-node-lease
+        - local-path-storage
+      
+      # Include cluster-scoped configuration
+      includeClusterResources: true
+      
+      # Only configuration resources
+      includedResources:
+        - configmaps
+        - secrets
+        - ingresses
+        - services
+        - networkpolicies
+        - rbac.authorization.k8s.io
+        - customresourcedefinitions
+        - storageclasses
+        - priorityclasses
+      
+      # No volume snapshots for config backups
+      snapshotVolumes: false
+      defaultVolumesToRestic: false
+      
+      # Storage location
+      storageLocation: aws-s3
+      
+      # Short retention - keep for 3 days
+      ttl: 72h0m0s  # 3 days
+      
+      # Exclude data volumes
+      excludedResources:
+        - persistentvolumes
+        - persistentvolumeclaims
+        - pods
+        - replicasets
+        - deployments
+        - daemonsets
+        - statefulsets
+        - jobs
+        - cronjobs
+
+---
+# Pre-upgrade backup (manual trigger template)
+apiVersion: velero.io/v1
+kind: BackupStorageLocation
+metadata:
+  name: pre-upgrade-storage
+  namespace: velero
+  labels:
+    backup-tier: upgrade
+    backup-type: manual
+spec:
+  provider: aws
+  objectStorage:
+    bucket: kailash-velero-backups
+    prefix: pre-upgrade-backups
+  config:
+    region: us-east-1
+    serverSideEncryption: AES256
+
+---
+# Cross-region backup storage location
+apiVersion: velero.io/v1
+kind: BackupStorageLocation
+metadata:
+  name: cross-region-backup
+  namespace: velero
+  labels:
+    backup-tier: disaster-recovery
+    backup-type: cross-region
+spec:
+  provider: aws
+  objectStorage:
+    bucket: kailash-velero-dr-backups
+    prefix: cross-region
+  config:
+    region: us-west-2  # Different region for DR
+    serverSideEncryption: AES256
+
+---
+# Monthly disaster recovery backup
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: monthly-dr-backup
+  namespace: velero
+  labels:
+    backup-tier: disaster-recovery
+    backup-type: scheduled
+spec:
+  schedule: "0 4 1 * *"  # First day of every month at 4 AM UTC
+  template:
+    metadata:
+      name: monthly-dr-{{.Date}}-{{.Time}}
+      labels:
+        backup-tier: disaster-recovery
+        backup-type: scheduled
+    spec:
+      # Full cluster backup
+      excludedNamespaces:
+        - kube-system
+        - kube-public
+        - kube-node-lease
+        - local-path-storage
+      
+      # Include all cluster resources
+      includeClusterResources: true
+      
+      # Snapshot all volumes
+      snapshotVolumes: true
+      defaultVolumesToRestic: false
+      
+      # Use cross-region storage
+      storageLocation: cross-region-backup
+      volumeSnapshotLocations:
+        - aws-ebs
+      
+      # Long retention - keep for 1 year
+      ttl: 8760h0m0s  # 365 days
+      
+      # Include everything except transient resources
+      excludedResources:
+        - events
+        - events.events.k8s.io
+        - backups.velero.io
+        - restores.velero.io
+        - resticrepositories.velero.io

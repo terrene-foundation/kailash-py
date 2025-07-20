@@ -22,18 +22,18 @@
 
 ---
 
-## 🔥 Latest Release: v0.8.4 (January 19, 2025)
+## 🔥 Latest Release: v0.8.5 (January 20, 2025)
 
-**A2A Google Protocol Enhancement**
+**Architecture Cleanup & Enterprise Security**
 
-- 🤖 **Advanced Agent Coordination**: A2ACoordinatorNode with Google Protocol best practices
-- 🎯 **Intelligent Task Delegation**: Context-aware task distribution with skill-based matching
-- 🔍 **Hybrid Search Capabilities**: Multi-strategy agent discovery and matching algorithms
-- 🧠 **Semantic Memory System**: Long-term memory management for agent interactions
-- 📊 **Real-time Analytics**: Streaming performance monitoring for A2A workflows
-- ✅ **Backward Compatible**: Seamless integration with existing A2A implementations
+- 🏗️ **Architecture Clarity**: Removed confusing `src/kailash/nexus` module
+- 🔒 **Connection Validation**: Enterprise-grade parameter validation with type safety
+- 🌐 **Edge Computing**: 50+ new nodes for geo-distributed infrastructure
+- 📊 **Advanced Monitoring**: AlertManager with proactive threshold monitoring
+- 🚀 **Performance**: <1ms validation overhead with intelligent caching
+- ✅ **Breaking Changes**: See [migration guide](changelogs/releases/v0.8.5-2025-07-20.md)
 
-[Full Changelog](CHANGELOG.md) | [PyPI Packages](https://pypi.org/project/kailash/0.8.4/)
+[Full Changelog](changelogs/releases/v0.8.5-2025-07-20.md) | [PyPI Packages](https://pypi.org/project/kailash/0.8.5/)
 
 ## 🎯 What Makes Kailash Different
 

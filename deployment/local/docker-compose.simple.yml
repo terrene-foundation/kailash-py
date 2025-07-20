@@ -1,0 +1,93 @@
+# Simplified Docker Compose for Testing Security Features
+version: '3.8'
+
+services:
+  # PostgreSQL with security configurations
+  postgres:
+    image: postgres:15-alpine
+    container_name: kailash-test-postgres
+    environment:
+      POSTGRES_DB: kailash_test
+      POSTGRES_USER: kailash_user
+      POSTGRES_PASSWORD: secure_test_password
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kailash_user -d kailash_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+
+  # Redis with security configurations
+  redis:
+    image: redis:7-alpine
+    container_name: kailash-test-redis
+    ports:
+      - "16379:6379"
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+    command: >
+      redis-server
+      --requirepass secure_redis_password
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+
+  # Vault in dev mode for testing
+  vault:
+    image: hashicorp/vault:1.15.2
+    container_name: kailash-test-vault
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: root-token-for-testing
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      VAULT_LOG_LEVEL: info
+    ports:
+      - "18200:8200"
+    cap_add:
+      - IPC_LOCK
+    networks:
+      - test-network
+
+  # Test application
+  test-app:
+    image: nginx:1.25-alpine
+    container_name: kailash-test-app
+    ports:
+      - "18080:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      vault:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://kailash_user:secure_test_password@postgres:5432/kailash_test
+      REDIS_URL: redis://:secure_redis_password@redis:6379
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root-token-for-testing
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+
+volumes:
+  postgres_test_data:
+  redis_test_data:
+
+networks:
+  test-network:
+    driver: bridge

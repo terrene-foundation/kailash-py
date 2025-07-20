@@ -1,0 +1,483 @@
+# Jaeger distributed tracing with Elasticsearch backend
+apiVersion: jaegertracing.io/v1
+kind: Jaeger
+metadata:
+  name: kailash-jaeger
+  namespace: tracing
+  labels:
+    app.kubernetes.io/name: jaeger
+    app.kubernetes.io/component: tracing
+spec:
+  strategy: production
+  
+  # Storage configuration using Elasticsearch
+  storage:
+    type: elasticsearch
+    elasticsearch:
+      serverUrls: https://kailash-logs-es-http.logging.svc.cluster.local:9200
+      username: elastic
+      passwordFrom:
+        secretKeyRef:
+          name: jaeger-elasticsearch-secret
+          key: password
+      tls:
+        skipHostVerify: true
+      indexPrefix: jaeger
+      
+      # Performance tuning
+      numShards: 3
+      numReplicas: 1
+      maxSpanAge: 72h
+      
+      # Index settings
+      indexDateSeparator: "-"
+      indexRolloverFrequencySpans: "1000000"
+      indexRolloverFrequencyDuration: "24h"
+      
+      # Bulk settings
+      bulkSize: 5000000
+      bulkActions: 1000
+      bulkWorkers: 10
+      bulkFlushInterval: 200ms
+    
+    # Index cleanup
+    esIndexCleaner:
+      enabled: true
+      numberOfDays: 7
+      schedule: "55 23 * * *"
+  
+  # Ingester configuration
+  ingester:
+    options:
+      kafka:
+        producer:
+          topic: jaeger-spans
+          brokers: kafka.kafka.svc.cluster.local:9092
+          batch-size: 1000000
+          batch-timeout: 1s
+        consumer:
+          topic: jaeger-spans
+          brokers: kafka.kafka.svc.cluster.local:9092
+          group-id: jaeger-ingester
+          fetch-min-bytes: 100000
+    
+    # Resource configuration
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 200m
+      limits:
+        memory: 1Gi
+        cpu: 500m
+    
+    # High availability
+    replicas: 2
+    
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "14269"
+    
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: jaeger
+                  app.kubernetes.io/component: ingester
+              topologyKey: kubernetes.io/hostname
+  
+  # Collector configuration
+  collector:
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 512Mi
+        cpu: 200m
+    
+    replicas: 3
+    
+    # Service configuration
+    service:
+      type: ClusterIP
+    
+    # Sampling configuration
+    options:
+      collector:
+        # Zipkin compatibility
+        zipkin:
+          host-port: ":9411"
+        
+        # OTLP receiver
+        otlp:
+          grpc:
+            host-port: ":14250"
+          http:
+            host-port: ":14268"
+        
+        # Kafka producer
+        kafka:
+          producer:
+            topic: jaeger-spans
+            brokers: kafka.kafka.svc.cluster.local:9092
+            encoding: protobuf
+            batch-size: 1000000
+            batch-timeout: 1s
+    
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "14269"
+    
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: jaeger
+                  app.kubernetes.io/component: collector
+              topologyKey: kubernetes.io/hostname
+  
+  # Query service configuration
+  query:
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 100m
+      limits:
+        memory: 512Mi
+        cpu: 200m
+    
+    replicas: 2
+    
+    # Service configuration
+    service:
+      type: ClusterIP
+    
+    # Query options
+    options:
+      query:
+        base-path: /
+        static-files: /go/jaeger-ui/
+        ui-config: /etc/jaeger/ui/ui-config.json
+        log-level: info
+        
+        # Max lookback for traces
+        max-clock-skew-adjustment: 0s
+    
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "16687"
+    
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: jaeger
+                  app.kubernetes.io/component: query
+              topologyKey: kubernetes.io/hostname
+  
+  # Agent configuration (optional - use OTEL collector instead)
+  agent:
+    strategy: DaemonSet
+    
+    resources:
+      requests:
+        memory: 64Mi
+        cpu: 50m
+      limits:
+        memory: 128Mi
+        cpu: 100m
+    
+    options:
+      agent:
+        collector.host-port: kailash-jaeger-collector:14267
+        
+        # Sampling configuration
+        sampling:
+          strategies-file: /etc/jaeger/sampling/sampling.json
+    
+    podAnnotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "14271"
+
+---
+# Jaeger UI configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jaeger-ui-config
+  namespace: tracing
+data:
+  ui-config.json: |
+    {
+      "monitor": {
+        "menuEnabled": true
+      },
+      "dependencies": {
+        "menuEnabled": true
+      },
+      "archiveEnabled": true,
+      "tracking": {
+        "gaID": "UA-000000-2",
+        "trackErrors": true
+      },
+      "menu": [
+        {
+          "label": "Grafana",
+          "url": "https://grafana.yourdomain.com",
+          "anchorTarget": "_blank"
+        },
+        {
+          "label": "Prometheus",
+          "url": "https://prometheus.yourdomain.com",
+          "anchorTarget": "_blank"
+        }
+      ],
+      "search": {
+        "maxLookback": {
+          "label": "2 Days",
+          "value": "2d"
+        }
+      }
+    }
+
+---
+# Sampling strategies configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jaeger-sampling-config
+  namespace: tracing
+data:
+  sampling.json: |
+    {
+      "service_strategies": [
+        {
+          "service": "kailash-app",
+          "type": "probabilistic",
+          "param": 0.1,
+          "max_traces_per_second": 100,
+          "operation_strategies": [
+            {
+              "operation": "GET /health",
+              "type": "probabilistic",
+              "param": 0.01
+            },
+            {
+              "operation": "POST /api/workflows",
+              "type": "probabilistic",
+              "param": 1.0
+            }
+          ]
+        },
+        {
+          "service": "nginx-ingress",
+          "type": "probabilistic",
+          "param": 0.05
+        }
+      ],
+      "default_strategy": {
+        "type": "probabilistic",
+        "param": 0.1,
+        "max_traces_per_second": 50
+      },
+      "per_operation_strategies": [
+        {
+          "operation": "health_check",
+          "type": "probabilistic",
+          "param": 0.001
+        }
+      ]
+    }
+
+---
+# Elasticsearch password secret for Jaeger
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jaeger-elasticsearch-secret
+  namespace: tracing
+type: Opaque
+stringData:
+  password: "changeme"  # Replace with actual password from elasticsearch secret
+
+---
+# Ingress for Jaeger UI
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jaeger-ingress
+  namespace: tracing
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: jaeger-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Authentication Required - Jaeger"
+spec:
+  tls:
+    - hosts:
+        - jaeger.yourdomain.com
+      secretName: jaeger-tls
+  rules:
+    - host: jaeger.yourdomain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kailash-jaeger-query
+                port:
+                  number: 16686
+
+---
+# ServiceMonitor for Jaeger Collector
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: jaeger-collector-metrics
+  namespace: tracing
+  labels:
+    prometheus: kailash
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jaeger
+      app.kubernetes.io/component: collector
+  endpoints:
+    - port: c-tchannel-trft
+      interval: 30s
+      path: /metrics
+
+---
+# ServiceMonitor for Jaeger Query
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: jaeger-query-metrics
+  namespace: tracing
+  labels:
+    prometheus: kailash
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jaeger
+      app.kubernetes.io/component: query
+  endpoints:
+    - port: http-query
+      interval: 30s
+      path: /metrics
+
+---
+# ServiceMonitor for Jaeger Agent
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: jaeger-agent-metrics
+  namespace: tracing
+  labels:
+    prometheus: kailash
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: jaeger
+      app.kubernetes.io/component: agent
+  endpoints:
+    - port: admin-http
+      interval: 30s
+      path: /metrics
+
+---
+# Network policy for Jaeger
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: jaeger-network-policy
+  namespace: tracing
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: jaeger
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress traffic
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 16686
+    
+    # Allow inter-component communication
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: jaeger
+      
+    # Allow application traces
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: kailash-app
+      ports:
+        - protocol: TCP
+          port: 14267  # Agent
+        - protocol: TCP
+          port: 14268  # Collector HTTP
+        - protocol: TCP
+          port: 14250  # Collector gRPC
+        - protocol: TCP
+          port: 9411   # Zipkin
+    
+    # Allow monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 14269  # Metrics
+        - protocol: TCP
+          port: 16687  # Query metrics
+        - protocol: TCP
+          port: 14271  # Agent metrics
+  
+  egress:
+    # Allow connection to Elasticsearch
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: logging
+      ports:
+        - protocol: TCP
+          port: 9200
+    
+    # Allow connection to Kafka (if using)
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kafka
+      ports:
+        - protocol: TCP
+          port: 9092
+    
+    # Allow DNS
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
