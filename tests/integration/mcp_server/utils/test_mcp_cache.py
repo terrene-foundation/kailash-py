@@ -81,7 +81,7 @@ class TestLRUCache:
 
     def test_ttl_expiration(self):
         """Test TTL expiration functionality."""
-        cache = LRUCache(ttl=1)  # 1 second TTL
+        cache = LRUCache(ttl=0.1)  # 0.1 second TTL for faster testing
 
         cache.set("key1", "value1")
 
@@ -89,12 +89,20 @@ class TestLRUCache:
         result = cache.get("key1")
         assert result == "value1"
 
-        # Wait for TTL to expire
-        time.sleep(1.1)
+        # Wait for TTL to expire using polling
+        from datetime import datetime
+        start_time = datetime.now()
+        expired = False
+        
+        while (datetime.now() - start_time).total_seconds() < 0.5:
+            result = cache.get("key1")
+            if result is None:
+                expired = True
+                break
+            time.sleep(0.02)
 
-        # Should return None and increment misses
-        result = cache.get("key1")
-        assert result is None
+        # Should have expired
+        assert expired, "Cache key did not expire within expected time"
         assert cache._misses == 1
 
     def test_ttl_disabled(self):

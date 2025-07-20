@@ -183,8 +183,8 @@ class AsyncWorkflowFixtures:
                 f"mysql://{user}:{password}@localhost:{actual_port}/{database}"
             )
 
-            # Wait for MySQL to be ready (takes longer than PostgreSQL)
-            await asyncio.sleep(10)
+            # Wait for MySQL to be ready (shorter wait for tests)
+            await asyncio.sleep(0.1)
 
             return DatabaseFixture(
                 container=container,

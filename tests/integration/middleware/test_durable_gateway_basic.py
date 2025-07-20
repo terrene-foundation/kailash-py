@@ -95,16 +95,28 @@ result = {
         )
         server_thread.start()
 
-        # Wait for startup
-        time.sleep(2)
-
-        # Check if gateway is running
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(f"http://localhost:{port}/health")
-                print(f"Health check response: {response.status_code}")
-        except Exception as e:
-            print(f"Health check failed: {e}")
+        # Wait for gateway startup with health check polling
+        from datetime import datetime
+        import asyncio
+        
+        start_time = datetime.now()
+        gateway_ready = False
+        
+        while (datetime.now() - start_time).total_seconds() < 10.0:
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(f"http://localhost:{port}/health", timeout=1.0)
+                    if response.status_code == 200:
+                        print(f"Health check response: {response.status_code}")
+                        gateway_ready = True
+                        break
+            except (httpx.ConnectError, httpx.TimeoutException):
+                pass  # Gateway not ready yet
+            
+            await asyncio.sleep(0.1)
+        
+        if not gateway_ready:
+            print("Gateway failed to start within 10 seconds")
 
         # Store port for tests
         gateway._test_port = port

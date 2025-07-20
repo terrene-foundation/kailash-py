@@ -16,6 +16,28 @@ pip install kailash-dataflow  # Zero-config database
 pip install kailash-nexus     # Multi-channel platform
 ```
 
+### Cyclic Workflows
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+workflow.add_node("DataProcessorNode", "processor", {"threshold": 0.9})
+workflow.add_node("QualityEvaluatorNode", "evaluator", {"target_quality": 0.95})
+
+# Create cycle using CycleBuilder API (NOT deprecated cycle=True)
+cycle_builder = workflow.create_cycle("quality_improvement")
+cycle_builder.connect("processor", "evaluator", mapping={"result": "input_data"}) \
+             .connect("evaluator", "processor", mapping={"feedback": "adjustment"}) \
+             .max_iterations(50) \
+             .converge_when("quality > 0.95") \
+             .timeout(300) \
+             .build()
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())  # Real cyclic execution
+```
+
 ### Basic Workflow
 ```python
 from kailash.workflow.builder import WorkflowBuilder
@@ -67,46 +89,6 @@ app.register("process_data", workflow)
 app.start()  # Available as API, CLI, and MCP
 ```
 
-### A2A Multi-Agent Quick Start
-```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
-
-workflow = WorkflowBuilder()
-workflow.add_node("A2ACoordinatorNode", "coordinator", {})
-
-# Register agents and delegate tasks
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build(), parameters={
-    "coordinator": {
-        "action": "register",
-        "agent_info": {"id": "analyst", "skills": ["research", "analysis"]}
-    }
-})
-```
-
-### Cyclic Workflows (v0.6.6+) - CycleBuilder API
-```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
-
-workflow = WorkflowBuilder()
-workflow.add_node("DataProcessorNode", "processor", {"threshold": 0.9})
-workflow.add_node("QualityEvaluatorNode", "evaluator", {"target_quality": 0.95})
-
-# Create cycle using CycleBuilder API (NOT deprecated cycle=True)
-cycle_builder = workflow.create_cycle("quality_improvement")
-cycle_builder.connect("processor", "evaluator", mapping={"result": "input_data"}) \
-             .connect("evaluator", "processor", mapping={"feedback": "adjustment"}) \
-             .max_iterations(50) \
-             .converge_when("quality > 0.95") \
-             .timeout(300) \
-             .build()
-
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())  # Real cyclic execution
-```
-
 ### ❌ NEVER
 - `workflow.execute(runtime)` → Use `runtime.execute(workflow)`
 - `workflow.addNode()` → Use `workflow.add_node()`
@@ -114,7 +96,7 @@ results, run_id = runtime.execute(workflow.build())  # Real cyclic execution
 - String code in PythonCodeNode → Use `.from_function()`
 - `workflow.connect(..., cycle=True)` → Use `workflow.create_cycle("name").connect(...).build()`
 - Override `execute()` in nodes → Implement `run()` instead
-- Use `operation` parameter → Use `action` for consistency
+- Parameter naming → Follow node-specific requirements (`operation` for EdgeCoordinationNode, `action` for others)
 
 ### 🎯 Multi-Step Strategy (Enterprise Workflow)
 1. **First implementation** → Copy basic pattern above
@@ -129,9 +111,10 @@ results, run_id = runtime.execute(workflow.build())  # Real cyclic execution
 10. **Custom nodes** → [sdk-users/developer/05-custom-development.md](sdk-users/developer/05-custom-development.md)
 11. **Production deployment** → [sdk-users/enterprise/production-patterns.md](sdk-users/enterprise/production-patterns.md) (Scaling, monitoring)
 12. **Enterprise resilience** → [sdk-users/enterprise/resilience-patterns.md](sdk-users/enterprise/resilience-patterns.md) (Circuit breaker, bulkhead, health monitoring)
-13. **Distributed transactions** → [sdk-users/cheatsheet/049-distributed-transactions.md](sdk-users/cheatsheet/049-distributed-transactions.md) (Saga, 2PC, automatic pattern selection)
-14. **Governance & compliance** → [sdk-users/enterprise/compliance-patterns.md](sdk-users/enterprise/compliance-patterns.md) (Audit, data policies)
-15. **Common errors** → [sdk-users/validation/common-mistakes.md](sdk-users/validation/common-mistakes.md)
+13. **Edge computing** → [sdk-users/developer/30-edge-computing-guide.md](sdk-users/developer/30-edge-computing-guide.md) (EdgeCoordinationNode, distributed consensus)
+14. **Distributed transactions** → [sdk-users/cheatsheet/049-distributed-transactions.md](sdk-users/cheatsheet/049-distributed-transactions.md) (Saga, 2PC, automatic pattern selection)
+15. **Governance & compliance** → [sdk-users/enterprise/compliance-patterns.md](sdk-users/enterprise/compliance-patterns.md) (Audit, data policies)
+16. **Common errors** → [sdk-users/validation/common-mistakes.md](sdk-users/validation/common-mistakes.md)
 
 ---
 
@@ -152,8 +135,6 @@ The **App Framework** provides complete domain-specific applications built on th
 - **kailash-dataflow**: Zero-config database framework with enterprise power
 - **kailash-mcp**: Enterprise MCP platform with authentication, multi-tenancy, compliance
 - **kailash-nexus**: Multi-channel platform (API, CLI, MCP) with unified sessions
-- **ai_registry**: AI-powered document registry with advanced RAG capabilities
-- **user_management**: Enterprise user management with RBAC and security patterns
 
 ### When to Use Each Approach
 
@@ -197,6 +178,11 @@ The **App Framework** provides complete domain-specific applications built on th
     - ✅ **REQUIRED**: `git add . && git commit -m "WIP"` before risky operations
     - ✅ Use `git stash` instead of destructive resets
     - 🚨 **ASK PERMISSION** before any potentially destructive git command
+8. **AsyncNode Implementation**: CRITICAL patterns to avoid common mistakes
+    - **Implement**: `async_run()` NOT `run()` in AsyncNode subclasses
+    - **Tests**: Use `await node.execute_async()` NOT `await node.execute()`
+    - **NodeParameter**: ALWAYS include `type` field (str, int, dict, object, etc.)
+    - **Full Guide**: [AsyncNode Implementation Guide](sdk-users/developer/async-node-guide.md)
 
 ## ⚡ Critical Patterns
 1. **Data Paths**: `get_input_data_path()`, `get_output_data_path()`
@@ -218,6 +204,12 @@ The **App Framework** provides complete domain-specific applications built on th
 14. **Core SDK Architecture**: TODO-111 resolved critical infrastructure gaps - CyclicWorkflowExecutor, WorkflowVisualizer, and ConnectionManager now production-ready with comprehensive test coverage
 15. **Parameter Naming Convention**: Use `action` (not `operation`) for consistency across nodes
 16. **Test Performance**: Run unit tests directly for 11x faster execution: `pytest tests/unit/`
+17. **Connection Parameter Validation** (v0.8.4+): Enterprise security with comprehensive validation
+    - Use `LocalRuntime(connection_validation="strict")` for production
+    - Connection contracts with `workflow.add_typed_connection(..., contract_name="no_pii_data")`
+    - Type-safe ports with `InputPort[str] = StringPort(required=True)`
+    - Monitoring with `get_validation_metrics()` and `AlertManager`
+    - Performance optimization with caching and batch validation
 
 ## 🔧 Core Nodes (110+ available)
 **Quick Access**: [Node Index](sdk-users/nodes/node-index.md) - Minimal reference (47 lines)
@@ -299,27 +291,3 @@ Use centralized `tests/node_registry_utils.py` for consistent node management
 - **SDK core tests** → `tests/` (unit/integration/e2e for SDK only)
 - **App-specific tests** → `apps/*/tests/` (DataFlow, Nexus, etc. have their own test folders)
 - **Training data** → `# contrib (removed)/training/` (LLM patterns)
-
-## 🎯 Quick Start Guide
-
-**Core SDK Development:**
-- **Start**: [sdk-users/](sdk-users/) - Complete workflow guides with decision matrix
-- **Node Selection**: [Node Selection Guide](sdk-users/nodes/node-selection-guide.md) - 110+ nodes
-- **Quick Patterns**: [Cheatsheet](sdk-users/cheatsheet/) - 37 copy-paste patterns
-- **Enterprise**: [Enterprise Patterns](sdk-users/enterprise/) - Advanced features
-
-**App Framework Deployment:**
-- **DataFlow**: [sdk-users/apps/dataflow/](sdk-users/apps/dataflow/) - Zero-config database operations
-- **Nexus Platform**: [sdk-users/apps/nexus/](sdk-users/apps/nexus/) - Multi-channel (API, CLI, MCP)
-- **MCP Platform**: [apps/kailash-mcp/](apps/kailash-mcp/) - Enterprise MCP with auth & compliance
-- **AI Registry**: [apps/ai_registry/](apps/ai_registry/) - Advanced RAG with document analysis
-
-**SDK Development:**
-- **Contributing**: [# contrib (removed)/CLAUDE.md](# contrib (removed)/CLAUDE.md)
-- **Architecture**: [# contrib (removed)/architecture/](# contrib (removed)/architecture/)
-- **Examples**: [examples/](examples/) - Feature validation
-
-**Need Help:**
-- **Errors**: [Troubleshooting](sdk-users/developer/05-troubleshooting.md)
-- **Common Mistakes**: [sdk-users/validation/common-mistakes.md](sdk-users/validation/common-mistakes.md)
-- **New Team**: [NEW_TEAM_MEMBER.md](NEW_TEAM_MEMBER.md)

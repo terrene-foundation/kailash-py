@@ -16,14 +16,16 @@
 ## 🔌 Multi-Channel MCP Integration
 **NEW: Nexus Framework Integration** - MCP now available as unified channel
 ```python
-from kailash.nexus import create_nexus
+# Use the Nexus app framework (pip install kailash-nexus)
+from nexus import Nexus
 
 # MCP as part of multi-channel platform
-nexus = create_nexus(
-    enable_api=True,    # REST API
-    enable_cli=True,    # Command line
-    enable_mcp=True     # MCP server - FULLY TESTED ✅
-)
+nexus = Nexus()
+
+# Configure channels
+nexus.enable_api(port=8000)    # REST API
+nexus.enable_cli()              # Command line
+nexus.enable_mcp(port=3000)     # MCP server - FULLY TESTED ✅
 
 # Workflows automatically available across all channels:
 # - API: POST /api/executions

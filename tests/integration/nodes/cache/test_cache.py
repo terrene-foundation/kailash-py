@@ -323,12 +323,12 @@ class TestCacheNode:
         """Test TTL expiration functionality."""
         key = "ttl_test"
 
-        # Set with very short TTL
+        # Set with TTL for testing
         cache_node.execute(
             operation="set",
             key=key,
             value=sample_data,
-            ttl=1,  # 1 second
+            ttl=1,  # 1 second TTL
             backend="memory",
         )
 
@@ -336,9 +336,9 @@ class TestCacheNode:
         get_result = cache_node.execute(operation="get", key=key, backend="memory")
         assert get_result["hit"] is True
 
-        # Wait for expiration
-        time.sleep(1.1)
-
+        # Wait a small amount to ensure we're past the exact TTL
+        time.sleep(1.05)
+        
         # Should be expired
         get_expired = cache_node.execute(operation="get", key=key, backend="memory")
         assert get_expired["hit"] is False

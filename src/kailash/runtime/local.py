@@ -37,13 +37,19 @@ Examples:
 import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 import networkx as nx
 
 from kailash.nodes import Node
 from kailash.runtime.parameter_injector import WorkflowParameterInjector
 from kailash.runtime.secret_provider import EnvironmentSecretProvider, SecretProvider
+from kailash.runtime.validation.connection_context import ConnectionContext
+from kailash.runtime.validation.error_categorizer import ErrorCategorizer
+from kailash.runtime.validation.suggestion_engine import ValidationSuggestionEngine
+from kailash.runtime.validation.enhanced_error_formatter import EnhancedErrorFormatter
+from kailash.runtime.validation.metrics import get_metrics_collector, ValidationEventType
+from kailash.workflow.contracts import ConnectionContract, ContractValidator
 from kailash.sdk_exceptions import (
     RuntimeExecutionError,
     WorkflowExecutionError,
@@ -86,6 +92,7 @@ class LocalRuntime:
         enable_audit: bool = False,
         resource_limits: Optional[dict[str, Any]] = None,
         secret_provider: Optional[Any] = None,
+        connection_validation: str = "warn",
     ):
         """Initialize the unified runtime.
 
@@ -100,7 +107,19 @@ class LocalRuntime:
             enable_audit: Whether to enable audit logging.
             resource_limits: Resource limits (memory_mb, cpu_cores, etc.).
             secret_provider: Optional secret provider for runtime secret injection.
+            connection_validation: Connection parameter validation mode:
+                - "off": No validation (backward compatibility)
+                - "warn": Log warnings on validation errors (default)
+                - "strict": Raise errors on validation failures
         """
+        # Validate connection_validation parameter
+        valid_modes = {"off", "warn", "strict"}
+        if connection_validation not in valid_modes:
+            raise ValueError(
+                f"Invalid connection_validation mode: {connection_validation}. "
+                f"Must be one of: {valid_modes}"
+            )
+        
         self.debug = debug
         self.enable_cycles = enable_cycles
         self.enable_async = enable_async
@@ -111,6 +130,7 @@ class LocalRuntime:
         self.enable_security = enable_security
         self.enable_audit = enable_audit
         self.resource_limits = resource_limits or {}
+        self.connection_validation = connection_validation
         self.logger = logger
 
         # Enterprise feature managers (lazy initialization)
@@ -402,6 +422,14 @@ class LocalRuntime:
                     task_manager.update_run_status(run_id, "completed")
                 except Exception as e:
                     self.logger.warning(f"Failed to update run status: {e}")
+            
+            # Final cleanup of all node instances
+            for node_id, node_instance in workflow._node_instances.items():
+                if hasattr(node_instance, "cleanup"):
+                    try:
+                        await node_instance.cleanup()
+                    except Exception as cleanup_error:
+                        self.logger.warning(f"Error during final cleanup of node {node_id}: {cleanup_error}")
 
             return results, run_id
 
@@ -632,6 +660,13 @@ class LocalRuntime:
                 self.logger.info(
                     f"Node {node_id} completed successfully in {performance_metrics.duration:.3f}s"
                 )
+                
+                # Clean up async resources if the node has a cleanup method
+                if hasattr(node_instance, "cleanup"):
+                    try:
+                        await node_instance.cleanup()
+                    except Exception as cleanup_error:
+                        self.logger.warning(f"Error during node {node_id} cleanup: {cleanup_error}")
 
             except Exception as e:
                 failed_nodes.append(node_id)
@@ -646,6 +681,13 @@ class LocalRuntime:
                         ended_at=datetime.now(UTC),
                     )
 
+                # Clean up async resources even on failure
+                if hasattr(node_instance, "cleanup"):
+                    try:
+                        await node_instance.cleanup()
+                    except Exception as cleanup_error:
+                        self.logger.warning(f"Error during node {node_id} cleanup after failure: {cleanup_error}")
+                
                 # Determine if we should continue
                 if self._should_stop_on_error(workflow, node_id):
                     error_msg = f"Node '{node_id}' failed: {e}"
@@ -816,7 +858,223 @@ class LocalRuntime:
         # Apply parameter overrides
         inputs.update(parameters)
 
+        # Connection parameter validation (TODO-121) with enhanced error messages and metrics
+        if self.connection_validation != "off":
+            metrics_collector = get_metrics_collector()
+            node_type = type(node_instance).__name__
+            
+            # Start metrics collection
+            metrics_collector.start_validation(node_id, node_type, self.connection_validation)
+            
+            try:
+                # Phase 2: Contract validation (if contracts exist in workflow metadata)
+                contract_violations = self._validate_connection_contracts(
+                    workflow, node_id, inputs, node_outputs
+                )
+                
+                if contract_violations:
+                    contract_error_msg = "\n".join([
+                        f"Contract '{violation['contract']}' violation on connection {violation['connection']}: {violation['error']}"
+                        for violation in contract_violations
+                    ])
+                    raise WorkflowExecutionError(
+                        f"Connection contract validation failed for node '{node_id}': {contract_error_msg}"
+                    )
+                
+                # Merge node config with inputs before validation (matches node.execute behavior)
+                # This ensures connection validation considers both runtime inputs AND node configuration
+                merged_inputs = {**node_instance.config, **inputs}
+                
+                # Handle nested config case (same as in node.execute)
+                if "config" in merged_inputs and isinstance(merged_inputs["config"], dict):
+                    nested_config = merged_inputs["config"]
+                    for key, value in nested_config.items():
+                        if key not in inputs:  # Runtime inputs take precedence
+                            merged_inputs[key] = value
+                
+                # Use the node's existing validate_inputs method with merged inputs
+                validated_inputs = node_instance.validate_inputs(**merged_inputs)
+                
+                # Extract only the runtime inputs from validated results
+                # (exclude config parameters that were merged for validation)
+                validated_runtime_inputs = {}
+                for key, value in validated_inputs.items():
+                    # Include if it was in original inputs OR not in node config
+                    # This preserves validated/converted values from runtime inputs
+                    if key in inputs or key not in node_instance.config:
+                        validated_runtime_inputs[key] = value
+                
+                # Record successful validation
+                metrics_collector.end_validation(node_id, node_type, success=True)
+                
+                # Replace inputs with validated runtime inputs only
+                inputs = validated_runtime_inputs
+                
+            except Exception as e:
+                # Categorize the error for metrics
+                categorizer = ErrorCategorizer()
+                error_category = categorizer.categorize_error(e, node_type)
+                
+                # Build connection info for metrics
+                connection_info = {"source": "unknown", "target": node_id}
+                for connection in workflow.connections:
+                    if connection.target_node == node_id:
+                        connection_info["source"] = connection.source_node
+                        break
+                
+                # Record failed validation
+                metrics_collector.end_validation(
+                    node_id, node_type, success=False, 
+                    error_category=error_category,
+                    connection_info=connection_info
+                )
+                
+                # Check for security violations
+                if error_category.value == "security_violation":
+                    metrics_collector.record_security_violation(
+                        node_id, node_type,
+                        {"message": str(e), "category": "connection_validation"},
+                        connection_info
+                    )
+                
+                # Generate enhanced error message with connection tracing
+                error_msg = self._generate_enhanced_validation_error(
+                    node_id, node_instance, e, workflow, parameters
+                )
+                
+                if self.connection_validation == "strict":
+                    # Strict mode: raise the error with enhanced message
+                    raise WorkflowExecutionError(error_msg) from e
+                elif self.connection_validation == "warn":
+                    # Warn mode: log enhanced warning and continue with unvalidated inputs
+                    self.logger.warning(error_msg)
+                    # Continue with original inputs
+        else:
+            # Record mode bypass for metrics
+            metrics_collector = get_metrics_collector()
+            metrics_collector.record_mode_bypass(
+                node_id, type(node_instance).__name__, self.connection_validation
+            )
+
         return inputs
+
+    def _generate_enhanced_validation_error(
+        self, 
+        node_id: str, 
+        node_instance: Node, 
+        original_error: Exception,
+        workflow: "Workflow",  # Type annotation as string to avoid circular import
+        parameters: dict
+    ) -> str:
+        """Generate enhanced validation error message with connection tracing and suggestions.
+        
+        Args:
+            node_id: ID of the target node that failed validation
+            node_instance: The node instance that failed
+            original_error: Original validation exception
+            workflow: The workflow being executed
+            parameters: Runtime parameters
+            
+        Returns:
+            Enhanced error message with connection context and actionable suggestions
+        """
+        # Initialize error enhancement components
+        categorizer = ErrorCategorizer()
+        suggestion_engine = ValidationSuggestionEngine()
+        formatter = EnhancedErrorFormatter()
+        
+        # Categorize the error
+        node_type = type(node_instance).__name__
+        error_category = categorizer.categorize_error(original_error, node_type)
+        
+        # Build connection context by finding the connections that feed into this node
+        connection_context = self._build_connection_context(node_id, workflow, parameters)
+        
+        # Generate suggestion for fixing the error
+        suggestion = suggestion_engine.generate_suggestion(
+            error_category, node_type, connection_context, str(original_error)
+        )
+        
+        # Format the enhanced error message
+        if error_category.value == "security_violation":
+            enhanced_msg = formatter.format_security_error(
+                str(original_error), connection_context, suggestion
+            )
+        else:
+            enhanced_msg = formatter.format_enhanced_error(
+                str(original_error), error_category, connection_context, suggestion
+            )
+            
+        return enhanced_msg
+        
+    def _build_connection_context(
+        self, 
+        target_node_id: str, 
+        workflow: "Workflow", 
+        parameters: dict
+    ) -> ConnectionContext:
+        """Build connection context for error message enhancement.
+        
+        Args:
+            target_node_id: ID of the target node
+            workflow: The workflow being executed  
+            parameters: Runtime parameters
+            
+        Returns:
+            ConnectionContext with source/target information
+        """
+        # Find the primary connection feeding into this node
+        source_node = "unknown"
+        source_port = None
+        target_port = "input"
+        parameter_value = None
+        
+        # Look through workflow connections to find what feeds this node
+        for connection in workflow.connections:
+            if connection.target_node == target_node_id:
+                source_node = connection.source_node
+                source_port = connection.source_output
+                target_port = connection.target_input
+                
+                # Try to get the actual parameter value from runtime parameters
+                if target_port in parameters:
+                    parameter_value = parameters[target_port]
+                break
+                
+        # If no connection found, this might be a direct parameter issue
+        if source_node == "unknown" and parameters:
+            # Find the first parameter that might have caused the issue
+            for key, value in parameters.items():
+                parameter_value = value
+                target_port = key
+                break
+                
+        return ConnectionContext(
+            source_node=source_node,
+            source_port=source_port,
+            target_node=target_node_id,
+            target_port=target_port,
+            parameter_value=parameter_value,
+            validation_mode=self.connection_validation
+        )
+
+    def get_validation_metrics(self) -> Dict[str, Any]:
+        """Get validation performance metrics for the runtime.
+        
+        Returns:
+            Dictionary containing performance and security metrics
+        """
+        metrics_collector = get_metrics_collector()
+        return {
+            "performance_summary": metrics_collector.get_performance_summary(),
+            "security_report": metrics_collector.get_security_report(),
+            "raw_metrics": metrics_collector.export_metrics() if self.debug else None
+        }
+        
+    def reset_validation_metrics(self) -> None:
+        """Reset validation metrics collector."""
+        metrics_collector = get_metrics_collector()
+        metrics_collector.reset_metrics()
 
     def _should_stop_on_error(self, workflow: Workflow, node_id: str) -> bool:
         """Determine if execution should stop when a node fails.
@@ -1200,3 +1458,69 @@ class LocalRuntime:
 
         # Default to workflow-level format
         return False
+    
+    def _validate_connection_contracts(
+        self,
+        workflow: Workflow,
+        target_node_id: str,
+        target_inputs: dict[str, Any],
+        node_outputs: dict[str, dict[str, Any]]
+    ) -> list[dict[str, str]]:
+        """
+        Validate connection contracts for a target node.
+        
+        Args:
+            workflow: The workflow being executed
+            target_node_id: ID of the target node
+            target_inputs: Inputs being passed to the target node
+            node_outputs: Outputs from all previously executed nodes
+            
+        Returns:
+            List of contract violations (empty if all valid)
+        """
+        violations = []
+        
+        # Get connection contracts from workflow metadata
+        connection_contracts = workflow.metadata.get("connection_contracts", {})
+        if not connection_contracts:
+            return violations  # No contracts to validate
+            
+        # Create contract validator
+        validator = ContractValidator()
+        
+        # Find all connections targeting this node
+        for connection in workflow.connections:
+            if connection.target_node == target_node_id:
+                connection_id = f"{connection.source_node}.{connection.source_output} → {connection.target_node}.{connection.target_input}"
+                
+                # Check if this connection has a contract
+                if connection_id in connection_contracts:
+                    contract_dict = connection_contracts[connection_id]
+                    
+                    # Reconstruct contract from dictionary
+                    contract = ConnectionContract.from_dict(contract_dict)
+                    
+                    # Get source data from node outputs
+                    source_data = None
+                    if connection.source_node in node_outputs:
+                        source_outputs = node_outputs[connection.source_node]
+                        if connection.source_output in source_outputs:
+                            source_data = source_outputs[connection.source_output]
+                    
+                    # Get target data from inputs
+                    target_data = target_inputs.get(connection.target_input)
+                    
+                    # Validate the connection if we have data
+                    if source_data is not None or target_data is not None:
+                        is_valid, errors = validator.validate_connection(
+                            contract, source_data, target_data
+                        )
+                        
+                        if not is_valid:
+                            violations.append({
+                                "connection": connection_id,
+                                "contract": contract.name,
+                                "error": "; ".join(errors)
+                            })
+                            
+        return violations
