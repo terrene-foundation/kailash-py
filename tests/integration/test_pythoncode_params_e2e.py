@@ -244,11 +244,11 @@ result = {
             builder.add_node("PythonCodeNode", f"unsafe_node_{i}", {"code": code})
             workflow = builder.build()
             runtime = LocalRuntime()
-            
+
             # Execute workflow - should complete but node should fail
             results, _ = runtime.execute(workflow)
             node_name = f"unsafe_node_{i}"
-            
+
             # Check that node failed with security error
             assert node_name in results
             assert results[node_name]["failed"] is True
@@ -349,7 +349,9 @@ result = {
         assert output["parameters_used"]["workflow_adjustment"] == 1.5
 
         # Check processing results
-        assert len(output["results"]) == 3  # Items with value * 3.0 > 250 (100×3=300, 200×3=600, 150×3=450)
+        assert (
+            len(output["results"]) == 3
+        )  # Items with value * 3.0 > 250 (100×3=300, 200×3=600, 150×3=450)
         for item in output["results"]:
             assert item["processed"] > 250.0
             assert item["above_threshold"] is True

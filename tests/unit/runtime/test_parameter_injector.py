@@ -163,7 +163,9 @@ class TestDeferredConfigNode:
 
     def test_cache_node_validation_redis_host(self):
         """Test Redis/Cache node validation with redis_host parameter."""
-        deferred_node = DeferredConfigNode(MockCacheNode, redis_host="localhost", redis_port=6379)
+        deferred_node = DeferredConfigNode(
+            MockCacheNode, redis_host="localhost", redis_port=6379
+        )
 
         assert deferred_node._has_required_config() is True
 
@@ -218,7 +220,9 @@ class TestDeferredConfigNode:
         assert deferred_node._has_required_config() is False
 
         # Add required parameters
-        deferred_node.set_runtime_config(required_param="value", default_none_param="value")
+        deferred_node.set_runtime_config(
+            required_param="value", default_none_param="value"
+        )
         assert deferred_node._has_required_config() is True
 
     def test_node_validation_exception_handling(self):
@@ -1154,6 +1158,7 @@ class TestWorkflowParameterInjector:
 
     def test_get_mapped_parameter_exception_in_param_def(self):
         """Test parameter mapping when accessing param def raises exception."""
+
         # Create a param def that raises exception when accessed
         class BrokenParamDef:
             @property
@@ -1209,22 +1214,17 @@ class TestWorkflowParameterInjector:
 
     def test_validate_parameters_with_primary_auto_map(self):
         """Test parameter validation with auto_map_primary."""
+
         # Create node with auto_map_primary parameter
         class NodeWithAutoMapPrimary(Node):
             def get_parameters(self):
-                param1 = NodeParameter(
-                    name="internal_url", type=str, required=True
-                )
+                param1 = NodeParameter(name="internal_url", type=str, required=True)
                 param1.workflow_alias = "endpoint"
 
-                param2 = NodeParameter(
-                    name="auth_token", type=str, required=True
-                )
+                param2 = NodeParameter(name="auth_token", type=str, required=True)
                 param2.auto_map_from = ["token", "api_key", "auth_key"]
 
-                param3 = NodeParameter(
-                    name="primary_data", type=Any, required=True
-                )
+                param3 = NodeParameter(name="primary_data", type=Any, required=True)
                 param3.auto_map_primary = True
 
                 return {
@@ -1236,8 +1236,10 @@ class TestWorkflowParameterInjector:
             def run(self, **kwargs):
                 return {"processed": True}
 
-        self.mock_workflow._node_instances["alias_node"] = NodeWithAutoMapPrimary(name="alias_node")
-        
+        self.mock_workflow._node_instances["alias_node"] = NodeWithAutoMapPrimary(
+            name="alias_node"
+        )
+
         workflow_params = {
             "endpoint": "https://api.example.com",  # Maps to internal_url via alias
             "token": "secret_token",  # Maps to auth_token via auto_map_from
@@ -1274,12 +1276,12 @@ class TestWorkflowParameterInjector:
         self.mock_workflow.metadata = {
             "_workflow_inputs": {
                 "cache_node": {
-                    "config.redis.host": "redis_host", 
-                    "config.redis.port": "redis_port"
+                    "config.redis.host": "redis_host",
+                    "config.redis.port": "redis_port",
                 },
                 "llm_node": {
-                    "ai.model_name": "model", 
-                    "ai.settings.temperature": "temperature"
+                    "ai.model_name": "model",
+                    "ai.settings.temperature": "temperature",
                 },
             }
         }

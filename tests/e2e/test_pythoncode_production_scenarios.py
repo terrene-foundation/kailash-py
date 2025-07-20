@@ -411,21 +411,23 @@ class TestTPCMigrationScenarios:
         """
         # Ensure test database exists
         await ensure_docker_services()
-        
+
         # Set up test data
         conn_string = get_postgres_connection_string()
         conn = await asyncpg.connect(conn_string)
         try:
             await conn.execute("DROP TABLE IF EXISTS customers CASCADE")
-            await conn.execute("""
+            await conn.execute(
+                """
                 CREATE TABLE customers (
                     id SERIAL PRIMARY KEY,
                     name VARCHAR(255),
                     tier VARCHAR(50),
                     risk_score FLOAT
                 )
-            """)
-            
+            """
+            )
+
             # Insert test data
             test_customers = [
                 ("Alice Corp", "premium", 0.2),
@@ -433,23 +435,25 @@ class TestTPCMigrationScenarios:
                 ("Charlie Ltd", "standard", 0.3),
                 ("David Inc", "premium", 0.8),
             ]
-            
+
             for name, tier, risk_score in test_customers:
                 await conn.execute(
                     "INSERT INTO customers (name, tier, risk_score) VALUES ($1, $2, $3)",
-                    name, tier, risk_score
+                    name,
+                    tier,
+                    risk_score,
                 )
         finally:
             await conn.close()
-        
+
         # Create workflow with deferred nodes
         builder = WorkflowBuilder()
 
         # Add deferred SQL node (credentials injected later)
         sql_node = create_deferred_sql(
-            name="customer_fetcher", 
+            name="customer_fetcher",
             query="SELECT * FROM customers WHERE tier = $1",
-            params=["premium"]
+            params=["premium"],
         )
         builder.add_node_instance(sql_node, "customer_fetcher")
 
@@ -458,17 +462,17 @@ class TestTPCMigrationScenarios:
             customers: List[Dict], tier_config: Dict = None, **kwargs
         ) -> Dict:
             """Process customers with tier-specific logic.
-            
+
             This function accepts **kwargs to test _node_accepts_kwargs detection.
             """
             # Access runtime-injected configuration
             processing_mode = kwargs.get("processing_mode", "standard")
             enable_notifications = kwargs.get("enable_notifications", False)
-            
+
             # Test fuzzy parameter matching - these should be injected via fuzzy match
             # "data" should match to "input_data" parameter
             input_source = kwargs.get("data", "unknown")
-            # "endpoint" should match to "url" parameter  
+            # "endpoint" should match to "url" parameter
             api_endpoint = kwargs.get("endpoint", "not_provided")
             # "config" should match to "configuration"
             app_config = kwargs.get("config", {})
@@ -507,15 +511,18 @@ class TestTPCMigrationScenarios:
         processor = PythonCodeNode.from_function(process_customers, name="processor")
         builder.add_node(processor, "processor")
 
-        builder.add_connection("customer_fetcher", "result.data", "processor", "customers")
+        builder.add_connection(
+            "customer_fetcher", "result.data", "processor", "customers"
+        )
 
         # Build workflow
         workflow = builder.build()
 
         # Create parameter injector and configure deferred nodes at runtime
         from kailash.runtime.parameter_injector import WorkflowParameterInjector
+
         injector = WorkflowParameterInjector(workflow, debug=True)
-        
+
         injector.configure_deferred_node(
             "customer_fetcher",
             connection_string=get_postgres_connection_string(),
@@ -526,12 +533,15 @@ class TestTPCMigrationScenarios:
         result = await runtime.execute(
             workflow,
             parameters={
-                "processing_mode": "enhanced", 
+                "processing_mode": "enhanced",
                 "enable_notifications": True,
                 # Test fuzzy parameter matching
                 "data": "enterprise_system",  # Should fuzzy match to input parameters
                 "endpoint": "https://api.example.com",  # Should fuzzy match
-                "config": {"version": "2.0", "features": ["advanced"]},  # Should fuzzy match
+                "config": {
+                    "version": "2.0",
+                    "features": ["advanced"],
+                },  # Should fuzzy match
             },
         )
 
@@ -540,13 +550,16 @@ class TestTPCMigrationScenarios:
         assert output["summary"]["total"] == 3  # 3 premium customers
         assert output["summary"]["processing_mode"] == "enhanced"
         assert output["summary"]["notifications_enabled"] is True
-        
+
         # Verify fuzzy parameter matching worked
         fuzzy_params = output["summary"]["fuzzy_matched_params"]
         assert fuzzy_params["input_source"] == "enterprise_system"
         assert fuzzy_params["api_endpoint"] == "https://api.example.com"
-        assert fuzzy_params["app_config"] == {"version": "2.0", "features": ["advanced"]}
-        
+        assert fuzzy_params["app_config"] == {
+            "version": "2.0",
+            "features": ["advanced"],
+        }
+
         # Verify all kwargs were injected (testing _node_accepts_kwargs)
         all_kwargs = output["summary"]["all_kwargs"]
         assert "processing_mode" in all_kwargs
@@ -562,7 +575,7 @@ class TestTPCMigrationScenarios:
             if customer["risk_category"] == "low":  # Only low risk get enhanced
                 assert customer.get("enhanced_features") is True
                 assert customer.get("priority") == "high"
-        
+
         # Cleanup
         conn = await asyncpg.connect(conn_string)
         try:
@@ -573,58 +586,61 @@ class TestTPCMigrationScenarios:
     @pytest.mark.asyncio
     async def test_scenario_3_complex_workflow_input_mappings(self):
         """Test Scenario 3: Complex workflow input mappings with dot notation.
-        
+
         This tests the _workflow_inputs metadata feature for complex parameter
         mappings including nested paths and deferred Cache/Redis nodes.
         """
         # Ensure services are running
         await ensure_docker_services()
-        
-        # Set up Redis test data  
+
+        # Set up Redis test data
         redis_params = get_redis_connection_params()
         r_client = redis.Redis(**redis_params)
-        
+
         # Create nested configuration in Redis
-        r_client.hset("app:config", mapping={
-            "cache_ttl": "3600",
-            "cache_prefix": "prod",
-            "max_connections": "100",
-        })
-        
-        r_client.hset("app:features", mapping={
-            "ml_enabled": "true",
-            "realtime_processing": "true",
-            "batch_size": "50",
-        })
-        
+        r_client.hset(
+            "app:config",
+            mapping={
+                "cache_ttl": "3600",
+                "cache_prefix": "prod",
+                "max_connections": "100",
+            },
+        )
+
+        r_client.hset(
+            "app:features",
+            mapping={
+                "ml_enabled": "true",
+                "realtime_processing": "true",
+                "batch_size": "50",
+            },
+        )
+
         try:
             builder = WorkflowBuilder()
-            
+
             # Add deferred Redis node for cache operations
             cache_node = create_deferred_node(
-                RedisNode,
-                name="cache_reader",
-                operation="hgetall",
-                key="app:config"
+                RedisNode, name="cache_reader", operation="hgetall", key="app:config"
             )
             builder.add_node_instance(cache_node, "cache_config")
-            
+
             # Add another Redis node for feature flags
             feature_node = create_deferred_node(
                 RedisNode,
                 name="feature_reader",
-                operation="hgetall", 
-                key="app:features"
+                operation="hgetall",
+                key="app:features",
             )
             builder.add_node_instance(feature_node, "feature_config")
-            
+
             # Processing node that uses complex nested parameters
             def process_with_configs(
                 cache_config: Dict,
                 feature_config: Dict,
                 ttl: int = None,
                 ml_model: str = None,
-                **kwargs
+                **kwargs,
             ) -> Dict:
                 """Process with complex configuration from multiple sources."""
                 # These parameters should be injected via _workflow_inputs mapping
@@ -643,9 +659,9 @@ class TestTPCMigrationScenarios:
                         "ttl_override": ttl is not None,
                         "model_override": ml_model is not None,
                         "extra_params": list(kwargs.keys()),
-                    }
+                    },
                 }
-                
+
                 # Process based on ML settings
                 if result["ml_settings"]["enabled"]:
                     result["ml_processing"] = {
@@ -653,54 +669,59 @@ class TestTPCMigrationScenarios:
                         "model": result["ml_settings"]["model"],
                         "batch_size": result["ml_settings"]["batch_size"],
                     }
-                
+
                 return result
-            
+
             processor = PythonCodeNode.from_function(
-                process_with_configs, 
-                name="config_processor"
+                process_with_configs, name="config_processor"
             )
             builder.add_node(processor, "processor")
-            
+
             # Set up complex workflow input mappings with dot notation
-            builder.set_workflow_inputs({
-                "processor": {
-                    "cache.ttl_seconds": "ttl",  # Map nested param to flat param
-                    "ml.model_name": "ml_model",  # Map nested to different name
-                },
-                "cache_config": {
-                    "redis.connection.host": "host",
-                    "redis.connection.port": "port",
-                },
-                "feature_config": {
-                    "redis.connection.host": "host",  # Same mapping for both Redis nodes
-                    "redis.connection.port": "port",
+            builder.set_workflow_inputs(
+                {
+                    "processor": {
+                        "cache.ttl_seconds": "ttl",  # Map nested param to flat param
+                        "ml.model_name": "ml_model",  # Map nested to different name
+                    },
+                    "cache_config": {
+                        "redis.connection.host": "host",
+                        "redis.connection.port": "port",
+                    },
+                    "feature_config": {
+                        "redis.connection.host": "host",  # Same mapping for both Redis nodes
+                        "redis.connection.port": "port",
+                    },
                 }
-            })
-            
+            )
+
             # Connect nodes
-            builder.add_connection("cache_config", "result", "processor", "cache_config")
-            builder.add_connection("feature_config", "result", "processor", "feature_config")
-            
+            builder.add_connection(
+                "cache_config", "result", "processor", "cache_config"
+            )
+            builder.add_connection(
+                "feature_config", "result", "processor", "feature_config"
+            )
+
             # Build workflow
             workflow = builder.build()
-            
+
             # Configure deferred Redis nodes at runtime
             injector = WorkflowParameterInjector(workflow, debug=True)
-            
+
             # Configure both cache nodes
             injector.configure_deferred_node(
                 "cache_config",
                 host=redis_params["host"],
                 port=redis_params["port"],
             )
-            
+
             injector.configure_deferred_node(
-                "feature_config", 
+                "feature_config",
                 host=redis_params["host"],
                 port=redis_params["port"],
             )
-            
+
             # Execute with nested parameters that should be mapped
             runtime = LocalRuntime()
             result = await runtime.execute(
@@ -717,31 +738,33 @@ class TestTPCMigrationScenarios:
                             "host": redis_params["host"],  # Should map to Redis nodes
                             "port": redis_params["port"],
                         }
-                    }
-                }
+                    },
+                },
             )
-            
+
             # Verify complex mappings worked
             output = result.node_outputs["processor"]["result"]
-            
+
             # Check cache settings
-            assert output["cache_settings"]["ttl"] == 7200  # Override from workflow params
+            assert (
+                output["cache_settings"]["ttl"] == 7200
+            )  # Override from workflow params
             assert output["cache_settings"]["prefix"] == "prod"  # From Redis
             assert output["cache_settings"]["connections"] == 100  # From Redis
-            
-            # Check ML settings  
+
+            # Check ML settings
             assert output["ml_settings"]["model"] == "advanced_model_v2"  # Override
             assert output["ml_settings"]["enabled"] is True  # From Redis
             assert output["ml_settings"]["batch_size"] == 50  # From Redis
-            
+
             # Verify parameter injection tracking
             assert output["injected_params"]["ttl_override"] is True
             assert output["injected_params"]["model_override"] is True
-            
+
             # Verify ML processing was activated
             assert "ml_processing" in output
             assert output["ml_processing"]["model"] == "advanced_model_v2"
-            
+
         finally:
             # Cleanup
             r_client.delete("app:config", "app:features")

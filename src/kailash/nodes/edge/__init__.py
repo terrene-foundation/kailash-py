@@ -18,9 +18,9 @@ from .cloud_node import CloudNode
 from .platform_node import PlatformNode
 
 __all__ = [
-    "EdgeNode", 
-    "EdgeDataNode", 
-    "EdgeStateMachine", 
+    "EdgeNode",
+    "EdgeDataNode",
+    "EdgeStateMachine",
     "EdgeCoordinationNode",
     "EdgeWarmingNode",
     "EdgeMonitoringNode",
@@ -32,5 +32,5 @@ __all__ = [
     "KubernetesNode",
     "DockerNode",
     "CloudNode",
-    "PlatformNode"
+    "PlatformNode",
 ]

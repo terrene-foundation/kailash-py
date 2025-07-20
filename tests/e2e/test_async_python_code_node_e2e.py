@@ -139,10 +139,10 @@ class TestAsyncPythonCodeNodeE2E:
         # Wait for gateway to be ready with health check polling
         from datetime import datetime
         import asyncio
-        
+
         start_time = datetime.now()
         gateway_ready = False
-        
+
         while (datetime.now() - start_time).total_seconds() < 10.0:
             try:
                 async with httpx.AsyncClient() as client:
@@ -155,9 +155,9 @@ class TestAsyncPythonCodeNodeE2E:
             except (httpx.ConnectError, httpx.TimeoutException):
                 # Gateway not ready yet
                 pass
-            
+
             await asyncio.sleep(0.1)
-        
+
         if not gateway_ready:
             pytest.fail("Gateway failed to start within 10 seconds")
 

@@ -6,7 +6,7 @@ from .edge_migrator import (
     MigrationPhase,
     MigrationPlan,
     MigrationProgress,
-    MigrationCheckpoint
+    MigrationCheckpoint,
 )
 
 __all__ = [
@@ -15,5 +15,5 @@ __all__ = [
     "MigrationPhase",
     "MigrationPlan",
     "MigrationProgress",
-    "MigrationCheckpoint"
+    "MigrationCheckpoint",
 ]

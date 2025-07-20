@@ -9,7 +9,7 @@ from .partition_detector import PartitionDetector
 
 __all__ = [
     "RaftNode",
-    "RaftState", 
+    "RaftState",
     "LogEntry",
     "PersistentState",
     "RequestVoteRequest",
@@ -19,5 +19,5 @@ __all__ = [
     "EdgeLeaderElection",
     "GlobalOrderingService",
     "HybridLogicalClock",
-    "PartitionDetector"
+    "PartitionDetector",
 ]

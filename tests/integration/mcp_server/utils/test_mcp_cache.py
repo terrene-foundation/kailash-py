@@ -91,9 +91,10 @@ class TestLRUCache:
 
         # Wait for TTL to expire using polling
         from datetime import datetime
+
         start_time = datetime.now()
         expired = False
-        
+
         while (datetime.now() - start_time).total_seconds() < 0.5:
             result = cache.get("key1")
             if result is None:

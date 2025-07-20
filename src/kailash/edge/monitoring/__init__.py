@@ -7,15 +7,15 @@ from .edge_monitor import (
     EdgeHealth,
     MetricType,
     AlertSeverity,
-    HealthStatus
+    HealthStatus,
 )
 
 __all__ = [
     "EdgeMonitor",
     "EdgeMetric",
-    "EdgeAlert", 
+    "EdgeAlert",
     "EdgeHealth",
     "MetricType",
     "AlertSeverity",
-    "HealthStatus"
+    "HealthStatus",
 ]
