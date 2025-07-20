@@ -6,9 +6,10 @@ errors based on error category, node type, and connection context.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Dict, List
-from .error_categorizer import ErrorCategory
+from typing import Dict, List, Optional
+
 from .connection_context import ConnectionContext
+from .error_categorizer import ErrorCategory
 
 
 @dataclass

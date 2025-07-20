@@ -1,12 +1,12 @@
 """Raft consensus protocol implementation for edge coordination."""
 
 import asyncio
+import logging
 import random
-from enum import Enum
-from typing import Dict, List, Optional, Any, Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import logging
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
 
 
 class RaftState(Enum):

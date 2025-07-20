@@ -1,11 +1,11 @@
 """Global ordering service for distributed events using hybrid logical clocks."""
 
 import asyncio
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime
-from collections import defaultdict
-import json
 import hashlib
+import json
+from collections import defaultdict
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class HybridLogicalClock:

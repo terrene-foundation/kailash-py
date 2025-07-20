@@ -1,20 +1,21 @@
 """Unit tests for edge monitoring."""
 
-import pytest
 import asyncio
-from datetime import datetime, timedelta
-from unittest.mock import Mock, patch
 import statistics
 from collections import deque
+from datetime import datetime, timedelta
+from unittest.mock import Mock, patch
+
+import pytest
 
 from kailash.edge.monitoring.edge_monitor import (
-    EdgeMonitor,
-    EdgeMetric,
+    AlertSeverity,
     EdgeAlert,
     EdgeHealth,
-    MetricType,
-    AlertSeverity,
+    EdgeMetric,
+    EdgeMonitor,
     HealthStatus,
+    MetricType,
 )
 
 

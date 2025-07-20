@@ -1,16 +1,17 @@
 """Docker integration for edge resource management."""
 
 import asyncio
-import json
 import base64
+import json
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional, Union
-from dataclasses import dataclass, asdict
 from enum import Enum
+from typing import Any, Dict, List, Optional, Union
 
 try:
+    from docker.types import EndpointSpec, LogConfig, RestartPolicy, UpdateConfig
+
     import docker
-    from docker.types import RestartPolicy, LogConfig, UpdateConfig, EndpointSpec
 
     DOCKER_AVAILABLE = True
 except ImportError:

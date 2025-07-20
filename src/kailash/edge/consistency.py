@@ -1,13 +1,13 @@
 """Consistency models and managers for edge computing."""
 
 import asyncio
-import time
 import logging
+import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Set, Callable
-from enum import Enum
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional, Set
 
 
 class ConsistencyLevel(Enum):

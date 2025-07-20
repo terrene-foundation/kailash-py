@@ -1,20 +1,21 @@
 """Unit tests for EdgeStateMachine."""
 
+import asyncio
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
 import pytest_asyncio
-import asyncio
-from unittest.mock import Mock, AsyncMock, patch
-from datetime import datetime, timedelta, UTC
 
-from kailash.nodes.edge.edge_state import EdgeStateMachine, StateOperation
 from kailash.edge.location import (
-    EdgeLocation,
+    ComplianceZone,
     EdgeCapabilities,
+    EdgeLocation,
     EdgeMetrics,
     EdgeRegion,
     GeographicCoordinates,
-    ComplianceZone,
 )
+from kailash.nodes.edge.edge_state import EdgeStateMachine, StateOperation
 
 
 @pytest.fixture

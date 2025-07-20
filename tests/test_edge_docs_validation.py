@@ -1,8 +1,9 @@
 """Simple validation that edge documentation examples build correctly."""
 
-import pytest
-from pathlib import Path
 import re
+from pathlib import Path
+
+import pytest
 
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -177,10 +178,10 @@ def test_documentation_syntax_patterns():
 def test_node_imports():
     """Test that edge nodes can be imported."""
     from kailash.nodes.edge import (
-        EdgeWarmingNode,
-        EdgeMonitoringNode,
         EdgeMigrationNode,
+        EdgeMonitoringNode,
         EdgeStateMachine,
+        EdgeWarmingNode,
     )
 
     # Verify they're classes
@@ -192,12 +193,12 @@ def test_node_imports():
 
 def test_edge_service_imports():
     """Test that edge services can be imported."""
-    from kailash.edge.prediction.predictive_warmer import (
-        PredictiveWarmer,
-        PredictionStrategy,
-    )
-    from kailash.edge.monitoring.edge_monitor import EdgeMonitor, MetricType
     from kailash.edge.migration.edge_migrator import EdgeMigrator, MigrationStrategy
+    from kailash.edge.monitoring.edge_monitor import EdgeMonitor, MetricType
+    from kailash.edge.prediction.predictive_warmer import (
+        PredictionStrategy,
+        PredictiveWarmer,
+    )
 
     # Verify enums
     assert PredictionStrategy.TIME_SERIES.value == "time_series"

@@ -9,29 +9,30 @@ Tests Task 3.1: Port System Design
 - Type validation and constraints
 """
 
-import pytest
-from typing import List, Dict, Union, Optional, Any
+from typing import Any, Dict, List, Optional, Union
 from unittest.mock import Mock
 
+import pytest
+
 from kailash.nodes.ports import (
+    BoolOutput,
+    BoolPort,
+    DictOutput,
+    DictPort,
+    FloatOutput,
+    FloatPort,
     InputPort,
+    IntOutput,
+    IntPort,
+    ListOutput,
+    ListPort,
     OutputPort,
     Port,
-    PortRegistry,
     PortMetadata,
-    get_port_registry,
-    StringPort,
-    IntPort,
-    FloatPort,
-    BoolPort,
-    ListPort,
-    DictPort,
+    PortRegistry,
     StringOutput,
-    IntOutput,
-    FloatOutput,
-    BoolOutput,
-    ListOutput,
-    DictOutput,
+    StringPort,
+    get_port_registry,
 )
 
 

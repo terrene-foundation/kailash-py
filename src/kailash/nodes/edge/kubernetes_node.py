@@ -1,8 +1,7 @@
 """Kubernetes integration node for edge resource management."""
 
-from typing import Dict, Any, Optional, List
-from kailash.nodes.base import NodeParameter, register_node
-from kailash.nodes.base_async import AsyncNode
+from typing import Any, Dict, List, Optional
+
 from kailash.edge.resource.kubernetes_integration import (
     KubernetesIntegration,
     KubernetesResource,
@@ -10,6 +9,8 @@ from kailash.edge.resource.kubernetes_integration import (
     PodScalingSpec,
     ScalingPolicy,
 )
+from kailash.nodes.base import NodeParameter, register_node
+from kailash.nodes.base_async import AsyncNode
 
 
 @register_node()

@@ -1,9 +1,9 @@
 """Edge leader election service using Raft consensus."""
 
 import asyncio
-from typing import Dict, Any, Optional, List
-from datetime import datetime, timedelta
 import logging
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
 from .raft import RaftNode, RaftState
 

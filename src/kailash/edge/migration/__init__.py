@@ -2,11 +2,11 @@
 
 from .edge_migrator import (
     EdgeMigrator,
-    MigrationStrategy,
+    MigrationCheckpoint,
     MigrationPhase,
     MigrationPlan,
     MigrationProgress,
-    MigrationCheckpoint,
+    MigrationStrategy,
 )
 
 __all__ = [

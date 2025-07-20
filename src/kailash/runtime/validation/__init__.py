@@ -6,9 +6,9 @@ and enhanced error message formatting for better developer experience.
 """
 
 from .connection_context import ConnectionContext
-from .error_categorizer import ErrorCategorizer, ErrorCategory
-from .suggestion_engine import ValidationSuggestionEngine, ValidationSuggestion
 from .enhanced_error_formatter import EnhancedErrorFormatter
+from .error_categorizer import ErrorCategorizer, ErrorCategory
+from .suggestion_engine import ValidationSuggestion, ValidationSuggestionEngine
 
 __all__ = [
     "ConnectionContext",

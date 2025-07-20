@@ -5,12 +5,14 @@ Tests the implementation of connection validation modes and parameter validation
 at the runtime level.
 """
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, patch, MagicMock
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
+
 from kailash.nodes.base import Node, NodeParameter
+from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 
 
 class TestLocalRuntimeConnectionValidation:
@@ -40,6 +42,7 @@ class TestLocalRuntimeConnectionValidation:
 
         # Mock node with validate_inputs method
         mock_node = Mock(spec=Node)
+        mock_node.config = {}  # Add config attribute
         mock_node.validate_inputs = Mock(return_value={"validated": True})
         mock_node.get_parameters = Mock(return_value={})
 
@@ -64,6 +67,7 @@ class TestLocalRuntimeConnectionValidation:
         """Test different validation modes handle errors correctly."""
         # Mock node that raises validation error
         mock_node = Mock(spec=Node)
+        mock_node.config = {}  # Add config attribute
         mock_node.validate_inputs = Mock(side_effect=ValueError("Invalid type"))
         mock_node.get_parameters = Mock(return_value={})
 
@@ -109,6 +113,7 @@ class TestLocalRuntimeConnectionValidation:
 
         # Mock target node expecting int
         mock_node = Mock(spec=Node)
+        mock_node.config = {}  # Add config attribute
         mock_node.get_parameters = Mock(
             return_value={"count": NodeParameter(name="count", type=int, required=True)}
         )
@@ -139,6 +144,7 @@ class TestLocalRuntimeConnectionValidation:
 
         # Mock node with multiple parameters
         mock_node = Mock(spec=Node)
+        mock_node.config = {}  # Add config attribute
         mock_node.get_parameters = Mock(
             return_value={
                 "param1": NodeParameter(name="param1", type=str, required=True),
@@ -189,6 +195,7 @@ class TestLocalRuntimeConnectionValidation:
             return kwargs
 
         mock_node = Mock(spec=Node)
+        mock_node.config = {}  # Add config attribute
         mock_node.validate_inputs = Mock(side_effect=mock_validate)
         mock_node.get_parameters = Mock(return_value={})
 

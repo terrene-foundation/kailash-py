@@ -5,19 +5,19 @@ Provides advanced caching, lazy evaluation, batch validation,
 and performance benchmarking for the validation system.
 """
 
-import time
 import asyncio
 import logging
-from typing import Dict, List, Optional, Any, Tuple, Set
-from dataclasses import dataclass, field
-from collections import defaultdict, OrderedDict
-from threading import RLock
-from datetime import datetime, UTC, timedelta
+import time
 import weakref
+from collections import OrderedDict, defaultdict
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+from threading import RLock
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from kailash.workflow.type_inference import (
-    TypeCompatibilityResult,
     ConnectionInferenceResult,
+    TypeCompatibilityResult,
 )
 
 logger = logging.getLogger(__name__)

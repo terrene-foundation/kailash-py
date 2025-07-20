@@ -8,21 +8,21 @@ Tests Task 1.4: Improved Error Messages
 - Enhanced error message formatting
 """
 
-import pytest
-from unittest.mock import Mock, patch
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
+from unittest.mock import Mock, patch
+
+import pytest
 
 # Will be implemented
 from kailash.runtime.validation.connection_context import ConnectionContext
-from kailash.runtime.validation.suggestion_engine import (
-    ValidationSuggestionEngine,
-    ValidationSuggestion,
-)
-from kailash.runtime.validation.error_categorizer import ErrorCategorizer, ErrorCategory
 from kailash.runtime.validation.enhanced_error_formatter import EnhancedErrorFormatter
-
-from kailash.sdk_exceptions import WorkflowValidationError, NodeValidationError
+from kailash.runtime.validation.error_categorizer import ErrorCategorizer, ErrorCategory
+from kailash.runtime.validation.suggestion_engine import (
+    ValidationSuggestion,
+    ValidationSuggestionEngine,
+)
+from kailash.sdk_exceptions import NodeValidationError, WorkflowValidationError
 
 
 class TestConnectionContext:

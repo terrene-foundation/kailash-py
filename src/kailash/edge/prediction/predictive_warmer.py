@@ -8,10 +8,11 @@ import asyncio
 import json
 import time
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Tuple, Set
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from enum import Enum
+from typing import Any, Dict, List, Optional, Set, Tuple
+
 import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler

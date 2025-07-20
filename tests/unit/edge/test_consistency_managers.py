@@ -1,17 +1,18 @@
 """Unit tests for edge consistency managers."""
 
-import pytest
 import asyncio
 import time
-from datetime import datetime, timedelta, UTC
-from unittest.mock import Mock, AsyncMock
+from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 from kailash.edge.consistency import (
-    ConsistencyLevel,
-    StrongConsistencyManager,
-    EventualConsistencyManager,
-    CausalConsistencyManager,
     BoundedStalenessManager,
+    CausalConsistencyManager,
+    ConsistencyLevel,
+    EventualConsistencyManager,
+    StrongConsistencyManager,
     Version,
 )
 

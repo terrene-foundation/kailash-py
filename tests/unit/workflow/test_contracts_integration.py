@@ -8,16 +8,17 @@ Tests Task 2.2: Integrate Contracts into WorkflowBuilder
 - Contract validation and error handling
 """
 
-import pytest
 from unittest.mock import Mock, patch
 
+import pytest
+
+from kailash.sdk_exceptions import ConnectionError, WorkflowValidationError
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.contracts import (
     ConnectionContract,
     SecurityPolicy,
     get_contract_registry,
 )
-from kailash.sdk_exceptions import WorkflowValidationError, ConnectionError
 
 
 class TestContractIntegration:

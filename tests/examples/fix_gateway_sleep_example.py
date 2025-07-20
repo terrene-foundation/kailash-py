@@ -7,8 +7,9 @@ This example shows how to replace a 3-second sleep with proper health check poll
 # BEFORE: Fixed 3-second sleep
 def test_gateway_startup_before():
     """Original test with fixed sleep."""
-    import time
     import threading
+    import time
+
     import httpx
 
     # Start gateway in background thread
@@ -29,10 +30,11 @@ def test_gateway_startup_before():
 # AFTER: Condition-based waiting (Edge Coordination Pattern)
 def test_gateway_startup_after():
     """Improved test with condition-based waiting."""
-    import time
     import threading
-    import httpx
+    import time
     from datetime import datetime
+
+    import httpx
 
     # Start gateway in background thread
     gateway = create_gateway()
@@ -64,6 +66,7 @@ def test_gateway_startup_after():
 async def test_gateway_startup_with_helper():
     """Best practice using helper utilities."""
     import threading
+
     from tests.utils.wait_conditions import wait_for_http_health
 
     # Start gateway in background thread
@@ -85,7 +88,7 @@ async def test_gateway_startup_with_helper():
 # Example: Fixing Docker container waits
 async def test_docker_services_after():
     """Replace 15-second Docker sleep with health checks."""
-    from tests.utils.wait_conditions import wait_for_port, wait_for_condition
+    from tests.utils.wait_conditions import wait_for_condition, wait_for_port
 
     with DockerCompose("docker-compose.yml") as compose:
         # Instead of: time.sleep(15)
@@ -132,8 +135,8 @@ async def test_cache_expiration_after():
 # Example: Fixing monitoring cycle waits
 async def test_monitoring_detection_after():
     """Replace monitoring cycle sleep with event detection."""
-    from datetime import datetime
     import asyncio
+    from datetime import datetime
 
     monitor = create_transaction_monitor()
     monitor.start_monitoring()

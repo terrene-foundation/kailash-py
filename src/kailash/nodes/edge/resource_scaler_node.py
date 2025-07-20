@@ -5,18 +5,18 @@ enabling ML-based resource demand prediction and proactive scaling.
 """
 
 import asyncio
-from typing import Dict, Any, List, Optional
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 
+from kailash.edge.resource.predictive_scaler import (
+    PredictionHorizon,
+    PredictiveScaler,
+    ScalingDecision,
+    ScalingPrediction,
+    ScalingStrategy,
+)
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
-from kailash.edge.resource.predictive_scaler import (
-    PredictiveScaler,
-    ScalingStrategy,
-    PredictionHorizon,
-    ScalingPrediction,
-    ScalingDecision,
-)
 
 
 @register_node()

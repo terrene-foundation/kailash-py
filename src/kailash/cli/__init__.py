@@ -2,9 +2,9 @@
 
 from .commands import cli as main
 from .validation_audit import (
-    WorkflowValidationAuditor,
-    ValidationAuditReport,
     ReportFormatter,
+    ValidationAuditReport,
+    WorkflowValidationAuditor,
 )
 
 __all__ = [

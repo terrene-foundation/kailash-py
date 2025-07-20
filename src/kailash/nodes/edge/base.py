@@ -1,11 +1,12 @@
 """Base edge-aware node with location awareness and compliance routing."""
 
 import asyncio
-from typing import Any, Dict, Optional, List
-from kailash.nodes.base_async import AsyncNode
+from typing import Any, Dict, List, Optional
+
+from kailash.edge.compliance import ComplianceRouter, DataClassification
 from kailash.edge.discovery import EdgeDiscovery, EdgeSelectionStrategy
 from kailash.edge.location import EdgeLocation
-from kailash.edge.compliance import ComplianceRouter, DataClassification
+from kailash.nodes.base_async import AsyncNode
 
 
 class EdgeNode(AsyncNode):

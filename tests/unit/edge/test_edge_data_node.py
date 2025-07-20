@@ -1,19 +1,20 @@
 """Unit tests for EdgeDataNode."""
 
-import pytest
 import asyncio
-from unittest.mock import Mock, AsyncMock, patch
 from datetime import datetime
+from unittest.mock import AsyncMock, Mock, patch
 
-from kailash.nodes.edge.edge_data import EdgeDataNode, ConsistencyModel
+import pytest
+
 from kailash.edge.location import (
-    EdgeLocation,
+    ComplianceZone,
     EdgeCapabilities,
+    EdgeLocation,
     EdgeMetrics,
     EdgeRegion,
     GeographicCoordinates,
-    ComplianceZone,
 )
+from kailash.nodes.edge.edge_data import ConsistencyModel, EdgeDataNode
 
 
 @pytest.fixture

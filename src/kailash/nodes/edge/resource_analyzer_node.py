@@ -5,18 +5,18 @@ providing insights into resource usage patterns and bottlenecks.
 """
 
 import asyncio
-from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
-from kailash.nodes.base import NodeParameter, register_node
-from kailash.nodes.base_async import AsyncNode
 from kailash.edge.resource.resource_analyzer import (
+    Bottleneck,
     ResourceAnalyzer,
     ResourceMetric,
-    ResourceType,
     ResourcePattern,
-    Bottleneck,
+    ResourceType,
 )
+from kailash.nodes.base import NodeParameter, register_node
+from kailash.nodes.base_async import AsyncNode
 
 
 @register_node()

@@ -9,14 +9,15 @@ Tests async version of Task 3.2: Node Migration Framework
 - Backward compatibility and migration
 """
 
-import pytest
 import asyncio
-from typing import Dict, List, Any, Optional, Union
-from unittest.mock import Mock, AsyncMock
+from typing import Any, Dict, List, Optional, Union
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 from kailash.nodes.base import AsyncTypedNode, NodeParameter
-from kailash.nodes.ports import InputPort, OutputPort, StringPort, IntPort
-from kailash.sdk_exceptions import NodeValidationError, NodeExecutionError
+from kailash.nodes.ports import InputPort, IntPort, OutputPort, StringPort
+from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 
 class TestAsyncTypedNodeBasics:

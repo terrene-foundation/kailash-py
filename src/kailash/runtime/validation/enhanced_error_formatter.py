@@ -6,8 +6,9 @@ connection paths, categorization, suggestions, and examples.
 """
 
 from typing import Optional
-from .error_categorizer import ErrorCategory, ErrorCategorizer
+
 from .connection_context import ConnectionContext
+from .error_categorizer import ErrorCategorizer, ErrorCategory
 from .suggestion_engine import ValidationSuggestion
 
 

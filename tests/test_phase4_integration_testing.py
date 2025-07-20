@@ -1,11 +1,13 @@
 """Comprehensive tests for Phase 4.4 Integration & Testing."""
 
-import pytest
 import asyncio
 from datetime import datetime, timedelta
-from kailash.workflow.builder import WorkflowBuilder
+
+import pytest
+
 from kailash.runtime.local import LocalRuntime
-from tests.utils.docker_config import is_kubernetes_available, is_docker_available
+from kailash.workflow.builder import WorkflowBuilder
+from tests.utils.docker_config import is_docker_available, is_kubernetes_available
 
 
 class TestKubernetesIntegration:
@@ -13,7 +15,6 @@ class TestKubernetesIntegration:
 
     def test_kubernetes_integration_imports(self):
         """Test that all Kubernetes integration components can be imported."""
-        from kailash.nodes.edge import KubernetesNode
         from kailash.edge.resource import (
             KubernetesIntegration,
             KubernetesResource,
@@ -21,6 +22,7 @@ class TestKubernetesIntegration:
             PodScalingSpec,
             ScalingPolicy,
         )
+        from kailash.nodes.edge import KubernetesNode
 
         assert isinstance(KubernetesNode, type)
         assert isinstance(KubernetesIntegration, type)
@@ -106,16 +108,16 @@ class TestDockerIntegration:
 
     def test_docker_integration_imports(self):
         """Test that all Docker integration components can be imported."""
-        from kailash.nodes.edge import DockerNode
         from kailash.edge.resource import (
-            DockerIntegration,
-            ContainerSpec,
-            ServiceSpec,
-            ContainerState,
-            RestartPolicyType,
-            NetworkMode,
             ContainerMetrics,
+            ContainerSpec,
+            ContainerState,
+            DockerIntegration,
+            NetworkMode,
+            RestartPolicyType,
+            ServiceSpec,
         )
+        from kailash.nodes.edge import DockerNode
 
         assert isinstance(DockerNode, type)
         assert isinstance(DockerIntegration, type)
@@ -142,7 +144,7 @@ class TestDockerIntegration:
 
     def test_container_spec_creation(self):
         """Test Docker container specification."""
-        from kailash.edge.resource import ContainerSpec, RestartPolicyType, NetworkMode
+        from kailash.edge.resource import ContainerSpec, NetworkMode, RestartPolicyType
 
         container_spec = ContainerSpec(
             name="test-container",
@@ -220,16 +222,16 @@ class TestCloudIntegration:
 
     def test_cloud_integration_imports(self):
         """Test that all Cloud integration components can be imported."""
-        from kailash.nodes.edge import CloudNode
         from kailash.edge.resource import (
+            CloudInstance,
             CloudIntegration,
+            CloudMetrics,
             CloudProvider,
             InstanceSpec,
             InstanceState,
             InstanceType,
-            CloudInstance,
-            CloudMetrics,
         )
+        from kailash.nodes.edge import CloudNode
 
         assert isinstance(CloudNode, type)
         assert isinstance(CloudIntegration, type)
@@ -252,7 +254,7 @@ class TestCloudIntegration:
 
     def test_instance_spec_creation(self):
         """Test cloud instance specification."""
-        from kailash.edge.resource import InstanceSpec, CloudProvider
+        from kailash.edge.resource import CloudProvider, InstanceSpec
 
         instance_spec = InstanceSpec(
             name="test-instance",
@@ -328,15 +330,15 @@ class TestPlatformIntegration:
 
     def test_platform_integration_imports(self):
         """Test that all platform integration components can be imported."""
-        from kailash.nodes.edge import PlatformNode
         from kailash.edge.resource import (
+            PlatformConfig,
             PlatformIntegration,
             PlatformType,
-            ResourceScope,
-            ResourceRequest,
             ResourceAllocation,
-            PlatformConfig,
+            ResourceRequest,
+            ResourceScope,
         )
+        from kailash.nodes.edge import PlatformNode
 
         assert isinstance(PlatformNode, type)
         assert isinstance(PlatformIntegration, type)
@@ -366,8 +368,8 @@ class TestPlatformIntegration:
 
     def test_resource_request_creation(self):
         """Test resource request specification."""
+        from kailash.edge.resource import PlatformResourceRequest as ResourceRequest
         from kailash.edge.resource import (
-            PlatformResourceRequest as ResourceRequest,
             PlatformType,
             ResourceScope,
         )
@@ -397,7 +399,7 @@ class TestPlatformIntegration:
 
     def test_resource_allocation_creation(self):
         """Test resource allocation object."""
-        from kailash.edge.resource import ResourceAllocation, PlatformType
+        from kailash.edge.resource import PlatformType, ResourceAllocation
 
         allocation = ResourceAllocation(
             allocation_id="alloc-456",
@@ -683,9 +685,9 @@ class TestPhase4NodeCompatibility:
     def test_all_phase4_nodes_importable(self):
         """Test that all Phase 4.4 nodes can be imported."""
         from kailash.nodes.edge import (
-            KubernetesNode,
-            DockerNode,
             CloudNode,
+            DockerNode,
+            KubernetesNode,
             PlatformNode,
         )
 
@@ -703,9 +705,9 @@ class TestPhase4NodeCompatibility:
     def test_all_phase4_nodes_have_parameters(self):
         """Test that all Phase 4.4 nodes have parameter definitions."""
         from kailash.nodes.edge import (
-            KubernetesNode,
-            DockerNode,
             CloudNode,
+            DockerNode,
+            KubernetesNode,
             PlatformNode,
         )
 
@@ -876,28 +878,24 @@ class TestPhase4ComponentRegistry:
 
     def test_phase4_edge_imports(self):
         """Test Phase 4.4 edge module imports."""
-        from kailash.edge.resource import (
-            # Kubernetes
+        from kailash.edge.resource import (  # Kubernetes; Docker; Cloud; Platform
+            CloudIntegration,
+            CloudProvider,
+            ContainerSpec,
+            ContainerState,
+            DockerIntegration,
+            InstanceSpec,
+            InstanceState,
             KubernetesIntegration,
             KubernetesResource,
             KubernetesResourceType,
-            PodScalingSpec,
-            # Docker
-            DockerIntegration,
-            ContainerSpec,
-            ServiceSpec,
-            ContainerState,
-            # Cloud
-            CloudIntegration,
-            CloudProvider,
-            InstanceSpec,
-            InstanceState,
-            # Platform
             PlatformIntegration,
             PlatformType,
-            ResourceScope,
-            ResourceRequest,
+            PodScalingSpec,
             ResourceAllocation,
+            ResourceRequest,
+            ResourceScope,
+            ServiceSpec,
         )
 
         # Verify all classes are importable
@@ -928,9 +926,9 @@ class TestPhase4ComponentRegistry:
     def test_phase4_node_imports(self):
         """Test Phase 4.4 node imports."""
         from kailash.nodes.edge import (
-            KubernetesNode,
-            DockerNode,
             CloudNode,
+            DockerNode,
+            KubernetesNode,
             PlatformNode,
         )
 

@@ -5,8 +5,8 @@ Provides comprehensive monitoring for validation failures, security violations,
 performance metrics, and alerting for critical events.
 """
 
-from .metrics import ValidationMetrics, SecurityMetrics, PerformanceMetrics
 from .alerts import AlertManager, AlertRule, AlertSeverity
+from .metrics import PerformanceMetrics, SecurityMetrics, ValidationMetrics
 
 __all__ = [
     "ValidationMetrics",

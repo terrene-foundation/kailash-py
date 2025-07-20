@@ -12,8 +12,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 from kailash.edge.location import (
     ComplianceZone,
     EdgeCapabilities,
@@ -21,6 +19,8 @@ from kailash.edge.location import (
     EdgeRegion,
     GeographicCoordinates,
 )
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 class TestEdgeDataFlowE2E:

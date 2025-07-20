@@ -1,17 +1,18 @@
 """Integration tests for edge coordination system."""
 
-import pytest
 import asyncio
-from datetime import datetime, timedelta
 import random
+from datetime import datetime, timedelta
 
-from kailash.edge.coordination.raft import RaftNode, RaftState
-from kailash.edge.coordination.leader_election import EdgeLeaderElection
+import pytest
+
 from kailash.edge.coordination.global_ordering import GlobalOrderingService
+from kailash.edge.coordination.leader_election import EdgeLeaderElection
 from kailash.edge.coordination.partition_detector import PartitionDetector
+from kailash.edge.coordination.raft import RaftNode, RaftState
 from kailash.nodes.edge.coordination import EdgeCoordinationNode
-from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 class TestEdgeCoordinationIntegration:

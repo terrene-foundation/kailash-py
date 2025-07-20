@@ -11,12 +11,12 @@ Usage:
     --fix: Attempt to automatically fix simple cases (experimental)
 """
 
+import argparse
 import os
 import re
 import sys
-import argparse
-from typing import List, Tuple, Dict
 from pathlib import Path
+from typing import Dict, List, Tuple
 
 
 class SleepPattern:
