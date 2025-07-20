@@ -317,18 +317,21 @@ txn_010,user_999,220.50,2024-01-01T10:09:00Z,pending"""
 
         # Wait for deadlock detection with polling
         from datetime import datetime
+
         start_time = datetime.now()
         deadlocks_detected = False
         detection_result = None
-        
+
         while (datetime.now() - start_time).total_seconds() < 5.0:
             # Check for deadlocks
             detection_result = deadlock_detector.execute(operation="detect_deadlocks")
-            if detection_result["status"] == "success" and detection_result.get("deadlocks_detected"):
+            if detection_result["status"] == "success" and detection_result.get(
+                "deadlocks_detected"
+            ):
                 deadlocks_detected = True
                 break
             time.sleep(0.1)
-        
+
         # If no deadlocks detected yet, do one final check
         if not deadlocks_detected:
             detection_result = deadlock_detector.execute(operation="detect_deadlocks")

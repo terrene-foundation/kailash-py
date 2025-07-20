@@ -191,21 +191,22 @@ class TestTransactionMonitoringIntegration:
 
         # Wait for detection with polling
         from datetime import datetime
+
         start_time = datetime.now()
         deadlock_found = False
-        
+
         while (datetime.now() - start_time).total_seconds() < 5.0:
             # Check for deadlocks
             result = deadlock_node.execute(operation="detect_deadlocks")
             assert result["status"] == "success"
-            
+
             # Should detect the circular dependency
             if result["deadlock_count"] > 0:
                 deadlock_found = True
                 break
-            
+
             time.sleep(0.1)
-        
+
         # Process detected deadlocks
         if deadlock_found:
             deadlocks = result["deadlocks_detected"]
@@ -267,18 +268,19 @@ class TestTransactionMonitoringIntegration:
 
         # Wait for race condition detection with polling
         from datetime import datetime
+
         start_time = datetime.now()
         races_detected = False
-        
+
         while (datetime.now() - start_time).total_seconds() < 3.0:
             # Analyze for race conditions
             result = race_node.execute(operation="detect_races", time_window=30.0)
             assert result["status"] == "success"
-            
+
             if result.get("race_conditions_detected", 0) > 0:
                 races_detected = True
                 break
-                
+
             time.sleep(0.1)
 
         # Verify race detection analysis ran

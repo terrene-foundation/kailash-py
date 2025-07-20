@@ -4,12 +4,12 @@ from .commands import cli as main
 from .validation_audit import (
     WorkflowValidationAuditor,
     ValidationAuditReport,
-    ReportFormatter
+    ReportFormatter,
 )
 
 __all__ = [
     "main",
     "WorkflowValidationAuditor",
-    "ValidationAuditReport", 
-    "ReportFormatter"
+    "ValidationAuditReport",
+    "ReportFormatter",
 ]

@@ -17,7 +17,7 @@ class WorkflowBuilder:
 
     def __init__(self, edge_config: dict[str, Any] | None = None):
         """Initialize an empty workflow builder.
-        
+
         Args:
             edge_config: Optional edge infrastructure configuration
         """
@@ -27,12 +27,12 @@ class WorkflowBuilder:
         # Parameter injection capabilities
         self.workflow_parameters: dict[str, Any] = {}
         self.parameter_mappings: dict[str, dict[str, str]] = {}
-        
+
         # Edge infrastructure support
         self.edge_config = edge_config
         self._has_edge_nodes = False
         self._edge_infrastructure = None
-        
+
         # Connection contracts support
         self.connection_contracts: dict[str, ConnectionContract] = {}
         self._contract_registry = get_contract_registry()
@@ -301,45 +301,50 @@ class WorkflowBuilder:
             )
 
         logger.info(f"Added node '{node_id}' of type '{type_name}'")
-        
+
         # Detect edge nodes
         if self._is_edge_node(type_name):
             self._has_edge_nodes = True
             logger.debug(f"Detected edge node: {type_name}")
-        
+
         return node_id
-    
+
     def _is_edge_node(self, node_type: str) -> bool:
         """Check if a node type is an edge node.
-        
+
         Args:
             node_type: The node type to check
-            
+
         Returns:
             True if the node is an edge node
         """
         # Use the same logic as EdgeInfrastructure if available
         if self._edge_infrastructure:
             return self._edge_infrastructure.is_edge_node(node_type)
-            
+
         # Otherwise use local logic
         # Check exact matches and subclasses
         edge_prefixes = ["Edge", "edge"]
-        edge_suffixes = ["EdgeNode", "EdgeDataNode", "EdgeStateMachine", "EdgeCacheNode"]
-        
+        edge_suffixes = [
+            "EdgeNode",
+            "EdgeDataNode",
+            "EdgeStateMachine",
+            "EdgeCacheNode",
+        ]
+
         # Exact match
         if node_type in edge_suffixes:
             return True
-            
+
         # Check if it starts with Edge/edge
         for prefix in edge_prefixes:
             if node_type.startswith(prefix):
                 return True
-                
+
         # Check if it ends with EdgeNode (for custom edge nodes)
         if node_type.endswith("EdgeNode"):
             return True
-                
+
         return False
 
     # Fluent API methods for backward compatibility
@@ -593,42 +598,42 @@ class WorkflowBuilder:
         return self
 
     def add_typed_connection(
-        self, 
-        from_node: str, 
-        from_output: str, 
-        to_node: str, 
+        self,
+        from_node: str,
+        from_output: str,
+        to_node: str,
         to_input: str,
         contract: Union[str, ConnectionContract],
-        validate_immediately: bool = False
+        validate_immediately: bool = False,
     ) -> "WorkflowBuilder":
         """
         Add a typed connection with contract validation.
-        
+
         This is the new contract-based connection method that enforces
         validation contracts on data flowing between nodes.
-        
+
         Args:
             from_node: Source node ID
             from_output: Output field from source
-            to_node: Target node ID  
+            to_node: Target node ID
             to_input: Input field on target
             contract: Contract name (string) or ConnectionContract instance
             validate_immediately: Whether to validate contract definitions now
-            
+
         Returns:
             Self for chaining
-            
+
         Raises:
             WorkflowValidationError: If contract is invalid or nodes don't exist
             ConnectionError: If connection setup fails
-            
+
         Example:
             # Using predefined contract
             workflow.add_typed_connection(
                 "csv_reader", "data", "processor", "input_data",
                 contract="string_data"
             )
-            
+
             # Using custom contract
             custom_contract = ConnectionContract(
                 name="user_data_flow",
@@ -650,20 +655,21 @@ class WorkflowBuilder:
                     f"Contract '{contract}' not found. Available contracts: {available_contracts}"
                 )
             contract = contract_obj
-            
+
         # Add the standard connection first
         self.add_connection(from_node, from_output, to_node, to_input)
-        
+
         # Store the contract for this connection
         connection_id = f"{from_node}.{from_output} → {to_node}.{to_input}"
         self.connection_contracts[connection_id] = contract
-        
+
         # Immediate validation if requested
         if validate_immediately:
             # Validate that contract schemas are valid
             try:
                 if contract.source_schema:
                     from jsonschema import Draft7Validator
+
                     Draft7Validator.check_schema(contract.source_schema)
                 if contract.target_schema:
                     Draft7Validator.check_schema(contract.target_schema)
@@ -671,59 +677,62 @@ class WorkflowBuilder:
                 raise WorkflowValidationError(
                     f"Invalid contract schema for connection {connection_id}: {e}"
                 )
-                
+
         logger.info(
             f"Added typed connection '{connection_id}' with contract '{contract.name}'"
         )
-        
+
         return self
-        
-    def get_connection_contract(self, connection_id: str) -> Optional[ConnectionContract]:
+
+    def get_connection_contract(
+        self, connection_id: str
+    ) -> Optional[ConnectionContract]:
         """
         Get the contract for a specific connection.
-        
+
         Args:
             connection_id: Connection identifier in format "from.output → to.input"
-            
+
         Returns:
             ConnectionContract if found, None otherwise
         """
         return self.connection_contracts.get(connection_id)
-        
+
     def list_connection_contracts(self) -> dict[str, str]:
         """
         List all connection contracts in this workflow.
-        
+
         Returns:
             Dict mapping connection IDs to contract names
         """
         return {
-            conn_id: contract.name 
+            conn_id: contract.name
             for conn_id, contract in self.connection_contracts.items()
         }
-        
+
     def validate_all_contracts(self) -> tuple[bool, list[str]]:
         """
         Validate all connection contracts in the workflow.
-        
+
         Returns:
             Tuple of (all_valid, list_of_errors)
         """
         errors = []
-        
+
         for connection_id, contract in self.connection_contracts.items():
             try:
                 # Validate contract schemas
                 if contract.source_schema:
                     from jsonschema import Draft7Validator
+
                     Draft7Validator.check_schema(contract.source_schema)
                 if contract.target_schema:
                     Draft7Validator.check_schema(contract.target_schema)
             except Exception as e:
                 errors.append(f"Contract '{contract.name}' for {connection_id}: {e}")
-                
+
         return len(errors) == 0, errors
-        
+
     def add_workflow_inputs(
         self, input_node_id: str, input_mappings: dict
     ) -> "WorkflowBuilder":
@@ -811,6 +820,7 @@ class WorkflowBuilder:
         # Initialize edge infrastructure if needed
         if self._has_edge_nodes and not self._edge_infrastructure:
             from kailash.workflow.edge_infrastructure import EdgeInfrastructure
+
             self._edge_infrastructure = EdgeInfrastructure(self.edge_config)
             logger.info("Initialized edge infrastructure for workflow")
 
@@ -823,7 +833,7 @@ class WorkflowBuilder:
             author=author,
             metadata=metadata,
         )
-        
+
         # Store edge infrastructure reference in workflow metadata if present
         if self._edge_infrastructure:
             workflow.metadata["_edge_infrastructure"] = self._edge_infrastructure
@@ -840,12 +850,16 @@ class WorkflowBuilder:
                     # Node class was provided
                     node_class = node_info["class"]
                     node_config = node_info.get("config", {})
-                    
+
                     # Inject edge infrastructure if this is an edge node
-                    if self._edge_infrastructure and self._is_edge_node(node_class.__name__):
+                    if self._edge_infrastructure and self._is_edge_node(
+                        node_class.__name__
+                    ):
                         node_config["_edge_infrastructure"] = self._edge_infrastructure
-                        logger.debug(f"Injected edge infrastructure into {node_class.__name__}")
-                    
+                        logger.debug(
+                            f"Injected edge infrastructure into {node_class.__name__}"
+                        )
+
                     workflow.add_node(
                         node_id=node_id, node_or_type=node_class, **node_config
                     )
@@ -853,12 +867,12 @@ class WorkflowBuilder:
                     # String node type
                     node_type = node_info["type"]
                     node_config = node_info.get("config", {})
-                    
+
                     # Inject edge infrastructure if this is an edge node
                     if self._edge_infrastructure and self._is_edge_node(node_type):
                         node_config["_edge_infrastructure"] = self._edge_infrastructure
                         logger.debug(f"Injected edge infrastructure into {node_type}")
-                    
+
                     workflow.add_node(
                         node_id=node_id, node_or_type=node_type, **node_config
                     )
@@ -922,7 +936,7 @@ class WorkflowBuilder:
         workflow.metadata["workflow_parameters"] = self.workflow_parameters
         workflow.metadata["parameter_mappings"] = self.parameter_mappings
         workflow.metadata["connection_contracts"] = {
-            conn_id: contract.to_dict() 
+            conn_id: contract.to_dict()
             for conn_id, contract in self.connection_contracts.items()
         }
 

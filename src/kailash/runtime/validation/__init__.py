@@ -12,9 +12,9 @@ from .enhanced_error_formatter import EnhancedErrorFormatter
 
 __all__ = [
     "ConnectionContext",
-    "ErrorCategorizer", 
+    "ErrorCategorizer",
     "ErrorCategory",
     "ValidationSuggestionEngine",
-    "ValidationSuggestion", 
+    "ValidationSuggestion",
     "EnhancedErrorFormatter",
 ]

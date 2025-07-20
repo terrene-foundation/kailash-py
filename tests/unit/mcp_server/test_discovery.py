@@ -1348,12 +1348,14 @@ class TestNetworkDiscovery:
                     self.discovery, "_handle_discovery_message", new=AsyncMock()
                 ) as mock_handle:
                     mock_loop.side_effect = RuntimeError("No event loop")
+
                     # Mock run to consume coroutine and avoid warnings
                     def mock_run_side_effect(coro):
                         # Close the coroutine to avoid "never awaited" warning
-                        if hasattr(coro, 'close'):
+                        if hasattr(coro, "close"):
                             coro.close()
                         return None
+
                     mock_run.side_effect = mock_run_side_effect
 
                     self.discovery.datagram_received(data, addr)

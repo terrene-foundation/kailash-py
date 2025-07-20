@@ -257,7 +257,9 @@ class TestAPIGatewayDockerIntegration:
 
 
 @pytest.mark.integration
-@pytest.mark.skip(reason="This test attempts to manage Docker containers dynamically - use existing Docker services instead")
+@pytest.mark.skip(
+    reason="This test attempts to manage Docker containers dynamically - use existing Docker services instead"
+)
 class TestAPIGatewayDockerCompose:
     """Test API Gateway with Docker Compose services."""
 
@@ -316,10 +318,10 @@ services:
                 # Wait for services to be healthy using proper health checks
                 from datetime import datetime
                 import socket
-                
+
                 start_time = datetime.now()
                 services_ready = False
-                
+
                 while (datetime.now() - start_time).total_seconds() < 30.0:
                     # Check PostgreSQL
                     postgres_ready = False
@@ -328,10 +330,10 @@ services:
                         sock.settimeout(1)
                         result = sock.connect_ex(("localhost", 5432))
                         sock.close()
-                        postgres_ready = (result == 0)
+                        postgres_ready = result == 0
                     except:
                         pass
-                    
+
                     # Check Redis
                     redis_ready = False
                     try:
@@ -339,10 +341,10 @@ services:
                         sock.settimeout(1)
                         result = sock.connect_ex(("localhost", 6379))
                         sock.close()
-                        redis_ready = (result == 0)
+                        redis_ready = result == 0
                     except:
                         pass
-                    
+
                     # Check Redis cache
                     redis_cache_ready = False
                     try:
@@ -350,22 +352,22 @@ services:
                         sock.settimeout(1)
                         result = sock.connect_ex(("localhost", 6380))
                         sock.close()
-                        redis_cache_ready = (result == 0)
+                        redis_cache_ready = result == 0
                     except:
                         pass
-                    
+
                     if postgres_ready and redis_ready and redis_cache_ready:
                         services_ready = True
                         break
-                    
+
                     time.sleep(0.5)
-                
+
                 if not services_ready:
                     pytest.fail("Docker services failed to start within 30 seconds")
-                
+
                 # Give services a moment to fully initialize after ports are open
                 time.sleep(1)
-                
+
                 yield compose
         finally:
             compose_file.unlink()
@@ -438,6 +440,7 @@ services:
 
             # Wait for async processing to complete
             from datetime import datetime
+
             start_time = datetime.now()
             while (datetime.now() - start_time).total_seconds() < 2.0:
                 if gateway.event_store.event_count > 0:

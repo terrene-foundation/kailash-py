@@ -196,21 +196,19 @@ def is_kubernetes_available():
     """Check if Kubernetes service is available."""
     try:
         import subprocess
-        
+
         # Check if kubectl is available
         kubectl_result = subprocess.run(
-            ["kubectl", "version", "--client"], 
-            capture_output=True, 
-            timeout=5
+            ["kubectl", "version", "--client"], capture_output=True, timeout=5
         )
         if kubectl_result.returncode != 0:
             return False
-        
+
         # Check if we can connect to the cluster
         cluster_result = subprocess.run(
-            ["kubectl", "cluster-info", "--request-timeout=3s"], 
-            capture_output=True, 
-            timeout=5
+            ["kubectl", "cluster-info", "--request-timeout=3s"],
+            capture_output=True,
+            timeout=5,
         )
         return cluster_result.returncode == 0
     except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError):

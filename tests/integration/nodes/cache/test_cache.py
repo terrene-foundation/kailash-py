@@ -338,7 +338,7 @@ class TestCacheNode:
 
         # Wait a small amount to ensure we're past the exact TTL
         time.sleep(1.05)
-        
+
         # Should be expired
         get_expired = cache_node.execute(operation="get", key=key, backend="memory")
         assert get_expired["hit"] is False

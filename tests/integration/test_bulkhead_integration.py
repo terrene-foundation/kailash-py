@@ -233,8 +233,9 @@ class TestBulkheadSQLIntegration:
         manager = BulkheadManager()
         small_partition = manager.create_partition(config_small)
         normal_partition = manager.create_partition(config_normal)
-        
+
         try:
+
             def slow_query():
                 import time
 
@@ -261,7 +262,7 @@ class TestBulkheadSQLIntegration:
             slow_result = await slow_task
             # Check that slow task completed successfully
             assert "data" in slow_result
-            
+
         finally:
             # Clean up bulkhead manager
             await manager.shutdown_all()
