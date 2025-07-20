@@ -473,10 +473,15 @@ class Node(ABC):
                 if not isinstance(value, param_def.type):
                     try:
                         # Special handling for datetime conversion from ISO strings
-                        if param_def.type.__name__ == 'datetime' and isinstance(value, str):
+                        if param_def.type.__name__ == "datetime" and isinstance(
+                            value, str
+                        ):
                             from datetime import datetime
+
                             # Try to parse ISO format string
-                            self.config[param_name] = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                            self.config[param_name] = datetime.fromisoformat(
+                                value.replace("Z", "+00:00")
+                            )
                         else:
                             self.config[param_name] = param_def.type(value)
                     except (ValueError, TypeError) as e:
