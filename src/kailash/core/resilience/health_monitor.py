@@ -63,7 +63,7 @@ class HealthCheckResult:
     details: Dict[str, Any] = field(default_factory=dict)
     error_message: Optional[str] = None
     is_healthy: bool = field(init=False)
-    
+
     # Additional attributes for compatibility
     check_name: str = field(default="", init=False)
     message: str = field(default="", init=False)
@@ -73,19 +73,21 @@ class HealthCheckResult:
     def __post_init__(self):
         """Calculate health status and initialize compatibility fields."""
         self.is_healthy = self.status in [HealthStatus.HEALTHY, HealthStatus.DEGRADED]
-        
+
         # Initialize compatibility fields
         self.check_name = self.service_name
         self.error = self.error_message
         self.metadata = self.details.copy()
-        
+
         # Set message based on status
         if self.status == HealthStatus.HEALTHY:
             self.message = "Service is healthy"
         elif self.status == HealthStatus.DEGRADED:
             self.message = "Service is degraded but functional"
         elif self.status == HealthStatus.UNHEALTHY:
-            self.message = f"Service is unhealthy: {self.error_message or 'Unknown error'}"
+            self.message = (
+                f"Service is unhealthy: {self.error_message or 'Unknown error'}"
+            )
         else:
             self.message = "Service status unknown"
 
@@ -148,9 +150,9 @@ class DatabaseHealthCheck(HealthCheck):
         """Initialize database health check."""
         super().__init__(name, **kwargs)
         self.check_name = name  # Required by HealthCheckManager
-        
+
         # Handle both database node objects and connection strings
-        if hasattr(database_node_or_connection_string, 'execute'):
+        if hasattr(database_node_or_connection_string, "execute"):
             # It's a database node object
             self.database_node = database_node_or_connection_string
             self.connection_string = None
@@ -167,10 +169,12 @@ class DatabaseHealthCheck(HealthCheck):
         try:
             if self.database_node:
                 # Use database node object directly
-                result = await self.database_node.execute("SELECT 1 as health_check", "dict")
-                
+                result = await self.database_node.execute(
+                    "SELECT 1 as health_check", "dict"
+                )
+
                 response_time = (time.time() - start_time) * 1000
-                
+
                 if result and result.get("success"):
                     return HealthCheckResult(
                         check_id=check_id,
@@ -199,7 +203,9 @@ class DatabaseHealthCheck(HealthCheck):
 
                 # Execute simple health check query
                 result = await asyncio.wait_for(
-                    asyncio.to_thread(sql_node.execute, query="SELECT 1 as health_check"),
+                    asyncio.to_thread(
+                        sql_node.execute, query="SELECT 1 as health_check"
+                    ),
                     timeout=self.timeout,
                 )
 
@@ -311,7 +317,13 @@ class RedisHealthCheck(HealthCheck):
 class MemoryHealthCheck(HealthCheck):
     """Health check for system memory usage."""
 
-    def __init__(self, name: str, warning_threshold: float = 80.0, critical_threshold: float = 95.0, **kwargs):
+    def __init__(
+        self,
+        name: str,
+        warning_threshold: float = 80.0,
+        critical_threshold: float = 95.0,
+        **kwargs,
+    ):
         """Initialize memory health check."""
         super().__init__(name, **kwargs)
         self.warning_threshold = warning_threshold
@@ -325,10 +337,10 @@ class MemoryHealthCheck(HealthCheck):
 
         try:
             import psutil
-            
+
             memory = psutil.virtual_memory()
             response_time = (time.time() - start_time) * 1000
-            
+
             # Determine status based on memory usage
             if memory.percent >= self.critical_threshold:
                 status = HealthStatus.UNHEALTHY
@@ -382,14 +394,16 @@ class CustomHealthCheck(HealthCheck):
         try:
             # Execute the custom check function
             if asyncio.iscoroutinefunction(self.check_function):
-                result = await asyncio.wait_for(self.check_function(), timeout=self.timeout)
+                result = await asyncio.wait_for(
+                    self.check_function(), timeout=self.timeout
+                )
             else:
                 result = await asyncio.wait_for(
                     asyncio.to_thread(self.check_function), timeout=self.timeout
                 )
-            
+
             response_time = (time.time() - start_time) * 1000
-            
+
             # Handle different result formats
             if isinstance(result, bool):
                 status = HealthStatus.HEALTHY if result else HealthStatus.UNHEALTHY
@@ -404,7 +418,7 @@ class CustomHealthCheck(HealthCheck):
                     status = HealthStatus.DEGRADED
                 else:
                     status = HealthStatus.UNHEALTHY
-                    
+
                 message = result.get("message", "Custom check completed")
                 details = result.get("metadata", {})
             else:
@@ -775,7 +789,7 @@ async def quick_health_check(service_name: str) -> bool:
 @dataclass
 class HealthSummary:
     """Health summary for all checks."""
-    
+
     total_checks: int
     healthy_checks: int
     degraded_checks: int
@@ -786,7 +800,7 @@ class HealthSummary:
 
 class HealthCheckManager:
     """Manager for orchestrating multiple health checks with configuration."""
-    
+
     def __init__(self, config: Dict[str, Any]):
         """Initialize health check manager with configuration."""
         self.config = config
@@ -794,77 +808,77 @@ class HealthCheckManager:
         self.default_interval = config.get("default_interval", 30.0)
         self.parallel_checks = config.get("parallel_checks", True)
         self.max_concurrent_checks = config.get("max_concurrent_checks", 10)
-        
+
         self.health_checks: Dict[str, HealthCheck] = {}
         self.check_intervals: Dict[str, float] = {}
         self.last_results: Dict[str, HealthCheckResult] = {}
         self.history: Dict[str, List[HealthCheckResult]] = {}
         self.status_change_callbacks: List[Callable] = []
         self._running = False
-        
+
     def register_health_check(self, health_check: HealthCheck, interval: float = None):
         """Register a health check with optional interval."""
         check_name = health_check.check_name
         self.health_checks[check_name] = health_check
         self.check_intervals[check_name] = interval or self.default_interval
         self.history[check_name] = []
-        
+
     async def run_health_check(self, check_name: str) -> HealthCheckResult:
         """Run a specific health check."""
         if check_name not in self.health_checks:
             raise ValueError(f"Health check '{check_name}' not found")
-            
+
         health_check = self.health_checks[check_name]
         result = await health_check.check_health()
-        
+
         # Check for status changes before storing new result
         await self._check_status_change(check_name, result)
-        
+
         # Store result
         self.last_results[check_name] = result
         self.history[check_name].append(result)
-        
+
         return result
-        
+
     async def run_all_health_checks(self) -> List[HealthCheckResult]:
         """Run all registered health checks."""
         if not self.health_checks:
             return []
-            
+
         if self.parallel_checks:
             # Run checks in parallel
             tasks = [
-                self.run_health_check(check_name) 
+                self.run_health_check(check_name)
                 for check_name in self.health_checks.keys()
             ]
-            
+
             # Limit concurrency
             semaphore = asyncio.Semaphore(self.max_concurrent_checks)
-            
+
             async def run_with_semaphore(task):
                 async with semaphore:
                     return await task
-                    
-            results = await asyncio.gather(*[
-                run_with_semaphore(task) for task in tasks
-            ])
+
+            results = await asyncio.gather(
+                *[run_with_semaphore(task) for task in tasks]
+            )
         else:
             # Run checks sequentially
             results = []
             for check_name in self.health_checks.keys():
                 result = await self.run_health_check(check_name)
                 results.append(result)
-                
+
         return results
-        
+
     async def get_health_summary(self) -> HealthSummary:
         """Get summary of all health checks."""
         results = await self.run_all_health_checks()
-        
+
         healthy_count = sum(1 for r in results if r.status == HealthStatus.HEALTHY)
-        degraded_count = sum(1 for r in results if r.status == HealthStatus.DEGRADED)  
+        degraded_count = sum(1 for r in results if r.status == HealthStatus.DEGRADED)
         unhealthy_count = sum(1 for r in results if r.status == HealthStatus.UNHEALTHY)
-        
+
         # Determine overall status
         if unhealthy_count > 0:
             overall_status = HealthStatus.UNHEALTHY
@@ -874,27 +888,29 @@ class HealthCheckManager:
             overall_status = HealthStatus.HEALTHY
         else:
             overall_status = HealthStatus.UNKNOWN
-            
+
         return HealthSummary(
             total_checks=len(results),
             healthy_checks=healthy_count,
             degraded_checks=degraded_count,
             unhealthy_checks=unhealthy_count,
             overall_status=overall_status,
-            details=results
+            details=results,
         )
-        
+
     def add_status_change_callback(self, callback: Callable):
         """Add callback for status changes."""
         self.status_change_callbacks.append(callback)
-        
-    def get_health_history(self, check_name: str, limit: int = None) -> List[HealthCheckResult]:
+
+    def get_health_history(
+        self, check_name: str, limit: int = None
+    ) -> List[HealthCheckResult]:
         """Get health check history for a specific check."""
         history = self.history.get(check_name, [])
         if limit:
             return history[-limit:]
         return history
-        
+
     async def _check_status_change(self, check_name: str, result: HealthCheckResult):
         """Check if status has changed and notify callbacks."""
         if check_name in self.last_results:
@@ -906,7 +922,7 @@ class HealthCheckManager:
                         await callback(check_name, result)
                     except Exception as e:
                         logger.error(f"Error in status change callback: {e}")
-                        
+
     async def shutdown(self):
         """Shutdown the health check manager."""
         self._running = False
@@ -925,30 +941,37 @@ def get_health_manager() -> HealthCheckManager:
             "enabled": True,
             "default_interval": 30.0,
             "parallel_checks": True,
-            "max_concurrent_checks": 10
+            "max_concurrent_checks": 10,
         }
         _global_health_manager = HealthCheckManager(config)
     return _global_health_manager
 
 
 # Add convenience functions for registering health checks
-async def register_database_health_check(name: str, database_node, interval: float = 30.0):
+async def register_database_health_check(
+    name: str, database_node, interval: float = 30.0
+):
     """Register a database health check with global manager."""
     health_check = DatabaseHealthCheck(name, database_node)
     manager = get_health_manager()
     manager.register_health_check(health_check, interval)
 
 
-async def register_memory_health_check(name: str, warning_threshold: float = 80.0, 
-                                     critical_threshold: float = 95.0, interval: float = 30.0):
+async def register_memory_health_check(
+    name: str,
+    warning_threshold: float = 80.0,
+    critical_threshold: float = 95.0,
+    interval: float = 30.0,
+):
     """Register a memory health check with global manager."""
     health_check = MemoryHealthCheck(name, warning_threshold, critical_threshold)
     manager = get_health_manager()
     manager.register_health_check(health_check, interval)
 
 
-async def register_custom_health_check(name: str, check_func: Callable, 
-                                     interval: float = 30.0, timeout: float = 10.0):
+async def register_custom_health_check(
+    name: str, check_func: Callable, interval: float = 30.0, timeout: float = 10.0
+):
     """Register a custom health check with global manager."""
     health_check = CustomHealthCheck(name, check_func, timeout=timeout)
     manager = get_health_manager()

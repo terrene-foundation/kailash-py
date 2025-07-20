@@ -467,7 +467,10 @@ class CircuitBreakerManager:
         return self._breakers[name]
 
     def create_circuit_breaker(
-        self, name: str, config: Optional[CircuitBreakerConfig] = None, pattern: Optional[str] = None
+        self,
+        name: str,
+        config: Optional[CircuitBreakerConfig] = None,
+        pattern: Optional[str] = None,
     ) -> ConnectionCircuitBreaker:
         """Create a new circuit breaker with optional pattern-based configuration."""
         if pattern and pattern in self._patterns:

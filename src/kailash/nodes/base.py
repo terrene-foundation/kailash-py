@@ -467,15 +467,38 @@ class Node(ABC):
                 # Skip type checking for Any type
                 if param_def.type is Any:
                     continue
+                # Skip validation for template expressions like ${variable_name}
+                if isinstance(value, str) and self._is_template_expression(value):
+                    continue
                 if not isinstance(value, param_def.type):
                     try:
-                        self.config[param_name] = param_def.type(value)
+                        # Special handling for datetime conversion from ISO strings
+                        if param_def.type.__name__ == 'datetime' and isinstance(value, str):
+                            from datetime import datetime
+                            # Try to parse ISO format string
+                            self.config[param_name] = datetime.fromisoformat(value.replace('Z', '+00:00'))
+                        else:
+                            self.config[param_name] = param_def.type(value)
                     except (ValueError, TypeError) as e:
                         raise NodeConfigurationError(
                             f"Configuration parameter '{param_name}' must be of type "
                             f"{param_def.type.__name__}, got {type(value).__name__}. "
                             f"Conversion failed: {e}"
                         ) from e
+
+    def _is_template_expression(self, value: str) -> bool:
+        """Check if a string value is a template expression like ${variable_name}.
+
+        Args:
+            value: String value to check
+
+        Returns:
+            True if the value is a template expression, False otherwise
+        """
+        import re
+
+        # Match template expressions like ${variable_name} or ${node.output}
+        return bool(re.match(r"^\$\{[^}]+\}$", value))
 
     def _get_cached_parameters(self) -> dict[str, NodeParameter]:
         """Get cached parameter definitions.
