@@ -396,6 +396,16 @@ class ConnectionCircuitBreaker(Generic[T]):
         if listener in self._listeners:
             self._listeners.remove(listener)
 
+    @property
+    def success_count(self) -> int:
+        """Get number of successful calls."""
+        return self.metrics.successful_calls
+
+    @property
+    def failure_count(self) -> int:
+        """Get number of failed calls."""
+        return self.metrics.failed_calls
+
     def get_status(self) -> Dict[str, Any]:
         """Get current circuit breaker status."""
         return {
@@ -435,10 +445,16 @@ class ConnectionCircuitBreaker(Generic[T]):
 class CircuitBreakerManager:
     """Manages multiple circuit breakers for different resources."""
 
-    def __init__(self):
+    def __init__(self, performance_monitor=None):
         """Initialize circuit breaker manager."""
         self._breakers: Dict[str, ConnectionCircuitBreaker] = {}
         self._default_config = CircuitBreakerConfig()
+        self._performance_monitor = performance_monitor
+        self._patterns = {
+            "database": CircuitBreakerConfig(failure_threshold=5, recovery_timeout=60),
+            "api": CircuitBreakerConfig(failure_threshold=3, recovery_timeout=30),
+            "cache": CircuitBreakerConfig(failure_threshold=2, recovery_timeout=15),
+        }
 
     def get_or_create(
         self, name: str, config: Optional[CircuitBreakerConfig] = None
@@ -449,6 +465,60 @@ class CircuitBreakerManager:
                 config or self._default_config
             )
         return self._breakers[name]
+
+    def create_circuit_breaker(
+        self, name: str, config: Optional[CircuitBreakerConfig] = None, pattern: Optional[str] = None
+    ) -> ConnectionCircuitBreaker:
+        """Create a new circuit breaker with optional pattern-based configuration."""
+        if pattern and pattern in self._patterns:
+            config = config or self._patterns[pattern]
+        return self.get_or_create(name, config)
+
+    async def execute_with_circuit_breaker(
+        self, name: str, func: Callable, fallback: Optional[Callable] = None
+    ):
+        """Execute a function with circuit breaker protection."""
+        cb = self.get_or_create(name)
+        try:
+            result = await cb.call(func)
+            return result
+        except CircuitBreakerError:
+            if fallback:
+                if asyncio.iscoroutinefunction(fallback):
+                    return await fallback()
+                else:
+                    return fallback()
+            raise
+
+    def get_circuit_breaker(self, name: str) -> Optional[ConnectionCircuitBreaker]:
+        """Get an existing circuit breaker by name."""
+        return self._breakers.get(name)
+
+    def get_all_circuit_states(self) -> Dict[str, Dict[str, Any]]:
+        """Get the state of all circuit breakers."""
+        return {name: cb.get_status() for name, cb in self._breakers.items()}
+
+    def force_open_circuit_breaker(self, name: str) -> bool:
+        """Manually open a circuit breaker."""
+        cb = self._breakers.get(name)
+        if cb:
+            asyncio.create_task(cb.force_open("Manual override"))
+            return True
+        return False
+
+    def reset_circuit_breaker(self, name: str) -> bool:
+        """Reset a circuit breaker to closed state."""
+        cb = self._breakers.get(name)
+        if cb:
+            asyncio.create_task(cb.reset())
+            return True
+        return False
+
+    def add_global_callback(self, callback: Callable):
+        """Add a global callback for circuit breaker state changes."""
+        # For now, add to all existing breakers
+        for cb in self._breakers.values():
+            cb.add_listener(callback)
 
     def get_all_status(self) -> Dict[str, Dict[str, Any]]:
         """Get status of all circuit breakers."""
