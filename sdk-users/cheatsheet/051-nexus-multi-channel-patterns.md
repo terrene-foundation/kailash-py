@@ -6,10 +6,10 @@
 
 ### Zero-Configuration Start
 ```python
-from kailash.nexus import create_nexus
+from nexus import Nexus
 
 # Instant multi-channel platform - all channels enabled
-nexus = create_nexus()
+nexus = Nexus()
 
 # Provides:
 # - REST API on port 8000 with OpenAPI docs
@@ -23,14 +23,14 @@ nexus = create_nexus()
 ### Channel-Specific Configuration
 ```python
 # API-only nexus for pure REST services
-api_nexus = create_api_nexus(
+api_nexus = Nexus(
     name="API Service",
     port=8080,
     enable_docs=True
 )
 
 # Development nexus with all channels
-dev_nexus = create_development_nexus(
+dev_nexus = Nexus(
     name="Development Platform",
     api_port=8000,
     mcp_port=3000,
@@ -38,7 +38,7 @@ dev_nexus = create_development_nexus(
 )
 
 # Production nexus with enterprise features
-prod_nexus = create_production_nexus(
+prod_nexus = Nexus(
     name="Production Platform",
     api_port=8000,
     mcp_port=3000,
@@ -50,7 +50,7 @@ prod_nexus = create_production_nexus(
 ### Custom Channel Selection
 ```python
 # Selective channel enabling
-nexus = create_nexus(
+nexus = Nexus(
     name="Custom Platform",
     enable_api=True,     # REST API + WebSocket
     enable_cli=True,     # Command-line interface
@@ -333,7 +333,7 @@ nexus.register_event_workflow("cross_channel_processor", event_workflow.build())
 ### Enterprise Security Integration
 ```python
 # Unified authentication across channels
-nexus = create_nexus(
+nexus = Nexus(
     auth_provider="enterprise_ldap",
     enable_rbac=True,
     security_config={
@@ -374,4 +374,4 @@ nexus = create_nexus(
 
 ---
 
-**Need unified multi-channel orchestration?** Nexus provides instant API, CLI, and MCP interfaces with zero configuration. Start with `create_nexus()` and progressively enhance with enterprise features.
+**Need unified multi-channel orchestration?** Nexus provides instant API, CLI, and MCP interfaces with zero configuration. Start with `Nexus()` and progressively enhance with enterprise features.

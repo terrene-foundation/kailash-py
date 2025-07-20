@@ -217,6 +217,32 @@ services:
     networks:
       - kailash-test-network
 
+  # Kubernetes in Docker (kind) for K8s testing
+  test-kubernetes:
+    image: kindest/node:v1.29.0
+    container_name: kailash_sdk_test_kubernetes
+    privileged: true
+    environment:
+      - KUBECONFIG=/etc/kubernetes/admin.conf
+    ports:
+      - "6443:6443"  # Kubernetes API server
+      - "30080:30080" # NodePort range start
+      - "30443:30443" # NodePort range
+    volumes:
+      - kubernetes_data:/var/lib/containerd
+      - kubernetes_config:/etc/kubernetes
+    tmpfs:
+      - /tmp
+      - /run
+    healthcheck:
+      test: ["CMD-SHELL", "kubectl get nodes --kubeconfig=/etc/kubernetes/admin.conf | grep Ready || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+    networks:
+      - kailash-test-network
+
   # Health check dashboard
   test-healthcheck:
     image: nginx:alpine
@@ -231,6 +257,7 @@ services:
       - test-redis
       - test-mysql
       - test-ollama
+      - test-kubernetes
     networks:
       - kailash-test-network
 
@@ -242,6 +269,8 @@ volumes:
   qdrant_test_data:
   minio_test_data:
   elasticsearch_data:
+  kubernetes_data:
+  kubernetes_config:
 
 networks:
   kailash-test-network:

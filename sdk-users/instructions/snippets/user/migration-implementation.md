@@ -251,29 +251,24 @@ For each component, you MUST:
 - [ ] Known bugs fixed (list fixes made)
 
 ### Mandatory Validation After Each Component
-**After EACH component migration, you MUST run these commands and show me the COMPLETE output:**
+Run complete test suite in the correct order. You MUST show me the COMPLETE output - do not summarize anything.
+Please follow our 3-tier testing strategy exactly as specified in `sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`
 
-1. **Run behavioral unit tests:**
-   `pytest tests/unit/test_component_behavior.py -v`
+1. **Tier 1 (all unit tests):**
+   `pytest tests/unit/ -v`
 
-2. **Run integration tests with real services:**
+2. **Tier 2 (all integration tests):**
    `./tests/utils/test-env up && ./tests/utils/test-env status`
-   `pytest tests/integration/test_component_integration.py -v`
+   `pytest tests/integration/ -v`
 
-3. **Run affected user flow tests:**
-   `pytest tests/e2e/test_affected_user_flows.py -v`
+3. **Tier 3 (relevant E2E tests):**
+   `pytest tests/e2e/test_specific_feature.py -v`
 
-4. **Compare behavior against documentation:**
-   - Show that responses match expected templates
-   - Show that flows match documented paths
-   - Show that bugs are fixed, not replicated
+Use our ollama to generate data or create LLMAgents freely. Always use the docker implementation in `tests/utils`, and real data, processes, responses.
 
-5. **Verify SDK pattern compliance:**
-   - Show DataFlow models replace state management correctly
-   - Show WorkflowBuilder replaces LangGraph patterns
-   - Show SDK nodes replace custom services
+If you find any existing tests with policy violations, please fix them immediately. Additional tests written MUST follow our test directives.
 
-**Show me the COMPLETE output after each component. Do not summarize. Do not proceed if behavior doesn't match documentation.**
+**Show me the COMPLETE output from each tier. Do not summarize. If any tests fail, STOP and fix before continuing.**
 
 ### Continuous Migration Validation
 After each component, you MUST validate:

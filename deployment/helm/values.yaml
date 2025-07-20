@@ -1,0 +1,133 @@
+# MCP Platform - Umbrella Chart Values
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+  postgresql:
+    auth:
+      postgresPassword: "mcppass"
+      username: "mcpuser"
+      password: "mcppass"
+      database: "mcpdb"
+  redis:
+    auth:
+      enabled: true
+      password: "redispass"
+
+# Enterprise Gateway
+enterprise-gateway:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: mcp/enterprise-gateway
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: LoadBalancer
+    port: 8000
+  ingress:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: nginx
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - host: mcp-gateway.company.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: mcp-gateway-tls
+        hosts:
+          - mcp-gateway.company.com
+
+# User Management App
+user-management:
+  enabled: true
+  replicaCount: 3
+  image:
+    repository: mcp/user-management
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+# AI Registry App
+ai-registry:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: mcp/ai-registry
+    tag: "1.0.1"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 250m
+      memory: 256Mi
+
+# PostgreSQL Database
+postgresql:
+  enabled: true
+  architecture: standalone
+  auth:
+    postgresPassword: "mcppass"
+    username: "mcpuser"
+    password: "mcppass"
+    database: "mcpdb"
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+      requests:
+        cpu: 500m
+        memory: 512Mi
+
+# Redis Cache
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: true
+    password: "redispass"
+  master:
+    persistence:
+      enabled: true
+      size: 5Gi
+    resources:
+      limits:
+        cpu: 500m
+        memory: 512Mi
+      requests:
+        cpu: 250m
+        memory: 256Mi
+
+# Monitoring
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+  grafana:
+    enabled: true
+    adminPassword: "admin123"

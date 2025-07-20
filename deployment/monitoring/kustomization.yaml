@@ -1,0 +1,120 @@
+# Kustomization for Monitoring Stack
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: monitoring
+
+resources:
+  # Core monitoring namespace
+  - namespace.yaml
+  
+  # Prometheus Operator CRDs and deployment
+  - https://github.com/prometheus-operator/prometheus-operator/releases/download/v0.70.0/bundle.yaml
+  
+  # Prometheus configuration
+  - prometheus/prometheus.yaml
+  - prometheus/service-monitor-default.yaml
+  - prometheus/prometheus-rules.yaml
+  
+  # Grafana configuration
+  - grafana/deployment.yaml
+  - grafana/service.yaml
+  - grafana/configmap-datasources.yaml
+  - grafana/configmap-dashboards.yaml
+  - grafana/configmap-dashboard-providers.yaml
+  
+  # AlertManager configuration
+  - alertmanager/alertmanager.yaml
+  - alertmanager/configmap.yaml
+  - alertmanager/service.yaml
+  
+  # ServiceMonitors for various services
+  - service-monitors/kube-state-metrics.yaml
+  - service-monitors/node-exporter.yaml
+  - service-monitors/kubelet.yaml
+  
+  # PrometheusRules
+  - rules/kubernetes-alerts.yaml
+  - rules/application-alerts.yaml
+  - rules/infrastructure-alerts.yaml
+
+# ConfigMap generator for Grafana dashboards
+configMapGenerator:
+  - name: grafana-dashboards
+    files:
+      - dashboards/kubernetes-cluster.json
+      - dashboards/kubernetes-pods.json
+      - dashboards/nginx-ingress.json
+      - dashboards/postgresql.json
+      - dashboards/redis.json
+      - dashboards/application-metrics.json
+
+# Secret generator for sensitive data
+secretGenerator:
+  - name: grafana-admin
+    literals:
+      - admin-user=admin
+      - admin-password=changeme  # Change this in production
+  - name: alertmanager-config
+    files:
+      - alertmanager.yaml=alertmanager/alertmanager-secret.yaml
+
+# Common labels
+commonLabels:
+  app.kubernetes.io/part-of: monitoring-stack
+  app.kubernetes.io/managed-by: kustomize
+
+# Patches for environment-specific configurations
+patches:
+  # Increase Prometheus retention for production
+  - target:
+      kind: Prometheus
+      name: kailash-prometheus
+    patch: |-
+      - op: replace
+        path: /spec/retention
+        value: 30d
+  
+  # Add persistent volumes
+  - target:
+      kind: Prometheus
+      name: kailash-prometheus
+    patch: |-
+      - op: add
+        path: /spec/storage
+        value:
+          volumeClaimTemplate:
+            spec:
+              accessModes: ["ReadWriteOnce"]
+              resources:
+                requests:
+                  storage: 50Gi
+              storageClassName: fast
+  
+  # Configure Grafana ingress
+  - target:
+      kind: Service
+      name: grafana
+    patch: |-
+      - op: add
+        path: /metadata/annotations
+        value:
+          service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+
+# Resource requirements
+replicas:
+  - name: prometheus
+    count: 2  # HA setup
+  - name: alertmanager
+    count: 3  # HA setup
+
+# Images to use specific versions
+images:
+  - name: prom/prometheus
+    newTag: v2.48.0
+  - name: prom/alertmanager
+    newTag: v0.26.0
+  - name: grafana/grafana
+    newTag: 10.2.2
+  - name: quay.io/prometheus-operator/prometheus-config-reloader
+    newTag: v0.70.0

@@ -141,6 +141,7 @@ What's New in v0.8.4
    api/access_control
    api/tracking
    api/visualization
+   api/monitoring
    api/utils
    api/cli
 
@@ -176,7 +177,7 @@ Key Features
    Native support for LLMs, embeddings, RAG, and multi-agent coordination with real MCP execution by default.
 
 🏗️ **Production-Grade Infrastructure**
-   Enterprise security, monitoring, resilience patterns, compliance frameworks, and multi-tenant architecture.
+   Edge computing, enterprise security, monitoring, resilience patterns, compliance frameworks, and multi-tenant architecture.
 
 ⚡ **Exceptional Performance**
    11x faster test execution, 31.8M operations/second queries, connection pooling, and optimized async operations.
@@ -240,6 +241,46 @@ Quick Start Examples
 
    runtime = LocalRuntime()
    results, run_id = runtime.execute(workflow.build())
+
+**Edge Computing - Distributed Coordination**
+
+.. code-block:: python
+
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.runtime.local import LocalRuntime
+
+   # Build edge coordination workflow
+   workflow = WorkflowBuilder(edge_config={
+       "discovery": {
+           "locations": ["us-east-1", "eu-west-1", "ap-south-1"]
+       }
+   })
+
+   # Leader election for edge coordination
+   workflow.add_node("EdgeCoordinationNode", "coordinator", {
+       "operation": "elect_leader",
+       "coordination_group": "cache_cluster"
+   })
+
+   # Global rate limiting across edges
+   workflow.add_node("EdgeCoordinationNode", "rate_limiter", {
+       "operation": "propose",
+       "coordination_group": "rate_limiters",
+       "proposal": {
+           "action": "set_rate_limit",
+           "api": "/api/v1/generate",
+           "limit": 1000,
+           "window": "1m"
+       }
+   })
+
+   # Execute with edge coordination
+   runtime = LocalRuntime()
+   results, run_id = runtime.execute(workflow.build())
+
+   # Verify edge coordination
+   assert results["coordinator"]["success"] is True
+   assert results["coordinator"]["leader"] is not None
 
 **Core SDK - Advanced Workflows**
 
@@ -343,6 +384,7 @@ Node Ecosystem (115+ Nodes)
    - **Data Nodes**: CSVReaderNode, AsyncSQLDatabaseNode, QueryBuilderNode, QueryCacheNode
    - **AI Nodes**: LLMAgentNode, IterativeLLMAgentNode, EmbeddingGeneratorNode, SelfOrganizingAgentNode
    - **A2A Nodes**: A2ACoordinatorNode, HybridSearchNode, AdaptiveSearchNode, SemanticMemoryNode, StreamingAnalyticsNode
+   - **Edge Nodes**: EdgeCoordinationNode, EdgeDiscoveryNode, EdgeStateManagerNode, EdgeCacheWarmerNode
    - **RAG Nodes**: 47+ specialized nodes for document processing and retrieval
    - **Security Nodes**: ThreatDetectionNode, AuditLogNode, AccessControlManager
    - **Monitoring Nodes**: TransactionMetricsNode, DeadlockDetectorNode, PerformanceAnomalyNode
@@ -352,6 +394,7 @@ Node Ecosystem (115+ Nodes)
    - **A2A Communication**: Google Protocol-based multi-agent coordination
    - **Semantic Memory**: Long-term memory management for agent interactions
    - **Hybrid Search**: Multi-strategy agent discovery and matching
+   - **Edge Computing**: Raft-based distributed coordination with leader election
    - **Cyclic Workflows**: CycleBuilder API with convergence detection
    - **Distributed Transactions**: Automatic Saga/2PC pattern selection
    - **Real-time Monitoring**: WebSocket streaming with performance metrics

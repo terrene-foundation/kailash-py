@@ -1,0 +1,140 @@
+# Main Kailash Application
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kailash-app
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: kailash
+    app.kubernetes.io/part-of: kailash-platform
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: kailash=ghcr.io/your-org/kailash-template
+    argocd-image-updater.argoproj.io/kailash.update-strategy: semver
+    argocd-image-updater.argoproj.io/kailash.helm.image-name: image.repository
+    argocd-image-updater.argoproj.io/kailash.helm.image-tag: image.tag
+spec:
+  project: kailash
+  
+  source:
+    repoURL: https://github.com/your-org/kailash-template
+    targetRevision: main
+    path: deployment/helm/kailash
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml
+      parameters:
+        - name: replicaCount
+          value: "3"
+        - name: image.pullPolicy
+          value: IfNotPresent
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kailash-prod
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  revisionHistoryLimit: 10
+  
+  # Health checks
+  health:
+    progressDeadlineSeconds: 600
+  
+  # Ignore differences in generated fields
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+      jsonPointers:
+        - /spec/metrics
+---
+# Staging environment
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kailash-app-staging
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: kailash
+    app.kubernetes.io/part-of: kailash-platform
+    environment: staging
+spec:
+  project: kailash
+  
+  source:
+    repoURL: https://github.com/your-org/kailash-template
+    targetRevision: develop
+    path: deployment/helm/kailash
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-staging.yaml
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kailash-staging
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  
+  revisionHistoryLimit: 5
+---
+# Development environment
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kailash-app-dev
+  namespace: argocd
+  labels:
+    app.kubernetes.io/name: kailash
+    app.kubernetes.io/part-of: kailash-platform
+    environment: dev
+spec:
+  project: kailash
+  
+  source:
+    repoURL: https://github.com/your-org/kailash-template
+    targetRevision: develop
+    path: deployment/helm/kailash
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-dev.yaml
+      parameters:
+        - name: replicaCount
+          value: "1"
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kailash-dev
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: true
+    syncOptions:
+      - CreateNamespace=true
+      - ApplyOutOfSyncOnly=true
+  
+  revisionHistoryLimit: 3

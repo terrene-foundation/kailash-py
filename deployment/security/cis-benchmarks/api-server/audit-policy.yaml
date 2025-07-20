@@ -1,0 +1,89 @@
+apiVersion: audit.k8s.io/v1
+kind: Policy
+metadata:
+  name: cis-audit-policy
+  namespace: kube-system
+# CIS 1.2.29 - Comprehensive audit policy
+rules:
+# Log at RequestResponse level for sensitive operations
+- level: RequestResponse
+  resources:
+  - group: ""
+    resources: ["secrets", "configmaps"]
+  - group: "rbac.authorization.k8s.io"
+    resources: ["*"]
+  - group: "authentication.k8s.io"
+    resources: ["*"]
+  - group: "authorization.k8s.io"
+    resources: ["*"]
+
+# Log at Request level for important resources
+- level: Request
+  resources:
+  - group: ""
+    resources: ["pods", "services", "persistentvolumes", "persistentvolumeclaims"]
+  - group: "apps"
+    resources: ["deployments", "replicasets", "daemonsets", "statefulsets"]
+  - group: "networking.k8s.io"
+    resources: ["networkpolicies"]
+  - group: "policy"
+    resources: ["podsecuritypolicies"]
+
+# Log failures at Request level
+- level: Request
+  omitStages:
+  - RequestReceived
+  namespaces: ["kube-system", "kube-public", "kube-node-lease"]
+
+# Log metadata for other operations
+- level: Metadata
+  omitStages:
+  - RequestReceived
+
+# Exclude noisy operations
+- level: None
+  users: ["system:kube-proxy"]
+  verbs: ["watch"]
+  resources:
+  - group: ""
+    resources: ["endpoints", "services"]
+
+- level: None
+  users: ["kubelet"]
+  verbs: ["get"]
+  resources:
+  - group: ""
+    resources: ["nodes"]
+
+- level: None
+  users: ["system:kube-controller-manager"]
+  verbs: ["get", "update"]
+  namespaces: ["kube-system"]
+  resources:
+  - group: ""
+    resources: ["endpoints"]
+
+- level: None
+  users: ["system:kube-scheduler"]
+  verbs: ["get", "update"]
+  namespaces: ["kube-system"]
+  resources:
+  - group: ""
+    resources: ["endpoints"]
+
+- level: None
+  users: ["system:unsecured"]
+  namespaces: ["kube-system"]
+  verbs: ["get"]
+  resources:
+  - group: ""
+    resources: ["configmaps"]
+
+# Don't log these read-only URLs
+- level: None
+  nonResourceURLs:
+  - /healthz*
+  - /version
+  - /swagger*
+  - /api*
+  - /apis*

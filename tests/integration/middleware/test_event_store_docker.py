@@ -12,33 +12,33 @@ from kailash.middleware.gateway.storage_backends import (
     PostgreSQLEventStorage,
     RedisEventStorage,
 )
+from tests.config_unified import POSTGRES_CONFIG, REDIS_CONFIG
 
 
 @pytest.fixture
 def postgres_storage():
-    """Create PostgreSQL storage backend (assumes PostgreSQL running on localhost:5432)."""
+    """Create PostgreSQL storage backend using unified config."""
     return PostgreSQLEventStorage(
-        host="localhost",
-        port=5432,
-        database="testdb",
-        username="testuser",
-        password="testpass",
+        host=POSTGRES_CONFIG["host"],
+        port=POSTGRES_CONFIG["port"],
+        database=POSTGRES_CONFIG["database"],
+        username=POSTGRES_CONFIG["user"],
+        password=POSTGRES_CONFIG["password"],
     )
 
 
 @pytest.fixture
 def redis_storage():
-    """Create Redis storage backend (assumes Redis running on localhost:6379)."""
+    """Create Redis storage backend using unified config."""
     return RedisEventStorage(
-        host="localhost",
-        port=6379,
+        host=REDIS_CONFIG["host"],
+        port=REDIS_CONFIG["port"],
         db=0,
         password=None,
     )
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(True, reason="Requires PostgreSQL service to be running")
 class TestEventStorePostgreSQLIntegration:
     """Test EventStore with real PostgreSQL backend."""
 
@@ -212,7 +212,6 @@ class TestEventStorePostgreSQLIntegration:
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(True, reason="Requires Redis service to be running")
 class TestEventStoreRedisIntegration:
     """Test EventStore with real Redis backend."""
 

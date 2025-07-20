@@ -2,7 +2,7 @@
 Unit tests for semantic memory nodes.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import numpy as np
@@ -30,7 +30,7 @@ class TestSemanticMemoryItem:
             content="test content",
             embedding=embedding,
             metadata={"key": "value"},
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             collection="test",
         )
 
@@ -43,7 +43,7 @@ class TestSemanticMemoryItem:
     def test_memory_item_to_dict(self):
         """Test converting memory item to dict."""
         embedding = np.array([0.1, 0.2, 0.3])
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         item = SemanticMemoryItem(
             id="test-id",
@@ -122,7 +122,7 @@ class TestInMemoryVectorStore:
             content="test content",
             embedding=np.array([0.1, 0.2, 0.3]),
             metadata={"key": "value"},
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             collection="test",
         )
 
@@ -144,7 +144,7 @@ class TestInMemoryVectorStore:
             content="apple fruit",
             embedding=np.array([1.0, 0.0, 0.0]),
             metadata={},
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             collection="test",
         )
 
@@ -153,7 +153,7 @@ class TestInMemoryVectorStore:
             content="banana fruit",
             embedding=np.array([0.8, 0.6, 0.0]),
             metadata={},
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             collection="test",
         )
 
@@ -180,7 +180,7 @@ class TestInMemoryVectorStore:
             content="test",
             embedding=np.array([1.0, 0.0, 0.0]),
             metadata={},
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             collection="collection1",
         )
 
@@ -189,7 +189,7 @@ class TestInMemoryVectorStore:
             content="test",
             embedding=np.array([0.0, 1.0, 0.0]),
             metadata={},
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             collection="collection2",
         )
 

@@ -1,0 +1,208 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: user-management-data
+  namespace: kailash-user-management
+  labels:
+    app: user-management
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: gp3
+  volumeMode: Filesystem
+
+---
+# PostgreSQL Data Storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-data
+  namespace: kailash-user-management
+  labels:
+    app: postgresql
+    component: database-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: gp3
+  volumeMode: Filesystem
+
+---
+# Redis Data Storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: kailash-user-management
+  labels:
+    app: redis
+    component: cache-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: gp3
+  volumeMode: Filesystem
+
+---
+# Backup Storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-storage
+  namespace: kailash-user-management
+  labels:
+    app: user-management
+    component: backup
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 100Gi
+  storageClassName: efs
+  volumeMode: Filesystem
+
+---
+# Log Storage (for centralized logging)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: log-storage
+  namespace: kailash-user-management
+  labels:
+    app: user-management
+    component: logging
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: efs
+  volumeMode: Filesystem
+
+---
+# Staging Environment Storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: user-management-data
+  namespace: kailash-user-management-staging
+  labels:
+    app: user-management
+    component: storage
+    environment: staging
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: gp3
+  volumeMode: Filesystem
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-data
+  namespace: kailash-user-management-staging
+  labels:
+    app: postgresql
+    component: database-storage
+    environment: staging
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: gp3
+  volumeMode: Filesystem
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: kailash-user-management-staging
+  labels:
+    app: redis
+    component: cache-storage
+    environment: staging
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: gp3
+  volumeMode: Filesystem
+
+---
+# Development Environment Storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: user-management-data
+  namespace: kailash-user-management-dev
+  labels:
+    app: user-management
+    component: storage
+    environment: development
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: gp3
+  volumeMode: Filesystem
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgresql-data
+  namespace: kailash-user-management-dev
+  labels:
+    app: postgresql
+    component: database-storage
+    environment: development
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: gp3
+  volumeMode: Filesystem
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-data
+  namespace: kailash-user-management-dev
+  labels:
+    app: redis
+    component: cache-storage
+    environment: development
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: gp3
+  volumeMode: Filesystem

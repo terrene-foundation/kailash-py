@@ -1,0 +1,56 @@
+# Enterprise Gateway - Server of Servers
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    nginx \
+    supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy main project requirements
+COPY pyproject.toml ./
+COPY README.md ./
+
+# Install base dependencies
+RUN pip install --no-cache-dir -e .
+
+# Copy enterprise gateway
+COPY mcp_server_enterprise/ ./mcp_server_enterprise/
+COPY core/ ./core/
+COPY config/ ./config/
+
+# Copy all app servers
+COPY apps/ ./apps/
+
+# Install all apps
+RUN cd apps/ai_registry && pip install --no-cache-dir -e . && cd ../..
+
+# Install enterprise CLI
+RUN pip install --no-cache-dir -e ./mcp_server_enterprise/
+
+# Create configuration directory
+RUN mkdir -p /app/config /app/logs
+
+# Copy enterprise configuration
+COPY docker/config/enterprise.yaml /app/config/
+COPY docker/config/nginx.conf /etc/nginx/
+COPY docker/config/supervisord.conf /etc/supervisor/conf.d/
+
+# Create non-root user
+RUN useradd -m -u 1000 mcpuser && \
+    chown -R mcpuser:mcpuser /app && \
+    chown -R mcpuser:mcpuser /var/log/nginx
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose ports
+EXPOSE 8000 8001 8002 8003 80
+
+# Run with supervisor to manage multiple services
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

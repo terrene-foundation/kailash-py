@@ -1,0 +1,142 @@
+# Kailash SDK - AWS EKS Terraform Configuration Example
+# Copy this file to terraform.tfvars and customize the values
+
+# General Configuration
+aws_region   = "us-west-2"
+environment  = "production"
+project_name = "kailash-sdk"
+owner        = "platform-team"
+cost_center  = "engineering"
+
+# Network Configuration
+vpc_cidr                = "10.0.0.0/16"
+enable_vpc_flow_logs    = true
+enable_vpc_endpoints    = true
+
+# EKS Configuration
+kubernetes_version                   = "1.28"
+cluster_endpoint_public_access       = false
+cluster_endpoint_public_access_cidrs = ["10.0.0.0/8"]
+
+# Node Groups Configuration
+node_groups = {
+  # General purpose nodes
+  general = {
+    instance_types = ["m6i.large"]
+    capacity_type  = "ON_DEMAND"
+    scaling_config = {
+      desired_size = 3
+      max_size     = 10
+      min_size     = 1
+    }
+    disk_size = 50
+    labels = {
+      role = "general"
+      tier = "application"
+    }
+  }
+  
+  # Spot instances for cost optimization (non-production workloads)
+  spot = {
+    instance_types = ["m6i.large", "m5.large", "m5a.large"]
+    capacity_type  = "SPOT"
+    scaling_config = {
+      desired_size = 2
+      max_size     = 20
+      min_size     = 0
+    }
+    disk_size = 50
+    labels = {
+      role = "spot"
+      tier = "batch"
+    }
+    taints = [
+      {
+        key    = "spot-instance"
+        value  = "true"
+        effect = "NO_SCHEDULE"
+      }
+    ]
+  }
+}
+
+enable_irsa = true
+
+# Database Configuration (Production)
+postgres_version             = "15.4"
+db_instance_class           = "db.r6g.xlarge"
+db_allocated_storage        = 200
+db_max_allocated_storage    = 2000
+db_name                     = "kailash_prod"
+db_username                 = "kailash_user"
+db_backup_retention_period  = 30
+db_backup_window           = "03:00-04:00"
+db_maintenance_window      = "sun:04:00-sun:05:00"
+db_multi_az                = true
+enable_performance_insights = true
+
+# ElastiCache Configuration (Production)
+redis_version                   = "7.0"
+redis_node_type                = "cache.r6g.xlarge"
+redis_num_cache_nodes          = 3
+redis_snapshot_retention_limit = 7
+redis_snapshot_window          = "03:00-05:00"
+redis_maintenance_window       = "sun:05:00-sun:09:00"
+
+# Security Configuration
+enable_aws_config         = true
+enable_cloudtrail         = true
+enable_kms_key_rotation    = true
+compliance_framework       = "SOC2"
+enable_encryption_in_transit = true
+enable_encryption_at_rest    = true
+
+# Monitoring Configuration
+enable_container_insights = true
+enable_prometheus        = true
+enable_grafana          = true
+# sns_topic_arn = "arn:aws:sns:us-west-2:123456789012:alerts"
+
+# DNS Configuration
+domain_name         = "your-domain.com"
+create_route53_zone = true
+
+# Add-ons Configuration
+enable_cluster_autoscaler          = true
+enable_aws_load_balancer_controller = true
+enable_external_dns               = true
+enable_cert_manager               = true
+enable_velero                     = true
+enable_metrics_server             = true
+enable_ingress_nginx              = true
+
+# Cost Optimization
+enable_spot_instances      = true
+spot_allocation_strategy   = "diversified"
+
+# Disaster Recovery
+enable_cross_region_backup = true
+backup_region             = "us-east-1"
+
+# Application Configuration
+application_config = {
+  replicas = 5
+  
+  resources = {
+    requests = {
+      cpu    = "1000m"
+      memory = "2Gi"
+    }
+    limits = {
+      cpu    = "4000m"
+      memory = "8Gi"
+    }
+  }
+  
+  autoscaling = {
+    enabled                          = true
+    min_replicas                    = 3
+    max_replicas                    = 50
+    target_cpu_utilization_percentage = 70
+  }
+}

@@ -1,0 +1,306 @@
+# HashiCorp Vault Helm Values - Enterprise Configuration
+# Production-ready Vault deployment with high availability and security
+
+global:
+  enabled: true
+  namespace: vault-system
+
+injector:
+  # Vault Agent Injector for sidecar-based secret injection
+  enabled: true
+  replicas: 2
+  
+  # Security configuration
+  agentImage:
+    repository: "hashicorp/vault"
+    tag: "1.15.2"
+  
+  # Resource limits
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+  
+  # Security context
+  securityContext:
+    pod:
+      fsGroup: 1000
+      runAsGroup: 1000
+      runAsNonRoot: true
+      runAsUser: 100
+      seccompProfile:
+        type: RuntimeDefault
+    container:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      readOnlyRootFilesystem: true
+
+  # Network policy support
+  hostNetwork: false
+  
+  # Webhook configuration
+  webhookAnnotations:
+    admissionregistration.k8s.io/mutating: "true"
+  
+  # Failure policy
+  failurePolicy: Fail
+  
+  # Certificate management
+  certs:
+    secretName: vault-injector-certs
+    caBundle: ""
+    certName: tls.crt
+    keyName: tls.key
+
+server:
+  # Enterprise image
+  image:
+    repository: "hashicorp/vault"
+    tag: "1.15.2"
+    pullPolicy: IfNotPresent
+  
+  # Enable enterprise features
+  # enterpriseLicense:
+  #   secretName: "vault-enterprise-license"
+  #   secretKey: "license"
+  
+  # Update strategy
+  updateStrategyType: "OnDelete"
+  
+  # Resource configuration
+  resources:
+    requests:
+      memory: 1Gi
+      cpu: 500m
+    limits:
+      memory: 2Gi
+      cpu: 1000m
+  
+  # Security context
+  securityContext:
+    pod:
+      fsGroup: 1000
+      runAsGroup: 1000
+      runAsNonRoot: true
+      runAsUser: 100
+      seccompProfile:
+        type: RuntimeDefault
+    container:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - ALL
+      readOnlyRootFilesystem: true
+  
+  # Readiness and liveness probes
+  readinessProbe:
+    enabled: true
+    path: "/v1/sys/health?standbyok=true&sealedcode=204&uninitcode=204"
+    initialDelaySeconds: 5
+    periodSeconds: 5
+  
+  livenessProbe:
+    enabled: true
+    path: "/v1/sys/health?standbyok=true"
+    initialDelaySeconds: 60
+    periodSeconds: 5
+  
+  # Network configuration
+  networkPolicy:
+    enabled: true
+    ingress:
+      - from:
+        - namespaceSelector:
+            matchLabels:
+              name: kailash-system
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+        ports:
+        - port: 8200
+          protocol: TCP
+        - port: 8201
+          protocol: TCP
+  
+  # High Availability configuration
+  ha:
+    enabled: true
+    replicas: 3
+    
+    # Raft integrated storage
+    raft:
+      enabled: true
+      setNodeId: true
+      
+      config: |
+        ui = true
+        
+        listener "tcp" {
+          tls_disable = 0
+          address = "[::]:8200"
+          cluster_address = "[::]:8201"
+          tls_cert_file = "/vault/userconfig/vault-tls/tls.crt"
+          tls_key_file = "/vault/userconfig/vault-tls/tls.key"
+          tls_client_ca_file = "/vault/userconfig/vault-tls/ca.crt"
+        }
+        
+        storage "raft" {
+          path = "/vault/data"
+          
+          retry_join {
+            leader_api_addr = "https://vault-0.vault-internal:8200"
+            leader_ca_cert_file = "/vault/userconfig/vault-tls/ca.crt"
+            leader_client_cert_file = "/vault/userconfig/vault-tls/tls.crt"
+            leader_client_key_file = "/vault/userconfig/vault-tls/tls.key"
+          }
+          retry_join {
+            leader_api_addr = "https://vault-1.vault-internal:8200"
+            leader_ca_cert_file = "/vault/userconfig/vault-tls/ca.crt"
+            leader_client_cert_file = "/vault/userconfig/vault-tls/tls.crt"
+            leader_client_key_file = "/vault/userconfig/vault-tls/tls.key"
+          }
+          retry_join {
+            leader_api_addr = "https://vault-2.vault-internal:8200"
+            leader_ca_cert_file = "/vault/userconfig/vault-tls/ca.crt"
+            leader_client_cert_file = "/vault/userconfig/vault-tls/tls.crt"
+            leader_client_key_file = "/vault/userconfig/vault-tls/tls.key"
+          }
+        }
+        
+        service_registration "kubernetes" {}
+        
+        # Cluster configuration
+        cluster_name = "vault-cluster"
+        cluster_addr = "https://[::]:8201"
+        api_addr = "https://POD_IP:8200"
+        
+        # Telemetry
+        telemetry {
+          prometheus_retention_time = "30s"
+          disable_hostname = true
+        }
+        
+        # Seal configuration (AWS KMS example)
+        # seal "awskms" {
+        #   region     = "us-west-2"
+        #   kms_key_id = "your-kms-key-id"
+        # }
+        
+        # Audit logging
+        log_level = "info"
+        log_format = "json"
+  
+  # Service configuration
+  service:
+    enabled: true
+    type: ClusterIP
+    clusterIP: None
+    port: 8200
+    targetPort: 8200
+    annotations:
+      service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+  
+  # Data storage
+  dataStorage:
+    enabled: true
+    size: 10Gi
+    storageClass: "gp3"
+    accessMode: ReadWriteOnce
+  
+  # Audit storage
+  auditStorage:
+    enabled: true
+    size: 5Gi
+    storageClass: "gp3"
+    accessMode: ReadWriteOnce
+  
+  # Extra volumes for TLS certificates
+  extraVolumes:
+  - type: secret
+    name: vault-tls
+    path: /vault/userconfig
+  
+  # Standalone configuration (disabled in HA mode)
+  standalone:
+    enabled: false
+  
+  # Development mode (never use in production)
+  dev:
+    enabled: false
+
+# UI configuration
+ui:
+  enabled: true
+  serviceType: "ClusterIP"
+  serviceNodePort: null
+  externalPort: 8200
+
+# CSI Secret Store provider
+csi:
+  enabled: true
+  image:
+    repository: "hashicorp/vault-csi-provider"
+    tag: "1.4.0"
+    pullPolicy: IfNotPresent
+  
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 50m
+    limits:
+      memory: 256Mi
+      cpu: 100m
+
+# Server telemetry
+serverTelemetry:
+  serviceMonitor:
+    enabled: true
+    selectors: {}
+    interval: 30s
+    scrapeTimeout: 10s
+  
+  prometheusRules:
+    enabled: true
+    selectors: {}
+    rules:
+    - alert: VaultSealed
+      expr: vault_core_unsealed == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Vault is sealed"
+        description: "Vault instance {{ $labels.instance }} is sealed"
+    
+    - alert: VaultDown
+      expr: up{job="vault"} == 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Vault is down"
+        description: "Vault instance {{ $labels.instance }} is down"
+
+# Ingress configuration (if needed)
+# ingress:
+#   enabled: true
+#   labels: {}
+#   annotations:
+#     kubernetes.io/ingress.class: nginx
+#     cert-manager.io/cluster-issuer: letsencrypt-prod
+#     nginx.ingress.kubernetes.io/backend-protocol: HTTPS
+#   ingressClassName: "nginx"
+#   hosts:
+#   - host: vault.your-domain.com
+#     paths:
+#     - path: /
+#       pathType: Prefix
+#   tls:
+#   - secretName: vault-tls
+#     hosts:
+#     - vault.your-domain.com

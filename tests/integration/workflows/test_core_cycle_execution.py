@@ -383,7 +383,7 @@ class TestCoreCycleExecution:
 
         workflow.add_node("node1", n1)
         workflow.add_node("node2", n2)
-        workflow.add_connection("node1", "result.output", "node2", "input")
+        workflow.connect("node1", "node2", mapping={"result.output": "input"})
 
         # Execute with CyclicWorkflowExecutor
         executor = CyclicWorkflowExecutor()

@@ -87,6 +87,8 @@ Complete quick reference with critical rules, common patterns, and navigation gu
 - **[Common Mistakes](validation/common-mistakes.md)** - Fix errors fast
 - **[Testing Guide](developer/12-testing-production-quality.md)** - Production-quality validation
 - **[Troubleshooting](developer/05-troubleshooting.md)** - Debug issues effectively
+- **[AsyncNode Guide](developer/async-node-guide.md)** - Async node implementation patterns
+- **[Edge WorkflowBuilder](developer/edge-workflowbuilder-guide.md)** - Geo-distributed edge computing
 
 ### **🎯 Critical for Claude Code Users**
 - **[cheatsheet/000-claude-code-guide.md](cheatsheet/000-claude-code-guide.md)** - **START HERE** Essential success patterns

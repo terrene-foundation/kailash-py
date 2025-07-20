@@ -1,0 +1,230 @@
+# HTTP-only AI Registry Server for testing
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    fastapi==0.115.0 \
+    uvicorn[standard]>=0.24.0 \
+    httpx>=0.24.0
+
+# Create HTTP API server that mimics MCP protocol
+RUN echo 'from fastapi import FastAPI, HTTPException\n\
+from fastapi.middleware.cors import CORSMiddleware\n\
+from pydantic import BaseModel\n\
+from typing import Dict, List, Any, Optional\n\
+import logging\n\
+\n\
+# Configure logging\n\
+logging.basicConfig(level=logging.INFO)\n\
+logger = logging.getLogger("ai_registry_api")\n\
+\n\
+app = FastAPI(title="AI Registry Server", version="1.0.0")\n\
+\n\
+# CORS\n\
+app.add_middleware(\n\
+    CORSMiddleware,\n\
+    allow_origins=["*"],\n\
+    allow_credentials=True,\n\
+    allow_methods=["*"],\n\
+    allow_headers=["*"],\n\
+)\n\
+\n\
+# Sample AI registry data\n\
+AI_REGISTRY = [\n\
+    {\n\
+        "company": "Healthcare AI Inc",\n\
+        "use_case": "Medical diagnosis assistance",\n\
+        "implementation": "Deep learning model for X-ray analysis",\n\
+        "category": "Healthcare",\n\
+        "tags": ["healthcare", "diagnosis", "deep learning"]\n\
+    },\n\
+    {\n\
+        "company": "FinTech Solutions",\n\
+        "use_case": "Fraud detection system",\n\
+        "implementation": "Real-time transaction monitoring with ML",\n\
+        "category": "Finance",\n\
+        "tags": ["finance", "fraud", "machine learning"]\n\
+    },\n\
+    {\n\
+        "company": "Retail Analytics",\n\
+        "use_case": "Customer behavior prediction",\n\
+        "implementation": "Recommendation engine using collaborative filtering",\n\
+        "category": "Retail",\n\
+        "tags": ["retail", "recommendations", "analytics"]\n\
+    },\n\
+    {\n\
+        "company": "Manufacturing AI",\n\
+        "use_case": "Predictive maintenance",\n\
+        "implementation": "IoT sensor data analysis with time series ML",\n\
+        "category": "Manufacturing",\n\
+        "tags": ["manufacturing", "IoT", "predictive maintenance"]\n\
+    },\n\
+    {\n\
+        "company": "AgriTech Innovation",\n\
+        "use_case": "Crop yield optimization",\n\
+        "implementation": "Satellite imagery analysis with computer vision",\n\
+        "category": "Agriculture",\n\
+        "tags": ["agriculture", "computer vision", "optimization"]\n\
+    }\n\
+]\n\
+\n\
+# MCP Protocol endpoints\n\
+class MCPRequest(BaseModel):\n\
+    jsonrpc: str = "2.0"\n\
+    id: int\n\
+    method: str\n\
+    params: Optional[Dict[str, Any]] = None\n\
+\n\
+@app.get("/health")\n\
+async def health_check():\n\
+    return {"status": "healthy", "server": "ai-registry", "type": "http-api"}\n\
+\n\
+@app.post("/")\n\
+async def handle_mcp_request(request: MCPRequest):\n\
+    """Handle MCP protocol requests."""\n\
+    \n\
+    if request.method == "tools/list":\n\
+        tools = [\n\
+            {\n\
+                "name": "search_use_cases",\n\
+                "description": "Search AI use cases by query or category",\n\
+                "inputSchema": {\n\
+                    "type": "object",\n\
+                    "properties": {\n\
+                        "query": {"type": "string", "description": "Search query"},\n\
+                        "category": {"type": "string", "description": "Filter by category"},\n\
+                        "limit": {"type": "integer", "description": "Max results", "default": 10}\n\
+                    }\n\
+                }\n\
+            },\n\
+            {\n\
+                "name": "get_categories",\n\
+                "description": "Get list of all AI use case categories",\n\
+                "inputSchema": {"type": "object", "properties": {}}\n\
+            },\n\
+            {\n\
+                "name": "analyze_implementation",\n\
+                "description": "Get detailed analysis of a specific AI implementation",\n\
+                "inputSchema": {\n\
+                    "type": "object",\n\
+                    "properties": {\n\
+                        "company": {"type": "string", "description": "Company name"}\n\
+                    },\n\
+                    "required": ["company"]\n\
+                }\n\
+            }\n\
+        ]\n\
+        return {\n\
+            "jsonrpc": "2.0",\n\
+            "id": request.id,\n\
+            "result": {"tools": tools}\n\
+        }\n\
+    \n\
+    elif request.method == "tools/call":\n\
+        if not request.params or "name" not in request.params:\n\
+            raise HTTPException(status_code=400, detail="Tool name required")\n\
+        \n\
+        tool_name = request.params["name"]\n\
+        arguments = request.params.get("arguments", {})\n\
+        \n\
+        if tool_name == "search_use_cases":\n\
+            query = arguments.get("query", "").lower()\n\
+            category = arguments.get("category", "").lower()\n\
+            limit = arguments.get("limit", 10)\n\
+            \n\
+            results = []\n\
+            for item in AI_REGISTRY:\n\
+                if query and not any(query in field.lower() for field in [\n\
+                    item["company"], item["use_case"], item["implementation"],\n\
+                    item["category"], " ".join(item["tags"])\n\
+                ]):\n\
+                    continue\n\
+                if category and category not in item["category"].lower():\n\
+                    continue\n\
+                results.append(item)\n\
+            \n\
+            results = results[:limit]\n\
+            return {\n\
+                "jsonrpc": "2.0",\n\
+                "id": request.id,\n\
+                "result": {\n\
+                    "content": [{\n\
+                        "type": "text",\n\
+                        "text": f"Found {len(results)} AI use cases: " + str(results)\n\
+                    }]\n\
+                }\n\
+            }\n\
+        \n\
+        elif tool_name == "get_categories":\n\
+            categories = sorted(set(item["category"] for item in AI_REGISTRY))\n\
+            return {\n\
+                "jsonrpc": "2.0",\n\
+                "id": request.id,\n\
+                "result": {\n\
+                    "content": [{\n\
+                        "type": "text",\n\
+                        "text": f"Categories: {categories}"\n\
+                    }]\n\
+                }\n\
+            }\n\
+        \n\
+        elif tool_name == "analyze_implementation":\n\
+            company = arguments.get("company", "")\n\
+            item = next((i for i in AI_REGISTRY if i["company"].lower() == company.lower()), None)\n\
+            \n\
+            if not item:\n\
+                text = f"No implementation found for company: {company}"\n\
+            else:\n\
+                text = f"Company: {item['"'"'company'"'"']} - {item['"'"'use_case'"'"']} - {item['"'"'implementation'"'"']}"\n\
+            \n\
+            return {\n\
+                "jsonrpc": "2.0",\n\
+                "id": request.id,\n\
+                "result": {\n\
+                    "content": [{\n\
+                        "type": "text",\n\
+                        "text": text\n\
+                    }]\n\
+                }\n\
+            }\n\
+        \n\
+        else:\n\
+            raise HTTPException(status_code=404, detail=f"Unknown tool: {tool_name}")\n\
+    \n\
+    else:\n\
+        raise HTTPException(status_code=404, detail=f"Unknown method: {request.method}")\n\
+\n\
+@app.get("/")\n\
+async def root():\n\
+    return {\n\
+        "name": "AI Registry Server",\n\
+        "version": "1.0.0",\n\
+        "type": "http-api",\n\
+        "mcp_compatible": True,\n\
+        "endpoints": ["/", "/health"]\n\
+    }\n\
+\n\
+if __name__ == "__main__":\n\
+    import uvicorn\n\
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")' > /app/server.py
+
+# Create non-root user
+RUN useradd -m -u 1000 mcpuser && chown -R mcpuser:mcpuser /app
+USER mcpuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose port
+EXPOSE 8000
+
+# Run the server
+CMD ["python", "/app/server.py"]

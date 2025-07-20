@@ -1,0 +1,102 @@
+# Kustomization for Velero backup and disaster recovery
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: velero-backup-dr
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# Resources to deploy
+resources:
+  - velero/velero-aws.yaml
+  - velero/backup-schedules.yaml
+  - disaster-recovery/disaster-recovery-plan.yaml
+
+# Common labels for all resources
+commonLabels:
+  app.kubernetes.io/part-of: kailash-platform
+  app.kubernetes.io/managed-by: kustomize
+  backup.solution: velero
+
+# Images with specific versions
+images:
+  - name: velero/velero
+    newTag: v1.12.2
+  - name: velero/velero-plugin-for-aws
+    newTag: v1.8.2
+
+# Configuration patches for different environments
+patchesStrategicMerge:
+  - patches/aws-credentials.yaml
+  - patches/storage-config.yaml
+
+# JSON patches for environment-specific configurations
+patchesJson6902:
+  - target:
+      group: velero.io
+      version: v1
+      kind: BackupStorageLocation
+      name: aws-s3
+    patch: |-
+      - op: replace
+        path: /spec/objectStorage/bucket
+        value: "kailash-velero-backups-prod"
+      - op: replace
+        path: /spec/config/region
+        value: "us-east-1"
+
+  - target:
+      group: velero.io
+      version: v1
+      kind: VolumeSnapshotLocation
+      name: aws-ebs
+    patch: |-
+      - op: replace
+        path: /spec/config/region
+        value: "us-east-1"
+
+# Configuration generators
+configMapGenerator:
+  - name: backup-configuration
+    literals:
+      - backup.retention.days=30
+      - backup.storage.encryption=AES256
+      - backup.compression.enabled=true
+      - backup.validation.enabled=true
+      - dr.rto.critical=15m
+      - dr.rpo.critical=1h
+
+# Secret generators (use external secret management in production)
+secretGenerator:
+  - name: velero-monitoring-credentials
+    literals:
+      - prometheus.auth.token=changeme-use-vault-in-prod
+      - grafana.api.key=changeme-use-vault-in-prod
+    type: Opaque
+
+# Replace the placeholder credentials secret
+replacements:
+  - source:
+      kind: Secret
+      name: aws-credentials
+      fieldPath: data.aws_access_key_id
+    targets:
+      - select:
+          kind: Secret
+          name: cloud-credentials
+        fieldPaths:
+          - data.cloud
+        options:
+          delimiter: '\n'
+
+# Namespace configuration
+namespace: velero
+
+# Generators for environment-specific configurations
+generators:
+  - backup-environment-config.yaml
+
+# Transformers
+transformers:
+  - backup-resource-transformers.yaml

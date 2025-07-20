@@ -1,0 +1,344 @@
+# Namespace for logging infrastructure
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: logging
+  labels:
+    name: logging
+    app.kubernetes.io/name: logging
+    app.kubernetes.io/component: observability
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    # Enable Istio injection if available
+    istio-injection: enabled
+
+---
+# Namespace for tracing infrastructure
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tracing
+  labels:
+    name: tracing
+    app.kubernetes.io/name: tracing
+    app.kubernetes.io/component: observability
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+  annotations:
+    # Enable Istio injection if available
+    istio-injection: enabled
+
+---
+# Network policy for logging namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: logging-default-deny
+  namespace: logging
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# Network policy allowing logging components to communicate
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: logging-internal-access
+  namespace: logging
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow communication within logging namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: logging
+    
+    # Allow ingress access to Kibana
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 5601
+    
+    # Allow Filebeat from all namespaces
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 5044  # Logstash beats input
+        - protocol: TCP
+          port: 5000  # Logstash TCP input
+    
+    # Allow monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9200  # Elasticsearch
+        - protocol: TCP
+          port: 5601  # Kibana
+        - protocol: TCP
+          port: 9600  # Logstash metrics
+        - protocol: TCP
+          port: 5066  # Filebeat metrics
+  
+  egress:
+    # Allow communication within logging namespace
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: logging
+    
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    
+    # Allow external connections for index templates and license
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+
+---
+# Network policy for tracing namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tracing-default-deny
+  namespace: tracing
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+
+---
+# Network policy allowing tracing components access
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tracing-access
+  namespace: tracing
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow communication within tracing namespace
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: tracing
+    
+    # Allow traces from all application namespaces
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 14267  # Jaeger agent
+        - protocol: TCP
+          port: 14268  # Jaeger collector HTTP
+        - protocol: TCP
+          port: 14250  # Jaeger collector gRPC
+        - protocol: TCP
+          port: 4317   # OTLP gRPC
+        - protocol: TCP
+          port: 4318   # OTLP HTTP
+        - protocol: TCP
+          port: 9411   # Zipkin
+        - protocol: UDP
+          port: 6831   # Jaeger compact
+        - protocol: UDP
+          port: 6832   # Jaeger binary
+    
+    # Allow ingress access to Jaeger UI
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 16686
+    
+    # Allow monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 14269  # Jaeger metrics
+        - protocol: TCP
+          port: 16687  # Jaeger query metrics
+        - protocol: TCP
+          port: 8888   # OTEL collector metrics
+        - protocol: TCP
+          port: 8889   # OTEL prometheus exporter
+  
+  egress:
+    # Allow communication within tracing namespace
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: tracing
+    
+    # Allow connection to Elasticsearch in logging namespace
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: logging
+      ports:
+        - protocol: TCP
+          port: 9200
+    
+    # Allow connection to Prometheus in monitoring namespace
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+    
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    
+    # Allow Kubernetes API access
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+
+---
+# Resource quotas for logging namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: logging-resource-quota
+  namespace: logging
+spec:
+  hard:
+    requests.cpu: "4"
+    requests.memory: 8Gi
+    limits.cpu: "8"
+    limits.memory: 16Gi
+    persistentvolumeclaims: "10"
+    requests.storage: 500Gi
+    count/pods: "20"
+    count/services: "10"
+    count/configmaps: "20"
+    count/secrets: "10"
+
+---
+# Resource quotas for tracing namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: tracing-resource-quota
+  namespace: tracing
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    persistentvolumeclaims: "5"
+    requests.storage: 100Gi
+    count/pods: "15"
+    count/services: "8"
+    count/configmaps: "10"
+    count/secrets: "5"
+
+---
+# Limit ranges for logging namespace
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: logging-limit-range
+  namespace: logging
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 500m
+        memory: 1Gi
+      defaultRequest:
+        cpu: 100m
+        memory: 256Mi
+      max:
+        cpu: "2"
+        memory: 4Gi
+      min:
+        cpu: 50m
+        memory: 64Mi
+    - type: Pod
+      max:
+        cpu: "4"
+        memory: 8Gi
+      min:
+        cpu: 100m
+        memory: 128Mi
+    - type: PersistentVolumeClaim
+      max:
+        storage: 200Gi
+      min:
+        storage: 1Gi
+
+---
+# Limit ranges for tracing namespace
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: tracing-limit-range
+  namespace: tracing
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: 200m
+        memory: 512Mi
+      defaultRequest:
+        cpu: 50m
+        memory: 128Mi
+      max:
+        cpu: "1"
+        memory: 2Gi
+      min:
+        cpu: 25m
+        memory: 32Mi
+    - type: Pod
+      max:
+        cpu: "2"
+        memory: 4Gi
+      min:
+        cpu: 50m
+        memory: 64Mi
+    - type: PersistentVolumeClaim
+      max:
+        storage: 50Gi
+      min:
+        storage: 1Gi

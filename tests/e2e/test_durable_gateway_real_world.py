@@ -481,17 +481,29 @@ class TestDurableGatewayRealWorld:
         )
         server_thread.start()
 
-        time.sleep(3)
+        # Wait for gateway to be ready with health check polling
+        from datetime import datetime
 
-        # Verify gateway is running
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"http://localhost:{port}/health", timeout=5.0
-                )
-                assert response.status_code == 200
-        except Exception as e:
-            pytest.fail(f"Gateway startup failed: {e}")
+        start_time = datetime.now()
+        gateway_ready = False
+
+        while (datetime.now() - start_time).total_seconds() < 10.0:
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        f"http://localhost:{port}/health", timeout=1.0
+                    )
+                    if response.status_code == 200:
+                        gateway_ready = True
+                        break
+            except (httpx.ConnectError, httpx.TimeoutException):
+                # Gateway not ready yet
+                pass
+
+            await asyncio.sleep(0.1)
+
+        if not gateway_ready:
+            pytest.fail("Gateway failed to start within 10 seconds")
 
         gateway._test_port = port
 
