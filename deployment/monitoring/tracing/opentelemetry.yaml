@@ -1,0 +1,654 @@
+# OpenTelemetry Collector for comprehensive observability
+apiVersion: opentelemetry.io/v1alpha1
+kind: OpenTelemetryCollector
+metadata:
+  name: kailash-otel-collector
+  namespace: tracing
+  labels:
+    app.kubernetes.io/name: opentelemetry-collector
+    app.kubernetes.io/component: observability
+spec:
+  mode: daemonset
+  serviceAccount: opentelemetry-collector
+  
+  # Resource configuration
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 200m
+  
+  # Security context
+  securityContext:
+    runAsUser: 0
+    runAsGroup: 0
+    fsGroup: 0
+  
+  # Volumes for host metrics collection
+  volumes:
+    - name: hostfs
+      hostPath:
+        path: /
+    - name: proc
+      hostPath:
+        path: /proc
+    - name: sys
+      hostPath:
+        path: /sys
+  
+  volumeMounts:
+    - name: hostfs
+      mountPath: /hostfs
+      readOnly: true
+      mountPropagation: HostToContainer
+    - name: proc
+      mountPath: /host/proc
+      readOnly: true
+    - name: sys
+      mountPath: /host/sys
+      readOnly: true
+  
+  # Environment variables
+  env:
+    - name: KUBE_NODE_NAME
+      valueFrom:
+        fieldRef:
+          apiVersion: v1
+          fieldPath: spec.nodeName
+    - name: OTEL_RESOURCE_ATTRIBUTES
+      value: "k8s.cluster.name=kailash-prod,k8s.node.name=$(KUBE_NODE_NAME)"
+  
+  # Affinity configuration
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/os
+                operator: In
+                values:
+                  - linux
+  
+  # Tolerations for all nodes
+  tolerations:
+    - operator: Exists
+      effect: NoSchedule
+    - operator: Exists
+      effect: NoExecute
+    - operator: Exists
+      effect: PreferNoSchedule
+  
+  # Configuration
+  config: |
+    receivers:
+      # OTLP receivers for traces, metrics, and logs
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+      
+      # Jaeger receivers
+      jaeger:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:14250
+          thrift_http:
+            endpoint: 0.0.0.0:14268
+          thrift_compact:
+            endpoint: 0.0.0.0:6831
+          thrift_binary:
+            endpoint: 0.0.0.0:6832
+      
+      # Zipkin receiver
+      zipkin:
+        endpoint: 0.0.0.0:9411
+      
+      # Prometheus receiver for metrics scraping
+      prometheus:
+        config:
+          global:
+            scrape_interval: 15s
+            external_labels:
+              cluster: "kailash-prod"
+              environment: "production"
+          
+          scrape_configs:
+            # Kubernetes API server
+            - job_name: 'kubernetes-apiservers'
+              kubernetes_sd_configs:
+                - role: endpoints
+              scheme: https
+              tls_config:
+                ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                insecure_skip_verify: true
+              bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+              relabel_configs:
+                - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+                  action: keep
+                  regex: default;kubernetes;https
+            
+            # Kubelet metrics
+            - job_name: 'kubernetes-nodes'
+              kubernetes_sd_configs:
+                - role: node
+              scheme: https
+              tls_config:
+                ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                insecure_skip_verify: true
+              bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+              relabel_configs:
+                - action: labelmap
+                  regex: __meta_kubernetes_node_label_(.+)
+                - target_label: __address__
+                  replacement: kubernetes.default.svc:443
+                - source_labels: [__meta_kubernetes_node_name]
+                  regex: (.+)
+                  target_label: __metrics_path__
+                  replacement: /api/v1/nodes/${1}/proxy/metrics
+            
+            # cAdvisor metrics
+            - job_name: 'kubernetes-cadvisor'
+              kubernetes_sd_configs:
+                - role: node
+              scheme: https
+              tls_config:
+                ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+                insecure_skip_verify: true
+              bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+              relabel_configs:
+                - action: labelmap
+                  regex: __meta_kubernetes_node_label_(.+)
+                - target_label: __address__
+                  replacement: kubernetes.default.svc:443
+                - source_labels: [__meta_kubernetes_node_name]
+                  regex: (.+)
+                  target_label: __metrics_path__
+                  replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
+      
+      # Host metrics receiver
+      hostmetrics:
+        collection_interval: 30s
+        root_path: /hostfs
+        scrapers:
+          cpu:
+            metrics:
+              system.cpu.utilization:
+                enabled: true
+          disk:
+          filesystem:
+            exclude_mount_points:
+              mount_points: ["/dev/*", "/proc/*", "/sys/*", "/var/lib/docker/*", "/var/lib/containerd/*"]
+              match_type: regexp
+            exclude_fs_types:
+              fs_types: ["autofs", "binfmt_misc", "bpf", "cgroup2", "configfs", "debugfs", "devpts", "devtmpfs", "fusectl", "hugetlbfs", "iso9660", "mqueue", "nsfs", "overlay", "proc", "procfs", "pstore", "rpc_pipefs", "securityfs", "selinuxfs", "squashfs", "sysfs", "tracefs"]
+              match_type: strict
+          load:
+          memory:
+          network:
+          paging:
+          processes:
+          process:
+            mute_process_name_error: true
+            mute_process_exe_error: true
+            mute_process_io_error: true
+      
+      # Kubernetes cluster receiver
+      k8s_cluster:
+        collection_interval: 30s
+        node_conditions_to_report: [Ready, MemoryPressure, DiskPressure, PIDPressure]
+        allocatable_types_to_report: [cpu, memory, storage]
+      
+      # Kubernetes events receiver
+      k8s_events:
+        auth_type: serviceAccount
+      
+      # Filelog receiver for container logs
+      filelog:
+        include:
+          - /var/log/pods/*/*/*.log
+        exclude:
+          - /var/log/pods/*/otc-container/*.log
+        start_at: end
+        include_file_path: true
+        include_file_name: false
+        operators:
+          # Parse CRI-O format
+          - type: regex_parser
+            id: parser-crio
+            regex: '^(?P<time>[^ Z]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) ?(?P<log>.*)$'
+            parse_from: attributes.log
+            timestamp:
+              parse_from: attributes.time
+              layout_type: gotime
+              layout: '2006-01-02T15:04:05.999999999Z07:00'
+          
+          # Parse Docker format
+          - type: regex_parser
+            id: parser-docker
+            regex: '^(?P<time>[^ Z]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) ?(?P<log>.*)$'
+            parse_from: attributes.log
+            timestamp:
+              parse_from: attributes.time
+              layout_type: gotime
+              layout: '2006-01-02T15:04:05.999999999Z07:00'
+          
+          # Parse containerd format
+          - type: regex_parser
+            id: parser-containerd
+            regex: '^(?P<time>[^ Z]+) (?P<stream>stdout|stderr) (?P<logtag>[^ ]*) ?(?P<log>.*)$'
+            parse_from: attributes.log
+            timestamp:
+              parse_from: attributes.time
+              layout_type: gotime
+              layout: '2006-01-02T15:04:05.999999999Z07:00'
+    
+    processors:
+      # Memory limiter to prevent OOM
+      memory_limiter:
+        limit_mib: 400
+        spike_limit_mib: 100
+        check_interval: 5s
+      
+      # Batch processor for performance
+      batch:
+        send_batch_size: 1024
+        timeout: 1s
+        send_batch_max_size: 2048
+      
+      # Resource processor to add cluster information
+      resource:
+        attributes:
+          - key: cluster.name
+            value: "kailash-prod"
+            action: upsert
+          - key: environment
+            value: "production"
+            action: upsert
+          - key: k8s.cluster.name
+            value: "kailash-prod"
+            action: upsert
+      
+      # Kubernetes attributes processor
+      k8sattributes:
+        auth_type: "serviceAccount"
+        passthrough: false
+        filter:
+          node_from_env_var: KUBE_NODE_NAME
+        extract:
+          metadata:
+            - k8s.pod.name
+            - k8s.pod.uid
+            - k8s.deployment.name
+            - k8s.namespace.name
+            - k8s.node.name
+            - k8s.pod.start_time
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.ip
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.uid
+          - sources:
+              - from: connection
+      
+      # Transform processor for log enhancement
+      transform:
+        log_statements:
+          - context: log
+            statements:
+              # Add log level detection
+              - set(attributes["log.level"], "INFO") where attributes["log.level"] == nil
+              - set(attributes["log.level"], "ERROR") where IsMatch(body, "(?i)(error|exception|fail)")
+              - set(attributes["log.level"], "WARN") where IsMatch(body, "(?i)(warn|warning)")
+              - set(attributes["log.level"], "DEBUG") where IsMatch(body, "(?i)debug")
+              
+              # Add service name from k8s labels
+              - set(attributes["service.name"], attributes["k8s.deployment.name"]) where attributes["k8s.deployment.name"] != nil
+              - set(attributes["service.name"], attributes["k8s.pod.name"]) where attributes["service.name"] == nil
+      
+      # Probabilistic sampler for traces
+      probabilistic_sampler:
+        hash_seed: 22
+        sampling_percentage: 10
+      
+      # Span metrics processor
+      spanmetrics:
+        metrics_exporter: prometheus
+        latency_histogram_buckets: [2ms, 5ms, 10ms, 20ms, 50ms, 100ms, 200ms, 500ms, 1s, 2s, 5s]
+        dimensions:
+          - name: http.method
+            default: GET
+          - name: http.status_code
+        dimensions_cache_size: 1000
+        aggregation_temporality: "AGGREGATION_TEMPORALITY_CUMULATIVE"
+    
+    exporters:
+      # Jaeger exporter for traces
+      jaeger:
+        endpoint: kailash-jaeger-collector.tracing.svc.cluster.local:14250
+        tls:
+          insecure: true
+      
+      # Prometheus exporter for metrics
+      prometheus:
+        endpoint: "0.0.0.0:8889"
+        namespace: otel
+        const_labels:
+          cluster: "kailash-prod"
+          environment: "production"
+      
+      # Prometheus remote write exporter
+      prometheusremotewrite:
+        endpoint: "http://prometheus.monitoring.svc.cluster.local:9090/api/v1/write"
+        tls:
+          insecure: true
+        external_labels:
+          cluster: "kailash-prod"
+          environment: "production"
+      
+      # Loki exporter for logs
+      loki:
+        endpoint: "http://loki-gateway.logging.svc.cluster.local/loki/api/v1/push"
+        default_labels_enabled:
+          exporter: false
+          job: true
+          instance: true
+          level: true
+        labels:
+          attributes:
+            k8s.namespace.name: "namespace"
+            k8s.pod.name: "pod"
+            k8s.container.name: "container"
+            service.name: "service"
+            log.level: "level"
+          resource:
+            service.name: "service_name"
+            service.instance.id: "service_instance_id"
+      
+      # Elasticsearch exporter for logs
+      elasticsearch:
+        endpoints: ["https://kailash-logs-es-http.logging.svc.cluster.local:9200"]
+        logs_index: "otel-logs"
+        traces_index: "otel-traces"
+        user: "elastic"
+        password: "changeme"  # Use secret reference in production
+        tls:
+          insecure_skip_verify: true
+        mapping:
+          mode: "index_template"
+          settings:
+            index:
+              number_of_shards: 1
+              number_of_replicas: 1
+              codec: "best_compression"
+      
+      # OTLP exporter for external systems
+      otlp:
+        endpoint: "external-otel-collector:4317"
+        tls:
+          insecure: true
+        compression: gzip
+        headers:
+          api-key: "your-api-key"
+      
+      # Debug exporter (disable in production)
+      # logging:
+      #   loglevel: debug
+    
+    extensions:
+      # Health check extension
+      health_check:
+        endpoint: 0.0.0.0:13133
+      
+      # pprof extension for debugging
+      pprof:
+        endpoint: 0.0.0.0:1777
+      
+      # zpages extension for debugging
+      zpages:
+        endpoint: 0.0.0.0:55679
+      
+      # Memory ballast extension
+      memory_ballast:
+        size_mib: 64
+    
+    service:
+      extensions: [health_check, pprof, zpages, memory_ballast]
+      pipelines:
+        # Traces pipeline
+        traces:
+          receivers: [otlp, jaeger, zipkin]
+          processors: [memory_limiter, k8sattributes, resource, batch, probabilistic_sampler, spanmetrics]
+          exporters: [jaeger]
+        
+        # Metrics pipeline
+        metrics:
+          receivers: [otlp, prometheus, hostmetrics, k8s_cluster]
+          processors: [memory_limiter, k8sattributes, resource, batch]
+          exporters: [prometheus, prometheusremotewrite]
+        
+        # Logs pipeline
+        logs:
+          receivers: [otlp, filelog, k8s_events]
+          processors: [memory_limiter, k8sattributes, resource, transform, batch]
+          exporters: [loki, elasticsearch]
+      
+      telemetry:
+        logs:
+          level: "info"
+        metrics:
+          address: 0.0.0.0:8888
+
+---
+# ServiceAccount for OpenTelemetry Collector
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opentelemetry-collector
+  namespace: tracing
+
+---
+# ClusterRole for OpenTelemetry Collector
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opentelemetry-collector
+rules:
+  - apiGroups: [""]
+    resources: ["events", "namespaces", "namespaces/status", "nodes", "nodes/spec", "pods", "pods/status", "replicationcontrollers", "replicationcontrollers/status", "resourcequotas", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets", "deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["extensions"]
+    resources: ["daemonsets", "deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+
+---
+# ClusterRoleBinding for OpenTelemetry Collector
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opentelemetry-collector
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: opentelemetry-collector
+subjects:
+  - kind: ServiceAccount
+    name: opentelemetry-collector
+    namespace: tracing
+
+---
+# Service for OpenTelemetry Collector
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: tracing
+  labels:
+    app.kubernetes.io/name: opentelemetry-collector
+spec:
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+      protocol: TCP
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+      protocol: TCP
+    - name: jaeger-grpc
+      port: 14250
+      targetPort: 14250
+      protocol: TCP
+    - name: jaeger-thrift-http
+      port: 14268
+      targetPort: 14268
+      protocol: TCP
+    - name: jaeger-thrift-compact
+      port: 6831
+      targetPort: 6831
+      protocol: UDP
+    - name: jaeger-thrift-binary
+      port: 6832
+      targetPort: 6832
+      protocol: UDP
+    - name: zipkin
+      port: 9411
+      targetPort: 9411
+      protocol: TCP
+    - name: prometheus
+      port: 8889
+      targetPort: 8889
+      protocol: TCP
+    - name: health-check
+      port: 13133
+      targetPort: 13133
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: opentelemetry-collector
+  type: ClusterIP
+
+---
+# ServiceMonitor for OpenTelemetry Collector
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: otel-collector-metrics
+  namespace: tracing
+  labels:
+    prometheus: kailash
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opentelemetry-collector
+  endpoints:
+    - port: prometheus
+      interval: 30s
+      path: /metrics
+    - port: health-check
+      interval: 30s
+      path: /
+
+---
+# Network policy for OpenTelemetry Collector
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: otel-collector-network-policy
+  namespace: tracing
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: opentelemetry-collector
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow telemetry data from all namespaces
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 4317  # OTLP gRPC
+        - protocol: TCP
+          port: 4318  # OTLP HTTP
+        - protocol: TCP
+          port: 14250 # Jaeger gRPC
+        - protocol: TCP
+          port: 14268 # Jaeger HTTP
+        - protocol: UDP
+          port: 6831  # Jaeger UDP compact
+        - protocol: UDP
+          port: 6832  # Jaeger UDP binary
+        - protocol: TCP
+          port: 9411  # Zipkin
+    
+    # Allow monitoring
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8889  # Prometheus metrics
+        - protocol: TCP
+          port: 13133 # Health check
+  
+  egress:
+    # Allow connection to Jaeger
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: jaeger
+      ports:
+        - protocol: TCP
+          port: 14250
+    
+    # Allow connection to Prometheus
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+    
+    # Allow connection to Loki
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: logging
+      ports:
+        - protocol: TCP
+          port: 3100
+    
+    # Allow connection to Elasticsearch
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: logging
+      ports:
+        - protocol: TCP
+          port: 9200
+    
+    # Allow DNS and Kubernetes API
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 443

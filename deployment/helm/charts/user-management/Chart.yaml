@@ -1,0 +1,44 @@
+apiVersion: v2
+name: kailash-user-management
+description: Kailash User Management System - Enterprise Grade Identity and Access Management
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - user-management
+  - identity
+  - access-control
+  - rbac
+  - abac
+  - kailash
+  - enterprise
+
+home: https://github.com/kailash/user-management
+sources:
+  - https://github.com/kailash/user-management
+
+maintainers:
+  - name: Kailash Team
+    email: team@kailash.com
+    url: https://kailash.com
+
+dependencies:
+  - name: postgresql
+    version: "12.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+  
+  - name: redis
+    version: "17.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+  
+  - name: nginx-ingress
+    version: "4.x.x"
+    repository: https://kubernetes.github.io/ingress-nginx
+    condition: ingress.enabled
+
+annotations:
+  category: Identity
+  licenses: Apache-2.0

@@ -1,0 +1,27 @@
+apiVersion: apiserver.config.k8s.io/v1
+kind: EncryptionConfiguration
+metadata:
+  name: cis-encryption-config
+  namespace: kube-system
+resources:
+# CIS 1.2.12 - Encryption at rest configuration
+- resources:
+  - secrets
+  providers:
+  - aescbc:
+      keys:
+      - name: key1
+        secret: VGhpcyBpcyBhIDMyIGJ5dGUgZW5jcnlwdGlvbiBrZXk=  # Base64 encoded 32-byte key
+  - identity: {}
+- resources:
+  - configmaps
+  providers:
+  - aescbc:
+      keys:
+      - name: key1
+        secret: VGhpcyBpcyBhIDMyIGJ5dGUgZW5jcnlwdGlvbiBrZXk=
+  - identity: {}
+- resources:
+  - events
+  providers:
+  - identity: {}  # Events don't contain sensitive data

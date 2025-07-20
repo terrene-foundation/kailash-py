@@ -1,0 +1,45 @@
+# Kind cluster configuration for testing enterprise deployment
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kailash-test
+nodes:
+# Control plane node with extra mounts for testing
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+  extraPortMappings:
+  - containerPort: 80
+    hostPort: 80
+    protocol: TCP
+  - containerPort: 443
+    hostPort: 443
+    protocol: TCP
+  - containerPort: 30000
+    hostPort: 30000
+    protocol: TCP
+  extraMounts:
+  - hostPath: ./deployment/security/cis-benchmarks
+    containerPath: /etc/kubernetes/cis-benchmarks
+    readOnly: true
+# Worker nodes for testing
+- role: worker
+- role: worker
+# Enable feature gates and audit logging
+kubeadmConfigPatches:
+- |
+  kind: ClusterConfiguration
+  apiServer:
+    extraArgs:
+      enable-admission-plugins: "NodeRestriction,ResourceQuota,PodSecurityPolicy"
+      audit-log-path: "/var/log/kubernetes/audit.log"
+      audit-log-maxage: "30"
+      audit-log-maxbackup: "3"
+      audit-log-maxsize: "100"
+      encryption-provider-config: "/etc/kubernetes/encryption/config.yaml"
+networking:
+  podSubnet: "10.244.0.0/16"
+  serviceSubnet: "10.96.0.0/12"

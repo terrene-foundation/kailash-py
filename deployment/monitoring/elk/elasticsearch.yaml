@@ -1,0 +1,291 @@
+# Elasticsearch cluster for centralized logging
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: kailash-logs
+  namespace: logging
+  labels:
+    app.kubernetes.io/name: elasticsearch
+    app.kubernetes.io/component: logging
+spec:
+  version: 8.11.3
+  
+  # High availability configuration
+  nodeSets:
+    - name: master
+      count: 3
+      config:
+        node.roles: ["master"]
+        cluster.initial_master_nodes: 
+          - kailash-logs-es-master-0
+          - kailash-logs-es-master-1
+          - kailash-logs-es-master-2
+        xpack.security.enabled: true
+        xpack.security.transport.ssl.enabled: true
+        xpack.security.http.ssl.enabled: true
+        xpack.monitoring.collection.enabled: true
+      
+      podTemplate:
+        metadata:
+          labels:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "9200"
+        spec:
+          containers:
+            - name: elasticsearch
+              resources:
+                requests:
+                  memory: 2Gi
+                  cpu: 500m
+                limits:
+                  memory: 4Gi
+                  cpu: 2
+              env:
+                - name: ES_JAVA_OPTS
+                  value: "-Xms2g -Xmx2g"
+          
+          securityContext:
+            fsGroup: 1000
+            runAsUser: 1000
+            runAsNonRoot: true
+          
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      elasticsearch.k8s.elastic.co/cluster-name: kailash-logs
+                      elasticsearch.k8s.elastic.co/node-master: "true"
+                  topologyKey: kubernetes.io/hostname
+      
+      volumeClaimTemplates:
+        - metadata:
+            name: elasticsearch-data
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 30Gi
+            storageClassName: fast-ssd
+    
+    - name: data
+      count: 3
+      config:
+        node.roles: ["data", "ingest"]
+        xpack.security.enabled: true
+        xpack.security.transport.ssl.enabled: true
+        xpack.security.http.ssl.enabled: true
+        indices.memory.index_buffer_size: "20%"
+        thread_pool.write.queue_size: 1000
+      
+      podTemplate:
+        metadata:
+          labels:
+            prometheus.io/scrape: "true"
+            prometheus.io/port: "9200"
+        spec:
+          containers:
+            - name: elasticsearch
+              resources:
+                requests:
+                  memory: 4Gi
+                  cpu: 1
+                limits:
+                  memory: 8Gi
+                  cpu: 4
+              env:
+                - name: ES_JAVA_OPTS
+                  value: "-Xms4g -Xmx4g"
+          
+          securityContext:
+            fsGroup: 1000
+            runAsUser: 1000
+            runAsNonRoot: true
+          
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      elasticsearch.k8s.elastic.co/cluster-name: kailash-logs
+                      elasticsearch.k8s.elastic.co/node-data: "true"
+                  topologyKey: kubernetes.io/hostname
+      
+      volumeClaimTemplates:
+        - metadata:
+            name: elasticsearch-data
+          spec:
+            accessModes:
+              - ReadWriteOnce
+            resources:
+              requests:
+                storage: 100Gi
+            storageClassName: fast-ssd
+  
+  # TLS configuration
+  http:
+    tls:
+      selfSignedCertificate:
+        disabled: false
+  
+  # Service configuration
+  transport:
+    tls:
+      selfSignedCertificate:
+        disabled: false
+
+---
+# Kibana for log visualization
+apiVersion: kibana.k8s.elastic.co/v1
+kind: Kibana
+metadata:
+  name: kailash-kibana
+  namespace: logging
+  labels:
+    app.kubernetes.io/name: kibana
+    app.kubernetes.io/component: logging
+spec:
+  version: 8.11.3
+  count: 2
+  
+  elasticsearchRef:
+    name: kailash-logs
+  
+  config:
+    server.publicBaseUrl: https://kibana.yourdomain.com
+    xpack.security.enabled: true
+    xpack.encryptedSavedObjects.encryptionKey: changeme-32-character-encryption-key
+    xpack.reporting.encryptionKey: changeme-32-character-encryption-key
+    xpack.security.encryptionKey: changeme-32-character-encryption-key
+    
+    # APM integration
+    xpack.apm.enabled: true
+    apm_oss.indexPattern: "apm-*"
+    
+    # Security configuration
+    xpack.security.session.idleTimeout: "1h"
+    xpack.security.session.lifespan: "8h"
+    
+    # Monitoring
+    monitoring.ui.container.elasticsearch.enabled: true
+    
+    # Index lifecycle management
+    xpack.ilm.enabled: true
+  
+  podTemplate:
+    metadata:
+      labels:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5601"
+    spec:
+      containers:
+        - name: kibana
+          resources:
+            requests:
+              memory: 1Gi
+              cpu: 500m
+            limits:
+              memory: 2Gi
+              cpu: 1
+          env:
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size=1800"
+      
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsNonRoot: true
+      
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    kibana.k8s.elastic.co/name: kailash-kibana
+                topologyKey: kubernetes.io/hostname
+
+---
+# Ingress for Kibana
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kibana-ingress
+  namespace: logging
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: kibana-basic-auth
+    nginx.ingress.kubernetes.io/auth-realm: "Authentication Required - Kibana"
+spec:
+  tls:
+    - hosts:
+        - kibana.yourdomain.com
+      secretName: kibana-tls
+  rules:
+    - host: kibana.yourdomain.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kailash-kibana-kb-http
+                port:
+                  number: 5601
+
+---
+# ServiceMonitor for Prometheus integration
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: elasticsearch-metrics
+  namespace: logging
+  labels:
+    prometheus: kailash
+spec:
+  selector:
+    matchLabels:
+      common.k8s.elastic.co/type: elasticsearch
+      elasticsearch.k8s.elastic.co/cluster-name: kailash-logs
+  endpoints:
+    - port: https
+      interval: 30s
+      path: /_prometheus/metrics
+      scheme: https
+      tlsConfig:
+        insecureSkipVerify: true
+      bearerTokenSecret:
+        name: elasticsearch-metrics-token
+        key: token
+
+---
+# ServiceMonitor for Kibana
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: kibana-metrics
+  namespace: logging
+  labels:
+    prometheus: kailash
+spec:
+  selector:
+    matchLabels:
+      common.k8s.elastic.co/type: kibana
+      kibana.k8s.elastic.co/name: kailash-kibana
+  endpoints:
+    - port: https
+      interval: 30s
+      path: /api/status
+      scheme: https
+      tlsConfig:
+        insecureSkipVerify: true

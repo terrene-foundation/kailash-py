@@ -15,7 +15,40 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
-### [0.8.4] - 2025-07-19
+### [0.8.5] - 2025-01-20
+
+**Architecture Cleanup & Enterprise Security Release**
+
+This release removes the confusing `src/kailash/nexus` module, adds comprehensive edge computing infrastructure, implements enterprise-grade connection parameter validation, and introduces advanced monitoring capabilities.
+
+#### Added
+- ✅ **Connection Parameter Validation**: Enterprise-grade validation framework with type safety
+- ✅ **Edge Computing Infrastructure**: 50+ new nodes for geo-distributed computing
+- ✅ **AlertManager**: Proactive monitoring with configurable thresholds
+- ✅ **Connection Contracts**: Define and enforce data flow contracts between nodes
+- ✅ **Validation Metrics**: Track connection validation performance and failures
+- ✅ **Edge Node Discovery**: Automatic discovery and coordination of edge resources
+- ✅ **Predictive Scaling**: Resource optimization with predictive algorithms
+- ✅ **Comprehensive Monitoring**: Enhanced monitoring patterns and guides
+
+#### Changed
+- Updated all documentation to use correct Nexus imports (`from nexus import Nexus`)
+- Enhanced LocalRuntime with validation enabled by default
+- Improved error messages with validation suggestions
+- Updated DataFlow integration to use proper imports
+
+#### Removed
+- ⚠️ **BREAKING**: Removed `src/kailash/nexus` module (use `apps/kailash-nexus` instead)
+- Removed `tests/integration/test_nexus_framework.py`
+- Removed outdated nexus import references from documentation
+
+#### Security
+- Enterprise-grade connection parameter validation
+- Real-time security event monitoring
+- Compliance-aware edge routing
+- Enhanced error handling with security considerations
+
+### [0.8.4] - 2025-01-19
 
 **A2A Google Protocol Enhancement Release**
 

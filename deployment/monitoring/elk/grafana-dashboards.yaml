@@ -1,0 +1,495 @@
+# Grafana dashboards for ELK monitoring
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elk-dashboards
+  namespace: logging
+  labels:
+    grafana_dashboard: "1"
+data:
+  elk-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "ELK Stack Overview",
+        "tags": ["elasticsearch", "logging", "elk"],
+        "style": "dark",
+        "timezone": "browser",
+        "refresh": "30s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Elasticsearch Cluster Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "elasticsearch_cluster_health_status{cluster=\"kailash-logs\"}",
+                "legendFormat": "Status"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "steps": [
+                    {"color": "red", "value": 0},
+                    {"color": "yellow", "value": 1},
+                    {"color": "green", "value": 2}
+                  ]
+                },
+                "mappings": [
+                  {"value": 0, "text": "Red"},
+                  {"value": 1, "text": "Yellow"},
+                  {"value": 2, "text": "Green"}
+                ]
+              }
+            },
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Total Documents",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "elasticsearch_cluster_health_number_of_data_nodes{cluster=\"kailash-logs\"}",
+                "legendFormat": "Data Nodes"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 6, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Log Ingestion Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(elasticsearch_indices_indexing_index_total{cluster=\"kailash-logs\"}[5m])",
+                "legendFormat": "Documents/sec"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Documents/sec",
+                "min": 0
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 4,
+            "title": "Storage Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "elasticsearch_filesystem_data_size_bytes{cluster=\"kailash-logs\"}",
+                "legendFormat": "Used - {{node}}"
+              },
+              {
+                "expr": "elasticsearch_filesystem_data_free_bytes{cluster=\"kailash-logs\"}",
+                "legendFormat": "Free - {{node}}"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Bytes",
+                "min": 0
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "Query Performance",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(elasticsearch_indices_search_query_total{cluster=\"kailash-logs\"}[5m])",
+                "legendFormat": "Queries/sec"
+              },
+              {
+                "expr": "rate(elasticsearch_indices_search_query_time_seconds{cluster=\"kailash-logs\"}[5m])",
+                "legendFormat": "Query Time"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          },
+          {
+            "id": 6,
+            "title": "JVM Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "elasticsearch_jvm_memory_used_bytes{cluster=\"kailash-logs\", area=\"heap\"}",
+                "legendFormat": "Heap Used - {{node}}"
+              },
+              {
+                "expr": "elasticsearch_jvm_memory_max_bytes{cluster=\"kailash-logs\", area=\"heap\"}",
+                "legendFormat": "Heap Max - {{node}}"
+              }
+            ],
+            "yAxes": [
+              {
+                "label": "Bytes",
+                "min": 0
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16}
+          },
+          {
+            "id": 7,
+            "title": "Index Sizes by Pattern",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "elasticsearch_indices_store_size_bytes{cluster=\"kailash-logs\"}",
+                "format": "table"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16}
+          }
+        ]
+      }
+    }
+  
+  logstash-monitoring.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Logstash Monitoring",
+        "tags": ["logstash", "logging", "elk"],
+        "style": "dark",
+        "timezone": "browser",
+        "refresh": "30s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Events Input Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(logstash_events{stage=\"inputs\"}[5m])",
+                "legendFormat": "Input Events/sec"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Events Output Rate", 
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(logstash_events{stage=\"outputs\"}[5m])",
+                "legendFormat": "Output Events/sec"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Pipeline Throughput",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "logstash_pipeline_events_duration_seconds",
+                "legendFormat": "Duration - {{pipeline}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0}
+          },
+          {
+            "id": 4,
+            "title": "Memory Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "logstash_jvm_memory_heap_used_bytes",
+                "legendFormat": "Heap Used"
+              },
+              {
+                "expr": "logstash_jvm_memory_heap_max_bytes",
+                "legendFormat": "Heap Max"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "Queue Events",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "logstash_queue_events",
+                "legendFormat": "Queue Size"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          }
+        ]
+      }
+    }
+  
+  filebeat-monitoring.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Filebeat Monitoring",
+        "tags": ["filebeat", "logging", "elk"],
+        "style": "dark",
+        "timezone": "browser", 
+        "refresh": "30s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Events Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(filebeat_events_total[5m])",
+                "legendFormat": "Events/sec - {{instance}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Harvester Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "filebeat_harvester_running",
+                "legendFormat": "Running Harvesters"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Registry Size",
+            "type": "stat", 
+            "targets": [
+              {
+                "expr": "filebeat_registrar_states_current",
+                "legendFormat": "Registry States"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 18, "y": 0}
+          },
+          {
+            "id": 4,
+            "title": "Output Errors",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(filebeat_output_errors_total[5m])",
+                "legendFormat": "Errors/sec - {{instance}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "Log Files Being Monitored",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "filebeat_harvester_files",
+                "format": "table"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          }
+        ]
+      }
+    }
+
+---
+# ConfigMap for Jaeger dashboards
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jaeger-dashboards
+  namespace: tracing
+  labels:
+    grafana_dashboard: "1"
+data:
+  jaeger-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Jaeger Tracing Overview", 
+        "tags": ["jaeger", "tracing", "observability"],
+        "style": "dark",
+        "timezone": "browser",
+        "refresh": "30s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Spans Received Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(jaeger_collector_spans_received_total[5m])",
+                "legendFormat": "Spans/sec"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Spans Saved Rate",
+            "type": "graph", 
+            "targets": [
+              {
+                "expr": "rate(jaeger_collector_spans_saved_by_svc_total[5m])",
+                "legendFormat": "Saved/sec - {{svc}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Query Latency",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(jaeger_query_latency_bucket[5m]))",
+                "legendFormat": "95th percentile"
+              },
+              {
+                "expr": "histogram_quantile(0.50, rate(jaeger_query_latency_bucket[5m]))",
+                "legendFormat": "50th percentile"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0}
+          },
+          {
+            "id": 4,
+            "title": "Services Tracked",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "jaeger_collector_traces_received_total",
+                "legendFormat": "Total Traces"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 6, "x": 0, "y": 8}
+          },
+          {
+            "id": 5,
+            "title": "Error Rate by Service",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(jaeger_collector_spans_received_total{status=\"error\"}[5m])",
+                "legendFormat": "Errors/sec - {{service}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 18, "x": 6, "y": 8}
+          }
+        ]
+      }
+    }
+
+---
+# ConfigMap for OpenTelemetry dashboards
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opentelemetry-dashboards
+  namespace: tracing
+  labels:
+    grafana_dashboard: "1"
+data:
+  otel-collector.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "OpenTelemetry Collector",
+        "tags": ["opentelemetry", "otel", "observability"],
+        "style": "dark",
+        "timezone": "browser",
+        "refresh": "30s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Receiver Metrics",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(otelcol_receiver_accepted_spans_total[5m])",
+                "legendFormat": "Spans/sec - {{receiver}}"
+              },
+              {
+                "expr": "rate(otelcol_receiver_accepted_metric_points_total[5m])", 
+                "legendFormat": "Metrics/sec - {{receiver}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0}
+          },
+          {
+            "id": 2,
+            "title": "Exporter Metrics",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(otelcol_exporter_sent_spans_total[5m])",
+                "legendFormat": "Spans/sec - {{exporter}}"
+              },
+              {
+                "expr": "rate(otelcol_exporter_sent_metric_points_total[5m])",
+                "legendFormat": "Metrics/sec - {{exporter}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0}
+          },
+          {
+            "id": 3,
+            "title": "Processor Queue Size",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "otelcol_processor_batch_batch_size_trigger_send",
+                "legendFormat": "Batch Size - {{processor}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}
+          },
+          {
+            "id": 4,
+            "title": "Memory Usage", 
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "process_resident_memory_bytes{job=\"otel-collector\"}",
+                "legendFormat": "Memory - {{instance}}"
+              }
+            ],
+            "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}
+          }
+        ]
+      }
+    }

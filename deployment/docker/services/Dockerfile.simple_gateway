@@ -1,0 +1,177 @@
+# Simple Enterprise Gateway for testing
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    fastapi==0.115.12 \
+    uvicorn[standard]==0.34.2 \
+    httpx==0.28.1 \
+    pyyaml==6.0.2 \
+    pydantic==2.11.5
+
+# Copy gateway configuration
+COPY docker/config/enterprise.yaml /app/config/enterprise.yaml
+
+# Create simple gateway application
+RUN echo 'import asyncio\n\
+import sys\n\
+import os\n\
+import yaml\n\
+import logging\n\
+from fastapi import FastAPI, HTTPException\n\
+from fastapi.middleware.cors import CORSMiddleware\n\
+from pydantic import BaseModel\n\
+import httpx\n\
+import uvicorn\n\
+\n\
+# Configure logging\n\
+logging.basicConfig(level=logging.INFO)\n\
+logger = logging.getLogger("enterprise_gateway")\n\
+\n\
+app = FastAPI(title="MCP Enterprise Gateway", version="1.0.0")\n\
+\n\
+# CORS\n\
+app.add_middleware(\n\
+    CORSMiddleware,\n\
+    allow_origins=["*"],\n\
+    allow_credentials=True,\n\
+    allow_methods=["*"],\n\
+    allow_headers=["*"],\n\
+)\n\
+\n\
+# Load configuration\n\
+try:\n\
+    with open("/app/config/enterprise.yaml", "r") as f:\n\
+        config = yaml.safe_load(f)\nexcept Exception as e:\n\
+    logger.error(f"Failed to load config: {e}")\n\
+    config = {"servers": []}\n\
+\n\
+# Server registry\n\
+servers = {}\n\
+for server_config in config.get("servers", []):\n\
+    if server_config.get("enabled", True):\n\
+        servers[server_config["name"]] = {\n\
+            "host": server_config["host"],\n\
+            "port": server_config["port"],\n\
+            "health_url": server_config.get("health_check_url", "http://" + server_config["host"] + ":" + str(server_config["port"]) + "/health")\n\
+        }\n\
+\n\
+@app.get("/health")\n\
+async def health_check():\n\
+    return {"status": "healthy", "gateway": "running", "servers": len(servers)}\n\
+\n\
+@app.get("/api/v1/servers")\n\
+async def list_servers():\n\
+    """List all registered MCP servers"""\n\
+    server_status = {}\n\
+    async with httpx.AsyncClient() as client:\n\
+        for name, server in servers.items():\n\
+            try:\n\
+                response = await client.get(server["health_url"], timeout=5.0)\n\
+                server_status[name] = {\n\
+                    "status": "healthy" if response.status_code == 200 else "unhealthy",\n\
+                    "host": server["host"],\n\
+                    "port": server["port"]\n\
+                }\n\
+            except Exception as e:\n\
+                server_status[name] = {\n\
+                    "status": "unreachable",\n\
+                    "error": str(e),\n\
+                    "host": server["host"],\n\
+                    "port": server["port"]\n\
+                }\n\
+    return server_status\n\
+\n\
+@app.get("/api/v1/tools")\n\
+async def list_all_tools():\n\
+    """Aggregate tools from all MCP servers"""\n\
+    all_tools = {}\n\
+    async with httpx.AsyncClient() as client:\n\
+        for name, server in servers.items():\n\
+            try:\n\
+                # Try to get tools list via MCP protocol\n\
+                mcp_request = {\n\
+                    "jsonrpc": "2.0",\n\
+                    "id": 1,\n\
+                    "method": "tools/list"\n\
+                }\n\
+                response = await client.post(\n\
+                    "http://" + server["host"] + ":" + str(server["port"]),\n\
+                    json=mcp_request,\n\
+                    timeout=10.0,\n\
+                    headers={"Content-Type": "application/json"}\n\
+                )\n\
+                if response.status_code == 200:\n\
+                    data = response.json()\n\
+                    if "result" in data and "tools" in data["result"]:\n\
+                        all_tools[name] = data["result"]["tools"]\n\
+                    else:\n\
+                        all_tools[name] = {"error": "Invalid MCP response format"}\n\
+                else:\n\
+                    all_tools[name] = {"error": f"HTTP {response.status_code}"}\n\
+            except Exception as e:\n\
+                all_tools[name] = {"error": str(e)}\n\
+    return all_tools\n\
+\n\
+@app.post("/api/v1/tools/{server_name}/{tool_name}")\n\
+async def execute_tool(server_name: str, tool_name: str, payload: dict):\n\
+    """Execute a tool on a specific MCP server"""\n\
+    if server_name not in servers:\n\
+        raise HTTPException(status_code=404, detail=f"Server {server_name} not found")\n\
+    \n\
+    server = servers[server_name]\n\
+    mcp_request = {\n\
+        "jsonrpc": "2.0",\n\
+        "id": 1,\n\
+        "method": "tools/call",\n\
+        "params": {\n\
+            "name": tool_name,\n\
+            "arguments": payload\n\
+        }\n\
+    }\n\
+    \n\
+    async with httpx.AsyncClient() as client:\n\
+        try:\n\
+            response = await client.post(\n\
+                "http://" + server["host"] + ":" + str(server["port"]),\n\
+                json=mcp_request,\n\
+                timeout=30.0,\n\
+                headers={"Content-Type": "application/json"}\n\
+            )\n\
+            return response.json()\n\
+        except Exception as e:\n\
+            raise HTTPException(status_code=500, detail=str(e))\n\
+\n\
+@app.get("/")\n\
+async def root():\n\
+    return {\n\
+        "name": "MCP Enterprise Gateway",\n\
+        "version": "1.0.0",\n\
+        "description": "Server of Servers - Orchestrating Multiple MCP Servers",\n\
+        "servers": list(servers.keys()),\n\
+        "endpoints": ["/health", "/api/v1/servers", "/api/v1/tools"]\n\
+    }\n\
+\n\
+if __name__ == "__main__":\n\
+    uvicorn.run(app, host="0.0.0.0", port=8000, log_level="info")' > /app/gateway.py
+
+# Create non-root user
+RUN useradd -m -u 1000 mcpuser && chown -R mcpuser:mcpuser /app
+USER mcpuser
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Expose port
+EXPOSE 8000
+
+# Run the gateway
+CMD ["python", "/app/gateway.py"]

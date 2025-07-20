@@ -1,0 +1,143 @@
+# Docker Compose for Local Testing of Security Configurations
+# Tests the deployment configurations without requiring a full Kubernetes cluster
+
+version: '3.8'
+
+services:
+  # PostgreSQL with security configurations
+  postgres:
+    image: postgres:15-alpine
+    container_name: kailash-test-postgres
+    environment:
+      POSTGRES_DB: kailash_test
+      POSTGRES_USER: kailash_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_test_password}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kailash_user -d kailash_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+    command: >
+      postgres
+      -c ssl=on
+      -c ssl_cert_file=/var/lib/postgresql/server.crt
+      -c ssl_key_file=/var/lib/postgresql/server.key
+      -c max_connections=100
+      -c shared_buffers=256MB
+
+  # Redis with security configurations
+  redis:
+    image: redis:7-alpine
+    container_name: kailash-test-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-secure_redis_password}
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+
+  # Vault in dev mode for testing
+  vault:
+    image: hashicorp/vault:1.15.2
+    container_name: kailash-test-vault
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: root-token-for-testing
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+      VAULT_LOG_LEVEL: info
+    ports:
+      - "8200:8200"
+    cap_add:
+      - IPC_LOCK
+    healthcheck:
+      test: ["CMD", "vault", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+
+  # Test application
+  test-app:
+    image: nginx:1.25-alpine
+    container_name: kailash-test-app
+    ports:
+      - "8080:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      vault:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://kailash_user:${POSTGRES_PASSWORD:-secure_test_password}@postgres:5432/kailash_test?sslmode=require
+      REDIS_URL: redis://:${REDIS_PASSWORD:-secure_redis_password}@redis:6379
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root-token-for-testing
+    volumes:
+      - ./test-configs:/etc/nginx/conf.d:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test-network
+
+  # Security scanner
+  security-scanner:
+    image: aquasec/trivy:latest
+    container_name: kailash-test-scanner
+    depends_on:
+      - test-app
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./scan-results:/results
+    command: image --exit-code 0 --no-progress --format json -o /results/scan-report.json nginx:1.25-alpine
+    networks:
+      - test-network
+
+  # Configuration validator
+  config-validator:
+    build:
+      context: .
+      dockerfile: Dockerfile.validator
+    container_name: kailash-test-validator
+    depends_on:
+      - vault
+    volumes:
+      - ../../security:/security:ro
+      - ./validation-results:/results
+    environment:
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: root-token-for-testing
+    networks:
+      - test-network
+
+volumes:
+  postgres_test_data:
+  redis_test_data:
+
+networks:
+  test-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16

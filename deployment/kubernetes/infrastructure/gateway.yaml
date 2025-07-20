@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: enterprise-gateway
+  namespace: mcp-platform
+  labels:
+    app: enterprise-gateway
+    component: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: enterprise-gateway
+  template:
+    metadata:
+      labels:
+        app: enterprise-gateway
+        component: gateway
+    spec:
+      containers:
+      - name: gateway
+        image: mcp/enterprise-gateway:latest
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: MCP_LOG_LEVEL
+          value: "INFO"
+        volumeMounts:
+        - name: apps-config
+          mountPath: /apps
+          readOnly: true
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: apps-config
+        configMap:
+          name: apps-manifests
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: enterprise-gateway
+  namespace: mcp-platform
+spec:
+  selector:
+    app: enterprise-gateway
+  ports:
+  - port: 8000
+    targetPort: 8000
+    name: http
+  type: LoadBalancer
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: apps-manifests
+  namespace: mcp-platform
+data:
+  # App manifests would be populated by deployment scripts
+  ai-registry.yaml: |
+    name: ai-registry
+    version: 1.0.1
+    type: hybrid
+    # ... rest of manifest
+  user-management.yaml: |
+    name: user-management
+    version: 1.0.0
+    type: hybrid
+    # ... rest of manifest
