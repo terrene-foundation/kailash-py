@@ -9,16 +9,16 @@ This directory contains the organized changelog for the Kailash Python SDK.
 
 ## Current Version
 
-The current version is **0.4.2** (released 2025-06-18).
+The current version is **0.8.5** (released 2025-07-20).
 
 ## Recent Releases
 
-- [v0.4.2 - 2025-06-18](releases/v0.4.2-2025-06-18.md) - Circular Import Resolution & Changelog Organization
-- [v0.4.1 - 2025-06-16](releases/v0.4.1-2025-06-16.md) - Alert Nodes System & AI Provider Vision Support
-- [v0.4.0 - 2025-06-15](releases/v0.4.0-2025-06-15.md) - Enterprise Middleware Architecture
-- [v0.3.2 - 2025-06-11](releases/v0.3.2-2025-06-11.md) - PythonCodeNode Output Validation Fix
-- [v0.3.1 - 2025-06-11](releases/v0.3.1-2025-06-11.md) - Complete Finance Workflow Library
-- [v0.3.0 - 2025-06-10](releases/v0.3.0-2025-06-10.md) - Parameter Lifecycle Architecture
+- [v0.8.5 - 2025-07-20](releases/v0.8.5-2025-07-20.md) - Architecture Cleanup & Enterprise Security
+- [v0.7.0 - 2025-07-10](releases/v0.7.0-2025-07-10.md) - Major Framework Release
+- [v0.6.6 - 2025-07-08](releases/v0.6.6-2025-07-08.md) - Infrastructure Enhancements
+- [v0.6.5 - 2025-07-08](releases/v0.6.5-2025-07-08.md) - Real MCP Execution Default
+- [v0.6.4 - 2025-07-06](releases/v0.6.4-2025-07-06.md) - AsyncSQL & Transaction Monitoring
+- [v0.6.3 - 2025-07-05](releases/v0.6.3-2025-07-05.md) - Enterprise Features
 
 ## All Releases
 
