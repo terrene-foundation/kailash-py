@@ -459,7 +459,7 @@ Check the `CLAUDE.md` in root and other directories:
      - You can trace a complete path from basic patterns to advanced custom development
      - Please maintain the concise, authoritative tone that respects context limits!
 
-2. For this module in `apps/`:
+2. For modules in `apps/`:
    - Please trace through the `CLAUDE.md` guidance system
    - Temp test all the instructions to ensure that they are correct
    - For each user persona and their workflows, please run through the e2e using temp tests
