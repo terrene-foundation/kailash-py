@@ -31,9 +31,9 @@
 - 🌐 **Edge Computing**: 50+ new nodes for geo-distributed infrastructure
 - 📊 **Advanced Monitoring**: AlertManager with proactive threshold monitoring
 - 🚀 **Performance**: <1ms validation overhead with intelligent caching
-- ✅ **Breaking Changes**: See [migration guide](sdk-users/changelogs/releases/v0.8.5-2025-07-20.md)
+- ✅ **Breaking Changes**: See [migration guide](sdk-users/6-reference/changelogs/releases/v0.8.5-2025-07-20.md)
 
-[Full Changelog](sdk-users/changelogs/releases/v0.8.5-2025-07-20.md) | [PyPI Packages](https://pypi.org/project/kailash/0.8.5/)
+[Full Changelog](sdk-users/6-reference/changelogs/releases/v0.8.5-2025-07-20.md) | [PyPI Packages](https://pypi.org/project/kailash/0.8.5/)
 
 ## 🎯 What Makes Kailash Different
 
@@ -327,8 +327,8 @@ pytest tests/e2e/ --timeout=10
 
 ### For Users
 - **[SDK Users Guide](sdk-users/)**: Complete workflow development guide
-- **[Node Selection Guide](sdk-users/nodes/node-selection-guide.md)**: Smart node selection with decision trees
-- **[Enterprise Patterns](sdk-users/enterprise/)**: Production deployment patterns
+- **[Node Selection Guide](sdk-users/2-core-concepts/nodes/node-selection-guide.md)**: Smart node selection with decision trees
+- **[Enterprise Patterns](sdk-users/5-enterprise/)**: Production deployment patterns
 - **[API Documentation](https://terrene-foundation.github.io/kailash-python-sdk)**: Complete API reference
 
 ### For Contributors
@@ -337,9 +337,9 @@ pytest tests/e2e/ --timeout=10
 - **[Testing Guide](tests/README.md)**: 3-tier testing strategy
 
 ### Quick References
-- **[Cheatsheet](sdk-users/cheatsheet/)**: 53 copy-paste patterns
-- **[Common Mistakes](sdk-users/validation/common-mistakes.md)**: Error patterns and solutions
-- **[Performance Guide](sdk-users/performance/)**: Optimization patterns
+- **[Cheatsheet](sdk-users/2-core-concepts/cheatsheet/)**: 53 copy-paste patterns
+- **[Common Mistakes](sdk-users/2-core-concepts/validation/common-mistakes.md)**: Error patterns and solutions
+- **[Performance Guide](sdk-users/5-enterprise/performance/)**: Optimization patterns
 
 ## 🚢 Production Deployment
 

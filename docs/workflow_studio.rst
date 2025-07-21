@@ -335,7 +335,7 @@ References
 - **Architecture Decision**: See ADR-0033 for multi-tenant architecture details
 - **Frontend Guidelines**: ``shared/frontend/``
 - **API Documentation**: :doc:`/api/workflow_api`
-- **Node Catalog**: ``sdk-users/nodes/comprehensive-node-catalog.md``
+- **Node Catalog**: ``sdk-users/2-core-concepts/nodes/comprehensive-node-catalog.md``
 
 .. note::
    For the latest updates on Workflow Studio development, check the

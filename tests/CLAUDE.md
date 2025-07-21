@@ -187,7 +187,7 @@ async def test_async_node():
 )  # Will fail validation!
 ```
 
-See [AsyncNode Implementation Guide](../sdk-users/developer/async-node-guide.md) for full details.
+See [AsyncNode Implementation Guide](../sdk-users/3-development/async-node-guide.md) for full details.
 
 ## 📝 Quick Reference
 

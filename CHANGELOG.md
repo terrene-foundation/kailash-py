@@ -9,9 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 The changelog has been reorganized into individual files for better management. Please see:
 
-- **[sdk-users/changelogs/](sdk-users/changelogs/)** - Main changelog directory
-- **[sdk-users/changelogs/unreleased/](sdk-users/changelogs/unreleased/)** - Unreleased changes
-- **[sdk-users/changelogs/releases/](sdk-users/changelogs/releases/)** - Individual release changelogs
+- **[sdk-users/6-reference/changelogs/](sdk-users/6-reference/changelogs/)** - Main changelog directory
+- **[sdk-users/6-reference/changelogs/unreleased/](sdk-users/6-reference/changelogs/unreleased/)** - Unreleased changes
+- **[sdk-users/6-reference/changelogs/releases/](sdk-users/6-reference/changelogs/releases/)** - Individual release changelogs
 
 ## Recent Releases
 
@@ -87,7 +87,7 @@ This release addresses developer experience issues identified in comprehensive S
 - ✅ **Nexus CLAUDE.md**: Multi-channel platform patterns guide (542 lines) for Claude Code integration  
 - ✅ **Enhanced Connection Error Messages**: Improved validation with helpful suggestions and port discovery
 - ✅ **hashlib Support**: Added to PythonCodeNode ALLOWED_MODULES for cryptographic operations
-- ✅ **Documentation Structure**: Migrated 90+ missing files from apps/*/docs/ to sdk-users/apps/
+- ✅ **Documentation Structure**: Migrated 90+ missing files from apps/*/docs/ to sdk-users/4-apps/
 - ✅ **Comprehensive API Guidance**: Quick reference system and developer onboarding paths
 
 #### Changed
@@ -231,7 +231,7 @@ This release focuses on comprehensive test infrastructure improvements, systemat
 - Gateway class renames are backward compatible
 - Infrastructure enhancements require no code changes - all improvements are transparent
 - New monitoring operations are additive - existing code continues to work
-- See [migration-guides/version-specific/v0.6.6-infrastructure-enhancements.md](sdk-users/migration-guides/version-specific/v0.6.6-infrastructure-enhancements.md) for details
+- See [migration-guides/version-specific/v0.6.6-infrastructure-enhancements.md](sdk-users/6-reference/migration-guides/version-specific/v0.6.6-infrastructure-enhancements.md) for details
 
 ### [0.6.6] - 2025-07-08
 
@@ -310,7 +310,7 @@ This release focuses on comprehensive test infrastructure improvements, systemat
 - **Documentation**: 200+ pattern corrections ensuring all examples work correctly
 
 **Enhanced:**
-- **Migration Guide Consolidation**: Unified location at `sdk-users/migration-guides/`
+- **Migration Guide Consolidation**: Unified location at `sdk-users/6-reference/migration-guides/`
 - **MCP Platform Unification**: Created `apps/mcp_platform/` from 6 scattered directories
 - **Documentation Quality**: 100% coverage (up from 72.7%), all examples validated
 - **API Design**: Clean server hierarchy with backward compatibility
@@ -319,61 +319,61 @@ This release focuses on comprehensive test infrastructure improvements, systemat
 
 ### [0.6.2] - 2025-07-03
 
-See [sdk-users/changelogs/releases/v0.6.2-2025-07-03.md](sdk-users/changelogs/releases/v0.6.2-2025-07-03.md) for full details.
+See [sdk-users/6-reference/changelogs/releases/v0.6.2-2025-07-03.md](sdk-users/6-reference/changelogs/releases/v0.6.2-2025-07-03.md) for full details.
 
 **Key Features:** LLM integration enhancements with Ollama backend_config support, 100% test coverage across all tiers, comprehensive documentation updates
 
 ### [0.6.1] - 2025-01-26
 
-See [sdk-users/changelogs/releases/v0.6.1-2025-01-26.md](sdk-users/changelogs/releases/v0.6.1-2025-01-26.md) for full details.
+See [sdk-users/6-reference/changelogs/releases/v0.6.1-2025-01-26.md](sdk-users/6-reference/changelogs/releases/v0.6.1-2025-01-26.md) for full details.
 
 **Key Features:** Critical middleware bug fixes, standardized test environment, massive CI performance improvements (10min → 40sec)
 
 ### [0.6.0] - 2025-01-24
 
-See [sdk-users/changelogs/releases/v0.6.0-2025-01-24.md](sdk-users/changelogs/releases/v0.6.0-2025-01-24.md) for full details.
+See [sdk-users/6-reference/changelogs/releases/v0.6.0-2025-01-24.md](sdk-users/6-reference/changelogs/releases/v0.6.0-2025-01-24.md) for full details.
 
 **Key Features:** User Management System, Enterprise Admin Infrastructure
 
 ### [0.5.0] - 2025-01-19
 
-See [sdk-users/changelogs/releases/v0.5.0-2025-01-19.md](sdk-users/changelogs/releases/v0.5.0-2025-01-19.md) for full details.
+See [sdk-users/6-reference/changelogs/releases/v0.5.0-2025-01-19.md](sdk-users/6-reference/changelogs/releases/v0.5.0-2025-01-19.md) for full details.
 
 **Key Features:** Major Architecture Refactoring, Performance Optimization, API Standardization
 
 ### [0.4.2] - 2025-06-18
 
-See [sdk-users/changelogs/releases/v0.4.2-2025-06-18.md](sdk-users/changelogs/releases/v0.4.2-2025-06-18.md) for full details.
+See [sdk-users/6-reference/changelogs/releases/v0.4.2-2025-06-18.md](sdk-users/6-reference/changelogs/releases/v0.4.2-2025-06-18.md) for full details.
 
 **Key Features:** Circular Import Resolution, Changelog Organization
 
 ### [0.4.1] - 2025-06-16
 
-See [sdk-users/changelogs/releases/v0.4.1-2025-06-16.md](sdk-users/changelogs/releases/v0.4.1-2025-06-16.md) for full details.
+See [sdk-users/6-reference/changelogs/releases/v0.4.1-2025-06-16.md](sdk-users/6-reference/changelogs/releases/v0.4.1-2025-06-16.md) for full details.
 
 **Key Features:** Alert Nodes System, AI Provider Vision Support
 
 ### [0.4.0] - 2025-06-15
 
-See [sdk-users/changelogs/releases/v0.4.0-2025-06-15.md](sdk-users/changelogs/releases/v0.4.0-2025-06-15.md) for full details.
+See [sdk-users/6-reference/changelogs/releases/v0.4.0-2025-06-15.md](sdk-users/6-reference/changelogs/releases/v0.4.0-2025-06-15.md) for full details.
 
 **Key Features:** Enterprise Middleware Architecture, Test Excellence Improvements
 
 ### [0.3.2] - 2025-06-11
 
-See [sdk-users/changelogs/releases/v0.3.2-2025-06-11.md](sdk-users/changelogs/releases/v0.3.2-2025-06-11.md) for full details.
+See [sdk-users/6-reference/changelogs/releases/v0.3.2-2025-06-11.md](sdk-users/6-reference/changelogs/releases/v0.3.2-2025-06-11.md) for full details.
 
 **Key Features:** PythonCodeNode Output Validation Fix, Manufacturing Workflow Library
 
 ### [0.3.1] - 2025-06-11
 
-See [sdk-users/changelogs/releases/v0.3.1-2025-06-11.md](sdk-users/changelogs/releases/v0.3.1-2025-06-11.md) for full details.
+See [sdk-users/6-reference/changelogs/releases/v0.3.1-2025-06-11.md](sdk-users/6-reference/changelogs/releases/v0.3.1-2025-06-11.md) for full details.
 
 **Key Features:** Complete Finance Workflow Library, PythonCodeNode Training Data
 
 ### [0.3.0] - 2025-06-10
 
-See [sdk-users/changelogs/releases/v0.3.0-2025-06-10.md](sdk-users/changelogs/releases/v0.3.0-2025-06-10.md) for full details.
+See [sdk-users/6-reference/changelogs/releases/v0.3.0-2025-06-10.md](sdk-users/6-reference/changelogs/releases/v0.3.0-2025-06-10.md) for full details.
 
 **Key Features:** Parameter Lifecycle Architecture, Centralized Data Management
 
