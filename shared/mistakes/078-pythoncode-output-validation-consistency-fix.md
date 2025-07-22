@@ -132,16 +132,16 @@ python -m pytest tests/test_schema/test_python_code_schemas_fixed.py -v  # ✅ 6
 python -m pytest tests/integration/test_code_node_integration.py -v  # ✅ 5/5 passed
 
 # All manufacturing workflows execute successfully
-python sdk-users/workflows/by-industry/manufacturing/scripts/quality_control.py  # ✅
-python sdk-users/workflows/by-industry/manufacturing/scripts/supply_chain_optimization.py  # ✅
-python sdk-users/workflows/by-industry/manufacturing/scripts/production_planning.py  # ✅
-python sdk-users/workflows/by-industry/manufacturing/scripts/iot_sensor_processing.py  # ✅
+python sdk-users/2-core-concepts/workflows/by-industry/manufacturing/scripts/quality_control.py  # ✅
+python sdk-users/2-core-concepts/workflows/by-industry/manufacturing/scripts/supply_chain_optimization.py  # ✅
+python sdk-users/2-core-concepts/workflows/by-industry/manufacturing/scripts/production_planning.py  # ✅
+python sdk-users/2-core-concepts/workflows/by-industry/manufacturing/scripts/iot_sensor_processing.py  # ✅
 ```
 
 ## Documentation Updates
 
-1. **Updated**: `sdk-users/developer/04-pythoncode-node.md` - Added output consistency section
-2. **Updated**: `sdk-users/developer/07-troubleshooting.md` - Added Session 064 fix documentation
+1. **Updated**: `sdk-users/3-development/04-pythoncode-node.md` - Added output consistency section
+2. **Updated**: `sdk-users/3-development/07-troubleshooting.md` - Added Session 064 fix documentation
 3. **Updated**: `CLAUDE.md` - Added critical validation rule for output consistency
 4. **Created**: This mistake documentation for future reference
 

@@ -11,6 +11,7 @@ from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 
 
+@pytest.mark.requires_isolation
 class TestSimplifiedWorkflow:
     """Test simplified workflow patterns with basic nodes."""
 

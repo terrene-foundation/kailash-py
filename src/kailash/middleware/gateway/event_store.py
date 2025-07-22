@@ -125,6 +125,7 @@ class EventStore:
             self._flush_task = asyncio.create_task(self._flush_loop())
         except RuntimeError:
             # If no event loop is running, defer task creation
+            # Don't create the coroutine here as it will never be awaited
             self._flush_task = None
 
     async def _ensure_flush_task(self):

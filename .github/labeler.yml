@@ -33,7 +33,7 @@
   - changed-files:
     - any-glob-to-any-file:
       - examples/workflow_examples/**/*
-      - sdk-users/workflows/**/*
+      - sdk-users/2-core-concepts/workflows/**/*
 
 "area/docs":
   - changed-files:

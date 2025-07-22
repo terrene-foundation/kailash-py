@@ -773,8 +773,8 @@ validation_result = {
 
         # Add report generation node if not exists
         if output not in workflow.nodes:
-            from kailash.examples.utils.data_paths import get_output_data_path
             from kailash.nodes.data import JSONWriterNode
+            from kailash.utils.data_paths import get_output_data_path
 
             workflow.add_node(
                 output,
@@ -814,8 +814,8 @@ validation_result = {
         """
         # Add document reader if not exists
         if document_reader not in workflow.nodes:
-            from kailash.examples.utils.data_paths import get_input_data_path
             from kailash.nodes.data import DirectoryReaderNode
+            from kailash.utils.data_paths import get_input_data_path
 
             workflow.add_node(
                 document_reader,
@@ -907,8 +907,8 @@ result = {
 
         # Add output writer if not exists
         if output not in workflow.nodes:
-            from kailash.examples.utils.data_paths import get_output_data_path
             from kailash.nodes.data import JSONWriterNode
+            from kailash.utils.data_paths import get_output_data_path
 
             workflow.add_node(
                 output,
@@ -1060,8 +1060,8 @@ validated_result = {
 
         # Add output node if not exists
         if output not in workflow.nodes:
-            from kailash.examples.utils.data_paths import get_output_data_path
             from kailash.nodes.data import JSONWriterNode
+            from kailash.utils.data_paths import get_output_data_path
 
             workflow.add_node(
                 output,
@@ -1106,8 +1106,8 @@ validated_result = {
         """
         # Add data reader if not exists
         if data_reader not in workflow.nodes:
-            from kailash.examples.utils.data_paths import get_input_data_path
             from kailash.nodes.data import CSVReaderNode
+            from kailash.utils.data_paths import get_input_data_path
 
             workflow.add_node(
                 data_reader,
@@ -1304,8 +1304,8 @@ result = {
 
         # Add data writer if not exists
         if writer not in workflow.nodes:
-            from kailash.examples.utils.data_paths import get_output_data_path
             from kailash.nodes.data import JSONWriterNode
+            from kailash.utils.data_paths import get_output_data_path
 
             workflow.add_node(
                 writer,

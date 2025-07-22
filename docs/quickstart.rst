@@ -706,19 +706,19 @@ Production-Ready Workflow Library
 
 For complete, production-ready workflows, explore our comprehensive library:
 
-- **Quick Start Patterns** (``sdk-users/workflows/quick-start/``)
+- **Quick Start Patterns** (``sdk-users/2-core-concepts/workflows/quick-start/``)
 
   - 30-second copy-paste workflows for common tasks
   - Essential SDK patterns covering 80% of use cases
   - Fast error-to-solution lookup guide
 
-- **Industry Solutions** (``sdk-users/workflows/by-industry/``)
+- **Industry Solutions** (``sdk-users/2-core-concepts/workflows/by-industry/``)
 
   - Healthcare: Clinical diagnostics, patient data processing
   - Financial Services: Risk analysis, transaction processing
   - Manufacturing: IoT data processing, quality control
 
-- **Technical Patterns** (``sdk-users/workflows/by-pattern/``)
+- **Technical Patterns** (``sdk-users/2-core-concepts/workflows/by-pattern/``)
 
   - ETL pipelines with error handling
   - REST API integrations with retry logic
@@ -726,7 +726,7 @@ For complete, production-ready workflows, explore our comprehensive library:
   - File processing and monitoring
   - Security and authentication flows
 
-- **Enterprise Solutions** (``sdk-users/workflows/by-enterprise/``)
+- **Enterprise Solutions** (``sdk-users/2-core-concepts/workflows/by-enterprise/``)
 
   - Customer 360° integration workflows
   - Multi-system data synchronization

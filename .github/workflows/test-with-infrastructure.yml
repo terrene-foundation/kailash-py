@@ -202,7 +202,7 @@ jobs:
 
         # Run financial processor
         echo "Running financial processor example..."
-        if uv run python sdk-users/workflows/by-enterprise/data-processing/scripts/financial_processor_minimal.py; then
+        if uv run python sdk-users/2-core-concepts/workflows/by-enterprise/data-processing/scripts/financial_processor_minimal.py; then
           echo "✅ Financial processor example completed successfully"
         else
           echo "❌ Financial processor example failed"
@@ -211,7 +211,7 @@ jobs:
 
         # Run lead scoring
         echo "Running lead scoring example..."
-        if uv run python sdk-users/workflows/by-enterprise/sales-marketing/scripts/lead_scoring_minimal.py; then
+        if uv run python sdk-users/2-core-concepts/workflows/by-enterprise/sales-marketing/scripts/lead_scoring_minimal.py; then
           echo "✅ Lead scoring example completed successfully"
         else
           echo "❌ Lead scoring example failed"

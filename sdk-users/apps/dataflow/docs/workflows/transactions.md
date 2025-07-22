@@ -62,9 +62,10 @@ runtime.execute(workflow2.build())  # Independent transaction
 workflow = WorkflowBuilder()
 
 # Start explicit transaction
-workflow.add_node("TransactionContextNode", "start_transaction", {
+workflow.add_node("TransactionScopeNode", "start_transaction", {
     "isolation_level": "READ_COMMITTED",  # Optional
-    "timeout": 30.0  # 30 seconds timeout
+    "timeout": 30,  # 30 seconds timeout
+    "rollback_on_error": True  # Automatically rollback on error
 })
 
 # Database operations
@@ -80,7 +81,7 @@ workflow.add_node("ProfileCreateNode", "create_profile", {
 
 # Commit transaction
 workflow.add_node("TransactionCommitNode", "commit_transaction", {
-    "cleanup": True  # Clean up transaction context
+    # No parameters required - commits active transaction
 })
 
 # Connect nodes
@@ -95,7 +96,9 @@ workflow.add_connection("create_profile", "commit_transaction")
 workflow = WorkflowBuilder()
 
 # Start transaction
-workflow.add_node("TransactionContextNode", "start_tx", {})
+workflow.add_node("TransactionScopeNode", "start_tx", {
+    "rollback_on_error": True
+})
 
 # Operations
 workflow.add_node("UserCreateNode", "create_user", {...})
@@ -122,7 +125,7 @@ workflow.add_node("SwitchNode", "tx_decision", {
 
 workflow.add_node("TransactionCommitNode", "commit_tx", {})
 workflow.add_node("TransactionRollbackNode", "rollback_tx", {
-    "reason": ":error"
+    # No parameters required - rolls back active transaction
 })
 
 # Connect flow
@@ -138,23 +141,27 @@ workflow.add_connection("validate_user", "rollback_tx", "error")
 
 ```python
 # READ_UNCOMMITTED - Lowest isolation, highest performance
-workflow.add_node("TransactionContextNode", "tx_read_uncommitted", {
-    "isolation_level": "READ_UNCOMMITTED"
+workflow.add_node("TransactionScopeNode", "tx_read_uncommitted", {
+    "isolation_level": "READ_UNCOMMITTED",
+    "rollback_on_error": True
 })
 
 # READ_COMMITTED - Default for most databases
-workflow.add_node("TransactionContextNode", "tx_read_committed", {
-    "isolation_level": "READ_COMMITTED"
+workflow.add_node("TransactionScopeNode", "tx_read_committed", {
+    "isolation_level": "READ_COMMITTED",
+    "rollback_on_error": True
 })
 
 # REPEATABLE_READ - Prevents non-repeatable reads
-workflow.add_node("TransactionContextNode", "tx_repeatable_read", {
-    "isolation_level": "REPEATABLE_READ"
+workflow.add_node("TransactionScopeNode", "tx_repeatable_read", {
+    "isolation_level": "REPEATABLE_READ",
+    "rollback_on_error": True
 })
 
 # SERIALIZABLE - Highest isolation, lowest concurrency
-workflow.add_node("TransactionContextNode", "tx_serializable", {
-    "isolation_level": "SERIALIZABLE"
+workflow.add_node("TransactionScopeNode", "tx_serializable", {
+    "isolation_level": "SERIALIZABLE",
+    "rollback_on_error": True
 })
 ```
 
@@ -162,8 +169,10 @@ workflow.add_node("TransactionContextNode", "tx_serializable", {
 
 ```python
 # For financial transactions - use SERIALIZABLE
-workflow.add_node("TransactionContextNode", "financial_tx", {
-    "isolation_level": "SERIALIZABLE"
+workflow.add_node("TransactionScopeNode", "financial_tx", {
+    "isolation_level": "SERIALIZABLE",
+    "timeout": 60,  # Longer timeout for complex transactions
+    "rollback_on_error": True
 })
 
 workflow.add_node("AccountUpdateNode", "debit_account", {
@@ -177,9 +186,10 @@ workflow.add_node("AccountUpdateNode", "credit_account", {
 })
 
 # For reporting - READ_COMMITTED is usually sufficient
-workflow.add_node("TransactionContextNode", "report_tx", {
+workflow.add_node("TransactionScopeNode", "report_tx", {
     "isolation_level": "READ_COMMITTED",
-    "read_only": True  # Optimization for read-only transactions
+    "rollback_on_error": True
+    # Note: read_only optimization can be handled at database level
 })
 ```
 
@@ -191,7 +201,9 @@ workflow.add_node("TransactionContextNode", "report_tx", {
 workflow = WorkflowBuilder()
 
 # Main transaction
-workflow.add_node("TransactionContextNode", "main_tx", {})
+workflow.add_node("TransactionScopeNode", "main_tx", {
+    "rollback_on_error": True
+})
 
 # Create user (will be kept)
 workflow.add_node("UserCreateNode", "create_user", {
@@ -226,7 +238,9 @@ workflow.add_node("TransactionCommitNode", "commit_main", {})
 # Complex workflow with multiple savepoints
 workflow = WorkflowBuilder()
 
-workflow.add_node("TransactionContextNode", "main_tx", {})
+workflow.add_node("TransactionScopeNode", "main_tx", {
+    "rollback_on_error": True
+})
 
 # Phase 1: User creation
 workflow.add_node("UserCreateNode", "create_user", {...})
@@ -409,7 +423,9 @@ workflow.add_node("RetryNode", "retry_on_conflict", {
 # Lock records during read
 workflow = WorkflowBuilder()
 
-workflow.add_node("TransactionContextNode", "start_tx", {})
+workflow.add_node("TransactionScopeNode", "start_tx", {
+    "rollback_on_error": True
+})
 
 # Lock account for update
 workflow.add_node("AccountReadNode", "lock_account", {
@@ -433,7 +449,9 @@ workflow.add_node("TransactionCommitNode", "commit_tx", {})
 
 ```python
 # Good: Short transaction
-workflow.add_node("TransactionContextNode", "tx", {})
+workflow.add_node("TransactionScopeNode", "tx", {
+    "rollback_on_error": True
+})
 workflow.add_node("UserCreateNode", "create_user", {...})
 workflow.add_node("TransactionCommitNode", "commit", {})
 
@@ -441,7 +459,9 @@ workflow.add_node("TransactionCommitNode", "commit", {})
 workflow.add_node("EmailNode", "send_welcome_email", {...})
 
 # Bad: Long transaction including slow operations
-# workflow.add_node("TransactionContextNode", "tx", {})
+# workflow.add_node("TransactionScopeNode", "tx", {
+    "rollback_on_error": True
+})
 # workflow.add_node("UserCreateNode", "create_user", {...})
 # workflow.add_node("EmailNode", "send_email", {...})  # Slow!
 # workflow.add_node("TransactionCommitNode", "commit", {})
@@ -450,10 +470,10 @@ workflow.add_node("EmailNode", "send_welcome_email", {...})
 ### 2. Handle Deadlocks
 
 ```python
-workflow.add_node("TransactionContextNode", "tx", {
-    "timeout": 10.0,
-    "deadlock_retry": True,
-    "max_retries": 3
+workflow.add_node("TransactionScopeNode", "tx", {
+    "timeout": 10,
+    "rollback_on_error": True
+    # Note: deadlock retry can be handled at runtime level
 })
 
 # Always access resources in same order
@@ -466,31 +486,30 @@ workflow.add_node("AccountUpdateNode", "update_account", {"id": 1})
 
 ```python
 # Financial operations: SERIALIZABLE
-workflow.add_node("TransactionContextNode", "financial_tx", {
+workflow.add_node("TransactionScopeNode", "financial_tx", {
     "isolation_level": "SERIALIZABLE"
 })
 
 # Reporting: READ_COMMITTED with read-only
-workflow.add_node("TransactionContextNode", "report_tx", {
+workflow.add_node("TransactionScopeNode", "report_tx", {
     "isolation_level": "READ_COMMITTED",
     "read_only": True
 })
 
 # Bulk operations: Consider READ_UNCOMMITTED
-workflow.add_node("TransactionContextNode", "bulk_tx", {
-    "isolation_level": "READ_UNCOMMITTED"
+workflow.add_node("TransactionScopeNode", "bulk_tx", {
+    "isolation_level": "READ_UNCOMMITTED",
+    "rollback_on_error": True
 })
 ```
 
 ### 4. Monitor Transaction Performance
 
 ```python
-workflow.add_node("TransactionContextNode", "monitored_tx", {
-    "monitoring": {
-        "track_duration": True,
-        "track_lock_waits": True,
-        "alert_on_long_transaction": 30.0  # Alert if > 30 seconds
-    }
+workflow.add_node("TransactionScopeNode", "monitored_tx", {
+    "timeout": 30,
+    "rollback_on_error": True
+    # Note: monitoring can be configured at runtime level
 })
 ```
 
@@ -520,9 +539,9 @@ else:
 ### Cleanup on Error
 
 ```python
-workflow.add_node("TransactionContextNode", "tx", {
-    "cleanup_on_error": True,
-    "error_handler": "handle_cleanup"
+workflow.add_node("TransactionScopeNode", "tx", {
+    "rollback_on_error": True
+    # Note: error handlers can be configured at workflow level
 })
 
 workflow.add_node("PythonCodeNode", "handle_cleanup", {

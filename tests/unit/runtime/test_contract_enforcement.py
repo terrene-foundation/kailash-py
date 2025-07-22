@@ -14,7 +14,7 @@ import pytest
 
 from kailash.nodes.base import Node
 from kailash.runtime.local import LocalRuntime
-from kailash.sdk_exceptions import WorkflowExecutionError
+from kailash.sdk_exceptions import WorkflowExecutionError, WorkflowValidationError
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.contracts import ConnectionContract, SecurityPolicy
 
@@ -451,11 +451,11 @@ class TestContractIntegrationWithExistingValidation:
             "source", "result", "csv_reader", "file_path", contract="file_path"
         )
 
-        workflow = builder.build()
-        runtime = LocalRuntime(connection_validation="strict")
-
-        # Should fail due to node validation or contract validation
+        # Should fail due to parameter validation at build time or contract validation at runtime
         try:
+            workflow = builder.build()
+            runtime = LocalRuntime(connection_validation="strict")
+
             results, run_id = runtime.execute(workflow)
             # Check if csv_reader node failed
             if (
@@ -466,8 +466,10 @@ class TestContractIntegrationWithExistingValidation:
                 pass  # Expected behavior
             else:
                 assert False, "Expected validation to cause node failure"
+        except WorkflowValidationError:
+            pass  # Also acceptable - parameter validation at build time
         except WorkflowExecutionError:
-            pass  # Also acceptable
+            pass  # Also acceptable - contract validation at runtime
 
     def test_metrics_collection_with_contracts(self):
         """Test that metrics are collected for contract validation."""

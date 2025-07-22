@@ -14,7 +14,7 @@
 ### Install via pip
 
 ```bash
-pip install kailash[nexus]
+pip install kailash-nexus
 ```
 
 ### Install from source
@@ -35,7 +35,7 @@ print("✅ Nexus installed successfully!")
 app = Nexus()
 health = app.health_check()
 print(f"Platform: {health['platform_type']}")
-print(f"Architecture: {health['architecture']}")
+print(f"Server Type: {health['server_type']}")
 ```
 
 ## Development Environment
@@ -48,7 +48,7 @@ python -m venv nexus-env
 source nexus-env/bin/activate  # On Windows: nexus-env\Scripts\activate
 
 # Install Nexus
-pip install kailash[nexus]
+pip install kailash-nexus
 
 # Verify
 python -c "from nexus import Nexus; print('Ready!')"
@@ -62,7 +62,7 @@ curl -sSL https://install.python-poetry.org | python3 -
 
 # Create new project
 poetry init
-poetry add kailash[nexus]
+poetry add kailash-nexus
 
 # Activate environment
 poetry shell
@@ -79,7 +79,7 @@ conda create -n nexus-env python=3.12
 conda activate nexus-env
 
 # Install Nexus
-pip install kailash[nexus]
+pip install kailash-nexus
 
 # Verify
 python -c "from nexus import Nexus; print('Ready!')"
@@ -95,7 +95,7 @@ Create a `Dockerfile`:
 FROM python:3.12-slim
 
 # Install dependencies
-RUN pip install kailash[nexus]
+RUN pip install kailash-nexus
 
 # Copy your application
 COPY . /app
@@ -188,7 +188,7 @@ kubectl apply -f deployment.yaml
 ### For AI/ML Workflows
 
 ```bash
-pip install kailash[nexus,ai]
+pip install kailash-nexus kailash[ai]
 ```
 
 Includes:
@@ -200,7 +200,7 @@ Includes:
 ### For Enterprise Features
 
 ```bash
-pip install kailash[nexus,enterprise]
+pip install kailash-nexus kailash[enterprise]
 ```
 
 Includes:
@@ -212,7 +212,7 @@ Includes:
 ### For Development
 
 ```bash
-pip install kailash[nexus,dev]
+pip install kailash-nexus kailash[dev]
 ```
 
 Includes:
@@ -286,7 +286,7 @@ health = app.health_check()
 
 print(f"Status: {health['status']}")
 print(f"Platform: {health['platform_type']}")
-print(f"Channels: {list(health['channels'].keys())}")
+print(f"Workflows: {health['workflows']}")
 ```
 
 ### Test Multi-Channel Access
@@ -326,8 +326,8 @@ python --version  # Should be 3.8+
 pip show kailash
 
 # Reinstall if needed
-pip uninstall kailash
-pip install kailash[nexus]
+pip uninstall kailash-nexus
+pip install kailash-nexus
 ```
 
 ### Port Conflicts
@@ -343,7 +343,7 @@ app = Nexus(api_port=8080, mcp_port=3002)
 
 ```bash
 # Linux/macOS: Use user install
-pip install --user kailash[nexus]
+pip install --user kailash-nexus
 
 # Or fix permissions
 sudo chown -R $USER ~/.local/

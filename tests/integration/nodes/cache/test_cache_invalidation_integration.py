@@ -373,7 +373,7 @@ class TestCacheInvalidationNodeIntegration:
             strategy="ttl_refresh",
             scope="single",
             key=ttl_key,
-            new_ttl=2,  # 2 seconds
+            new_ttl=1,  # 1 second
             backend="redis",
             redis_url="redis://localhost:6380",
             reason="TTL refresh test",
@@ -383,8 +383,8 @@ class TestCacheInvalidationNodeIntegration:
         assert result["strategy_used"] == "ttl_refresh"
         assert result["invalidated_count"] == 1
 
-        # Wait for new TTL to expire
-        time.sleep(0.1)
+        # Wait for new TTL to expire (longer than TTL)
+        time.sleep(1.1)
 
         # Verify key expired due to shortened TTL
         expired_result = cache_node.execute(

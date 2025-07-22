@@ -159,7 +159,7 @@ def import_cheatsheets(source_dir: str, target_dir: str, limit: int = None):
    :keywords: kailash, workflow, {get_cheatsheet_category(md_file.name).replace('_', ' ')}
 
 .. note::
-   This cheatsheet was imported from ``sdk-users/cheatsheet/{md_file.name}``
+   This cheatsheet was imported from ``sdk-users/2-core-concepts/cheatsheet/{md_file.name}``
 
 """
         rst_content = header + rst_content
@@ -234,7 +234,7 @@ Navigation Tips
 def main():
     """Main entry point."""
     # Paths relative to docs directory
-    source_dir = "../sdk-users/cheatsheet"
+    source_dir = "../sdk-users/2-core-concepts/cheatsheet"
     target_dir = "quick_reference/cheatsheets"
 
     # Import first 10 cheatsheets as proof of concept

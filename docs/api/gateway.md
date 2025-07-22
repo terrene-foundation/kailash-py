@@ -526,7 +526,7 @@ GET /health
 
 ## Related Documentation
 
-- [Agent-UI Communication Guide](../../sdk-users/middleware/agent-ui-communication.md)
-- [Real-time Communication](../../sdk-users/middleware/real-time-communication.md)
-- [Authentication & Security](../../sdk-users/middleware/authentication-security.md)
+- [Agent-UI Communication Guide](../../sdk-users/4-features/middleware/agent-ui-communication.md)
+- [Real-time Communication](../../sdk-users/4-features/middleware/real-time-communication.md)
+- [Authentication & Security](../../sdk-users/4-features/middleware/authentication-security.md)
 - [Middleware Examples](../../examples/feature_examples/middleware/)

@@ -389,7 +389,9 @@ class CodeExecutor:
                 f"Error position: {' ' * (e.offset - 1) if e.offset else ''}^"
             )
 
-    def execute_code(self, code: str, inputs: dict[str, Any]) -> dict[str, Any]:
+    def execute_code(
+        self, code: str, inputs: dict[str, Any], node_instance=None
+    ) -> dict[str, Any]:
         """Execute Python code with given inputs.
 
         Args:
@@ -475,6 +477,43 @@ class CodeExecutor:
                     namespace[module_name] = module
                 except ImportError:
                     logger.warning(f"Module {module_name} not available")
+
+        # Add global utility functions to namespace
+        try:
+            from kailash.utils.data_paths import (
+                get_data_path,
+                get_input_data_path,
+                get_output_data_path,
+            )
+
+            namespace["get_input_data_path"] = get_input_data_path
+            namespace["get_output_data_path"] = get_output_data_path
+            namespace["get_data_path"] = get_data_path
+        except ImportError:
+            logger.warning(
+                "Could not import data path utilities - functions will not be available in PythonCodeNode execution"
+            )
+
+        # Add workflow context functions if node instance is available
+        if node_instance and hasattr(node_instance, "get_workflow_context"):
+            # Bind the actual node methods
+            namespace["get_workflow_context"] = node_instance.get_workflow_context
+            namespace["set_workflow_context"] = node_instance.set_workflow_context
+        else:
+            # Add placeholder functions that warn about unavailability
+            def _get_workflow_context(key: str, default=None):
+                logger.warning(
+                    "get_workflow_context() is not available in PythonCodeNode execution context. Node instance not provided."
+                )
+                return default
+
+            def _set_workflow_context(key: str, value):
+                logger.warning(
+                    "set_workflow_context() is not available in PythonCodeNode execution context. Node instance not provided."
+                )
+
+            namespace["get_workflow_context"] = _get_workflow_context
+            namespace["set_workflow_context"] = _set_workflow_context
 
         # Add sanitized inputs
         namespace.update(sanitized_inputs)
@@ -1222,7 +1261,9 @@ class PythonCodeNode(Node):
         try:
             if self.code:
                 # Execute code string
-                outputs = self.executor.execute_code(self.code, kwargs)
+                outputs = self.executor.execute_code(
+                    self.code, kwargs, node_instance=self
+                )
                 # Return 'result' variable if it exists, otherwise all outputs
                 if "result" in outputs:
                     return {"result": outputs["result"]}
@@ -1454,7 +1495,7 @@ class PythonCodeNode(Node):
         """
         # Execute directly based on execution type
         if self.code:
-            outputs = self.executor.execute_code(self.code, inputs)
+            outputs = self.executor.execute_code(self.code, inputs, node_instance=self)
             return outputs.get("result", outputs)
         elif self.function:
             wrapper = FunctionWrapper(self.function, self.executor)

@@ -49,8 +49,8 @@ class TestValidation:
             code_node.execute(x=5)  # Missing y - will fail at execution
 
         # Direct executor.execute_code works the same way
-        result = code_node.executor.execute_code(code_node.code, {"x": 5, "y": 10})
-        assert result == {"result": 15}
+        namespace = code_node.executor.execute_code(code_node.code, {"x": 5, "y": 10})
+        assert namespace["result"] == 15
 
     def test_type_validation_issue(self):
         """Test that type validation correctly catches mismatches."""

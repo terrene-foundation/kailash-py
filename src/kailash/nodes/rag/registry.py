@@ -512,7 +512,7 @@ builder.connect("strategy_switch", "hybrid_strategy", route="hybrid")
 4. **Monitor Over Time**: Use performance monitor for continuous improvement
 5. **Customize When Needed**: Use configurable pipeline for specific requirements
 
-For detailed examples, see: sdk-users/workflows/by-pattern/rag/
+For detailed examples, see: sdk-users/2-core-concepts/workflows/by-pattern/rag/
 """
 
     def get_strategy_comparison(self) -> Dict[str, Any]:
