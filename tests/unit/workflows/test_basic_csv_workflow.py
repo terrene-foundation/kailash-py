@@ -12,6 +12,9 @@ from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime.local import LocalRuntime
 
+# Mark entire module as requiring isolation due to fixture state issues
+pytestmark = pytest.mark.requires_isolation
+
 
 class TestBasicWorkflow:
     """Test basic workflow construction and execution."""
