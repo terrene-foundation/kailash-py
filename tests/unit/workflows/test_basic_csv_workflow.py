@@ -12,19 +12,13 @@ from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime.local import LocalRuntime
 
-# Mark entire module as requiring isolation due to fixture state issues
-pytestmark = pytest.mark.requires_isolation
+# NOTE: Temporarily disabled requires_isolation due to CI forking issues
+# This test doesn't actually need isolation (no mocking or global state changes)
+# pytestmark = pytest.mark.requires_isolation
 
 
 class TestBasicWorkflow:
     """Test basic workflow construction and execution."""
-
-    def setup_method(self):
-        """Set up test fixtures."""
-        # Ensure nodes are registered in forked process
-        from tests.node_registry_utils import ensure_nodes_registered
-
-        ensure_nodes_registered()
 
     @pytest.fixture
     def sample_csv_file(self, tmp_path):
