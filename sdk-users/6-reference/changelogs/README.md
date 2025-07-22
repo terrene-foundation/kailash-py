@@ -9,10 +9,11 @@ This directory contains the organized changelog for the Kailash Python SDK.
 
 ## Current Version
 
-The current version is **0.8.5** (released 2025-01-22).
+The current version is **0.8.6** (released 2025-07-22).
 
 ## Recent Releases
 
+- [v0.8.6 - 2025-07-22](releases/v0.8.6-2025-07-22.md) - Enhanced Parameter Validation & Debugging
 - [v0.8.5 - 2025-01-22](releases/v0.8.5-2025-01-22.md) - Test Infrastructure & Application Framework Enhancement
 - [v0.7.0 - 2025-07-10](releases/v0.7.0-2025-07-10.md) - Major Framework Release
 - [v0.6.6 - 2025-07-08](releases/v0.6.6-2025-07-08.md) - Infrastructure Enhancements
@@ -23,6 +24,15 @@ The current version is **0.8.5** (released 2025-01-22).
 ## All Releases
 
 ### 2025
+
+#### July
+- [v0.8.6 - 2025-07-22](releases/v0.8.6-2025-07-22.md)
+- [v0.8.5 - 2025-01-22](releases/v0.8.5-2025-01-22.md)
+- [v0.7.0 - 2025-07-10](releases/v0.7.0-2025-07-10.md)
+- [v0.6.6 - 2025-07-08](releases/v0.6.6-2025-07-08.md)
+- [v0.6.5 - 2025-07-08](releases/v0.6.5-2025-07-08.md)
+- [v0.6.4 - 2025-07-06](releases/v0.6.4-2025-07-06.md)
+- [v0.6.3 - 2025-07-05](releases/v0.6.3-2025-07-05.md)
 
 #### June
 - [v0.4.2 - 2025-06-18](releases/v0.4.2-2025-06-18.md)
