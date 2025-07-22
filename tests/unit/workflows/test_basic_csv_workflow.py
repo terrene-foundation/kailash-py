@@ -22,6 +22,7 @@ class TestBasicWorkflow:
         """Clean up after each test method."""
         # Ensure any lingering state is cleaned up
         import gc
+
         gc.collect()
 
     @pytest.fixture
