@@ -51,14 +51,14 @@ setup(
             "pygraphviz>=1.9",
         ],
         "dataflow": [
-            "kailash-dataflow>=0.1.0",
+            "kailash-dataflow>=0.3.1",
         ],
         "nexus": [
-            "kailash-nexus>=1.0.0",
+            "kailash-nexus>=1.0.3",
         ],
         "all": [
-            "kailash-dataflow>=0.1.0",
-            "kailash-nexus>=1.0.0",
+            "kailash-dataflow>=0.3.1",
+            "kailash-nexus>=1.0.3",
         ],
     },
     # Entry points for CLI

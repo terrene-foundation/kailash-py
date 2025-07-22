@@ -9,11 +9,11 @@ This directory contains the organized changelog for the Kailash Python SDK.
 
 ## Current Version
 
-The current version is **0.8.5** (released 2025-07-20).
+The current version is **0.8.5** (released 2025-01-22).
 
 ## Recent Releases
 
-- [v0.8.5 - 2025-07-20](releases/v0.8.5-2025-07-20.md) - Architecture Cleanup & Enterprise Security
+- [v0.8.5 - 2025-01-22](releases/v0.8.5-2025-01-22.md) - Test Infrastructure & Application Framework Enhancement
 - [v0.7.0 - 2025-07-10](releases/v0.7.0-2025-07-10.md) - Major Framework Release
 - [v0.6.6 - 2025-07-08](releases/v0.6.6-2025-07-08.md) - Infrastructure Enhancements
 - [v0.6.5 - 2025-07-08](releases/v0.6.5-2025-07-08.md) - Real MCP Execution Default
