@@ -19,6 +19,13 @@ pytestmark = pytest.mark.requires_isolation
 class TestBasicWorkflow:
     """Test basic workflow construction and execution."""
 
+    def setup_method(self):
+        """Set up test fixtures."""
+        # Ensure nodes are registered in forked process
+        from tests.node_registry_utils import ensure_nodes_registered
+
+        ensure_nodes_registered()
+
     @pytest.fixture
     def sample_csv_file(self, tmp_path):
         """Create a sample CSV file for testing."""
