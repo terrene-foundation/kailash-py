@@ -15,10 +15,10 @@ Load these files before starting (DO NOT proceed until loaded):
 - `todos/000-master.md` - Current project state and priorities
 
 **For implementation guidance during development, remember these key resource locations** (use MCP tools to search when needed):
-- `sdk-users/developer/` - Core implementation guides and patterns
-- `sdk-users/nodes/` - Node selection and usage patterns
-- `sdk-users/cheatsheet/` - Copy-paste implementation patterns
-- `sdk-users/validation/common-mistakes.md` - Error database with solutions
+- `sdk-users/3-development/` - Core implementation guides and patterns
+- `sdk-users/2-core-concepts/nodes/` - Node selection and usage patterns
+- `sdk-users/2-core-concepts/cheatsheet/` - Copy-paste implementation patterns
+- `sdk-users/2-core-concepts/validation/common-mistakes.md` - Error database with solutions
 
 ### Framework-First Approach (MANDATORY)
 Check for existing framework solutions that can accelerate implementation (use MCP tools to search):
@@ -28,12 +28,15 @@ Check for existing framework solutions that can accelerate implementation (use M
 
 ### Critical Understanding Confirmation
 After loading the essential files, you MUST confirm you understand:
-- **3-tier testing strategy** (`sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`)
+- **3-tier testing strategy** (`sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`)
   - **Tier 1 requirements**: Fast (<1s), isolated, can use mocks, no external dependencies, no sleep
   - **NO MOCKING policy** for Tier 2/3 tests - this is absolutely critical
   - Real Docker infrastructure requirement - never skip this for integration/E2E tests
 - **Todo management system** The todo management system is two-tiered: Repo level todos are in `todos/` and module level todos are in their respective `src/` sub-directories.
-- **Available frameworks** in `sdk-users/apps/` that can provide ready-made solutions
+- **Available frameworks** in `sdk-users/apps/` that can provide ready-made solutions. Demonstrate your understanding by showing me:
+  - What frameworks are available and what do they provide
+  - How they can be used to accelerate implementation
+  - How to implement using these frameworks
 - **How to use MCP tools** to search relevant documentation when needed
 
 **Search relevant documentation as needed during implementation using MCP tools instead of loading everything upfront.**
@@ -42,7 +45,7 @@ After loading the essential files, you MUST confirm you understand:
 Put on your ultrathink cap. Before we begin any implementation, you MUST analyze deeply and provide specific answers to these questions:
 
 1. **What are the most likely failure points for this specific task?**
-   - Consider past patterns from `sdk-users/validation/common-mistakes.md`
+   - Consider past patterns from `sdk-users/2-core-concepts/validation/common-mistakes.md`
    - Think about integration points that commonly break
    - Identify areas where tests typically fail
 
@@ -179,7 +182,7 @@ Update the todo management system before starting implementation. This ensures p
 
 ## 4. TEST-FIRST DEVELOPMENT
 
-Write tests BEFORE implementation. This prevents missing tests and ensures working code. You MUST follow the 3-tier testing strategy exactly as specified in `sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`.
+Write tests BEFORE implementation. This prevents missing tests and ensures working code. You MUST follow the 3-tier testing strategy exactly as specified in `sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`.
 
 **Always ensure that your TDD covers all the detailed todo entries**
 
@@ -347,9 +350,9 @@ Ensure that no tests are trivial:
 Validate ALL documentation updates.
 
 **Important implementation guidance docs**:
-- `sdk-users/developer/` - Core implementation guides and patterns
-- `sdk-users/nodes/` - Node selection and usage patterns
-- `sdk-users/cheatsheet/` - Copy-paste implementation patterns
+- `sdk-users/3-development/` - Core implementation guides and patterns
+- `sdk-users/2-core-concepts/nodes/` - Node selection and usage patterns
+- `sdk-users/2-core-concepts/cheatsheet/` - Copy-paste implementation patterns
 - `sdk-users/migration-guides/` - Migration guides for breaking changes
 - `sdk-users/apps/` - Application-specific documentation
 
@@ -368,7 +371,7 @@ You MUST show me the validation results for each file:
 
 Always run `./tests/utils/test-env up && ./tests/utils/test-env status` before running documentation tests. Use real services, not mocks.
 
-Cross-reference the actual SDK implementation and the corresponding tests in `tests/` to understand the expected behavior and correct usage patterns. Tests in `tests/` are written in accordance with the policies in `sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`.
+Cross-reference the actual SDK implementation and the corresponding tests in `tests/` to understand the expected behavior and correct usage patterns. Tests in `tests/` are written in accordance with the policies in `sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`.
 
 **Show me validation results for each file:**
 - File: [path to documentation file]
@@ -379,7 +382,7 @@ Cross-reference the actual SDK implementation and the corresponding tests in `te
 
 ### Full Test Suite Execution
 Run complete test suite in the correct order. You MUST show me the COMPLETE output - do not summarize anything.
-Please follow our 3-tier testing strategy exactly as specified in `sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`
+Please follow our 3-tier testing strategy exactly as specified in `sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`
 
 1. **Tier 1 (all unit tests):**
    `pytest tests/unit/ -v`

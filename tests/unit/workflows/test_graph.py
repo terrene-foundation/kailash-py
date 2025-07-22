@@ -18,10 +18,19 @@ class MockNode(Node):
         self.node_id = node_id
         self.name = name or node_id
         self.config = kwargs
-
-    def get_parameters(self) -> dict[str, Any]:
-        """Get node parameters."""
-        return {}
+    
+    def get_parameters(self):
+        """Define input parameters for the mock node."""
+        from kailash.nodes.base import NodeParameter
+        return {
+            "value": NodeParameter(
+                name="value",
+                type=float,
+                required=False,
+                description="Input value parameter",
+                default=0.0
+            )
+        }
 
     def run(self, **kwargs) -> dict[str, Any]:
         """Run node."""
@@ -57,6 +66,7 @@ def mock_get(node_type: str):
 NodeRegistry.get = mock_get
 
 
+@pytest.mark.requires_isolation
 class TestWorkflow:
     """Test Workflow class."""
 
@@ -237,6 +247,7 @@ class TestWorkflow:
         assert "Test Workflow" in str_repr
 
 
+@pytest.mark.requires_isolation
 class TestWorkflowBuilder:
     """Test WorkflowBuilder class."""
 
@@ -346,8 +357,8 @@ class TestWorkflowBuilder:
             "workflow_id": "test",
             "name": "Test Workflow",
             "nodes": [
-                {"type": "MockNode", "id": "node1", "config": {"param": "value"}},
-                {"type": "MockNode", "id": "node2"},
+                {"type": "MockNode", "id": "node1", "config": {"value": 1.0}},
+                {"type": "MockNode", "id": "node2", "config": {"value": 2.0}},
             ],
             "connections": [
                 {

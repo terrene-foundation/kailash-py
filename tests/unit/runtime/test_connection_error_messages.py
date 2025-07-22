@@ -301,7 +301,7 @@ class TestEnhancedErrorFormatter:
         suggestion = ValidationSuggestion(
             message="SQL injection detected",
             code_example="Use parameterized queries",
-            documentation_link="sdk-users/5-enterprise/security/sql-injection.md",
+            documentation_link="sdk-users/5-enterprise/security-patterns.md#sql-injection",
         )
 
         error_msg = formatter.format_enhanced_error(
@@ -364,7 +364,7 @@ workflow.add_connection("reader", "data", "processor", "input")"""
         suggestion = ValidationSuggestion(
             message="Connection setup required",
             code_example=multiline_example,
-            documentation_link="sdk-users/2-core-concepts/cheatsheet/005-connection-patterns.md",
+            documentation_link="sdk-users/2-core-concepts/patterns/connection-patterns.md",
         )
 
         error_msg = formatter.format_enhanced_error(
@@ -418,7 +418,7 @@ class TestEnhancedErrorFormatterAdditional:
         suggestion = ValidationSuggestion(
             message="Use parameterized queries to prevent SQL injection",
             code_example="db.execute('SELECT * FROM users WHERE id = ?', [user_id])",
-            documentation_link="sdk-users/5-enterprise/security/sql-injection.md",
+            documentation_link="sdk-users/5-enterprise/security-patterns.md#sql-injection",
         )
 
         error_msg = formatter.format_security_error(

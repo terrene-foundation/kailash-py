@@ -15,6 +15,7 @@ from kailash.edge.migration.edge_migrator import (
     MigrationProgress,
     MigrationStrategy,
 )
+from kailash.edge.migration.edge_migration_service import EdgeMigrationService
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 
@@ -59,18 +60,21 @@ class EdgeMigrationNode(AsyncNode):
         """Initialize edge migration node."""
         super().__init__(**kwargs)
 
-        # Extract configuration
-        checkpoint_interval = kwargs.get("checkpoint_interval", 60)
-        sync_batch_size = kwargs.get("sync_batch_size", 1000)
-        bandwidth_limit_mbps = kwargs.get("bandwidth_limit_mbps")
-        enable_compression = kwargs.get("enable_compression", True)
+        # Extract node-specific configuration
+        self.node_config = {
+            "checkpoint_interval": kwargs.get("checkpoint_interval", 60),
+            "sync_batch_size": kwargs.get("sync_batch_size", 1000),
+            "bandwidth_limit_mbps": kwargs.get("bandwidth_limit_mbps"),
+            "enable_compression": kwargs.get("enable_compression", True),
+        }
 
-        # Initialize migrator
-        self.migrator = EdgeMigrator(
-            checkpoint_interval=checkpoint_interval,
-            sync_batch_size=sync_batch_size,
-            bandwidth_limit_mbps=bandwidth_limit_mbps,
-            enable_compression=enable_compression,
+        # Get reference to shared migration service
+        self.migration_service = EdgeMigrationService(self.node_config)
+        
+        # Get migrator instance from shared service with node-specific config
+        self.node_id = f"edge_migration_node_{id(self)}"
+        self.migrator = self.migration_service.get_migrator_for_node(
+            self.node_id, self.node_config
         )
 
         self._migrator_started = False

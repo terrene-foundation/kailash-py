@@ -159,6 +159,7 @@ class StateTestModelManager:
         assert state.count == 0  # Original unchanged
 
 
+@pytest.mark.requires_isolation
 class TestWorkflowStateWrapper:
     """Tests for the WorkflowStateWrapper class."""
 

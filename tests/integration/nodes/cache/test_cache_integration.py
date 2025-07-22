@@ -96,7 +96,7 @@ class TestCacheNodeIntegration:
             value=test_data,
             backend="redis",
             redis_url="redis://localhost:6380",
-            ttl=2,  # 2 seconds
+            ttl=1,  # 1 second
         )
 
         # Should be available immediately
@@ -108,8 +108,8 @@ class TestCacheNodeIntegration:
         )
         assert result["hit"] is True
 
-        # Wait for expiration
-        time.sleep(0.1)
+        # Wait for expiration (longer than TTL)
+        time.sleep(1.1)
 
         # Should be expired
         expired_result = redis_cache_node.execute(

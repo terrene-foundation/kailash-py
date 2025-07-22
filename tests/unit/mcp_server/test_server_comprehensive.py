@@ -769,7 +769,7 @@ class TestMCPServerRunMethod:
             mock_logger.info.assert_any_call(
                 "Starting enhanced MCP server: test-server"
             )
-            mock_logger.info.assert_any_call("Starting FastMCP server...")
+            mock_logger.info.assert_any_call("Starting FastMCP server in STDIO mode...")
 
     def test_run_method_with_transport_sse(self):
         """Test run method with SSE transport."""
@@ -798,7 +798,7 @@ class TestMCPServerRunMethod:
             mock_logger.info.assert_any_call(
                 "Starting enhanced MCP server: test-server"
             )
-            mock_logger.info.assert_any_call("Starting FastMCP server...")
+            mock_logger.info.assert_any_call("Starting FastMCP server in STDIO mode...")
 
     def test_run_method_initializes_mcp(self):
         """Test run method initializes MCP if not already initialized."""

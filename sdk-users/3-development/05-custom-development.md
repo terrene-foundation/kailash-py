@@ -1,6 +1,6 @@
 # Custom Development - Build Nodes & Extensions
 
-*Create custom nodes and extend Kailash SDK functionality*
+*Create enterprise-grade custom nodes with proper parameter handling and security*
 
 ## Prerequisites
 
@@ -9,11 +9,53 @@
 - Understanding of Python classes and inheritance
 - Familiarity with type hints
 
+## 🚨 CRITICAL: SDK Nodes vs Custom Nodes
+
+### **Fundamental Pattern Difference**
+
+The Kailash SDK has **different patterns** for SDK nodes vs custom nodes:
+
+#### **SDK Nodes (String-based)**
+```python
+# ✅ SDK nodes use string references
+workflow.add_node("PythonCodeNode", "processor", {"code": "..."})
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+```
+
+#### **Custom Nodes (Class-based)**
+```python
+# ✅ Custom nodes use class references
+from myapp.nodes import CustomProcessorNode
+workflow.add_node(CustomProcessorNode, "processor", {"threshold": 0.8})
+```
+
+#### **Common Mistake**
+```python
+# ❌ WRONG: String reference for custom node
+workflow.add_node("CustomProcessorNode", "processor", {})
+# ERROR: Node 'CustomProcessorNode' not found in registry
+```
+
+### **Understanding the Warning**
+
+When using custom nodes, you'll see:
+```
+✅ CUSTOM NODE USAGE CORRECT
+
+Pattern: add_node(CustomProcessorNode, 'processor', {...})
+Status: This is the CORRECT pattern for custom nodes
+
+⚠️  IGNORE "preferred pattern" suggestions for custom nodes
+String references only work for @register_node() decorated SDK nodes.
+```
+
+**This warning is expected and correct** - it confirms you're using the right pattern.
+
 ## Basic Custom Node Structure
 
 ### Essential Rules for Custom Nodes
 
-All custom nodes must inherit from the base `Node` class and implement required methods:
+All custom nodes must inherit from `Node` and follow these patterns:
 
 ```python
 from typing import Dict, Any
@@ -22,16 +64,16 @@ from kailash.nodes.base import Node, NodeParameter
 class CustomProcessorNode(Node):
     """Custom data processing node."""
 
-    def __init__(self, name, processing_mode: str = "standard", **kwargs):
+    def __init__(self, **kwargs):
         # ⚠️ CRITICAL: Set attributes BEFORE calling super().__init__()
-        self.processing_mode = processing_mode
+        self.processing_mode = kwargs.get("processing_mode", "standard")
         self.threshold = kwargs.get("threshold", 0.75)
-
+        
         # NOW call parent init
-        super().__init__(name=name)
+        super().__init__(**kwargs)
 
     def get_parameters(self) -> Dict[str, NodeParameter]:
-        """Define input/output parameters."""
+        """Define ALL parameters the node accepts."""
         return {
             "input_data": NodeParameter(
                 name="input_data",
@@ -39,696 +81,395 @@ class CustomProcessorNode(Node):
                 required=True,
                 description="Data to process"
             ),
-            "config": NodeParameter(
-                name="config",
-                type=dict,
+            "threshold": NodeParameter(
+                name="threshold",
+                type=float,
                 required=False,
-                default={},
-                description="Processing configuration"
+                default=0.75,
+                description="Processing threshold"
+            ),
+            "processing_mode": NodeParameter(
+                name="processing_mode",
+                type=str,
+                required=False,
+                default="standard",
+                description="Processing mode"
             )
         }
 
     def run(self, **kwargs) -> Dict[str, Any]:
-        """Main execution logic - must be named 'run' not 'execute'."""
+        """Execute node logic. NEVER override execute()!"""
+        # SDK only passes parameters declared in get_parameters()
         input_data = kwargs.get("input_data", [])
-        config = kwargs.get("config", {})
+        threshold = kwargs.get("threshold", self.threshold)
+        mode = kwargs.get("processing_mode", self.processing_mode)
+        
+        # Process data
+        result = self._process_data(input_data, threshold, mode)
+        
+        return {"result": result}
 
-        # Process data based on mode
-        if self.processing_mode == "advanced":
-            result = self._advanced_processing(input_data, config)
-        else:
-            result = self._standard_processing(input_data, config)
-
-        return {"result": result, "processing_mode": self.processing_mode}
-
-    def _standard_processing(self, data: list, config: dict) -> Any:
-        """Standard processing implementation."""
-        return [item for item in data if self._validate_item(item)]
-
-    def _advanced_processing(self, data: list, config: dict) -> Any:
-        """Advanced processing implementation."""
-        processed = []
-        for item in data:
-            if self._validate_item(item):
-                enhanced_item = self._enhance_item(item, config)
-                processed.append(enhanced_item)
-        return processed
-
-    def _validate_item(self, item) -> bool:
-        """Validate individual items."""
-        return item is not None
-
-    def _enhance_item(self, item, config: dict) -> Any:
-        """Enhance item with additional data."""
-        from datetime import datetime
-
-        if isinstance(item, dict):
-            item["processed_at"] = datetime.now().isoformat()
-            item["enhancement_level"] = config.get("level", "basic")
-        return item
+    def _process_data(self, data, threshold, mode):
+        """Internal processing logic."""
+        # Your custom logic here
+        return [item for item in data if item > threshold]
 ```
 
-### Common Mistakes to Avoid
+## 🚨 Parameter Declaration Best Practices
+
+### **The Silent Parameter Dropping Issue**
+
+The SDK **ONLY** injects parameters declared in `get_parameters()`:
 
 ```python
-# ❌ WRONG - Setting attributes after super().__init__()
-class BadNode(Node):
-    def __init__(self, name, **kwargs):
-        super().__init__(name=name)  # Parent validates here!
-        self.my_param = kwargs.get("my_param")  # Too late!
+class BrokenNode(Node):
+    def get_parameters(self):
+        return {}  # ❌ Empty! No parameters declared
+    
+    def run(self, **kwargs):
+        # kwargs will be EMPTY even if workflow provides parameters!
+        data = kwargs.get("data")  # Always None!
+        return {"result": data}
 
-# ✅ CORRECT - Set attributes first
-class GoodNode(Node):
-    def __init__(self, name, **kwargs):
-        self.my_param = kwargs.get("my_param", "default")
-        super().__init__(name=name)
-
-# ❌ WRONG - Using wrong method name
-def execute(self, **kwargs):  # Won't be called!
-    pass
-
-# ✅ CORRECT - Must use 'run' method
-def run(self, **kwargs):
-    pass
-
-# ❌ WRONG - Not returning dict with 'result' key
-def run(self, **kwargs):
-    return "processed data"  # Wrong format!
-
-# ✅ CORRECT - Return dict with result
-def run(self, **kwargs):
-    return {"result": "processed data"}
+# In workflow:
+workflow.add_node(BrokenNode, "broken", {"data": [1,2,3]})
+# The "data" parameter is SILENTLY DROPPED!
 ```
 
-## NodeParameter Definition
-
-### Parameter Types and Validation
+### **Correct Parameter Declaration**
 
 ```python
-def get_parameters(self) -> Dict[str, NodeParameter]:
-    """Define all node parameters with proper types."""
-    return {
-        # String parameter
-        "text_input": NodeParameter(
-            name="text_input",
-            type=str,
-            required=True,
-            description="Text to process"
-        ),
-
-        # List parameter with default
-        "items": NodeParameter(
-            name="items",
-            type=list,
-            required=False,
-            default=[],
-            description="List of items to process"
-        ),
-
-        # Dict parameter for configuration
-        "settings": NodeParameter(
-            name="settings",
-            type=dict,
-            required=False,
-            default={"mode": "standard"},
-            description="Processing settings"
-        ),
-
-        # Numeric parameters
-        "threshold": NodeParameter(
-            name="threshold",
-            type=float,
-            required=False,
-            default=0.75,
-            description="Processing threshold"
-        ),
-
-        # Boolean flag
-        "verbose": NodeParameter(
-            name="verbose",
-            type=bool,
-            required=False,
-            default=False,
-            description="Enable verbose output"
-        )
-    }
-```
-
-### Parameter Access in run()
-
-```python
-def run(self, **kwargs) -> Dict[str, Any]:
-    """Access parameters safely with defaults."""
-    # Get required parameters
-    text_input = kwargs["text_input"]  # Will raise KeyError if missing
-
-    # Get optional parameters with defaults
-    items = kwargs.get("items", [])
-    settings = kwargs.get("settings", {})
-    threshold = kwargs.get("threshold", self.threshold)  # Use instance default
-    verbose = kwargs.get("verbose", False)
-
-    # Process based on parameters
-    if verbose:
-        print(f"Processing {len(items)} items with threshold {threshold}")
-
-    # Your processing logic here
-    result = self._process(text_input, items, settings, threshold)
-
-    return {
-        "result": result,
-        "items_processed": len(items),
-        "threshold_used": threshold
-    }
-```
-
-## Error Handling in Custom Nodes
-
-### Comprehensive Error Management
-
-```python
-import logging
-from typing import Optional
-
-logger = logging.getLogger(__name__)
-
-class RobustProcessorNode(Node):
-    """Node with comprehensive error handling."""
-
-    def __init__(self, name, error_mode: str = "catch", **kwargs):
-        self.error_mode = error_mode  # "catch", "raise", or "partial"
-        self.max_errors = kwargs.get("max_errors", 10)
-        super().__init__(name=name)
-
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+class WorkingNode(Node):
+    def get_parameters(self):
         return {
             "data": NodeParameter(
                 name="data",
                 type=list,
                 required=True,
-                description="Data to process"
+                description="Input data to process"
             )
         }
-
-    def run(self, **kwargs) -> Dict[str, Any]:
-        """Process with error handling."""
-        try:
-            data = kwargs.get("data", [])
-
-            # Input validation
-            if not isinstance(data, list):
-                raise TypeError(f"Expected list, got {type(data).__name__}")
-
-            if not data:
-                raise ValueError("No data provided")
-
-            # Process with individual error handling
-            results = []
-            errors = []
-
-            for i, item in enumerate(data):
-                try:
-                    result = self._process_item(item, i)
-                    results.append(result)
-
-                except Exception as e:
-                    error_msg = f"Item {i}: {str(e)}"
-                    errors.append(error_msg)
-                    logger.warning(error_msg)
-
-                    if len(errors) >= self.max_errors:
-                        logger.error(f"Max errors ({self.max_errors}) reached")
-                        if self.error_mode == "raise":
-                            raise RuntimeError(f"Too many errors: {len(errors)}")
-                        break
-
-                    if self.error_mode == "raise":
-                        raise
-
-            # Return comprehensive result
-            return {
-                "result": results,
-                "success_count": len(results),
-                "error_count": len(errors),
-                "errors": errors[:10],  # Limit error list size
-                "status": self._determine_status(results, errors)
-            }
-
-        except Exception as e:
-            logger.error(f"Processing failed: {e}", exc_info=True)
-
-            if self.error_mode == "raise":
-                raise
-
-            return {
-                "result": [],
-                "error": str(e),
-                "status": "error"
-            }
-
-    def _process_item(self, item: Any, index: int) -> Any:
-        """Process individual item with validation."""
-        if item is None:
-            raise ValueError("Item is None")
-
-        # Your processing logic here
-        return {"original": item, "processed": True, "index": index}
-
-    def _determine_status(self, results: list, errors: list) -> str:
-        """Determine overall processing status."""
-        if not errors:
-            return "success"
-        elif not results:
-            return "error"
-        else:
-            return "partial"
+    
+    def run(self, **kwargs):
+        data = kwargs["data"]  # ✅ Now available!
+        return {"result": data}
 ```
 
-## Async Custom Nodes
+### **Parameter Validation**
 
-### Basic Async Node
+The SDK now provides comprehensive parameter validation:
 
 ```python
-import asyncio
-from typing import Dict, Any
+# During workflow.build(), the SDK will:
+# 1. Detect empty parameter declarations with workflow config
+# 2. Warn about undeclared parameters that will be ignored
+# 3. Check for missing required parameters
+# 4. Validate parameter types
 
-class AsyncDataFetcherNode(Node):
-    """Async node for concurrent data fetching."""
-
-    def __init__(self, name, timeout: float = 30.0, **kwargs):
-        self.timeout = timeout
-        self.max_concurrent = kwargs.get("max_concurrent", 5)
-        super().__init__(name=name)
-
-    def get_parameters(self) -> Dict[str, NodeParameter]:
-        return {
-            "urls": NodeParameter(
-                name="urls",
-                type=list,
-                required=True,
-                description="URLs to fetch"
-            )
-        }
-
-    async def async_run(self, **kwargs) -> Dict[str, Any]:
-        """Async execution method."""
-        urls = kwargs.get("urls", [])
-
-        # Create semaphore for concurrency control
-        semaphore = asyncio.Semaphore(self.max_concurrent)
-
-        # Fetch all URLs concurrently
-        tasks = [self._fetch_with_limit(url, semaphore) for url in urls]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Process results
-        successful = []
-        failed = []
-
-        for url, result in zip(urls, results):
-            if isinstance(result, Exception):
-                failed.append({"url": url, "error": str(result)})
-            else:
-                successful.append({"url": url, "data": result})
-
-        return {
-            "result": successful,
-            "failed": failed,
-            "success_rate": len(successful) / len(urls) if urls else 0
-        }
-
-    async def _fetch_with_limit(self, url: str, semaphore: asyncio.Semaphore) -> Any:
-        """Fetch URL with concurrency limit."""
-        async with semaphore:
-            return await self._fetch_url(url)
-
-    async def _fetch_url(self, url: str) -> Any:
-        """Simulate async URL fetching."""
-        # In real implementation, use aiohttp or similar
-        await asyncio.sleep(0.1)  # Simulate network delay
-        return f"Data from {url}"
-
-    def run(self, **kwargs) -> Dict[str, Any]:
-        """Sync wrapper for async execution."""
-        # Get or create event loop
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        # Run async method
-        return loop.run_until_complete(self.async_run(**kwargs))
+# Example validation messages:
+# ERROR PAR001: Node declares no parameters but workflow provides ['data', 'config']
+# WARNING PAR002: Parameters ['extra'] not declared - will be ignored by SDK
+# ERROR PAR004: Required parameter 'input_data' not provided by workflow
 ```
 
-## Advanced Custom Node Patterns
+## Secure Enterprise Nodes
 
-### Stateful Node with Context
+### **Using SecureGovernedNode**
+
+For enterprise applications, use `SecureGovernedNode` for built-in security:
 
 ```python
-class StatefulProcessorNode(Node):
-    """Node that maintains state across executions."""
+from kailash.nodes.governance import SecureGovernedNode
 
-    def __init__(self, name, **kwargs):
-        self.state = {}
-        self.max_history = kwargs.get("max_history", 100)
-        self.processing_history = []
-        super().__init__(name=name)
-
-    def get_parameters(self) -> Dict[str, NodeParameter]:
+class EnterpriseProcessorNode(SecureGovernedNode):
+    """Enterprise-grade processor with security and governance."""
+    
+    def get_parameters(self):
         return {
-            "data": NodeParameter(
-                name="data",
+            "sensitive_data": NodeParameter(
+                name="sensitive_data",
                 type=dict,
-                required=True
-            ),
-            "operation": NodeParameter(
-                name="operation",
-                type=str,
                 required=True,
-                description="Operation: 'add', 'update', 'remove', 'get'"
+                description="Sensitive data requiring validation"
             ),
-            "key": NodeParameter(
-                name="key",
-                type=str,
-                required=False
+            "user_context": NodeParameter(
+                name="user_context",
+                type=dict,
+                required=True,
+                description="User authentication context"
             )
         }
-
-    def run(self, **kwargs) -> Dict[str, Any]:
-        """Execute stateful operation."""
-        data = kwargs.get("data", {})
-        operation = kwargs.get("operation", "get")
-        key = kwargs.get("key")
-
-        # Track operation
-        self._add_to_history(operation, key)
-
-        # Execute operation
-        if operation == "add":
-            result = self._add_to_state(key, data)
-        elif operation == "update":
-            result = self._update_state(key, data)
-        elif operation == "remove":
-            result = self._remove_from_state(key)
-        elif operation == "get":
-            result = self._get_from_state(key)
-        else:
-            raise ValueError(f"Unknown operation: {operation}")
-
-        return {
-            "result": result,
-            "state_size": len(self.state),
-            "operation": operation
-        }
-
-    def _add_to_state(self, key: str, data: dict) -> Any:
-        """Add data to state."""
-        if key in self.state:
-            raise KeyError(f"Key '{key}' already exists")
-        self.state[key] = data
-        return data
-
-    def _update_state(self, key: str, data: dict) -> Any:
-        """Update existing state."""
-        if key not in self.state:
-            raise KeyError(f"Key '{key}' not found")
-        self.state[key].update(data)
-        return self.state[key]
-
-    def _remove_from_state(self, key: str) -> Any:
-        """Remove from state."""
-        if key not in self.state:
-            raise KeyError(f"Key '{key}' not found")
-        return self.state.pop(key)
-
-    def _get_from_state(self, key: Optional[str]) -> Any:
-        """Get from state."""
-        if key:
-            return self.state.get(key)
-        return dict(self.state)  # Return copy of full state
-
-    def _add_to_history(self, operation: str, key: Optional[str]):
-        """Track operation history."""
-        from datetime import datetime
-
-        self.processing_history.append({
-            "timestamp": datetime.now().isoformat(),
-            "operation": operation,
-            "key": key
-        })
-
-        # Limit history size
-        if len(self.processing_history) > self.max_history:
-            self.processing_history.pop(0)
+    
+    def run_governed(self, **kwargs):
+        """Implement governed logic (called after validation)."""
+        # All inputs are pre-validated and sanitized
+        sensitive_data = kwargs["sensitive_data"]
+        user_context = kwargs["user_context"]
+        
+        # Your secure processing logic
+        result = self._process_with_audit(sensitive_data, user_context)
+        
+        return {"secure_result": result}
 ```
 
-### Configurable Processing Pipeline Node
+### **Security Features**
+
+`SecureGovernedNode` provides:
+- ✅ Automatic input sanitization
+- ✅ Parameter declaration validation
+- ✅ Audit logging
+- ✅ Security context management
+- ✅ Performance monitoring
+
+## Import Best Practices
+
+### **Absolute Imports (REQUIRED for Production)**
 
 ```python
-class PipelineNode(Node):
-    """Node with configurable processing pipeline."""
+# ✅ CORRECT: Absolute imports work in production
+from src.myapp.nodes.processors import DataProcessor
+from src.myapp.utils.validators import validate_input
+from src.myapp.contracts.schemas import DataSchema
 
-    def __init__(self, name, pipeline_config: list = None, **kwargs):
-        self.pipeline_config = pipeline_config or ["validate", "transform", "enrich"]
-        self.skip_on_error = kwargs.get("skip_on_error", False)
-        super().__init__(name=name)
-
-    def get_parameters(self) -> Dict[str, NodeParameter]:
-        return {
-            "data": NodeParameter(
-                name="data",
-                type=list,
-                required=True
-            ),
-            "pipeline_overrides": NodeParameter(
-                name="pipeline_overrides",
-                type=list,
-                required=False,
-                description="Override pipeline steps for this execution"
-            )
-        }
-
-    def run(self, **kwargs) -> Dict[str, Any]:
-        """Execute configurable pipeline."""
-        data = kwargs.get("data", [])
-        pipeline = kwargs.get("pipeline_overrides", self.pipeline_config)
-
-        # Available pipeline steps
-        steps = {
-            "validate": self._validate_data,
-            "transform": self._transform_data,
-            "enrich": self._enrich_data,
-            "filter": self._filter_data,
-            "aggregate": self._aggregate_data
-        }
-
-        # Execute pipeline
-        current_data = data
-        pipeline_results = {}
-
-        for step_name in pipeline:
-            if step_name not in steps:
-                raise ValueError(f"Unknown pipeline step: {step_name}")
-
-            try:
-                step_func = steps[step_name]
-                current_data = step_func(current_data)
-                pipeline_results[step_name] = "success"
-
-            except Exception as e:
-                pipeline_results[step_name] = f"error: {str(e)}"
-
-                if not self.skip_on_error:
-                    raise
-
-                logger.warning(f"Pipeline step '{step_name}' failed: {e}")
-
-        return {
-            "result": current_data,
-            "pipeline_executed": pipeline,
-            "pipeline_results": pipeline_results
-        }
-
-    def _validate_data(self, data: list) -> list:
-        """Validate data items."""
-        validated = []
-        for item in data:
-            if self._is_valid(item):
-                validated.append(item)
-        return validated
-
-    def _transform_data(self, data: list) -> list:
-        """Transform data items."""
-        return [self._transform_item(item) for item in data]
-
-    def _enrich_data(self, data: list) -> list:
-        """Enrich data with additional information."""
-        from datetime import datetime
-
-        enriched = []
-        for item in data:
-            if isinstance(item, dict):
-                item["enriched_at"] = datetime.now().isoformat()
-                item["source"] = "PipelineNode"
-            enriched.append(item)
-        return enriched
-
-    def _filter_data(self, data: list) -> list:
-        """Filter data based on criteria."""
-        return [item for item in data if self._meets_criteria(item)]
-
-    def _aggregate_data(self, data: list) -> list:
-        """Aggregate data."""
-        # Simple aggregation example
-        if not data:
-            return []
-
-        return [{
-            "count": len(data),
-            "items": data[:10],  # First 10 items
-            "summary": "Aggregated data"
-        }]
-
-    def _is_valid(self, item) -> bool:
-        """Check if item is valid."""
-        return item is not None
-
-    def _transform_item(self, item):
-        """Transform individual item."""
-        if isinstance(item, dict):
-            return {k: v for k, v in item.items() if v is not None}
-        return item
-
-    def _meets_criteria(self, item) -> bool:
-        """Check if item meets filter criteria."""
-        if isinstance(item, dict):
-            return item.get("active", True)
-        return True
+# ❌ WRONG: Relative imports fail in production
+from ..processors import DataProcessor  # Fails when run from repo root
+from .validators import validate_input  # Fails in Docker
+from utils.helpers import format_data   # Implicit relative - fails
 ```
 
-## Using Custom Nodes in Workflows
+### **Validate Your Imports**
 
-### Registering and Using Custom Nodes
+Use the import validator to ensure production compatibility:
+
+```bash
+# Validate your custom nodes
+python -m kailash.cli.validate_imports src/myapp/nodes
+
+# Fix import issues
+python -m kailash.cli.validate_imports src/myapp/nodes --fix
+```
+
+## Workflow Integration
+
+### **Registering Custom Nodes**
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
+from src.myapp.nodes.custom import CustomProcessorNode
 
-# Create custom node instance
-custom_processor = CustomProcessorNode(
-    name="data_processor",
-    processing_mode="advanced",
-    threshold=0.9
-)
-
-# Method 1: Direct usage (if supported)
+# Create workflow
 workflow = WorkflowBuilder()
 
-# Add custom node to workflow
-# Note: WorkflowBuilder typically uses string node names
-# Check your SDK version for custom node support
-
-# Method 2: Using PythonCodeNode wrapper
-def custom_processing(data, config):
-    """Wrapper function for custom logic."""
-    processor = CustomProcessorNode(name="processor")
-    result = processor.run(input_data=data, config=config)
-    return result
-
-from kailash.nodes.code import PythonCodeNode
-
-workflow.add_node("PythonCodeNode", "custom_processor", {
-    "code": """
-# Use the custom processor
-processor = CustomProcessorNode(name="processor", processing_mode="advanced")
-result = processor.run(input_data=data, config=config)
-"""
+# ✅ CORRECT: Use class reference for custom nodes
+workflow.add_node(CustomProcessorNode, "processor", {
+    "threshold": 0.8,
+    "mode": "advanced"
 })
+
+# Connect nodes
+workflow.add_connection("input", "data", "processor", "input_data")
+workflow.add_connection("processor", "result", "output", "data")
+
+# Build and execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ## Testing Custom Nodes
 
-### Unit Testing Pattern
+### **Unit Testing Pattern**
 
 ```python
 import pytest
-from unittest.mock import Mock, patch
+from src.myapp.nodes.custom import CustomProcessorNode
 
 class TestCustomProcessorNode:
-    """Test suite for CustomProcessorNode."""
-
-    def test_initialization(self):
-        """Test node initialization."""
-        node = CustomProcessorNode(
-            name="test_node",
-            processing_mode="advanced",
-            threshold=0.8
+    def test_parameter_declarations(self):
+        """Test that all parameters are properly declared."""
+        node = CustomProcessorNode()
+        params = node.get_parameters()
+        
+        # Verify required parameters
+        assert "input_data" in params
+        assert params["input_data"].required is True
+        assert params["input_data"].type == list
+        
+    def test_execution_with_valid_data(self):
+        """Test node execution with valid inputs."""
+        node = CustomProcessorNode()
+        
+        # Use execute() for tests, not run()
+        result = node.execute(
+            input_data=[1, 2, 3, 4, 5],
+            threshold=3
         )
-
-        assert node.name == "test_node"
-        assert node.processing_mode == "advanced"
-        assert node.threshold == 0.8
-
-    def test_standard_processing(self):
-        """Test standard processing mode."""
-        node = CustomProcessorNode(name="test", processing_mode="standard")
-
-        result = node.run(
-            input_data=[1, 2, None, 3],
-            config={}
-        )
-
-        assert "result" in result
-        assert len(result["result"]) == 3  # None filtered out
-
-    def test_error_handling(self):
-        """Test error handling."""
-        node = RobustProcessorNode(name="test", error_mode="catch")
-
-        result = node.run(data=[1, None, 3])
-
-        assert result["status"] == "partial"
-        assert result["success_count"] == 2
-        assert result["error_count"] == 1
-
-    @pytest.mark.asyncio
-    async def test_async_node(self):
-        """Test async node execution."""
-        node = AsyncDataFetcherNode(name="test", max_concurrent=2)
-
-        result = await node.async_run(
-            urls=["http://example1.com", "http://example2.com"]
-        )
-
-        assert "result" in result
-        assert len(result["result"]) == 2
-        assert result["success_rate"] == 1.0
+        
+        assert result["result"] == [4, 5]
+    
+    def test_missing_required_parameter(self):
+        """Test that missing required parameters raise errors."""
+        node = CustomProcessorNode()
+        
+        with pytest.raises(ValueError) as exc_info:
+            node.execute(threshold=3)  # Missing input_data
+            
+        assert "Missing required parameter" in str(exc_info.value)
 ```
 
-## Best Practices
+### **Integration Testing**
 
-1. **Always set attributes before super().__init__()**
-2. **Use descriptive parameter names and documentation**
-3. **Handle errors gracefully with informative messages**
-4. **Return consistent result structure**
-5. **Add logging for debugging**
-6. **Write comprehensive tests**
-7. **Document expected inputs and outputs**
-8. **Consider async implementation for I/O operations**
-9. **Validate inputs early in the run() method**
-10. **Keep nodes focused on a single responsibility**
+```python
+def test_custom_node_in_workflow():
+    """Test custom node integration in workflow."""
+    workflow = WorkflowBuilder()
+    
+    # Add custom node
+    workflow.add_node(CustomProcessorNode, "processor", {
+        "threshold": 0.5
+    })
+    
+    # Build should validate parameters
+    built_workflow = workflow.build()
+    
+    # Execute with runtime
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(built_workflow)
+    
+    assert results["processor"]["result"] is not None
+```
 
-## Related Guides
+## Common Mistakes and Solutions
 
-**Prerequisites:**
-- [Fundamentals](01-fundamentals.md) - Core concepts
-- [Workflows](02-workflows.md) - Using nodes in workflows
+### **1. Empty get_parameters()**
+```python
+# ❌ WRONG
+def get_parameters(self):
+    return {}  # All workflow parameters will be ignored!
 
-**Next Steps:**
-- [Advanced Features](03-advanced-features.md) - Enterprise patterns
-- [Production](04-production.md) - Deploying custom nodes
-- [RAG Guide](07-comprehensive-rag-guide.md) - Specialized nodes
+# ✅ CORRECT
+def get_parameters(self):
+    return {
+        "param": NodeParameter(name="param", type=str, required=True)
+    }
+```
+
+### **2. Overriding execute()**
+```python
+# ❌ WRONG
+def execute(self, **kwargs):  # Don't override this!
+    return self.process(kwargs)
+
+# ✅ CORRECT
+def run(self, **kwargs):  # Implement run() instead
+    return self.process(kwargs)
+```
+
+### **3. Using String References**
+```python
+# ❌ WRONG
+workflow.add_node("MyCustomNode", "node1", {})  # Not registered!
+
+# ✅ CORRECT
+workflow.add_node(MyCustomNode, "node1", {})  # Use class
+```
+
+### **4. Relative Imports**
+```python
+# ❌ WRONG
+from .utils import helper  # Fails in production
+
+# ✅ CORRECT
+from src.myapp.nodes.utils import helper  # Absolute import
+```
+
+## Advanced Patterns
+
+### **Async Custom Nodes**
+
+For async operations, inherit from `AsyncNode`:
+
+```python
+from kailash.nodes.base import AsyncNode, NodeParameter
+
+class AsyncDataFetcher(AsyncNode):
+    """Async node for external data fetching."""
+    
+    def get_parameters(self):
+        return {
+            "url": NodeParameter(
+                name="url",
+                type=str,
+                required=True,
+                description="URL to fetch data from"
+            )
+        }
+    
+    async def async_run(self, **kwargs):
+        """Implement async logic here."""
+        url = kwargs["url"]
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                data = await response.json()
+                
+        return {"fetched_data": data}
+```
+
+### **Dynamic Parameter Nodes**
+
+For nodes with dynamic parameters based on configuration:
+
+```python
+class DynamicProcessorNode(Node):
+    """Node with dynamic parameter requirements."""
+    
+    def __init__(self, field_config=None, **kwargs):
+        self.field_config = field_config or {}
+        super().__init__(**kwargs)
+    
+    def get_parameters(self):
+        params = {
+            "base_data": NodeParameter(
+                name="base_data",
+                type=dict,
+                required=True
+            )
+        }
+        
+        # Add dynamic parameters based on config
+        for field_name, field_type in self.field_config.items():
+            params[field_name] = NodeParameter(
+                name=field_name,
+                type=field_type,
+                required=False,
+                description=f"Dynamic field: {field_name}"
+            )
+            
+        return params
+```
+
+## Production Checklist
+
+Before deploying custom nodes:
+
+- [ ] ✅ All parameters declared in `get_parameters()`
+- [ ] ✅ Using absolute imports throughout
+- [ ] ✅ Implementing `run()` not `execute()`
+- [ ] ✅ Using class references in workflows
+- [ ] ✅ Unit tests for parameter validation
+- [ ] ✅ Integration tests with workflows
+- [ ] ✅ Security validation for sensitive data
+- [ ] ✅ Import validation passes
+- [ ] ✅ No relative imports
+- [ ] ✅ Error handling for missing parameters
+
+## Next Steps
+
+- Review [Parameter Passing Patterns](../2-core-concepts/cheatsheet/028-parameter-passing-patterns.md)
+- Explore [SecureGovernedNode Guide](../5-enterprise/patterns/13-secure-governed-nodes.md)
+- Check [Import Validation Guide](../7-gold-standards/absolute-imports-gold-standard.md)
+- Study [Testing Best Practices](12-testing-production-quality.md)
 
 ---
 
-**Build powerful custom nodes to extend Kailash SDK capabilities for your specific needs!**
+**Remember**: Custom nodes use class references, SDK nodes use string references. This is by design and both patterns are correct for their respective use cases.

@@ -194,7 +194,7 @@ class TestAccessControlledRuntime:
             acm.enabled = False
             acm.rules.clear()
 
-    def test_create_controlled_workflow(self):
+    def test_create_controlled_workflow(self, mock_node_factory):
         """Test _create_controlled_workflow method."""
         user = UserContext(
             user_id="test_user",
@@ -205,30 +205,8 @@ class TestAccessControlledRuntime:
 
         runtime = AccessControlledRuntime(user_context=user)
 
-        # Create a simple test node inline
-        from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
-
-        @register_node()
-        class SimpleTestNode2(Node):
-            def __init__(self, **kwargs):
-                metadata = NodeMetadata(
-                    name="SimpleTestNode2", description="Simple test node 2"
-                )
-                super().__init__(metadata=metadata, **kwargs)
-
-            def get_parameters(self):
-                return {
-                    "value": NodeParameter(
-                        name="value",
-                        type=float,
-                        required=True,
-                        description="Test value",
-                    )
-                }
-
-            def run(self, **kwargs):
-                value = kwargs.get("value", 0)
-                return {"result": value * 2}
+        # Create a simple test node using the factory to avoid registry conflicts
+        TestNode = mock_node_factory("SimpleTestNode2", execute_return={"result": 8.0})
 
         # Create original workflow
         builder = WorkflowBuilder()

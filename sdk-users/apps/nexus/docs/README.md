@@ -1,4 +1,4 @@
-# Nexus Documentation
+# Kailash Nexus Documentation
 
 **The Zero-Configuration, Multi-Channel Workflow Platform**
 
@@ -88,3 +88,16 @@ Welcome to Nexus - a revolutionary workflow-native platform that unifies API, CL
 | Single interface (HTTP) | Multi-channel unified (API/CLI/MCP) |
 | Manual error handling | Automatic retry with checkpointing |
 | Lost work on failure | Resumable from checkpoints |
+
+## 📞 Support & Community
+
+- **Issues**: [GitHub Issues](https://github.com/kailash/nexus/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/kailash/nexus/discussions)
+- **Documentation**: This documentation site
+- **Examples**: [GitHub Examples](https://github.com/kailash/nexus/tree/main/examples)
+
+## 🔄 Documentation Updates
+
+This documentation is continuously updated. Last updated: 2025-07-13
+
+**Contributing**: See [CONTRIBUTING.md](../CONTRIBUTING.md) for documentation contribution guidelines.

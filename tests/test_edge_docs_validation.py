@@ -137,11 +137,11 @@ def test_complex_edge_workflow_builds():
 def test_documentation_syntax_patterns():
     """Test that documentation follows correct syntax patterns."""
     doc_files = [
-        "sdk-users/4-features/edge/predictive-warming-guide.md",
-        "sdk-users/4-features/edge/edge-monitoring-guide.md",
-        "sdk-users/4-features/edge/edge-migration-guide.md",
-        "sdk-users/4-features/edge/EDGE_COMPUTING_SUMMARY.md",
-        "sdk-users/4-features/edge/README.md",
+        "sdk-users/3-development/edge/predictive-warming-guide.md",
+        "sdk-users/3-development/edge/edge-monitoring-guide.md",
+        "sdk-users/3-development/edge/edge-migration-guide.md",
+        "sdk-users/3-development/edge/EDGE_COMPUTING_SUMMARY.md",
+        "sdk-users/3-development/edge/README.md",
     ]
 
     base_path = Path("./repos/projects/kailash_python_sdk")
@@ -209,11 +209,11 @@ def test_edge_service_imports():
 def test_documentation_files_exist():
     """Test that all Phase 3 documentation files exist."""
     required_files = [
-        "sdk-users/4-features/edge/predictive-warming-guide.md",
-        "sdk-users/4-features/edge/edge-monitoring-guide.md",
-        "sdk-users/4-features/edge/edge-migration-guide.md",
-        "sdk-users/4-features/edge/EDGE_COMPUTING_SUMMARY.md",
-        "sdk-users/4-features/edge/DOCUMENTATION_FIXES_SUMMARY.md",
+        "sdk-users/3-development/edge/predictive-warming-guide.md",
+        "sdk-users/3-development/edge/edge-monitoring-guide.md",
+        "sdk-users/3-development/edge/edge-migration-guide.md",
+        "sdk-users/3-development/edge/EDGE_COMPUTING_SUMMARY.md",
+        "sdk-users/3-development/edge/DOCUMENTATION_FIXES_SUMMARY.md",
     ]
 
     base_path = Path("./repos/projects/kailash_python_sdk")

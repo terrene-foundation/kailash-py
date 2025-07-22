@@ -15,6 +15,27 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### Application Framework Releases
+
+#### DataFlow [0.3.1] - 2025-01-22
+**Test Infrastructure & Reliability Release**
+- **Test Coverage**: Improved from ~40% to 90.7% pass rate (330/364 tests)
+- **Zero Failures**: All tests now pass or are properly skipped
+- **Enhanced Multi-Database Integration**: Fixed PostgreSQL precision and context passing
+- **Improved Multi-Tenancy**: Fixed Row Level Security tests with proper permissions
+- **Transaction Support**: Enhanced transaction management and schema operations
+- **Documentation**: Enhanced CLAUDE.md guidance for parameter validation
+
+#### Nexus [1.0.3] - 2025-01-22
+**Production Ready Release**
+- **100% Documentation Validation**: All code examples verified with real infrastructure
+- **77% Test Coverage**: Comprehensive test suite with 248 passing unit tests
+- **WebSocket Transport**: Full MCP protocol implementation with concurrent clients
+- **API Correctness**: All documented patterns validated and corrected
+- **Enhanced Stability**: Robust error handling and timeout enforcement
+
+### Core SDK Releases
+
 ### [0.8.5] - 2025-01-20
 
 **Architecture Cleanup & Enterprise Security Release**

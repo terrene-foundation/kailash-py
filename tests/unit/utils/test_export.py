@@ -40,7 +40,7 @@ class TestWorkflowExporter:
         builder = WorkflowBuilder()
         # Use CSVReader which is registered
         builder.add_node(
-            "CSVReaderNode", "csv_reader", config={"file_path": "test.csv"}
+            "CSVReaderNode", "csv_reader", {"file_path": "test.csv"}
         )
         workflow = builder.build("test_workflow")
 

@@ -405,7 +405,7 @@ class StorageFactory:
             if not db_pool:
                 raise ValueError("db_pool is required for database storage")
             return DatabaseStateStorage(
-                db_pool, kwargs.get("table_name", "saga_states")
+                db_pool, kwargs.get("saga_table_name", kwargs.get("table_name", "saga_states"))
             )
         else:
             raise ValueError(f"Unknown storage type: {storage_type}")

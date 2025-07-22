@@ -18,10 +18,10 @@ Load these files before starting (DO NOT proceed until loaded):
 - System architecture documentation if available
 
 **For implementation guidance during development, remember these key resource locations** (use MCP tools to search when needed):
-- `sdk-users/developer/` - Core implementation guides and patterns
-- `sdk-users/nodes/` - Node selection and usage patterns
-- `sdk-users/cheatsheet/` - Copy-paste implementation patterns
-- `sdk-users/validation/common-mistakes.md` - Error database with solutions
+- `sdk-users/3-development/` - Core implementation guides and patterns
+- `sdk-users/2-core-concepts/nodes/` - Node selection and usage patterns
+- `sdk-users/2-core-concepts/cheatsheet/` - Copy-paste implementation patterns
+- `sdk-users/2-core-concepts/validation/common-mistakes.md` - Error database with solutions
 
 ### Framework-First Approach (MANDATORY)
 Check for existing framework solutions that can replace current components (use MCP tools to search):
@@ -31,7 +31,7 @@ Check for existing framework solutions that can replace current components (use 
 
 ### Critical Understanding Confirmation
 After loading the essential files, you MUST confirm you understand:
-- **3-tier testing strategy** (`sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`)
+- **3-tier testing strategy** (`sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`)
   - **Tier 1 requirements**: Fast (<1s), isolated, can use mocks, no external dependencies, no sleep
   - **NO MOCKING policy** for Tier 2/3 tests - this is absolutely critical
   - Real Docker infrastructure requirement - never skip this for integration/E2E tests
@@ -194,7 +194,7 @@ Update the todo management system before starting implementation. This ensures p
 
 ## 4. TEST-FIRST MIGRATION
 
-Write tests BEFORE implementation. This prevents missing tests and ensures working code. You MUST follow the 3-tier testing strategy exactly as specified in `sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`.
+Write tests BEFORE implementation. This prevents missing tests and ensures working code. You MUST follow the 3-tier testing strategy exactly as specified in `sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`.
 
 **Always ensure that your TDD covers all the detailed todo entries**
 
@@ -252,7 +252,7 @@ For each component, you MUST:
 
 ### Mandatory Validation After Each Component
 Run complete test suite in the correct order. You MUST show me the COMPLETE output - do not summarize anything.
-Please follow our 3-tier testing strategy exactly as specified in `sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`
+Please follow our 3-tier testing strategy exactly as specified in `sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`
 
 1. **Tier 1 (all unit tests):**
    `pytest tests/unit/ -v`

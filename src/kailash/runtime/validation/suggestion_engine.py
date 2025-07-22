@@ -89,7 +89,7 @@ class ValidationSuggestionEngine:
             ErrorCategory.CONSTRAINT_VIOLATION: {
                 "message": "The parameter value violates validation constraints. Check the parameter requirements for this node type.",
                 "code_template": '# Ensure parameter meets requirements:\n# {constraint_details}\nworkflow.add_connection("{source}", "{source_port}", "{target}", "{target_port}")\n\n# Or add validation in source node:\nworkflow.add_node("PythonCodeNode", "validator", {{"code": "result = max(0, input_value)"}})',
-                "doc_link": "sdk-users/2-core-concepts/nodes/node-selection-guide.md#parameter-validation",
+                "doc_link": "sdk-users/6-reference/nodes/node-selection-guide.md#parameter-validation",
                 "alternatives": [
                     "Add data validation/transformation before the target node",
                     "Check the node documentation for parameter requirements",
@@ -110,7 +110,7 @@ class ValidationSuggestionEngine:
             ErrorCategory.UNKNOWN: {
                 "message": "An unexpected validation error occurred. Check the error details and node documentation.",
                 "code_template": '# General troubleshooting:\n# 1. Check node documentation for parameter requirements\n# 2. Verify data types and formats\n# 3. Test with simpler data first\nworkflow.add_connection("{source}", "{source_port}", "{target}", "{target_port}")',
-                "doc_link": "sdk-users/3-development/05-troubleshooting.md",
+                "doc_link": "sdk-users/3-development/guides/troubleshooting.md",
                 "alternatives": [
                     "Check the node documentation for specific requirements",
                     "Test with simplified data to isolate the issue",

@@ -489,6 +489,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
                     or "DELETE" in query_upper
                     or "INSERT" in query_upper
                 )
+                and "SELECT" not in query_upper
                 and "RETURNING" not in query_upper
                 and fetch_mode == FetchMode.ALL
             ):
@@ -527,6 +528,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
                         or "DELETE" in query_upper
                         or "INSERT" in query_upper
                     )
+                    and "SELECT" not in query_upper
                     and "RETURNING" not in query_upper
                     and fetch_mode == FetchMode.ALL
                 ):
@@ -2617,33 +2619,49 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
     async def cleanup(self):
         """Clean up database connections."""
+        try:
+            # Check if we have a running event loop
+            loop = asyncio.get_running_loop()
+            if loop.is_closed():
+                # Event loop is closing, skip cleanup
+                return
+        except RuntimeError:
+            # No event loop, skip cleanup
+            return
+
         # Rollback any active transaction
         if self._active_transaction and self._adapter:
             try:
-                await self._adapter.rollback_transaction(self._active_transaction)
-            except Exception:
+                await asyncio.wait_for(
+                    self._adapter.rollback_transaction(self._active_transaction),
+                    timeout=1.0
+                )
+            except (Exception, asyncio.TimeoutError):
                 pass  # Best effort cleanup
             self._active_transaction = None
 
         if self._adapter and self._connected:
-            if self._share_pool and self._pool_key:
-                # Decrement reference count for shared pool
-                async with self._get_pool_lock():
-                    if self._pool_key in self._shared_pools:
-                        adapter, ref_count = self._shared_pools[self._pool_key]
-                        if ref_count > 1:
-                            # Others still using the pool
-                            self._shared_pools[self._pool_key] = (
-                                adapter,
-                                ref_count - 1,
-                            )
-                        else:
-                            # Last reference, close the pool
-                            del self._shared_pools[self._pool_key]
-                            await adapter.disconnect()
-            else:
-                # Dedicated pool, close directly
-                await self._adapter.disconnect()
+            try:
+                if self._share_pool and self._pool_key:
+                    # Decrement reference count for shared pool with timeout
+                    async with await asyncio.wait_for(self._get_pool_lock(), timeout=1.0):
+                        if self._pool_key in self._shared_pools:
+                            adapter, ref_count = self._shared_pools[self._pool_key]
+                            if ref_count > 1:
+                                # Others still using the pool
+                                self._shared_pools[self._pool_key] = (
+                                    adapter,
+                                    ref_count - 1,
+                                )
+                            else:
+                                # Last reference, close the pool
+                                del self._shared_pools[self._pool_key]
+                                await asyncio.wait_for(adapter.disconnect(), timeout=1.0)
+                else:
+                    # Dedicated pool, close directly
+                    await asyncio.wait_for(self._adapter.disconnect(), timeout=1.0)
+            except (Exception, asyncio.TimeoutError):
+                pass  # Best effort cleanup
 
             self._connected = False
             self._adapter = None

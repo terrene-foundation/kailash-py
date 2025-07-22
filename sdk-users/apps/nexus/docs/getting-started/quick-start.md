@@ -136,7 +136,7 @@ app = Nexus(api_port=8080, mcp_port=3002)
 
 **Import errors?**
 ```bash
-pip install kailash[nexus]
+pip install kailash-nexus
 ```
 
 **Need help?** Check the [troubleshooting guide](../technical/troubleshooting.md).

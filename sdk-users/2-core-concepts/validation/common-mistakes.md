@@ -21,6 +21,35 @@ from kailash.nodes.base import Node, NodeParameter
 
 ## 🚨 **Most Common Mistakes**
 
+### **Mistake #-1: Missing Required Parameters (NEW in v0.7.0+)**
+
+```python
+# ❌ WRONG - Missing required parameters
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Alice"
+    # Missing required 'email' parameter!
+})
+# Error: Node 'create' missing required inputs: ['email']
+
+# ✅ CORRECT - Use one of three methods:
+
+# Method 1: Node config
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Alice",
+    "email": "alice@example.com"
+})
+
+# Method 2: Connection from another node
+workflow.add_connection("form_data", "email", "create", "email")
+
+# Method 3: Runtime parameters
+runtime.execute(workflow.build(), parameters={
+    "create": {"email": "alice@example.com"}
+})
+```
+
+**See**: [Parameter Passing Guide](../../3-development/parameter-passing-guide.md)
+
 ### **Mistake #0: Insecure Secret Management (SECURITY CRITICAL)**
 
 ```python

@@ -190,7 +190,7 @@ class TestWorkflowBuilderAddNodePatterns:
             assert node_id == "test_node"
             assert len(w) == 1
             assert issubclass(w[0].category, UserWarning)
-            assert "Alternative API usage detected" in str(w[0].message)
+            assert "CUSTOM NODE USAGE CORRECT" in str(w[0].message)
 
         assert self.builder.nodes["test_node"]["type"] == "MockNode"
         assert self.builder.nodes["test_node"]["config"]["param"] == "value"
@@ -246,6 +246,14 @@ class TestWorkflowBuilderAddNodePatterns:
         assert self.builder.nodes[node_id]["type"] == "MockNode"
         assert self.builder.nodes[node_id]["config"] == {}
 
+    def test_add_node_string_with_config_dict(self):
+        """Test string with config dict: add_node('NodeType', {config})."""
+        node_id = self.builder.add_node("MockNode", {"value": 1.0})
+
+        assert node_id.startswith("node_")
+        assert self.builder.nodes[node_id]["type"] == "MockNode"
+        assert self.builder.nodes[node_id]["config"] == {"value": 1.0}
+
     def test_add_node_single_class_argument(self):
         """Test single class argument: add_node(NodeClass)."""
         with warnings.catch_warnings(record=True) as w:
@@ -277,20 +285,20 @@ class TestWorkflowBuilderAddNodePatterns:
 
     def test_add_node_auto_id_generation(self):
         """Test automatic ID generation."""
-        node_id1 = self.builder.add_node("MockNode")
-        node_id2 = self.builder.add_node("MockNode")
+        node_id1 = self.builder.add_node("MockNode", {"value": 1.0})
+        node_id2 = self.builder.add_node("MockNode", {"value": 2.0})
 
         assert node_id1 != node_id2
         assert node_id1.startswith("node_") and node_id2.startswith("node_")
 
     def test_add_node_duplicate_id_error(self):
         """Test error when adding duplicate node ID."""
-        self.builder.add_node("MockNode", "test_node")
+        self.builder.add_node("MockNode", "test_node", {"value": 1.0})
 
         with pytest.raises(
             WorkflowValidationError, match="Node ID 'test_node' already exists"
         ):
-            self.builder.add_node("MockNode", "test_node")
+            self.builder.add_node("MockNode", "test_node", {"value": 1.0})
 
     def test_add_node_invalid_arguments(self):
         """Test error handling for invalid arguments."""
@@ -316,9 +324,9 @@ class TestWorkflowBuilderConnections:
         self.builder = WorkflowBuilder()
         # Ensure mock nodes are registered for string-based references
         _ensure_mock_nodes_registered()
-        self.builder.add_node("MockNode", "node1")
-        self.builder.add_node("MockNode", "node2")
-        self.builder.add_node("MockNode", "node3")
+        self.builder.add_node("MockNode", "node1", {"value": 1.0})
+        self.builder.add_node("MockNode", "node2", {"value": 2.0})
+        self.builder.add_node("MockNode", "node3", {"value": 3.0})
 
     def test_add_connection_basic(self):
         """Test basic connection addition."""
@@ -425,7 +433,7 @@ class TestWorkflowBuilderParameterInjection:
 
     def test_add_parameter_mapping(self):
         """Test adding parameter mappings for specific nodes."""
-        self.builder.add_node("MockNode", "node1")
+        self.builder.add_node("MockNode", "node1", {"value": 1.0})
 
         result = self.builder.add_parameter_mapping(
             "node1", {"workflow_param": "node_param", "global_timeout": "local_timeout"}
@@ -442,7 +450,7 @@ class TestWorkflowBuilderParameterInjection:
 
     def test_add_input_connection(self):
         """Test adding workflow input connections."""
-        self.builder.add_node("MockNode", "node1")
+        self.builder.add_node("MockNode", "node1", {"value": 1.0})
 
         result = self.builder.add_input_connection(
             "node1", "input_param", "workflow_input"
@@ -460,7 +468,7 @@ class TestWorkflowBuilderParameterInjection:
 
     def test_add_workflow_inputs(self):
         """Test adding workflow inputs mapping."""
-        self.builder.add_node("MockNode", "input_node")
+        self.builder.add_node("MockNode", "input_node", {"value": 1.0})
 
         result = self.builder.add_workflow_inputs(
             "input_node",
@@ -548,8 +556,8 @@ class TestWorkflowBuilderMetadata:
 
     def test_build_workflow_basic(self):
         """Test building a basic workflow."""
-        self.builder.add_node("MockNode", "node1")
-        self.builder.add_node("MockNode", "node2")
+        self.builder.add_node("MockNode", "node1", {"value": 1.0})
+        self.builder.add_node("MockNode", "node2", {"value": 2.0})
         self.builder.add_connection("node1", "output", "node2", "input")
 
         workflow = self.builder.build()
@@ -561,7 +569,7 @@ class TestWorkflowBuilderMetadata:
 
     def test_build_workflow_with_custom_id(self):
         """Test building workflow with custom ID."""
-        self.builder.add_node("MockNode", "node1")
+        self.builder.add_node("MockNode", "node1", {"value": 1.0})
 
         workflow = self.builder.build(workflow_id="custom_id")
 
@@ -575,7 +583,7 @@ class TestWorkflowBuilderMetadata:
             version="1.5.0",
             author="Test Author",
         )
-        self.builder.add_node("MockNode", "node1")
+        self.builder.add_node("MockNode", "node1", {"value": 1.0})
 
         workflow = self.builder.build(name="Override Name", custom_field="custom_value")
 
@@ -587,7 +595,7 @@ class TestWorkflowBuilderMetadata:
 
     def test_build_workflow_auto_generated_name(self):
         """Test building workflow with auto-generated name."""
-        self.builder.add_node("MockNode", "node1")
+        self.builder.add_node("MockNode", "node1", {"value": 1.0})
 
         workflow = self.builder.build()
 
@@ -597,9 +605,9 @@ class TestWorkflowBuilderMetadata:
     def test_build_workflow_with_mixed_node_types(self):
         """Test building workflow with different node configurations."""
         # Use preferred string-based API for all nodes
-        self.builder.add_node("MockNode", "string_node", {"param": "string"})
-        self.builder.add_node("MockNode", "class_node", {"param": "class"})
-        self.builder.add_node("MockNode", "instance_node", {"param": "instance"})
+        self.builder.add_node("MockNode", "string_node", {"value": 1.0})
+        self.builder.add_node("MockNode", "class_node", {"value": 2.0})
+        self.builder.add_node("MockNode", "instance_node", {"value": 3.0})
 
         workflow = self.builder.build()
 
@@ -614,7 +622,7 @@ class TestWorkflowBuilderMetadata:
         """Test error handling during workflow building."""
         mock_add_node.side_effect = Exception("Node addition failed")
 
-        self.builder.add_node("MockNode", "node1")
+        self.builder.add_node("MockNode", "node1", {"value": 1.0})
 
         with pytest.raises(
             WorkflowValidationError, match="Failed to add node 'node1' to workflow"
@@ -627,8 +635,8 @@ class TestWorkflowBuilderMetadata:
         """Test error handling during connection building."""
         mock_add_edge.side_effect = Exception("Connection failed")
 
-        self.builder.add_node("MockNode", "node1")
-        self.builder.add_node("MockNode", "node2")
+        self.builder.add_node("MockNode", "node1", {"value": 1.0})
+        self.builder.add_node("MockNode", "node2", {"value": 2.0})
         self.builder.add_connection("node1", "output", "node2", "input")
 
         with pytest.raises(
@@ -861,8 +869,8 @@ class TestWorkflowBuilderUtilityMethods:
     def test_clear_method(self):
         """Test clearing builder state."""
         # Set up some state
-        self.builder.add_node("MockNode", "node1")
-        self.builder.add_node("MockNode", "node2")
+        self.builder.add_node("MockNode", "node1", {"value": 1.0})
+        self.builder.add_node("MockNode", "node2", {"value": 2.0})
         self.builder.add_connection("node1", "output", "node2", "input")
         self.builder.set_metadata(name="Test")
         self.builder.set_workflow_parameters(param="value")
@@ -881,8 +889,8 @@ class TestWorkflowBuilderUtilityMethods:
     def test_chaining_methods(self):
         """Test method chaining capability."""
         # Add nodes first
-        self.builder.add_node("MockNode", "node1")
-        self.builder.add_node("MockNode", "node2")
+        self.builder.add_node("MockNode", "node1", {"value": 1.0})
+        self.builder.add_node("MockNode", "node2", {"value": 2.0})
 
         # Test chaining with methods that support it
         result = (
@@ -912,7 +920,7 @@ class TestWorkflowBuilderUtilityMethods:
         """Test building workflow with parameter injection."""
         # This test verifies the complex parameter injection logic
         self.builder.set_workflow_parameters(global_param="global_value")
-        self.builder.add_node("MockNode", "node1")
+        self.builder.add_node("MockNode", "node1", {"value": 1.0})
 
         # The parameter injection logic is complex and depends on node configuration
         # Let's test that the workflow parameters are at least stored in metadata
@@ -927,8 +935,8 @@ class TestWorkflowBuilderUtilityMethods:
 
     def test_repr_and_str_methods(self):
         """Test string representation methods."""
-        self.builder.add_node("MockNode", "node1")
-        self.builder.add_node("MockNode", "node2")
+        self.builder.add_node("MockNode", "node1", {"value": 1.0})
+        self.builder.add_node("MockNode", "node2", {"value": 2.0})
         self.builder.add_connection("node1", "output", "node2", "input")
 
         # Test that string representations don't crash

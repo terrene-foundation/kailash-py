@@ -61,6 +61,7 @@ Working code examples:
 | Deploy to production | [5-enterprise/production/](5-enterprise/production/) |
 | Integrate with React/Vue | [4-features/frontend-integration/](4-features/frontend-integration/) |
 | Use AI/MCP features | [4-features/mcp/](4-features/mcp/) |
+| Build edge computing solutions | [4-features/edge/](4-features/edge/) |
 
 ## 📖 Learning Path
 

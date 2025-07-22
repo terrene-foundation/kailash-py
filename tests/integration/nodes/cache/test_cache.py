@@ -430,7 +430,11 @@ class TestCacheNode:
         # Redis backend should fail with NodeExecutionError when not available
         with pytest.raises(NodeExecutionError, match="Failed to connect to Redis"):
             cache_node.execute(
-                operation="set", key="redis_test", value=sample_data, backend="redis"
+                operation="set", 
+                key="redis_test", 
+                value=sample_data, 
+                backend="redis",
+                redis_url="redis://localhost:9999"  # Non-existent port
             )
 
     def test_hybrid_backend_fallback(self, cache_node, sample_data):

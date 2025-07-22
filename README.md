@@ -250,7 +250,7 @@ results, run_id = runtime.execute(workflow.build())
 
 ## 🚀 Applications Built with Kailash
 
-### 1. DataFlow - Zero-Config Database Platform
+### 1. DataFlow - Zero-Config Database Platform (v0.3.1)
 ```bash
 pip install kailash-dataflow
 ```
@@ -258,8 +258,9 @@ pip install kailash-dataflow
 - **Redis caching** with enterprise-grade invalidation
 - **Automatic API generation** with OpenAPI documentation
 - **4 production examples** with complete deployment guides
+- **Latest**: v0.3.1 - Enhanced transaction support and schema management
 
-### 2. Nexus - Multi-Channel Platform
+### 2. Nexus - Multi-Channel Platform (v1.0.3)
 ```bash
 pip install kailash-nexus
 ```
@@ -267,6 +268,7 @@ pip install kailash-nexus
 - **Enterprise orchestration** with multi-tenancy
 - **Session management** with cross-channel synchronization
 - **105 tests** with comprehensive validation
+- **Latest**: v1.0.3 - Production-ready release with enhanced stability
 
 ### 3. AI Registry - Advanced RAG Platform
 ```bash

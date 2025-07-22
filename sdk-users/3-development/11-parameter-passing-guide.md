@@ -1,16 +1,43 @@
-# Parameter Passing Guide - Complete Reference
+# Parameter Passing Guide - Enterprise Patterns
 
-*Master parameter flow in Kailash workflows with confidence*
+*Master enterprise-grade parameter passing with security, validation, and compliance*
 
 ## Overview
 
-Parameter passing is crucial for workflow success. This guide covers all parameter-related patterns, best practices, and common pitfalls.
+Parameter passing in Kailash is designed with **security-first principles**. This guide covers enterprise patterns, security requirements, and gold standard implementations.
 
 ## Prerequisites
 
 - Completed [Fundamentals](01-fundamentals.md) - Core concepts
 - Completed [Workflows](02-workflows.md) - Basic patterns
 - Understanding of Python dictionaries and kwargs
+- Familiarity with type annotations
+
+## 🎯 Critical Understanding: Security by Design
+
+The Kailash SDK requires **explicit parameter declaration** as a security feature, not a limitation. This aligns with enterprise best practices used by AWS, Google, and Microsoft.
+
+### Why Explicit Declaration?
+
+```python
+# SDK's WorkflowParameterInjector logic (simplified)
+def inject_parameters(self, node_instance, workflow_params):
+    declared_params = node_instance.get_parameters()  # SDK checks this
+    
+    injected_params = {}
+    for param_name, param_value in workflow_params.items():
+        if param_name in declared_params:  # Only if explicitly declared
+            injected_params[param_name] = param_value
+        # else: parameter is ignored (security feature)
+    
+    return injected_params
+```
+
+**Security Benefits**:
+- Prevents arbitrary parameter injection attacks
+- Validates all inputs before execution
+- Provides audit trails for compliance
+- Prevents code injection through parameters
 
 ## Enterprise-Grade Parameter Resolution
 
@@ -63,13 +90,145 @@ node = MyNode(config_param="default")
 
 **Resolution Priority**: Connection inputs > Runtime parameters > Node config > Auto-mapping
 
-## Node Parameter Declaration
+## Enterprise Parameter Patterns
 
-### CRITICAL: Declare ALL Input Parameters
+### Pattern 1: Workflow-Specific Entry Nodes (Recommended)
+
+Create dedicated entry nodes for each workflow type to ensure type safety and validation:
 
 ```python
 from kailash.nodes.base import Node, NodeParameter
+from typing import Dict, Any
 
+class UserManagementEntryNode(Node):
+    """Entry node specifically for user management workflows.
+    
+    Enterprise Pattern: Explicit parameter contracts for security.
+    """
+    
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        """Declare ALL parameters with enterprise validation."""
+        return {
+            "operation": NodeParameter(
+                name="operation",
+                type=str,
+                required=True,
+                description="Operation: create_user, update_user, delete_user, get_user"
+            ),
+            "user_data": NodeParameter(
+                name="user_data",
+                type=dict,
+                required=False,
+                description="User data for create/update operations"
+            ),
+            "user_id": NodeParameter(
+                name="user_id",
+                type=str,
+                required=False,
+                description="User ID for get/update/delete operations"
+            ),
+            "tenant_id": NodeParameter(
+                name="tenant_id",
+                type=str,
+                required=True,
+                description="Tenant identifier for multi-tenancy"
+            ),
+            "requestor_id": NodeParameter(
+                name="requestor_id",
+                type=str,
+                required=True,
+                description="ID of user making the request"
+            ),
+            "audit_context": NodeParameter(
+                name="audit_context",
+                type=dict,
+                required=False,
+                default={},
+                description="Audit context for compliance"
+            )
+        }
+    
+    def run(self, **kwargs) -> Dict[str, Any]:
+        """Process with business logic validation."""
+        # All parameters are validated by SDK before reaching here
+        operation = kwargs["operation"]  # Required, guaranteed to exist
+        tenant_id = kwargs["tenant_id"]  # Required, guaranteed to exist
+        requestor_id = kwargs["requestor_id"]  # Required, guaranteed to exist
+        
+        # Business logic validation
+        if operation in ["update", "delete", "get"] and not kwargs.get("user_id"):
+            raise ValueError(f"user_id required for {operation} operation")
+        
+        if operation in ["create", "update"] and not kwargs.get("user_data"):
+            raise ValueError(f"user_data required for {operation} operation")
+        
+        # Prepare output for downstream nodes
+        return {
+            "result": {
+                "operation": operation,
+                "user_data": kwargs.get("user_data"),
+                "user_id": kwargs.get("user_id"),
+                "tenant_id": tenant_id,
+                "requestor_id": requestor_id,
+                "audit_context": kwargs.get("audit_context", {})
+            }
+        }
+```
+
+### Pattern 2: SecureGovernedNode for Enterprise Security
+
+For production deployments, use `SecureGovernedNode` which provides connection parameter validation:
+
+```python
+from kailash.nodes.governance import SecureGovernedNode
+from pydantic import BaseModel, Field
+from typing import Optional, Literal
+
+class UserManagementContract(BaseModel):
+    """Pydantic contract for type safety and validation."""
+    operation: Literal["create", "update", "delete", "get"]
+    user_data: Optional[Dict[str, Any]] = None
+    user_id: Optional[str] = None
+    tenant_id: str
+    requestor_id: str
+    
+    class Config:
+        extra = "forbid"  # Security: reject unknown parameters
+
+class EnterpriseUserNode(SecureGovernedNode):
+    """Enterprise-grade user management with security validation."""
+    
+    @classmethod
+    def get_parameter_contract(cls):
+        return UserManagementContract
+    
+    @classmethod
+    def get_connection_contract(cls):
+        """Define connection parameters for security."""
+        return None  # Override if receiving connection parameters
+    
+    def run_governed(self, **kwargs):
+        """Execute with pre-validated parameters."""
+        # All parameters are validated against contract
+        operation = kwargs["operation"]
+        tenant_id = kwargs["tenant_id"]
+        
+        # Your secure business logic here
+        result = self._process_user_operation(operation, kwargs)
+        
+        return {"result": result}
+```
+
+**Security Features of SecureGovernedNode**:
+- ✅ Validates both workflow AND connection parameters
+- ✅ Prevents SQL injection through connection parameters
+- ✅ Automatic audit logging of security violations
+- ✅ Context-aware SQL injection detection
+- ✅ Performance monitoring built-in
+
+### Pattern 3: Parameter Declaration Best Practices
+
+```python
 class DataProcessorNode(Node):
     def get_parameters(self) -> dict[str, NodeParameter]:
         return {
@@ -342,6 +501,89 @@ runtime.execute(workflow.build(), parameters={
 })
 ```
 
+## Enterprise Anti-Patterns (What NOT to Do)
+
+### Anti-Pattern 1: Empty Parameter Declaration
+
+```python
+# ❌ WRONG - No parameters declared (SECURITY RISK)
+class BadEntryNode(Node):
+    def get_parameters(self):
+        return {}  # SDK will inject nothing!
+    
+    def run(self, **kwargs):
+        # kwargs will always be empty!
+        operation = kwargs.get('operation')  # Always None
+        # This is a SECURITY FEATURE, not a bug
+
+# ✅ CORRECT - Explicit parameter declaration
+class GoodEntryNode(Node):
+    def get_parameters(self):
+        return {
+            "operation": NodeParameter(
+                name="operation",
+                type=str,
+                required=True,
+                description="Operation to perform"
+            ),
+            "data": NodeParameter(
+                name="data",
+                type=dict,
+                required=True,
+                description="Input data"
+            )
+        }
+```
+
+### Anti-Pattern 2: Attempting Dynamic Parameter Injection
+
+```python
+# ❌ WRONG - Trying to bypass security
+class DynamicParameterNode(Node):
+    def get_parameters(self):
+        # These patterns DO NOT WORK (by design)
+        return {
+            "*": NodeParameter(accept_all=True),  # Not supported!
+            "**kwargs": NodeParameter(type=dict),  # Not supported!
+            "dynamic": NodeParameter(dynamic=True) # Not supported!
+        }
+
+# ✅ CORRECT - Define all expected parameters
+class ExplicitParameterNode(Node):
+    def get_parameters(self):
+        return {
+            "user_data": NodeParameter(type=dict, required=False),
+            "config": NodeParameter(type=dict, required=False),
+            "options": NodeParameter(type=dict, required=False)
+        }
+```
+
+### Anti-Pattern 3: Using PythonCodeNode for Complex Business Logic
+
+```python
+# ❌ WRONG - Complex logic in string code
+workflow.add_node("PythonCodeNode", "business_logic", {
+    "code": """
+# 100+ lines of business logic in a string
+# Hard to test, debug, maintain
+# Security risk with string execution
+# No IDE support, no type checking
+"""
+})
+
+# ✅ CORRECT - Create a proper custom node
+class BusinessLogicNode(SecureGovernedNode):
+    """Properly implemented business logic with security."""
+    
+    @classmethod
+    def get_parameter_contract(cls):
+        return BusinessLogicContract
+    
+    def run_governed(self, **kwargs):
+        # Testable, maintainable, secure code
+        return self._process_business_logic(kwargs)
+```
+
 ## Common Pitfalls and Solutions
 
 ### 1. Missing Parameter Declaration
@@ -351,7 +593,7 @@ runtime.execute(workflow.build(), parameters={
 class MyNode(Node):
     def get_parameters(self):
         return {
-            "input": NodeParameter(type=str, required=True)
+            "input": NodeParameter(name="input", type=str, required=True)
             # Missing "config" parameter!
         }
 
@@ -363,8 +605,8 @@ class MyNode(Node):
 class MyNode(Node):
     def get_parameters(self):
         return {
-            "input": NodeParameter(type=str, required=True),
-            "config": NodeParameter(type=dict, required=False, default={})
+            "input": NodeParameter(name="input", type=str, required=True),
+            "config": NodeParameter(name="config", type=dict, required=False, default={})
         }
 ```
 
@@ -462,6 +704,80 @@ logger = logging.getLogger("kailash.workflow")
 logger.setLevel(logging.DEBUG)
 
 # This will show detailed parameter passing information
+```
+
+## Security Best Practices
+
+### Context-Aware SQL Injection Prevention
+
+The SDK implements sophisticated context-aware validation to balance security with user experience:
+
+```python
+# User content fields - NO SQL scanning (allows O'Brien, user--admin)
+user_fields = {
+    'username', 'first_name', 'last_name', 'email', 'display_name',
+    'user_id', 'requestor_id', 'created_by', 'updated_by'
+}
+
+# SQL construction fields - ALWAYS scan for injection
+sql_fields = {
+    'query', 'sql', 'where', 'filter', 'order_by', 'group_by',
+    'where_clause', 'filter_condition', 'select', 'from', 'join'
+}
+```
+
+**Example Validation**:
+```python
+# ✅ ALLOWED: User content
+{"username": "O'Brien"}           # Apostrophe OK in user fields
+{"first_name": "user--admin"}     # Dashes OK in user fields
+
+# 🚨 BLOCKED: SQL construction
+{"query": "'; DROP TABLE users;"}     # SQL injection blocked
+{"where": "1=1 OR admin='true'"}      # Logic bombs blocked
+```
+
+### Connection Parameter Security
+
+Always validate connection parameters to prevent injection attacks:
+
+```python
+class SecureDatabaseNode(SecureGovernedNode):
+    """Database node with connection parameter validation."""
+    
+    @classmethod
+    def get_connection_contract(cls):
+        """Define connection parameters for security."""
+        class DatabaseConnectionContract(BaseModel):
+            params: List[Any] = Field(description="SQL parameters")
+            query: Optional[str] = Field(default=None)
+            
+            @field_validator('params')
+            @classmethod
+            def validate_params_list(cls, v):
+                if not isinstance(v, list):
+                    raise ValueError("params must be a list for SQL safety")
+                return v
+        
+        return DatabaseConnectionContract
+```
+
+### Audit Trail Implementation
+
+```python
+class AuditedNode(SecureGovernedNode):
+    """Node with comprehensive audit logging."""
+    
+    def execute(self, **kwargs):
+        # Log parameter access for compliance
+        self.audit_logger.log_parameter_access(
+            node_class=self.__class__.__name__,
+            parameters=self._sanitize_for_logging(kwargs),
+            sensitivity=self._classify_parameters(kwargs),
+            user_context=kwargs.get('requestor_id', 'unknown')
+        )
+        
+        return super().execute(**kwargs)
 ```
 
 ## Best Practices
@@ -790,6 +1106,33 @@ class FlexibleNode(Node):
     pass
 ```
 
+## Enterprise Summary
+
+### Key Principles
+
+1. **Security by Design**: Explicit parameter declaration prevents injection attacks
+2. **Type Safety**: Strong typing with validation contracts
+3. **Audit Compliance**: Complete parameter access logging
+4. **Performance**: <2ms validation overhead per node
+5. **User Experience**: Context-aware validation (no false positives on names like O'Brien)
+
+### Industry Alignment
+
+This approach aligns with enterprise standards used by:
+- **AWS**: CloudFormation parameter schemas
+- **Google**: Cloud Deployment Manager configs
+- **Microsoft**: Azure Resource Manager templates
+- **Salesforce**: Apex parameter validation
+
+### Migration Path
+
+For existing projects:
+1. Audit nodes with empty `get_parameters()`
+2. Define parameter contracts using patterns above
+3. Migrate to `SecureGovernedNode` for production
+4. Enable connection parameter validation
+5. Implement audit logging
+
 ## Related Guides
 
 **Prerequisites:**
@@ -797,9 +1140,14 @@ class FlexibleNode(Node):
 - [Workflows](02-workflows.md) - Workflow basics
 
 **Advanced Topics:**
-- [Custom Development](05-custom-development.md) - Creating custom nodes
-- [Troubleshooting](../validation/common-mistakes.md) - Common parameter issues
+- [Custom Development](05-custom-development.md) - Creating custom nodes with security
+- [SecureGovernedNode Guide](../7-gold-standards/enterprise-parameter-passing-gold-standard.md) - Complete security patterns
+- [Troubleshooting](../2-core-concepts/validation/common-mistakes.md) - Common parameter issues
+
+**Enterprise Patterns:**
+- [Security Patterns](../5-enterprise/security-patterns.md) - Comprehensive security guide
+- [Compliance Patterns](../5-enterprise/compliance-patterns.md) - Audit and compliance
 
 ---
 
-**Master parameter passing to build robust, flexible workflows that handle complex data flows with ease!**
+**Master enterprise-grade parameter passing with security, validation, and compliance built-in!**

@@ -215,7 +215,8 @@ class MermaidVisualizer:
             Sanitized node ID safe for Mermaid
         """
         # Replace special characters with underscores
-        sanitized = node_id.replace("-", "_").replace(" ", "_").replace(".", "_")
+        import re
+        sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', node_id)
         # Ensure it starts with a letter
         if sanitized and sanitized[0].isdigit():
             sanitized = f"node_{sanitized}"

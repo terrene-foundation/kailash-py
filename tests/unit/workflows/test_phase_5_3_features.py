@@ -16,6 +16,7 @@ from kailash.workflow.templates import CycleTemplates
 from kailash.workflow.validation import CycleLinter, IssueSeverity
 
 
+@pytest.mark.requires_isolation
 class TestPhase53Features:
     """Test Phase 5.3 workflow enhancement features."""
 

@@ -12,7 +12,7 @@ You are fixing a bug. Follow these steps exactly and show me complete outputs at
 Load these files before starting (DO NOT proceed until loaded):
 - Root `CLAUDE.md` - Core validation rules and critical patterns
 - `sdk-users/CLAUDE.md` - Implementation patterns and architectural guidance
-- Use MCP tools to search for related error patterns in `sdk-users/validation/common-mistakes.md`
+- Use MCP tools to search for related error patterns in `sdk-users/2-core-concepts/validation/common-mistakes.md`
 
 ### Critical Understanding Required
 - **3-tier testing strategy**: Unit (fast, mocks OK), Integration (real Docker, NO MOCKS), E2E (complete flows, NO MOCKS)
@@ -24,7 +24,7 @@ Load these files before starting (DO NOT proceed until loaded):
 If you encounter any error during implementation, use this investigation approach:
 
 1. **Check common mistakes first:**
-   - Use MCP tools to search `sdk-users/validation/common-mistakes.md`
+   - Use MCP tools to search `sdk-users/2-core-concepts/validation/common-mistakes.md`
    - Is this a known issue with documented solution?
    - Have we seen this error pattern before?
 
@@ -167,14 +167,14 @@ Run tests in this exact order and show me complete outputs:
 If the bug fix affects documented behavior:
 1. **Update relevant documentation files**
    - Look through the docs in `sdk-users/`, using the `CLAUDE.md` as the entrypoint.
-   - Important directories are `developer/`, `nodes/`, `cheatsheet/`, and `migration-guides`.
+   - Important directories are `3-development/`, `2-core-concepts/nodes/`, `2-core-concepts/cheatsheet/`, and `migration-guides`.
    - Check for any outdated or incorrect information with respect to the bug fix.
 
 2. **Create temp test files** to validate examples: `/tmp/test_bugfix_docs.py`
 
 3. **Run documentation tests** with real infrastructure
 
-4. **Check if similar patterns exist** in `sdk-users/validation/common-mistakes.md` and document the fix pattern for future reference
+4. **Check if similar patterns exist** in `sdk-users/2-core-concepts/validation/common-mistakes.md` and document the fix pattern for future reference
 
 **Show me the final validation results and any documentation updates you've made.**
 

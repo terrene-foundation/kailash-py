@@ -1084,6 +1084,298 @@ class WebSocketTransport(BaseTransport):
             self.websocket = None
 
 
+class WebSocketServerTransport(BaseTransport):
+    """WebSocket server transport for accepting MCP connections."""
+
+    def __init__(
+        self,
+        host: str = "0.0.0.0",
+        port: int = 3001,
+        message_handler: Optional[Callable[[Dict[str, Any], str], Dict[str, Any]]] = None,
+        ping_interval: float = 20.0,
+        ping_timeout: float = 20.0,
+        max_message_size: int = 10 * 1024 * 1024,  # 10MB
+        **kwargs,
+    ):
+        """Initialize WebSocket server transport.
+
+        Args:
+            host: Host to bind to
+            port: Port to listen on
+            message_handler: Handler for incoming messages
+            ping_interval: Ping interval in seconds
+            ping_timeout: Ping timeout in seconds
+            max_message_size: Maximum message size in bytes
+            **kwargs: Base transport arguments
+        """
+        super().__init__("websocket_server", **kwargs)
+
+        self.host = host
+        self.port = port
+        self.message_handler = message_handler
+        self.ping_interval = ping_interval
+        self.ping_timeout = ping_timeout
+        self.max_message_size = max_message_size
+
+        # Server state
+        self.server: Optional[websockets.WebSocketServer] = None
+        self._clients: Dict[str, Any] = {}  # websockets.WebSocketServerProtocol
+        self._client_sessions: Dict[str, Dict[str, Any]] = {}
+        self._server_task: Optional[asyncio.Task] = None
+
+    async def connect(self) -> None:
+        """Start the WebSocket server."""
+        if self._connected:
+            return
+
+        try:
+            # Create handler that works with new websockets API
+            async def connection_handler(websocket):
+                # Get path from the websocket's request path
+                path = websocket.path if hasattr(websocket, 'path') else '/'
+                await self.handle_client(websocket, path)
+            
+            # Start WebSocket server
+            self.server = await websockets.serve(
+                connection_handler,
+                self.host,
+                self.port,
+                ping_interval=self.ping_interval,
+                ping_timeout=self.ping_timeout,
+                max_size=self.max_message_size,
+            )
+
+            self._connected = True
+            self._update_metrics("connections_total")
+
+            logger.info(f"WebSocket server listening on {self.host}:{self.port}")
+
+        except Exception as e:
+            self._update_metrics("connections_failed")
+            raise TransportError(
+                f"Failed to start WebSocket server: {e}", transport_type="websocket_server"
+            )
+
+    async def disconnect(self) -> None:
+        """Stop the WebSocket server."""
+        if not self._connected:
+            return
+
+        self._connected = False
+
+        # Close all client connections
+        clients = list(self._clients.values())
+        for client in clients:
+            await client.close()
+
+        # Stop server
+        if self.server:
+            self.server.close()
+            await self.server.wait_closed()
+            self.server = None
+
+        # Clear client tracking
+        self._clients.clear()
+        self._client_sessions.clear()
+
+        logger.info("WebSocket server stopped")
+
+    async def send_message(self, message: Dict[str, Any], client_id: Optional[str] = None) -> None:
+        """Send message to specific client or broadcast to all.
+
+        Args:
+            message: Message to send
+            client_id: Target client ID (None for broadcast)
+        """
+        if not self._connected:
+            raise TransportError("Transport not connected", transport_type="websocket_server")
+
+        message_data = json.dumps(message)
+
+        try:
+            if client_id:
+                # Send to specific client
+                if client_id in self._clients:
+                    await self._clients[client_id].send(message_data)
+                    self._update_metrics("messages_sent")
+                    self._update_metrics("bytes_sent", len(message_data))
+                else:
+                    raise TransportError(
+                        f"Client {client_id} not found", transport_type="websocket_server"
+                    )
+            else:
+                # Broadcast to all clients
+                if self._clients:
+                    await asyncio.gather(
+                        *[client.send(message_data) for client in self._clients.values()],
+                        return_exceptions=True,
+                    )
+                    self._update_metrics("messages_sent", len(self._clients))
+                    self._update_metrics("bytes_sent", len(message_data) * len(self._clients))
+
+        except Exception as e:
+            self._update_metrics("errors_total")
+            raise TransportError(
+                f"Failed to send message: {e}", transport_type="websocket_server"
+            )
+
+    async def receive_message(self) -> Dict[str, Any]:
+        """Not implemented for server transport."""
+        raise NotImplementedError(
+            "Server transport doesn't support receive_message. "
+            "Messages are handled via handle_client callback."
+        )
+
+    async def handle_client(self, websocket, path: str):
+        """Handle a client connection.
+
+        Args:
+            websocket: WebSocket connection
+            path: Request path
+        """
+        client_id = str(uuid.uuid4())
+        self._clients[client_id] = websocket
+        self._client_sessions[client_id] = {
+            "connected_at": time.time(),
+            "path": path,
+            "remote_address": websocket.remote_address,
+        }
+
+        logger.info(f"Client {client_id} connected from {websocket.remote_address}")
+        self._update_metrics("connections_total")
+
+        try:
+            async for message in websocket:
+                try:
+                    # Parse message
+                    request = json.loads(message)
+
+                    # Update metrics
+                    self._update_metrics("messages_received")
+                    self._update_metrics("bytes_received", len(message))
+
+                    # Handle message
+                    if self.message_handler:
+                        response = await self._handle_message_safely(request, client_id)
+                    else:
+                        response = {
+                            "jsonrpc": "2.0",
+                            "error": {
+                                "code": -32601,
+                                "message": "No message handler configured",
+                            },
+                            "id": request.get("id"),
+                        }
+
+                    # Send response
+                    await websocket.send(json.dumps(response))
+                    self._update_metrics("messages_sent")
+                    self._update_metrics("bytes_sent", len(json.dumps(response)))
+
+                except json.JSONDecodeError as e:
+                    logger.error(f"Invalid JSON from client {client_id}: {e}")
+                    self._update_metrics("errors_total")
+
+                    error_response = {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32700,
+                            "message": "Parse error: Invalid JSON",
+                        },
+                        "id": None,
+                    }
+                    await websocket.send(json.dumps(error_response))
+
+                except Exception as e:
+                    logger.error(f"Error handling message from client {client_id}: {e}")
+                    self._update_metrics("errors_total")
+
+        except websockets.exceptions.ConnectionClosed:
+            logger.info(f"Client {client_id} disconnected")
+        except Exception as e:
+            logger.error(f"Error in client handler for {client_id}: {e}")
+        finally:
+            # Clean up client
+            del self._clients[client_id]
+            del self._client_sessions[client_id]
+
+    async def _handle_message_safely(
+        self, request: Dict[str, Any], client_id: str
+    ) -> Dict[str, Any]:
+        """Handle message with error handling.
+
+        Args:
+            request: JSON-RPC request
+            client_id: Client identifier
+
+        Returns:
+            JSON-RPC response
+        """
+        try:
+            if asyncio.iscoroutinefunction(self.message_handler):
+                return await self.message_handler(request, client_id)
+            else:
+                return self.message_handler(request, client_id)
+        except Exception as e:
+            logger.error(f"Message handler error: {e}")
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": f"Internal error: {str(e)}",
+                },
+                "id": request.get("id"),
+            }
+
+    def get_client_info(self, client_id: str) -> Optional[Dict[str, Any]]:
+        """Get information about a connected client.
+
+        Args:
+            client_id: Client identifier
+
+        Returns:
+            Client information or None
+        """
+        if client_id not in self._client_sessions:
+            return None
+
+        session = self._client_sessions[client_id]
+        return {
+            "client_id": client_id,
+            "connected_at": session["connected_at"],
+            "connection_duration": time.time() - session["connected_at"],
+            "path": session["path"],
+            "remote_address": session["remote_address"],
+        }
+
+    def list_clients(self) -> List[Dict[str, Any]]:
+        """List all connected clients.
+
+        Returns:
+            List of client information
+        """
+        return [
+            self.get_client_info(client_id)
+            for client_id in self._client_sessions
+        ]
+
+    async def close_client(self, client_id: str, code: int = 1000, reason: str = "") -> bool:
+        """Close a specific client connection.
+
+        Args:
+            client_id: Client to disconnect
+            code: WebSocket close code
+            reason: Close reason
+
+        Returns:
+            True if client was closed
+        """
+        if client_id in self._clients:
+            await self._clients[client_id].close(code, reason)
+            return True
+        return False
+
+
 class TransportManager:
     """Manager for MCP transport instances."""
 
@@ -1095,6 +1387,7 @@ class TransportManager:
             "sse": SSETransport,
             "streamable_http": StreamableHTTPTransport,
             "websocket": WebSocketTransport,
+            "websocket_server": WebSocketServerTransport,
         }
 
     def register_transport_factory(self, transport_type: str, factory: Callable):

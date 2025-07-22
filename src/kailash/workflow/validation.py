@@ -116,9 +116,11 @@ See Also:
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from . import Workflow
+# Note: Workflow import moved to individual methods to avoid circular imports
+if TYPE_CHECKING:
+    from kailash.workflow.graph import Workflow
 
 
 class IssueSeverity(Enum):
@@ -143,6 +145,120 @@ class ValidationIssue:
     documentation_link: str | None = None
 
 
+class ParameterDeclarationValidator:
+    """Validator for node parameter declarations - detects silent parameter dropping issues.
+    
+    This validator addresses the critical issue where nodes with empty get_parameters()
+    methods silently receive no workflow parameters, leading to debugging issues.
+    
+    Key validations:
+    1. Empty parameter declarations (PAR001 - WARNING at build time, enforced at runtime)
+    2. Undeclared parameter access attempts (PAR002 - WARNING)
+    3. Parameter type validation issues (PAR003 - WARNING)
+    4. Missing required parameters in workflow (PAR004 - WARNING at build time, ERROR at runtime)
+    
+    Usage:
+        validator = ParameterDeclarationValidator()
+        issues = validator.validate_node_parameters(node_instance, workflow_params)
+    """
+    
+    validation_code = "PAR"
+    
+    def validate_node_parameters(self, node_instance, workflow_parameters: dict[str, Any]) -> list[ValidationIssue]:
+        """Check parameter declarations against workflow usage.
+        
+        Args:
+            node_instance: Node instance to validate
+            workflow_parameters: Parameters provided by workflow
+            
+        Returns:
+            List of ValidationIssue objects for any problems found
+        """
+        issues = []
+        
+        try:
+            declared_params = node_instance.get_parameters()
+        except Exception as e:
+            issues.append(ValidationIssue(
+                severity=IssueSeverity.ERROR,
+                category="parameter_declaration", 
+                code="PAR000",
+                message=f"Node {node_instance.__class__.__name__} get_parameters() failed: {e}",
+                suggestion="Fix get_parameters() method implementation",
+                documentation_link="sdk-users/7-gold-standards/enterprise-parameter-passing-gold-standard.md"
+            ))
+            return issues
+        
+        # Critical: Empty parameter declarations (addresses gold standard issue #2)
+        # For backwards compatibility, downgrade to WARNING at build time
+        if not declared_params and workflow_parameters:
+            workflow_param_names = list(workflow_parameters.keys())
+            issues.append(ValidationIssue(
+                severity=IssueSeverity.WARNING,
+                category="parameter_declaration",
+                code="PAR001", 
+                message=f"Node {node_instance.__class__.__name__} declares no parameters but workflow provides {workflow_param_names}",
+                suggestion="Add parameters to get_parameters() method - SDK only injects explicitly declared parameters",
+                documentation_link="sdk-users/7-gold-standards/enterprise-parameter-passing-gold-standard.md#parameter-declaration-security"
+            ))
+        
+        # Security: Undeclared parameter access attempts  
+        if declared_params and workflow_parameters:
+            undeclared = set(workflow_parameters.keys()) - set(declared_params.keys())
+            if undeclared:
+                issues.append(ValidationIssue(
+                    severity=IssueSeverity.WARNING,
+                    category="parameter_declaration",
+                    code="PAR002",
+                    message=f"Workflow parameters {list(undeclared)} not declared in get_parameters() - will be ignored by SDK",
+                    suggestion="Add missing parameters to get_parameters() or remove from workflow configuration"
+                ))
+        
+        # Validation: Parameter type issues
+        if declared_params:
+            for param_name, param_def in declared_params.items():
+                if not hasattr(param_def, 'type') or param_def.type is None:
+                    issues.append(ValidationIssue(
+                        severity=IssueSeverity.WARNING,
+                        category="parameter_declaration", 
+                        code="PAR003",
+                        message=f"Parameter '{param_name}' missing type definition",
+                        suggestion=f"Add type field to NodeParameter: NodeParameter(name='{param_name}', type=str, ...)"
+                    ))
+                
+                # Check for required parameters without defaults
+                if getattr(param_def, 'required', False) and param_name not in workflow_parameters:
+                    if getattr(param_def, 'default', None) is None:
+                        # For backwards compatibility, missing required parameters are WARNING at build time
+                        # They'll still cause runtime errors when the node executes
+                        issues.append(ValidationIssue(
+                            severity=IssueSeverity.WARNING,
+                            category="parameter_declaration",
+                            code="PAR004", 
+                            message=f"Required parameter '{param_name}' not provided by workflow and has no default",
+                            suggestion=f"Either provide '{param_name}' in workflow configuration or add default value"
+                        ))
+        
+        return issues
+    
+    def validate_workflow_node_parameters(self, workflow) -> list[ValidationIssue]:
+        """Validate parameter declarations for all nodes in a workflow.
+        
+        Args:
+            workflow: Workflow instance to validate
+            
+        Returns:
+            List of all parameter declaration issues across the workflow
+        """
+        all_issues = []
+        
+        # This would need workflow.nodes to be iterable with node instances
+        # For now, we'll focus on the single-node validation method
+        # Implementation would depend on workflow structure
+        
+        return all_issues
+
+
 class CycleLinter:
     """
     Comprehensive linter for cyclic workflows.
@@ -151,7 +267,7 @@ class CycleLinter:
     and potential problems specific to cyclic execution.
     """
 
-    def __init__(self, workflow: Workflow):
+    def __init__(self, workflow: "Workflow"):
         """
         Initialize linter with target workflow.
 

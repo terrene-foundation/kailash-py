@@ -345,6 +345,11 @@ class MCPServer:
         self,
         name: str,
         config_file: Optional[Union[str, Path]] = None,
+        # Transport configuration
+        transport: str = "stdio",  # "stdio", "websocket", "http", "sse"
+        websocket_host: str = "0.0.0.0",
+        websocket_port: int = 3001,
+        # Caching configuration
         enable_cache: bool = True,
         cache_ttl: int = 300,
         cache_backend: str = "memory",  # "memory" or "redis"
@@ -371,6 +376,9 @@ class MCPServer:
         Args:
             name: Server name
             config_file: Optional configuration file path
+            transport: Transport to use ("stdio", "websocket", "http", "sse")
+            websocket_host: Host for WebSocket server (default: "0.0.0.0")
+            websocket_port: Port for WebSocket server (default: 3001)
             enable_cache: Whether to enable caching (default: True)
             cache_ttl: Default cache TTL in seconds (default: 300)
             cache_backend: Cache backend ("memory" or "redis")
@@ -390,6 +398,11 @@ class MCPServer:
             enable_streaming: Enable streaming support
         """
         self.name = name
+        
+        # Transport configuration
+        self.transport = transport
+        self.websocket_host = websocket_host
+        self.websocket_port = websocket_port
 
         # Enhanced features
         self.auth_provider = auth_provider
@@ -410,7 +423,9 @@ class MCPServer:
                 "server": {
                     "name": name,
                     "version": "1.0.0",
-                    "transport": "stdio",
+                    "transport": transport,
+                    "websocket_host": websocket_host,
+                    "websocket_port": websocket_port,
                     "enable_http": enable_http_transport,
                     "enable_sse": enable_sse_transport,
                     "timeout": transport_timeout,
@@ -499,6 +514,9 @@ class MCPServer:
         self._tool_registry: Dict[str, Dict[str, Any]] = {}
         self._resource_registry: Dict[str, Dict[str, Any]] = {}
         self._prompt_registry: Dict[str, Dict[str, Any]] = {}
+        
+        # Transport instance (for WebSocket and other transports)
+        self._transport = None
 
     def _init_mcp(self):
         """Initialize FastMCP server."""
@@ -1207,10 +1225,24 @@ class MCPServer:
                 self._init_mcp()
 
             # Wrap with metrics if enabled
+            wrapped_func = func
             if self.metrics.enabled:
-                func = self.metrics.track_tool(f"resource:{uri}")(func)
+                wrapped_func = self.metrics.track_tool(f"resource:{uri}")(func)
 
-            return self._mcp.resource(uri)(func)
+            # Register with FastMCP
+            mcp_resource = self._mcp.resource(uri)(wrapped_func)
+            
+            # Track in registry
+            self._resource_registry[uri] = {
+                "handler": mcp_resource,
+                "original_handler": func,
+                "name": uri,
+                "description": func.__doc__ or f"Resource: {uri}",
+                "mime_type": "text/plain",
+                "created_at": time.time(),
+            }
+
+            return mcp_resource
 
         return decorator
 
@@ -1230,10 +1262,23 @@ class MCPServer:
                 self._init_mcp()
 
             # Wrap with metrics if enabled
+            wrapped_func = func
             if self.metrics.enabled:
-                func = self.metrics.track_tool(f"prompt:{name}")(func)
+                wrapped_func = self.metrics.track_tool(f"prompt:{name}")(func)
 
-            return self._mcp.prompt(name)(func)
+            # Register with FastMCP
+            mcp_prompt = self._mcp.prompt(name)(wrapped_func)
+            
+            # Track in registry
+            self._prompt_registry[name] = {
+                "handler": mcp_prompt,
+                "original_handler": func,
+                "description": func.__doc__ or f"Prompt: {name}",
+                "arguments": [],  # Could be extracted from function signature
+                "created_at": time.time(),
+            }
+
+            return mcp_prompt
 
         return decorator
 
@@ -1454,6 +1499,47 @@ class MCPServer:
             return True
         return False
 
+    def _execute_tool(self, tool_name: str, arguments: dict) -> Any:
+        """Execute a tool directly (for testing purposes)."""
+        if tool_name not in self._tool_registry:
+            raise ValueError(f"Tool '{tool_name}' not found in registry")
+            
+        tool_info = self._tool_registry[tool_name]
+        if tool_info.get("disabled", False):
+            raise ValueError(f"Tool '{tool_name}' is currently disabled")
+            
+        # Get the tool handler (the enhanced function)
+        if "handler" in tool_info:
+            handler = tool_info["handler"]
+        elif "function" in tool_info:
+            handler = tool_info["function"]  
+        else:
+            raise ValueError(f"Tool '{tool_name}' has no valid handler")
+            
+        # Update statistics
+        tool_info["call_count"] = tool_info.get("call_count", 0) + 1
+        tool_info["last_called"] = time.time()
+        
+        try:
+            # Execute the tool
+            if asyncio.iscoroutinefunction(handler):
+                # For async functions, we need to run in event loop
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Already in async context - create task
+                        return asyncio.create_task(handler(**arguments))
+                    else:
+                        return loop.run_until_complete(handler(**arguments))
+                except RuntimeError:
+                    # No event loop - create new one
+                    return asyncio.run(handler(**arguments))
+            else:
+                return handler(**arguments)
+        except Exception as e:
+            tool_info["error_count"] = tool_info.get("error_count", 0) + 1
+            raise
+
     def run(self):
         """Run the enhanced MCP server with all features."""
         if self._mcp is None:
@@ -1464,6 +1550,7 @@ class MCPServer:
 
         # Log enhanced server startup
         logger.info(f"Starting enhanced MCP server: {self.name}")
+        logger.info(f"Transport: {self.transport}")
         logger.info("Features enabled:")
         logger.info(f"  - Cache: {self.cache.enabled if self.cache else False}")
         logger.info(f"  - Metrics: {self.metrics.enabled if self.metrics else False}")
@@ -1490,9 +1577,14 @@ class MCPServer:
             if health["status"] != "healthy":
                 logger.warning(f"Server health check shows issues: {health['issues']}")
 
-            # Run the FastMCP server
-            logger.info("Starting FastMCP server...")
-            self._mcp.run()
+            # Run server based on transport type
+            if self.transport == "websocket":
+                logger.info(f"Starting WebSocket server on {self.websocket_host}:{self.websocket_port}...")
+                asyncio.run(self._run_websocket())
+            else:
+                # Default to FastMCP (STDIO) server
+                logger.info("Starting FastMCP server in STDIO mode...")
+                self._mcp.run()
 
         except KeyboardInterrupt:
             logger.info("Server stopped by user")
@@ -1526,6 +1618,265 @@ class MCPServer:
 
             self._running = False
             logger.info(f"Enhanced MCP server '{self.name}' stopped")
+    
+    async def _run_websocket(self):
+        """Run the server using WebSocket transport."""
+        from .transports import WebSocketServerTransport
+        
+        try:
+            # Create WebSocket transport
+            self._transport = WebSocketServerTransport(
+                host=self.websocket_host,
+                port=self.websocket_port,
+                message_handler=self._handle_websocket_message,
+                auth_provider=self.auth_provider,
+                timeout=self.transport_timeout,
+                max_message_size=self.max_request_size,
+                enable_metrics=self.metrics.enabled if self.metrics else False,
+            )
+            
+            # Start WebSocket server
+            await self._transport.connect()
+            logger.info(f"WebSocket server started on {self.websocket_host}:{self.websocket_port}")
+            
+            # Keep server running
+            try:
+                await asyncio.Future()  # Run forever
+            except asyncio.CancelledError:
+                logger.info("WebSocket server cancelled")
+        
+        finally:
+            # Clean up
+            if self._transport:
+                await self._transport.disconnect()
+                self._transport = None
+    
+    async def _handle_websocket_message(self, request: Dict[str, Any], client_id: str) -> Dict[str, Any]:
+        """Handle incoming WebSocket message."""
+        try:
+            method = request.get("method", "")
+            params = request.get("params", {})
+            request_id = request.get("id")
+            
+            # Log request
+            logger.debug(f"WebSocket request from {client_id}: {method}")
+            
+            # Route to appropriate handler
+            if method == "initialize":
+                return await self._handle_initialize(params, request_id)
+            elif method == "tools/list":
+                return await self._handle_list_tools(params, request_id)
+            elif method == "tools/call":
+                return await self._handle_call_tool(params, request_id)
+            elif method == "resources/list":
+                return await self._handle_list_resources(params, request_id)
+            elif method == "resources/read":
+                return await self._handle_read_resource(params, request_id)
+            elif method == "prompts/list":
+                return await self._handle_list_prompts(params, request_id)
+            elif method == "prompts/get":
+                return await self._handle_get_prompt(params, request_id)
+            else:
+                return {
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32601,
+                        "message": f"Method not found: {method}"
+                    },
+                    "id": request_id
+                }
+                
+        except Exception as e:
+            logger.error(f"Error handling WebSocket message: {e}")
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": f"Internal error: {str(e)}"
+                },
+                "id": request.get("id")
+            }
+    
+    async def _handle_initialize(self, params: Dict[str, Any], request_id: Any) -> Dict[str, Any]:
+        """Handle initialize request."""
+        return {
+            "jsonrpc": "2.0",
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {"listSupported": True, "callSupported": True},
+                    "resources": {"listSupported": True, "readSupported": True},
+                    "prompts": {"listSupported": True, "getSupported": True}
+                },
+                "serverInfo": {
+                    "name": self.name,
+                    "version": self.config.get("server.version", "1.0.0")
+                }
+            },
+            "id": request_id
+        }
+    
+    async def _handle_list_tools(self, params: Dict[str, Any], request_id: Any) -> Dict[str, Any]:
+        """Handle tools/list request."""
+        tools = []
+        for name, info in self._tool_registry.items():
+            if not info.get("disabled", False):
+                tools.append({
+                    "name": name,
+                    "description": info.get("description", ""),
+                    "inputSchema": info.get("input_schema", {})
+                })
+        
+        return {
+            "jsonrpc": "2.0",
+            "result": {"tools": tools},
+            "id": request_id
+        }
+    
+    async def _handle_call_tool(self, params: Dict[str, Any], request_id: Any) -> Dict[str, Any]:
+        """Handle tools/call request."""
+        tool_name = params.get("name")
+        arguments = params.get("arguments", {})
+        
+        try:
+            result = self._execute_tool(tool_name, arguments)
+            
+            # Handle async results
+            if asyncio.iscoroutine(result) or asyncio.isfuture(result):
+                result = await result
+            
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "content": [{"type": "text", "text": str(result)}]
+                },
+                "id": request_id
+            }
+        except Exception as e:
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": f"Tool execution error: {str(e)}"
+                },
+                "id": request_id
+            }
+    
+    async def _handle_list_resources(self, params: Dict[str, Any], request_id: Any) -> Dict[str, Any]:
+        """Handle resources/list request."""
+        resources = []
+        for uri, info in self._resource_registry.items():
+            resources.append({
+                "uri": uri,
+                "name": info.get("name", uri),
+                "description": info.get("description", ""),
+                "mimeType": info.get("mime_type", "text/plain")
+            })
+        
+        return {
+            "jsonrpc": "2.0",
+            "result": {"resources": resources},
+            "id": request_id
+        }
+    
+    async def _handle_read_resource(self, params: Dict[str, Any], request_id: Any) -> Dict[str, Any]:
+        """Handle resources/read request."""
+        uri = params.get("uri")
+        
+        if uri not in self._resource_registry:
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32602,
+                    "message": f"Resource not found: {uri}"
+                },
+                "id": request_id
+            }
+        
+        try:
+            resource_info = self._resource_registry[uri]
+            handler = resource_info.get("handler")
+            
+            if handler:
+                content = handler()
+                if asyncio.iscoroutine(content):
+                    content = await content
+            else:
+                content = ""
+            
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "contents": [{"uri": uri, "text": str(content)}]
+                },
+                "id": request_id
+            }
+        except Exception as e:
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": f"Resource read error: {str(e)}"
+                },
+                "id": request_id
+            }
+    
+    async def _handle_list_prompts(self, params: Dict[str, Any], request_id: Any) -> Dict[str, Any]:
+        """Handle prompts/list request."""
+        prompts = []
+        for name, info in self._prompt_registry.items():
+            prompts.append({
+                "name": name,
+                "description": info.get("description", ""),
+                "arguments": info.get("arguments", [])
+            })
+        
+        return {
+            "jsonrpc": "2.0",
+            "result": {"prompts": prompts},
+            "id": request_id
+        }
+    
+    async def _handle_get_prompt(self, params: Dict[str, Any], request_id: Any) -> Dict[str, Any]:
+        """Handle prompts/get request."""
+        name = params.get("name")
+        arguments = params.get("arguments", {})
+        
+        if name not in self._prompt_registry:
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32602,
+                    "message": f"Prompt not found: {name}"
+                },
+                "id": request_id
+            }
+        
+        try:
+            prompt_info = self._prompt_registry[name]
+            handler = prompt_info.get("handler")
+            
+            if handler:
+                messages = handler(**arguments)
+                if asyncio.iscoroutine(messages):
+                    messages = await messages
+            else:
+                messages = []
+            
+            return {
+                "jsonrpc": "2.0",
+                "result": {"messages": messages},
+                "id": request_id
+            }
+        except Exception as e:
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": f"Prompt generation error: {str(e)}"
+                },
+                "id": request_id
+            }
 
     async def run_stdio(self):
         """Run the server using stdio transport for testing."""

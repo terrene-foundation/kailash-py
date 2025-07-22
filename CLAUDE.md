@@ -71,6 +71,11 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Nexus Quick Start
+```bash
+# Install Nexus separately
+pip install kailash-nexus
+```
+
 ```python
 from nexus import Nexus
 from kailash.workflow.builder import WorkflowBuilder
@@ -84,7 +89,7 @@ workflow.add_node("PythonCodeNode", "process", {
 })
 
 # Register workflow
-app.register("process_data", workflow)
+app.register("process_data", workflow.build())
 
 app.start()  # Available as API, CLI, and MCP
 ```
@@ -97,24 +102,38 @@ app.start()  # Available as API, CLI, and MCP
 - `workflow.connect(..., cycle=True)` → Use `workflow.create_cycle("name").connect(...).build()`
 - Override `execute()` in nodes → Implement `run()` instead
 - Parameter naming → Follow node-specific requirements (`operation` for EdgeCoordinationNode, `action` for others)
+- **Missing required parameters** → See [Parameter Guide](sdk-users/3-development/parameter-passing-guide.md) & [Error Solutions](sdk-users/2-core-concepts/validation/common-mistakes.md)
+
+## 🚨 **Debugging Workflow Errors**
+**"Node 'X' missing required inputs"** → [Parameter Solution Guide](sdk-users/2-core-concepts/validation/common-mistakes.md#mistake--1-missing-required-parameters-new-in-v070)
+
+### 🚨 PARAMETER PASSING
+**Required parameters MUST be provided via one of three methods:**
+1. **Node config**: `workflow.add_node("Node", "id", {"param": "value"})`
+2. **Connections**: `workflow.add_connection("source", "output", "target", "param")`  
+3. **Runtime**: `runtime.execute(workflow.build(), parameters={"node_id": {"param": "value"}})`
+
+**See**: [Parameter Passing Guide](sdk-users/3-development/parameter-passing-guide.md)
 
 ### 🎯 Multi-Step Strategy (Enterprise Workflow)
 1. **First implementation** → Copy basic pattern above
-2. **Architecture decisions** → [sdk-users/decision-matrix.md](sdk-users/decision-matrix.md)
-3. **Node selection** → [sdk-users/2-core-concepts/nodes/node-selection-guide.md](sdk-users/2-core-concepts/nodes/node-selection-guide.md)
-4. **AI Agents with MCP** → Use `use_real_mcp=True` (default) for real tool execution
-5. **Multi-agent coordination** → [sdk-users/2-core-concepts/cheatsheet/023-a2a-agent-coordination.md](sdk-users/2-core-concepts/cheatsheet/023-a2a-agent-coordination.md) (A2A agent cards, task delegation)
-6. **Multi-channel apps** → [sdk-users/5-enterprise/nexus-patterns.md](sdk-users/5-enterprise/nexus-patterns.md) (API, CLI, MCP unified)
-7. **Security & access control** → [sdk-users/5-enterprise/security-patterns.md](sdk-users/5-enterprise/security-patterns.md) (User management, RBAC, auth)
-8. **Enterprise integration** → [sdk-users/5-enterprise/gateway-patterns.md](sdk-users/5-enterprise/gateway-patterns.md) (API gateways, external systems)
-9. **Custom logic** → [sdk-users/2-core-concepts/cheatsheet/031-pythoncode-best-practices.md](sdk-users/2-core-concepts/cheatsheet/031-pythoncode-best-practices.md) (Use `.from_function()`)
-10. **Custom nodes** → [sdk-users/3-development/05-custom-development.md](sdk-users/3-development/05-custom-development.md)
-11. **Production deployment** → [sdk-users/5-enterprise/production-patterns.md](sdk-users/5-enterprise/production-patterns.md) (Scaling, monitoring)
-12. **Enterprise resilience** → [sdk-users/5-enterprise/resilience-patterns.md](sdk-users/5-enterprise/resilience-patterns.md) (Circuit breaker, bulkhead, health monitoring)
-13. **Edge computing** → [sdk-users/3-development/30-edge-computing-guide.md](sdk-users/3-development/30-edge-computing-guide.md) (EdgeCoordinationNode, distributed consensus)
-14. **Distributed transactions** → [sdk-users/2-core-concepts/cheatsheet/049-distributed-transactions.md](sdk-users/2-core-concepts/cheatsheet/049-distributed-transactions.md) (Saga, 2PC, automatic pattern selection)
-15. **Governance & compliance** → [sdk-users/5-enterprise/compliance-patterns.md](sdk-users/5-enterprise/compliance-patterns.md) (Audit, data policies)
-16. **Common errors** → [sdk-users/2-core-concepts/validation/common-mistakes.md](sdk-users/2-core-concepts/validation/common-mistakes.md)
+2. **Parameter validation** → [Parameter Guide](sdk-users/3-development/parameter-passing-guide.md) (CRITICAL for avoiding validation errors)
+3. **Architecture decisions** → [Architecture Decision Guide](sdk-users/architecture-decision-guide.md) | [Decision Matrix](sdk-users/decision-matrix.md)
+4. **Feature discovery** → [Feature Discovery Guide](sdk-users/2-core-concepts/feature-discovery-guide.md) (**Use existing solutions first!**)
+5. **Node selection** → [sdk-users/2-core-concepts/nodes/node-selection-guide.md](sdk-users/2-core-concepts/nodes/node-selection-guide.md)
+6. **AI Agents with MCP** → Use `use_real_mcp=True` (default) for real tool execution
+7. **Multi-agent coordination** → [sdk-users/2-core-concepts/cheatsheet/023-a2a-agent-coordination.md](sdk-users/2-core-concepts/cheatsheet/023-a2a-agent-coordination.md) (A2A agent cards, task delegation)
+8. **Multi-channel apps** → [sdk-users/5-enterprise/nexus-patterns.md](sdk-users/5-enterprise/nexus-patterns.md) (API, CLI, MCP unified)
+9. **Security & access control** → [sdk-users/5-enterprise/security-patterns.md](sdk-users/5-enterprise/security-patterns.md) (User management, RBAC, auth)
+10. **Enterprise integration** → [sdk-users/5-enterprise/gateway-patterns.md](sdk-users/5-enterprise/gateway-patterns.md) (API gateways, external systems)
+11. **Custom logic** → [sdk-users/2-core-concepts/cheatsheet/031-pythoncode-best-practices.md](sdk-users/2-core-concepts/cheatsheet/031-pythoncode-best-practices.md) (Use `.from_function()`)
+12. **Custom nodes** → [sdk-users/3-development/05-custom-development.md](sdk-users/3-development/05-custom-development.md)
+13. **Production deployment** → [sdk-users/5-enterprise/production-patterns.md](sdk-users/5-enterprise/production-patterns.md) (Scaling, monitoring)
+14. **Enterprise resilience** → [sdk-users/5-enterprise/resilience-patterns.md](sdk-users/5-enterprise/resilience-patterns.md) (Circuit breaker, bulkhead, health monitoring)
+15. **Edge computing** → [sdk-users/3-development/30-edge-computing-guide.md](sdk-users/3-development/30-edge-computing-guide.md) (EdgeCoordinationNode, distributed consensus)
+16. **Distributed transactions** → [sdk-users/2-core-concepts/cheatsheet/049-distributed-transactions.md](sdk-users/2-core-concepts/cheatsheet/049-distributed-transactions.md) (Saga, 2PC, automatic pattern selection)
+17. **Governance & compliance** → [sdk-users/5-enterprise/compliance-patterns.md](sdk-users/5-enterprise/compliance-patterns.md) (Audit, data policies)
+18. **Common errors** → [sdk-users/2-core-concepts/validation/common-mistakes.md](sdk-users/2-core-concepts/validation/common-mistakes.md)
 
 ---
 

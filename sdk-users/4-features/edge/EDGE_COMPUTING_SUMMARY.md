@@ -172,7 +172,8 @@ workflow.add_node("EdgeMonitoringNode", "analytics", {
 
 **Implementation**:
 - `EdgeMigrator`: Core migration service with phase management
-- `EdgeMigrationNode`: Workflow integration for migrations
+- `EdgeMigrationService`: Singleton service for shared state coordination across workflows
+- `EdgeMigrationNode`: Workflow integration for migrations with shared state access
 - Complete test coverage with integration tests
 
 **Example**:

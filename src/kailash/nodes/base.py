@@ -255,6 +255,54 @@ class Node(ABC):
                 f"Failed to initialize node '{self.id}': {e}"
             ) from e
 
+    def get_workflow_context(self, key: str, default: Any = None) -> Any:
+        """Get a value from the workflow context.
+
+        This method allows nodes to retrieve shared state from the workflow
+        execution context. The workflow context is managed by the runtime
+        and provides a way for nodes to share data within a single workflow
+        execution.
+
+        Args:
+            key: The key to retrieve from the workflow context
+            default: Default value to return if key is not found
+
+        Returns:
+            The value from the workflow context, or default if not found
+
+        Example:
+            >>> # In a transaction node
+            >>> connection = self.get_workflow_context('transaction_connection')
+            >>> if connection:
+            >>>     # Use the shared connection
+            >>>     result = await connection.execute(query)
+        """
+        if not hasattr(self, '_workflow_context'):
+            self._workflow_context = {}
+        return self._workflow_context.get(key, default)
+
+    def set_workflow_context(self, key: str, value: Any) -> None:
+        """Set a value in the workflow context.
+
+        This method allows nodes to store shared state in the workflow
+        execution context. Other nodes in the same workflow execution
+        can retrieve this data using get_workflow_context().
+
+        Args:
+            key: The key to store the value under
+            value: The value to store in the workflow context
+
+        Example:
+            >>> # In a transaction scope node
+            >>> connection = await self.get_connection()
+            >>> transaction = await connection.begin()
+            >>> self.set_workflow_context('transaction_connection', connection)
+            >>> self.set_workflow_context('active_transaction', transaction)
+        """
+        if not hasattr(self, '_workflow_context'):
+            self._workflow_context = {}
+        self._workflow_context[key] = value
+
     @abstractmethod
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts.

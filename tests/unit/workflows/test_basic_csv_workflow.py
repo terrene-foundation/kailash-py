@@ -13,6 +13,7 @@ from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime.local import LocalRuntime
 
 
+@pytest.mark.requires_isolation
 class TestBasicWorkflow:
     """Test basic workflow construction and execution."""
 

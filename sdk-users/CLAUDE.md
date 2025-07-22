@@ -1,5 +1,8 @@
 # SDK Users - Essential Patterns Only
 
+## 🚨 **Debugging Workflow Errors**
+**"Node 'X' missing required inputs"** → [Parameter Solution Guide](2-core-concepts/validation/common-mistakes.md#mistake--1-missing-required-parameters-new-in-v070)
+
 ## ⚡ CRITICAL PATTERNS
 
 ### Workflow Pattern (Always use this)
@@ -40,6 +43,7 @@ workflow.add_node("process", PythonCodeNode.from_function(process_data))
 
 ### Quick Links
 - **Node Selection**: [2-core-concepts/nodes/node-selection-guide.md](2-core-concepts/nodes/node-selection-guide.md)
+- **Parameter Passing**: [3-development/parameter-passing-guide.md](3-development/parameter-passing-guide.md)
 - **Common Errors**: [2-core-concepts/validation/common-mistakes.md](2-core-concepts/validation/common-mistakes.md)
 - **Patterns**: [2-core-concepts/cheatsheet/](2-core-concepts/cheatsheet/)
 
@@ -66,6 +70,11 @@ workflow.add_node("process", PythonCodeNode.from_function(process_data))
 ### App Frameworks
 - **DataFlow**: [../apps/kailash-dataflow/](../apps/kailash-dataflow/)
 - **Nexus**: [../apps/kailash-nexus/](../apps/kailash-nexus/)
+
+### Advanced Features
+- **Edge Computing**: [4-features/edge/](4-features/edge/) - Migration, monitoring, coordination
+- **MCP Integration**: [4-features/mcp/](4-features/mcp/) - Model Context Protocol
+- **Middleware**: [4-features/middleware/](4-features/middleware/) - Custom middleware
 
 ### Workflow Guidance
 - **Production Workflows**: [4-workflows/](4-workflows/)
