@@ -20,6 +20,12 @@ from kailash.runtime.local import LocalRuntime
 class TestBasicWorkflow:
     """Test basic workflow construction and execution."""
 
+    def teardown_method(self):
+        """Clean up after each test method."""
+        # Ensure any lingering state is cleaned up
+        import gc
+        gc.collect()
+
     @pytest.fixture
     def sample_csv_file(self, tmp_path):
         """Create a sample CSV file for testing."""
