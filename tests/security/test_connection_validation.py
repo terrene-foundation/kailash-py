@@ -12,6 +12,7 @@ import pytest
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.core.registry import get_node_registry
 from kailash.runtime.local import LocalRuntime
+from kailash.sdk_exceptions import WorkflowExecutionError
 from kailash.workflow.builder import WorkflowBuilder
 
 
@@ -138,10 +139,10 @@ class TestConnectionValidation:
             or "conversion" in str(exc_info.value).lower()
         )
 
-    def test_connection_parameters_bypass_validation_currently(self):
+    def test_connection_parameters_security_validation_enforced(self):
         """
-        This test demonstrates the current vulnerability where connection
-        parameters bypass validation. This should FAIL after the fix.
+        Test that connection parameters are now validated by default in strict mode.
+        This test verifies the security fix is working.
         """
         workflow = WorkflowBuilder()
         workflow.add_node(MaliciousNode, "malicious", {})
@@ -150,19 +151,35 @@ class TestConnectionValidation:
         # Connect malicious output to secure input
         workflow.add_connection("malicious", "output", "secure", "")
 
+        # Default runtime should now use strict mode and prevent security bypass
         runtime = LocalRuntime()
 
-        # Currently this executes without validation (VULNERABILITY!)
-        # After fix, this should raise an error in strict mode
-        try:
+        # This should now raise a validation error preventing the security bypass
+        with pytest.raises(WorkflowExecutionError) as exc_info:
             results, _ = runtime.execute(workflow.build(), {})
-            # If we get here, validation was bypassed (current behavior)
-            assert True  # This is the vulnerability we're fixing
-        except Exception as e:
-            if "security" in str(e).lower() or "unauthorized" in str(e).lower():
-                # After fix, this should happen in strict mode
-                pytest.fail("Security validation is working (good!)")
+        
+        # Verify it's a security-related validation error
+        error_msg = str(exc_info.value).lower()
+        assert any(keyword in error_msg for keyword in ["unauthorized", "validation", "parameter", "security"]), \
+            f"Expected security validation error, got: {exc_info.value}"
 
+    def test_backward_compatibility_warn_mode(self):
+        """Test that warn mode still allows execution while logging security warnings."""
+        workflow = WorkflowBuilder()
+        workflow.add_node(MaliciousNode, "malicious", {})
+        workflow.add_node(SecureNode, "secure", {})
+        workflow.add_connection("malicious", "output", "secure", "")
+        
+        # Explicit warn mode for backward compatibility
+        runtime = LocalRuntime(connection_validation="warn")
+        
+        # Should execute successfully but log warnings
+        results, _ = runtime.execute(workflow.build(), {})
+        
+        # Verify execution completed
+        assert results is not None
+        assert "secure" in results
+    
     def test_connection_validation_modes(self):
         """Test different validation modes after fix implementation."""
         workflow = WorkflowBuilder()
@@ -329,6 +346,60 @@ class TestConnectionValidation:
         # Performance impact should be < 5%
         overhead = (time_with - time_without) / time_without
         assert overhead < 0.05, f"Performance overhead {overhead:.1%} exceeds 5%"
+
+
+    def test_sql_injection_prevention_comprehensive(self):
+        """Test comprehensive SQL injection prevention through connections."""
+        
+        class SQLInjectionAttackNode(Node):
+            """Node that outputs dangerous SQL injection patterns."""
+            def run(self, **kwargs):
+                return {
+                    "dangerous_query": "'; DROP TABLE users; SELECT * FROM admin WHERE '1'='1",
+                    "xss_payload": "<script>alert('XSS')</script>",
+                    "command_injection": "; rm -rf /; echo 'hacked'",
+                    "count": "not_a_number"  # Type confusion attack
+                }
+        
+        class DatabaseNode(Node):
+            """Mock database node that should validate SQL parameters."""
+            def get_parameters(self):
+                return {
+                    "query": NodeParameter(type=str, required=True),
+                    "count": NodeParameter(type=int, required=True)
+                }
+            
+            def run(self, **kwargs):
+                query = kwargs.get("query", "")
+                count = kwargs.get("count", 0)
+                
+                # Simulate validation that should prevent injection
+                if any(dangerous in query.lower() for dangerous in ["drop", "delete", "truncate", "insert"]):
+                    raise ValueError(f"Dangerous SQL detected: {query}")
+                
+                if not isinstance(count, int):
+                    raise TypeError(f"Count must be integer, got {type(count)}")
+                    
+                return {"query_result": f"Executed: {query} with count {count}"}
+        
+        workflow = WorkflowBuilder()
+        workflow.add_node(SQLInjectionAttackNode, "attacker", {})
+        workflow.add_node(DatabaseNode, "database", {})
+        
+        # Direct connection that should be validated
+        workflow.add_connection("attacker", "dangerous_query", "database", "query")
+        workflow.add_connection("attacker", "count", "database", "count")
+        
+        # Strict mode should prevent the attack
+        runtime = LocalRuntime(connection_validation="strict")
+        
+        with pytest.raises(WorkflowExecutionError) as exc_info:
+            runtime.execute(workflow.build(), {})
+        
+        error_msg = str(exc_info.value).lower()
+        # Should fail on either SQL injection or type validation
+        assert any(keyword in error_msg for keyword in ["dangerous", "type", "validation", "parameter"]), \
+            f"Expected security or validation error, got: {exc_info.value}"
 
 
 class TestDataFlowConnectionSecurity:

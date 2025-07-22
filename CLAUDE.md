@@ -34,18 +34,18 @@ cycle_builder.connect("processor", "evaluator", mapping={"result": "input_data"}
              .timeout(300) \
              .build()
 
-runtime = LocalRuntime()
+runtime = LocalRuntime()  # Secure by default (v0.8.6+)
 results, run_id = runtime.execute(workflow.build())  # Real cyclic execution
 ```
 
-### Basic Workflow
+### Basic Workflow  
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 workflow = WorkflowBuilder()
 workflow.add_node("LLMAgentNode", "agent", {"model": "gpt-4"})
-runtime = LocalRuntime()
+runtime = LocalRuntime()  # Secure by default (v0.8.6+)
 results, run_id = runtime.execute(workflow.build())
 ```
 
@@ -66,7 +66,7 @@ workflow = WorkflowBuilder()
 workflow.add_node("UserCreateNode", "create", {"name": "Alice", "age": 25})
 workflow.add_node("UserListNode", "list", {"filter": {"age": {"$gt": 18}}})
 
-runtime = LocalRuntime()
+runtime = LocalRuntime()  # Secure by default (v0.8.6+)
 results, run_id = runtime.execute(workflow.build())
 ```
 
@@ -113,7 +113,22 @@ app.start()  # Available as API, CLI, and MCP
 2. **Connections**: `workflow.add_connection("source", "output", "target", "param")`  
 3. **Runtime**: `runtime.execute(workflow.build(), parameters={"node_id": {"param": "value"}})`
 
-**See**: [Parameter Passing Guide](sdk-users/3-development/parameter-passing-guide.md)
+### 🔧 PARAMETER DEBUGGING
+```python
+# Enhanced parameter validation with debugging
+runtime = LocalRuntime(
+    parameter_validation="strict",  # "warn", "strict", "debug"
+    enable_parameter_debugging=True
+)
+
+# Debug parameter flow
+from kailash.runtime.parameter_debugger import ParameterDebugger
+debugger = ParameterDebugger()
+report = debugger.trace_parameter_flow(workflow, runtime_parameters)
+debugger.print_parameter_flow_report(report)
+```
+
+**See**: [Parameter Passing Guide](sdk-users/3-development/parameter-passing-guide.md) | [Parameter Troubleshooting](sdk-users/3-development/parameter-troubleshooting-guide.md)
 
 ### 🎯 Multi-Step Strategy (Enterprise Workflow)
 1. **First implementation** → Copy basic pattern above
@@ -223,12 +238,15 @@ The **App Framework** provides complete domain-specific applications built on th
 14. **Core SDK Architecture**: TODO-111 resolved critical infrastructure gaps - CyclicWorkflowExecutor, WorkflowVisualizer, and ConnectionManager now production-ready with comprehensive test coverage
 15. **Parameter Naming Convention**: Use `action` (not `operation`) for consistency across nodes
 16. **Test Performance**: Run unit tests directly for 11x faster execution: `pytest tests/unit/`
-17. **Connection Parameter Validation** (v0.8.4+): Enterprise security with comprehensive validation
-    - Use `LocalRuntime(connection_validation="strict")` for production
-    - Connection contracts with `workflow.add_typed_connection(..., contract_name="no_pii_data")`
-    - Type-safe ports with `InputPort[str] = StringPort(required=True)`
-    - Monitoring with `get_validation_metrics()` and `AlertManager`
-    - Performance optimization with caching and batch validation
+17. **Parameter Validation & Debugging**: Enhanced parameter troubleshooting
+    - Use `LocalRuntime(parameter_validation="strict", enable_parameter_debugging=True)` 
+    - Debug with `ParameterDebugger().trace_parameter_flow(workflow, runtime_parameters)`
+    - Validation modes: `"off"`, `"warn"`, `"stri![img.png](img.png)ct"`, `"debug"`
+    - See: [Parameter Troubleshooting Guide](sdk-users/3-development/parameter-troubleshooting-guide.md)
+18. **🔒 SECURE BY DEFAULT** (v0.8.6+): Connection parameter validation automatic
+    - **SECURE**: `LocalRuntime()` prevents SQL injection, type confusion, parameter attacks
+    - **FAST**: Performance optimization with caching enabled automatically  
+    - **MIGRATION**: Use `LocalRuntime(connection_validation="warn")` for legacy compatibility
 
 ## 🔧 Core Nodes (110+ available)
 **Quick Access**: [Node Index](sdk-users/2-core-concepts/nodes/node-index.md) - Minimal reference (47 lines)

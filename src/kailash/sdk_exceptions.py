@@ -113,6 +113,17 @@ class NodeConfigurationError(NodeException):
     """
 
 
+class ParameterValidationError(NodeException):
+    """Raised when parameter validation fails.
+    
+    This typically occurs when:
+    - Required parameters are missing
+    - Parameter types don't match expectations
+    - Undeclared parameters are provided in strict mode
+    - Parameter constraints are violated
+    """
+
+
 class SafetyViolationError(NodeException):
     """Raised when code safety validation fails.
 

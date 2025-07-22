@@ -3,6 +3,22 @@
 ## 🚨 **Debugging Workflow Errors**
 **"Node 'X' missing required inputs"** → [Parameter Solution Guide](2-core-concepts/validation/common-mistakes.md#mistake--1-missing-required-parameters-new-in-v070)
 
+### 🔧 PARAMETER DEBUGGING
+```python
+# Enhanced parameter validation with debugging
+runtime = LocalRuntime(
+    parameter_validation="strict",  # "warn", "strict", "debug"
+    enable_parameter_debugging=True
+)
+
+# Debug parameter flow
+from kailash.runtime.parameter_debugger import ParameterDebugger
+debugger = ParameterDebugger()
+report = debugger.trace_parameter_flow(workflow, runtime_parameters)
+debugger.print_parameter_flow_report(report)
+```
+**Troubleshooting**: [3-development/parameter-troubleshooting-guide.md](3-development/parameter-troubleshooting-guide.md)
+
 ## ⚡ CRITICAL PATTERNS
 
 ### Workflow Pattern (Always use this)

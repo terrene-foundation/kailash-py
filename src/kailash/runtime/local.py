@@ -95,7 +95,9 @@ class LocalRuntime:
         enable_audit: bool = False,
         resource_limits: Optional[dict[str, Any]] = None,
         secret_provider: Optional[Any] = None,
-        connection_validation: str = "warn",
+        connection_validation: str = "strict",
+        parameter_validation: str = "warn",
+        enable_parameter_debugging: bool = False,
     ):
         """Initialize the unified runtime.
 
@@ -112,15 +114,29 @@ class LocalRuntime:
             secret_provider: Optional secret provider for runtime secret injection.
             connection_validation: Connection parameter validation mode:
                 - "off": No validation (backward compatibility)
-                - "warn": Log warnings on validation errors (default)
-                - "strict": Raise errors on validation failures
+                - "warn": Log warnings on validation errors
+                - "strict": Raise errors on validation failures (default, recommended for production)
+            parameter_validation: Enhanced parameter validation mode:
+                - "off": No parameter validation (backward compatibility)
+                - "warn": Log warnings for parameter issues (default)
+                - "strict": Raise errors for parameter validation failures
+                - "debug": Verbose logging for troubleshooting parameter issues
+            enable_parameter_debugging: Enable detailed parameter flow debugging
         """
         # Validate connection_validation parameter
-        valid_modes = {"off", "warn", "strict"}
-        if connection_validation not in valid_modes:
+        valid_connection_modes = {"off", "warn", "strict"}
+        if connection_validation not in valid_connection_modes:
             raise ValueError(
                 f"Invalid connection_validation mode: {connection_validation}. "
-                f"Must be one of: {valid_modes}"
+                f"Must be one of: {valid_connection_modes}"
+            )
+        
+        # Validate parameter_validation parameter
+        valid_parameter_modes = {"off", "warn", "strict", "debug"}
+        if parameter_validation not in valid_parameter_modes:
+            raise ValueError(
+                f"Invalid parameter_validation mode: {parameter_validation}. "
+                f"Must be one of: {valid_parameter_modes}"
             )
 
         self.debug = debug
@@ -134,10 +150,13 @@ class LocalRuntime:
         self.enable_audit = enable_audit
         self.resource_limits = resource_limits or {}
         self.connection_validation = connection_validation
+        self.parameter_validation = parameter_validation
+        self.enable_parameter_debugging = enable_parameter_debugging
         self.logger = logger
 
         # Enterprise feature managers (lazy initialization)
         self._access_control_manager = None
+        self._performance_optimizer = None
 
         # Initialize cyclic workflow executor if enabled
         if enable_cycles:
@@ -148,6 +167,10 @@ class LocalRuntime:
             self.logger.setLevel(logging.DEBUG)
         else:
             self.logger.setLevel(logging.INFO)
+        
+        # Initialize performance optimizer for strict validation
+        if self.connection_validation == "strict":
+            self._enable_performance_optimization()
 
         # Enterprise execution context
         self._execution_context = {
@@ -937,8 +960,13 @@ class LocalRuntime:
                         if key not in inputs:  # Runtime inputs take precedence
                             merged_inputs[key] = value
 
-                # Use the node's existing validate_inputs method with merged inputs
-                validated_inputs = node_instance.validate_inputs(**merged_inputs)
+                # Use optimized validation with performance enhancement
+                if self.connection_validation == "strict" and hasattr(self, '_performance_optimizer'):
+                    from kailash.runtime.validation.performance_optimizer import optimize_validation_performance
+                    validated_inputs = optimize_validation_performance(node_id, node_instance, merged_inputs)
+                else:
+                    # Use the node's existing validate_inputs method with merged inputs
+                    validated_inputs = node_instance.validate_inputs(**merged_inputs)
 
                 # Extract only the runtime inputs from validated results
                 # (exclude config parameters that were merged for validation)
@@ -1112,16 +1140,38 @@ class LocalRuntime:
             Dictionary containing performance and security metrics
         """
         metrics_collector = get_metrics_collector()
-        return {
+        base_metrics = {
             "performance_summary": metrics_collector.get_performance_summary(),
             "security_report": metrics_collector.get_security_report(),
             "raw_metrics": metrics_collector.export_metrics() if self.debug else None,
         }
+        
+        # Add performance optimization metrics if available
+        if self._performance_optimizer:
+            base_metrics['performance_optimization'] = self._performance_optimizer.get_performance_report()
+            
+        return base_metrics
 
     def reset_validation_metrics(self) -> None:
         """Reset validation metrics collector."""
         metrics_collector = get_metrics_collector()
         metrics_collector.reset_metrics()
+        
+        # Reset performance optimizer metrics if enabled
+        if self._performance_optimizer:
+            self._performance_optimizer.reset_metrics()
+    
+    def _enable_performance_optimization(self):
+        """Enable performance optimization for connection validation."""
+        if self._performance_optimizer is None:
+            from kailash.runtime.validation.performance_optimizer import ValidationPerformanceOptimizer
+            self._performance_optimizer = ValidationPerformanceOptimizer(
+                enable_caching=True,
+                enable_batching=True
+            )
+            
+            if self.debug:
+                self.logger.debug("Performance optimization enabled for connection validation")
 
     def _should_stop_on_error(self, workflow: Workflow, node_id: str) -> bool:
         """Determine if execution should stop when a node fails.
@@ -1427,6 +1477,70 @@ class LocalRuntime:
                     # Ensure result is not None if we added secrets
                     if result is None:
                         result = {}
+
+        # Enhanced parameter validation
+        if self.parameter_validation != "off" and result:
+            from kailash.runtime.parameter_validator import (
+                EnhancedParameterValidator,
+                ValidationMode
+            )
+            
+            # Map string modes to enum values
+            mode_mapping = {
+                "warn": ValidationMode.WARN,
+                "strict": ValidationMode.STRICT,
+                "debug": ValidationMode.DEBUG
+            }
+            validation_mode = mode_mapping.get(self.parameter_validation, ValidationMode.WARN)
+            
+            validator = EnhancedParameterValidator(validation_mode)
+            
+            # Get workflow nodes for validation
+            workflow_nodes = getattr(workflow, '_node_instances', {})
+            if not workflow_nodes:
+                # Fallback: get nodes from workflow.nodes
+                workflow_nodes = {node_id: node for node_id, node in workflow.nodes.items()}
+            
+            # Get node configurations
+            node_configs = {
+                node_id: getattr(node, 'config', {}) 
+                for node_id, node in workflow_nodes.items()
+            }
+            
+            try:
+                # Validate runtime parameters
+                validated_params, validation_issues = validator.validate_runtime_parameters(
+                    workflow_nodes=workflow_nodes,
+                    runtime_parameters=result,
+                    node_configs=node_configs
+                )
+                
+                # Log validation issues
+                if validation_issues:
+                    if self.debug or self.enable_parameter_debugging:
+                        report = validator.get_validation_report()
+                        self.logger.info(f"Enhanced parameter validation report: {report}")
+                    
+                    # Log individual issues
+                    for issue in validation_issues:
+                        if issue.severity == "error":
+                            self.logger.error(f"Parameter validation error: {issue.message}")
+                            if issue.suggestion:
+                                self.logger.error(f"Suggestion: {issue.suggestion}")
+                        else:
+                            self.logger.warning(f"Parameter validation warning: {issue.message}")
+                            if issue.suggestion and (self.debug or self.enable_parameter_debugging):
+                                self.logger.info(f"Suggestion: {issue.suggestion}")
+                
+                # Use validated parameters if validation passed
+                if validated_params:
+                    result = validated_params
+                    
+            except Exception as e:
+                if self.parameter_validation == "strict":
+                    raise
+                else:
+                    self.logger.warning(f"Enhanced parameter validation failed: {e}")
 
         return result if result else None
 

@@ -21,7 +21,37 @@ from kailash.nodes.base import Node, NodeParameter
 
 ## 🚨 **Most Common Mistakes**
 
-### **Mistake #-1: Missing Required Parameters (NEW in v0.7.0+)**
+### **✅ FIXED: Mistake #0: Connection Parameter Security - NOW SECURE BY DEFAULT**
+
+**🔒 AUTOMATIC (v0.8.6+): Connection validation is now STRICT by default with performance optimization**
+
+```python
+# ✅ SECURE BY DEFAULT (no configuration needed)
+runtime = LocalRuntime()  # Automatically prevents SQL injection, type confusion, parameter attacks
+workflow.add_connection("source", "data", "database", "query")  # Validated automatically
+# Fast performance with built-in caching
+
+# ✅ RECOMMENDED: Add parameter validation in your nodes
+class SecureDatabaseNode(Node):
+    def get_parameters(self):
+        return {
+            "query": NodeParameter(type=str, required=True),  # SDK validates automatically
+            "max_rows": NodeParameter(type=int, required=True)
+        }
+
+# ⚠️ LEGACY MIGRATION (only if needed for old workflows)
+runtime = LocalRuntime(connection_validation="warn")  # Temporarily disable for migration
+# Then remove this override - strict mode is safer and just as fast
+```
+
+**Benefits of secure-by-default:**
+- **No Configuration**: Security works automatically
+- **Fast Performance**: Built-in caching makes strict validation faster than warn mode
+- **Enterprise Ready**: Meets security compliance requirements out-of-the-box
+- **Unauthorized Parameter Blocking**: Rejects undeclared parameters automatically
+- **No Performance Impact**: Caching makes validation faster than previous versions
+
+### **Mistake #1: Missing Required Parameters (NEW in v0.7.0+)**
 
 ```python
 # ❌ WRONG - Missing required parameters

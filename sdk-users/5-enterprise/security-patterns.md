@@ -649,33 +649,32 @@ cred_workflow.add_connection(
 )
 ```
 
-## 🛡️ Connection Parameter Validation (v0.6.7+)
+## 🔒 Connection Parameter Validation - SECURE BY DEFAULT (v0.8.6+)
 
 ### Overview
 
-Starting in v0.6.7, the Kailash SDK provides connection parameter validation to prevent security vulnerabilities where parameters passed through workflow connections could bypass validation checks. This is a **CRITICAL** security feature that prevents injection attacks and ensures type safety.
+**✅ AUTOMATIC**: The Kailash SDK now provides secure-by-default connection parameter validation with built-in performance optimization. This **CRITICAL** security feature prevents injection attacks and ensures type safety automatically.
 
-### Security Vulnerability Fixed
+### Security Benefits - Now Default
 
-Previously, parameters had two paths with different validation:
+**All parameters are now validated automatically:**
 - **Direct parameters** (via `runtime.execute()`) - ✅ VALIDATED  
-- **Connection parameters** (via `workflow.add_connection()`) - ❌ NOT VALIDATED
+- **Connection parameters** (via `workflow.add_connection()`) - ✅ NOW VALIDATED BY DEFAULT
+- **Performance optimized** - Validation is faster than previous versions due to caching
 
-This created attack vectors for SQL injection, command injection, and other parameter-based exploits.
-
-### Implementation
+### Implementation - Now Automatic
 
 ```python
 from kailash.runtime.local import LocalRuntime
 
-# Production: Always use strict mode
-runtime = LocalRuntime(connection_validation="strict")
+# ✅ SECURE BY DEFAULT (v0.8.6+) - No configuration needed
+runtime = LocalRuntime()  # Automatically prevents injection attacks with high performance
 
-# Migration period: Use warn mode to identify issues
-runtime_migration = LocalRuntime(connection_validation="warn")
+# ⚠️ MIGRATION ONLY (if needed for legacy workflows)
+runtime_legacy = LocalRuntime(connection_validation="warn")
 
-# Legacy compatibility only (NOT RECOMMENDED)
-runtime_legacy = LocalRuntime(connection_validation="off")
+# ❌ NOT RECOMMENDED (security risk)
+runtime_insecure = LocalRuntime(connection_validation="off")
 ```
 
 ### Enterprise Security Workflow
@@ -697,14 +696,14 @@ workflow.add_node(SQLDatabaseNode, "db_operation", {
     "operation": "query"
 })
 
-# Connection will now validate parameters
+# Connection automatically validates parameters (v0.8.6+)
 workflow.add_connection(
     "user_input", "query_params",
     "db_operation", "parameters"
 )
 
-# Strict validation prevents SQL injection
-runtime = LocalRuntime(connection_validation="strict")
+# Automatic validation prevents SQL injection
+runtime = LocalRuntime()  # Secure by default
 
 try:
     # Malicious input will be caught by validation

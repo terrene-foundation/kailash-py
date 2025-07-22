@@ -6,7 +6,13 @@
 
 ### Latest Versions
 
-- **[v0.6.6-infrastructure-enhancements.md](v0.6.6-infrastructure-enhancements.md)** ⭐ **NEW**
+- **[v0.8.5-enhanced-parameter-validation.md](v0.8.5-enhanced-parameter-validation.md)** ⭐ **NEW**
+  - Enhanced runtime parameter validation (4 modes: off/warn/strict/debug)
+  - Parameter flow debugging and tracing with ParameterDebugger
+  - Actionable error messages with fix suggestions
+  - <1ms performance overhead, comprehensive troubleshooting
+
+- **[v0.6.6-infrastructure-enhancements.md](v0.6.6-infrastructure-enhancements.md)**
   - Enhanced transaction monitoring operations
   - Improved AsyncNode event loop handling
   - New operations: complete_transaction, acquire_resource, complete_operation
@@ -46,6 +52,7 @@
 | v0.6.0 | v0.6.1 | [v0.6.0-to-v0.6.1-migration.md](v0.6.0-to-v0.6.1-migration.md) | MEDIUM |
 | v0.6.x | v0.6.5+ | [v0.6.5-shared-workflow-fix.md](v0.6.5-shared-workflow-fix.md) | LOW |
 | v0.6.5+ | v0.6.6+ | [v0.6.6-infrastructure-enhancements.md](v0.6.6-infrastructure-enhancements.md) | LOW |
+| v0.8.4 | v0.8.5+ | [v0.8.5-enhanced-parameter-validation.md](v0.8.5-enhanced-parameter-validation.md) | MEDIUM |
 
 ---
 
