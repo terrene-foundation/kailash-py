@@ -1,11 +1,12 @@
 import asyncio
 import json
-from typing import Dict, List, Any
-from mcp.server.models import InitializationOptions
-from mcp.server import NotificationOptions, Server
-from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent
 import logging
+from typing import Any, Dict, List
+
+from mcp.server import NotificationOptions, Server
+from mcp.server.models import InitializationOptions
+from mcp.server.stdio import stdio_server
+from mcp.types import TextContent, Tool
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -189,10 +190,12 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
 
+import threading
+
+import uvicorn
+
 # Add health check endpoint for HTTP mode
 from fastapi import FastAPI
-import uvicorn
-import threading
 
 app = FastAPI()
 

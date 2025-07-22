@@ -481,9 +481,9 @@ class CodeExecutor:
         # Add global utility functions to namespace
         try:
             from kailash.utils.data_paths import (
+                get_data_path,
                 get_input_data_path,
                 get_output_data_path,
-                get_data_path,
             )
 
             namespace["get_input_data_path"] = get_input_data_path

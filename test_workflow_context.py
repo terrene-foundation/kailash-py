@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Test script to verify workflow context functions work in actual workflow execution."""
 
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code.python import PythonCodeNode
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 def test_workflow_context_in_workflow():

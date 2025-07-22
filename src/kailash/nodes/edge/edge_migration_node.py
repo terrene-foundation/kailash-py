@@ -8,6 +8,7 @@ import asyncio
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from kailash.edge.migration.edge_migration_service import EdgeMigrationService
 from kailash.edge.migration.edge_migrator import (
     EdgeMigrator,
     MigrationPhase,
@@ -15,7 +16,6 @@ from kailash.edge.migration.edge_migrator import (
     MigrationProgress,
     MigrationStrategy,
 )
-from kailash.edge.migration.edge_migration_service import EdgeMigrationService
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 

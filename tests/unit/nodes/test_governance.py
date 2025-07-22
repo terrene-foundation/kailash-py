@@ -1,13 +1,14 @@
 """Tests for SecureGovernedNode and governance patterns."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from kailash.nodes.base import NodeParameter
-from kailash.nodes.governance import SecureGovernedNode, EnterpriseNode, DevelopmentNode
-from kailash.workflow.validation import ValidationIssue, IssueSeverity
+from kailash.nodes.governance import DevelopmentNode, EnterpriseNode, SecureGovernedNode
 from kailash.sdk_exceptions import NodeConfigurationError
 from kailash.security import SecurityError
+from kailash.workflow.validation import IssueSeverity, ValidationIssue
 
 
 class TestSecureGovernedNode(SecureGovernedNode):

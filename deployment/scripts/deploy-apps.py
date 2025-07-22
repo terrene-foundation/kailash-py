@@ -4,13 +4,14 @@ Dynamic multi-app deployment script
 Automatically discovers and deploys apps from the apps/ directory
 """
 
-import os
-import sys
-import yaml
-import subprocess
 import argparse
+import os
+import subprocess
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional
+
+import yaml
 
 
 class AppDiscovery:

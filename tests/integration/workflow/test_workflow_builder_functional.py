@@ -940,11 +940,11 @@ class TestEnhancedWarningSystemIntegration:
     def test_sdk_node_with_real_workflow(self):
         """Test that SDK nodes provide correct warnings in realistic workflows."""
         try:
-            from kailash.workflow.builder import WorkflowBuilder
             from kailash.nodes.base import Node, NodeParameter
-            from tests.conftest import (
+            from kailash.workflow.builder import WorkflowBuilder
+            from tests.conftest import (  # This is registered with @register_node
                 MockNode,
-            )  # This is registered with @register_node
+            )
 
             builder = WorkflowBuilder()
 
@@ -977,8 +977,8 @@ class TestEnhancedWarningSystemIntegration:
     def test_custom_node_with_real_workflow(self):
         """Test that custom nodes get correct confirmation messages in realistic workflows."""
         try:
-            from kailash.workflow.builder import WorkflowBuilder
             from kailash.nodes.base import Node, NodeParameter
+            from kailash.workflow.builder import WorkflowBuilder
 
             # Create a custom unregistered node
             class CustomDataProcessorNode(Node):
@@ -1037,8 +1037,8 @@ class TestEnhancedWarningSystemIntegration:
     def test_mixed_node_types_realistic_workflow(self):
         """Test realistic workflow with mix of SDK and custom nodes."""
         try:
-            from kailash.workflow.builder import WorkflowBuilder
             from kailash.nodes.base import Node, NodeParameter
+            from kailash.workflow.builder import WorkflowBuilder
             from tests.conftest import MockNode  # SDK node
 
             # Create a custom security validation node
@@ -1101,8 +1101,8 @@ class TestEnhancedWarningSystemIntegration:
     def test_node_detection_accuracy_with_registry(self):
         """Test that node type detection works correctly with the NodeRegistry."""
         try:
-            from kailash.workflow.builder import WorkflowBuilder
             from kailash.nodes.base import Node, NodeParameter, NodeRegistry
+            from kailash.workflow.builder import WorkflowBuilder
             from tests.conftest import MockNode  # SDK node
 
             # Create custom node

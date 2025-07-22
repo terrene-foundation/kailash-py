@@ -7,6 +7,6 @@ This module provides validation tools for ensuring production-ready code:
 - Security validation for enterprise deployments
 """
 
-from .import_validator import ImportPathValidator, ImportIssue, ImportIssueType
+from .import_validator import ImportIssue, ImportIssueType, ImportPathValidator
 
 __all__ = ["ImportPathValidator", "ImportIssue", "ImportIssueType"]

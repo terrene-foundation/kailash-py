@@ -1,12 +1,13 @@
 """Integration tests for import validator with production deployment simulation."""
 
-import pytest
-import tempfile
+import os
 import subprocess
 import sys
-import os
+import tempfile
 from pathlib import Path
 from textwrap import dedent
+
+import pytest
 
 from kailash.runtime.validation import ImportPathValidator
 

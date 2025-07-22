@@ -4,9 +4,9 @@ import pytest
 
 from kailash.nodes.base import Node, NodeParameter
 from kailash.workflow.validation import (
+    IssueSeverity,
     ParameterDeclarationValidator,
     ValidationIssue,
-    IssueSeverity,
 )
 
 

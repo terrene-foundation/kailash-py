@@ -26,8 +26,8 @@ class TestBulkheadIntegration:
     async def clean_bulkhead_manager(self):
         """Ensure clean bulkhead manager for each test."""
         # Clear any existing global manager
-        from src.kailash.core.resilience.bulkhead import _bulkhead_manager
         import src.kailash.core.resilience.bulkhead as bulkhead_module
+        from src.kailash.core.resilience.bulkhead import _bulkhead_manager
 
         # Reset global manager
         old_manager = bulkhead_module._bulkhead_manager

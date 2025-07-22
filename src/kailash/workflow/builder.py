@@ -9,9 +9,9 @@ from kailash.sdk_exceptions import ConnectionError, WorkflowValidationError
 from kailash.workflow.contracts import ConnectionContract, get_contract_registry
 from kailash.workflow.graph import Workflow
 from kailash.workflow.validation import (
+    IssueSeverity,
     ParameterDeclarationValidator,
     ValidationIssue,
-    IssueSeverity,
 )
 
 logger = logging.getLogger(__name__)

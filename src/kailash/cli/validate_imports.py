@@ -24,7 +24,7 @@ import sys
 from pathlib import Path
 from typing import List
 
-from kailash.runtime.validation import ImportPathValidator, ImportIssue
+from kailash.runtime.validation import ImportIssue, ImportPathValidator
 
 
 def main():

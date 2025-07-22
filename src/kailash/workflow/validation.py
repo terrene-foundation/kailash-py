@@ -116,7 +116,7 @@ See Also:
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 # Note: Workflow import moved to individual methods to avoid circular imports
 if TYPE_CHECKING:

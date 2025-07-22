@@ -20,10 +20,12 @@ Then test:
 - CLI: nexus run data-processor --data '[1,2,3,4,5]'
 """
 
-from nexus import Nexus
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
 import json
+
+from nexus import Nexus
+
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 # ==============================================================================
 # EXAMPLE 1: ZERO-CONFIG DATA PROCESSING WORKFLOW

@@ -912,7 +912,7 @@ class DistributedTransactionManagerNode(AsyncNode):
                 async def save_state(self, transaction_id: str, state_data: dict):
                     """Save DTM state using transaction_id."""
                     import json
-                    from datetime import datetime, UTC
+                    from datetime import UTC, datetime
 
                     async with self.db_pool.acquire() as conn:
                         query = f"""
