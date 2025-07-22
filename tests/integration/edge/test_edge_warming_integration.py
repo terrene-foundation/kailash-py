@@ -42,7 +42,7 @@ class TestEdgeWarmingIntegration:
         )
 
         # Connect nodes
-        workflow.add_connection("warmer", "predictor")
+        workflow.add_connection("warmer", "output", "predictor", "data")
 
         # Execute workflow
         runtime = LocalRuntime()
@@ -352,9 +352,9 @@ class TestEdgeWarmingIntegration:
         workflow.add_node("EdgeWarmingNode", "metrics", {"operation": "get_metrics"})
 
         # Connect workflow
-        workflow.add_connection("recorder", "predictor")
-        workflow.add_connection("predictor", "executor")
-        workflow.add_connection("executor", "metrics")
+        workflow.add_connection("recorder", "output", "predictor", "data")
+        workflow.add_connection("predictor", "output", "executor", "data")
+        workflow.add_connection("executor", "output", "metrics", "data")
 
         # Execute
         runtime = LocalRuntime()

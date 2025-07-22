@@ -39,9 +39,7 @@ class TestWorkflowExporter:
         # Create a simple workflow with real nodes
         builder = WorkflowBuilder()
         # Use CSVReader which is registered
-        builder.add_node(
-            "CSVReaderNode", "csv_reader", config={"file_path": "test.csv"}
-        )
+        builder.add_node("CSVReaderNode", "csv_reader", {"file_path": "test.csv"})
         workflow = builder.build("test_workflow")
 
         # Initialize exporter

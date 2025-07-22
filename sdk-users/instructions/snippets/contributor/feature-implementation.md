@@ -12,13 +12,15 @@ You are implementing a feature. Follow these steps exactly and show me complete 
 Load these files before starting (DO NOT proceed until loaded):
 - Root `CLAUDE.md` - Core validation rules and critical patterns
 - `sdk-users/CLAUDE.md` - Implementation patterns and architectural guidance
+- `sdk-users/7-gold-standards/` - Core gold standards for implementation
+  - Implemented improvements in the SDK based on the comments in this directory, yet to update 7-gold-standards.
 - `# contrib (removed)/project/todos/000-master.md` - Current project state and priorities
 
 **For implementation guidance during development, remember these key resource locations** (use MCP tools to search when needed):
-- `sdk-users/developer/` - Core implementation guides and patterns
-- `sdk-users/nodes/` - Node selection and usage patterns
-- `sdk-users/cheatsheet/` - Copy-paste implementation patterns
-- `sdk-users/validation/common-mistakes.md` - Error database with solutions
+- `sdk-users/3-development/` - Core implementation guides and patterns
+- `sdk-users/2-core-concepts/nodes/` - Node selection and usage patterns
+- `sdk-users/2-core-concepts/cheatsheet/` - Copy-paste implementation patterns
+- `sdk-users/2-core-concepts/validation/common-mistakes.md` - Error database with solutions
 
 ### Framework-First Approach (MANDATORY)
 Check for existing framework solutions that can accelerate implementation (use MCP tools to search):
@@ -29,12 +31,15 @@ Check for existing framework solutions that can accelerate implementation (use M
 
 ### Critical Understanding Confirmation
 After loading the essential files, you MUST confirm you understand:
-- **3-tier testing strategy** (`sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`)
+- **3-tier testing strategy** (`sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`)
   - **Tier 1 requirements**: Fast (<1s), isolated, can use mocks, no external dependencies, no sleep
   - **NO MOCKING policy** for Tier 2/3 tests - this is absolutely critical
   - Real Docker infrastructure requirement - never skip this for integration/E2E tests
 - **Todo management system** structure in `# contrib (removed)/project/todos/`
-- **Available solutions** in `apps/` that can provide ready-made solutions
+- **Available solutions** in `apps/` that can provide ready-made solutions. Demonstrate your understanding by showing me:
+  - What frameworks are available and what do they provide
+  - How they can be used to accelerate implementation
+  - How to implement using these frameworks
 - **How to use MCP tools** to search relevant documentation when needed
 
 **Search relevant documentation as needed during implementation using MCP tools instead of loading everything upfront.**
@@ -43,7 +48,7 @@ After loading the essential files, you MUST confirm you understand:
 Put on your ultrathink cap. Before we begin any implementation, you MUST analyze deeply and provide specific answers to these questions:
 
 1. **What are the most likely failure points for this specific task?**
-   - Consider past patterns from `sdk-users/validation/common-mistakes.md`
+   - Consider past patterns from `sdk-users/2-core-concepts/validation/common-mistakes.md`
    - Think about integration points that commonly break
    - Identify areas where tests typically fail
 
@@ -180,7 +185,7 @@ The local todo management system is in `# contrib (removed)/project/todos/`. You
 
 ## 4. TEST-FIRST DEVELOPMENT
 
-Write tests BEFORE implementation. This prevents missing tests and ensures working code. You MUST follow the 3-tier testing strategy exactly as specified in `sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`.
+Write tests BEFORE implementation. This prevents missing tests and ensures working code. You MUST follow the 3-tier testing strategy exactly as specified in `sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`.
 
 **Always ensure that your TDD covers all the detailed todo entries**
 z
@@ -361,7 +366,7 @@ You MUST show me the validation results for each file:
 
 Always run `./tests/utils/test-env up && ./tests/utils/test-env status` before running documentation tests. Use real services, not mocks.
 
-Cross-reference the actual SDK implementation and the corresponding tests in `tests/` to understand the expected behavior and correct usage patterns. Tests in `tests/` are written in accordance with the policies in `sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`.
+Cross-reference the actual SDK implementation and the corresponding tests in `tests/` to understand the expected behavior and correct usage patterns. Tests in `tests/` are written in accordance with the policies in `sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`.
 
 **Show me validation results for each file:**
 - File: [path to documentation file]
@@ -372,7 +377,7 @@ Cross-reference the actual SDK implementation and the corresponding tests in `te
 
 ### Full Test Suite Execution
 Run complete test suite in the correct order. You MUST show me the COMPLETE output - do not summarize anything.
-Please follow our 3-tier testing strategy exactly as specified in `sdk-users/testing/regression-testing-strategy.md` and `sdk-users/testing/test-organization-policy.md`
+Please follow our 3-tier testing strategy exactly as specified in `sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`
 
 1. **Tier 1 (all unit tests):**
    `pytest tests/unit/ -v`
@@ -440,7 +445,7 @@ After completing the implementation, update the todo management system:
    - Look through the entire file thoroughly
    - Update the status of completed todos
    - Remove old completed entries that don't add context to outstanding todos
-   - Keep this file concise, lean, and easy to navigate
+   - Keep this file concise, lean, and easy to navigatea
 3. Ensure that each todo's details are captured in:
    - `todos/active` for outstanding todos
    - `todos/completed` for completed todos
@@ -459,7 +464,7 @@ Check the `CLAUDE.md` in root and other directories:
      - You can trace a complete path from basic patterns to advanced custom development
      - Please maintain the concise, authoritative tone that respects context limits!
 
-2. For this module in `apps/`:
+2. For modules in `apps/`:
    - Please trace through the `CLAUDE.md` guidance system
    - Temp test all the instructions to ensure that they are correct
    - For each user persona and their workflows, please run through the e2e using temp tests

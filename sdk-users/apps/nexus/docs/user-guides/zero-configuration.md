@@ -282,7 +282,7 @@ app.start()
 **Dockerfile**:
 ```dockerfile
 FROM python:3.12-slim
-RUN pip install kailash[nexus]
+RUN pip install kailash-nexus
 COPY . /app
 WORKDIR /app
 EXPOSE 8000 3001

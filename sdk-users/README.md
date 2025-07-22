@@ -1,299 +1,76 @@
-# SDK Users Guide
+# SDK Users Documentation
 
-*Everything you need to build solutions with the Kailash SDK*
+Welcome to the Kailash SDK user documentation! This folder contains everything you need to build with the SDK.
 
-## 🚀 **New Developer? Start Here!**
+## 📁 Organized Documentation Structure
 
-### **⚡ 5-Minute Quick Start**
+### 1️⃣ [Quickstart](1-quickstart/)
+**Start here if you're new!** Installation, first workflow, and basic patterns.
 
-**Step 1: Choose Your Path**
-- **🎯 I want to build workflows** → [Core patterns](#-core-implementation-patterns-claude-md)
-- **🏗️ I want complete apps** → [App platforms](#-app-platforms-dataflow--nexus)
-- **🔧 I want custom solutions** → [Decision matrix](decision-matrix.md)
+### 2️⃣ [Core Concepts](2-core-concepts/)
+- **[nodes/](2-core-concepts/nodes/)** - Node catalog and selection guide
+- **[workflows/](2-core-concepts/workflows/)** - Workflow patterns and examples
+- **[cheatsheet/](2-core-concepts/cheatsheet/)** - Quick reference patterns
+- **[validation/](2-core-concepts/validation/)** - Common mistakes and fixes
 
-**Step 2: First Success** (Copy & Run)
-```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
+### 3️⃣ [Development](3-development/)
+Complete development guides from fundamentals to production deployment.
+- **[testing/](3-development/testing/)** - Testing strategies and best practices
 
-workflow = WorkflowBuilder()
-workflow.add_node("PythonCodeNode", "hello", {"code": "result = 'Hello, Kailash!'"})
+### 4️⃣ [Features](4-features/)
+Advanced SDK capabilities:
+- **[mcp/](4-features/mcp/)** - Model Context Protocol integration
+- **[edge/](4-features/edge/)** - Edge computing patterns
+- **[middleware/](4-features/middleware/)** - Middleware implementation
+- **[frontend-integration/](4-features/frontend-integration/)** - React/Vue integration
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
-print(results)  # {'hello': 'Hello, Kailash!'}
-```
+### 5️⃣ [Enterprise](5-enterprise/)
+Production deployment and enterprise patterns:
+- **[security/](5-enterprise/security/)** - Security patterns and validation
+- **[monitoring/](5-enterprise/monitoring/)** - Observability and metrics
+- **[production/](5-enterprise/production/)** - Production deployment guides
+- **[patterns/](5-enterprise/patterns/)** - Enterprise architecture patterns
 
-**Step 3: Build Something Real**
-- **📊 Data Processing** → [Data pipeline pattern](CLAUDE.md#pattern-1-data-processing-pipeline)
-- **🤖 AI Integration** → [AI workflow pattern](CLAUDE.md#pattern-2-ai-analysis-workflow)
-- **🌐 API Integration** → [API pipeline pattern](CLAUDE.md#pattern-3-api-integration-pipeline)
+### 6️⃣ [Reference](6-reference/)
+Technical reference documentation:
+- **[api/](6-reference/api/)** - API reference
+- **[migration-guides/](6-reference/migration-guides/)** - Version migration guides
+- **[changelogs/](6-reference/changelogs/)** - Release notes
 
-### **🎓 Learning Path by Experience**
+### 📚 [Examples](examples/)
+Working code examples:
+- **[by-industry/](examples/by-industry/)** - Industry-specific workflows
+- **[production-examples/](examples/production-examples/)** - Real production patterns
 
-| **Experience Level** | **Start Here** | **Next Steps** | **Advanced** |
-|---------------------|----------------|----------------|--------------|
-| **Complete Beginner** | [Core patterns (CLAUDE.md)](CLAUDE.md) | [Node selection guide](nodes/node-selection-guide.md) | [Custom development](developer/05-custom-development.md) |
-| **Some Programming** | [Decision matrix](decision-matrix.md) | [Connection patterns](cheatsheet/005-connection-patterns.md) | [Enterprise patterns](enterprise/) |
-| **Building Apps** | [App platforms](#-app-platforms-dataflow--nexus) | [Production deployment](developer/04-production.md) | [Multi-channel architecture](enterprise/nexus-patterns.md) |
-| **Enterprise/Production** | [Security patterns](enterprise/security-patterns.md) | [Compliance guide](enterprise/compliance-patterns.md) | [Gateway patterns](enterprise/gateway-patterns.md) |
+## 🔑 Key Documents
 
-### **📋 Quick Win Checklist**
+- **[CLAUDE.md](CLAUDE.md)** - Claude Code instructions and patterns
+- **[decision-matrix.md](decision-matrix.md)** - Architecture decision guide
+- **[apps/](apps/)** - App framework documentation
+- **[instructions/](instructions/)** - Internal development instructions
 
-- [ ] **✅ Run first workflow** - Execute the 5-minute example above
-- [ ] **🔍 Find right nodes** - Use [node selection guide](nodes/node-selection-guide.md)
-- [ ] **🔗 Connect nodes** - Follow [connection patterns](cheatsheet/005-connection-patterns.md)
-- [ ] **🔧 Handle errors** - Check [common mistakes](validation/common-mistakes.md)
-- [ ] **🧪 Test workflow** - Use [testing guide](developer/12-testing-production-quality.md)
-- [ ] **🚀 Deploy solution** - Follow [production guide](developer/04-production.md)
+## 🚀 Quick Links by Task
 
-### **❓ Common First Questions**
+| I want to... | Go to |
+|--------------|-------|
+| Install and get started | [1-quickstart/](1-quickstart/) |
+| Find the right node | [2-core-concepts/nodes/node-selection-guide.md](2-core-concepts/nodes/node-selection-guide.md) |
+| Copy a working pattern | [2-core-concepts/cheatsheet/](2-core-concepts/cheatsheet/) |
+| Fix an error | [2-core-concepts/validation/common-mistakes.md](2-core-concepts/validation/common-mistakes.md) |
+| Build a complete app | [3-development/](3-development/) |
+| Deploy to production | [5-enterprise/production/](5-enterprise/production/) |
+| Integrate with React/Vue | [4-features/frontend-integration/](4-features/frontend-integration/) |
+| Use AI/MCP features | [4-features/mcp/](4-features/mcp/) |
+| Build edge computing solutions | [4-features/edge/](4-features/edge/) |
 
-**Q: Which nodes do I need?**
-→ Use [node selection guide](nodes/node-selection-guide.md) with decision trees
+## 📖 Learning Path
 
-**Q: How do I connect nodes?**
-→ Always use 4-parameter syntax: `workflow.add_connection("source", "out_port", "target", "in_port")`
+1. **New to Kailash?** Start with [1-quickstart/](1-quickstart/)
+2. **Building workflows?** Learn concepts in [2-core-concepts/](2-core-concepts/)
+3. **Building apps?** Follow guides in [3-development/](3-development/)
+4. **Need advanced features?** Explore [4-features/](4-features/)
+5. **Going to production?** Check [5-enterprise/](5-enterprise/)
 
-**Q: My workflow isn't working**
-→ Check [common mistakes](validation/common-mistakes.md) - covers 90% of issues
+## 🏗️ For SDK Contributors
 
-**Q: How do I deploy to production?**
-→ Start with [production guide](developer/04-production.md), then [enterprise patterns](enterprise/)
-
-**Q: Can I build complete applications?**
-→ Yes! Use [DataFlow](../apps/kailash-dataflow/) (database) or [Nexus](../apps/kailash-nexus/) (multi-channel) platforms
-
----
-
-## 🚨 Essential References
-
-### **Start Here: [CLAUDE.md](CLAUDE.md)**
-Complete quick reference with critical rules, common patterns, and navigation guide.
-
-### **🎯 Core Implementation Patterns (CLAUDE.md)**
-- **[CLAUDE.md](CLAUDE.md)** - **ESSENTIAL** API patterns, decision trees, common mistakes
-- **[Decision Matrix](decision-matrix.md)** - Architecture decisions for app building
-- **[Node Selection Guide](nodes/node-selection-guide.md)** - Smart node finder with decision trees
-- **[Connection Patterns](cheatsheet/005-connection-patterns.md)** - Data flow mapping patterns
-
-### **🏗️ App Platforms (DataFlow & Nexus)**
-- **[DataFlow Platform](../apps/kailash-dataflow/)** - Zero-config database with enterprise power
-- **[Nexus Platform](../apps/kailash-nexus/)** - Multi-channel orchestration (API, CLI, MCP)
-- **[App Development Guide](../apps/APP_DEVELOPMENT_GUIDE.md)** - Complete app implementation guide
-
-### **🔧 Development Essentials**
-- **[Cheatsheet](cheatsheet/)** - 38 copy-paste patterns for common tasks
-- **[Common Mistakes](validation/common-mistakes.md)** - Fix errors fast
-- **[Testing Guide](developer/12-testing-production-quality.md)** - Production-quality validation
-- **[Troubleshooting](developer/05-troubleshooting.md)** - Debug issues effectively
-- **[AsyncNode Guide](developer/async-node-guide.md)** - Async node implementation patterns
-- **[Edge WorkflowBuilder](developer/edge-workflowbuilder-guide.md)** - Geo-distributed edge computing
-
-### **🎯 Critical for Claude Code Users**
-- **[cheatsheet/000-claude-code-guide.md](cheatsheet/000-claude-code-guide.md)** - **START HERE** Essential success patterns
-- **[cheatsheet/025-mcp-integration.md](cheatsheet/025-mcp-integration.md)** - MCP (Model Context Protocol) integration
-- **[cheatsheet/038-integration-mastery.md](cheatsheet/038-integration-mastery.md)** - Complete integration guide
-- **[cheatsheet/039-workflow-composition.md](cheatsheet/039-workflow-composition.md)** - Advanced workflow patterns
-
-## 🚀 **MCP (Model Context Protocol) - AI Tool Integration**
-- **[guides/mcp-quickstart.md](guides/mcp-quickstart.md)** - **NEW!** Quick start guide for MCP
-- **[cheatsheet/025-mcp-integration.md](cheatsheet/025-mcp-integration.md)** - Complete MCP reference with code snippets
-- **[patterns/12-mcp-patterns.md](patterns/12-mcp-patterns.md)** - Production MCP patterns and best practices
-- **[examples/mcp/](examples/mcp/)** - Ready-to-run MCP examples
-- **[developer/22-mcp-development-guide.md](developer/22-mcp-development-guide.md)** - Build custom MCP servers and clients (✅ 100% validated)
-
----
-
-## 📁 Complete Documentation Structure
-
-### **Enterprise & Production**
-- **[enterprise/](enterprise/)** - Enterprise-grade patterns and architecture
-  - Advanced middleware patterns
-  - Multi-tenant session management
-  - Production security and monitoring
-  - High-scale deployment patterns
-
-- **[production-patterns/](production-patterns/)** - Real app implementations & deployment
-  - Proven patterns from actual production apps
-  - 15.9x performance optimizations
-  - Production deployment configurations
-  - Real-world security and monitoring
-
-### **Build from Scratch or Modify**
-- **[developer/](developer/)** - Node creation, patterns, troubleshooting
-  - Critical PythonCodeNode input exclusion patterns
-  - DirectoryReaderNode file discovery
-  - Document processing workflows
-  - Custom node development guide
-  - Advanced troubleshooting
-  - **✅ [MCP Development Guide](developer/22-mcp-development-guide.md)** - Build MCP servers and clients (comprehensive validation complete)
-
-### **Lift Working Examples**
-- **[workflows/](workflows/)** - End-to-end use cases ready to copy
-  - Quick-start patterns for immediate use
-  - Common patterns (data processing, API integration, AI)
-  - Industry solutions (healthcare, finance, manufacturing)
-  - Production-ready scripts with real data
-
-### **Quick Reference**
-- **[cheatsheet/](cheatsheet/)** - Copy-paste code snippets
-  - **NEW: Claude Code specific guides**
-  - Installation and basic setup
-  - Common node patterns
-  - Connection patterns
-  - Error handling
-- **[migration-guides/](migration-guides/)** - Version upgrade guides
-  - Architecture improvements by version
-  - Step-by-step migration instructions
-  - Breaking changes documentation
-  - Security configuration
-
-- **[api/](api/)** - Complete API documentation
-  - Method signatures and parameters
-  - YAML specifications
-  - Usage examples
-
-- **[nodes/](nodes/)** - Comprehensive node catalog
-  - 110+ nodes with examples
-  - Node selection guide
-  - Use case recommendations
-
-- **[patterns/](patterns/)** - Architectural workflow patterns
-  - Core workflow patterns
-  - Control flow and data processing
-  - Integration and deployment patterns
-  - Performance and security patterns
-  - **NEW: [MCP Patterns](patterns/12-mcp-patterns.md)** - Model Context Protocol patterns
-
-- **[workflows/](workflows/)** - Ready-to-use boilerplate code
-  - Basic workflows
-  - Custom node templates
-  - Integration examples
-
-### **User Features**
-- **[features/](features/)** - Feature guides and implementation examples
-  - When and how to use each feature
-  - Decision guides and best practices
-  - Real-world implementation patterns
-
-- **[validation-guide.md](validation-guide.md)** - Critical rules to prevent common errors
-
-## 🎯 Quick Start Paths
-
-### **New to Kailash?**
-1. Read [CLAUDE.md](CLAUDE.md) for critical rules
-2. Try [workflows/quick-start/](workflows/quick-start/) examples
-3. Use [cheatsheet/](cheatsheet/) for common patterns
-4. Reference [nodes/](nodes/) for available components
-
-### **Building with MCP (Model Context Protocol)?**
-1. Start with [guides/mcp-quickstart.md](guides/mcp-quickstart.md) for basics
-2. Use [cheatsheet/025-mcp-integration.md](cheatsheet/025-mcp-integration.md) for quick reference
-3. Try [examples/mcp/](examples/mcp/) for working examples
-4. Study [patterns/12-mcp-patterns.md](patterns/12-mcp-patterns.md) for production patterns
-
-### **Building Complex Workflows?**
-1. Start with [workflows/common-patterns/](workflows/common-patterns/)
-2. Check [patterns/](patterns/) for architectural guidance
-3. Use [developer/](developer/) for custom components
-4. Reference [api/](api/) for detailed specifications
-
-### **Industry-Specific Solutions?**
-1. Browse [workflows/by-industry/](workflows/by-industry/)
-2. Check [features/](features/) for relevant capabilities
-3. Use [workflows/](workflows/) for boilerplate code
-4. Customize with [developer/](developer/) patterns
-
-### **Debugging Issues?**
-1. Check [developer/05-troubleshooting.md](developer/05-troubleshooting.md)
-2. Review [CLAUDE.md](CLAUDE.md) common mistakes
-3. Look up errors in [../shared/mistakes/](../shared/mistakes/)
-4. Validate with [validation/common-mistakes.md](validation/common-mistakes.md)
-
-## ✅ Production Quality Validated (2025-07-02)
-
-**Comprehensive Testing Status**: All core SDK functionality validated with production-quality testing
-
-| Test Tier | Results | Status |
-|-----------|---------|---------|
-| **Tier 1 (Unit)** | 1265/1265 PASSED | ✅ 100% |
-| **Tier 2 (Integration)** | 400/400 PASSED | ✅ 100% |
-| **Tier 3 (E2E Core)** | 10/10 CORE PASSED | ✅ 100% |
-
-**Key Validations Completed**:
-- ✅ **Ollama LLM Integration**: Real AI workflows with aiohttp async compatibility
-- ✅ **Performance & Scalability**: Memory usage, concurrency, stress testing
-- ✅ **Admin Docker Integration**: Multi-tenant operations with real databases
-- ✅ **Cycle Patterns**: ETL pipelines with retry logic and real file processing
-- ✅ **Simple AI Docker**: Basic to advanced AI workflow patterns
-
-**Production Features Verified**:
-- AsyncWorkflowBuilder with 240-second timeouts for complex AI operations
-- Real Ollama LLM instances with 60%+ success rates
-- Docker-based admin operations with full CRUD functionality
-- Multi-node AI processing pipelines
-- Performance patterns under load
-
-See [../e2e_summary.txt](../e2e_summary.txt) for complete test results and technical fixes applied.
-
-## ⚠️ Critical Knowledge
-
-### **MCP Integration with LLMAgentNode**
-MCP enables AI agents to use external tools and resources:
-```python
-from kailash.nodes.ai import LLMAgentNode
-
-# LLM with MCP tools
-workflow.add_node("agent", LLMAgentNode())
-results, run_id = runtime.execute(workflow, parameters={
-    "agent": {
-        "provider": "ollama",
-        "model": "llama3.2",
-        "mcp_servers": [{
-            "name": "tools",
-            "transport": "stdio",
-            "command": "mcp-server"
-        }],
-        "auto_discover_tools": True,
-        "auto_execute_tools": True
-    }
-})
-```
-
-### **PythonCodeNode Input Exclusion**
-Variables passed as inputs are EXCLUDED from outputs!
-```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
-
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
-```
-
-### **Node Naming Convention**
-ALL nodes must end with "Node":
-- ✅ `CSVReaderNode`
-- ❌ `CSVReader`
-
-### **Parameter Types**
-Only use basic types: `str`, `int`, `float`, `bool`, `list`, `dict`, `Any`
-- ❌ `List[str]`, `Optional[int]`, `Union[str, int]`
-
-## 📖 Related Resources
-
-- **SDK Development**: [../# contrib (removed)/](../# contrib (removed)/)
-- **Shared Resources**: [../shared/](../shared/)
-- **Error Lookup**: [../shared/mistakes/CLAUDE.md](../shared/mistakes/CLAUDE.md)
-
----
-
-*This guide focuses on using the SDK to build solutions. For extending the SDK itself, see [../# contrib (removed)/README.md](../# contrib (removed)/README.md)*
+If you're contributing to the SDK itself (not building with it), see [../# contrib (removed)/](../# contrib (removed)/).

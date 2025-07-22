@@ -932,3 +932,204 @@ class TestWorkflowBuilderAdvancedFeatures:
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
+
+
+class TestEnhancedWarningSystemIntegration:
+    """Integration tests for enhanced warning system with real workflow building."""
+
+    def test_sdk_node_with_real_workflow(self):
+        """Test that SDK nodes provide correct warnings in realistic workflows."""
+        try:
+            from kailash.nodes.base import Node, NodeParameter
+            from kailash.workflow.builder import WorkflowBuilder
+            from tests.conftest import (  # This is registered with @register_node
+                MockNode,
+            )
+
+            builder = WorkflowBuilder()
+
+            # Add string node (no warning expected)
+            builder.add_node("MockNode", "input_node", {"test_param": "input"})
+
+            # Add class reference to SDK node (should warn to use string)
+            with pytest.warns(UserWarning, match="SDK node detected") as warning_info:
+                builder.add_node(MockNode, "processing_node", {"test_param": "process"})
+
+            warning_message = str(warning_info[0].message)
+            assert (
+                "Consider using string reference for better compatibility"
+                in warning_message
+            )
+            assert "PREFERRED: add_node('MockNode'" in warning_message
+            assert (
+                "String references work for all @register_node() decorated SDK nodes"
+                in warning_message
+            )
+
+            # Build workflow to ensure it works
+            workflow = builder.build()
+            assert "input_node" in workflow.nodes
+            assert "processing_node" in workflow.nodes
+
+        except ImportError:
+            pytest.skip("WorkflowBuilder not available")
+
+    def test_custom_node_with_real_workflow(self):
+        """Test that custom nodes get correct confirmation messages in realistic workflows."""
+        try:
+            from kailash.nodes.base import Node, NodeParameter
+            from kailash.workflow.builder import WorkflowBuilder
+
+            # Create a custom unregistered node
+            class CustomDataProcessorNode(Node):
+                def get_parameters(self):
+                    return {
+                        "input_data": NodeParameter(
+                            name="input_data", type=dict, required=True
+                        ),
+                        "processing_mode": NodeParameter(
+                            name="processing_mode",
+                            type=str,
+                            required=False,
+                            default="standard",
+                        ),
+                    }
+
+                def run(self, input_data, processing_mode="standard"):
+                    return {
+                        "processed_data": f"processed_{input_data}_{processing_mode}"
+                    }
+
+            builder = WorkflowBuilder()
+
+            # Add custom node with class reference (should confirm this is correct)
+            with pytest.warns(
+                UserWarning, match="✅ CUSTOM NODE USAGE CORRECT"
+            ) as warning_info:
+                builder.add_node(
+                    CustomDataProcessorNode,
+                    "custom_node",
+                    {"input_data": {"data": "test"}, "processing_mode": "advanced"},
+                )
+
+            warning_message = str(warning_info[0].message)
+            assert "This is the CORRECT pattern for custom nodes" in warning_message
+            assert (
+                'IGNORE "preferred pattern" suggestions for custom nodes'
+                in warning_message
+            )
+            assert "Custom nodes MUST use class references" in warning_message
+            assert (
+                "sdk-users/7-gold-standards/GOLD-STANDARD-custom-node-development-guide.md"
+                in warning_message
+            )
+
+            # Build workflow to ensure it works
+            workflow = builder.build()
+            assert "custom_node" in workflow.nodes
+            # Check that the custom node's class is stored in the WorkflowBuilder
+            assert "class" in builder.nodes["custom_node"]
+            assert builder.nodes["custom_node"]["class"] == CustomDataProcessorNode
+
+        except ImportError:
+            pytest.skip("WorkflowBuilder not available")
+
+    def test_mixed_node_types_realistic_workflow(self):
+        """Test realistic workflow with mix of SDK and custom nodes."""
+        try:
+            from kailash.nodes.base import Node, NodeParameter
+            from kailash.workflow.builder import WorkflowBuilder
+            from tests.conftest import MockNode  # SDK node
+
+            # Create a custom security validation node
+            class SecurityValidationNode(Node):
+                def get_parameters(self):
+                    return {
+                        "data": NodeParameter(name="data", type=dict, required=True),
+                        "security_level": NodeParameter(
+                            name="security_level",
+                            type=str,
+                            required=False,
+                            default="standard",
+                        ),
+                    }
+
+                def run(self, data, security_level="standard"):
+                    # Custom security logic
+                    return {"validated_data": data, "security_status": "validated"}
+
+            builder = WorkflowBuilder()
+
+            # Step 1: Use SDK node with string (preferred, no warning)
+            builder.add_node("MockNode", "data_input", {"test_param": "input_data"})
+
+            # Step 2: Use custom security node with class reference (correct, gets confirmation)
+            with pytest.warns(UserWarning, match="✅ CUSTOM NODE USAGE CORRECT"):
+                builder.add_node(
+                    SecurityValidationNode,
+                    "security_check",
+                    {"data": {}, "security_level": "high"},
+                )
+
+            # Step 3: Use SDK node with class reference (works but suggests string)
+            with pytest.warns(UserWarning, match="SDK node detected"):
+                builder.add_node(MockNode, "data_output", {"test_param": "output_data"})
+
+            # Add connections
+            builder.add_connection("data_input", "result", "security_check", "data")
+            builder.add_connection(
+                "security_check", "validated_data", "data_output", "test_param"
+            )
+
+            # Build and verify workflow
+            workflow = builder.build()
+            assert len(workflow.nodes) == 3
+            assert len(workflow.connections) == 2
+
+            # Verify node types are stored correctly in WorkflowBuilder
+            assert builder.nodes["data_input"]["type"] == "MockNode"
+            assert builder.nodes["security_check"]["type"] == "SecurityValidationNode"
+            assert builder.nodes["data_output"]["type"] == "MockNode"
+
+            # Custom node should have class reference stored in WorkflowBuilder
+            assert "class" in builder.nodes["security_check"]
+            assert builder.nodes["security_check"]["class"] == SecurityValidationNode
+
+        except ImportError:
+            pytest.skip("WorkflowBuilder not available")
+
+    def test_node_detection_accuracy_with_registry(self):
+        """Test that node type detection works correctly with the NodeRegistry."""
+        try:
+            from kailash.nodes.base import Node, NodeParameter, NodeRegistry
+            from kailash.workflow.builder import WorkflowBuilder
+            from tests.conftest import MockNode  # SDK node
+
+            # Create custom node
+            class UnregisteredCustomNode(Node):
+                def get_parameters(self):
+                    return {
+                        "param": NodeParameter(name="param", type=str, required=False)
+                    }
+
+                def run(self, param="default"):
+                    return {"result": f"custom_{param}"}
+
+            builder = WorkflowBuilder()
+
+            # Test detection for SDK node (registered)
+            assert builder._is_sdk_node(MockNode) is True
+
+            # Test detection for custom node (not registered)
+            assert builder._is_sdk_node(UnregisteredCustomNode) is False
+
+            # Verify MockNode is actually in registry
+            registered_class = NodeRegistry.get("MockNode")
+            assert registered_class is MockNode
+
+            # Verify custom node is not in registry
+            with pytest.raises(Exception):  # NodeConfigurationError expected
+                NodeRegistry.get("UnregisteredCustomNode")
+
+        except ImportError:
+            pytest.skip("WorkflowBuilder not available")

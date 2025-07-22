@@ -84,6 +84,7 @@ class MCPChannel(Channel):
         # MCP-specific state
         self._clients: Dict[str, Dict[str, Any]] = {}
         self._server_task: Optional[asyncio.Task] = None
+        self._mcp_server_task: Optional[asyncio.Task] = None
 
         logger.info(f"Initialized MCP channel {self.name}")
 
@@ -202,8 +203,15 @@ class MCPChannel(Channel):
             self.status = ChannelStatus.STARTING
             self._setup_event_queue()
 
-            # Start MCP server
-            await self.mcp_server.start()
+            # Start MCP server (Core SDK uses run() method, not start())
+            # For async operation, we need to run it in a separate task
+            if hasattr(self.mcp_server, "run"):
+                # Core SDK MCPServer uses run() method
+                loop = asyncio.get_event_loop()
+                self._mcp_server_task = loop.run_in_executor(None, self.mcp_server.run)
+            else:
+                # Fallback to start() if available
+                await self.mcp_server.start()
 
             # Start server task for handling connections
             self._server_task = asyncio.create_task(self._server_loop())
@@ -261,9 +269,20 @@ class MCPChannel(Channel):
                 except asyncio.CancelledError:
                     pass
 
+            # Stop MCP server task if running
+            if hasattr(self, "_mcp_server_task") and self._mcp_server_task:
+                self._mcp_server_task.cancel()
+                try:
+                    await self._mcp_server_task
+                except asyncio.CancelledError:
+                    pass
+
             # Stop MCP server
-            if self.mcp_server:
-                await self.mcp_server.stop()
+            if self.mcp_server and hasattr(self.mcp_server, "stop"):
+                try:
+                    await self.mcp_server.stop()
+                except Exception as e:
+                    logger.warning(f"Error stopping MCP server: {e}")
 
             await self._cleanup()
             self.status = ChannelStatus.STOPPED

@@ -153,7 +153,7 @@ class TestWorkflowValidationAuditor:
         # Create workflow
         builder = WorkflowBuilder()
         builder.add_node("PythonCodeNode", "source", {"code": "result = 123"})
-        builder.add_node("CSVReaderNode", "reader", {})
+        builder.add_node("CSVReaderNode", "reader", {"file_path": "test.csv"})
         builder.add_connection("source", "result", "reader", "file_path")
         workflow = builder.build()
 

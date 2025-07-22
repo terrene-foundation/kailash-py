@@ -1,11 +1,12 @@
 import asyncio
 import json
-from typing import Dict, List, Any
-from mcp.server.models import InitializationOptions
-from mcp.server import NotificationOptions, Server
-from mcp.server.stdio import stdio_server
-from mcp.types import Tool, TextContent
 import logging
+from typing import Any, Dict, List
+
+from mcp.server import NotificationOptions, Server
+from mcp.server.models import InitializationOptions
+from mcp.server.stdio import stdio_server
+from mcp.types import TextContent, Tool
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -151,7 +152,7 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
         return [
             TextContent(
                 type="text",
-                text=f"Available AI use case categories:\n\n"
+                text="Available AI use case categories:\n\n"
                 + "\n".join(f"- {cat}" for cat in categories),
             )
         ]
@@ -177,10 +178,10 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
                 + f"**Implementation Details:** {item['implementation']}\n\n"
                 + f"**Industry Category:** {item['category']}\n\n"
                 + f"**Key Technologies:** {', '.join(item['tags'])}\n\n"
-                + f"**Analysis:**\n"
-                + f"This implementation leverages modern AI techniques to address "
+                + "**Analysis:**\n"
+                + "This implementation leverages modern AI techniques to address "
                 + f"specific challenges in the {item['category']} sector. "
-                + f"The approach demonstrates practical application of "
+                + "The approach demonstrates practical application of "
                 + f"{item['tags'][0]} technology for real-world business value.",
             )
         ]
@@ -189,10 +190,12 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
 
+import threading
+
+import uvicorn
+
 # Add health check endpoint for HTTP mode
 from fastapi import FastAPI
-import uvicorn
-import threading
 
 app = FastAPI()
 

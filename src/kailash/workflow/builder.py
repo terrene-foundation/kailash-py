@@ -4,10 +4,15 @@ import logging
 import uuid
 from typing import TYPE_CHECKING, Any, Optional, Union
 
-from kailash.nodes.base import Node
+from kailash.nodes.base import Node, NodeRegistry
 from kailash.sdk_exceptions import ConnectionError, WorkflowValidationError
 from kailash.workflow.contracts import ConnectionContract, get_contract_registry
 from kailash.workflow.graph import Workflow
+from kailash.workflow.validation import (
+    IssueSeverity,
+    ParameterDeclarationValidator,
+    ValidationIssue,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +41,160 @@ class WorkflowBuilder:
         # Connection contracts support
         self.connection_contracts: dict[str, ConnectionContract] = {}
         self._contract_registry = get_contract_registry()
+
+        # Parameter validation support
+        self._param_validator = ParameterDeclarationValidator()
+
+    def _is_sdk_node(self, node_class: type) -> bool:
+        """Detect if node is SDK-provided vs custom implementation.
+
+        SDK nodes are registered in the NodeRegistry via @register_node decorator.
+        Custom nodes are not registered and require class reference usage.
+
+        Args:
+            node_class: The node class to check
+
+        Returns:
+            True if node is registered in SDK (can use string reference),
+            False if custom node (must use class reference)
+        """
+        if not hasattr(node_class, "__name__"):
+            return False
+
+        # Check if the node class is registered in the NodeRegistry
+        try:
+            registered_class = NodeRegistry.get(node_class.__name__)
+            # Check if it's the same class (identity check)
+            return registered_class is node_class
+        except Exception:
+            # Node not found in registry = custom node
+            return False
+
+    def _generate_intelligent_node_warning(self, node_class: type, node_id: str) -> str:
+        """Generate context-aware warnings based on node type.
+
+        Args:
+            node_class: The node class being added
+            node_id: The node ID
+
+        Returns:
+            Appropriate warning message for the node type
+        """
+        if self._is_sdk_node(node_class):
+            # SDK node using class reference - suggest string pattern
+            return (
+                f"SDK node detected. Consider using string reference for better compatibility:\n"
+                f"  CURRENT: add_node({node_class.__name__}, '{node_id}', {{...}})\n"
+                f"  PREFERRED: add_node('{node_class.__name__}', '{node_id}', {{...}})\n"
+                f"String references work for all @register_node() decorated SDK nodes."
+            )
+        else:
+            # Custom node using class reference - this is CORRECT
+            return (
+                f"✅ CUSTOM NODE USAGE CORRECT\n"
+                f"\n"
+                f"Pattern: add_node({node_class.__name__}, '{node_id}', {{...}})\n"
+                f"Status: This is the CORRECT pattern for custom nodes\n"
+                f"\n"
+                f'⚠️  IGNORE "preferred pattern" suggestions for custom nodes\n'
+                f"String references only work for @register_node() decorated SDK nodes.\n"
+                f"Custom nodes MUST use class references as shown above.\n"
+                f"\n"
+                f"📚 Guide: sdk-users/7-gold-standards/GOLD-STANDARD-custom-node-development-guide.md"
+            )
+
+    def validate_parameter_declarations(
+        self, warn_on_issues: bool = True
+    ) -> list[ValidationIssue]:
+        """Validate parameter declarations for all nodes in the workflow.
+
+        This method detects common parameter declaration issues that lead to
+        silent parameter dropping and debugging difficulties.
+
+        Args:
+            warn_on_issues: Whether to log warnings for detected issues
+
+        Returns:
+            List of ValidationIssue objects for any problems found
+        """
+        all_issues = []
+
+        for node_id, node_info in self.nodes.items():
+            try:
+                # Create a temporary instance to validate parameter declarations
+                if "instance" in node_info:
+                    # Use existing instance
+                    node_instance = node_info["instance"]
+                    workflow_params = {}  # Instance already has config
+                elif "class" in node_info:
+                    # Create temporary instance of custom node
+                    node_class = node_info["class"]
+                    node_config = node_info.get("config", {})
+                    # Create minimal instance just for parameter validation
+                    try:
+                        node_instance = node_class(**node_config)
+                        workflow_params = node_config
+                    except Exception as e:
+                        # If we can't create instance, skip detailed validation
+                        all_issues.append(
+                            ValidationIssue(
+                                severity=IssueSeverity.WARNING,
+                                category="parameter_declaration",
+                                code="PAR005",
+                                message=f"Could not validate parameters for custom node '{node_id}': {e}",
+                                suggestion="Ensure node constructor accepts provided configuration parameters",
+                                node_id=node_id,
+                            )
+                        )
+                        continue
+                else:
+                    # SDK node - validate if we can create it
+                    node_type = node_info["type"]
+                    node_config = node_info.get("config", {})
+                    try:
+                        # Try to get the class from registry
+                        node_class = NodeRegistry.get(node_type)
+                        node_instance = node_class(**node_config)
+                        workflow_params = node_config
+                    except Exception:
+                        # Skip validation for nodes we can't instantiate
+                        continue
+
+                # Validate parameter declarations
+                issues = self._param_validator.validate_node_parameters(
+                    node_instance, workflow_params
+                )
+
+                # Add node_id to issues
+                for issue in issues:
+                    issue.node_id = node_id
+                    all_issues.append(issue)
+
+                    # Log warnings if requested
+                    if warn_on_issues:
+                        if issue.severity == IssueSeverity.ERROR:
+                            logger.error(
+                                f"Parameter validation error in node '{node_id}': {issue.message}"
+                            )
+                        elif issue.severity == IssueSeverity.WARNING:
+                            logger.warning(
+                                f"Parameter validation warning in node '{node_id}': {issue.message}"
+                            )
+
+            except Exception as e:
+                # General validation error
+                all_issues.append(
+                    ValidationIssue(
+                        severity=IssueSeverity.WARNING,
+                        category="parameter_declaration",
+                        code="PAR006",
+                        message=f"Parameter validation failed for node '{node_id}': {e}",
+                        suggestion="Check node configuration and parameter declarations",
+                        node_id=node_id,
+                    )
+                )
+
+        return all_issues
 
     def add_node(self, *args, **kwargs) -> str:
         """
@@ -105,6 +264,9 @@ class WorkflowBuilder:
                 # Two strings - assume current API: add_node("NodeType", "node_id")
                 config = kwargs if kwargs else (args[2] if len(args) > 2 else {})
                 return self._add_node_current(args[0], args[1], config)
+            elif isinstance(args[1], dict):
+                # Pattern: add_node("NodeType", {config}) - treat as add_node("NodeType", None, {config})
+                return self._add_node_current(args[0], None, args[1])
             else:
                 # Invalid second argument
                 raise WorkflowValidationError(
@@ -202,10 +364,10 @@ class WorkflowBuilder:
         if node_id is None:
             node_id = f"node_{uuid.uuid4().hex[:8]}"
 
+        # Generate context-aware warning based on node type
+        warning_message = self._generate_intelligent_node_warning(node_class, node_id)
         warnings.warn(
-            f"Alternative API usage detected. Consider using preferred pattern:\n"
-            f"  CURRENT: add_node({node_class.__name__}, '{node_id}', {list(config.keys())})\n"
-            f"  PREFERRED: add_node('{node_class.__name__}', '{node_id}', {config})",
+            warning_message,
             UserWarning,
             stacklevel=3,
         )
@@ -837,6 +999,23 @@ class WorkflowBuilder:
         # Store edge infrastructure reference in workflow metadata if present
         if self._edge_infrastructure:
             workflow.metadata["_edge_infrastructure"] = self._edge_infrastructure
+
+        # Validate parameter declarations before building workflow
+        param_issues = self.validate_parameter_declarations(warn_on_issues=True)
+
+        # Check for critical parameter errors that should block workflow creation
+        critical_errors = [
+            issue for issue in param_issues if issue.severity == IssueSeverity.ERROR
+        ]
+        if critical_errors:
+            error_messages = [
+                f"{issue.node_id}: {issue.message}" for issue in critical_errors
+            ]
+            raise WorkflowValidationError(
+                "Cannot build workflow due to parameter declaration errors:\n"
+                + "\n".join(f"  - {msg}" for msg in error_messages)
+                + "\n\nSee: sdk-users/7-gold-standards/enterprise-parameter-passing-gold-standard.md"
+            )
 
         # Add nodes to workflow
         for node_id, node_info in self.nodes.items():

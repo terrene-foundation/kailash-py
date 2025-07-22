@@ -12,6 +12,7 @@ from typing import Any, Dict
 
 import asyncpg
 import pytest
+import pytest_asyncio
 import redis
 
 from kailash.nodes.transaction.distributed_transaction_manager import (
@@ -56,66 +57,54 @@ class TestDistributedTransactionManagerIntegration:
         client.flushdb()
         client.close()
 
-    @pytest.fixture
-    def db_pool(self, event_loop):
+    @pytest_asyncio.fixture
+    async def db_pool(self):
         """Create PostgreSQL pool for integration tests."""
+        connection_string = get_postgres_connection_string()
+        pool = await asyncpg.create_pool(connection_string, min_size=2, max_size=10)
 
-        async def setup_pool():
-            connection_string = get_postgres_connection_string()
-            pool = await asyncpg.create_pool(connection_string, min_size=2, max_size=10)
-
-            # Create tables for integration test
-            async with pool.acquire() as conn:
-                await conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS integration_dtx_states (
-                        transaction_id VARCHAR(255) PRIMARY KEY,
-                        transaction_name VARCHAR(255),
-                        status VARCHAR(50),
-                        state_data JSONB,
-                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                    );
-
-                    CREATE TABLE IF NOT EXISTS integration_saga_states (
-                        saga_id VARCHAR(255) PRIMARY KEY,
-                        saga_name VARCHAR(255),
-                        state VARCHAR(50),
-                        state_data JSONB,
-                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                    );
-
-                    CREATE TABLE IF NOT EXISTS integration_2pc_states (
-                        transaction_id VARCHAR(255) PRIMARY KEY,
-                        transaction_name VARCHAR(255),
-                        state VARCHAR(50),
-                        state_data JSONB,
-                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-                    );
+        # Create tables for integration test
+        async with pool.acquire() as conn:
+            await conn.execute(
                 """
-                )
+                CREATE TABLE IF NOT EXISTS integration_dtx_states (
+                    transaction_id VARCHAR(255) PRIMARY KEY,
+                    transaction_name VARCHAR(255),
+                    status VARCHAR(50),
+                    state_data JSONB,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
 
-            return pool
+                CREATE TABLE IF NOT EXISTS integration_saga_states (
+                    saga_id VARCHAR(255) PRIMARY KEY,
+                    saga_name VARCHAR(255),
+                    state VARCHAR(50),
+                    state_data JSONB,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
 
-        async def cleanup_pool(pool):
-            async with pool.acquire() as conn:
-                await conn.execute(
-                    "DROP TABLE IF EXISTS integration_dtx_states CASCADE"
-                )
-                await conn.execute(
-                    "DROP TABLE IF EXISTS integration_saga_states CASCADE"
-                )
-                await conn.execute(
-                    "DROP TABLE IF EXISTS integration_2pc_states CASCADE"
-                )
+                CREATE TABLE IF NOT EXISTS integration_2pc_states (
+                    transaction_id VARCHAR(255) PRIMARY KEY,
+                    transaction_name VARCHAR(255),
+                    state VARCHAR(50),
+                    state_data JSONB,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+            """
+            )
 
-            await pool.close()
-
-        pool = event_loop.run_until_complete(setup_pool())
         yield pool
-        event_loop.run_until_complete(cleanup_pool(pool))
+
+        # Cleanup
+        async with pool.acquire() as conn:
+            await conn.execute("DROP TABLE IF EXISTS integration_dtx_states CASCADE")
+            await conn.execute("DROP TABLE IF EXISTS integration_saga_states CASCADE")
+            await conn.execute("DROP TABLE IF EXISTS integration_2pc_states CASCADE")
+
+        await pool.close()
 
     @pytest.mark.asyncio
     async def test_manager_with_redis_storage(self, redis_client):
@@ -209,7 +198,12 @@ class TestDistributedTransactionManagerIntegration:
         manager = DistributedTransactionManagerNode(
             transaction_name="database_integration_test",
             state_storage="database",
-            storage_config={"db_pool": db_pool, "table_name": "integration_dtx_states"},
+            storage_config={
+                "db_pool": db_pool,
+                "table_name": "integration_dtx_states",
+                "saga_table_name": "integration_saga_states",
+                "twophase_table_name": "integration_2pc_states",
+            },
         )
 
         # Create transaction
@@ -217,8 +211,8 @@ class TestDistributedTransactionManagerIntegration:
             operation="create_transaction",
             transaction_name="database_distributed_tx",
             requirements={
-                "consistency": "eventual",
-                "availability": "high",
+                "consistency": "strong",  # Force 2PC pattern
+                "availability": "medium",
                 "timeout": 300,
             },
             context={"test_type": "database_integration", "order_id": "order_123"},
@@ -227,19 +221,19 @@ class TestDistributedTransactionManagerIntegration:
         assert result["status"] == "success"
         transaction_id = result["transaction_id"]
 
-        # Add participants with mixed capabilities
+        # Add participants with 2PC capabilities (for testing database storage)
         participants = [
             {
                 "participant_id": "db_payment_service",
                 "endpoint": "http://payment:8080/api",
-                "supports_2pc": False,  # Forces Saga pattern
+                "supports_2pc": True,  # Test with 2PC pattern
                 "supports_saga": True,
                 "compensation_action": "cancel_payment",
             },
             {
                 "participant_id": "db_shipping_service",
                 "endpoint": "http://shipping:8080/api",
-                "supports_2pc": False,
+                "supports_2pc": True,
                 "supports_saga": True,
                 "compensation_action": "cancel_shipment",
             },
@@ -263,14 +257,19 @@ class TestDistributedTransactionManagerIntegration:
 
         assert result["status"] == "success"
         assert (
-            result["selected_pattern"] == "saga"
-        )  # Eventual consistency + no 2PC support
+            result["selected_pattern"] == "two_phase_commit"
+        )  # Strong consistency + 2PC support
         assert manager.status == TransactionStatus.COMMITTED
 
         # Test database recovery
         new_manager = DistributedTransactionManagerNode(
             state_storage="database",
-            storage_config={"db_pool": db_pool, "table_name": "integration_dtx_states"},
+            storage_config={
+                "db_pool": db_pool,
+                "table_name": "integration_dtx_states",
+                "saga_table_name": "integration_saga_states",
+                "twophase_table_name": "integration_2pc_states",
+            },
         )
 
         recovery_result = await new_manager.async_run(
@@ -409,7 +408,12 @@ class TestDistributedTransactionManagerIntegration:
         db_manager = DistributedTransactionManagerNode(
             transaction_name="db_storage_test",
             state_storage="database",
-            storage_config={"db_pool": db_pool, "table_name": "integration_dtx_states"},
+            storage_config={
+                "db_pool": db_pool,
+                "table_name": "integration_dtx_states",
+                "saga_table_name": "integration_saga_states",
+                "twophase_table_name": "integration_2pc_states",
+            },
         )
 
         await db_manager.async_run(

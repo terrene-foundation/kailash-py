@@ -32,6 +32,7 @@ class MockNode(Node):
         return {}
 
 
+@pytest.mark.requires_isolation
 class TestWorkflowVisualizer:
     """Test WorkflowVisualizer class."""
 

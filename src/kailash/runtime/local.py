@@ -336,6 +336,17 @@ class LocalRuntime:
             if self.enable_security and self.user_context:
                 self._check_workflow_access(workflow)
 
+            # Extract workflow context BEFORE parameter processing
+            # This prevents workflow_context from being treated as a workflow-level parameter
+            workflow_context = {}
+            if parameters and "workflow_context" in parameters:
+                workflow_context = parameters.pop("workflow_context")
+                if not isinstance(workflow_context, dict):
+                    workflow_context = {}
+
+            # Store workflow context for inspection/cleanup
+            self._current_workflow_context = workflow_context
+
             # Transform workflow-level parameters if needed
             processed_parameters = self._process_workflow_parameters(
                 workflow, parameters
@@ -404,6 +415,7 @@ class LocalRuntime:
                     task_manager=task_manager,
                     run_id=run_id,
                     parameters=processed_parameters or {},
+                    workflow_context=workflow_context,
                 )
 
             # Enterprise Audit: Log successful completion
@@ -503,6 +515,7 @@ class LocalRuntime:
         task_manager: TaskManager | None,
         run_id: str | None,
         parameters: dict[str, dict[str, Any]],
+        workflow_context: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Execute the workflow nodes in topological order.
 
@@ -531,6 +544,13 @@ class LocalRuntime:
         results = {}
         node_outputs = {}
         failed_nodes = []
+
+        # Use the workflow context passed from _execute_async
+        if workflow_context is None:
+            workflow_context = {}
+
+        # Store the workflow context for cleanup later
+        self._current_workflow_context = workflow_context
 
         # Execute each node
         for node_id in execution_order:
@@ -627,6 +647,13 @@ class LocalRuntime:
                         node_id, inputs
                     )
 
+                    # Set workflow context on the node instance
+                    if hasattr(node_instance, "_workflow_context"):
+                        node_instance._workflow_context = workflow_context
+                    else:
+                        # Initialize the workflow context if it doesn't exist
+                        node_instance._workflow_context = workflow_context
+
                     if self.enable_async and hasattr(node_instance, "execute_async"):
                         # Use async execution method that includes validation
                         outputs = await node_instance.execute_async(**validated_inputs)
@@ -711,6 +738,9 @@ class LocalRuntime:
                         "error_type": type(e).__name__,
                         "failed": True,
                     }
+
+        # Clean up workflow context
+        self._current_workflow_context = None
 
         return results
 

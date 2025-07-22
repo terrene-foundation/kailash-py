@@ -71,6 +71,11 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Nexus Quick Start
+```bash
+# Install Nexus separately
+pip install kailash-nexus
+```
+
 ```python
 from nexus import Nexus
 from kailash.workflow.builder import WorkflowBuilder
@@ -84,7 +89,7 @@ workflow.add_node("PythonCodeNode", "process", {
 })
 
 # Register workflow
-app.register("process_data", workflow)
+app.register("process_data", workflow.build())
 
 app.start()  # Available as API, CLI, and MCP
 ```
@@ -97,24 +102,38 @@ app.start()  # Available as API, CLI, and MCP
 - `workflow.connect(..., cycle=True)` → Use `workflow.create_cycle("name").connect(...).build()`
 - Override `execute()` in nodes → Implement `run()` instead
 - Parameter naming → Follow node-specific requirements (`operation` for EdgeCoordinationNode, `action` for others)
+- **Missing required parameters** → See [Parameter Guide](sdk-users/3-development/parameter-passing-guide.md) & [Error Solutions](sdk-users/2-core-concepts/validation/common-mistakes.md)
+
+## 🚨 **Debugging Workflow Errors**
+**"Node 'X' missing required inputs"** → [Parameter Solution Guide](sdk-users/2-core-concepts/validation/common-mistakes.md#mistake--1-missing-required-parameters-new-in-v070)
+
+### 🚨 PARAMETER PASSING
+**Required parameters MUST be provided via one of three methods:**
+1. **Node config**: `workflow.add_node("Node", "id", {"param": "value"})`
+2. **Connections**: `workflow.add_connection("source", "output", "target", "param")`  
+3. **Runtime**: `runtime.execute(workflow.build(), parameters={"node_id": {"param": "value"}})`
+
+**See**: [Parameter Passing Guide](sdk-users/3-development/parameter-passing-guide.md)
 
 ### 🎯 Multi-Step Strategy (Enterprise Workflow)
 1. **First implementation** → Copy basic pattern above
-2. **Architecture decisions** → [sdk-users/decision-matrix.md](sdk-users/decision-matrix.md)
-3. **Node selection** → [sdk-users/nodes/node-selection-guide.md](sdk-users/nodes/node-selection-guide.md)
-4. **AI Agents with MCP** → Use `use_real_mcp=True` (default) for real tool execution
-5. **Multi-agent coordination** → [sdk-users/cheatsheet/023-a2a-agent-coordination.md](sdk-users/cheatsheet/023-a2a-agent-coordination.md) (A2A agent cards, task delegation)
-6. **Multi-channel apps** → [sdk-users/enterprise/nexus-patterns.md](sdk-users/enterprise/nexus-patterns.md) (API, CLI, MCP unified)
-7. **Security & access control** → [sdk-users/enterprise/security-patterns.md](sdk-users/enterprise/security-patterns.md) (User management, RBAC, auth)
-8. **Enterprise integration** → [sdk-users/enterprise/gateway-patterns.md](sdk-users/enterprise/gateway-patterns.md) (API gateways, external systems)
-9. **Custom logic** → [sdk-users/cheatsheet/031-pythoncode-best-practices.md](sdk-users/cheatsheet/031-pythoncode-best-practices.md) (Use `.from_function()`)
-10. **Custom nodes** → [sdk-users/developer/05-custom-development.md](sdk-users/developer/05-custom-development.md)
-11. **Production deployment** → [sdk-users/enterprise/production-patterns.md](sdk-users/enterprise/production-patterns.md) (Scaling, monitoring)
-12. **Enterprise resilience** → [sdk-users/enterprise/resilience-patterns.md](sdk-users/enterprise/resilience-patterns.md) (Circuit breaker, bulkhead, health monitoring)
-13. **Edge computing** → [sdk-users/developer/30-edge-computing-guide.md](sdk-users/developer/30-edge-computing-guide.md) (EdgeCoordinationNode, distributed consensus)
-14. **Distributed transactions** → [sdk-users/cheatsheet/049-distributed-transactions.md](sdk-users/cheatsheet/049-distributed-transactions.md) (Saga, 2PC, automatic pattern selection)
-15. **Governance & compliance** → [sdk-users/enterprise/compliance-patterns.md](sdk-users/enterprise/compliance-patterns.md) (Audit, data policies)
-16. **Common errors** → [sdk-users/validation/common-mistakes.md](sdk-users/validation/common-mistakes.md)
+2. **Parameter validation** → [Parameter Guide](sdk-users/3-development/parameter-passing-guide.md) (CRITICAL for avoiding validation errors)
+3. **Architecture decisions** → [Architecture Decision Guide](sdk-users/architecture-decision-guide.md) | [Decision Matrix](sdk-users/decision-matrix.md)
+4. **Feature discovery** → [Feature Discovery Guide](sdk-users/2-core-concepts/feature-discovery-guide.md) (**Use existing solutions first!**)
+5. **Node selection** → [sdk-users/2-core-concepts/nodes/node-selection-guide.md](sdk-users/2-core-concepts/nodes/node-selection-guide.md)
+6. **AI Agents with MCP** → Use `use_real_mcp=True` (default) for real tool execution
+7. **Multi-agent coordination** → [sdk-users/2-core-concepts/cheatsheet/023-a2a-agent-coordination.md](sdk-users/2-core-concepts/cheatsheet/023-a2a-agent-coordination.md) (A2A agent cards, task delegation)
+8. **Multi-channel apps** → [sdk-users/5-enterprise/nexus-patterns.md](sdk-users/5-enterprise/nexus-patterns.md) (API, CLI, MCP unified)
+9. **Security & access control** → [sdk-users/5-enterprise/security-patterns.md](sdk-users/5-enterprise/security-patterns.md) (User management, RBAC, auth)
+10. **Enterprise integration** → [sdk-users/5-enterprise/gateway-patterns.md](sdk-users/5-enterprise/gateway-patterns.md) (API gateways, external systems)
+11. **Custom logic** → [sdk-users/2-core-concepts/cheatsheet/031-pythoncode-best-practices.md](sdk-users/2-core-concepts/cheatsheet/031-pythoncode-best-practices.md) (Use `.from_function()`)
+12. **Custom nodes** → [sdk-users/3-development/05-custom-development.md](sdk-users/3-development/05-custom-development.md)
+13. **Production deployment** → [sdk-users/5-enterprise/production-patterns.md](sdk-users/5-enterprise/production-patterns.md) (Scaling, monitoring)
+14. **Enterprise resilience** → [sdk-users/5-enterprise/resilience-patterns.md](sdk-users/5-enterprise/resilience-patterns.md) (Circuit breaker, bulkhead, health monitoring)
+15. **Edge computing** → [sdk-users/3-development/30-edge-computing-guide.md](sdk-users/3-development/30-edge-computing-guide.md) (EdgeCoordinationNode, distributed consensus)
+16. **Distributed transactions** → [sdk-users/2-core-concepts/cheatsheet/049-distributed-transactions.md](sdk-users/2-core-concepts/cheatsheet/049-distributed-transactions.md) (Saga, 2PC, automatic pattern selection)
+17. **Governance & compliance** → [sdk-users/5-enterprise/compliance-patterns.md](sdk-users/5-enterprise/compliance-patterns.md) (Audit, data policies)
+18. **Common errors** → [sdk-users/2-core-concepts/validation/common-mistakes.md](sdk-users/2-core-concepts/validation/common-mistakes.md)
 
 ---
 
@@ -162,9 +181,9 @@ The **App Framework** provides complete domain-specific applications built on th
 | **Core SDK** | **App Framework** | **Contributors** |
 |---------------|---------------------|-----------|
 | [sdk-users/](sdk-users/) - Complete workflow guides | [apps/](apps/) - Production-ready applications | [# contrib (removed)/architecture/](# contrib (removed)/architecture/) |
-| [sdk-users/nodes/node-selection-guide.md](sdk-users/nodes/node-selection-guide.md) - 110+ nodes | [sdk-users/apps/dataflow/](sdk-users/apps/dataflow/) - DataFlow guide (PyPI) | [# contrib (removed)/training/](# contrib (removed)/training/) |
-| [sdk-users/cheatsheet/](sdk-users/cheatsheet/) - Copy-paste patterns | [sdk-users/apps/nexus/](sdk-users/apps/nexus/) - Nexus guide (PyPI) | [tests/](tests/) - 2,400+ tests |
-| [sdk-users/enterprise/](sdk-users/enterprise/) - Advanced features | [apps/kailash-mcp/](apps/kailash-mcp/) - Enterprise MCP platform | [examples/](examples/) - Feature validation |
+| [sdk-users/2-core-concepts/nodes/node-selection-guide.md](sdk-users/2-core-concepts/nodes/node-selection-guide.md) - 110+ nodes | [sdk-users/4-apps/dataflow/](sdk-users/4-apps/dataflow/) - DataFlow guide (PyPI) | [# contrib (removed)/training/](# contrib (removed)/training/) |
+| [sdk-users/2-core-concepts/cheatsheet/](sdk-users/2-core-concepts/cheatsheet/) - Copy-paste patterns | [sdk-users/4-apps/nexus/](sdk-users/4-apps/nexus/) - Nexus guide (PyPI) | [tests/](tests/) - 2,400+ tests |
+| [sdk-users/5-enterprise/](sdk-users/5-enterprise/) - Advanced features | [apps/kailash-mcp/](apps/kailash-mcp/) - Enterprise MCP platform | [examples/](examples/) - Feature validation |
 
 ## ⚠️ MUST FOLLOW
 1. **🚨 Node Execution**: ALWAYS use `.execute()` - NEVER `.run()`, `.process()`, or `.call()`
@@ -182,7 +201,7 @@ The **App Framework** provides complete domain-specific applications built on th
     - **Implement**: `async_run()` NOT `run()` in AsyncNode subclasses
     - **Tests**: Use `await node.execute_async()` NOT `await node.execute()`
     - **NodeParameter**: ALWAYS include `type` field (str, int, dict, object, etc.)
-    - **Full Guide**: [AsyncNode Implementation Guide](sdk-users/developer/async-node-guide.md)
+    - **Full Guide**: [AsyncNode Implementation Guide](sdk-users/3-development/async-node-guide.md)
 
 ## ⚡ Critical Patterns
 1. **Data Paths**: `get_input_data_path()`, `get_output_data_path()`
@@ -194,13 +213,13 @@ The **App Framework** provides complete domain-specific applications built on th
 4. **Ollama Embeddings**: Extract with `[emb["embedding"] for emb in result["embeddings"]]`
 5. **Cyclic Workflows**: Use CycleBuilder API `workflow.create_cycle("name").connect(...).max_iterations(N).build()`
 6. **WorkflowBuilder**: String-based `add_node("CSVReaderNode", ...)`, 4-param `add_connection()`
-7. **MCP Integration**: 100% validated, comprehensive testing (407 tests, 100% pass rate) - see [MCP Guide](sdk-users/cheatsheet/025-mcp-integration.md)
+7. **MCP Integration**: 100% validated, comprehensive testing (407 tests, 100% pass rate) - see [MCP Guide](sdk-users/2-core-concepts/cheatsheet/025-mcp-integration.md)
 8. **MCP Real Execution**: All AI agents use `use_real_mcp=True` by default (v0.6.6+) - BREAKING CHANGE from mock execution
 9. **Documentation**: Comprehensive validation across 9 critical phases, 100% pass rates achieved - see [SDK Users](sdk-users/) navigation hub
-10. **Enterprise Resilience**: Circuit breaker, bulkhead isolation, health monitoring - see [Resilience Patterns](sdk-users/enterprise/resilience-patterns.md)
-11. **Transaction Monitoring**: 5 production-tested nodes for metrics, deadlock detection, race conditions - see [Transaction Monitoring](sdk-users/cheatsheet/048-transaction-monitoring.md)
-12. **Distributed Transactions**: Automatic pattern selection (Saga/2PC), compensation logic, recovery - see [Distributed Transactions](sdk-users/cheatsheet/049-distributed-transactions.md)
-13. **AsyncSQL Parameter Types**: PostgreSQL type inference fix with `parameter_types` for JSONB/COALESCE contexts (v0.6.6+) - see [AsyncSQL Patterns](sdk-users/cheatsheet/047-asyncsql-enterprise-patterns.md)
+10. **Enterprise Resilience**: Circuit breaker, bulkhead isolation, health monitoring - see [Resilience Patterns](sdk-users/5-enterprise/resilience-patterns.md)
+11. **Transaction Monitoring**: 5 production-tested nodes for metrics, deadlock detection, race conditions - see [Transaction Monitoring](sdk-users/2-core-concepts/cheatsheet/048-transaction-monitoring.md)
+12. **Distributed Transactions**: Automatic pattern selection (Saga/2PC), compensation logic, recovery - see [Distributed Transactions](sdk-users/2-core-concepts/cheatsheet/049-distributed-transactions.md)
+13. **AsyncSQL Parameter Types**: PostgreSQL type inference fix with `parameter_types` for JSONB/COALESCE contexts (v0.6.6+) - see [AsyncSQL Patterns](sdk-users/2-core-concepts/cheatsheet/047-asyncsql-enterprise-patterns.md)
 14. **Core SDK Architecture**: TODO-111 resolved critical infrastructure gaps - CyclicWorkflowExecutor, WorkflowVisualizer, and ConnectionManager now production-ready with comprehensive test coverage
 15. **Parameter Naming Convention**: Use `action` (not `operation`) for consistency across nodes
 16. **Test Performance**: Run unit tests directly for 11x faster execution: `pytest tests/unit/`
@@ -212,17 +231,17 @@ The **App Framework** provides complete domain-specific applications built on th
     - Performance optimization with caching and batch validation
 
 ## 🔧 Core Nodes (110+ available)
-**Quick Access**: [Node Index](sdk-users/nodes/node-index.md) - Minimal reference (47 lines)
-**Choose Smart**: [Node Selection Guide](sdk-users/nodes/node-selection-guide.md) - Decision trees + quick finder
+**Quick Access**: [Node Index](sdk-users/2-core-concepts/nodes/node-index.md) - Minimal reference (47 lines)
+**Choose Smart**: [Node Selection Guide](sdk-users/2-core-concepts/nodes/node-selection-guide.md) - Decision trees + quick finder
 **AI**: **LLMAgentNode**, **IterativeLLMAgentNode** (real MCP execution by default), MonitoredLLMAgentNode, EmbeddingGeneratorNode, A2AAgentNode, SelfOrganizingAgentNode
 **Data**: CSVReaderNode, JSONReaderNode, SQLDatabaseNode, AsyncSQLDatabaseNode, DirectoryReaderNode
-**RAG**: 47+ specialized nodes - see [RAG Guide](sdk-users/developer/06-comprehensive-rag-guide.md)
+**RAG**: 47+ specialized nodes - see [RAG Guide](sdk-users/3-development/06-comprehensive-rag-guide.md)
 **API**: HTTPRequestNode, RESTClientNode, OAuth2Node, GraphQLClientNode
 **Logic**: SwitchNode, MergeNode, WorkflowNode, ConvergenceCheckerNode
 **Enterprise**: MultiFactorAuthNode, ThreatDetectionNode, AccessControlManager, GDPRComplianceNode
-**Monitoring**: TransactionMetricsNode, TransactionMonitorNode, DeadlockDetectorNode, RaceConditionDetectorNode, PerformanceAnomalyNode - see [Monitoring Guide](sdk-users/nodes/monitoring-nodes.md)
-**Transactions**: DistributedTransactionManagerNode, SagaCoordinatorNode, TwoPhaseCommitCoordinatorNode - see [Transaction Guide](sdk-users/nodes/transaction-nodes.md)
-**Full catalog**: [Complete Node Catalog](sdk-users/nodes/comprehensive-node-catalog.md) (2194 lines - use sparingly)
+**Monitoring**: TransactionMetricsNode, TransactionMonitorNode, DeadlockDetectorNode, RaceConditionDetectorNode, PerformanceAnomalyNode - see [Monitoring Guide](sdk-users/2-core-concepts/nodes/monitoring-nodes.md)
+**Transactions**: DistributedTransactionManagerNode, SagaCoordinatorNode, TwoPhaseCommitCoordinatorNode - see [Transaction Guide](sdk-users/2-core-concepts/nodes/transaction-nodes.md)
+**Full catalog**: [Complete Node Catalog](sdk-users/2-core-concepts/nodes/comprehensive-node-catalog.md) (2194 lines - use sparingly)
 
 ## 📂 Directory Navigation Convention
 **File Naming Standard**:
@@ -243,15 +262,15 @@ The **App Framework** provides complete domain-specific applications built on th
 
 | **I need to...** | **Core SDK** | **App Framework** | **Contributors** |
 |-----------------|--------------|---------------------|-----------|
-| **Build a workflow** | [sdk-users/workflows/](sdk-users/workflows/) | - | - |
+| **Build a workflow** | [sdk-users/2-core-concepts/workflows/](sdk-users/2-core-concepts/workflows/) | - | - |
 | **Build an app** | [sdk-users/decision-matrix.md](sdk-users/decision-matrix.md) | [apps/DOCUMENTATION_STANDARDS.md](apps/DOCUMENTATION_STANDARDS.md) | - |
-| **Database operations** | [sdk-users/cheatsheet/047-asyncsql-enterprise-patterns.md](sdk-users/cheatsheet/047-asyncsql-enterprise-patterns.md) | [apps/kailash-dataflow/](apps/kailash-dataflow/) - Zero-config | - |
-| **Multi-channel platform** | [sdk-users/enterprise/nexus-patterns.md](sdk-users/enterprise/nexus-patterns.md) | [apps/kailash-nexus/](apps/kailash-nexus/) - Production-ready | - |
-| **MCP integration** | [sdk-users/cheatsheet/025-mcp-integration.md](sdk-users/cheatsheet/025-mcp-integration.md) | [apps/kailash-mcp/](apps/kailash-mcp/) - Enterprise platform | - |
-| **AI & RAG** | [sdk-users/developer/06-comprehensive-rag-guide.md](sdk-users/developer/06-comprehensive-rag-guide.md) | [apps/ai_registry/](apps/ai_registry/) - Advanced RAG | - |
-| **User management** | [sdk-users/enterprise/security-patterns.md](sdk-users/enterprise/security-patterns.md) | [apps/user_management/](apps/user_management/) - RBAC system | - |
-| **Fix an error** | [sdk-users/developer/05-troubleshooting.md](sdk-users/developer/05-troubleshooting.md) | [shared/mistakes/](shared/mistakes/) | [shared/mistakes/](shared/mistakes/) |
-| **Distributed transactions** | [sdk-users/cheatsheet/049-distributed-transactions.md](sdk-users/cheatsheet/049-distributed-transactions.md) | - | - |
+| **Database operations** | [sdk-users/2-core-concepts/cheatsheet/047-asyncsql-enterprise-patterns.md](sdk-users/2-core-concepts/cheatsheet/047-asyncsql-enterprise-patterns.md) | [apps/kailash-dataflow/](apps/kailash-dataflow/) - Zero-config | - |
+| **Multi-channel platform** | [sdk-users/5-enterprise/nexus-patterns.md](sdk-users/5-enterprise/nexus-patterns.md) | [apps/kailash-nexus/](apps/kailash-nexus/) - Production-ready | - |
+| **MCP integration** | [sdk-users/2-core-concepts/cheatsheet/025-mcp-integration.md](sdk-users/2-core-concepts/cheatsheet/025-mcp-integration.md) | [apps/kailash-mcp/](apps/kailash-mcp/) - Enterprise platform | - |
+| **AI & RAG** | [sdk-users/3-development/06-comprehensive-rag-guide.md](sdk-users/3-development/06-comprehensive-rag-guide.md) | [apps/ai_registry/](apps/ai_registry/) - Advanced RAG | - |
+| **User management** | [sdk-users/5-enterprise/security-patterns.md](sdk-users/5-enterprise/security-patterns.md) | [apps/user_management/](apps/user_management/) - RBAC system | - |
+| **Fix an error** | [sdk-users/3-development/05-troubleshooting.md](sdk-users/3-development/05-troubleshooting.md) | [shared/mistakes/](shared/mistakes/) | [shared/mistakes/](shared/mistakes/) |
+| **Distributed transactions** | [sdk-users/2-core-concepts/cheatsheet/049-distributed-transactions.md](sdk-users/2-core-concepts/cheatsheet/049-distributed-transactions.md) | - | - |
 | **Run tests**   | [tests/README.md](tests/README.md) - Test guide | [tests/](tests/) - Full test suite | [tests/](tests/) - Full test suite |
 | **Train LLMs**  | - | - | [# contrib (removed)/training/](# contrib (removed)/training/) |
 | **Design architecture** | - | - | [# contrib (removed)/architecture/](# contrib (removed)/architecture/) |
@@ -286,7 +305,7 @@ Use centralized `tests/node_registry_utils.py` for consistent node management
 ## 📁 Organization Principles
 - **Core SDK** → `src/kailash/` (foundational components) + `sdk-users/` (usage guides)
 - **App Framework** → `apps/` (complete applications) + domain-specific docs
-- **Production workflows** → `sdk-users/workflows/` (business value)
+- **Production workflows** → `sdk-users/2-core-concepts/workflows/` (business value)
 - **SDK development** → `examples/` (feature validation)
 - **SDK core tests** → `tests/` (unit/integration/e2e for SDK only)
 - **App-specific tests** → `apps/*/tests/` (DataFlow, Nexus, etc. have their own test folders)

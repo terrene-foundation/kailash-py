@@ -12,8 +12,8 @@ After a comprehensive analysis of our documentation ecosystem, this plan outline
 - **Limited Coverage**: Missing extensive user documentation, enterprise patterns, and framework guides
 
 ### What's Missing:
-1. **54 Cheatsheets** from `sdk-users/cheatsheet/` - Quick reference patterns
-2. **35+ Developer Guides** from `sdk-users/developer/` - Comprehensive technical guides
+1. **54 Cheatsheets** from `sdk-users/2-core-concepts/cheatsheet/` - Quick reference patterns
+2. **35+ Developer Guides** from `sdk-users/3-development/` - Comprehensive technical guides
 3. **110+ Node Documentation** - Complete catalog with selection guide
 4. **Enterprise Patterns** - Production-grade patterns for security, resilience, compliance
 5. **100+ Production Workflows** - Industry-specific examples

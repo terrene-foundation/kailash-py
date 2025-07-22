@@ -82,26 +82,51 @@ workflow.add_node("UserCreateNode", "create_user", {
 
 # Step 2: Create profile for user
 workflow.add_node("ProfileCreateNode", "create_profile", {
-    "user_id": ":user_id",  # Reference from previous node
+    # IMPORTANT: Do NOT use template syntax in node config
+    # user_id will be provided via connection below
     "bio": "Software developer",
     "location": "New York"
 })
 
 # Step 3: Send welcome email
 workflow.add_node("EmailNotificationNode", "send_welcome", {
-    "to": ":user_email",
-    "template": "welcome",
-    "data": {
-        "name": ":user_name",
-        "profile_id": ":profile_id"
-    }
+    # email, name, and profile_id provided via connections
+    "template": "welcome"
 })
 
 # Connect nodes with data flow (4-parameter signature)
 workflow.add_connection("create_user", "id", "create_profile", "user_id")
-workflow.add_connection("create_user", "email", "send_welcome", "user_email")
-workflow.add_connection("create_user", "name", "send_welcome", "user_name")
+workflow.add_connection("create_user", "email", "send_welcome", "to")
+workflow.add_connection("create_user", "name", "send_welcome", "name")
 workflow.add_connection("create_profile", "id", "send_welcome", "profile_id")
+```
+
+### Parameter Validation Patterns
+
+```python
+# ❌ WRONG: Never use ${} syntax in node parameters
+workflow.add_node("OrderCreateNode", "create_order", {
+    "customer_id": "${create_customer.id}",  # This will fail validation
+    "total": 100.0
+})
+
+# ✅ CORRECT: Use workflow connections for dynamic values
+workflow.add_node("OrderCreateNode", "create_order", {
+    "total": 100.0  # customer_id provided via connection
+})
+workflow.add_connection("create_customer", "id", "create_order", "customer_id")
+
+# ✅ CORRECT: Use {{}} for Nexus parameter placeholders (Nexus integration only)
+nexus_workflow.add_node("ProductCreateNode", "create", {
+    "name": "{{product_name}}",    # Nexus will replace at runtime
+    "price": "{{product_price}}"   # Only for Nexus channels
+})
+
+# ✅ CORRECT: Use native Python types for datetime
+workflow.add_node("OrderCreateNode", "create_order", {
+    "due_date": datetime.now(),     # Native datetime object
+    # NOT: datetime.now().isoformat() - string will fail validation
+})
 ```
 
 ## Advanced Workflow Patterns
@@ -281,9 +306,10 @@ workflow.add_connection("create_account", "create_transaction", "id", "account_i
 workflow = WorkflowBuilder()
 
 # Start transaction
-workflow.add_node("TransactionContextNode", "start_transaction", {
+workflow.add_node("TransactionScopeNode", "start_transaction", {
     "isolation_level": "READ_COMMITTED",
-    "timeout": 30.0
+    "timeout": 30,
+    "rollback_on_error": True
 })
 
 # Database operations
@@ -320,8 +346,10 @@ workflow.add_connection("create_profile", "commit_transaction")
 workflow = WorkflowBuilder()
 
 # Main transaction
-workflow.add_node("TransactionContextNode", "main_transaction", {
-    "isolation_level": "SERIALIZABLE"
+workflow.add_node("TransactionScopeNode", "main_transaction", {
+    "isolation_level": "SERIALIZABLE",
+    "timeout": 60,
+    "rollback_on_error": True
 })
 
 # Create user (always commit)
@@ -794,6 +822,130 @@ def test_complex_workflow():
     assert results["create_orders"]["data"]["success_count"] == 2
 ```
 
+## Specialized DataFlow Nodes
+
+### Transaction Management Nodes
+
+DataFlow provides specialized nodes for managing database transactions:
+
+#### TransactionScopeNode
+
+Manages transaction scope with isolation levels and automatic rollback:
+
+```python
+workflow.add_node("TransactionScopeNode", "start_transaction", {
+    "isolation_level": "READ_COMMITTED",  # READ_UNCOMMITTED, READ_COMMITTED, REPEATABLE_READ, SERIALIZABLE
+    "timeout": 30,  # Transaction timeout in seconds
+    "rollback_on_error": True  # Automatically rollback on any error
+})
+```
+
+#### TransactionCommitNode
+
+Commits the current transaction:
+
+```python
+workflow.add_node("TransactionCommitNode", "commit", {
+    # No parameters required - commits active transaction
+})
+```
+
+#### TransactionRollbackNode
+
+Rolls back the current transaction:
+
+```python
+workflow.add_node("TransactionRollbackNode", "rollback", {
+    # No parameters required - rolls back active transaction
+})
+```
+
+### Schema Management Nodes
+
+DataFlow provides nodes for managing database schema changes:
+
+#### SchemaModificationNode
+
+Performs schema modifications on database tables:
+
+```python
+# Add column
+workflow.add_node("SchemaModificationNode", "add_column", {
+    "table": "users",
+    "operation": "add_column",
+    "column_name": "phone_number",
+    "column_type": "varchar(20)",
+    "nullable": True
+})
+
+# Drop column
+workflow.add_node("SchemaModificationNode", "drop_column", {
+    "table": "users",
+    "operation": "drop_column",
+    "column_name": "deprecated_field"
+})
+```
+
+#### MigrationNode
+
+Tracks database migrations to ensure schema changes are applied consistently:
+
+```python
+# Track migration
+workflow.add_node("MigrationNode", "track_migration", {
+    "migration_name": "add_user_phone_number",
+    "status": "pending"  # pending, completed, failed
+})
+
+# Update migration status
+workflow.add_node("MigrationNode", "complete_migration", {
+    "migration_name": "add_user_phone_number",
+    "status": "completed"
+})
+```
+
+### Complete Schema Migration Example
+
+```python
+workflow = WorkflowBuilder()
+
+# Start transaction for safe migration
+workflow.add_node("TransactionScopeNode", "start_migration", {
+    "isolation_level": "SERIALIZABLE",
+    "rollback_on_error": True
+})
+
+# Track migration
+workflow.add_node("MigrationNode", "track", {
+    "migration_name": "add_user_preferences",
+    "status": "pending"
+})
+
+# Apply schema change
+workflow.add_node("SchemaModificationNode", "add_preferences", {
+    "table": "users",
+    "operation": "add_column",
+    "column_name": "preferences",
+    "column_type": "jsonb",
+    "nullable": True
+})
+
+# Update migration status
+workflow.add_node("MigrationNode", "complete", {
+    "migration_name": "add_user_preferences",
+    "status": "completed"
+})
+
+# Commit transaction
+workflow.add_node("TransactionCommitNode", "commit_migration", {})
+
+# Connect workflow
+workflow.add_connection("start_migration", "track")
+workflow.add_connection("track", "add_preferences")
+workflow.add_connection("add_preferences", "complete")
+workflow.add_connection("complete", "commit_migration")
+```
+
 ## Best Practices
 
 ### 1. Node Naming and Organization
@@ -855,13 +1007,17 @@ for user in user_list:
 
 ```python
 # Good: Appropriate transaction boundaries
-workflow.add_node("TransactionContextNode", "start_transaction", {})
+workflow.add_node("TransactionScopeNode", "start_transaction", {
+    "rollback_on_error": True
+})
 workflow.add_node("UserCreateNode", "create_user", {...})
 workflow.add_node("ProfileCreateNode", "create_profile", {...})
 workflow.add_node("TransactionCommitNode", "commit_transaction", {})
 
 # Avoid: Overly broad transactions
-workflow.add_node("TransactionContextNode", "start_transaction", {})
+workflow.add_node("TransactionScopeNode", "start_transaction", {
+    "rollback_on_error": True
+})
 # ... 50 different operations ...
 workflow.add_node("TransactionCommitNode", "commit_transaction", {})
 ```

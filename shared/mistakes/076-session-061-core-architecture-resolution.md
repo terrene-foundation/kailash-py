@@ -72,8 +72,8 @@ results = node.run(input_text="Hello world")
 ## Documentation Updates
 
 ### Files Updated:
-1. **`sdk-users/validation-guide.md`** - Updated with new parameter patterns
-2. **`sdk-users/developer/01-node-basics.md`** - Added Session 061 improvements section
+1. **`sdk-users/2-core-concepts/validation-guide.md`** - Updated with new parameter patterns
+2. **`sdk-users/3-development/01-node-basics.md`** - Added Session 061 improvements section
 3. **`examples/`** - Fixed 4+ files to use `node.run()` instead of `node.execute()`
 4. **`shared/mistakes/`** - Marked #020, #053, #058 as RESOLVED
 

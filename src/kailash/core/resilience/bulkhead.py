@@ -204,11 +204,21 @@ class BulkheadPartition:
             await self._record_failure(execution_time)
             raise
         finally:
-            # Clean up
-            async with self._lock:
-                if operation_id in self._active_operations:
-                    self._active_operations.remove(operation_id)
-                self.metrics.active_operations = len(self._active_operations)
+            # Clean up - with proper exception handling for event loop issues
+            try:
+                async with self._lock:
+                    if operation_id in self._active_operations:
+                        self._active_operations.remove(operation_id)
+                    self.metrics.active_operations = len(self._active_operations)
+            except (RuntimeError, asyncio.CancelledError):
+                # Handle event loop issues during cleanup - force cleanup without lock
+                try:
+                    if operation_id in self._active_operations:
+                        self._active_operations.remove(operation_id)
+                    self.metrics.active_operations = len(self._active_operations)
+                except:
+                    # Final fallback - ignore cleanup errors during shutdown
+                    pass
 
     async def _execute_isolated(
         self, operation_id: str, func: Callable, args: tuple, kwargs: dict, timeout: int

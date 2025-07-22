@@ -10,22 +10,21 @@ This gateway automatically discovers apps using manifests and provides:
 """
 
 import asyncio
-import sys
-import os
 import logging
-from typing import Dict, List, Any, Optional
+import os
+import sys
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 # Add core to Python path
 sys.path.insert(0, "/app")
 
+import httpx
+from core.discovery import get_registry, initialize_service_discovery
 from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-import httpx
-
-from core.discovery import initialize_service_discovery, get_registry
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -66,7 +65,6 @@ async def startup_event():
     logger.info("🚀 Starting Enhanced Enterprise Gateway...")
 
     # Initialize service discovery with mounted apps directory
-    from pathlib import Path
 
     apps_path = Path("/apps")
     if not apps_path.exists():
@@ -284,7 +282,7 @@ async def execute_tool(service_name: str, tool_name: str, payload: dict):
                 raise HTTPException(status_code=500, detail=str(e))
     else:
         raise HTTPException(
-            status_code=501, detail=f"Stdio MCP execution not yet supported"
+            status_code=501, detail="Stdio MCP execution not yet supported"
         )
 
 

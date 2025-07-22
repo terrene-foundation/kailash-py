@@ -129,9 +129,10 @@ app.start()
 
 **Before (Singleton Problem):**
 ```python
-from nexus import create_nexus
-n1 = create_nexus()  # Hidden global singleton
-n2 = create_nexus()  # Same instance! Confusing ownership
+# Old pattern (removed)
+# from nexus import create_nexus  
+# n1 = create_nexus()  # Hidden global singleton
+# n2 = create_nexus()  # Same instance! Confusing ownership
 ```
 
 **After (FastAPI-Style Solution):**
