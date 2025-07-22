@@ -12,8 +12,7 @@ from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime.local import LocalRuntime
 
-# Skip entire module due to CI-specific teardown issues - works fine locally
-pytestmark = pytest.mark.skip(reason="CI-specific teardown issue - works locally")
+# NOTE: Some tests may have CI-specific teardown issues but work fine locally
 
 
 class TestBasicWorkflow:
@@ -42,6 +41,7 @@ class TestBasicWorkflow:
 
         return csv_file
 
+    @pytest.mark.skip(reason="CI-specific teardown issue - works locally")
     def test_csv_reader_node(self, sample_csv_file):
         """Test CSVReaderNode reads data correctly."""
         # Create workflow
