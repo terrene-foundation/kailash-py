@@ -70,7 +70,7 @@ class EdgeMigrationNode(AsyncNode):
 
         # Get reference to shared migration service
         self.migration_service = EdgeMigrationService(self.node_config)
-        
+
         # Get migrator instance from shared service with node-specific config
         self.node_id = f"edge_migration_node_{id(self)}"
         self.migrator = self.migration_service.get_migrator_for_node(

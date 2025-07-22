@@ -18,17 +18,18 @@ class MockNode(Node):
         self.node_id = node_id
         self.name = name or node_id
         self.config = kwargs
-    
+
     def get_parameters(self):
         """Define input parameters for the mock node."""
         from kailash.nodes.base import NodeParameter
+
         return {
             "value": NodeParameter(
                 name="value",
                 type=float,
                 required=False,
                 description="Input value parameter",
-                default=0.0
+                default=0.0,
             )
         }
 

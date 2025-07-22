@@ -12,7 +12,7 @@ from .session import CrossChannelSession, SessionManager
 
 __all__ = [
     "Channel",
-    "ChannelConfig", 
+    "ChannelConfig",
     "ChannelType",
     "APIChannel",
     "CLIChannel",

@@ -191,8 +191,12 @@ class TestAsyncSQLPoolSharing:
             self._connected = True
             return mock_adapter
 
-        with patch.object(AsyncSQLDatabaseNode, "_create_adapter", mock_create_adapter), \
-             patch.object(AsyncSQLDatabaseNode, "_shared_pools", {}) as mock_shared_pools:
+        with (
+            patch.object(AsyncSQLDatabaseNode, "_create_adapter", mock_create_adapter),
+            patch.object(
+                AsyncSQLDatabaseNode, "_shared_pools", {}
+            ) as mock_shared_pools,
+        ):
             # Set up pool metrics responses
             metrics_sequence = [
                 {
@@ -237,12 +241,12 @@ class TestAsyncSQLPoolSharing:
             # Both nodes should be marked as connected
             assert node1._connected is True
             assert node2._connected is True
-            
+
             # Manually set up shared pools to simulate pool sharing
             pool_key1 = node1._pool_key
             pool_key2 = node2._pool_key
             assert pool_key1 == pool_key2  # Should be the same for identical config
-            
+
             # Simulate pool sharing by setting reference count
             AsyncSQLDatabaseNode._shared_pools[pool_key1] = (mock_adapter, 2)
 

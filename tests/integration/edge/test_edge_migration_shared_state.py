@@ -31,7 +31,7 @@ class TestEdgeMigrationSharedState:
     @pytest.mark.asyncio
     async def test_cross_node_migration_plan_sharing(self, runtime, workflow_builder):
         """Test that migration plans created by one node are accessible to another node."""
-        
+
         # Create workflow with two EdgeMigrationNode instances
         # Node 1: Creates a migration plan
         workflow_builder.add_node(
@@ -40,14 +40,14 @@ class TestEdgeMigrationSharedState:
             {
                 "operation": "plan_migration",
                 "source_edge": "edge-source",
-                "target_edge": "edge-target", 
+                "target_edge": "edge-target",
                 "workloads": ["shared-workload"],
                 "strategy": "live",
                 "priority": 7,
             },
         )
 
-        # Node 2: Retrieves migration plan created by Node 1  
+        # Node 2: Retrieves migration plan created by Node 1
         workflow_builder.add_node(
             "EdgeMigrationNode",
             "executor_node",
@@ -57,7 +57,9 @@ class TestEdgeMigrationSharedState:
         )
 
         # Connect the nodes
-        workflow_builder.add_connection("planner_node", "result", "executor_node", "input")
+        workflow_builder.add_connection(
+            "planner_node", "result", "executor_node", "input"
+        )
 
         # Execute workflow
         workflow = workflow_builder.build()
@@ -67,11 +69,11 @@ class TestEdgeMigrationSharedState:
         assert results["planner_node"]["status"] == "success"
         assert "migration_id" in results["planner_node"]["plan"]
         migration_id = results["planner_node"]["plan"]["migration_id"]
-        
+
         # Verify executor node can see the migration plan created by planner node
         assert results["executor_node"]["status"] == "success"
         assert results["executor_node"]["count"] >= 1
-        
+
         # Check that the migration created by planner_node is visible to executor_node
         migrations = results["executor_node"]["migrations"]
         migration_ids = [m["migration_id"] for m in migrations]
@@ -80,7 +82,7 @@ class TestEdgeMigrationSharedState:
     @pytest.mark.asyncio
     async def test_migration_progress_sharing(self, runtime, workflow_builder):
         """Test that migration progress updates are shared between nodes."""
-        
+
         # Node 1: Start migrator and create plan
         workflow_builder.add_node(
             "EdgeMigrationNode",
@@ -91,7 +93,7 @@ class TestEdgeMigrationSharedState:
         )
 
         workflow_builder.add_node(
-            "EdgeMigrationNode", 
+            "EdgeMigrationNode",
             "planner_node",
             {
                 "operation": "plan_migration",
@@ -106,15 +108,19 @@ class TestEdgeMigrationSharedState:
         # Node 2: Get metrics (should see the migration from Node 1)
         workflow_builder.add_node(
             "EdgeMigrationNode",
-            "metrics_node", 
+            "metrics_node",
             {
                 "operation": "get_metrics",
             },
         )
 
         # Connect nodes
-        workflow_builder.add_connection("starter_node", "result", "planner_node", "input")
-        workflow_builder.add_connection("planner_node", "result", "metrics_node", "input")
+        workflow_builder.add_connection(
+            "starter_node", "result", "planner_node", "input"
+        )
+        workflow_builder.add_connection(
+            "planner_node", "result", "metrics_node", "input"
+        )
 
         # Execute workflow
         workflow = workflow_builder.build()
@@ -122,7 +128,7 @@ class TestEdgeMigrationSharedState:
 
         # Verify all operations succeeded
         assert results["starter_node"]["status"] == "success"
-        assert results["planner_node"]["status"] == "success" 
+        assert results["planner_node"]["status"] == "success"
         assert results["metrics_node"]["status"] == "success"
 
         # Verify metrics node can see migration created by planner node
@@ -131,9 +137,11 @@ class TestEdgeMigrationSharedState:
         assert metrics["active_migrations"] >= 1
 
     @pytest.mark.asyncio
-    async def test_multiple_nodes_same_service_instance(self, runtime, workflow_builder):
+    async def test_multiple_nodes_same_service_instance(
+        self, runtime, workflow_builder
+    ):
         """Test that multiple EdgeMigrationNode instances share the same service."""
-        
+
         # Create multiple nodes with different configurations
         for i in range(3):
             workflow_builder.add_node(
@@ -155,19 +163,22 @@ class TestEdgeMigrationSharedState:
         for i in range(3):
             assert results[f"node_{i}"]["status"] == "success"
             metrics = results[f"node_{i}"]["metrics"]
-            
+
             if base_metrics is None:
                 base_metrics = metrics
             else:
                 # All nodes should see the same migration state
                 assert metrics["total_migrations"] == base_metrics["total_migrations"]
                 assert metrics["active_migrations"] == base_metrics["active_migrations"]
-                assert metrics["completed_migrations"] == base_metrics["completed_migrations"]
+                assert (
+                    metrics["completed_migrations"]
+                    == base_metrics["completed_migrations"]
+                )
 
     @pytest.mark.asyncio
     async def test_migration_lifecycle_across_nodes(self, runtime):
         """Test complete migration lifecycle across different nodes."""
-        
+
         # Workflow 1: Plan migration
         plan_workflow = WorkflowBuilder()
         plan_workflow.add_node(
@@ -184,12 +195,12 @@ class TestEdgeMigrationSharedState:
 
         plan_workflow_built = plan_workflow.build()
         plan_results, _ = await runtime.execute_async(plan_workflow_built)
-        
+
         assert plan_results["planner"]["status"] == "success"
         migration_id = plan_results["planner"]["plan"]["migration_id"]
 
         # Workflow 2: Check that migration is visible from different node
-        check_workflow = WorkflowBuilder() 
+        check_workflow = WorkflowBuilder()
         check_workflow.add_node(
             "EdgeMigrationNode",
             "checker",
@@ -200,9 +211,9 @@ class TestEdgeMigrationSharedState:
 
         check_workflow_built = check_workflow.build()
         check_results, _ = await runtime.execute_async(check_workflow_built)
-        
+
         assert check_results["checker"]["status"] == "success"
-        
+
         # Migration should be visible in the active migrations
         migrations = check_results["checker"]["migrations"]
         migration_ids = [m["migration_id"] for m in migrations]
@@ -220,7 +231,7 @@ class TestEdgeMigrationSharedState:
 
         history_workflow_built = history_workflow.build()
         history_results, _ = await runtime.execute_async(history_workflow_built)
-        
+
         assert history_results["historian"]["status"] == "success"
         # History should contain the migration (even if still active)
         assert len(history_results["historian"]["migrations"]) >= 0
@@ -228,10 +239,10 @@ class TestEdgeMigrationSharedState:
     @pytest.mark.asyncio
     async def test_concurrent_migration_operations(self, runtime):
         """Test concurrent migration operations from multiple nodes."""
-        
+
         # Create multiple concurrent workflows with different nodes
         workflows = []
-        
+
         for i in range(3):
             workflow = WorkflowBuilder()
             workflow.add_node(
@@ -240,7 +251,7 @@ class TestEdgeMigrationSharedState:
                 {
                     "operation": "plan_migration",
                     "source_edge": f"concurrent-source-{i}",
-                    "target_edge": f"concurrent-target-{i}", 
+                    "target_edge": f"concurrent-target-{i}",
                     "workloads": [f"concurrent-workload-{i}"],
                     "strategy": "bulk",
                     "priority": 3 + i,
@@ -255,7 +266,9 @@ class TestEdgeMigrationSharedState:
         # All should succeed
         migration_ids = []
         for results, _ in all_results:
-            planner_key = [k for k in results.keys() if k.startswith("concurrent_planner")][0]
+            planner_key = [
+                k for k in results.keys() if k.startswith("concurrent_planner")
+            ][0]
             assert results[planner_key]["status"] == "success"
             migration_ids.append(results[planner_key]["plan"]["migration_id"])
 
@@ -274,7 +287,7 @@ class TestEdgeMigrationSharedState:
 
         final_results, _ = await runtime.execute_async(check_workflow.build())
         assert final_results["final_checker"]["status"] == "success"
-        
+
         # Should see at least 3 migrations from concurrent operations
         metrics = final_results["final_checker"]["metrics"]
         assert metrics["total_migrations"] >= 3

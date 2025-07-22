@@ -2634,7 +2634,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
             try:
                 await asyncio.wait_for(
                     self._adapter.rollback_transaction(self._active_transaction),
-                    timeout=1.0
+                    timeout=1.0,
                 )
             except (Exception, asyncio.TimeoutError):
                 pass  # Best effort cleanup
@@ -2644,7 +2644,9 @@ class AsyncSQLDatabaseNode(AsyncNode):
             try:
                 if self._share_pool and self._pool_key:
                     # Decrement reference count for shared pool with timeout
-                    async with await asyncio.wait_for(self._get_pool_lock(), timeout=1.0):
+                    async with await asyncio.wait_for(
+                        self._get_pool_lock(), timeout=1.0
+                    ):
                         if self._pool_key in self._shared_pools:
                             adapter, ref_count = self._shared_pools[self._pool_key]
                             if ref_count > 1:
@@ -2656,7 +2658,9 @@ class AsyncSQLDatabaseNode(AsyncNode):
                             else:
                                 # Last reference, close the pool
                                 del self._shared_pools[self._pool_key]
-                                await asyncio.wait_for(adapter.disconnect(), timeout=1.0)
+                                await asyncio.wait_for(
+                                    adapter.disconnect(), timeout=1.0
+                                )
                 else:
                     # Dedicated pool, close directly
                     await asyncio.wait_for(self._adapter.disconnect(), timeout=1.0)

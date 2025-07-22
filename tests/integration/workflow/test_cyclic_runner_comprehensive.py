@@ -331,7 +331,7 @@ class TestCyclicRunnerIntegration:
                 # Since the actual method calls are commented out above,
                 # we can't verify they were called. The test is just verifying
                 # that the executor has a safety_manager attribute.
-                assert hasattr(executor, 'safety_manager')
+                assert hasattr(executor, "safety_manager")
                 assert executor.safety_manager is not None
 
         except ImportError:

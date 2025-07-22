@@ -343,7 +343,7 @@ class LocalRuntime:
                 workflow_context = parameters.pop("workflow_context")
                 if not isinstance(workflow_context, dict):
                     workflow_context = {}
-            
+
             # Store workflow context for inspection/cleanup
             self._current_workflow_context = workflow_context
 
@@ -544,11 +544,11 @@ class LocalRuntime:
         results = {}
         node_outputs = {}
         failed_nodes = []
-        
+
         # Use the workflow context passed from _execute_async
         if workflow_context is None:
             workflow_context = {}
-        
+
         # Store the workflow context for cleanup later
         self._current_workflow_context = workflow_context
 

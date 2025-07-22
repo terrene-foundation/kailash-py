@@ -44,8 +44,8 @@ class TestAdminNodesPerformanceE2E:
             ),
             "database_type": "postgresql",
             "pool_size": 10,  # Reduced pool for E2E testing
-            "max_overflow": 5,   # Reduced overflow for E2E testing
-            "pool_timeout": 5,   # Reduced timeout for faster E2E testing
+            "max_overflow": 5,  # Reduced overflow for E2E testing
+            "pool_timeout": 5,  # Reduced timeout for faster E2E testing
             "pool_pre_ping": True,  # Enable connection health checks
         }
 
@@ -681,7 +681,7 @@ class TestAdminNodesPerformanceE2E:
             ) / first_sample["throughput"]
         else:
             throughput_degradation = 0.0
-            
+
         if first_sample["avg_latency"] > 0:
             latency_increase = (
                 last_sample["avg_latency"] - first_sample["avg_latency"]
@@ -746,7 +746,7 @@ class TestAdminNodesPerformanceE2E:
             },
             {
                 "name": "Quick burst",
-                "duration": 1,  # Reduced from 5 
+                "duration": 1,  # Reduced from 5
                 "operations_per_second": 15,  # Reduced from 200
                 "operation_mix": [
                     ("check_permission", 60),

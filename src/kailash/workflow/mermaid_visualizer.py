@@ -216,7 +216,8 @@ class MermaidVisualizer:
         """
         # Replace special characters with underscores
         import re
-        sanitized = re.sub(r'[^a-zA-Z0-9_]', '_', node_id)
+
+        sanitized = re.sub(r"[^a-zA-Z0-9_]", "_", node_id)
         # Ensure it starts with a letter
         if sanitized and sanitized[0].isdigit():
             sanitized = f"node_{sanitized}"

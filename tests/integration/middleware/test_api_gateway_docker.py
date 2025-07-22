@@ -56,7 +56,7 @@ def gateway_with_docker_services():
         enable_docs=True,
         database_url=database_url,
     )
-    
+
     # Attach the managers to gateway for test access
     gateway.checkpoint_manager = checkpoint_manager
     gateway.event_store = event_store
@@ -159,7 +159,7 @@ class TestAPIGatewayDockerIntegration:
         response = client.get("/api/stats")
         assert response.status_code == 200
         stats = response.json()
-        
+
         # Verify session was created - check in agent_ui stats
         assert "agent_ui" in stats
         assert stats["agent_ui"]["total_sessions_created"] > 0

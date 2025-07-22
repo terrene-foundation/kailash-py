@@ -277,7 +277,7 @@ class Node(ABC):
             >>>     # Use the shared connection
             >>>     result = await connection.execute(query)
         """
-        if not hasattr(self, '_workflow_context'):
+        if not hasattr(self, "_workflow_context"):
             self._workflow_context = {}
         return self._workflow_context.get(key, default)
 
@@ -299,7 +299,7 @@ class Node(ABC):
             >>> self.set_workflow_context('transaction_connection', connection)
             >>> self.set_workflow_context('active_transaction', transaction)
         """
-        if not hasattr(self, '_workflow_context'):
+        if not hasattr(self, "_workflow_context"):
             self._workflow_context = {}
         self._workflow_context[key] = value
 

@@ -364,7 +364,7 @@ class TestMCPServerResourceManagement:
 
             server = MCPServer("resource-server")
 
-            # Register a resource  
+            # Register a resource
             @server.resource("data://example/{path}")
             def get_example_data(path: str) -> str:
                 """Get example data by path."""
@@ -875,17 +875,17 @@ class TestMCPServerIntegrationAndEdgeCases:
                 enable_cache=True,
                 cache_ttl=300,
                 cache_backend="memory",
-                enable_metrics=True
+                enable_metrics=True,
             )
-            
+
             server2 = MCPServer(
                 "server2",
                 enable_cache=False,
                 cache_ttl=600,
                 cache_backend="redis",
-                enable_metrics=False
+                enable_metrics=False,
             )
-            
+
             # Test that servers have correct names
             assert server1.name == "server1"
             assert server2.name == "server2"

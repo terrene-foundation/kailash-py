@@ -455,7 +455,7 @@ class TestContractIntegrationWithExistingValidation:
         try:
             workflow = builder.build()
             runtime = LocalRuntime(connection_validation="strict")
-            
+
             results, run_id = runtime.execute(workflow)
             # Check if csv_reader node failed
             if (

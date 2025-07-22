@@ -205,7 +205,7 @@ class MCPChannel(Channel):
 
             # Start MCP server (Core SDK uses run() method, not start())
             # For async operation, we need to run it in a separate task
-            if hasattr(self.mcp_server, 'run'):
+            if hasattr(self.mcp_server, "run"):
                 # Core SDK MCPServer uses run() method
                 loop = asyncio.get_event_loop()
                 self._mcp_server_task = loop.run_in_executor(None, self.mcp_server.run)
@@ -270,7 +270,7 @@ class MCPChannel(Channel):
                     pass
 
             # Stop MCP server task if running
-            if hasattr(self, '_mcp_server_task') and self._mcp_server_task:
+            if hasattr(self, "_mcp_server_task") and self._mcp_server_task:
                 self._mcp_server_task.cancel()
                 try:
                     await self._mcp_server_task
@@ -278,7 +278,7 @@ class MCPChannel(Channel):
                     pass
 
             # Stop MCP server
-            if self.mcp_server and hasattr(self.mcp_server, 'stop'):
+            if self.mcp_server and hasattr(self.mcp_server, "stop"):
                 try:
                     await self.mcp_server.stop()
                 except Exception as e:

@@ -10,7 +10,7 @@ from pathlib import Path
 
 def get_project_root() -> Path:
     """Get the project root directory.
-    
+
     Returns:
         Path to the kailash_python_sdk project root
     """
@@ -25,10 +25,10 @@ def get_project_root() -> Path:
 
 def get_input_data_path(filename: str) -> str:
     """Get the full path to an input data file.
-    
+
     Args:
         filename: Name of the input data file
-        
+
     Returns:
         Full path to the input data file
     """
@@ -38,37 +38,37 @@ def get_input_data_path(filename: str) -> str:
 
 def get_output_data_path(filename: str) -> str:
     """Get the full path to an output data file.
-    
+
     Args:
         filename: Name of the output data file
-        
+
     Returns:
         Full path to the output data file
     """
     project_root = get_project_root()
     output_path = project_root / "data" / "outputs" / filename
-    
+
     # Ensure the output directory exists
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     return str(output_path)
 
 
 def get_data_path(subfolder: str, filename: str) -> str:
     """Get the full path to a data file in a specific subfolder.
-    
+
     Args:
         subfolder: Subfolder within the data directory (e.g., 'inputs', 'outputs', 'templates')
         filename: Name of the data file
-        
+
     Returns:
         Full path to the data file
     """
     project_root = get_project_root()
     data_path = project_root / "data" / subfolder / filename
-    
+
     # Ensure the directory exists for output-type operations
-    if subfolder in ('outputs', 'exports', 'tracking'):
+    if subfolder in ("outputs", "exports", "tracking"):
         data_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     return str(data_path)

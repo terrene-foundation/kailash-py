@@ -36,7 +36,7 @@ class TestEdgeMigrationIntegration:
     @pytest.mark.asyncio
     async def test_migration_workflow(self, runtime, workflow_builder):
         """Test migration workflow operations."""
-        
+
         # Test migrator start
         workflow_builder.add_node(
             "EdgeMigrationNode",
@@ -54,7 +54,7 @@ class TestEdgeMigrationIntegration:
         # Verify migrator start
         assert results["migrator_start"]["status"] == "success"
         assert results["migrator_start"]["migrator_active"] is True
-        
+
         # Test plan creation in a separate workflow
         plan_workflow_builder = WorkflowBuilder()
         plan_workflow_builder.add_node(
@@ -142,7 +142,7 @@ class TestEdgeMigrationIntegration:
         """Test pause and resume functionality using shared state."""
         # This test demonstrates the shared state functionality where
         # migration operations can coordinate across separate workflows
-        
+
         # === Workflow 1: Start migrator and create migration plan ===
         workflow_builder.add_node(
             "EdgeMigrationNode", "start", {"operation": "start_migrator"}
@@ -179,22 +179,22 @@ class TestEdgeMigrationIntegration:
 
         # Pause migration (using migration_id from previous workflow)
         pause_resume_builder.add_node(
-            "EdgeMigrationNode", 
-            "pause", 
+            "EdgeMigrationNode",
+            "pause",
             {
                 "operation": "pause_migration",
                 "migration_id": migration_id,
-            }
+            },
         )
 
         # Resume migration
         pause_resume_builder.add_node(
-            "EdgeMigrationNode", 
-            "resume", 
+            "EdgeMigrationNode",
+            "resume",
             {
-                "operation": "resume_migration", 
+                "operation": "resume_migration",
                 "migration_id": migration_id,
-            }
+            },
         )
 
         # Connect pause and resume
@@ -395,7 +395,9 @@ class TestEdgeMigrationIntegration:
         )
 
         # Connect
-        workflow_builder.add_connection("start_migrator", "result", "incremental", "input")
+        workflow_builder.add_connection(
+            "start_migrator", "result", "incremental", "input"
+        )
 
         # Execute
         workflow = workflow_builder.build()

@@ -8,7 +8,11 @@ from kailash.nodes.base import Node, NodeRegistry
 from kailash.sdk_exceptions import ConnectionError, WorkflowValidationError
 from kailash.workflow.contracts import ConnectionContract, get_contract_registry
 from kailash.workflow.graph import Workflow
-from kailash.workflow.validation import ParameterDeclarationValidator, ValidationIssue, IssueSeverity
+from kailash.workflow.validation import (
+    ParameterDeclarationValidator,
+    ValidationIssue,
+    IssueSeverity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -37,26 +41,26 @@ class WorkflowBuilder:
         # Connection contracts support
         self.connection_contracts: dict[str, ConnectionContract] = {}
         self._contract_registry = get_contract_registry()
-        
+
         # Parameter validation support
         self._param_validator = ParameterDeclarationValidator()
 
     def _is_sdk_node(self, node_class: type) -> bool:
         """Detect if node is SDK-provided vs custom implementation.
-        
+
         SDK nodes are registered in the NodeRegistry via @register_node decorator.
         Custom nodes are not registered and require class reference usage.
-        
+
         Args:
             node_class: The node class to check
-            
+
         Returns:
             True if node is registered in SDK (can use string reference),
             False if custom node (must use class reference)
         """
-        if not hasattr(node_class, '__name__'):
+        if not hasattr(node_class, "__name__"):
             return False
-            
+
         # Check if the node class is registered in the NodeRegistry
         try:
             registered_class = NodeRegistry.get(node_class.__name__)
@@ -65,14 +69,14 @@ class WorkflowBuilder:
         except Exception:
             # Node not found in registry = custom node
             return False
-    
+
     def _generate_intelligent_node_warning(self, node_class: type, node_id: str) -> str:
         """Generate context-aware warnings based on node type.
-        
+
         Args:
             node_class: The node class being added
             node_id: The node ID
-            
+
         Returns:
             Appropriate warning message for the node type
         """
@@ -92,27 +96,29 @@ class WorkflowBuilder:
                 f"Pattern: add_node({node_class.__name__}, '{node_id}', {{...}})\n"
                 f"Status: This is the CORRECT pattern for custom nodes\n"
                 f"\n"
-                f"⚠️  IGNORE \"preferred pattern\" suggestions for custom nodes\n"
+                f'⚠️  IGNORE "preferred pattern" suggestions for custom nodes\n'
                 f"String references only work for @register_node() decorated SDK nodes.\n"
                 f"Custom nodes MUST use class references as shown above.\n"
                 f"\n"
                 f"📚 Guide: sdk-users/7-gold-standards/GOLD-STANDARD-custom-node-development-guide.md"
             )
-    
-    def validate_parameter_declarations(self, warn_on_issues: bool = True) -> list[ValidationIssue]:
+
+    def validate_parameter_declarations(
+        self, warn_on_issues: bool = True
+    ) -> list[ValidationIssue]:
         """Validate parameter declarations for all nodes in the workflow.
-        
+
         This method detects common parameter declaration issues that lead to
         silent parameter dropping and debugging difficulties.
-        
+
         Args:
             warn_on_issues: Whether to log warnings for detected issues
-            
+
         Returns:
             List of ValidationIssue objects for any problems found
         """
         all_issues = []
-        
+
         for node_id, node_info in self.nodes.items():
             try:
                 # Create a temporary instance to validate parameter declarations
@@ -130,14 +136,16 @@ class WorkflowBuilder:
                         workflow_params = node_config
                     except Exception as e:
                         # If we can't create instance, skip detailed validation
-                        all_issues.append(ValidationIssue(
-                            severity=IssueSeverity.WARNING,
-                            category="parameter_declaration",
-                            code="PAR005",
-                            message=f"Could not validate parameters for custom node '{node_id}': {e}",
-                            suggestion="Ensure node constructor accepts provided configuration parameters",
-                            node_id=node_id
-                        ))
+                        all_issues.append(
+                            ValidationIssue(
+                                severity=IssueSeverity.WARNING,
+                                category="parameter_declaration",
+                                code="PAR005",
+                                message=f"Could not validate parameters for custom node '{node_id}': {e}",
+                                suggestion="Ensure node constructor accepts provided configuration parameters",
+                                node_id=node_id,
+                            )
+                        )
                         continue
                 else:
                     # SDK node - validate if we can create it
@@ -151,35 +159,41 @@ class WorkflowBuilder:
                     except Exception:
                         # Skip validation for nodes we can't instantiate
                         continue
-                
+
                 # Validate parameter declarations
                 issues = self._param_validator.validate_node_parameters(
                     node_instance, workflow_params
                 )
-                
+
                 # Add node_id to issues
                 for issue in issues:
                     issue.node_id = node_id
                     all_issues.append(issue)
-                    
+
                     # Log warnings if requested
                     if warn_on_issues:
                         if issue.severity == IssueSeverity.ERROR:
-                            logger.error(f"Parameter validation error in node '{node_id}': {issue.message}")
+                            logger.error(
+                                f"Parameter validation error in node '{node_id}': {issue.message}"
+                            )
                         elif issue.severity == IssueSeverity.WARNING:
-                            logger.warning(f"Parameter validation warning in node '{node_id}': {issue.message}")
-                        
+                            logger.warning(
+                                f"Parameter validation warning in node '{node_id}': {issue.message}"
+                            )
+
             except Exception as e:
                 # General validation error
-                all_issues.append(ValidationIssue(
-                    severity=IssueSeverity.WARNING,
-                    category="parameter_declaration", 
-                    code="PAR006",
-                    message=f"Parameter validation failed for node '{node_id}': {e}",
-                    suggestion="Check node configuration and parameter declarations",
-                    node_id=node_id
-                ))
-        
+                all_issues.append(
+                    ValidationIssue(
+                        severity=IssueSeverity.WARNING,
+                        category="parameter_declaration",
+                        code="PAR006",
+                        message=f"Parameter validation failed for node '{node_id}': {e}",
+                        suggestion="Check node configuration and parameter declarations",
+                        node_id=node_id,
+                    )
+                )
+
         return all_issues
 
     def add_node(self, *args, **kwargs) -> str:
@@ -988,15 +1002,19 @@ class WorkflowBuilder:
 
         # Validate parameter declarations before building workflow
         param_issues = self.validate_parameter_declarations(warn_on_issues=True)
-        
+
         # Check for critical parameter errors that should block workflow creation
-        critical_errors = [issue for issue in param_issues if issue.severity == IssueSeverity.ERROR]
+        critical_errors = [
+            issue for issue in param_issues if issue.severity == IssueSeverity.ERROR
+        ]
         if critical_errors:
-            error_messages = [f"{issue.node_id}: {issue.message}" for issue in critical_errors]
+            error_messages = [
+                f"{issue.node_id}: {issue.message}" for issue in critical_errors
+            ]
             raise WorkflowValidationError(
-                f"Cannot build workflow due to parameter declaration errors:\n" +
-                "\n".join(f"  - {msg}" for msg in error_messages) +
-                f"\n\nSee: sdk-users/7-gold-standards/enterprise-parameter-passing-gold-standard.md"
+                "Cannot build workflow due to parameter declaration errors:\n"
+                + "\n".join(f"  - {msg}" for msg in error_messages)
+                + "\n\nSee: sdk-users/7-gold-standards/enterprise-parameter-passing-gold-standard.md"
             )
 
         # Add nodes to workflow

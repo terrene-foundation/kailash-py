@@ -168,8 +168,8 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
         # Process active users - using from_function
         def process_users(data):
             # Extract users array from JSON data
-            users = data.get('users', []) if isinstance(data, dict) else data
-            active_users = [u for u in users if u.get('active', False)]
+            users = data.get("users", []) if isinstance(data, dict) else data
+            active_users = [u for u in users if u.get("active", False)]
             return {"active_count": len(active_users), "users": active_users}
 
         filter_node = PythonCodeNode.from_function(process_users)
@@ -182,14 +182,20 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
 
         # Process branches - using from_function
         def process_many_active(data):
-            return {"message": f"Found {data['active_count']} active users", "status": "success"}
+            return {
+                "message": f"Found {data['active_count']} active users",
+                "status": "success",
+            }
 
         def process_few_active(data):
-            return {"message": f"Only {data['active_count']} active users", "status": "warning"}
+            return {
+                "message": f"Only {data['active_count']} active users",
+                "status": "warning",
+            }
 
         many_node = PythonCodeNode.from_function(process_many_active)
         few_node = PythonCodeNode.from_function(process_few_active)
-        
+
         workflow.add_node_instance(many_node, "many_active")
         workflow.add_node_instance(few_node, "few_active")
 
@@ -204,16 +210,16 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
 
         # Verify results - filter_active worked correctly
         assert results["filter_active"]["result"]["active_count"] == 2
-        
+
         # Check that the conditional workflow executed properly
         # The switch node should have determined which branch to take
         assert "switch" in results
-        
+
         # Verify that few_active executed successfully (since condition was false)
         assert "few_active" in results
         assert results["few_active"]["result"]["message"] == "Only 2 active users"
         assert results["few_active"]["result"]["status"] == "warning"
-        
+
         # many_active might exist but with error (since it got None data)
         # That's expected behavior for conditional workflows
 
@@ -224,7 +230,7 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
 
         # Create parallel processing nodes using from_function
         import time
-        
+
         def process1(data=None):
             time.sleep(0.01)  # Reduce sleep for faster tests
             return {"result": "A", "value": 100}
@@ -240,7 +246,7 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
         p1 = PythonCodeNode.from_function(process1)
         p2 = PythonCodeNode.from_function(process2)
         p3 = PythonCodeNode.from_function(process3)
-        
+
         workflow.add_node_instance(p1, "processor1")
         workflow.add_node_instance(p2, "processor2")
         workflow.add_node_instance(p3, "processor3")
@@ -258,8 +264,8 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
         # Final processor
         def process_final(data):
             # Process merged results
-            total = sum(item.get('value', 0) for item in data)
-            results = [item.get('result', '') for item in data]
+            total = sum(item.get("value", 0) for item in data)
+            results = [item.get("result", "") for item in data]
             return {"total": total, "results": results}
 
         final = PythonCodeNode.from_function(process_final)
@@ -296,7 +302,7 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
 
         # For now, just test that the failing node fails gracefully
         # Error handling between nodes is complex - simplified test
-        
+
         # Execute workflow and expect it to handle the error
         try:
             results, run_id = runtime.execute(workflow.build())
@@ -366,9 +372,10 @@ def process(embeddings):
 
         # Build workflow that might exceed time limit
         workflow = WorkflowBuilder()
-        
+
         def slow_process(data=None):
             import time
+
             time.sleep(0.5)  # Reduced sleep for faster test
             return {"status": "Completed"}
 
@@ -405,7 +412,7 @@ def process(embeddings):
         node_0 = PythonCodeNode.from_function(process_node_0)
         node_1 = PythonCodeNode.from_function(process_node_1)
         node_2 = PythonCodeNode.from_function(process_node_2)
-        
+
         workflow.add_node_instance(node_0, "node_0")
         workflow.add_node_instance(node_1, "node_1")
         workflow.add_node_instance(node_2, "node_2")

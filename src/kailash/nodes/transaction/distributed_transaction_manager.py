@@ -902,17 +902,18 @@ class DistributedTransactionManagerNode(AsyncNode):
                 from .saga_state_storage import InMemoryStateStorage
 
                 return InMemoryStateStorage()
+
             # Create a DTM-specific storage wrapper that uses transaction_id instead of saga_id
             class DTMDatabaseStorage:
                 def __init__(self, db_pool, table_name):
                     self.db_pool = db_pool
                     self.table_name = table_name
-                
+
                 async def save_state(self, transaction_id: str, state_data: dict):
                     """Save DTM state using transaction_id."""
                     import json
                     from datetime import datetime, UTC
-                    
+
                     async with self.db_pool.acquire() as conn:
                         query = f"""
                         INSERT INTO {self.table_name}
@@ -925,7 +926,7 @@ class DistributedTransactionManagerNode(AsyncNode):
                             state_data = EXCLUDED.state_data,
                             updated_at = EXCLUDED.updated_at
                         """
-                        
+
                         await conn.execute(
                             query,
                             transaction_id,
@@ -934,19 +935,20 @@ class DistributedTransactionManagerNode(AsyncNode):
                             json.dumps(state_data),
                             datetime.now(UTC),
                         )
-                
+
                 async def load_state(self, transaction_id: str):
                     """Load DTM state using transaction_id."""
                     async with self.db_pool.acquire() as conn:
                         row = await conn.fetchrow(
                             f"SELECT state_data FROM {self.table_name} WHERE transaction_id = $1",
-                            transaction_id
+                            transaction_id,
                         )
                         if row:
                             import json
+
                             return json.loads(row["state_data"])
                         return None
-            
+
             return DTMDatabaseStorage(
                 db_pool,
                 self.storage_config.get("table_name", "distributed_transaction_states"),

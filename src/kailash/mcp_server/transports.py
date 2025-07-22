@@ -1091,7 +1091,9 @@ class WebSocketServerTransport(BaseTransport):
         self,
         host: str = "0.0.0.0",
         port: int = 3001,
-        message_handler: Optional[Callable[[Dict[str, Any], str], Dict[str, Any]]] = None,
+        message_handler: Optional[
+            Callable[[Dict[str, Any], str], Dict[str, Any]]
+        ] = None,
         ping_interval: float = 20.0,
         ping_timeout: float = 20.0,
         max_message_size: int = 10 * 1024 * 1024,  # 10MB
@@ -1132,9 +1134,9 @@ class WebSocketServerTransport(BaseTransport):
             # Create handler that works with new websockets API
             async def connection_handler(websocket):
                 # Get path from the websocket's request path
-                path = websocket.path if hasattr(websocket, 'path') else '/'
+                path = websocket.path if hasattr(websocket, "path") else "/"
                 await self.handle_client(websocket, path)
-            
+
             # Start WebSocket server
             self.server = await websockets.serve(
                 connection_handler,
@@ -1153,7 +1155,8 @@ class WebSocketServerTransport(BaseTransport):
         except Exception as e:
             self._update_metrics("connections_failed")
             raise TransportError(
-                f"Failed to start WebSocket server: {e}", transport_type="websocket_server"
+                f"Failed to start WebSocket server: {e}",
+                transport_type="websocket_server",
             )
 
     async def disconnect(self) -> None:
@@ -1180,7 +1183,9 @@ class WebSocketServerTransport(BaseTransport):
 
         logger.info("WebSocket server stopped")
 
-    async def send_message(self, message: Dict[str, Any], client_id: Optional[str] = None) -> None:
+    async def send_message(
+        self, message: Dict[str, Any], client_id: Optional[str] = None
+    ) -> None:
         """Send message to specific client or broadcast to all.
 
         Args:
@@ -1188,7 +1193,9 @@ class WebSocketServerTransport(BaseTransport):
             client_id: Target client ID (None for broadcast)
         """
         if not self._connected:
-            raise TransportError("Transport not connected", transport_type="websocket_server")
+            raise TransportError(
+                "Transport not connected", transport_type="websocket_server"
+            )
 
         message_data = json.dumps(message)
 
@@ -1201,17 +1208,23 @@ class WebSocketServerTransport(BaseTransport):
                     self._update_metrics("bytes_sent", len(message_data))
                 else:
                     raise TransportError(
-                        f"Client {client_id} not found", transport_type="websocket_server"
+                        f"Client {client_id} not found",
+                        transport_type="websocket_server",
                     )
             else:
                 # Broadcast to all clients
                 if self._clients:
                     await asyncio.gather(
-                        *[client.send(message_data) for client in self._clients.values()],
+                        *[
+                            client.send(message_data)
+                            for client in self._clients.values()
+                        ],
                         return_exceptions=True,
                     )
                     self._update_metrics("messages_sent", len(self._clients))
-                    self._update_metrics("bytes_sent", len(message_data) * len(self._clients))
+                    self._update_metrics(
+                        "bytes_sent", len(message_data) * len(self._clients)
+                    )
 
         except Exception as e:
             self._update_metrics("errors_total")
@@ -1354,12 +1367,11 @@ class WebSocketServerTransport(BaseTransport):
         Returns:
             List of client information
         """
-        return [
-            self.get_client_info(client_id)
-            for client_id in self._client_sessions
-        ]
+        return [self.get_client_info(client_id) for client_id in self._client_sessions]
 
-    async def close_client(self, client_id: str, code: int = 1000, reason: str = "") -> bool:
+    async def close_client(
+        self, client_id: str, code: int = 1000, reason: str = ""
+    ) -> bool:
         """Close a specific client connection.
 
         Args:

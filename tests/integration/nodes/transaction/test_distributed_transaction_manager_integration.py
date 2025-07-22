@@ -199,10 +199,10 @@ class TestDistributedTransactionManagerIntegration:
             transaction_name="database_integration_test",
             state_storage="database",
             storage_config={
-                "db_pool": db_pool, 
+                "db_pool": db_pool,
                 "table_name": "integration_dtx_states",
                 "saga_table_name": "integration_saga_states",
-                "twophase_table_name": "integration_2pc_states"
+                "twophase_table_name": "integration_2pc_states",
             },
         )
 
@@ -265,10 +265,10 @@ class TestDistributedTransactionManagerIntegration:
         new_manager = DistributedTransactionManagerNode(
             state_storage="database",
             storage_config={
-                "db_pool": db_pool, 
+                "db_pool": db_pool,
                 "table_name": "integration_dtx_states",
                 "saga_table_name": "integration_saga_states",
-                "twophase_table_name": "integration_2pc_states"
+                "twophase_table_name": "integration_2pc_states",
             },
         )
 
@@ -409,10 +409,10 @@ class TestDistributedTransactionManagerIntegration:
             transaction_name="db_storage_test",
             state_storage="database",
             storage_config={
-                "db_pool": db_pool, 
+                "db_pool": db_pool,
                 "table_name": "integration_dtx_states",
                 "saga_table_name": "integration_saga_states",
-                "twophase_table_name": "integration_2pc_states"
+                "twophase_table_name": "integration_2pc_states",
             },
         )
 

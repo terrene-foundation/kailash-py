@@ -41,8 +41,12 @@ class TestMermaidVisualizerDiagramGeneration:
             # For edges(data=True), return 3-tuples with edge data
             edges_with_data = [(source, target, {}) for source, target in edges]
             mock_graph.edges.return_value = edges
-            mock_graph.edges.side_effect = lambda data=False: edges_with_data if data else edges
-            mock_graph.edges.side_effect = lambda data=False: edges_with_data if data else edges
+            mock_graph.edges.side_effect = lambda data=False: (
+                edges_with_data if data else edges
+            )
+            mock_graph.edges.side_effect = lambda data=False: (
+                edges_with_data if data else edges
+            )
 
             # Setup degree calculations
             def in_degree(node_id):
@@ -123,7 +127,9 @@ class TestMermaidVisualizerDiagramGeneration:
             # For edges(data=True), return 3-tuples with edge data
             edges_with_data = [(source, target, {}) for source, target in edges]
             mock_graph.edges.return_value = edges
-            mock_graph.edges.side_effect = lambda data=False: edges_with_data if data else edges
+            mock_graph.edges.side_effect = lambda data=False: (
+                edges_with_data if data else edges
+            )
 
             # Setup degree calculations for branching topology
             degree_map = {
@@ -350,7 +356,9 @@ class TestMermaidVisualizerMarkdownGeneration:
             # For edges(data=True), return 3-tuples with edge data
             edges_with_data = [(source, target, {}) for source, target in edges]
             mock_graph.edges.return_value = edges
-            mock_graph.edges.side_effect = lambda data=False: edges_with_data if data else edges
+            mock_graph.edges.side_effect = lambda data=False: (
+                edges_with_data if data else edges
+            )
             mock_graph.in_degree.side_effect = lambda n: 0 if n == "input" else 1
             mock_graph.out_degree.side_effect = lambda n: 0 if n == "output" else 1
 
@@ -492,7 +500,9 @@ class TestMermaidVisualizerEdgeCases:
             # For edges(data=True), return 3-tuples with edge data
             edges_with_data = [(source, target, {}) for source, target in edges]
             mock_graph.edges.return_value = edges
-            mock_graph.edges.side_effect = lambda data=False: edges_with_data if data else edges
+            mock_graph.edges.side_effect = lambda data=False: (
+                edges_with_data if data else edges
+            )
 
             # All nodes have in_degree=1 and out_degree=1 (cycle)
             mock_graph.in_degree.return_value = 1

@@ -28,13 +28,13 @@ class TestBulkheadIntegration:
         # Clear any existing global manager
         from src.kailash.core.resilience.bulkhead import _bulkhead_manager
         import src.kailash.core.resilience.bulkhead as bulkhead_module
-        
+
         # Reset global manager
         old_manager = bulkhead_module._bulkhead_manager
         bulkhead_module._bulkhead_manager = None
-        
+
         yield
-        
+
         # Cleanup after test
         current_manager = bulkhead_module._bulkhead_manager
         if current_manager:
@@ -221,13 +221,13 @@ class TestBulkheadIntegration:
             # Wait for slow task to complete with timeout protection
             slow_result = await asyncio.wait_for(slow_future, timeout=3.0)
             assert slow_result == "slow_done"
-            
+
         except asyncio.TimeoutError:
             # Test timeout - clean up and pass (this is acceptable behavior)
             if not slow_future.done():
                 slow_future.cancel()
             return
-            
+
         finally:
             # Ensure task cleanup even if test fails
             if not slow_future.done():
@@ -236,7 +236,7 @@ class TestBulkheadIntegration:
                     await asyncio.wait_for(slow_future, timeout=0.5)
                 except (asyncio.CancelledError, asyncio.TimeoutError):
                     pass
-                    
+
             # Shutdown manager to clean up resources
             try:
                 await manager.shutdown_all()

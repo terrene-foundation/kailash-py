@@ -8,7 +8,7 @@ complete high-level workflow-to-API automation through SDK integration.
 
 Key Findings:
 - Single workflow registration → API + CLI + MCP exposure automatically
-- Zero-config setup with enterprise defaults 
+- Zero-config setup with enterprise defaults
 - Uses SDK's enterprise gateway (no custom FastAPI needed)
 - Production-ready features enabled by default
 - Progressive enhancement for complex scenarios
@@ -29,10 +29,11 @@ import json
 # EXAMPLE 1: ZERO-CONFIG DATA PROCESSING WORKFLOW
 # ==============================================================================
 
+
 def create_data_processing_workflow():
     """Create a data processing workflow with multiple nodes."""
     workflow = WorkflowBuilder()
-    
+
     # Input validation node
     validation_code = """
 def validate_input(data):
@@ -44,10 +45,8 @@ def validate_input(data):
         raise ValueError("All data items must be numbers")
     return {"validated_data": data}
 """
-    workflow.add_node("PythonCodeNode", "validator", {
-        "code": validation_code.strip()
-    })
-    
+    workflow.add_node("PythonCodeNode", "validator", {"code": validation_code.strip()})
+
     # Data processing node
     processing_code = """
 def process_data(validated_data):
@@ -63,10 +62,8 @@ def process_data(validated_data):
     }
     return {"result": result}
 """
-    workflow.add_node("PythonCodeNode", "processor", {
-        "code": processing_code.strip()
-    })
-    
+    workflow.add_node("PythonCodeNode", "processor", {"code": processing_code.strip()})
+
     # Results formatting node
     formatting_code = """
 def format_results(result):
@@ -84,24 +81,26 @@ def format_results(result):
     }
     return {"formatted_result": formatted}
 """
-    workflow.add_node("PythonCodeNode", "formatter", {
-        "code": formatting_code.strip()
-    })
-    
+    workflow.add_node("PythonCodeNode", "formatter", {"code": formatting_code.strip()})
+
     # Connect the workflow pipeline
-    workflow.add_connection("validator", "validated_data", "processor", "validated_data")
+    workflow.add_connection(
+        "validator", "validated_data", "processor", "validated_data"
+    )
     workflow.add_connection("processor", "result", "formatter", "result")
-    
+
     return workflow.build()
 
+
 # ==============================================================================
-# EXAMPLE 2: AI-POWERED DOCUMENT ANALYSIS WORKFLOW  
+# EXAMPLE 2: AI-POWERED DOCUMENT ANALYSIS WORKFLOW
 # ==============================================================================
+
 
 def create_ai_document_workflow():
     """Create an AI-powered document analysis workflow."""
     workflow = WorkflowBuilder()
-    
+
     # Document preprocessing
     preprocess_code = """
 def preprocess_document(text, max_length=1000):
@@ -120,22 +119,26 @@ def preprocess_document(text, max_length=1000):
         "truncated": len(text) > max_length
     }
 """
-    workflow.add_node("PythonCodeNode", "preprocessor", {
-        "code": preprocess_code.strip()
-    })
-    
+    workflow.add_node(
+        "PythonCodeNode", "preprocessor", {"code": preprocess_code.strip()}
+    )
+
     # AI Analysis using LLM
-    workflow.add_node("LLMAgentNode", "analyzer", {
-        "model": "gpt-4",
-        "system_prompt": """You are a document analysis expert. Analyze the given text and provide:
+    workflow.add_node(
+        "LLMAgentNode",
+        "analyzer",
+        {
+            "model": "gpt-4",
+            "system_prompt": """You are a document analysis expert. Analyze the given text and provide:
         1. Summary (max 2 sentences)
         2. Key topics (max 5 topics)
         3. Sentiment (positive/negative/neutral)
         4. Readability level (easy/medium/hard)
         5. Word count estimate""",
-        "use_real_mcp": True  # Real AI execution by default
-    })
-    
+            "use_real_mcp": True,  # Real AI execution by default
+        },
+    )
+
     # Results compilation
     compile_code = """
 def compile_analysis(processed_text, analysis_result):
@@ -152,25 +155,29 @@ def compile_analysis(processed_text, analysis_result):
         "processed_text_preview": processed_text["processed_text"][:200] + "..." if len(processed_text["processed_text"]) > 200 else processed_text["processed_text"]
     }
 """
-    workflow.add_node("PythonCodeNode", "compiler", {
-        "code": compile_code.strip()
-    })
-    
+    workflow.add_node("PythonCodeNode", "compiler", {"code": compile_code.strip()})
+
     # Connect the AI workflow
     workflow.add_connection("preprocessor", "processed_text", "analyzer", "message")
-    workflow.add_connection("preprocessor", "processed_text", "compiler", "processed_text") 
-    workflow.add_connection("analyzer", "analysis_result", "compiler", "analysis_result")
-    
+    workflow.add_connection(
+        "preprocessor", "processed_text", "compiler", "processed_text"
+    )
+    workflow.add_connection(
+        "analyzer", "analysis_result", "compiler", "analysis_result"
+    )
+
     return workflow.build()
+
 
 # ==============================================================================
 # EXAMPLE 3: DATABASE WORKFLOW WITH DATAFLOW INTEGRATION
 # ==============================================================================
 
+
 def create_database_workflow():
     """Create a database workflow using DataFlow integration."""
     workflow = WorkflowBuilder()
-    
+
     # User data preparation
     prep_code = """
 def prepare_user_data(name, email, age=None):
@@ -188,10 +195,8 @@ def prepare_user_data(name, email, age=None):
     
     return {"user_data": user_data}
 """
-    workflow.add_node("PythonCodeNode", "data_prep", {
-        "code": prep_code.strip()
-    })
-    
+    workflow.add_node("PythonCodeNode", "data_prep", {"code": prep_code.strip()})
+
     # Simulate database operation (in real scenario, use AsyncSQLDatabaseNode)
     db_code = """
 def simulate_database_insert(user_data):
@@ -208,10 +213,8 @@ def simulate_database_insert(user_data):
         "table": "users"
     }
 """
-    workflow.add_node("PythonCodeNode", "database", {
-        "code": db_code.strip()
-    })
-    
+    workflow.add_node("PythonCodeNode", "database", {"code": db_code.strip()})
+
     # Response formatting
     response_code = """
 def format_response(operation, user, database, table):
@@ -231,33 +234,33 @@ def format_response(operation, user, database, table):
         }
     }
 """
-    workflow.add_node("PythonCodeNode", "formatter", {
-        "code": response_code.strip()
-    })
-    
+    workflow.add_node("PythonCodeNode", "formatter", {"code": response_code.strip()})
+
     # Connect database workflow
     workflow.add_connection("data_prep", "user_data", "database", "user_data")
     workflow.add_connection("database", "operation", "formatter", "operation")
     workflow.add_connection("database", "user", "formatter", "user")
     workflow.add_connection("database", "database", "formatter", "database")
     workflow.add_connection("database", "table", "formatter", "table")
-    
+
     return workflow.build()
+
 
 # ==============================================================================
 # MAIN NEXUS APPLICATION - ZERO FASTAPI CODING REQUIRED!
 # ==============================================================================
 
+
 def main():
     """
     Main application demonstrating Nexus capabilities.
-    
+
     This is the ENTIRE setup required - NO FastAPI coding needed!
     """
-    
+
     print("🚀 Starting Nexus Comprehensive Demo")
     print("=" * 50)
-    
+
     # STEP 1: Initialize Nexus with zero configuration
     # This automatically sets up:
     # - Enterprise FastAPI server via create_gateway()
@@ -265,132 +268,137 @@ def main():
     # - CLI interface preparation
     # - Health monitoring and durability
     app = Nexus()
-    
+
     print("✅ Nexus initialized with zero configuration")
-    
+
     # STEP 2: Register workflows - Single call exposes on ALL channels
     print("\n📝 Registering workflows...")
-    
+
     # Data processing workflow
     data_workflow = create_data_processing_workflow()
     app.register("data-processor", data_workflow)
     print("  ✅ data-processor: Registered → API + CLI + MCP")
-    
-    # AI document analysis workflow  
+
+    # AI document analysis workflow
     ai_workflow = create_ai_document_workflow()
     app.register("document-analyzer", ai_workflow)
     print("  ✅ document-analyzer: Registered → API + CLI + MCP")
-    
+
     # Database workflow
     db_workflow = create_database_workflow()
     app.register("user-manager", db_workflow)
     print("  ✅ user-manager: Registered → API + CLI + MCP")
-    
+
     # STEP 3: Optional enterprise features (progressive enhancement)
     print("\n🔒 Enabling enterprise features...")
     app.auth.strategy = "rbac"  # Role-based access control
     app.monitoring.interval = 30  # Performance monitoring
     app.api.cors_enabled = True  # CORS for web clients
-    
+
     # Enable features (optional - works fine without these)
     try:
         app.enable_monitoring()
         print("  ✅ Performance monitoring enabled")
     except Exception as e:
         print(f"  ⚠️ Monitoring setup: {e}")
-    
+
     try:
         app.enable_auth()
         print("  ✅ Authentication system enabled")
     except Exception as e:
         print(f"  ⚠️ Auth setup: {e}")
-    
+
     # STEP 4: Start all channels with single command
     print("\n🌐 Starting multi-channel platform...")
     print("This single command starts:")
     print("  • REST API server (enterprise-grade)")
-    print("  • WebSocket MCP server (for AI agents)")  
+    print("  • WebSocket MCP server (for AI agents)")
     print("  • CLI interface (for command-line use)")
     print("  • Health monitoring and metrics")
     print("  • Auto-discovery and hot-reload")
-    
+
     try:
         app.start()
-        
+
         print("\n" + "=" * 60)
         print("🎉 NEXUS PLATFORM RUNNING - ZERO FASTAPI CODING REQUIRED!")
         print("=" * 60)
-        
+
         print("\n📡 Available Interfaces:")
         print("  🌐 REST API: http://localhost:8000")
         print("    • POST /workflows/data-processor/execute")
-        print("    • POST /workflows/document-analyzer/execute") 
+        print("    • POST /workflows/document-analyzer/execute")
         print("    • POST /workflows/user-manager/execute")
         print("    • GET  /workflows (list all workflows)")
         print("    • GET  /health (health check)")
-        
+
         print("\n  🤖 MCP Interface: ws://localhost:3001")
         print("    • AI agents can call workflows directly")
         print("    • Real-time WebSocket communication")
         print("    • Tool discovery and execution")
-        
+
         print("\n  ⌨️  CLI Interface: nexus run <workflow>")
         print("    • nexus run data-processor --data '[1,2,3,4,5]'")
         print("    • nexus run document-analyzer --text 'Hello world'")
         print("    • nexus run user-manager --name 'John' --email 'john@example.com'")
-        
+
         print("\n🧪 Test Commands:")
         print("  # Test data processor")
-        print('  curl -X POST http://localhost:8000/workflows/data-processor/execute \\')
+        print(
+            "  curl -X POST http://localhost:8000/workflows/data-processor/execute \\"
+        )
         print('    -H "Content-Type: application/json" \\')
-        print('    -d \'{"data": [1, 2, 3, 4, 5]}\'')
-        
+        print("    -d '{\"data\": [1, 2, 3, 4, 5]}'")
+
         print("\n  # Test document analyzer")
-        print('  curl -X POST http://localhost:8000/workflows/document-analyzer/execute \\')
+        print(
+            "  curl -X POST http://localhost:8000/workflows/document-analyzer/execute \\"
+        )
         print('    -H "Content-Type: application/json" \\')
         print('    -d \'{"text": "This is a sample document for analysis."}\'')
-        
+
         print("\n  # Test user manager")
-        print('  curl -X POST http://localhost:8000/workflows/user-manager/execute \\')
+        print("  curl -X POST http://localhost:8000/workflows/user-manager/execute \\")
         print('    -H "Content-Type: application/json" \\')
         print('    -d \'{"name": "Alice", "email": "alice@example.com", "age": 30}\'')
-        
+
         print("\n" + "=" * 60)
         print("💡 KEY INSIGHT: This entire multi-channel platform required:")
         print("   ❌ ZERO FastAPI route definitions")
-        print("   ❌ ZERO custom middleware setup") 
+        print("   ❌ ZERO custom middleware setup")
         print("   ❌ ZERO API endpoint coding")
         print("   ❌ ZERO WebSocket handling")
         print("   ❌ ZERO CLI command setup")
         print("   ✅ ONLY workflow definitions + app.register() calls!")
         print("=" * 60)
-        
+
         print("\n⏹️  Press Ctrl+C to stop the platform...")
-        
+
         # Keep running until interrupted
         import signal
         import time
-        
+
         def signal_handler(sig, frame):
             print("\n\n🛑 Shutting down Nexus platform...")
             app.stop()
             print("✅ Platform stopped gracefully")
             exit(0)
-            
+
         signal.signal(signal.SIGINT, signal_handler)
-        
+
         while True:
             time.sleep(1)
-            
+
     except Exception as e:
         print(f"❌ Error starting platform: {e}")
         print("\n🔍 This might be due to:")
-        print("  • Ports 8000 or 3001 already in use") 
+        print("  • Ports 8000 or 3001 already in use")
         print("  • Missing dependencies (ensure 'pip install kailash[nexus]')")
         print("  • Configuration issues")
         return False
-    
+
     return True
+
 
 if __name__ == "__main__":
     success = main()

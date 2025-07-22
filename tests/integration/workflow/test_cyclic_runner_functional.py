@@ -644,11 +644,14 @@ class TestCyclicRunnerIntegrationScenarios:
             # Test timing analysis
             longest_phase = max(phases, key=lambda p: p["duration"])
             # Either cycle_iteration or convergence_check could be longest depending on timing
-            assert longest_phase["name"] in ["cycle_iteration", "convergence_check"], \
-                f"Longest phase should be cycle_iteration or convergence_check, got {longest_phase['name']}"
+            assert longest_phase["name"] in [
+                "cycle_iteration",
+                "convergence_check",
+            ], f"Longest phase should be cycle_iteration or convergence_check, got {longest_phase['name']}"
             # Duration should be reasonable (not exact due to timing variations)
-            assert 0.1 < longest_phase["duration"] < 10.0, \
-                f"Longest phase duration should be reasonable, got {longest_phase['duration']}"
+            assert (
+                0.1 < longest_phase["duration"] < 10.0
+            ), f"Longest phase duration should be reasonable, got {longest_phase['duration']}"
 
             # Test phase timing validation
             for i in range(len(phases) - 1):

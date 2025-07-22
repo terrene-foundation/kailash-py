@@ -93,10 +93,12 @@ class TestHealthMonitorPostgreSQLIntegration:
         """Test multiple database health checks concurrently."""
         # Create multiple database checks
         db_check1 = DatabaseHealthCheck(
-            name="postgres_1", database_node_or_connection_string=postgres_connection_string
+            name="postgres_1",
+            database_node_or_connection_string=postgres_connection_string,
         )
         db_check2 = DatabaseHealthCheck(
-            name="postgres_2", database_node_or_connection_string=postgres_connection_string
+            name="postgres_2",
+            database_node_or_connection_string=postgres_connection_string,
         )
 
         health_monitor.register_check("postgres_1", db_check1)
@@ -117,7 +119,8 @@ class TestHealthMonitorPostgreSQLIntegration:
     ):
         """Test health metrics collection with real database."""
         db_check = DatabaseHealthCheck(
-            name="postgres_metrics", database_node_or_connection_string=postgres_connection_string
+            name="postgres_metrics",
+            database_node_or_connection_string=postgres_connection_string,
         )
         health_monitor.register_check("postgres_metrics", db_check)
 
@@ -239,7 +242,8 @@ class TestHealthMonitorMixedServicesIntegration:
         """Test health monitoring with multiple real services."""
         # Register multiple service checks
         db_check = DatabaseHealthCheck(
-            name="postgres_mixed", database_node_or_connection_string=postgres_connection_string
+            name="postgres_mixed",
+            database_node_or_connection_string=postgres_connection_string,
         )
         redis_check = RedisHealthCheck(name="redis_mixed", redis_config=redis_config)
 
@@ -264,7 +268,8 @@ class TestHealthMonitorMixedServicesIntegration:
         """Test health monitoring with some services failing."""
         # Register working and failing services
         working_db = DatabaseHealthCheck(
-            name="working_db", database_node_or_connection_string=postgres_connection_string
+            name="working_db",
+            database_node_or_connection_string=postgres_connection_string,
         )
         failing_db = DatabaseHealthCheck(
             name="failing_db",

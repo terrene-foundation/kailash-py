@@ -68,6 +68,7 @@ class TestHealthCheckNodeDocker(DockerIntegrationTestBase):
 
         # Start server in background thread with random port to avoid conflicts
         import random
+
         port = random.randint(8900, 8999)
         config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error")
         server = uvicorn.Server(config)
@@ -163,7 +164,11 @@ class TestHealthCheckNodeDocker(DockerIntegrationTestBase):
         """Test checking multiple services in parallel."""
         health_status, port = test_api_server
         services = [
-            {"name": "test_api", "type": "http", "url": f"http://localhost:{port}/health"},
+            {
+                "name": "test_api",
+                "type": "http",
+                "url": f"http://localhost:{port}/health",
+            },
             {
                 "name": "test_metrics",
                 "type": "http",
@@ -201,9 +206,7 @@ class TestHealthCheckNodeDocker(DockerIntegrationTestBase):
             }
         ]
 
-        result = await health_check_node.execute_async(
-            services=services, timeout=10.0
-        )
+        result = await health_check_node.execute_async(services=services, timeout=10.0)
 
         assert result["overall_status"] == "healthy"
         assert result["services"]["postgres_db"]["status"] == "healthy"
@@ -214,11 +217,11 @@ class TestHealthCheckNodeDocker(DockerIntegrationTestBase):
         """Test health check retry mechanism with real service."""
         health_status, port = test_api_server
         original_status = health_status["status"]
-        
+
         try:
             # Make service initially fail
             health_status["status"] = "error"
-            
+
             services = [
                 {
                     "name": "flaky_api",
@@ -236,7 +239,7 @@ class TestHealthCheckNodeDocker(DockerIntegrationTestBase):
             # With error status, should be unhealthy despite retries
             assert result["overall_status"] == "unhealthy"
             assert result["services"]["flaky_api"]["status"] == "unhealthy"
-        
+
         finally:
             # Always restore original status
             health_status["status"] = original_status
@@ -249,7 +252,11 @@ class TestHealthCheckNodeDocker(DockerIntegrationTestBase):
         health_status["delay"] = 2.0
 
         services = [
-            {"name": "slow_api", "type": "http", "url": f"http://localhost:{port}/health"}
+            {
+                "name": "slow_api",
+                "type": "http",
+                "url": f"http://localhost:{port}/health",
+            }
         ]
 
         # Execute with short timeout
@@ -259,7 +266,10 @@ class TestHealthCheckNodeDocker(DockerIntegrationTestBase):
 
         assert result["overall_status"] == "unhealthy"
         assert result["services"]["slow_api"]["status"] == "unhealthy"
-        assert "timeout" in result["services"]["slow_api"]["error"].lower() or "timed out" in result["services"]["slow_api"]["error"].lower()
+        assert (
+            "timeout" in result["services"]["slow_api"]["error"].lower()
+            or "timed out" in result["services"]["slow_api"]["error"].lower()
+        )
 
         # Reset delay
         health_status["delay"] = 0
@@ -286,9 +296,9 @@ class TestHealthCheckNodeDocker(DockerIntegrationTestBase):
 
         services = [
             {
-                "name": "custom_service", 
-                "type": "custom", 
-                "check_function": check_custom_service
+                "name": "custom_service",
+                "type": "custom",
+                "check_function": check_custom_service,
             }
         ]
 
