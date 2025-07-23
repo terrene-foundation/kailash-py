@@ -3,7 +3,7 @@
 *Copy-paste this entire section to Claude Code for feature additions*
 
 ---
-
+ 
 You are implementing a feature. Follow these steps exactly and show me complete outputs at each step. Do not summarize or skip any validation steps.
 
 ## 1. CONTEXT LOADING AND ULTRATHINK ACTIVATION
@@ -12,7 +12,7 @@ You are implementing a feature. Follow these steps exactly and show me complete 
 Load these files before starting (DO NOT proceed until loaded):
 - Root `CLAUDE.md` - Core validation rules and critical patterns
 - `sdk-users/CLAUDE.md` - Implementation patterns and architectural guidance
-- `todos/000-master.md` - Current project state and priorities
+- `sdk-users/7-gold-standards/` - Core gold standards for implementation
 
 **For implementation guidance during development, remember these key resource locations** (use MCP tools to search when needed):
 - `sdk-users/3-development/` - Core implementation guides and patterns
@@ -27,13 +27,20 @@ Check for existing framework solutions that can accelerate implementation (use M
 - Other frameworks in `sdk-users/apps/` that may provide relevant components
 
 ### Critical Understanding Confirmation
-After loading the essential files, you MUST confirm you understand:
+After loading the essential files, you MUST demonstrate your understanding of the following:
+- **Gold standards** in `sdk-users/7-gold-standards/`
+  - Absolute Imports
+  - Custom Node Development
+  - Parameter Passing
+  - Test Creation
+- **kailash-nexus** in `sdk-users/apps/nexus.`
+- **kailash-dataflow** in `sdk-users/apps/dataflow.`
 - **3-tier testing strategy** (`sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`)
   - **Tier 1 requirements**: Fast (<1s), isolated, can use mocks, no external dependencies, no sleep
   - **NO MOCKING policy** for Tier 2/3 tests - this is absolutely critical
   - Real Docker infrastructure requirement - never skip this for integration/E2E tests
-- **Todo management system** The todo management system is two-tiered: Repo level todos are in `todos/` and module level todos are in their respective `src/` sub-directories.
-- **Available frameworks** in `sdk-users/apps/` that can provide ready-made solutions. Demonstrate your understanding by showing me:
+- **Todo management system** two-tiered: Repo level todos are in `todos/` and module level todos are in their respective `src/` sub-directories.
+- **Available solutions** in `sdk-users/apps/` that can provide ready-made solutions. Demonstrate your understanding by showing me:
   - What frameworks are available and what do they provide
   - How they can be used to accelerate implementation
   - How to implement using these frameworks
@@ -52,7 +59,7 @@ Put on your ultrathink cap. Before we begin any implementation, you MUST analyze
 2. **What existing SDK components should I reuse instead of creating new code?**
    - Use MCP tools to search `src/kailash/` for existing implementations
    - Use MCP tools to search `sdk-users/` for documented patterns
-   - Use MCP tools to search `apps/` frameworks for ready-made solutions
+   - Use MCP tools to search `sdk-users/apps/` frameworks for ready-made solutions
    - Verify there isn't already a solution in the codebase
 
 3. **What tests will definitively prove this works in production?**
@@ -106,15 +113,14 @@ This prevents incomplete implementations by ensuring we understand exactly what 
 
 ### Framework Solutions Check (CRITICAL)
 **MANDATORY**: Search for existing solutions before writing any new code:
-- Use MCP tools to search `apps/kailash-dataflow/` for database-related solutions
-- Use MCP tools to search `apps/kailash-mcp/` for MCP-related solutions
-- Use MCP tools to search `apps/kailash-nexus/` for platform-related solutions
-- Use MCP tools to search `src/kailash/` for similar implementations
+- Use MCP tools to search `sdk-users/apps/dataflow/` for database-related solutions
+- Use MCP tools to search `sdk-users/apps/nexus/` for platform-related solutions
+- Use MCP tools to search `sdk-users/` for similar implementations
 
 **Document and show me what existing solutions you found and what you can reuse.**
 
 ### Architectural Decision Documentation
-Before writing any code, you MUST create an ADR (Architecture Decision Record) in `adr/`. This prevents wrong implementations by documenting the approach and reasoning.
+Before writing any code, you MUST create an ADR (Architecture Decision Record). This prevents wrong implementations by documenting the approach and reasoning.
 
 You MUST create an ADR with the following structure:
 
@@ -185,7 +191,7 @@ Update the todo management system before starting implementation. This ensures p
 Write tests BEFORE implementation. This prevents missing tests and ensures working code. You MUST follow the 3-tier testing strategy exactly as specified in `sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`.
 
 **Always ensure that your TDD covers all the detailed todo entries**
-
+z
 Do not write new tests without checking that existing ones can be modified to include them. You MUST have all 3 kinds of tests:
 
 **Tier 1 (Unit tests):**
@@ -214,10 +220,9 @@ Do not write new tests without checking that existing ones can be modified to in
 
 ## 5. IMPLEMENTATION WITH CONTINUOUS VALIDATION
 
-**Always read the detailed todo entries before starting implementation. Extend from core SDK, don't create.**
+**Always read the detailed todo entries before starting implementation**
 
-Implement in small, verifiable chunks. After each component, please test your implementation thoroughly.
-**Do not proceed to the next component until the current one is completely working.**
+Implement in small, verifiable chunks. After each component, please test your implementation thoroughly. **Do not proceed to the next component until the current one is completely working.**
 
 ### Implementation Checkpoints
 For each component, you MUST:
@@ -274,7 +279,7 @@ For each component, you MUST:
 After each component, you MUST validate the following against the detailed todo entries:
 
 1. **Does it follow existing SDK patterns?**
-   - Check `src/kailash/` for similar implementations
+   - Check `sdk-users/` for similar implementations
    - Follow the established coding conventions
    - Use existing base classes and interfaces
    - Respect the established directory structure
@@ -323,7 +328,7 @@ Verify test coverage:
   - Always run `./tests/utils/test-env up && ./tests/utils/test-env status` before tests
 - Review coverage report carefully to identify untested code paths
 - Add additional tests for any uncovered critical code
-- Follow the same 3-tier testing strategy for new tests
+- Follow the same 3-tier testing strategy for new testsplea
 - **NO MOCKING** in integration/E2E tiers
 - If tests contain capabilities and components are missing
   - Do not simply skip or remove them because we follow TDD and will write tests first before implementation.
@@ -347,16 +352,9 @@ Ensure that no tests are trivial:
 
 ## 7. DOCUMENTATION VALIDATION
 
-Validate ALL documentation updates.
+Validate ALL documentation updates. For each doc file you've changed, you MUST create temporary tests to verify every code example actually works.
 
-**Important implementation guidance docs**:
-- `sdk-users/3-development/` - Core implementation guides and patterns
-- `sdk-users/2-core-concepts/nodes/` - Node selection and usage patterns
-- `sdk-users/2-core-concepts/cheatsheet/` - Copy-paste implementation patterns
-- `sdk-users/migration-guides/` - Migration guides for breaking changes
-- `sdk-users/apps/` - Application-specific documentation
-
-For each doc file you've changed, you MUST create temporary tests to verify every code example actually works.
+For each doc file changed:
 1. Create a temp test file (e.g., `/tmp/test_docs_feature.py`)
 2. Copy-paste every code example from the documentation
 3. Add necessary imports and setup code
@@ -445,12 +443,12 @@ Before considering this implementation complete, put on your ultrathink cap and 
 ### Todo System Completion Update
 After completing the implementation, update the todo management system:
 
-1. The todo management system is two-tiered: Repo level todos are in `todos/` and module level todos are in their respective `src/` sub-directories. .
+1. The local todo management system is in `/todos/`.
 2. Start with updating the master list (`000-master.md`):
    - Look through the entire file thoroughly
    - Update the status of completed todos
    - Remove old completed entries that don't add context to outstanding todos
-   - Keep this file concise, lean, and easy to navigate
+   - Keep this file concise, lean, and easy to navigatea
 3. Ensure that each todo's details are captured in:
    - `todos/active` for outstanding todos
    - `todos/completed` for completed todos
@@ -469,24 +467,11 @@ Check the `CLAUDE.md` in root and other directories:
      - You can trace a complete path from basic patterns to advanced custom development
      - Please maintain the concise, authoritative tone that respects context limits!
 
-2. For this module in `src/`:
+2. For modules in `apps/`:
    - Please trace through the `CLAUDE.md` guidance system
    - Temp test all the instructions to ensure that they are correct
    - For each user persona and their workflows, please run through the e2e using temp tests
    - Run through the guidance flow as a user and ensure that you can trace everything to build from basic to advanced
-
-### Final Validation
-Before considering this implementation complete, put on your ultrathink cap and run through this final validation:
-
-1. Can another developer understand and maintain this code?
-2. Are all edge cases and error conditions handled?
-3. Do all tests actually verify the intended functionality?
-4. Is the documentation accurate and complete?
-5. Does this follow all established SDK patterns?
-
-**If you cannot answer "yes" to all questions, continue working until you can.**
-
-**Do not declare the feature complete until all validation steps pass and you've shown me the complete outputs for every step.**
 
 ## 10. ULTRATHINK CAP CRITIQUE
 
@@ -498,7 +483,7 @@ Put on your ultrathink cap again. Starting fresh, critique this implementation.
 
 Then, review this project without any prejudice:
 
-1. **Is the codebase delivering the solution's intents, purposes and user objectives**
+1. **Is the codebase delivering the solution's intents, purposes, and user objectives**
    - Does it meet the functional requirements?
    - Does it meet user expectations?
    - Does it follow the architectural decisions made in the ADR?
@@ -531,12 +516,17 @@ Then, review this project without any prejudice:
 **Be honest, fair, and transparent. Find real problems. Show me specific issues with code examples.**
 **Record your critique in the core or apps `docs/critiques` accordingly`**
 
-## 11. GIT Procedures
+## 11. GIT and RELEASE PROCEDURES
+**Important**
 1. Never use git reset --hard or git reset --soft.
 2. Always check all local changes (from all sessions) and add/stage all modified and untracked files.
-3. Always stash any uncommitted changes before any potentially destructive git operations.
+3. Before any potentially destructive git operations, check if there are any uncommitted changes. If there are, stash or commit them first.
 
-# 12. Release versions
-1. Please follow `# contrib (removed)/development/workflows/release-checklist.md`
+**Commit to github**
+1. Run locally to ensure that the github actions will pass.
+2. Commit and push to github.
+3. Issue PR, wait for the CI to pass. Correct errors if any, else merge the PR.
+
+**Release versions**
 2. Continue with release process.
 3. Release to github and pypi.

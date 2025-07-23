@@ -9,7 +9,6 @@ Load these files before starting (DO NOT proceed until loaded):
 - Root `CLAUDE.md` - Core validation rules and critical patterns
 - `sdk-users/CLAUDE.md` - Implementation patterns and architectural guidance
 - `sdk-users/7-gold-standards/` - Core gold standards for implementation
-- `# contrib (removed)/project/todos/000-master.md` - Current project state and priorities
 
 **For implementation guidance during development, remember these key resource locations** (use MCP tools to search when needed):
 - `sdk-users/3-development/` - Core implementation guides and patterns
