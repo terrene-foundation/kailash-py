@@ -10,6 +10,44 @@ The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`
 and this project adheres to `Semantic Versioning
 <https://semver.org/spec/v2.0.0.html>`_.
 
+[0.8.6] - 2025-07-22
+--------------------
+
+Added
+~~~~~
+- **Test Infrastructure Enhancement** - Comprehensive test suite improvements with 2,400+ tests
+- **Documentation Updates** - Enhanced Sphinx documentation with accurate feature descriptions
+- **Version Alignment** - Updated all package versions and metadata for consistency
+
+Enhanced
+~~~~~~~~
+- **Documentation Quality** - Corrected Sphinx documentation to match actual implemented features
+- **Release Process** - Improved version management and distribution packaging
+- **Package Metadata** - Updated version strings across all components
+
+Fixed
+~~~~~
+- **Documentation Accuracy** - Removed references to unimplemented features
+- **Sphinx Build Warnings** - Eliminated import errors for non-existent modules
+- **Version Consistency** - Aligned all version references to 0.8.6
+
+[0.8.5] - 2025-01-22
+--------------------
+
+Added
+~~~~~
+- **Test Infrastructure Enhancement** - Comprehensive test suite improvements with 2,400+ tests
+- **Application Framework** - Enhanced DataFlow, Nexus, and MCP platform capabilities
+- **Performance Optimization** - 11x faster test execution with improved fixtures
+- **Enterprise Features** - Advanced security, compliance, and monitoring capabilities
+
+Enhanced
+~~~~~~~~
+- **Testing Strategy** - 3-tier approach (unit/integration/E2E) with proper isolation
+- **Documentation** - Complete framework documentation with production patterns
+- **CI/CD Pipeline** - Improved automation and validation processes
+- **Code Quality** - Enhanced formatting and linting standards
+
 [0.8.4] - 2025-01-19
 --------------------
 
