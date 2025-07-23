@@ -548,6 +548,117 @@ Parameter Mapping Issues
             self.log_cycle_info(context, f"Received params: {kwargs}")
             # Your logic here
 
+Connection Parameter Issues (v0.8.4+)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+**Problem**: Connection parameter validation errors or security issues
+
+**Symptoms**:
+
+.. code-block:: text
+
+    # Connection validation warnings or errors
+    runtime.execute(workflow, parameters={"node": {"param": "value"}})
+    # May show validation warnings or block execution
+
+**Enhanced Connection Validation**:
+
+.. code-block:: python
+
+    from kailash.runtime.local import LocalRuntime
+
+    # Step 1: Enable connection validation
+    runtime = LocalRuntime(
+        connection_validation="strict"    # Block invalid connections
+    )
+
+    # Step 2: Execute with monitoring
+    try:
+        results, run_id = runtime.execute(workflow, parameters=params)
+    except Exception as e:
+        print(f"Connection validation failed: {e}")
+
+    # Step 3: Check validation metrics
+    metrics = runtime.get_validation_metrics()
+    print(f"Performance: {metrics['performance_summary']}")
+    print(f"Security: {metrics['security_report']}")
+
+**Common Connection Issues and Solutions**:
+
+1. **Connection Parameter Mapping**
+
+   **Problem**: Parameters not properly mapped through connections
+
+   .. code-block:: python
+
+       # ❌ WRONG - 2-parameter connection (deprecated)
+       workflow.connect("source", "target")
+
+       # ✅ CORRECT - 4-parameter connection with explicit mapping
+       workflow.add_connection(
+           "source_node", "output_key",    # Source
+           "target_node", "input_key"      # Target
+       )
+
+2. **Runtime Parameter Precedence**
+
+   **Problem**: Understanding parameter precedence order
+
+   .. code-block:: python
+
+       # Parameter precedence (highest to lowest):
+       # 1. Runtime parameters (highest)
+       # 2. Connection parameters
+       # 3. Node configuration (lowest)
+
+       workflow.add_node("ProcessorNode", "process", {
+           "batch_size": 100  # Lowest precedence
+       })
+
+       workflow.add_connection("source", "size", "process", "batch_size")
+       # Connection parameters override node config
+
+       runtime.execute(workflow, parameters={
+           "process": {"batch_size": 500}  # Highest precedence - this wins
+       })
+
+3. **Connection Security Validation**
+
+   **Problem**: Preventing parameter injection through connections
+
+   .. code-block:: python
+
+       # Enable strict validation for security
+       runtime = LocalRuntime(connection_validation="strict")
+       
+       # Monitor security violations
+       metrics = runtime.get_validation_metrics()
+       security_report = metrics["security_report"]
+       
+       if security_report["violations_detected"] > 0:
+           print("Security violations detected!")
+           for violation in security_report["violations"]:
+               print(f"  {violation}")
+
+**Connection Validation Modes**:
+
+.. code-block:: python
+
+    # Development - strict validation
+    dev_runtime = LocalRuntime(
+        connection_validation="strict"    # Block invalid connections
+    )
+
+    # Production - warnings only
+    prod_runtime = LocalRuntime(
+        connection_validation="warn"      # Log warnings, continue execution
+    )
+
+    # Performance - no validation
+    perf_runtime = LocalRuntime(
+        connection_validation="off"       # No validation overhead
+    )
+
 Data Processing Errors
 ----------------------
 
