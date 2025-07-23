@@ -11,7 +11,7 @@ Kailash Python SDK Documentation
    :target: https://opensource.org/licenses/MIT
    :alt: License
 
-.. image:: https://img.shields.io/badge/version-0.8.4-green.svg
+.. image:: https://img.shields.io/badge/version-0.8.6-green.svg
    :alt: SDK Version
 
 .. image:: https://img.shields.io/badge/tests-2400%2B%20passing-brightgreen.svg
@@ -22,8 +22,8 @@ Kailash Python SDK Documentation
 
 Welcome to the **Kailash Python SDK** - The enterprise-grade workflow orchestration platform that transforms how you build production applications. From zero-config database operations to multi-channel platforms, comprehensive AI integration, and enterprise-grade security.
 
-🚀 **Latest Release: v0.8.4**
-   A2A Google Protocol Enhancement with advanced agent coordination, hybrid search capabilities, and semantic memory systems. Complete multi-agent workflows with production-grade performance.
+🚀 **Latest Release: v0.8.6**
+   Enhanced documentation accuracy, improved test infrastructure with 2,400+ tests, and connection parameter validation security features. Production-ready performance with comprehensive validation and complete backward compatibility.
 
 Quick Links
 -----------
@@ -46,34 +46,34 @@ Quick Links
    - **AI Registry**: Advanced RAG with 47+ specialized nodes
    - **User Management**: Enterprise RBAC with comprehensive security
 
-What's New in v0.8.4
+What's New in v0.8.6
 ---------------------
 
-**🤖 A2A Google Protocol Enhancement**
+**📚 Enhanced Documentation & Testing**
 
-🎯 **Advanced Agent Coordination**
-   - **A2ACoordinatorNode**: Enhanced multi-agent coordination with Google Protocol patterns
-   - **Agent Cards System**: Dynamic agent registration with skill-based matching
-   - **Intelligent Task Delegation**: Context-aware task distribution with workload balancing
-   - **Backward Compatibility**: Seamless integration with existing A2A implementations
+🛡️ **Connection Parameter Validation (v0.8.4+)**
+   - **3 Validation Modes**: Off, Warn, Strict for connection security
+   - **Enterprise Security**: Prevents parameter injection through workflow connections
+   - **Performance Monitoring**: <1ms overhead with comprehensive metrics
+   - **Backward Compatibility**: 100% maintained - no breaking changes
 
-🔍 **Hybrid Search Capabilities**
-   - **HybridSearchNode**: Multi-strategy agent discovery and matching
-   - **AdaptiveSearchNode**: Self-optimizing search strategies
-   - **Semantic Agent Matching**: Advanced algorithms for optimal agent selection
-   - **Real-time Performance Monitoring**: Streaming analytics for A2A workflows
+🔧 **Improved Test Infrastructure**
+   - **2,400+ Tests**: Comprehensive test suite with 100% pass rate
+   - **11x Faster Execution**: Optimized test performance and isolation
+   - **Production Validation**: Complete coverage of core SDK functionality
+   - **Quality Assurance**: Automated testing across all workflow patterns
 
-🧠 **Semantic Memory System**
-   - **SemanticMemoryNode**: Long-term memory management for agent interactions
-   - **DataFlow Integration**: Zero-config semantic search capabilities
-   - **Advanced Embeddings**: Multi-provider embedding support with intelligent caching
-   - **Context-Aware Retrieval**: Enhanced memory recall with relevance scoring
+📚 **Documentation Accuracy**
+   - **Corrected Features**: Documentation now accurately reflects implemented capabilities
+   - **Real Implementation**: All examples and guides match actual SDK code
+   - **Connection Validation**: Comprehensive guide for enterprise security features
+   - **Troubleshooting**: Updated guides for actual debugging workflows
 
-⚡ **Performance & Reliability**
-   - **Maintained 100% test pass rate**: 2,400+ tests with comprehensive A2A coverage
-   - **Production-tested patterns**: Real-world multi-agent coordination scenarios
-   - **Enterprise-grade scaling**: Optimized for high-throughput agent workflows
-   - **Comprehensive documentation**: Complete implementation guides and examples
+⚡ **Developer Experience**
+   - **Accurate References**: All documentation references working features
+   - **Enhanced Examples**: Production-ready code patterns and workflows
+   - **Version Consistency**: Aligned package versions and metadata
+   - **Build Quality**: Eliminated Sphinx warnings and import errors
 
 .. toctree::
    :maxdepth: 2

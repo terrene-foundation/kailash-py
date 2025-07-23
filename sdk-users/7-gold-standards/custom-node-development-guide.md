@@ -13,14 +13,15 @@ This comprehensive guide extends the existing SDK custom node documentation with
 ## Table of Contents
 
 1. [🚨 CRITICAL: SDK Node vs Custom Node Patterns](#critical-sdk-node-vs-custom-node-patterns)
-2. [Enterprise Custom Node Architecture](#enterprise-custom-node-architecture)
-3. [Parameter Declaration Best Practices](#parameter-declaration-best-practices)
-4. [Security and Validation Patterns](#security-and-validation-patterns)
-5. [Workflow Integration](#workflow-integration)
-6. [Testing Custom Nodes](#testing-custom-nodes)
-7. [Common Mistakes and Solutions](#common-mistakes-and-solutions)
-8. [Advanced Patterns](#advanced-patterns)
-9. [Node Registration Analysis](#node-registration-analysis)
+2. [🚨 CRITICAL: run() vs execute() Method Requirement](#critical-run-vs-execute-method-requirement)
+3. [Enterprise Custom Node Architecture](#enterprise-custom-node-architecture)
+4. [Parameter Declaration Best Practices](#parameter-declaration-best-practices)
+5. [Security and Validation Patterns](#security-and-validation-patterns)
+6. [Workflow Integration](#workflow-integration)
+7. [Testing Custom Nodes](#testing-custom-nodes)
+8. [Common Mistakes and Solutions](#common-mistakes-and-solutions)
+9. [Advanced Patterns](#advanced-patterns)
+10. [Node Registration Analysis](#node-registration-analysis)
 
 ## 🚨 CRITICAL: SDK Node vs Custom Node Patterns
 
@@ -43,92 +44,151 @@ workflow.add_node("LLMAgentNode", "agent", {config})
 3. `workflow.add_node("NodeName", ...)` calls `NodeRegistry.get("NodeName")`
 4. **NO warnings** - this is the preferred pattern
 
-### **Custom Node Pattern (Unregistered Nodes)**
+## 🚨 CRITICAL: run() vs execute() Method Requirement
+
+### **DISCOVERED 2025-07-22: Fatal Method Name Error**
+
+**CRITICAL FINDING**: Custom nodes MUST implement `run()` method, NOT `execute()` method. This is the source of many parameter passing failures.
+
+### ❌ WRONG Implementation
+```python
+class BadCustomNode(Node):
+    def get_parameters(self):
+        return {"param": NodeParameter(type=str, required=True)}
+    
+    def execute(self, **kwargs):  # ❌ WRONG METHOD NAME
+        return {"result": kwargs.get("param")}
+
+# Result: SDK calls run(), but node has execute()
+# Parameters: {} (empty - SDK can't find the method)
+```
+
+### ✅ CORRECT Implementation  
+```python
+class GoodCustomNode(Node):
+    def get_parameters(self):
+        return {"param": NodeParameter(type=str, required=True)}
+    
+    def run(self, **kwargs):  # ✅ CORRECT METHOD NAME
+        return {"result": kwargs.get("param")}
+
+# Result: SDK calls run(), node implements run()
+# Parameters: {"param": "value"} (working correctly)
+```
+
+### **Why This Happens**
+1. **SDK Runtime**: Always calls `node.run(**parameters)`
+2. **Wrong Method**: Node implements `execute()` instead of `run()`
+3. **Default Behavior**: Base Node class has empty `run()` method
+4. **Result**: Empty parameters `{}` instead of configured parameters
+
+### **Debug Signs of This Error**
+```
+DEBUG:kailash.runtime.local:Node node_id inputs: {}
+```
+If you see empty inputs `{}` despite providing parameters, check the method name!
+
+### **Testing Pattern to Catch This**
+```python
+def test_node_receives_parameters():
+    """Test that node receives configured parameters."""
+    node = MyCustomNode()
+    
+    # This will fail if node uses execute() instead of run()
+    result = node.run(test_param="test_value")
+    
+    assert "test_param" in result
+```
+
+### **Custom Node Pattern (NOW STANDARDIZED - Updated 2025-07-22)**
 
 ```python
-# ✅ CORRECT: Custom nodes use class references
-from nodes.workflow_entry_node import WorkflowEntryNode
+# ✅ CORRECT: ALL custom nodes must use @register_node() decorator
+from kailash.nodes.base import register_node
 
-workflow.add_node(WorkflowEntryNode, "node_id", {config})
+@register_node()
+class WorkflowEntryNode(Node):
+    """Standard pattern for ALL custom nodes."""
+    pass
+
+# Usage - use string reference like SDK nodes
+workflow.add_node("WorkflowEntryNode", "node_id", {config})
 ```
 
 **How it works:**
-1. Custom nodes typically **DON'T** have `@register_node()` decorator
-2. **NOT** registered in `NodeRegistry`
-3. Must pass class object directly to `workflow.add_node()`
-4. **EXPECTED WARNING**: "Alternative API usage detected" - **this is normal!**
+1. ALL custom nodes **MUST** have `@register_node()` decorator
+2. Automatically registered in `NodeRegistry` on import
+3. Use string reference in `workflow.add_node()` - same as SDK nodes
+4. **NO WARNINGS** - follows SDK preferred pattern
 
-### **The Critical Error Pattern**
+### **The OLD Pattern (NO LONGER RECOMMENDED)**
 
 ```python
-# ❌ WRONG: Using string reference for unregistered custom node
-workflow.add_node("WorkflowEntryNode", "node_id", {config})
-# ERROR: Node 'WorkflowEntryNode' not found in registry
+# ❌ OLD PATTERN: Using class reference without registration
+from nodes.workflow_entry_node import WorkflowEntryNode
+workflow.add_node(WorkflowEntryNode, "node_id", {config})
+# This pattern is deprecated - causes warnings and missing features
 ```
 
-**Why this fails:**
-1. `WorkflowEntryNode` is not registered with `@register_node()`
-2. `NodeRegistry.get("WorkflowEntryNode")` fails
-3. SDK can't find the node class
+**CORRECTED Understanding (Based on SDK Investigation 2025-07-22):**
+1. **Enables discoverability and IDE support** (primary benefit)
+2. No "Alternative API usage" warnings
+3. Consistent with SDK node patterns
+4. Better tooling and testing support
+5. Future-proof for new SDK features
 
-### **The SDK Warning is MISLEADING for Custom Nodes**
+**IMPORTANT CORRECTION**: Registration does NOT affect `add_workflow_inputs()` functionality. Both registered and unregistered nodes receive workflow parameters identically. The real requirement for parameter injection is proper parameter definition in `get_parameters()`.
 
-The SDK shows this warning for custom nodes:
+### **Migration from Old to New Pattern**
+
+If you have legacy custom nodes without `@register_node()`:
+```python
+# Step 1: Add decorator to node definition
+from kailash.nodes.base import register_node
+
+@register_node()  # ADD THIS
+class MyCustomNode(Node):
+    pass
+
+# Step 2: Update workflow usage
+# OLD: workflow.add_node(MyCustomNode, "node_id", {})
+# NEW: workflow.add_node("MyCustomNode", "node_id", {})
 ```
-Alternative API usage detected. Consider using preferred pattern:
-  CURRENT: add_node(WorkflowEntryNode, 'node_id', {})
-  PREFERRED: add_node('WorkflowEntryNode', 'node_id', {})
-```
 
-**🚨 IGNORE THIS WARNING FOR CUSTOM NODES!**
-
-The "preferred" pattern **ONLY works for registered SDK nodes**. For custom nodes, the class-based approach is **REQUIRED**.
-
-### **Enterprise Decision Matrix**
+### **Enterprise Decision Matrix (Updated 2025-07-22)**
 
 | **Node Type** | **Pattern** | **Registration** | **Warning** | **Enterprise Recommendation** |
 |---------------|-------------|------------------|-------------|-------------------------------|
 | **SDK Nodes** | String-based | `@register_node()` | ❌ No | Use string references |
-| **Custom Nodes** | Class-based | No decorator | ⚠️ Expected | Use class references |
+| **Custom Nodes** | String-based | `@register_node()` | ❌ No | Use string references (NEW STANDARD) |
 
-### **0 Fail 0 Warning Policy Solution**
+### **0 Fail 0 Warning Policy Solution (Updated 2025-07-22)**
 
-For enterprise environments requiring 0 warnings, you have **3 options**:
+For enterprise environments requiring 0 warnings, the solution is now standardized:
 
-**Option 1: Accept Warning (RECOMMENDED)**
-```python
-# Accept the warning - it's expected for custom nodes
-workflow.add_node(WorkflowEntryNode, "node_id", {})
-```
-
-**Option 2: Suppress Warning**
-```python
-import warnings
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="Alternative API usage detected")
-    workflow.add_node(WorkflowEntryNode, "node_id", {})
-```
-
-**Option 3: Register Custom Node**
+**MANDATORY Standard Pattern:**
 ```python
 from kailash.nodes.base import register_node
 
 @register_node()
 class WorkflowEntryNode(Node):
+    """All custom nodes must use @register_node() decorator."""
     # ... implementation
 
-# Then use string reference
+# Use string reference - NO warnings
 workflow.add_node("WorkflowEntryNode", "node_id", {})
 ```
 
-### **Enterprise Recommendation: Option 1**
+### **Enterprise Recommendation: Standard Registration**
 
-**Why accept the warning:**
-1. **Clear distinction** between SDK and custom nodes
-2. **Security isolation** - custom nodes stay within modules
-3. **Testing simplicity** - no registry state management
-4. **Enterprise governance** - easier to audit custom node usage
-5. **SDK compliance** - the warning is **expected behavior** per SDK tests
+**Benefits of mandatory registration (CORRECTED 2025-07-22):**
+1. **Zero warnings** - complies with enterprise policy
+2. **Discoverability** - string references work without issues
+3. **Consistency** - all nodes follow same pattern
+4. **SDK alignment** - uses SDK's preferred pattern
+5. **Future-proofing** - ready for new SDK features
+
+**CRITICAL CORRECTION**: Registration does NOT enable `add_workflow_inputs()` functionality. Parameter injection works identically for registered and unregistered nodes. The real requirement is proper parameter definition.
 
 ## Enterprise Custom Node Architecture
 
@@ -162,6 +222,19 @@ class EnterpriseBaseNode(Node):
         
         if self.audit_enabled:
             logger.info(f"Initialized {self.__class__.__name__} v{self.node_version}")
+    
+    # 🚨 CRITICAL: Use run() method, NOT execute()
+    def run(self, **kwargs) -> Dict[str, Any]:
+        """
+        MANDATORY: All custom nodes MUST implement run() method.
+        
+        ❌ WRONG: def execute(self, **kwargs) - SDK will not call this
+        ✅ CORRECT: def run(self, **kwargs) - SDK entry point
+        
+        The SDK runtime calls node.run(**parameters), not node.execute().
+        Using execute() will result in empty parameters: {}
+        """
+        raise NotImplementedError("Subclasses must implement run() method")
     
     def _init_governance(self):
         """Initialize parameter governance."""
@@ -254,7 +327,7 @@ class EnterpriseBaseNode(Node):
 
 ### 1. Complete Parameter Declaration
 
-**CRITICAL RULE**: Every parameter your node expects must be declared in `get_parameters()`. The SDK will only inject declared parameters.
+**CRITICAL RULE (CONFIRMED BY SDK INVESTIGATION)**: Every parameter your node expects must be declared in `get_parameters()`. The SDK's WorkflowParameterInjector will ONLY inject parameters that are explicitly declared in the node's parameter definition. This is a security feature that prevents arbitrary parameter injection attacks.
 
 ```python
 class UserManagementNode(EnterpriseBaseNode):
@@ -1127,7 +1200,24 @@ def test_contract_validation():
     # Test validation logic
 ```
 
+✅ **Step 5: Document in Contract Reference**
+```python
+# docs/CUSTOM_NODE_CONTRACT_REFERENCE.md
+## MyCustomNode
+**Contract**: MyCustomNodeContract
+**Purpose**: Brief description of what this node does
+**Parameters**:
+- param1 (str, required): Description
+- param2 (dict, optional): Description
+**Output**: Description of output structure
+**Example Usage**: Code example for tests
+```
+
 **⚠️ COMMON MISTAKE**: Creating a custom node without registering its parameter contract leads to incomplete governance framework integration.
+
+**🚨 CRITICAL**: Every custom node MUST be documented in the [Custom Node Contract Reference](./CUSTOM_NODE_CONTRACT_REFERENCE.md) for test development.
+
+**📋 TEST CREATION**: When writing tests for custom nodes, follow the [Gold Standard Test Creation Guide](test_creation_guide.md) to eliminate parameter errors and ensure contract compliance.
 
 ## Testing Custom Nodes
 
@@ -1369,66 +1459,232 @@ class SecureUserNode(UserManagementNode):
 
 ## Node Registration Analysis
 
-### **Deep Dive: Why Custom Nodes Don't Register**
+### **Deep Dive: Node Registration in Kailash SDK**
 
-**Enterprise Philosophy**: Custom nodes should remain **modular and isolated** rather than globally registered. This provides:
+**Updated 2025-07-22**: Based on actual SDK implementation analysis, the NodeRegistry API has evolved. Here's the correct pattern:
 
-1. **Security Isolation**: Custom nodes stay within their modules
-2. **Version Control**: Different modules can have different node versions
-3. **Testing Isolation**: No shared registry state between tests
-4. **Governance**: Clear audit trail of custom vs SDK node usage
-
-### **Registry Internals**
+### **Registry Internals - Actual Implementation**
 
 From SDK source analysis (`kailash/nodes/base.py`):
 
 ```python
 class NodeRegistry:
-    """Global registry for node discovery and management."""
+    """Global registry for node discovery and management.
+    
+    The NodeRegistry is a singleton that manages all registered nodes.
+    It uses _nodes (not _registry) as the internal storage.
+    """
+    
+    @classmethod
+    def register(cls, node_class: type[Node], alias: str = None):
+        """Register a node class.
+        
+        Args:
+            node_class: Node class to register (must inherit from Node)
+            alias: Optional alias for the node (defaults to class name)
+        """
+        # Implementation details...
     
     @classmethod
     def get(cls, node_type: str) -> type[Node]:
         """Get node class by type name."""
-        if node_type not in cls._nodes:
+        instance = cls()  # Get singleton instance
+        if node_type not in instance._nodes:
             raise NodeConfigurationError(
                 f"Node '{node_type}' not found in registry. "
-                f"Available nodes: {list(cls._nodes.keys())}"
+                f"Available nodes: {list(instance._nodes.keys())}"
             )
-        return cls._nodes[node_type]
+        return instance._nodes[node_type]
 ```
 
-**Key Insight**: `NodeRegistry.get()` **only** finds registered nodes. Unregistered custom nodes **must** use class references.
+### **Correct Registration Pattern**
+
+**For Custom Nodes that Need Registration:**
+
+```python
+from kailash.nodes.base import NodeRegistry, register_node
+
+# Option 1: Using decorator (RECOMMENDED)
+@register_node()
+class MyCustomNode(Node):
+    """Custom node with automatic registration."""
+    pass
+
+# Option 2: Manual registration
+class MyCustomNode(Node):
+    """Custom node requiring manual registration."""
+    pass
+
+# Register manually
+NodeRegistry.register(MyCustomNode, alias="MyCustomNode")
+
+# Option 3: Registration in module initialization
+# In nodes/__init__.py
+from kailash.nodes.base import NodeRegistry
+from .my_custom_node import MyCustomNode
+
+# Register all module nodes
+NodeRegistry.register(MyCustomNode, alias="MyCustomNode")
+```
+
+### **Testing Node Registration**
+
+**Correct Test Pattern (Based on SDK Implementation):**
+
+```python
+import pytest
+from kailash.nodes.base import NodeRegistry
+
+class TestNodeRegistration:
+    """Test node registration following SDK patterns."""
+    
+    def setup_method(self):
+        """Store registry state before test."""
+        # NodeRegistry is a singleton, get instance
+        self.registry = NodeRegistry()
+        # Store original nodes
+        self._original_nodes = self.registry._nodes.copy()
+    
+    def teardown_method(self):
+        """Restore registry state after test."""
+        # Clear and restore
+        self.registry.clear()
+        for name, node_class in self._original_nodes.items():
+            self.registry.register(node_class, alias=name)
+    
+    def test_custom_node_registration(self):
+        """Test registering a custom node."""
+        from my_module.nodes import MyCustomNode
+        
+        # Register the node
+        NodeRegistry.register(MyCustomNode, alias="MyCustomNode")
+        
+        # Verify registration
+        assert "MyCustomNode" in self.registry._nodes
+        assert self.registry._nodes["MyCustomNode"] is MyCustomNode
+        
+        # Test retrieval
+        retrieved = NodeRegistry.get("MyCustomNode")
+        assert retrieved is MyCustomNode
+```
+
+### **Enterprise Philosophy: When to Register Custom Nodes**
+
+**NEW Standard Approach (Updated 2025-07-22)**: ALL custom nodes should be **auto-registered** using the `@register_node()` decorator for consistency, discoverability, and to enable SDK features like `add_workflow_inputs()`.
+
+**Why Auto-Register All Custom Nodes:**
+1. **Consistency**: All nodes follow the same pattern
+2. **SDK Features**: Enables `add_workflow_inputs()` functionality
+3. **Zero Warnings**: No "Alternative API" warnings
+4. **Discoverability**: Nodes can be found in NodeRegistry
+5. **Testing**: Simplifies test setup and node discovery
+6. **Future-Proofing**: SDK may add more registry-based features
 
 ### **Registration Decision Matrix**
 
 | **Use Case** | **Register?** | **Rationale** |
 |--------------|---------------|---------------|
-| **Enterprise Module Nodes** | ❌ No | Security isolation, version control |
-| **Shared Utility Nodes** | ✅ Yes | Reusability across modules |
-| **SDK Contributions** | ✅ Yes | Global availability requirement |
-| **Testing Mocks** | ✅ Yes | Test suite needs string references |
+| **ALL Custom Nodes** | ✅ Yes | Standard pattern for consistency |
+| **Module-Specific Nodes** | ✅ Yes | Enables SDK features |
+| **Shared Utility Nodes** | ✅ Yes | Cross-module reusability |
+| **SDK Extensions** | ✅ Yes | Framework integration |
+| **Test Fixtures** | ✅ Yes | Test infrastructure needs |
+| **Zero-Warning Requirement** | ✅ Yes | Enterprise policy compliance |
 
-### **Best Practices Summary**
+### **Standard Registration Pattern for ALL Custom Nodes**
 
-**For Custom Nodes:**
+**MANDATORY Pattern (Updated 2025-07-22):**
 ```python
-# ✅ Correct Pattern
-from nodes.my_custom_node import MyCustomNode
-workflow.add_node(MyCustomNode, "node_id", {})  # Accept warning
+# nodes/user_processor.py
+from kailash.nodes.base import register_node, Node
+
+@register_node()  # REQUIRED for ALL custom nodes
+class UserProcessorNode(Node):
+    """All custom nodes MUST use @register_node() decorator."""
+    pass
+
+# Usage in workflow - use string reference
+workflow.add_node("UserProcessorNode", "processor", {})  # No warning
 ```
 
-**For SDK Nodes:**
+**2. Shared Utility Node (Standard Pattern):**
 ```python
-# ✅ Correct Pattern  
-workflow.add_node("PythonCodeNode", "node_id", {})  # No warning
+# shared/nodes/audit_logger.py
+from kailash.nodes.base import register_node
+
+@register_node()
+class AuditLoggerNode(Node):
+    """Standard pattern - all nodes registered."""
+    pass
+
+# Usage in any module
+workflow.add_node("AuditLoggerNode", "logger", {})  # No warning
 ```
 
-**For Zero Warning Policy:**
+**3. Test Fixture Node (Standard Pattern):**
 ```python
-# ✅ Acceptable Pattern
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore", message="Alternative API usage detected")
-    workflow.add_node(MyCustomNode, "node_id", {})
+# tests/fixtures/test_nodes.py
+from kailash.nodes.base import register_node
+
+@register_node()
+class TestNode(Node):
+    """Test nodes also use standard pattern."""
+    pass
+
+# Usage in tests
+workflow.add_node("TestNode", "test_node", {})  # No warning
+```
+
+### **Best Practices Summary (Updated 2025-07-22)**
+
+**Standard Pattern for ALL Custom Nodes:**
+```python
+# ✅ MANDATORY Pattern
+from kailash.nodes.base import register_node
+
+@register_node()
+class MyCustomNode(Node):
+    """All custom nodes MUST have @register_node() decorator."""
+    def execute(self, **kwargs):
+        # Implementation
+        pass
+
+# Usage - always use string reference
+workflow.add_node("MyCustomNode", "node_id", {})  # No warning
+```
+
+**Migration Pattern for Legacy Unregistered Nodes:**
+```python
+# Step 1: Add the decorator to existing node
+from kailash.nodes.base import register_node
+
+@register_node()  # ADD THIS LINE
+class LegacyCustomNode(Node):
+    """Legacy node now follows standard pattern."""
+    pass
+
+# Step 2: Update workflow usage
+# OLD: workflow.add_node(LegacyCustomNode, "node_id", {})
+# NEW: workflow.add_node("LegacyCustomNode", "node_id", {})
+```
+
+**Complete Custom Node Template:**
+```python
+from kailash.nodes.base import register_node, Node
+from typing import Dict, Any
+
+@register_node()  # MANDATORY
+class TPCCustomNode(Node):
+    """Standard custom node implementation."""
+    
+    def __init__(self, **kwargs):
+        # Set attributes BEFORE super().__init__()
+        self.custom_param = kwargs.get("custom_param", "default")
+        super().__init__(**kwargs)
+    
+    def execute(self, **kwargs) -> Dict[str, Any]:
+        # Implementation
+        return {"result": "success"}
 ```
 
 ## Conclusion

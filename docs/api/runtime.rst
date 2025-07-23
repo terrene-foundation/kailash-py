@@ -72,6 +72,61 @@ The default runtime for synchronous execution.
    # Execute with local runtime
    results = runtime.execute(workflow)
 
+**Connection Parameter Validation (v0.8.4+)**
+
+Configure connection parameter validation modes for enhanced security:
+
+.. code-block:: python
+
+   from kailash.runtime import LocalRuntime
+
+   # Development mode - strict validation
+   runtime = LocalRuntime(
+       connection_validation="strict"    # Block invalid connection parameters
+   )
+
+   # Production mode - warnings only (default)
+   runtime = LocalRuntime(
+       connection_validation="warn"      # Log warnings but continue
+   )
+
+   # Performance mode - no validation
+   runtime = LocalRuntime(
+       connection_validation="off"       # No validation overhead
+   )
+
+**Connection Validation Modes:**
+
+- **off**: No connection parameter validation
+- **warn**: Log warnings for parameter issues but continue execution (default)
+- **strict**: Block execution for invalid connection parameters
+
+**Performance Characteristics:**
+
+- **Validation Overhead**: <1ms per workflow execution
+- **Connection Security**: Prevents parameter injection through workflow connections
+- **Enterprise Ready**: Comprehensive metrics collection and alerting
+
+**Validation Features:**
+
+.. code-block:: python
+
+   from kailash.runtime import LocalRuntime
+
+   # Create runtime with validation
+   runtime = LocalRuntime(connection_validation="strict")
+
+   # Execute workflow - validation runs automatically
+   results, run_id = runtime.execute(workflow, parameters=params)
+
+   # Access validation metrics
+   metrics = runtime.get_validation_metrics()
+   print(f"Performance: {metrics['performance_summary']}")
+   print(f"Security: {metrics['security_report']}")
+
+   # Reset metrics for next run
+   runtime.reset_validation_metrics()
+
 AsyncLocalRuntime
 =================
 
