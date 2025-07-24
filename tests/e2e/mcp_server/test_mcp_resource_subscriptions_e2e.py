@@ -60,16 +60,32 @@ class MCPTestClient:
     async def send_request(self, method: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Send MCP request and return response."""
         self.request_id += 1
+        request_id = f"{self.client_name}_{self.request_id}"
         request = {
             "jsonrpc": "2.0",
-            "id": f"{self.client_name}_{self.request_id}",
+            "id": request_id,
             "method": method,
             "params": params or {}
         }
         
         await self.websocket.send(json.dumps(request))
-        response = await self.websocket.recv()
-        return json.loads(response)
+        
+        # Keep receiving messages until we get the response (not a notification)
+        while True:
+            response = await self.websocket.recv()
+            message = json.loads(response)
+            
+            # Check if this is a notification (no id field) or response to another request
+            if "id" not in message:
+                # This is a notification, store it and continue waiting
+                self.notifications.append(message)
+                continue
+            elif message.get("id") == request_id:
+                # This is our response
+                return message
+            else:
+                # This is a response to a different request, ignore and continue
+                continue
     
     async def list_resources(self, cursor: str = None, limit: int = None) -> Dict[str, Any]:
         """List available resources."""
@@ -186,12 +202,14 @@ class TestMCPResourceSubscriptionsE2E:
         @server.resource("config:///{section}")
         def config_resource(section):
             """Return configuration for different sections."""
+            import json
             configs = {
                 "database": {"host": "localhost", "port": 5432, "name": "testdb"},
                 "redis": {"host": "localhost", "port": 6379, "db": 0},
                 "logging": {"level": "INFO", "format": "json"}
             }
-            return configs.get(section, {})
+            # Return JSON-serialized content for proper MCP format
+            return json.dumps(configs.get(section, {}))
         
         yield server
         
@@ -410,7 +428,17 @@ class TestMCPResourceSubscriptionsE2E:
             # Read initial configuration
             read_response = await client.read_resource("config:///database")
             assert "result" in read_response
-            config = read_response["result"]
+            
+            # MCP resources/read returns contents array
+            result = read_response["result"]
+            assert "contents" in result
+            assert len(result["contents"]) > 0
+            
+            # Parse the JSON content from the first content item
+            content_text = result["contents"][0]["text"]
+            import json
+            config = json.loads(content_text)
+            
             assert config["host"] == "localhost"
             assert config["port"] == 5432
             

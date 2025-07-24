@@ -180,6 +180,7 @@ class TestResourceSubscriptionManager:
         """Create mock auth manager."""
         auth = Mock(spec=AuthManager)
         auth.check_permission = AsyncMock(return_value={"authorized": True})
+        auth.authenticate_and_authorize = AsyncMock(return_value=True)
         return auth
     
     @pytest.fixture
@@ -214,12 +215,12 @@ class TestResourceSubscriptionManager:
         assert manager.get_subscription(sub_id) is not None
         
         # Verify auth was checked
-        auth_manager.check_permission.assert_called_once()
+        auth_manager.authenticate_and_authorize.assert_called_once()
     
     @pytest.mark.asyncio
     async def test_create_subscription_permission_denied(self, manager, auth_manager):
         """Test subscription creation with permission denied."""
-        auth_manager.check_permission.return_value = {"authorized": False}
+        auth_manager.authenticate_and_authorize.side_effect = PermissionDeniedError("Not authorized")
         
         with pytest.raises(PermissionDeniedError):
             await manager.create_subscription(

@@ -58,6 +58,20 @@ class TestMCPResourceSubscriptionIntegration:
             else:
                 return {"content": f"content for {filename}", "version": 1}
         
+        # Add more resources for pagination testing
+        @server.resource("config:///{section}")
+        def config_resource(section):
+            configs = {
+                "database": {"host": "localhost", "port": 5432},
+                "redis": {"host": "localhost", "port": 6379},
+                "logging": {"level": "INFO", "format": "json"}
+            }
+            return configs.get(section, {})
+        
+        @server.resource("api:///{endpoint}")
+        def api_resource(endpoint):
+            return {"endpoint": endpoint, "status": "active"}
+        
         yield server
         
         # Cleanup
@@ -294,26 +308,62 @@ class TestMCPResourceSubscriptionIntegration:
             assert first_uri != second_uri
     
     @pytest.mark.asyncio
-    async def test_subscription_authentication(self, running_server):
+    async def test_subscription_authentication(self, event_store):
         """Test subscription with authentication requirements."""
-        server_info = running_server
+        from unittest.mock import Mock, AsyncMock
+        from kailash.mcp_server.auth import PermissionError as PermissionDeniedError
         
-        async with await self.create_websocket_client(server_info["host"], server_info["port"]) as ws:
-            # Initialize connection
-            await self.send_mcp_request(ws, "initialize", {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {"resources": {}},
-                "clientInfo": {"name": "test-client", "version": "1.0.0"}
-            })
-            
-            # Try to subscribe without authentication (should fail)
-            subscribe_response = await self.send_mcp_request(ws, "resources/subscribe", {
-                "uri": "file:///test.json"
-            })
-            
-            # Should receive error due to missing authentication
-            assert "error" in subscribe_response
-            assert subscribe_response["error"]["code"] == -32603  # Internal error
+        # Create server with authentication enabled
+        auth_provider = Mock()
+        auth_provider.authenticate_and_authorize = AsyncMock(side_effect=PermissionDeniedError("Not authorized"))
+        
+        server = MCPServer(
+            name="auth-test-server",
+            transport="websocket",
+            websocket_host="127.0.0.1", 
+            websocket_port=9003,  # Different port for auth test
+            enable_subscriptions=True,
+            auth_provider=auth_provider,
+            event_store=event_store
+        )
+        
+        # Add test resource
+        @server.resource("file:///{filename}")
+        def file_resource(filename):
+            return {"content": f"content for {filename}", "version": 1}
+        
+        # Start server in background
+        server_task = asyncio.create_task(server._run_websocket())
+        await asyncio.sleep(0.2)
+        
+        try:
+            async with await self.create_websocket_client("127.0.0.1", 9003) as ws:
+                # Initialize connection
+                await self.send_mcp_request(ws, "initialize", {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {"resources": {}},
+                    "clientInfo": {"name": "test-client", "version": "1.0.0"}
+                })
+                
+                # Try to subscribe without authentication (should fail)
+                subscribe_response = await self.send_mcp_request(ws, "resources/subscribe", {
+                    "uri": "file:///test.json"
+                })
+                
+                # Should receive error due to missing authentication
+                assert "error" in subscribe_response
+                # Authentication error returns -32601 with authorization message
+                assert subscribe_response["error"]["code"] == -32601
+                assert "authorized" in subscribe_response["error"]["message"].lower()
+        finally:
+            # Cleanup
+            if server.subscription_manager:
+                await server.subscription_manager.shutdown()
+            server_task.cancel()
+            try:
+                await server_task
+            except asyncio.CancelledError:
+                pass
     
     @pytest.mark.asyncio
     async def test_multiple_client_subscriptions(self, running_server):
@@ -343,8 +393,8 @@ class TestMCPResourceSubscriptionIntegration:
             assert "result" in sub1_response
             assert "result" in sub2_response
             
-            sub1_id = sub1_response["result"]["subscription_id"]
-            sub2_id = sub2_response["result"]["subscription_id"]
+            sub1_id = sub1_response["result"]["subscriptionId"]
+            sub2_id = sub2_response["result"]["subscriptionId"]
             
             # Trigger change for first subscription
             server = server_info["server"]
@@ -414,15 +464,16 @@ class TestMCPResourceSubscriptionIntegration:
             subscription = server.subscription_manager.get_subscription(subscription_id)
             assert subscription is not None
             
-            # Get client ID (simulate)
-            client_id = f"client_{id(ws)}"
+            # Get the actual connection ID from the subscription
+            connection_id = subscription.connection_id
             
         finally:
             # Close WebSocket connection
             await ws.close()
         
-        # Simulate connection cleanup
-        await server._handle_connection_close(client_id)
+        # Simulate connection cleanup using the actual connection ID
+        removed_count = await server.subscription_manager.cleanup_connection(connection_id)
+        assert removed_count > 0  # Should have removed at least one subscription
         
         # Verify subscription was cleaned up
         subscription = server.subscription_manager.get_subscription(subscription_id)

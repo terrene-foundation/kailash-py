@@ -349,8 +349,7 @@ Ensure that no tests are trivial:
 - Avoid tests that only check for syntax or trivial conditions
 - Ensure tests are not just placeholders or empty stubs
 - Ensure tests are not just checking for presence of code or artifact without verifying actual functionality
-- Ensure that performance tests are meaningful and cover actual performance characteristics
-
+- Ensure that performance tests are meaningful and cover actual performance characteristic
 **Show me the coverage report and address any gaps before proceeding.**
 
 ## 7. DOCUMENTATION VALIDATION

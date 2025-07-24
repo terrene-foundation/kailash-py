@@ -5,10 +5,20 @@ import uuid
 import fnmatch
 import json
 from datetime import datetime, timedelta
-from typing import Dict, Set, List, Optional, Callable, Any, Union
+from typing import Dict, Set, List, Optional, Callable, Any, Union, Protocol
 from dataclasses import dataclass, field
 import weakref
 import hashlib
+from abc import ABC, abstractmethod
+import logging
+
+# Optional Redis support
+try:
+    import redis.asyncio as redis
+    REDIS_AVAILABLE = True
+except ImportError:
+    redis = None
+    REDIS_AVAILABLE = False
 
 from .protocol import ResourceChange, ResourceChangeType
 from .auth import AuthManager, PermissionError as PermissionDeniedError
@@ -19,15 +29,311 @@ class SubscriptionError(Exception):
     pass
 
 
+class TransformationError(Exception):
+    """Raised when resource transformation fails."""
+    pass
+
+
+class ResourceTransformer(ABC):
+    """Abstract base class for resource transformations."""
+    
+    @abstractmethod
+    async def transform(self, resource_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Transform resource data.
+        
+        Args:
+            resource_data: The original resource data
+            context: Additional context (subscription info, user info, etc.)
+            
+        Returns:
+            Transformed resource data
+        """
+        pass
+    
+    @abstractmethod
+    def should_apply(self, uri: str, subscription: 'ResourceSubscription') -> bool:
+        """Determine if this transformer should be applied.
+        
+        Args:
+            uri: Resource URI
+            subscription: The subscription requesting the resource
+            
+        Returns:
+            True if transformer should be applied
+        """
+        pass
+
+
+class DataEnrichmentTransformer(ResourceTransformer):
+    """Transformer that adds computed fields and metadata."""
+    
+    def __init__(self, enrichment_functions: Dict[str, Callable[[Dict[str, Any]], Any]] = None):
+        self.enrichment_functions = enrichment_functions or {}
+    
+    def add_enrichment(self, field_name: str, function: Callable[[Dict[str, Any]], Any]):
+        """Add an enrichment function for a specific field."""
+        self.enrichment_functions[field_name] = function
+    
+    async def transform(self, resource_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Add enriched fields to resource data."""
+        enriched_data = resource_data.copy()
+        
+        # Add computed fields
+        for field_name, function in self.enrichment_functions.items():
+            try:
+                if asyncio.iscoroutinefunction(function):
+                    enriched_data[field_name] = await function(resource_data)
+                else:
+                    enriched_data[field_name] = function(resource_data)
+            except Exception as e:
+                # Log error but continue processing
+                pass
+        
+        # Add transformation metadata
+        enriched_data["__transformation"] = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "enriched_fields": list(self.enrichment_functions.keys()),
+            "transformer": "DataEnrichmentTransformer"
+        }
+        
+        return enriched_data
+    
+    def should_apply(self, uri: str, subscription: 'ResourceSubscription') -> bool:
+        """Apply to all resources that have enrichment functions."""
+        return len(self.enrichment_functions) > 0
+
+
+class FormatConverterTransformer(ResourceTransformer):
+    """Transformer that converts between data formats."""
+    
+    def __init__(self, conversions: Dict[str, Callable[[Any], Any]] = None):
+        self.conversions = conversions or {}
+    
+    def add_conversion(self, field_pattern: str, converter: Callable[[Any], Any]):
+        """Add a conversion function for fields matching a pattern."""
+        self.conversions[field_pattern] = converter
+    
+    async def transform(self, resource_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply format conversions to matching fields."""
+        converted_data = await self._apply_conversions(resource_data, "")
+        
+        # Add transformation metadata
+        converted_data["__transformation"] = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "conversions_applied": list(self.conversions.keys()),
+            "transformer": "FormatConverterTransformer"
+        }
+        
+        return converted_data
+    
+    async def _apply_conversions(self, data: Any, path: str) -> Any:
+        """Recursively apply conversions to nested data."""
+        if isinstance(data, dict):
+            result = {}
+            for key, value in data.items():
+                field_path = f"{path}.{key}" if path else key
+                
+                # Check if this field matches any conversion pattern
+                converted_value = value
+                for pattern, converter in self.conversions.items():
+                    if fnmatch.fnmatch(field_path, pattern):
+                        try:
+                            if asyncio.iscoroutinefunction(converter):
+                                converted_value = await converter(value)
+                            else:
+                                converted_value = converter(value)
+                            break
+                        except Exception:
+                            # Keep original value on conversion error
+                            pass
+                
+                # Recursively process nested objects
+                result[key] = await self._apply_conversions(converted_value, field_path)
+            return result
+        elif isinstance(data, list):
+            return [await self._apply_conversions(item, f"{path}[{i}]") for i, item in enumerate(data)]
+        else:
+            return data
+    
+    def should_apply(self, uri: str, subscription: 'ResourceSubscription') -> bool:
+        """Apply to resources that have format conversions defined."""
+        return len(self.conversions) > 0
+
+
+class AggregationTransformer(ResourceTransformer):
+    """Transformer that aggregates data from multiple sources."""
+    
+    def __init__(self, data_sources: Dict[str, Callable[[str], Any]] = None):
+        self.data_sources = data_sources or {}
+    
+    def add_data_source(self, source_name: str, fetcher: Callable[[str], Any]):
+        """Add a data source for aggregation."""
+        self.data_sources[source_name] = fetcher
+    
+    async def transform(self, resource_data: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+        """Aggregate data from multiple sources."""
+        aggregated_data = resource_data.copy()
+        
+        # Fetch data from additional sources
+        uri = resource_data.get("uri", "")
+        aggregated_sources = {}
+        
+        for source_name, fetcher in self.data_sources.items():
+            try:
+                if asyncio.iscoroutinefunction(fetcher):
+                    source_data = await fetcher(uri)
+                else:
+                    source_data = fetcher(uri)
+                aggregated_sources[source_name] = source_data
+            except Exception as e:
+                # Log error but continue with other sources
+                aggregated_sources[source_name] = {"error": str(e)}
+        
+        # Add aggregated data
+        aggregated_data["__aggregated"] = aggregated_sources
+        
+        # Add transformation metadata
+        aggregated_data["__transformation"] = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "sources": list(self.data_sources.keys()),
+            "transformer": "AggregationTransformer"
+        }
+        
+        return aggregated_data
+    
+    def should_apply(self, uri: str, subscription: 'ResourceSubscription') -> bool:
+        """Apply to resources that have data sources defined."""
+        return len(self.data_sources) > 0
+
+
+class TransformationPipeline:
+    """Manages a pipeline of resource transformations."""
+    
+    def __init__(self):
+        self.transformers: List[ResourceTransformer] = []
+        self._enabled = True
+    
+    def add_transformer(self, transformer: ResourceTransformer):
+        """Add a transformer to the pipeline."""
+        self.transformers.append(transformer)
+    
+    def remove_transformer(self, transformer: ResourceTransformer):
+        """Remove a transformer from the pipeline."""
+        if transformer in self.transformers:
+            self.transformers.remove(transformer)
+    
+    def clear(self):
+        """Remove all transformers."""
+        self.transformers.clear()
+    
+    def enable(self):
+        """Enable the transformation pipeline."""
+        self._enabled = True
+    
+    def disable(self):
+        """Disable the transformation pipeline."""
+        self._enabled = False
+    
+    @property
+    def enabled(self) -> bool:
+        """Check if pipeline is enabled."""
+        return self._enabled
+    
+    async def apply(self, resource_data: Dict[str, Any], uri: str, subscription: 'ResourceSubscription') -> Dict[str, Any]:
+        """Apply all applicable transformations to resource data.
+        
+        Args:
+            resource_data: Original resource data
+            uri: Resource URI
+            subscription: Subscription requesting the resource
+            
+        Returns:
+            Transformed resource data
+        """
+        if not self._enabled or not self.transformers:
+            return resource_data
+        
+        # Create transformation context
+        context = {
+            "uri": uri,
+            "subscription_id": subscription.id,
+            "connection_id": subscription.connection_id,
+            "uri_pattern": subscription.uri_pattern,
+            "fields": subscription.fields,
+            "fragments": subscription.fragments,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        transformed_data = resource_data
+        
+        # Collect pipeline-level transformation metadata
+        pipeline_metadata = {
+            "errors": [],
+            "applied_transformers": []
+        }
+        
+        # Apply each transformer in sequence
+        for transformer in self.transformers:
+            if transformer.should_apply(uri, subscription):
+                try:
+                    new_transformed_data = await transformer.transform(transformed_data, context)
+                    
+                    # Preserve any existing pipeline errors when merging transformation metadata
+                    if "__transformation" in new_transformed_data and "errors" in pipeline_metadata:
+                        existing_errors = pipeline_metadata["errors"]
+                        new_transformation_metadata = new_transformed_data.get("__transformation", {})
+                        
+                        # Merge errors if the new transformer also has transformation metadata
+                        if "errors" in new_transformation_metadata:
+                            pipeline_metadata["errors"].extend(new_transformation_metadata["errors"])
+                        
+                        # Update the new data with preserved errors
+                        new_transformed_data["__transformation"]["errors"] = pipeline_metadata["errors"]
+                    
+                    transformed_data = new_transformed_data
+                    pipeline_metadata["applied_transformers"].append(transformer.__class__.__name__)
+                    
+                except Exception as e:
+                    # Log transformation error but continue with pipeline
+                    transformation_error = {
+                        "transformer": transformer.__class__.__name__,
+                        "error": str(e),
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    pipeline_metadata["errors"].append(transformation_error)
+        
+        # Add pipeline metadata
+        if pipeline_metadata["applied_transformers"] or pipeline_metadata["errors"]:
+            if "__transformation" not in transformed_data:
+                transformed_data["__transformation"] = {}
+            
+            # Add pipeline-level errors
+            if pipeline_metadata["errors"]:
+                transformed_data["__transformation"]["errors"] = pipeline_metadata["errors"]
+            
+            # Add pipeline summary
+            transformed_data["__transformation"]["pipeline"] = {
+                "applied_transformers": pipeline_metadata["applied_transformers"],
+                "total_transformers": len(self.transformers),
+                "enabled": self._enabled,
+                "errors_count": len(pipeline_metadata["errors"])
+            }
+        
+        return transformed_data
+
+
 @dataclass
 class ResourceSubscription:
-    """Represents a resource subscription."""
+    """Represents a resource subscription with GraphQL-style field selection."""
     
     id: str
     connection_id: str
     uri_pattern: str
     cursor: Optional[str] = None
     created_at: datetime = field(default_factory=datetime.utcnow)
+    # GraphQL-style field selection
+    fields: Optional[List[str]] = None  # e.g., ["uri", "content.text", "metadata.size"]
+    fragments: Optional[Dict[str, List[str]]] = None  # e.g., {"basicInfo": ["uri", "name"]}
     
     def matches_uri(self, uri: str) -> bool:
         """Check if URI matches subscription pattern.
@@ -56,6 +362,69 @@ class ResourceSubscription:
         
         import re
         return bool(re.match(pattern, uri))
+    
+    def apply_field_selection(self, resource_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Apply GraphQL-style field selection to resource data.
+        
+        Args:
+            resource_data: Full resource data
+            
+        Returns:
+            Filtered resource data based on field selection
+        """
+        if not self.fields and not self.fragments:
+            # No field selection specified, return all data
+            return resource_data
+        
+        result = {}
+        
+        # Process direct field selections
+        if self.fields:
+            for field_path in self.fields:
+                value = self._extract_field_value(resource_data, field_path)
+                if value is not None:
+                    self._set_nested_value(result, field_path, value)
+        
+        # Process fragment selections
+        if self.fragments:
+            for fragment_name, fragment_fields in self.fragments.items():
+                fragment_data = {}
+                for field_path in fragment_fields:
+                    value = self._extract_field_value(resource_data, field_path)
+                    if value is not None:
+                        self._set_nested_value(fragment_data, field_path, value)
+                
+                if fragment_data:
+                    result[f"__{fragment_name}"] = fragment_data
+        
+        return result
+    
+    def _extract_field_value(self, data: Dict[str, Any], field_path: str) -> Any:
+        """Extract field value using dot notation (e.g., 'content.text')."""
+        parts = field_path.split('.')
+        current = data
+        
+        for part in parts:
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return None
+        
+        return current
+    
+    def _set_nested_value(self, data: Dict[str, Any], field_path: str, value: Any):
+        """Set nested value using dot notation."""
+        parts = field_path.split('.')
+        current = data
+        
+        # Navigate to parent
+        for part in parts[:-1]:
+            if part not in current:
+                current[part] = {}
+            current = current[part]
+        
+        # Set final value
+        current[parts[-1]] = value
 
 
 class CursorManager:
@@ -230,6 +599,9 @@ class ResourceSubscriptionManager:
         # Cursor management
         self.cursor_manager = CursorManager()
         
+        # Transformation pipeline
+        self.transformation_pipeline = TransformationPipeline()
+        
         # Cleanup task
         self._cleanup_task = None
     
@@ -265,7 +637,9 @@ class ResourceSubscriptionManager:
     
     async def create_subscription(self, connection_id: str, uri_pattern: str,
                                   user_context: Optional[Dict[str, Any]] = None,
-                                  cursor: Optional[str] = None) -> str:
+                                  cursor: Optional[str] = None,
+                                  fields: Optional[List[str]] = None,
+                                  fragments: Optional[Dict[str, List[str]]] = None) -> str:
         """Create a new subscription."""
         # Check rate limit
         if self.rate_limiter:
@@ -300,7 +674,9 @@ class ResourceSubscriptionManager:
             id=sub_id,
             connection_id=connection_id,
             uri_pattern=uri_pattern,
-            cursor=cursor
+            cursor=cursor,
+            fields=fields,
+            fragments=fragments
         )
         
         async with self._lock:
@@ -319,10 +695,12 @@ class ResourceSubscriptionManager:
         
         # Log to event store
         if self.event_store:
-            await self.event_store.append_event(
-                stream_name="subscriptions",
-                event_type="subscription.created",
+            from kailash.middleware.gateway.event_store import EventType
+            await self.event_store.append(
+                event_type=EventType.REQUEST_COMPLETED,
+                request_id=sub_id,
                 data={
+                    "type": "subscription.created",
                     "subscription_id": sub_id,
                     "connection_id": connection_id,
                     "uri_pattern": uri_pattern,
@@ -331,6 +709,98 @@ class ResourceSubscriptionManager:
             )
         
         return sub_id
+    
+    async def create_batch_subscriptions(self, 
+                                       subscriptions: List[Dict[str, Any]],
+                                       connection_id: str,
+                                       user_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Create multiple subscriptions in a single batch operation.
+        
+        Args:
+            subscriptions: List of subscription requests, each containing:
+                - uri_pattern: Resource URI pattern to subscribe to
+                - cursor: Optional cursor for pagination
+                - fields: Optional field selection
+                - fragments: Optional fragment selection
+                - subscription_name: Optional name for the subscription
+            connection_id: Client connection ID
+            user_context: Optional user context for authorization
+            
+        Returns:
+            Dictionary with created subscription IDs and any errors
+        """
+        results = {
+            "successful": [],
+            "failed": [],
+            "total_requested": len(subscriptions),
+            "total_created": 0,
+            "total_failed": 0
+        }
+        
+        # Process each subscription request
+        for i, sub_request in enumerate(subscriptions):
+            try:
+                # Extract subscription parameters
+                uri_pattern = sub_request.get("uri_pattern")
+                if not uri_pattern:
+                    results["failed"].append({
+                        "index": i,
+                        "error": "Missing required parameter: uri_pattern",
+                        "request": sub_request
+                    })
+                    results["total_failed"] += 1
+                    continue
+                
+                cursor = sub_request.get("cursor")
+                fields = sub_request.get("fields")
+                fragments = sub_request.get("fragments")
+                subscription_name = sub_request.get("subscription_name")
+                
+                # Create individual subscription
+                subscription_id = await self.create_subscription(
+                    connection_id=connection_id,
+                    uri_pattern=uri_pattern,
+                    user_context=user_context,
+                    cursor=cursor,
+                    fields=fields,
+                    fragments=fragments
+                )
+                
+                # Record successful creation
+                results["successful"].append({
+                    "index": i,
+                    "subscription_id": subscription_id,
+                    "uri_pattern": uri_pattern,
+                    "subscription_name": subscription_name
+                })
+                results["total_created"] += 1
+                
+            except Exception as e:
+                # Record failed creation
+                results["failed"].append({
+                    "index": i,
+                    "error": str(e),
+                    "request": sub_request
+                })
+                results["total_failed"] += 1
+        
+        # Log batch operation to event store
+        if self.event_store:
+            from kailash.middleware.gateway.event_store import EventType
+            await self.event_store.append(
+                event_type=EventType.REQUEST_COMPLETED,
+                request_id=f"batch_subscribe_{connection_id}_{uuid.uuid4()}",
+                data={
+                    "type": "batch_subscription_created",
+                    "connection_id": connection_id,
+                    "total_requested": results["total_requested"],
+                    "total_created": results["total_created"],
+                    "total_failed": results["total_failed"],
+                    "user_id": user_context.get("user_id") if user_context else None
+                }
+            )
+        
+        return results
     
     async def remove_subscription(self, subscription_id: str, connection_id: str) -> bool:
         """Remove a subscription."""
@@ -358,16 +828,85 @@ class ResourceSubscriptionManager:
         
         # Log to event store
         if self.event_store:
-            await self.event_store.append_event(
-                stream_name="subscriptions",
-                event_type="subscription.removed",
+            from kailash.middleware.gateway.event_store import EventType
+            await self.event_store.append(
+                event_type=EventType.REQUEST_COMPLETED,
+                request_id=subscription_id,
                 data={
+                    "type": "subscription.removed",
                     "subscription_id": subscription_id,
                     "connection_id": connection_id
                 }
             )
         
         return True
+    
+    async def remove_batch_subscriptions(self, 
+                                       subscription_ids: List[str],
+                                       connection_id: str) -> Dict[str, Any]:
+        """Remove multiple subscriptions in a single batch operation.
+        
+        Args:
+            subscription_ids: List of subscription IDs to remove
+            connection_id: Client connection ID
+            
+        Returns:
+            Dictionary with removal results and any errors
+        """
+        results = {
+            "successful": [],
+            "failed": [],
+            "total_requested": len(subscription_ids),
+            "total_removed": 0,
+            "total_failed": 0
+        }
+        
+        # Process each unsubscribe request
+        for i, subscription_id in enumerate(subscription_ids):
+            try:
+                # Attempt to remove subscription
+                success = await self.remove_subscription(subscription_id, connection_id)
+                
+                if success:
+                    results["successful"].append({
+                        "index": i,
+                        "subscription_id": subscription_id,
+                        "removed": True
+                    })
+                    results["total_removed"] += 1
+                else:
+                    results["failed"].append({
+                        "index": i,
+                        "subscription_id": subscription_id,
+                        "error": "Subscription not found or not owned by connection"
+                    })
+                    results["total_failed"] += 1
+                    
+            except Exception as e:
+                # Record failed removal
+                results["failed"].append({
+                    "index": i,
+                    "subscription_id": subscription_id,
+                    "error": str(e)
+                })
+                results["total_failed"] += 1
+        
+        # Log batch operation to event store
+        if self.event_store:
+            from kailash.middleware.gateway.event_store import EventType
+            await self.event_store.append(
+                event_type=EventType.REQUEST_COMPLETED,
+                request_id=f"batch_unsubscribe_{connection_id}_{uuid.uuid4()}",
+                data={
+                    "type": "batch_subscription_removed",
+                    "connection_id": connection_id,
+                    "total_requested": results["total_requested"],
+                    "total_removed": results["total_removed"],
+                    "total_failed": results["total_failed"]
+                }
+            )
+        
+        return results
     
     def get_subscription(self, subscription_id: str) -> Optional[ResourceSubscription]:
         """Get subscription by ID."""
@@ -415,28 +954,38 @@ class ResourceSubscriptionManager:
         if not matching_subs:
             return
         
-        # Group by connection for batching
-        notifications_by_connection: Dict[str, List[ResourceChange]] = {}
-        
-        for subscription in matching_subs:
-            conn_id = subscription.connection_id
-            if conn_id not in notifications_by_connection:
-                notifications_by_connection[conn_id] = []
-            notifications_by_connection[conn_id].append(change)
-        
-        # Send notifications
+        # Send notifications per subscription (to apply individual transformations and field selection)
         if self._notification_callback:
-            for conn_id, changes in notifications_by_connection.items():
-                # Send batched notification
+            for subscription in matching_subs:
+                # Get full resource data for transformation and field selection
+                resource_data = await self._get_resource_data(change.uri)
+                
+                if resource_data:
+                    # Apply transformation pipeline before field selection
+                    transformed_data = await self.transformation_pipeline.apply(
+                        resource_data, change.uri, subscription
+                    )
+                    
+                    # Apply field selection to transformed data
+                    filtered_data = subscription.apply_field_selection(transformed_data)
+                else:
+                    filtered_data = {}
+                
+                # Create notification
                 notification = {
                     "jsonrpc": "2.0",
                     "method": "notifications/resources/updated",
                     "params": {
+                        "subscriptionId": subscription.id,
                         "uri": change.uri,
                         "type": change.type.value,
-                        "timestamp": change.timestamp.isoformat()
+                        "timestamp": change.timestamp.isoformat(),
+                        "data": filtered_data
                     }
                 }
+                
+                # Send to specific connection
+                conn_id = subscription.connection_id
                 
                 # Check if callback is async
                 if asyncio.iscoroutinefunction(self._notification_callback):
@@ -446,16 +995,468 @@ class ResourceSubscriptionManager:
         
         # Log to event store
         if self.event_store:
-            await self.event_store.append_event(
-                stream_name="resource_changes",
-                event_type="resource.changed",
+            from kailash.middleware.gateway.event_store import EventType
+            await self.event_store.append(
+                event_type=EventType.REQUEST_COMPLETED,
+                request_id=f"resource_change_{change.uri}",
                 data={
+                    "type": "resource.changed",
                     "uri": change.uri,
-                    "type": change.type.value,
+                    "change_type": change.type.value,
                     "timestamp": change.timestamp.isoformat(),
-                    "notified_connections": list(notifications_by_connection.keys())
+                    "notified_subscriptions": len(matching_subs)
                 }
             )
+    
+    async def _get_resource_data(self, uri: str) -> Optional[Dict[str, Any]]:
+        """Get full resource data for field selection.
+        
+        This method should be overridden or configured to fetch actual resource data.
+        For now, it returns basic resource information from the monitored state.
+        """
+        async with self._resource_monitor._lock:
+            if uri in self._resource_monitor._resource_states:
+                state = self._resource_monitor._resource_states[uri]
+                return {
+                    "uri": uri,
+                    "content": state.get("content", {}),
+                    "metadata": {
+                        "hash": state.get("hash"),
+                        "last_checked": state.get("last_checked", "").isoformat() if state.get("last_checked") else None,
+                        "size": len(str(state.get("content", "")))
+                    }
+                }
+        
+        # Fallback: return basic URI info
+        return {
+            "uri": uri,
+            "content": {},
+            "metadata": {
+                "available": False
+            }
+        }
+
+
+class DistributedSubscriptionManager(ResourceSubscriptionManager):
+    """Redis-backed distributed subscription manager for multi-instance MCP servers.
+    
+    This manager extends the base ResourceSubscriptionManager to support distributed
+    deployments where multiple MCP server instances need to coordinate subscriptions
+    and resource notifications across the cluster.
+    
+    Key Features:
+    - Shared subscription state across server instances
+    - Distributed resource change notifications
+    - Automatic failover when instances go down
+    - Subscription replication and consistency
+    - Cross-instance notification routing
+    """
+    
+    def __init__(self, 
+                 redis_url: str = "redis://localhost:6379",
+                 redis_config: Optional[Dict[str, Any]] = None,
+                 server_instance_id: Optional[str] = None,
+                 subscription_key_prefix: str = "mcp:subs:",
+                 notification_channel_prefix: str = "mcp:notify:",
+                 heartbeat_interval: int = 30,
+                 instance_timeout: int = 90,
+                 **kwargs):
+        """Initialize distributed subscription manager.
+        
+        Args:
+            redis_url: Redis connection URL
+            redis_config: Additional Redis configuration
+            server_instance_id: Unique ID for this server instance
+            subscription_key_prefix: Redis key prefix for subscriptions
+            notification_channel_prefix: Redis channel prefix for notifications
+            heartbeat_interval: How often to send heartbeats (seconds)
+            instance_timeout: When to consider an instance dead (seconds)
+            **kwargs: Arguments passed to parent ResourceSubscriptionManager
+        """
+        super().__init__(**kwargs)
+        
+        if not REDIS_AVAILABLE:
+            raise ImportError("Redis support not available. Install with: pip install redis")
+        
+        self.redis_url = redis_url
+        self.redis_config = redis_config or {}
+        self.server_instance_id = server_instance_id or f"mcp_server_{uuid.uuid4().hex[:8]}"
+        self.subscription_key_prefix = subscription_key_prefix
+        self.notification_channel_prefix = notification_channel_prefix
+        self.heartbeat_interval = heartbeat_interval
+        self.instance_timeout = instance_timeout
+        
+        # Redis connections
+        self.redis_client: Optional[redis.Redis] = None
+        self.redis_pubsub: Optional[redis.Redis] = None
+        
+        # Instance management
+        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._notification_listener_task: Optional[asyncio.Task] = None
+        self._instance_monitor_task: Optional[asyncio.Task] = None
+        
+        # Distributed state
+        self._other_instances: Set[str] = set()
+        self._instance_subscriptions: Dict[str, Set[str]] = {}  # instance_id -> subscription_ids
+        
+        self.logger = logging.getLogger(__name__)
+    
+    async def initialize(self):
+        """Initialize Redis connections and distributed state."""
+        await super().initialize()
+        
+        # Connect to Redis
+        self.redis_client = redis.Redis.from_url(
+            self.redis_url,
+            decode_responses=True,
+            **self.redis_config
+        )
+        
+        # Separate connection for pub/sub
+        self.redis_pubsub = redis.Redis.from_url(
+            self.redis_url,
+            decode_responses=True,
+            **self.redis_config
+        )
+        
+        # Test connections
+        try:
+            await self.redis_client.ping()
+            await self.redis_pubsub.ping()
+            self.logger.info(f"Connected to Redis at {self.redis_url}")
+        except Exception as e:
+            self.logger.error(f"Failed to connect to Redis: {e}")
+            raise
+        
+        # Register this instance
+        await self._register_instance()
+        
+        # Start background tasks
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+        self._notification_listener_task = asyncio.create_task(self._notification_listener())
+        self._instance_monitor_task = asyncio.create_task(self._instance_monitor())
+        
+        # Load existing distributed subscriptions
+        await self._load_distributed_subscriptions()
+        
+        self.logger.info(f"Distributed subscription manager initialized (instance: {self.server_instance_id})")
+    
+    async def shutdown(self):
+        """Shutdown distributed subscription manager."""
+        # Cancel background tasks
+        for task in [self._heartbeat_task, self._notification_listener_task, self._instance_monitor_task]:
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+        
+        # Unregister instance
+        await self._unregister_instance()
+        
+        # Close Redis connections
+        if self.redis_client:
+            await self.redis_client.aclose()
+        if self.redis_pubsub:
+            await self.redis_pubsub.aclose()
+        
+        await super().shutdown()
+        self.logger.info(f"Distributed subscription manager shutdown (instance: {self.server_instance_id})")
+    
+    async def create_subscription(self, connection_id: str, uri_pattern: str, **kwargs) -> str:
+        """Create subscription and replicate to Redis."""
+        # Create local subscription
+        subscription_id = await super().create_subscription(connection_id, uri_pattern, **kwargs)
+        
+        # Replicate to Redis
+        await self._replicate_subscription_to_redis(subscription_id)
+        
+        return subscription_id
+    
+    async def remove_subscription(self, subscription_id: str, connection_id: str) -> bool:
+        """Remove subscription and update Redis."""
+        # Remove local subscription
+        success = await super().remove_subscription(subscription_id, connection_id)
+        
+        if success:
+            # Remove from Redis
+            await self._remove_subscription_from_redis(subscription_id)
+        
+        return success
+    
+    async def process_resource_change(self, change: Union[ResourceChange, Dict[str, Any]]):
+        """Process resource change and distribute notifications across instances."""
+        # Process locally first
+        await super().process_resource_change(change)
+        
+        # Distribute to other instances via Redis
+        await self._distribute_resource_change(change)
+    
+    async def _register_instance(self):
+        """Register this server instance in Redis."""
+        instance_key = f"mcp:instances:{self.server_instance_id}"
+        instance_data = {
+            "id": self.server_instance_id,
+            "registered_at": datetime.utcnow().isoformat(),
+            "last_heartbeat": datetime.utcnow().isoformat(),
+            "subscriptions": 0
+        }
+        
+        # Set with expiration
+        await self.redis_client.hset(instance_key, mapping=instance_data)
+        await self.redis_client.expire(instance_key, self.instance_timeout)
+        
+        self.logger.info(f"Registered instance {self.server_instance_id}")
+    
+    async def _unregister_instance(self):
+        """Unregister this server instance from Redis."""
+        instance_key = f"mcp:instances:{self.server_instance_id}"
+        await self.redis_client.delete(instance_key)
+        
+        # Clean up instance subscriptions
+        await self.redis_client.delete(f"mcp:instance_subs:{self.server_instance_id}")
+        
+        self.logger.info(f"Unregistered instance {self.server_instance_id}")
+    
+    async def _heartbeat_loop(self):
+        """Send periodic heartbeats to indicate this instance is alive."""
+        while True:
+            try:
+                await asyncio.sleep(self.heartbeat_interval)
+                
+                instance_key = f"mcp:instances:{self.server_instance_id}"
+                await self.redis_client.hset(instance_key, "last_heartbeat", datetime.utcnow().isoformat())
+                await self.redis_client.expire(instance_key, self.instance_timeout)
+                
+                # Update subscription count
+                sub_count = len(self._subscriptions)
+                await self.redis_client.hset(instance_key, "subscriptions", sub_count)
+                
+                self.logger.debug(f"Heartbeat sent (instance: {self.server_instance_id}, subscriptions: {sub_count})")
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.logger.error(f"Heartbeat error: {e}")
+    
+    async def _instance_monitor(self):
+        """Monitor other instances and handle failures."""
+        while True:
+            try:
+                await asyncio.sleep(self.heartbeat_interval)
+                
+                # Get all instances
+                instance_keys = await self.redis_client.keys("mcp:instances:*")
+                current_instances = set()
+                
+                for key in instance_keys:
+                    instance_data = await self.redis_client.hgetall(key)
+                    if not instance_data:
+                        continue
+                    
+                    instance_id = instance_data.get("id")
+                    if instance_id == self.server_instance_id:
+                        continue
+                    
+                    last_heartbeat = instance_data.get("last_heartbeat")
+                    if last_heartbeat:
+                        try:
+                            heartbeat_time = datetime.fromisoformat(last_heartbeat)
+                            age = (datetime.utcnow() - heartbeat_time).total_seconds()
+                            
+                            if age < self.instance_timeout:
+                                current_instances.add(instance_id)
+                            else:
+                                # Instance is dead, clean up
+                                await self._cleanup_dead_instance(instance_id)
+                        except ValueError:
+                            pass
+                
+                # Update known instances
+                new_instances = current_instances - self._other_instances
+                dead_instances = self._other_instances - current_instances
+                
+                if new_instances:
+                    self.logger.info(f"New instances detected: {new_instances}")
+                
+                if dead_instances:
+                    self.logger.info(f"Dead instances detected: {dead_instances}")
+                
+                self._other_instances = current_instances
+                
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self.logger.error(f"Instance monitor error: {e}")
+    
+    async def _cleanup_dead_instance(self, instance_id: str):
+        """Clean up subscriptions from a dead instance."""
+        try:
+            # Get subscriptions for dead instance
+            instance_subs_key = f"mcp:instance_subs:{instance_id}"
+            dead_subscriptions = await self.redis_client.smembers(instance_subs_key)
+            
+            # Remove subscription data
+            if dead_subscriptions:
+                pipeline = self.redis_client.pipeline()
+                for sub_id in dead_subscriptions:
+                    sub_key = f"{self.subscription_key_prefix}{sub_id}"
+                    pipeline.delete(sub_key)
+                
+                pipeline.delete(instance_subs_key)
+                await pipeline.execute()
+                
+                self.logger.info(f"Cleaned up {len(dead_subscriptions)} subscriptions from dead instance {instance_id}")
+            
+            # Remove instance record
+            await self.redis_client.delete(f"mcp:instances:{instance_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Error cleaning up dead instance {instance_id}: {e}")
+    
+    async def _replicate_subscription_to_redis(self, subscription_id: str):
+        """Replicate subscription data to Redis."""
+        subscription = self._subscriptions.get(subscription_id)
+        if not subscription:
+            return
+        
+        # Serialize subscription data
+        sub_data = {
+            "id": subscription.id,
+            "connection_id": subscription.connection_id,
+            "uri_pattern": subscription.uri_pattern,
+            "cursor": subscription.cursor or "",
+            "created_at": subscription.created_at.isoformat(),
+            "fields": json.dumps(subscription.fields or []),
+            "fragments": json.dumps(subscription.fragments or {}),
+            "server_instance": self.server_instance_id
+        }
+        
+        # Store in Redis
+        sub_key = f"{self.subscription_key_prefix}{subscription_id}"
+        await self.redis_client.hset(sub_key, mapping=sub_data)
+        
+        # Track instance subscriptions
+        instance_subs_key = f"mcp:instance_subs:{self.server_instance_id}"
+        await self.redis_client.sadd(instance_subs_key, subscription_id)
+        
+        self.logger.debug(f"Replicated subscription {subscription_id} to Redis")
+    
+    async def _remove_subscription_from_redis(self, subscription_id: str):
+        """Remove subscription data from Redis."""
+        sub_key = f"{self.subscription_key_prefix}{subscription_id}"
+        await self.redis_client.delete(sub_key)
+        
+        # Remove from instance tracking
+        instance_subs_key = f"mcp:instance_subs:{self.server_instance_id}"
+        await self.redis_client.srem(instance_subs_key, subscription_id)
+        
+        self.logger.debug(f"Removed subscription {subscription_id} from Redis")
+    
+    async def _load_distributed_subscriptions(self):
+        """Load subscription data for other instances from Redis."""
+        # This is for awareness only - we don't process other instances' subscriptions locally
+        # but we might need this information for coordination
+        try:
+            instance_keys = await self.redis_client.keys("mcp:instances:*")
+            
+            for key in instance_keys:
+                instance_data = await self.redis_client.hgetall(key)
+                instance_id = instance_data.get("id")
+                
+                if instance_id and instance_id != self.server_instance_id:
+                    # Load subscription IDs for this instance
+                    instance_subs_key = f"mcp:instance_subs:{instance_id}"
+                    sub_ids = await self.redis_client.smembers(instance_subs_key)
+                    self._instance_subscriptions[instance_id] = set(sub_ids)
+            
+            total_distributed_subs = sum(len(subs) for subs in self._instance_subscriptions.values())
+            self.logger.info(f"Loaded {total_distributed_subs} distributed subscriptions from {len(self._instance_subscriptions)} instances")
+            
+        except Exception as e:
+            self.logger.error(f"Error loading distributed subscriptions: {e}")
+    
+    async def _distribute_resource_change(self, change: Union[ResourceChange, Dict[str, Any]]):
+        """Distribute resource change notification to other instances."""
+        if not self._other_instances:
+            return  # No other instances to notify
+        
+        # Convert to dict if needed
+        if isinstance(change, ResourceChange):
+            change_data = {
+                "type": change.type.value,
+                "uri": change.uri,
+                "timestamp": change.timestamp.isoformat(),
+                "source_instance": self.server_instance_id
+            }
+        else:
+            change_data = dict(change)
+            change_data["source_instance"] = self.server_instance_id
+        
+        # Publish to notification channel
+        channel = f"{self.notification_channel_prefix}resource_changes"
+        try:
+            await self.redis_client.publish(channel, json.dumps(change_data))
+            self.logger.debug(f"Distributed resource change for {change_data['uri']} to {len(self._other_instances)} instances")
+        except Exception as e:
+            self.logger.error(f"Error distributing resource change: {e}")
+    
+    async def _notification_listener(self):
+        """Listen for distributed resource change notifications."""
+        try:
+            pubsub = self.redis_pubsub.pubsub()
+            channel = f"{self.notification_channel_prefix}resource_changes"
+            await pubsub.subscribe(channel)
+            
+            self.logger.info(f"Listening for distributed notifications on channel: {channel}")
+            
+            async for message in pubsub.listen():
+                if message["type"] == "message":
+                    try:
+                        change_data = json.loads(message["data"])
+                        source_instance = change_data.get("source_instance")
+                        
+                        # Ignore notifications from ourselves
+                        if source_instance == self.server_instance_id:
+                            continue
+                        
+                        # Process the resource change locally
+                        # This will check local subscriptions and send notifications
+                        change = ResourceChange(
+                            type=ResourceChangeType(change_data["type"]),
+                            uri=change_data["uri"],
+                            timestamp=datetime.fromisoformat(change_data["timestamp"])
+                        )
+                        
+                        # Process without re-distributing (to avoid loops)
+                        await super().process_resource_change(change)
+                        
+                        self.logger.debug(f"Processed distributed resource change from {source_instance}: {change_data['uri']}")
+                        
+                    except Exception as e:
+                        self.logger.error(f"Error processing distributed notification: {e}")
+        
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            self.logger.error(f"Notification listener error: {e}")
+    
+    def get_distributed_stats(self) -> Dict[str, Any]:
+        """Get statistics about the distributed subscription system."""
+        return {
+            "instance_id": self.server_instance_id,
+            "local_subscriptions": len(self._subscriptions),
+            "other_instances": len(self._other_instances),
+            "distributed_subscriptions": {
+                instance_id: len(subs) 
+                for instance_id, subs in self._instance_subscriptions.items()
+            },
+            "total_distributed_subscriptions": sum(
+                len(subs) for subs in self._instance_subscriptions.values()
+            ),
+            "redis_url": self.redis_url
+        }
 
 
 # Required imports
