@@ -369,6 +369,9 @@ class MCPServer:
         transport_timeout: float = 30.0,
         max_request_size: int = 10_000_000,  # 10MB
         enable_streaming: bool = False,
+        # Resource subscription configuration
+        enable_subscriptions: bool = True,
+        event_store = None,
     ):
         """
         Initialize enhanced MCP server.
@@ -514,6 +517,18 @@ class MCPServer:
         self._tool_registry: Dict[str, Dict[str, Any]] = {}
         self._resource_registry: Dict[str, Dict[str, Any]] = {}
         self._prompt_registry: Dict[str, Dict[str, Any]] = {}
+
+        # Resource subscription support
+        self.enable_subscriptions = enable_subscriptions
+        self.event_store = event_store
+        self.subscription_manager = None
+        if self.enable_subscriptions:
+            from .subscriptions import ResourceSubscriptionManager
+            self.subscription_manager = ResourceSubscriptionManager(
+                auth_manager=self.auth_manager if hasattr(self, 'auth_manager') else None,
+                event_store=event_store,
+                rate_limiter=self.rate_limiter if hasattr(self, 'rate_limiter') else None
+            )
 
         # Transport instance (for WebSocket and other transports)
         self._transport = None
@@ -1642,6 +1657,11 @@ class MCPServer:
             logger.info(
                 f"WebSocket server started on {self.websocket_host}:{self.websocket_port}"
             )
+            
+            # Set up subscription notification callback
+            if self.subscription_manager:
+                await self.subscription_manager.initialize()
+                self.subscription_manager.set_notification_callback(self._send_websocket_notification)
 
             # Keep server running
             try:
@@ -1677,7 +1697,11 @@ class MCPServer:
             elif method == "resources/list":
                 return await self._handle_list_resources(params, request_id)
             elif method == "resources/read":
-                return await self._handle_read_resource(params, request_id)
+                return await self._handle_read_resource(params, request_id, client_id)
+            elif method == "resources/subscribe":
+                return await self._handle_subscribe(params, request_id, client_id)
+            elif method == "resources/unsubscribe":
+                return await self._handle_unsubscribe(params, request_id, client_id)
             elif method == "prompts/list":
                 return await self._handle_list_prompts(params, request_id)
             elif method == "prompts/get":
@@ -1707,7 +1731,12 @@ class MCPServer:
                 "protocolVersion": "2024-11-05",
                 "capabilities": {
                     "tools": {"listSupported": True, "callSupported": True},
-                    "resources": {"listSupported": True, "readSupported": True},
+                    "resources": {
+                        "listSupported": True, 
+                        "readSupported": True,
+                        "subscribe": self.enable_subscriptions,
+                        "listChanged": self.enable_subscriptions
+                    },
                     "prompts": {"listSupported": True, "getSupported": True},
                 },
                 "serverInfo": {
@@ -1764,10 +1793,14 @@ class MCPServer:
     async def _handle_list_resources(
         self, params: Dict[str, Any], request_id: Any
     ) -> Dict[str, Any]:
-        """Handle resources/list request."""
-        resources = []
+        """Handle resources/list request with cursor-based pagination."""
+        cursor = params.get("cursor")
+        limit = params.get("limit")
+        
+        # Get all resources
+        all_resources = []
         for uri, info in self._resource_registry.items():
-            resources.append(
+            all_resources.append(
                 {
                     "uri": uri,
                     "name": info.get("name", uri),
@@ -1775,13 +1808,50 @@ class MCPServer:
                     "mimeType": info.get("mime_type", "text/plain"),
                 }
             )
+        
+        # Handle pagination if subscription manager is available
+        if self.subscription_manager:
+            cursor_manager = self.subscription_manager.cursor_manager
+            
+            # Determine starting position
+            start_pos = 0
+            if cursor:
+                if cursor_manager.is_valid(cursor):
+                    start_pos = cursor_manager.get_cursor_position(cursor) or 0
+                else:
+                    return {
+                        "jsonrpc": "2.0",
+                        "error": {"code": -32602, "message": "Invalid or expired cursor"},
+                        "id": request_id,
+                    }
+            
+            # Apply pagination
+            if limit:
+                end_pos = start_pos + limit
+                resources = all_resources[start_pos:end_pos]
+                
+                # Generate next cursor if there are more resources
+                next_cursor = None
+                if end_pos < len(all_resources):
+                    next_cursor = cursor_manager.create_cursor_for_position(all_resources, end_pos)
+                
+                result = {"resources": resources}
+                if next_cursor:
+                    result["nextCursor"] = next_cursor
+                    
+                return {"jsonrpc": "2.0", "result": result, "id": request_id}
+            else:
+                resources = all_resources[start_pos:]
+        else:
+            # No pagination support
+            resources = all_resources
 
         return {"jsonrpc": "2.0", "result": {"resources": resources}, "id": request_id}
 
     async def _handle_read_resource(
-        self, params: Dict[str, Any], request_id: Any
+        self, params: Dict[str, Any], request_id: Any, client_id: str = None
     ) -> Dict[str, Any]:
-        """Handle resources/read request."""
+        """Handle resources/read request with change detection."""
         uri = params.get("uri")
 
         if uri not in self._resource_registry:
@@ -1801,6 +1871,22 @@ class MCPServer:
                     content = await content
             else:
                 content = ""
+
+            # Process change detection if subscription manager is available
+            if self.subscription_manager:
+                resource_data = {
+                    "uri": uri,
+                    "text": str(content),
+                    "mimeType": resource_info.get("mime_type", "text/plain")
+                }
+                
+                # Check for changes and notify subscribers
+                change = await self.subscription_manager.resource_monitor.check_for_changes(
+                    uri, resource_data
+                )
+                
+                if change:
+                    await self.subscription_manager.process_resource_change(change)
 
             return {
                 "jsonrpc": "2.0",
@@ -1869,6 +1955,108 @@ class MCPServer:
                 },
                 "id": request_id,
             }
+
+    async def _handle_subscribe(
+        self, params: Dict[str, Any], request_id: Any, client_id: str
+    ) -> Dict[str, Any]:
+        """Handle resources/subscribe request."""
+        if not self.subscription_manager:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32601, "message": "Subscriptions not enabled"},
+                "id": request_id,
+            }
+
+        uri_pattern = params.get("uri")
+        cursor = params.get("cursor")
+
+        if not uri_pattern:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32602, "message": "Missing required parameter: uri"},
+                "id": request_id,
+            }
+
+        try:
+            # Create subscription with auth context
+            user_context = {"user_id": client_id, "connection_id": client_id}
+            subscription_id = await self.subscription_manager.create_subscription(
+                connection_id=client_id,
+                uri_pattern=uri_pattern,
+                cursor=cursor,
+                user_context=user_context
+            )
+
+            return {
+                "jsonrpc": "2.0",
+                "result": {"subscriptionId": subscription_id},
+                "id": request_id,
+            }
+        except Exception as e:
+            error_code = -32603
+            if "permission" in str(e).lower() or "not authorized" in str(e).lower():
+                error_code = -32601
+            elif "rate limit" in str(e).lower():
+                error_code = -32601
+
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": error_code, "message": str(e)},
+                "id": request_id,
+            }
+
+    async def _handle_unsubscribe(
+        self, params: Dict[str, Any], request_id: Any, client_id: str
+    ) -> Dict[str, Any]:
+        """Handle resources/unsubscribe request."""
+        if not self.subscription_manager:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32601, "message": "Subscriptions not enabled"},
+                "id": request_id,
+            }
+
+        subscription_id = params.get("subscriptionId")
+
+        if not subscription_id:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32602, "message": "Missing required parameter: subscriptionId"},
+                "id": request_id,
+            }
+
+        try:
+            success = await self.subscription_manager.remove_subscription(
+                subscription_id, client_id
+            )
+
+            return {
+                "jsonrpc": "2.0",
+                "result": {"success": success},
+                "id": request_id,
+            }
+        except Exception as e:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32603, "message": str(e)},
+                "id": request_id,
+            }
+
+    async def _handle_connection_close(self, client_id: str):
+        """Handle WebSocket connection close."""
+        if self.subscription_manager:
+            removed_count = await self.subscription_manager.cleanup_connection(client_id)
+            if removed_count > 0:
+                logger.info(f"Cleaned up {removed_count} subscriptions for client {client_id}")
+    
+    async def _send_websocket_notification(self, client_id: str, notification: Dict[str, Any]):
+        """Send notification to WebSocket client."""
+        if self._transport and hasattr(self._transport, 'send_message'):
+            try:
+                await self._transport.send_message(notification, client_id=client_id)
+                logger.debug(f"Sent notification to client {client_id}: {notification['method']}")
+            except Exception as e:
+                logger.error(f"Failed to send notification to client {client_id}: {e}")
 
     async def run_stdio(self):
         """Run the server using stdio transport for testing."""
