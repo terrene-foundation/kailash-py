@@ -54,6 +54,8 @@ Enhanced Production Usage:
 
 import asyncio
 import functools
+import gzip
+import json
 import logging
 import time
 import uuid
@@ -74,6 +76,7 @@ from .errors import (
     RetryableOperation,
     ToolError,
 )
+from .protocol import get_protocol_manager
 from .utils import CacheManager, ConfigManager, MetricsCollector, format_response
 
 logger = logging.getLogger(__name__)
@@ -369,6 +372,13 @@ class MCPServer:
         transport_timeout: float = 30.0,
         max_request_size: int = 10_000_000,  # 10MB
         enable_streaming: bool = False,
+        # Resource subscription configuration
+        enable_subscriptions: bool = True,
+        event_store=None,
+        # WebSocket compression configuration
+        enable_websocket_compression: bool = False,
+        compression_threshold: int = 1024,  # Only compress messages larger than 1KB
+        compression_level: int = 6,  # 1 (fastest) to 9 (best compression)
     ):
         """
         Initialize enhanced MCP server.
@@ -396,6 +406,11 @@ class MCPServer:
             transport_timeout: Transport timeout in seconds
             max_request_size: Maximum request size in bytes
             enable_streaming: Enable streaming support
+            enable_subscriptions: Enable resource subscriptions (default: True)
+            event_store: Optional event store for subscription logging
+            enable_websocket_compression: Enable gzip compression for WebSocket messages (default: False)
+            compression_threshold: Only compress messages larger than this size in bytes (default: 1024)
+            compression_level: Compression level from 1 (fastest) to 9 (best compression) (default: 6)
         """
         self.name = name
 
@@ -403,6 +418,11 @@ class MCPServer:
         self.transport = transport
         self.websocket_host = websocket_host
         self.websocket_port = websocket_port
+
+        # WebSocket compression configuration
+        self.enable_websocket_compression = enable_websocket_compression
+        self.compression_threshold = compression_threshold
+        self.compression_level = compression_level
 
         # Enhanced features
         self.auth_provider = auth_provider
@@ -514,6 +534,27 @@ class MCPServer:
         self._tool_registry: Dict[str, Dict[str, Any]] = {}
         self._resource_registry: Dict[str, Dict[str, Any]] = {}
         self._prompt_registry: Dict[str, Dict[str, Any]] = {}
+
+        # Client management for new handlers
+        self.client_info: Dict[str, Dict[str, Any]] = {}
+        self._pending_sampling_requests: Dict[str, Dict[str, Any]] = {}
+
+        # Resource subscription support
+        self.enable_subscriptions = enable_subscriptions
+        self.event_store = event_store
+        self.subscription_manager = None
+        if self.enable_subscriptions:
+            from .subscriptions import ResourceSubscriptionManager
+
+            self.subscription_manager = ResourceSubscriptionManager(
+                auth_manager=(
+                    self.auth_manager if hasattr(self, "auth_manager") else None
+                ),
+                event_store=event_store,
+                rate_limiter=(
+                    self.rate_limiter if hasattr(self, "rate_limiter") else None
+                ),
+            )
 
         # Transport instance (for WebSocket and other transports)
         self._transport = None
@@ -1643,6 +1684,13 @@ class MCPServer:
                 f"WebSocket server started on {self.websocket_host}:{self.websocket_port}"
             )
 
+            # Set up subscription notification callback
+            if self.subscription_manager:
+                await self.subscription_manager.initialize()
+                self.subscription_manager.set_notification_callback(
+                    self._send_websocket_notification
+                )
+
             # Keep server running
             try:
                 await asyncio.Future()  # Run forever
@@ -1658,18 +1706,21 @@ class MCPServer:
     async def _handle_websocket_message(
         self, request: Dict[str, Any], client_id: str
     ) -> Dict[str, Any]:
-        """Handle incoming WebSocket message."""
+        """Handle incoming WebSocket message with decompression support."""
         try:
-            method = request.get("method", "")
-            params = request.get("params", {})
-            request_id = request.get("id")
+            # Decompress message if needed
+            decompressed_request = self._decompress_message(request)
+
+            method = decompressed_request.get("method", "")
+            params = decompressed_request.get("params", {})
+            request_id = decompressed_request.get("id")
 
             # Log request
             logger.debug(f"WebSocket request from {client_id}: {method}")
 
             # Route to appropriate handler
             if method == "initialize":
-                return await self._handle_initialize(params, request_id)
+                return await self._handle_initialize(params, request_id, client_id)
             elif method == "tools/list":
                 return await self._handle_list_tools(params, request_id)
             elif method == "tools/call":
@@ -1677,11 +1728,35 @@ class MCPServer:
             elif method == "resources/list":
                 return await self._handle_list_resources(params, request_id)
             elif method == "resources/read":
-                return await self._handle_read_resource(params, request_id)
+                return await self._handle_read_resource(params, request_id, client_id)
+            elif method == "resources/subscribe":
+                return await self._handle_subscribe(params, request_id, client_id)
+            elif method == "resources/unsubscribe":
+                return await self._handle_unsubscribe(params, request_id, client_id)
+            elif method == "resources/batch_subscribe":
+                return await self._handle_batch_subscribe(params, request_id, client_id)
+            elif method == "resources/batch_unsubscribe":
+                return await self._handle_batch_unsubscribe(
+                    params, request_id, client_id
+                )
             elif method == "prompts/list":
                 return await self._handle_list_prompts(params, request_id)
             elif method == "prompts/get":
                 return await self._handle_get_prompt(params, request_id)
+            elif method == "logging/setLevel":
+                return await self._handle_logging_set_level(params, request_id)
+            elif method == "roots/list":
+                # Add client_id to params for roots/list handler
+                params_with_client = {**params, "client_id": client_id}
+                return await self._handle_roots_list(params_with_client, request_id)
+            elif method == "completion/complete":
+                return await self._handle_completion_complete(params, request_id)
+            elif method == "sampling/createMessage":
+                # Add client_id to params for sampling handler
+                params_with_client = {**params, "client_id": client_id}
+                return await self._handle_sampling_create_message(
+                    params_with_client, request_id
+                )
             else:
                 return {
                     "jsonrpc": "2.0",
@@ -1698,17 +1773,42 @@ class MCPServer:
             }
 
     async def _handle_initialize(
-        self, params: Dict[str, Any], request_id: Any
+        self, params: Dict[str, Any], request_id: Any, client_id: str = None
     ) -> Dict[str, Any]:
         """Handle initialize request."""
+        # Store client information for capability checks
+        if client_id:
+            self.client_info[client_id] = {
+                "capabilities": params.get("capabilities", {}),
+                "name": params.get("clientInfo", {}).get("name", "unknown"),
+                "version": params.get("clientInfo", {}).get("version", "unknown"),
+                "initialized_at": time.time(),
+            }
+
         return {
             "jsonrpc": "2.0",
             "result": {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {
                     "tools": {"listSupported": True, "callSupported": True},
-                    "resources": {"listSupported": True, "readSupported": True},
+                    "resources": {
+                        "listSupported": True,
+                        "readSupported": True,
+                        "subscribe": self.enable_subscriptions,
+                        "listChanged": self.enable_subscriptions,
+                        "batch_subscribe": self.enable_subscriptions,
+                        "batch_unsubscribe": self.enable_subscriptions,
+                    },
                     "prompts": {"listSupported": True, "getSupported": True},
+                    "logging": {"setLevel": True},
+                    "roots": {"list": True},
+                    "experimental": {
+                        "progressNotifications": True,
+                        "cancellation": True,
+                        "completion": True,
+                        "sampling": True,
+                        "websocketCompression": self.enable_websocket_compression,
+                    },
                 },
                 "serverInfo": {
                     "name": self.name,
@@ -1764,10 +1864,14 @@ class MCPServer:
     async def _handle_list_resources(
         self, params: Dict[str, Any], request_id: Any
     ) -> Dict[str, Any]:
-        """Handle resources/list request."""
-        resources = []
+        """Handle resources/list request with cursor-based pagination."""
+        cursor = params.get("cursor")
+        limit = params.get("limit")
+
+        # Get all resources
+        all_resources = []
         for uri, info in self._resource_registry.items():
-            resources.append(
+            all_resources.append(
                 {
                     "uri": uri,
                     "name": info.get("name", uri),
@@ -1776,15 +1880,66 @@ class MCPServer:
                 }
             )
 
+        # Handle pagination if subscription manager is available
+        if self.subscription_manager:
+            cursor_manager = self.subscription_manager.cursor_manager
+
+            # Determine starting position
+            start_pos = 0
+            if cursor:
+                if cursor_manager.is_valid(cursor):
+                    start_pos = cursor_manager.get_cursor_position(cursor) or 0
+                else:
+                    return {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32602,
+                            "message": "Invalid or expired cursor",
+                        },
+                        "id": request_id,
+                    }
+
+            # Apply pagination
+            if limit:
+                end_pos = start_pos + limit
+                resources = all_resources[start_pos:end_pos]
+
+                # Generate next cursor if there are more resources
+                next_cursor = None
+                if end_pos < len(all_resources):
+                    next_cursor = cursor_manager.create_cursor_for_position(
+                        all_resources, end_pos
+                    )
+
+                result = {"resources": resources}
+                if next_cursor:
+                    result["nextCursor"] = next_cursor
+
+                return {"jsonrpc": "2.0", "result": result, "id": request_id}
+            else:
+                resources = all_resources[start_pos:]
+        else:
+            # No pagination support
+            resources = all_resources
+
         return {"jsonrpc": "2.0", "result": {"resources": resources}, "id": request_id}
 
     async def _handle_read_resource(
-        self, params: Dict[str, Any], request_id: Any
+        self, params: Dict[str, Any], request_id: Any, client_id: str = None
     ) -> Dict[str, Any]:
-        """Handle resources/read request."""
+        """Handle resources/read request with change detection."""
         uri = params.get("uri")
 
-        if uri not in self._resource_registry:
+        # First try exact match
+        resource_info = None
+        resource_params = {}
+        if uri in self._resource_registry:
+            resource_info = self._resource_registry[uri]
+        else:
+            # Try template matching
+            resource_info, resource_params = self._match_resource_template(uri)
+
+        if resource_info is None:
             return {
                 "jsonrpc": "2.0",
                 "error": {"code": -32602, "message": f"Resource not found: {uri}"},
@@ -1792,15 +1947,37 @@ class MCPServer:
             }
 
         try:
-            resource_info = self._resource_registry[uri]
             handler = resource_info.get("handler")
+            original_handler = resource_info.get("original_handler")
 
             if handler:
-                content = handler()
+                # Use original handler with parameters if available
+                if original_handler and resource_params:
+                    content = original_handler(**resource_params)
+                else:
+                    content = handler()
                 if asyncio.iscoroutine(content):
                     content = await content
             else:
                 content = ""
+
+            # Process change detection if subscription manager is available
+            if self.subscription_manager:
+                resource_data = {
+                    "uri": uri,
+                    "text": str(content),
+                    "mimeType": resource_info.get("mime_type", "text/plain"),
+                }
+
+                # Check for changes and notify subscribers
+                change = (
+                    await self.subscription_manager.resource_monitor.check_for_changes(
+                        uri, resource_data
+                    )
+                )
+
+                if change:
+                    await self.subscription_manager.process_resource_change(change)
 
             return {
                 "jsonrpc": "2.0",
@@ -1813,6 +1990,24 @@ class MCPServer:
                 "error": {"code": -32603, "message": f"Resource read error: {str(e)}"},
                 "id": request_id,
             }
+
+    def _match_resource_template(self, uri: str) -> tuple:
+        """Match URI against resource templates and extract parameters."""
+        import re
+
+        for template_uri, resource_info in self._resource_registry.items():
+            # Convert template to regex pattern
+            # Replace {param} with named capture groups
+            pattern = re.sub(r"\{([^}]+)\}", r"(?P<\1>[^/]+)", template_uri)
+            pattern = f"^{pattern}$"
+
+            match = re.match(pattern, uri)
+            if match:
+                # Extract parameters from the match
+                params = match.groupdict()
+                return resource_info, params
+
+        return None, {}
 
     async def _handle_list_prompts(
         self, params: Dict[str, Any], request_id: Any
@@ -1866,6 +2061,541 @@ class MCPServer:
                 "error": {
                     "code": -32603,
                     "message": f"Prompt generation error: {str(e)}",
+                },
+                "id": request_id,
+            }
+
+    async def _handle_subscribe(
+        self, params: Dict[str, Any], request_id: Any, client_id: str
+    ) -> Dict[str, Any]:
+        """Handle resources/subscribe request with GraphQL-style field selection."""
+        if not self.subscription_manager:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32601, "message": "Subscriptions not enabled"},
+                "id": request_id,
+            }
+
+        uri_pattern = params.get("uri")
+        cursor = params.get("cursor")
+        # Extract field selection parameters for GraphQL-style filtering
+        fields = params.get("fields")  # e.g., ["uri", "content.text", "metadata.size"]
+        fragments = params.get("fragments")  # e.g., {"basicInfo": ["uri", "name"]}
+
+        if not uri_pattern:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32602, "message": "Missing required parameter: uri"},
+                "id": request_id,
+            }
+
+        try:
+            # Create subscription with auth context and field selection
+            user_context = {"user_id": client_id, "connection_id": client_id}
+            subscription_id = await self.subscription_manager.create_subscription(
+                connection_id=client_id,
+                uri_pattern=uri_pattern,
+                cursor=cursor,
+                user_context=user_context,
+                fields=fields,
+                fragments=fragments,
+            )
+
+            return {
+                "jsonrpc": "2.0",
+                "result": {"subscriptionId": subscription_id},
+                "id": request_id,
+            }
+        except Exception as e:
+            error_code = -32603
+            if "permission" in str(e).lower() or "not authorized" in str(e).lower():
+                error_code = -32601
+            elif "rate limit" in str(e).lower():
+                error_code = -32601
+
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": error_code, "message": str(e)},
+                "id": request_id,
+            }
+
+    async def _handle_unsubscribe(
+        self, params: Dict[str, Any], request_id: Any, client_id: str
+    ) -> Dict[str, Any]:
+        """Handle resources/unsubscribe request."""
+        if not self.subscription_manager:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32601, "message": "Subscriptions not enabled"},
+                "id": request_id,
+            }
+
+        subscription_id = params.get("subscriptionId")
+
+        if not subscription_id:
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32602,
+                    "message": "Missing required parameter: subscriptionId",
+                },
+                "id": request_id,
+            }
+
+        try:
+            success = await self.subscription_manager.remove_subscription(
+                subscription_id, client_id
+            )
+
+            return {
+                "jsonrpc": "2.0",
+                "result": {"success": success},
+                "id": request_id,
+            }
+        except Exception as e:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32603, "message": str(e)},
+                "id": request_id,
+            }
+
+    async def _handle_batch_subscribe(
+        self, params: Dict[str, Any], request_id: Any, client_id: str
+    ) -> Dict[str, Any]:
+        """Handle resources/batch_subscribe request."""
+        if not self.subscription_manager:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32601, "message": "Subscriptions not enabled"},
+                "id": request_id,
+            }
+
+        subscriptions = params.get("subscriptions")
+        if not subscriptions or not isinstance(subscriptions, list):
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32602,
+                    "message": "Missing or invalid parameter: subscriptions",
+                },
+                "id": request_id,
+            }
+
+        try:
+            # Create batch subscriptions with auth context
+            user_context = {"user_id": client_id, "connection_id": client_id}
+            results = await self.subscription_manager.create_batch_subscriptions(
+                subscriptions=subscriptions,
+                connection_id=client_id,
+                user_context=user_context,
+            )
+
+            return {
+                "jsonrpc": "2.0",
+                "result": results,
+                "id": request_id,
+            }
+        except Exception as e:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32603, "message": str(e)},
+                "id": request_id,
+            }
+
+    async def _handle_batch_unsubscribe(
+        self, params: Dict[str, Any], request_id: Any, client_id: str
+    ) -> Dict[str, Any]:
+        """Handle resources/batch_unsubscribe request."""
+        if not self.subscription_manager:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32601, "message": "Subscriptions not enabled"},
+                "id": request_id,
+            }
+
+        subscription_ids = params.get("subscriptionIds")
+        if not subscription_ids or not isinstance(subscription_ids, list):
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32602,
+                    "message": "Missing or invalid parameter: subscriptionIds",
+                },
+                "id": request_id,
+            }
+
+        try:
+            # Remove batch subscriptions
+            results = await self.subscription_manager.remove_batch_subscriptions(
+                subscription_ids=subscription_ids, connection_id=client_id
+            )
+
+            return {
+                "jsonrpc": "2.0",
+                "result": results,
+                "id": request_id,
+            }
+        except Exception as e:
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32603, "message": str(e)},
+                "id": request_id,
+            }
+
+    async def _handle_connection_close(self, client_id: str):
+        """Handle WebSocket connection close."""
+        if self.subscription_manager:
+            removed_count = await self.subscription_manager.cleanup_connection(
+                client_id
+            )
+            if removed_count > 0:
+                logger.info(
+                    f"Cleaned up {removed_count} subscriptions for client {client_id}"
+                )
+
+    def _compress_message(
+        self, message: Dict[str, Any]
+    ) -> Union[Dict[str, Any], bytes]:
+        """Compress message if compression is enabled and message exceeds threshold.
+
+        Args:
+            message: The message to potentially compress
+
+        Returns:
+            Either the original dict or compressed bytes with metadata
+        """
+        if not self.enable_websocket_compression:
+            return message
+
+        # Serialize message to determine size
+        message_json = json.dumps(message, separators=(",", ":")).encode("utf-8")
+
+        # Only compress if message exceeds threshold
+        if len(message_json) < self.compression_threshold:
+            return message
+
+        try:
+            # Compress the message
+            compressed_data = gzip.compress(
+                message_json, compresslevel=self.compression_level
+            )
+
+            # Calculate compression ratio
+            compression_ratio = len(compressed_data) / len(message_json)
+
+            # Only use compression if it actually reduces size significantly
+            if compression_ratio > 0.9:  # Less than 10% improvement
+                return message
+
+            # Return compressed message with metadata
+            return {
+                "__compressed": True,
+                "__original_size": len(message_json),
+                "__compressed_size": len(compressed_data),
+                "__compression_ratio": compression_ratio,
+                "data": compressed_data.hex(),  # Hex encode for JSON transport
+            }
+
+        except Exception as e:
+            logger.warning(f"Failed to compress message: {e}")
+            return message
+
+    def _decompress_message(self, compressed_message: Dict[str, Any]) -> Dict[str, Any]:
+        """Decompress a compressed message.
+
+        Args:
+            compressed_message: The compressed message with metadata
+
+        Returns:
+            The original decompressed message
+        """
+        if not compressed_message.get("__compressed"):
+            return compressed_message
+
+        try:
+            # Decode hex data and decompress
+            compressed_data = bytes.fromhex(compressed_message["data"])
+            decompressed_json = gzip.decompress(compressed_data)
+
+            # Parse back to dict
+            return json.loads(decompressed_json.decode("utf-8"))
+
+        except Exception as e:
+            logger.error(f"Failed to decompress message: {e}")
+            # Return a sensible error message
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": f"Failed to decompress message: {e}",
+                },
+            }
+
+    async def _send_websocket_notification(
+        self, client_id: str, notification: Dict[str, Any]
+    ):
+        """Send notification to WebSocket client with optional compression."""
+        if self._transport and hasattr(self._transport, "send_message"):
+            try:
+                # Apply compression if enabled
+                message_to_send = self._compress_message(notification)
+
+                # Log compression stats if compression was applied
+                if isinstance(message_to_send, dict) and message_to_send.get(
+                    "__compressed"
+                ):
+                    ratio = message_to_send["__compression_ratio"]
+                    logger.debug(
+                        f"Compressed notification for client {client_id}: "
+                        f"{message_to_send['__original_size']} -> "
+                        f"{message_to_send['__compressed_size']} bytes "
+                        f"({ratio:.2%} ratio)"
+                    )
+
+                await self._transport.send_message(message_to_send, client_id=client_id)
+                logger.debug(
+                    f"Sent notification to client {client_id}: {notification['method']}"
+                )
+            except Exception as e:
+                logger.error(f"Failed to send notification to client {client_id}: {e}")
+
+    async def _handle_logging_set_level(
+        self, params: Dict[str, Any], request_id: Any
+    ) -> Dict[str, Any]:
+        """Handle logging/setLevel request to dynamically adjust log levels."""
+        level = params.get("level", "INFO").upper()
+
+        # Validate log level
+        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+        if level not in valid_levels:
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32602,
+                    "message": f"Invalid log level: {level}. Must be one of {valid_levels}",
+                },
+                "id": request_id,
+            }
+
+        # Set the log level
+        logging.getLogger().setLevel(getattr(logging, level))
+        logger.info(f"Log level changed to {level}")
+
+        # Track in event store if available
+        if self.event_store:
+            from kailash.middleware.gateway.event_store import EventType
+
+            await self.event_store.append(
+                event_type=EventType.REQUEST_COMPLETED,
+                request_id=str(request_id),
+                data={
+                    "type": "log_level_changed",
+                    "level": level,
+                    "timestamp": time.time(),
+                    "changed_by": params.get("client_id", "unknown"),
+                },
+            )
+
+        return {
+            "jsonrpc": "2.0",
+            "result": {"level": level, "levels": valid_levels},
+            "id": request_id,
+        }
+
+    async def _handle_roots_list(
+        self, params: Dict[str, Any], request_id: Any
+    ) -> Dict[str, Any]:
+        """Handle roots/list request to get file system access roots."""
+        protocol_mgr = get_protocol_manager()
+
+        # Check if client supports roots
+        client_info = self.client_info.get(params.get("client_id", ""))
+        if (
+            not client_info.get("capabilities", {})
+            .get("roots", {})
+            .get("listChanged", False)
+        ):
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32601,
+                    "message": "Client does not support roots capability",
+                },
+                "id": request_id,
+            }
+
+        roots = protocol_mgr.roots.list_roots()
+
+        # Apply access control if auth manager is available
+        if self.auth_manager and params.get("client_id"):
+            filtered_roots = []
+            for root in roots:
+                if await protocol_mgr.roots.validate_access(
+                    root["uri"],
+                    operation="list",
+                    user_context=self.client_info.get(params["client_id"], {}),
+                ):
+                    filtered_roots.append(root)
+            roots = filtered_roots
+
+        return {"jsonrpc": "2.0", "result": {"roots": roots}, "id": request_id}
+
+    async def _handle_completion_complete(
+        self, params: Dict[str, Any], request_id: Any
+    ) -> Dict[str, Any]:
+        """Handle completion/complete request for auto-completion."""
+        ref = params.get("ref", {})
+        argument = params.get("argument", {})
+
+        # Extract completion parameters
+        ref_type = ref.get("type")  # "resource", "prompt", "tool"
+        ref_name = ref.get("name")  # Optional specific name
+        partial_value = argument.get("value", "")
+
+        try:
+            values = []
+
+            if ref_type == "resource":
+                # Search through registered resources
+                for uri, resource_info in self._resource_registry.items():
+                    if partial_value in uri:  # Simple prefix/substring matching
+                        values.append(
+                            {
+                                "uri": uri,
+                                "name": resource_info.get("name", uri),
+                                "description": resource_info.get("description", ""),
+                            }
+                        )
+
+            elif ref_type == "prompt":
+                # Search through registered prompts
+                for name, prompt_info in self._prompt_registry.items():
+                    if partial_value in name:  # Simple prefix/substring matching
+                        values.append(
+                            {
+                                "name": name,
+                                "description": prompt_info.get("description", ""),
+                                "arguments": prompt_info.get("arguments", []),
+                            }
+                        )
+
+            elif ref_type == "tool":
+                # Search through registered tools
+                for name, tool_info in self._tool_registry.items():
+                    if partial_value in name:
+                        values.append(
+                            {
+                                "name": name,
+                                "description": tool_info.get("description", ""),
+                                "inputSchema": tool_info.get("inputSchema", {}),
+                            }
+                        )
+
+            # Limit to 100 items and add hasMore flag if needed
+            total_matches = len(values)
+            has_more = total_matches > 100
+            if has_more:
+                values = values[:100]
+
+            result = {
+                "completion": {
+                    "values": values,
+                    "total": total_matches,
+                    "hasMore": has_more,
+                }
+            }
+
+            return {"jsonrpc": "2.0", "result": result, "id": request_id}
+
+        except Exception as e:
+            logger.error(f"Completion error: {e}")
+            return {
+                "jsonrpc": "2.0",
+                "error": {"code": -32603, "message": f"Completion failed: {str(e)}"},
+                "id": request_id,
+            }
+
+    async def _handle_sampling_create_message(
+        self, params: Dict[str, Any], request_id: Any
+    ) -> Dict[str, Any]:
+        """Handle sampling/createMessage - this is typically server-to-client."""
+        # This is usually initiated by the server to request LLM sampling from the client
+        # For server-side handling, we can validate and forward to connected clients
+
+        protocol_mgr = get_protocol_manager()
+
+        # Check if any client supports sampling
+        sampling_clients = [
+            client_id
+            for client_id, info in self.client_info.items()
+            if info.get("capabilities", {})
+            .get("experimental", {})
+            .get("sampling", False)
+        ]
+
+        if not sampling_clients:
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32601,
+                    "message": "No connected clients support sampling",
+                },
+                "id": request_id,
+            }
+
+        # Create sampling request
+        messages = params.get("messages", [])
+        sampling_params = {
+            "messages": messages,
+            "model_preferences": params.get("modelPreferences"),
+            "system_prompt": params.get("systemPrompt"),
+            "temperature": params.get("temperature"),
+            "max_tokens": params.get("maxTokens"),
+            "metadata": params.get("metadata"),
+        }
+
+        # Send to first available sampling client (or implement selection logic)
+        target_client = sampling_clients[0]
+
+        # Create server-to-client request
+        sampling_request = {
+            "jsonrpc": "2.0",
+            "method": "sampling/createMessage",
+            "params": sampling_params,
+            "id": f"sampling_{uuid.uuid4().hex[:8]}",
+        }
+
+        # Send via WebSocket to client
+        if self._transport and hasattr(self._transport, "send_message"):
+            await self._transport.send_message(
+                sampling_request, client_id=target_client
+            )
+
+            # Store pending sampling request
+            if not hasattr(self, "_pending_sampling_requests"):
+                self._pending_sampling_requests = {}
+
+            self._pending_sampling_requests[sampling_request["id"]] = {
+                "original_request_id": request_id,
+                "client_id": params.get("client_id"),
+                "timestamp": time.time(),
+            }
+
+            return {
+                "jsonrpc": "2.0",
+                "result": {
+                    "status": "sampling_requested",
+                    "sampling_id": sampling_request["id"],
+                    "target_client": target_client,
+                },
+                "id": request_id,
+            }
+        else:
+            return {
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": "Transport does not support sampling",
                 },
                 "id": request_id,
             }

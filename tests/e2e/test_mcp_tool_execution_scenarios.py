@@ -7,11 +7,11 @@ from typing import Any, Dict
 
 import pytest
 import pytest_asyncio
+from tests.utils.docker_config import OLLAMA_CONFIG, ensure_docker_services
 
 from kailash.nodes.ai.llm_agent import LLMAgentNode
 from kailash.runtime import LocalRuntime
 from kailash.workflow import Workflow
-from tests.utils.docker_config import OLLAMA_CONFIG, ensure_docker_services
 
 
 @pytest.mark.e2e

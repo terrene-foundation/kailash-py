@@ -58,6 +58,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
+from datetime import datetime
 from enum import Enum
 from typing import Any, AsyncGenerator, Callable, Dict, List, Optional, Union
 
@@ -320,6 +321,31 @@ class ResourceTemplate:
         if self.mime_type:
             result["mimeType"] = self.mime_type
         return result
+
+
+class ResourceChangeType(Enum):
+    """Types of resource changes."""
+
+    CREATED = "created"
+    UPDATED = "updated"
+    DELETED = "deleted"
+
+
+@dataclass
+class ResourceChange:
+    """Represents a resource change event."""
+
+    type: ResourceChangeType
+    uri: str
+    timestamp: datetime
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "type": self.type.value,
+            "uri": self.uri,
+            "timestamp": self.timestamp.isoformat(),
+        }
 
 
 @dataclass

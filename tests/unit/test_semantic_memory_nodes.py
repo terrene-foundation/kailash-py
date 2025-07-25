@@ -86,11 +86,22 @@ class TestSimpleEmbeddingProvider:
         assert not np.array_equal(embedding1, embedding2)
 
     @pytest.mark.asyncio
+    @pytest.mark.timeout(1)  # Add 1 second timeout
     async def test_embed_text_fallback(self):
         """Test embedding with fallback to hash method."""
         provider = SimpleEmbeddingProvider(host="http://invalid:11434")
 
-        result = await provider.embed_text("test text")
+        # Mock the aiohttp session to avoid actual network calls
+        from unittest.mock import AsyncMock, patch
+
+        import aiohttp
+
+        mock_response = AsyncMock()
+        mock_response.status = 500
+        mock_response.text = AsyncMock(return_value="Connection failed")
+
+        with patch("aiohttp.ClientSession.post", return_value=mock_response):
+            result = await provider.embed_text("test text")
 
         assert isinstance(result, EmbeddingResult)
         assert result.embeddings.shape[0] == 1
@@ -98,11 +109,22 @@ class TestSimpleEmbeddingProvider:
         assert result.model == "nomic-embed-text"
 
     @pytest.mark.asyncio
+    @pytest.mark.timeout(1)  # Add 1 second timeout
     async def test_embed_text_multiple(self):
         """Test embedding multiple texts."""
         provider = SimpleEmbeddingProvider(host="http://invalid:11434")
 
-        result = await provider.embed_text(["text one", "text two"])
+        # Mock the aiohttp session to avoid actual network calls
+        from unittest.mock import AsyncMock, patch
+
+        import aiohttp
+
+        mock_response = AsyncMock()
+        mock_response.status = 500
+        mock_response.text = AsyncMock(return_value="Connection failed")
+
+        with patch("aiohttp.ClientSession.post", return_value=mock_response):
+            result = await provider.embed_text(["text one", "text two"])
 
         assert result.embeddings.shape[0] == 2
         assert result.embeddings.shape[1] == 384

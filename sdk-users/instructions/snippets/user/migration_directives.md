@@ -57,7 +57,7 @@ After loading the essential files, you MUST demonstrate your understanding of th
    - Data model and infrastructure patterns
    - Framework translation guide
    - Standard configuration templates
-   - Error handling and recovery patterns  
+   - Error handling and recovery patterns
    - Data validation schemas
    - Testing strategy framework
    - Monitoring and alerting patterns
@@ -119,7 +119,7 @@ Before proceeding with migration, validate content separation:
 
 #### Must-Pass Criteria ✅
 - [ ] **No Systematic Patterns in Workflow Doc**: Everything in workflow doc is workflow-unique
-- [ ] **Complete Business Justification**: All workflow rules have WHY explanations  
+- [ ] **Complete Business Justification**: All workflow rules have WHY explanations
 - [ ] **Performance Baselines**: Actual measurements from original implementation
 - [ ] **State Transition Flows**: Clear diagrams for integration scenarios
 - [ ] **Configuration Separation**: Only workflow-specific config in workflow doc
@@ -128,9 +128,9 @@ Before proceeding with migration, validate content separation:
 
 Perform 4 ultrathink critique passes to ensure migration completeness:
 In each pass, please:
-- Document all business logic, API calls, state transitions  
-- Identify gaps in requirements, performance, security, integration  
-- Validate from migration, testing, operations, and business perspectives  
+- Document all business logic, API calls, state transitions
+- Identify gaps in requirements, performance, security, integration
+- Validate from migration, testing, operations, and business perspectives
 - Ensure systematic vs workflow-specific content is properly separated
 
 ## Architectural Decision Documentation
@@ -212,12 +212,12 @@ Do not write new tests without checking that existing ones can be modified to in
 
 ### Tier 1: Unit Tests
 - **Location**: `tests/unit/`
-- **Requirements**: 
+- **Requirements**:
   - Fast execution (<1s per test)
   - Can use mocks
   - No external dependencies
   - No sleep statements
-- **Coverage**: 
+- **Coverage**:
   - All public methods
   - Edge cases
   - Error conditions
@@ -299,11 +299,11 @@ For each component, you MUST complete this checklist:
    ```bash
    # Check existing containers first
    docker ps -a
-   
+
    # Use existing test utils
    ./tests/utils/test-env up && ./tests/utils/test-env status
    ```
-   
+
    **Docker Creation Rules**:
    - DO NOT create new docker containers before checking existing
    - Use docker-compose approach from `tests/utils/CLAUDE.md`
@@ -549,7 +549,7 @@ python scripts/benchmark_phase_{N}.py --validate-requirements
 #### **7. Go/No-Go Decision**
 **Before proceeding to next phase:**
 - [ ] All acceptance criteria met with evidence
-- [ ] All tests pass against real infrastructure  
+- [ ] All tests pass against real infrastructure
 - [ ] Performance requirements validated with measurements
 - [ ] No critical security or compliance gaps
 - [ ] Team can actually use the implemented components
