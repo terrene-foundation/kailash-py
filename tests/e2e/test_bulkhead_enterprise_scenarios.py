@@ -10,7 +10,6 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-
 from src.kailash.core.resilience.bulkhead import (
     BulkheadManager,
     BulkheadPartition,

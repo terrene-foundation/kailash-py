@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import pytest
+from tests.utils.docker_config import OLLAMA_CONFIG
 
 from kailash import Workflow
 from kailash.nodes.ai import LLMAgentNode
@@ -24,7 +25,6 @@ from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime.local import LocalRuntime
-from tests.utils.docker_config import OLLAMA_CONFIG
 
 # Mark as AI-powered e2e tests
 pytestmark = [pytest.mark.ollama, pytest.mark.e2e, pytest.mark.ai]

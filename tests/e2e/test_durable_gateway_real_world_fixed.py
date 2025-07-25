@@ -17,11 +17,11 @@ from typing import Dict, List
 
 import httpx
 import pytest
-
-from kailash.workflow.builder import WorkflowBuilder
 from tests.e2e.config import E2ETestConfig
 from tests.e2e.test_durable_gateway_base import DurableGatewayTestBase
 from tests.utils.docker_config import OLLAMA_CONFIG
+
+from kailash.workflow.builder import WorkflowBuilder
 
 # Add model configuration
 OLLAMA_CONFIG["model"] = "llama3.2:3b"

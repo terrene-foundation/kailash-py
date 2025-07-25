@@ -14,6 +14,12 @@ import aiohttp
 import pytest
 import pytest_asyncio
 import redis.asyncio as redis
+from tests.utils.docker_config import (
+    OLLAMA_CONFIG,
+    ensure_docker_services,
+    get_postgres_connection_string,
+    get_redis_url,
+)
 
 from kailash.mcp_server import MCPClient, MCPServer
 from kailash.mcp_server.discovery import (
@@ -24,12 +30,6 @@ from kailash.mcp_server.discovery import (
 )
 from kailash.mcp_server.oauth import AuthorizationServer, OAuth2Client
 from kailash.mcp_server.transports import get_transport_manager
-from tests.utils.docker_config import (
-    OLLAMA_CONFIG,
-    ensure_docker_services,
-    get_postgres_connection_string,
-    get_redis_url,
-)
 
 
 @pytest.mark.e2e

@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import asyncpg
 import pytest
+from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 from kailash.access_control import UserContext
 from kailash.database.execution_pipeline import (
@@ -14,7 +15,6 @@ from kailash.database.execution_pipeline import (
     ExecutionContext,
     ExecutionResult,
 )
-from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 
 @pytest.mark.integration

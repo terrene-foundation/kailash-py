@@ -2,10 +2,10 @@
 
 import pytest
 import pytest_asyncio
+from tests.utils.docker_config import get_postgres_connection_string
 
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from kailash.sdk_exceptions import NodeExecutionError
-from tests.utils.docker_config import get_postgres_connection_string
 
 # Mark all tests as requiring postgres and as integration tests
 pytestmark = [pytest.mark.integration, pytest.mark.requires_postgres]

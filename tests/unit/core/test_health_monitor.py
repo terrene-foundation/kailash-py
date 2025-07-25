@@ -9,7 +9,6 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from src.kailash.core.resilience.health_monitor import (
     AlertLevel,
     DatabaseHealthCheck,

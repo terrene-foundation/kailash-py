@@ -7,10 +7,10 @@ from datetime import datetime
 import asyncpg
 import pytest
 import pytest_asyncio
+from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from kailash.sdk_exceptions import NodeExecutionError
-from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 
 @pytest.mark.integration

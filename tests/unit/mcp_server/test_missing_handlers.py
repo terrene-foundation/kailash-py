@@ -28,17 +28,17 @@ class TestLoggingSetLevel:
         # Test data
         params = {"level": "DEBUG"}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_logging_set_level(params, request_id)
-        
+
         # Verify response
         assert result["jsonrpc"] == "2.0"
         assert result["id"] == request_id
         assert result["result"]["level"] == "DEBUG"
         assert "levels" in result["result"]
         assert "DEBUG" in result["result"]["levels"]
-        
+
         # Verify log level was actually changed
         assert logging.getLogger().level == logging.DEBUG
 
@@ -48,10 +48,10 @@ class TestLoggingSetLevel:
         # Test data
         params = {"level": "INVALID"}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_logging_set_level(params, request_id)
-        
+
         # Verify error response
         assert result["jsonrpc"] == "2.0"
         assert result["id"] == request_id
@@ -65,10 +65,10 @@ class TestLoggingSetLevel:
         # Test data with no level
         params = {}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_logging_set_level(params, request_id)
-        
+
         # Should default to INFO
         assert result["result"]["level"] == "INFO"
         assert logging.getLogger().level == logging.INFO
@@ -79,10 +79,10 @@ class TestLoggingSetLevel:
         # Test data with lowercase
         params = {"level": "warning"}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_logging_set_level(params, request_id)
-        
+
         # Should convert to uppercase
         assert result["result"]["level"] == "WARNING"
         assert logging.getLogger().level == logging.WARNING
@@ -94,14 +94,14 @@ class TestLoggingSetLevel:
         mock_event_store = MagicMock()
         mock_event_store.append = AsyncMock()
         server.event_store = mock_event_store
-        
+
         # Test data
         params = {"level": "ERROR", "client_id": "client_123"}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_logging_set_level(params, request_id)
-        
+
         # Verify event was recorded
         mock_event_store.append.assert_called_once()
         call_kwargs = mock_event_store.append.call_args[1]
@@ -128,29 +128,27 @@ class TestRootsList:
         protocol_mgr = get_protocol_manager()
         protocol_mgr.roots.add_root("file:///workspace", "Workspace", "Main workspace")
         protocol_mgr.roots.add_root("file:///home", "Home", "User home")
-        
+
         # Setup client with roots capability
         client_id = "client_123"
         server.client_info[client_id] = {
-            "capabilities": {
-                "roots": {"listChanged": True}
-            }
+            "capabilities": {"roots": {"listChanged": True}}
         }
-        
+
         # Test data
         params = {"client_id": client_id}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_roots_list(params, request_id)
-        
+
         # Verify response
         assert result["jsonrpc"] == "2.0"
         assert result["id"] == request_id
         assert "result" in result
         assert "roots" in result["result"]
         assert len(result["result"]["roots"]) == 2
-        
+
         # Verify root content
         roots = result["result"]["roots"]
         assert any(r["uri"] == "file:///workspace" for r in roots)
@@ -161,17 +159,15 @@ class TestRootsList:
         """Test error when client doesn't support roots."""
         # Setup client without roots capability
         client_id = "client_123"
-        server.client_info[client_id] = {
-            "capabilities": {}
-        }
-        
+        server.client_info[client_id] = {"capabilities": {}}
+
         # Test data
         params = {"client_id": client_id}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_roots_list(params, request_id)
-        
+
         # Verify error response
         assert result["jsonrpc"] == "2.0"
         assert result["id"] == request_id
@@ -185,22 +181,20 @@ class TestRootsList:
         # Clear any existing roots
         protocol_mgr = get_protocol_manager()
         protocol_mgr.roots._roots = []
-        
+
         # Setup client
         client_id = "client_123"
         server.client_info[client_id] = {
-            "capabilities": {
-                "roots": {"listChanged": True}
-            }
+            "capabilities": {"roots": {"listChanged": True}}
         }
-        
+
         # Test data
         params = {"client_id": client_id}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_roots_list(params, request_id)
-        
+
         # Should return empty list
         assert result["result"]["roots"] == []
 
@@ -210,36 +204,34 @@ class TestRootsList:
         # Setup auth manager
         mock_auth = MagicMock()
         server.auth_manager = mock_auth
-        
+
         # Setup protocol manager
         protocol_mgr = get_protocol_manager()
         protocol_mgr.roots._roots = []  # Clear existing
         protocol_mgr.roots.add_root("file:///public", "Public", "Public files")
         protocol_mgr.roots.add_root("file:///private", "Private", "Private files")
-        
+
         # Mock access validation
         async def mock_validate_access(uri, operation, user_context=None):
             # Only allow access to public
             return "public" in uri
-        
+
         protocol_mgr.roots.validate_access = mock_validate_access
-        
+
         # Setup client
         client_id = "client_123"
         server.client_info[client_id] = {
-            "capabilities": {
-                "roots": {"listChanged": True}
-            },
-            "user_id": "user_123"
+            "capabilities": {"roots": {"listChanged": True}},
+            "user_id": "user_123",
         }
-        
+
         # Test data
         params = {"client_id": client_id}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_roots_list(params, request_id)
-        
+
         # Should only return public root
         assert len(result["result"]["roots"]) == 1
         assert result["result"]["roots"][0]["uri"] == "file:///public"
@@ -252,57 +244,51 @@ class TestCompletionComplete:
     def server(self):
         """Create test server with resources and prompts."""
         server = MCPServer("test_server")
-        
+
         # Add some test resources
         server._resource_registry = {
             "file:///documents/report.pdf": {
                 "name": "Report",
-                "description": "Annual report"
+                "description": "Annual report",
             },
             "file:///data/dataset.csv": {
                 "name": "Dataset",
-                "description": "Sales data"
+                "description": "Sales data",
             },
             "config:///database": {
                 "name": "Database Config",
-                "description": "DB settings"
-            }
+                "description": "DB settings",
+            },
         }
-        
+
         # Add some test prompts
         server._prompt_registry = {
-            "analyze": {
-                "description": "Analyze data",
-                "arguments": ["data", "format"]
-            },
+            "analyze": {"description": "Analyze data", "arguments": ["data", "format"]},
             "summarize": {
                 "description": "Summarize text",
-                "arguments": ["text", "length"]
-            }
+                "arguments": ["text", "length"],
+            },
         }
-        
+
         return server
 
     @pytest.mark.asyncio
     async def test_complete_resources(self, server):
         """Test resource completion."""
         # Test data
-        params = {
-            "ref": {"type": "resource"},
-            "argument": {"value": "file://"}
-        }
+        params = {"ref": {"type": "resource"}, "argument": {"value": "file://"}}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_completion_complete(params, request_id)
-        
+
         # Verify response
         assert result["jsonrpc"] == "2.0"
         assert result["id"] == request_id
         assert "result" in result
         assert "completion" in result["result"]
         assert "values" in result["result"]["completion"]
-        
+
         # Should return file:// resources
         values = result["result"]["completion"]["values"]
         assert len(values) == 2
@@ -312,15 +298,12 @@ class TestCompletionComplete:
     async def test_complete_prompts(self, server):
         """Test prompt completion."""
         # Test data
-        params = {
-            "ref": {"type": "prompt"},
-            "argument": {"value": "ana"}
-        }
+        params = {"ref": {"type": "prompt"}, "argument": {"value": "ana"}}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_completion_complete(params, request_id)
-        
+
         # Should return "analyze" prompt
         values = result["result"]["completion"]["values"]
         assert len(values) == 1
@@ -331,15 +314,12 @@ class TestCompletionComplete:
     async def test_complete_with_no_matches(self, server):
         """Test completion with no matches."""
         # Test data
-        params = {
-            "ref": {"type": "resource"},
-            "argument": {"value": "nonexistent://"}
-        }
+        params = {"ref": {"type": "resource"}, "argument": {"value": "nonexistent://"}}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_completion_complete(params, request_id)
-        
+
         # Should return empty values
         assert result["result"]["completion"]["values"] == []
         assert result["result"]["completion"]["total"] == 0
@@ -351,19 +331,16 @@ class TestCompletionComplete:
         for i in range(150):
             server._resource_registry[f"test://resource_{i}"] = {
                 "name": f"Resource {i}",
-                "description": f"Test resource {i}"
+                "description": f"Test resource {i}",
             }
-        
+
         # Test data
-        params = {
-            "ref": {"type": "resource"},
-            "argument": {"value": "test://"}
-        }
+        params = {"ref": {"type": "resource"}, "argument": {"value": "test://"}}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_completion_complete(params, request_id)
-        
+
         # Should limit to 100 and set hasMore
         completion = result["result"]["completion"]
         assert len(completion["values"]) == 100
@@ -374,15 +351,12 @@ class TestCompletionComplete:
     async def test_complete_error_handling(self, server):
         """Test completion with successful registry-based implementation."""
         # Test data - this will match against the test server's registered resources
-        params = {
-            "ref": {"type": "resource"},
-            "argument": {"value": "file://"}
-        }
+        params = {"ref": {"type": "resource"}, "argument": {"value": "file://"}}
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_completion_complete(params, request_id)
-        
+
         # Should return successful result (no longer testing mocked errors)
         assert "result" in result
         assert "completion" in result["result"]
@@ -400,12 +374,12 @@ class TestSamplingCreateMessage:
         server = MCPServer("test_server")
         server.client_info = {}
         server._pending_sampling_requests = {}
-        
+
         # Mock transport
         mock_transport = MagicMock()
         mock_transport.send_message = AsyncMock()
         server._transport = mock_transport
-        
+
         return server
 
     @pytest.mark.asyncio
@@ -414,28 +388,24 @@ class TestSamplingCreateMessage:
         # Setup client with sampling capability
         client_id = "client_123"
         server.client_info[client_id] = {
-            "capabilities": {
-                "experimental": {
-                    "sampling": True
-                }
-            }
+            "capabilities": {"experimental": {"sampling": True}}
         }
-        
+
         # Test data
         params = {
             "messages": [
                 {"role": "user", "content": "Hello"},
-                {"role": "assistant", "content": "Hi there!"}
+                {"role": "assistant", "content": "Hi there!"},
             ],
             "modelPreferences": {"model": "gpt-4"},
             "temperature": 0.7,
-            "client_id": client_id
+            "client_id": client_id,
         }
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_sampling_create_message(params, request_id)
-        
+
         # Verify response
         assert result["jsonrpc"] == "2.0"
         assert result["id"] == request_id
@@ -443,7 +413,7 @@ class TestSamplingCreateMessage:
         assert result["result"]["status"] == "sampling_requested"
         assert "sampling_id" in result["result"]
         assert result["result"]["target_client"] == client_id
-        
+
         # Verify message was sent
         server._transport.send_message.assert_called_once()
         sent_msg = server._transport.send_message.call_args[0][0]
@@ -455,20 +425,18 @@ class TestSamplingCreateMessage:
         """Test sampling when no clients support it."""
         # Setup client without sampling capability
         client_id = "client_123"
-        server.client_info[client_id] = {
-            "capabilities": {}
-        }
-        
+        server.client_info[client_id] = {"capabilities": {}}
+
         # Test data
         params = {
             "messages": [{"role": "user", "content": "Hello"}],
-            "client_id": client_id
+            "client_id": client_id,
         }
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_sampling_create_message(params, request_id)
-        
+
         # Should return error
         assert "error" in result
         assert result["error"]["code"] == -32601
@@ -480,24 +448,22 @@ class TestSamplingCreateMessage:
         # Setup client
         client_id = "client_123"
         server.client_info[client_id] = {
-            "capabilities": {
-                "experimental": {"sampling": True}
-            }
+            "capabilities": {"experimental": {"sampling": True}}
         }
-        
+
         # Test data
         params = {
             "messages": [{"role": "user", "content": "Test"}],
-            "client_id": client_id
+            "client_id": client_id,
         }
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_sampling_create_message(params, request_id)
-        
+
         # Get sampling ID
         sampling_id = result["result"]["sampling_id"]
-        
+
         # Verify request is tracked
         assert sampling_id in server._pending_sampling_requests
         pending = server._pending_sampling_requests[sampling_id]
@@ -510,25 +476,23 @@ class TestSamplingCreateMessage:
         """Test sampling when transport doesn't support it."""
         # Remove transport
         server._transport = None
-        
+
         # Setup client
         client_id = "client_123"
         server.client_info[client_id] = {
-            "capabilities": {
-                "experimental": {"sampling": True}
-            }
+            "capabilities": {"experimental": {"sampling": True}}
         }
-        
+
         # Test data
         params = {
             "messages": [{"role": "user", "content": "Test"}],
-            "client_id": client_id
+            "client_id": client_id,
         }
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_sampling_create_message(params, request_id)
-        
+
         # Should return error
         assert "error" in result
         assert result["error"]["code"] == -32603
@@ -540,11 +504,9 @@ class TestSamplingCreateMessage:
         # Setup client
         client_id = "client_123"
         server.client_info[client_id] = {
-            "capabilities": {
-                "experimental": {"sampling": True}
-            }
+            "capabilities": {"experimental": {"sampling": True}}
         }
-        
+
         # Test data with all parameters
         params = {
             "messages": [{"role": "user", "content": "Test"}],
@@ -553,13 +515,13 @@ class TestSamplingCreateMessage:
             "temperature": 0.8,
             "maxTokens": 2000,
             "metadata": {"session_id": "abc123"},
-            "client_id": client_id
+            "client_id": client_id,
         }
         request_id = "test_123"
-        
+
         # Call handler
         result = await server._handle_sampling_create_message(params, request_id)
-        
+
         # Verify all parameters were forwarded
         sent_msg = server._transport.send_message.call_args[0][0]
         sent_params = sent_msg["params"]
@@ -586,36 +548,30 @@ class TestCapabilityAdvertisement:
             "protocolVersion": "0.1.0",
             "capabilities": {
                 "roots": {"listChanged": True},
-                "experimental": {
-                    "progressNotifications": True,
-                    "sampling": True
-                }
+                "experimental": {"progressNotifications": True, "sampling": True},
             },
-            "clientInfo": {
-                "name": "test-client",
-                "version": "1.0.0"
-            }
+            "clientInfo": {"name": "test-client", "version": "1.0.0"},
         }
         request_id = "init_123"
         client_id = "client_123"
-        
+
         # Call handler
         result = await server._handle_initialize(params, request_id, client_id)
-        
+
         # Verify response includes experimental capabilities
         assert result["jsonrpc"] == "2.0"
         assert result["id"] == request_id
         assert "result" in result
-        
+
         capabilities = result["result"]["capabilities"]
-        
+
         # Check new capabilities
         assert "logging" in capabilities
         assert capabilities["logging"]["setLevel"] is True
-        
+
         assert "roots" in capabilities
         assert capabilities["roots"]["list"] is True
-        
+
         assert "experimental" in capabilities
         exp = capabilities["experimental"]
         assert exp["progressNotifications"] is True
@@ -629,20 +585,15 @@ class TestCapabilityAdvertisement:
         # Test data
         params = {
             "protocolVersion": "0.1.0",
-            "capabilities": {
-                "experimental": {"sampling": True}
-            },
-            "clientInfo": {
-                "name": "test-client",
-                "version": "1.0.0"
-            }
+            "capabilities": {"experimental": {"sampling": True}},
+            "clientInfo": {"name": "test-client", "version": "1.0.0"},
         }
         request_id = "init_123"
         client_id = "client_123"
-        
+
         # Call handler
         await server._handle_initialize(params, request_id, client_id)
-        
+
         # Verify client info was stored
         assert client_id in server.client_info
         client = server.client_info[client_id]
@@ -658,7 +609,7 @@ class TestMessageRouting:
     def server(self):
         """Create test server with mocked handlers."""
         server = MCPServer("test_server")
-        
+
         # Mock the new handlers
         server._handle_logging_set_level = AsyncMock(
             return_value={"jsonrpc": "2.0", "result": {"level": "DEBUG"}, "id": "test"}
@@ -667,12 +618,20 @@ class TestMessageRouting:
             return_value={"jsonrpc": "2.0", "result": {"roots": []}, "id": "test"}
         )
         server._handle_completion_complete = AsyncMock(
-            return_value={"jsonrpc": "2.0", "result": {"completion": {"values": []}}, "id": "test"}
+            return_value={
+                "jsonrpc": "2.0",
+                "result": {"completion": {"values": []}},
+                "id": "test",
+            }
         )
         server._handle_sampling_create_message = AsyncMock(
-            return_value={"jsonrpc": "2.0", "result": {"status": "requested"}, "id": "test"}
+            return_value={
+                "jsonrpc": "2.0",
+                "result": {"status": "requested"},
+                "id": "test",
+            }
         )
-        
+
         return server
 
     @pytest.mark.asyncio
@@ -682,11 +641,11 @@ class TestMessageRouting:
             "jsonrpc": "2.0",
             "method": "logging/setLevel",
             "params": {"level": "DEBUG"},
-            "id": "test_123"
+            "id": "test_123",
         }
-        
+
         result = await server._handle_websocket_message(message, "client_123")
-        
+
         server._handle_logging_set_level.assert_called_once_with(
             {"level": "DEBUG"}, "test_123"
         )
@@ -698,11 +657,11 @@ class TestMessageRouting:
             "jsonrpc": "2.0",
             "method": "roots/list",
             "params": {},
-            "id": "test_123"
+            "id": "test_123",
         }
-        
+
         result = await server._handle_websocket_message(message, "client_123")
-        
+
         server._handle_roots_list.assert_called_once()
 
     @pytest.mark.asyncio
@@ -712,11 +671,11 @@ class TestMessageRouting:
             "jsonrpc": "2.0",
             "method": "completion/complete",
             "params": {"ref": {"type": "resource"}},
-            "id": "test_123"
+            "id": "test_123",
         }
-        
+
         result = await server._handle_websocket_message(message, "client_123")
-        
+
         server._handle_completion_complete.assert_called_once()
 
     @pytest.mark.asyncio
@@ -726,11 +685,11 @@ class TestMessageRouting:
             "jsonrpc": "2.0",
             "method": "sampling/createMessage",
             "params": {"messages": []},
-            "id": "test_123"
+            "id": "test_123",
         }
-        
+
         result = await server._handle_websocket_message(message, "client_123")
-        
+
         server._handle_sampling_create_message.assert_called_once()
 
 

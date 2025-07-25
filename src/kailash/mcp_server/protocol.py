@@ -325,26 +325,26 @@ class ResourceTemplate:
 
 class ResourceChangeType(Enum):
     """Types of resource changes."""
-    
+
     CREATED = "created"
-    UPDATED = "updated"  
+    UPDATED = "updated"
     DELETED = "deleted"
 
 
 @dataclass
 class ResourceChange:
     """Represents a resource change event."""
-    
+
     type: ResourceChangeType
     uri: str
     timestamp: datetime
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "type": self.type.value,
             "uri": self.uri,
-            "timestamp": self.timestamp.isoformat()
+            "timestamp": self.timestamp.isoformat(),
         }
 
 

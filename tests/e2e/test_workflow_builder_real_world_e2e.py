@@ -34,6 +34,15 @@ try:
 except ImportError:
     redis = None
 
+from tests.utils.docker_config import (
+    DATABASE_CONFIG,
+    OLLAMA_CONFIG,
+    REDIS_CONFIG,
+    ensure_docker_services,
+    get_postgres_connection_string,
+    get_redis_url,
+)
+
 from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode, RESTClientNode
 
@@ -62,14 +71,6 @@ from kailash.workflow import (
     ErrorHandler,
     RetryPolicy,
     WorkflowBuilder,
-)
-from tests.utils.docker_config import (
-    DATABASE_CONFIG,
-    OLLAMA_CONFIG,
-    REDIS_CONFIG,
-    ensure_docker_services,
-    get_postgres_connection_string,
-    get_redis_url,
 )
 
 

@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import pytest
+from tests.utils.docker_config import DATABASE_CONFIG, REDIS_CONFIG
 
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.code import AsyncPythonCodeNode, PythonCodeNode
@@ -29,7 +30,6 @@ from kailash.resources import (
 )
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.workflow import WorkflowBuilder
-from tests.utils.docker_config import DATABASE_CONFIG, REDIS_CONFIG
 
 
 @pytest.fixture
