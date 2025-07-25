@@ -3,10 +3,10 @@
 The Kailash SDK provides a comprehensive framework for creating nodes and workflows
 that align with container-node architecture while allowing rapid prototyping.
 
-New in v0.8.6: Enhanced parameter validation system with 4 modes (off/warn/strict/debug),
-ParameterDebugger for comprehensive flow tracing (10x faster debugging), production-ready
-performance (<1ms overhead), and complete troubleshooting documentation.
-Previous v0.8.5: Test infrastructure enhancement, application framework improvements.
+New in v0.8.7: MCP Parameter Validation Tool, 100% MCP Protocol compliance with missing
+handlers, Phase 2 MCP subscriptions with GraphQL optimization, WebSocket compression, and
+Redis-backed distributed coordination.
+Previous v0.8.6: Enhanced parameter validation system with debugging tools.
 """
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter

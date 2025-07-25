@@ -36,6 +36,28 @@ The changelog has been reorganized into individual files for better management. 
 
 ### Core SDK Releases
 
+### [0.8.7] - 2025-01-25 (Unreleased)
+
+**MCP Ecosystem Enhancement Release**
+
+This release completes the MCP ecosystem with comprehensive parameter validation, 100% protocol compliance, and enterprise-grade subscriptions.
+
+#### Added
+- ✅ **MCP Parameter Validation Tool**: 7 validation endpoints, 28 error types, 132 unit tests
+- ✅ **MCP Protocol Compliance**: 4 missing handlers implemented for 100% compliance
+- ✅ **MCP Subscriptions Phase 2**: GraphQL optimization, WebSocket compression, Redis coordination
+- ✅ **Claude Code Integration**: Full MCP tool integration with configuration guides
+- ✅ **A/B Testing Framework**: Legitimate blind testing methodology for validation
+
+### [0.8.6] - 2025-07-22
+
+**Enhanced Parameter Validation & Debugging Release**
+
+#### Added
+- ✅ **Enhanced Parameter Validation**: 4 modes (off/warn/strict/debug) with <1ms overhead
+- ✅ **Parameter Debugging Tools**: ParameterDebugger provides 10x faster issue resolution
+- ✅ **Comprehensive Documentation**: 1,300+ lines of troubleshooting guides
+
 ### [0.8.5] - 2025-01-20
 
 **Architecture Cleanup & Enterprise Security Release**

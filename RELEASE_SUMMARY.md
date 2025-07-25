@@ -1,4 +1,4 @@
-# Release Summary - TODOs 095, 126, 127 Completed
+# Release Summary v0.8.7 - TODOs 095, 126, 127 Completed
 
 ## Overview
 This release completes three major TODOs that significantly enhance the Kailash SDK's MCP ecosystem:
