@@ -4,10 +4,10 @@ import asyncio
 from datetime import datetime, timedelta
 
 import pytest
+from tests.utils.docker_config import is_docker_available, is_kubernetes_available
 
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-from tests.utils.docker_config import is_docker_available, is_kubernetes_available
 
 
 class TestKubernetesIntegration:
@@ -369,10 +369,7 @@ class TestPlatformIntegration:
     def test_resource_request_creation(self):
         """Test resource request specification."""
         from kailash.edge.resource import PlatformResourceRequest as ResourceRequest
-        from kailash.edge.resource import (
-            PlatformType,
-            ResourceScope,
-        )
+        from kailash.edge.resource import PlatformType, ResourceScope
 
         request = ResourceRequest(
             request_id="req-123",

@@ -413,6 +413,11 @@ class TestPythonCodeNodeConfiguration:
 
     def test_code_length_warning(self, caplog):
         """Test warning for long code strings."""
+        import logging
+
+        # Set logging level to capture warnings
+        caplog.set_level(logging.WARNING)
+
         long_code = "\n".join([f"line{i} = {i}" for i in range(15)])
         long_code += "\nresult = {}"
 

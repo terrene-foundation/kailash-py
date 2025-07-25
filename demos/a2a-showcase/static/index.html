@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A2A Agent Collaboration - Live Demo</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🤖 A2A Agent Collaboration System</h1>
+            <p class="subtitle">Watch AI agents collaborate in real-time using the Kailash SDK</p>
+        </header>
+
+        <!-- Query Input Section -->
+        <section class="query-section">
+            <h2>Start a Collaborative Research Task</h2>
+            <div class="query-examples">
+                <p><strong>Try these example queries:</strong></p>
+                <ul>
+                    <li>"Analyze the impact of AI on healthcare productivity"</li>
+                    <li>"Research quantum computing applications in cryptography"</li>
+                    <li>"Evaluate the environmental benefits of renewable energy"</li>
+                    <li>"Investigate the future of autonomous vehicles"</li>
+                    <li>"Assess blockchain technology for supply chain management"</li>
+                </ul>
+            </div>
+            
+            <div class="query-input-group">
+                <input 
+                    type="text" 
+                    id="queryInput" 
+                    placeholder="Enter your research topic..."
+                    class="query-input"
+                />
+                <button id="startBtn" class="start-btn">
+                    Start Research
+                </button>
+            </div>
+
+            <div class="agent-selector">
+                <label>
+                    <input type="checkbox" id="selectAll" checked> 
+                    <strong>Use all agents</strong>
+                </label>
+                <div id="agentCheckboxes" class="agent-checkboxes"></div>
+            </div>
+        </section>
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <!-- Agents Panel -->
+            <section class="agents-panel">
+                <h3>Research Team</h3>
+                <div id="agentsList" class="agents-list">
+                    <!-- Agents will be populated here -->
+                </div>
+            </section>
+
+            <!-- Collaboration Visualization -->
+            <section class="collaboration-area">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="messages">Live Activity</button>
+                    <button class="tab-btn" data-tab="memory">Shared Memory</button>
+                    <button class="tab-btn" data-tab="insights">Key Insights</button>
+                </div>
+
+                <div class="tab-content">
+                    <!-- Messages Tab -->
+                    <div id="messagesTab" class="tab-pane active">
+                        <div id="messageStream" class="message-stream">
+                            <div class="welcome-message">
+                                <h4>Welcome to the A2A Demo!</h4>
+                                <p>This demo shows how AI agents collaborate using:</p>
+                                <ul>
+                                    <li><strong>Agent Cards:</strong> Rich capability descriptions</li>
+                                    <li><strong>Shared Memory:</strong> Agents share insights via a memory pool</li>
+                                    <li><strong>Attention Filtering:</strong> Agents focus on relevant information</li>
+                                    <li><strong>Real OpenAI API:</strong> Actual AI responses, not mocked</li>
+                                </ul>
+                                <p>Enter a research topic above to see the agents work together!</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Memory Tab -->
+                    <div id="memoryTab" class="tab-pane">
+                        <div class="memory-stats">
+                            <div class="stat-card">
+                                <span class="stat-label">Total Memories</span>
+                                <span class="stat-value" id="totalMemories">0</span>
+                            </div>
+                            <div class="stat-card">
+                                <span class="stat-label">Active Segments</span>
+                                <span class="stat-value" id="activeSegments">0</span>
+                            </div>
+                        </div>
+                        <div id="memoryContent" class="memory-content">
+                            <!-- Memory items will be shown here -->
+                        </div>
+                    </div>
+
+                    <!-- Insights Tab -->
+                    <div id="insightsTab" class="tab-pane">
+                        <div id="insightsList" class="insights-list">
+                            <!-- Key insights will be collected here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Status Bar -->
+        <footer class="status-bar">
+            <span id="connectionStatus" class="status-indicator">
+                <span class="status-dot"></span>
+                Connecting...
+            </span>
+            <span id="activityStatus" class="activity-status">Ready</span>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
