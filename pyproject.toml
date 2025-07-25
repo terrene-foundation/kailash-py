@@ -85,6 +85,7 @@ dependencies = [
     "seaborn>=0.13.2",
     "sqlparse>=0.5.3",
     "jsonschema>=4.24.0",
+    "openai>=1.97.1",
 ]
 
 [project.optional-dependencies]
