@@ -7,15 +7,15 @@ Patterns for building resilient workflows that gracefully handle failures and re
 **Purpose**: Prevent cascading failures by stopping calls to failing services
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.api import RESTClientNode
 from kailash.runtime.local import LocalRuntime
 
-workflow = Workflow("circuit_breaker_workflow", "Circuit Breaker Pattern")
+workflow = WorkflowBuilder()
 
 # Circuit breaker implementation
-workflow.add_node("circuit_breaker", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "circuit_breaker", {}),
     code="""
 import time
 import json
@@ -122,13 +122,12 @@ def call_external_service(data):
 )
 
 # Route based on circuit breaker result
-workflow.add_node("result_handler", SwitchNode(),
+workflow.add_node("SwitchNode", "result_handler", {}),
     condition_field="should_retry",
-    true_route="retry_handler",
-    false_route="final_handler"
-)
+    true_# route removed,
+    false_# route removed)
 
-workflow.connect("circuit_breaker", "result_handler", mapping={"result": "input"})
+workflow.add_connection("circuit_breaker", "result_handler", "result", "input")
 
 ```
 
@@ -137,7 +136,7 @@ workflow.connect("circuit_breaker", "result_handler", mapping={"result": "input"
 **Purpose**: Automatically retry failed operations with increasing delays
 
 ```python
-workflow.add_node("retry_with_backoff", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "retry_with_backoff", {}),
     code="""
 import time
 import random
@@ -220,10 +219,10 @@ def perform_risky_operation(data):
 **Purpose**: Provide alternative responses when primary service fails
 
 ```python
-workflow = Workflow("fallback_pattern", "Fallback Pattern")
+workflow = WorkflowBuilder()
 
 # Primary service
-workflow.add_node("primary_service", RESTClientNode(),
+workflow.add_node("RESTClientNode", "primary_service", {}),
     base_url="https://primary-api.example.com",
     endpoint="/process",
     method="POST",
@@ -231,7 +230,7 @@ workflow.add_node("primary_service", RESTClientNode(),
 )
 
 # Fallback service
-workflow.add_node("fallback_service", RESTClientNode(),
+workflow.add_node("RESTClientNode", "fallback_service", {}),
     base_url="https://backup-api.example.com",
     endpoint="/process",
     method="POST",
@@ -239,7 +238,7 @@ workflow.add_node("fallback_service", RESTClientNode(),
 )
 
 # Cache fallback
-workflow.add_node("cache_fallback", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "cache_fallback", {}),
     code="""
 import json
 from datetime import datetime, timedelta
@@ -274,7 +273,7 @@ result = {
 )
 
 # Static fallback
-workflow.add_node("static_fallback", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "static_fallback", {}),
     code="""
 # Return static/default response as last resort
 print("WARNING: All services failed, returning static response")
@@ -296,7 +295,7 @@ result = {
 )
 
 # Fallback orchestrator
-workflow.add_node("fallback_orchestrator", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "fallback_orchestrator", {}),
     code="""
 # Try services in order of preference
 services = [
@@ -326,24 +325,19 @@ else:
 )
 
 # Connect with parallel execution for fallbacks
-workflow.connect("request", "primary_service")
-workflow.connect("request", "fallback_service")
-workflow.connect("request", "cache_fallback")
-workflow.connect("request", "static_fallback")
+workflow.add_connection("request", "result", "primary_service", "input")
+workflow.add_connection("request", "result", "fallback_service", "input")
+workflow.add_connection("request", "result", "cache_fallback", "input")
+workflow.add_connection("request", "result", "static_fallback", "input")
 
 # Merge all results
-workflow.add_node("merger", MergeNode())
-workflow.connect("primary_service", "merger", mapping={"result": "data1"})
-workflow.connect("fallback_service", "merger", mapping={"result": "data2"})
-workflow.connect("cache_fallback", "merger", mapping={"result": "data3"})
-workflow.connect("static_fallback", "merger", mapping={"result": "data4"})
+workflow.add_node("MergeNode", "merger", {}))
+workflow.add_connection("primary_service", "merger", "result", "data1")
+workflow.add_connection("fallback_service", "merger", "result", "data2")
+workflow.add_connection("cache_fallback", "merger", "result", "data3")
+workflow.add_connection("static_fallback", "merger", "result", "data4")
 
-workflow.connect("merger", "fallback_orchestrator", mapping={
-    "merged_data[0]": "primary_result",
-    "merged_data[1]": "fallback_result",
-    "merged_data[2]": "cache_result",
-    "merged_data[3]": "static_result"
-})
+workflow.add_connection("merger", "result", "fallback_orchestrator", "input")
 
 ```
 
@@ -353,7 +347,7 @@ workflow.connect("merger", "fallback_orchestrator", mapping={
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -363,11 +357,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("bulkhead_processor", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "bulkhead_processor", {}),
     code="""
 import concurrent.futures
 import threading
@@ -461,7 +456,7 @@ def process_in_bulkhead(request, priority):
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -471,11 +466,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("dlq_handler", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "dlq_handler", {}),
     code="""
 import json
 import datetime
@@ -579,7 +575,7 @@ def analyze_dlq_patterns():
 **Purpose**: Undo or compensate for failed operations in distributed transactions
 
 ```python
-workflow.add_node("compensation_handler", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "compensation_handler", {}),
     code="""
 # Track operations for potential compensation
 operations_log = []

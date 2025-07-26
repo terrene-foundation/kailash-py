@@ -375,9 +375,9 @@ workflow.add_node("TransactionMetricsNode", "complete_metrics", {
 })
 
 # Connect nodes
-workflow.connect("metrics", "status", mapping={"reader": "start_signal"})
-workflow.connect("reader", "data", mapping={"processor": "input_data"})
-workflow.connect("processor", "result", mapping={"complete_metrics": "final_result"})
+workflow.add_connection("metrics", "status", "reader", "start_signal")
+workflow.add_connection("reader", "data", "processor", "input_data")
+workflow.add_connection("processor", "result", "complete_metrics", "final_result")
 
 # Execute with monitoring
 runtime = LocalRuntime()

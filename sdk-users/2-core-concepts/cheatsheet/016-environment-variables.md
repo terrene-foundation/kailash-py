@@ -108,7 +108,7 @@ os.environ["KAILASH_ENABLE_AUDIT"] = "true"
 ## Usage in Code
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.secret_provider import EnvironmentSecretProvider
 from kailash.nodes.data import CSVReaderNode
@@ -123,14 +123,14 @@ secret_provider = EnvironmentSecretProvider()
 runtime = LocalRuntime(secret_provider=secret_provider)
 
 # ✅ NEW: Secrets automatically injected at runtime
-workflow = Workflow("example", name="Example")
-workflow.add_node("llm", LLMAgentNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "llm", {}),
     provider="openai",  # API key injected via secret provider
     model="gpt-4"
 )
 
 # ⚠️ DEPRECATED: Template string substitution
-# workflow.add_node("api", HTTPRequestNode(),
+# workflow.add_node("HTTPRequestNode", "api", {}),
 #     url="${API_BASE_URL}/endpoint",
 #     headers={"Authorization": "Bearer ${API_TOKEN}"}
 # )

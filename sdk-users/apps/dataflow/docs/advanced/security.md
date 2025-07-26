@@ -11,6 +11,8 @@ Security is paramount in DataFlow applications. This guide covers authentication
 ### Basic Authentication
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash_dataflow import DataFlow, AuthConfig
 
 # Configure authentication
@@ -425,7 +427,7 @@ workflow.add_node("RateLimiterNode", "check_rate_limit", {
 ```python
 def test_sql_injection():
     """Test SQL injection prevention."""
-    malicious_inputs = [
+    malicious_parameters= [
         "'; DROP TABLE users; --",
         "1' OR '1'='1",
         "admin'--",

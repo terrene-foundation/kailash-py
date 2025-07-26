@@ -65,7 +65,7 @@ result = {'high_performers': high_scores}
 '''
 })
 
-workflow.connect("data_source", "result", mapping={"analyzer": "input_data"})
+workflow.add_connection("data_source", "result", "analyzer", "input_data")
 ```
 
 ## ❌ Invalid Parameter Types

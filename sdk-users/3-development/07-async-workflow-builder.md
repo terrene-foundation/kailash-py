@@ -580,7 +580,8 @@ builder.add_async_code(
 
 ```python
 # Before (WorkflowBuilder)
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
 builder = WorkflowBuilder()
 builder.add_node("PythonCodeNode", "process", {"code": "result = process_data()"})

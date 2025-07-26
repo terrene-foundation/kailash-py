@@ -7,17 +7,17 @@ These are the fundamental patterns for working with Kailash SDK. Start here if y
 **Purpose**: Sequential data processing from source to destination
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.data import CSVReaderNode, JSONWriterNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 
 # Create workflow
-workflow = Workflow("etl_pipeline", "ETL Pipeline")
+workflow = WorkflowBuilder()
 
 # Add nodes with configuration
-workflow.add_node("reader", CSVReaderNode(), file_path="input.csv")
-workflow.add_node("transformer", PythonCodeNode(),
+workflow.add_node("CSVReaderNode", "reader", {}), file_path="input.csv")
+workflow.add_node("PythonCodeNode", "transformer", {}),
     code="""
 result = []
 for row in data:
@@ -27,15 +27,15 @@ for row in data:
 """,
     imports=["from datetime import datetime"]
 )
-workflow.add_node("writer", JSONWriterNode(), file_path="output.json")
+workflow.add_node("JSONWriterNode", "writer", {}), file_path="output.json")
 
 # Connect in sequence
-workflow.connect("reader", "transformer", mapping={"data": "data"})
-workflow.connect("transformer", "writer", mapping={"result": "data"})
+workflow.add_connection("reader", "transformer", "data", "data")
+workflow.add_connection("transformer", "writer", "result", "data")
 
 # Execute
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 print(f"Pipeline completed: {run_id}")
 
 ```
@@ -51,7 +51,7 @@ print(f"Pipeline completed: {run_id}")
 ### With Error Handling
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -61,12 +61,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Add validation node
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("validator", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "validator", {}),
     code="""
 errors = []
 valid_data = []
@@ -80,17 +81,17 @@ result = {"valid": valid_data, "errors": errors}
 )
 
 # Connect with validation
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
 ### With Multiple Outputs
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -100,20 +101,21 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Write to multiple formats
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("json_writer", JSONWriterNode(), file_path="output.json")
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("csv_writer", CSVWriterNode(), file_path="output.csv")
+workflow = WorkflowBuilder()
+workflow.add_node("JSONWriterNode", "json_writer", {}), file_path="output.json")
+workflow = WorkflowBuilder()
+workflow.add_node("CSVWriterNode", "csv_writer", {}), file_path="output.csv")
 
 # Fork the output
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -196,7 +198,7 @@ print(f"Processed {result} records asynchronously")
 ### With Configuration Override
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -206,8 +208,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Create node with default config
 csv_reader = CSVReaderNode(file_path="default.csv", delimiter=",")

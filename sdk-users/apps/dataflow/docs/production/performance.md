@@ -11,6 +11,8 @@ Performance optimization in DataFlow involves multiple layers: query optimizatio
 ### Index Strategy
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 @db.model
 class Order:
     id: int

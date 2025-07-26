@@ -32,7 +32,7 @@ class OptimizerNode(CycleAwareNode):
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -42,8 +42,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # 1. Create packager
 def package_for_switch(metrics=None, score=0.0, iteration=0):
@@ -58,16 +59,44 @@ def package_for_switch(metrics=None, score=0.0, iteration=0):
 
 packager = PythonCodeNode.from_function("packager", package_for_switch)
 
-# 2. Connect nodes
-workflow.add_node("packager", packager)
-workflow.add_node("optimizer", OptimizerNode())
-workflow.add_node("switch", SwitchNode())
-workflow.add_node("processor", PythonCodeNode())
+# 2. Connect nodes using WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 
-# 3. Create cycle
-workflow.connect("optimizer", "packager")
-workflow.connect("packager", "switch", mapping={"switch_data": "data"})
-workflow.connect("switch", "optimizer", output_port="continue")
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "packager", {
+    "code": """
+result = {
+    "switch_data": {
+        "converged": score >= 0.95,
+        "metrics": metrics or {},
+        "score": score,
+        "iteration": iteration
+    }
+}
+"""
+})
+workflow.add_node("PythonCodeNode", "optimizer", {"code": "result = optimize_data(input_data)"})
+workflow.add_node("SwitchNode", "switch", {
+    "condition_field": "converged",
+    "operator": "==",
+    "value": True
+})
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = process_final_result(input_data)"})
+
+# 3. Create cycle using CycleBuilder API
+workflow.add_connection("optimizer", "result", "packager", "metrics")
+workflow.add_connection("packager", "result", "switch", "input_data")
+
+# Create cycle with CycleBuilder
+cycle_builder = workflow.create_cycle("optimization_cycle")
+cycle_builder.connect("switch", "false_output", "optimizer", "input_data") \
+             .max_iterations(50) \
+             .converge_when("converged == True") \
+             .timeout(300) \
+             .build()
+
+# Exit path
+workflow.add_connection("switch", "true_output", "processor", "input_data")
 
 ```
 
@@ -101,7 +130,7 @@ return {
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -111,8 +140,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class SelfOptimizingNode(CycleAwareNode):
     def get_parameters(self) -> Dict[str, NodeParameter]:
@@ -153,14 +183,42 @@ class SelfOptimizingNode(CycleAwareNode):
             **self.set_cycle_state({"improvement_history": improvement_history})
         }
 
-# Usage
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("self_optimizer", SelfOptimizingNode())
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("self_optimizer", "self_optimizer",
-    cycle=True,
-    max_iterations=20,
-    convergence_check="converged == True")
+# Usage with WorkflowBuilder
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "self_optimizer", {
+    "code": """
+# Simulate self-optimization logic
+target_quality = target_quality if 'target_quality' in locals() else 0.8
+data = data if 'data' in locals() else []
+
+# Simple quality calculation
+current_quality = sum(data) / len(data) if data else 0.0
+
+# Improve data
+if current_quality < target_quality:
+    improved_data = [x * 1.1 for x in data]  # Simple improvement
+    improved_quality = sum(improved_data) / len(improved_data) if improved_data else 0.0
+else:
+    improved_data = data
+    improved_quality = current_quality
+
+converged = improved_quality >= target_quality
+
+result = {
+    "data": improved_data,
+    "quality": improved_quality,
+    "converged": converged
+}
+"""
+})
+
+# Create self-improvement cycle
+cycle_builder = workflow.create_cycle("self_optimization")
+cycle_builder.connect("self_optimizer", "result", "self_optimizer", "input_data") \
+             .max_iterations(20) \
+             .converge_when("converged == True") \
+             .timeout(600) \
+             .build()
 
 ```
 
@@ -197,7 +255,7 @@ def run(self, **kwargs):
 ### Runtime Mapping Preservation
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -207,12 +265,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Ensure parameters flow through cycle connections
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow connections go here
 
 ```
 
@@ -221,7 +280,7 @@ workflow.  # Method signature
 ### Three-Node Optimization Cycle
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -231,8 +290,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Node 1: Data Processor
 class DataProcessorNode(CycleAwareNode):
@@ -270,12 +330,12 @@ class ConvergenceControllerNode(CycleAwareNode):
         }
 
 # Connect in cycle
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow connections go here
+workflow = WorkflowBuilder()
+# Workflow connections go here
+workflow = WorkflowBuilder()
+# Workflow connections go here
 
 ```
 
@@ -283,7 +343,7 @@ workflow.  # Method signature
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -293,8 +353,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class MonitoredCycleNode(CycleAwareNode):
     def run(self, **kwargs):
@@ -341,7 +402,7 @@ class MonitoredCycleNode(CycleAwareNode):
 ### Simple Self-Cycle
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -351,18 +412,19 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("node", "node", cycle=True, max_iterations=10)
+workflow = WorkflowBuilder()
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 ```
 
 ### Self-Cycle with Convergence
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -372,14 +434,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("node", "node",
-    cycle=True,
-    max_iterations=20,
-    convergence_check="converged == True")
+workflow = WorkflowBuilder()
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 ```
 
@@ -399,7 +459,7 @@ return {
 ### SwitchNode Integration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -409,8 +469,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Package data for SwitchNode
 return {

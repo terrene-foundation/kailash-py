@@ -28,7 +28,7 @@ class TestMCPUnit:
 
     def test_tool_discovery_mock(self):
         """Test tool discovery with mocked MCP server."""
-        node = LLMAgentNode()
+        node = "LLMAgentNode"
 
         # Use mock provider for speed
         result = node.run(
@@ -47,7 +47,7 @@ class TestMCPUnit:
 
     def test_tool_execution_mock(self):
         """Test tool execution flow."""
-        node = LLMAgentNode()
+        node = "LLMAgentNode"
 
         # Mock tool call response
         with patch.object(node, '_execute_mcp_tool') as mock_exec:
@@ -87,7 +87,7 @@ class TestMCPIntegration:
 
     def test_stdio_transport(self, real_mcp_server):
         """Test STDIO transport with real server."""
-        node = LLMAgentNode()
+        node = "LLMAgentNode"
 
         result = node.run(
             provider="ollama",  # Use real provider
@@ -103,7 +103,7 @@ class TestMCPIntegration:
 
     def test_error_recovery(self, real_mcp_server):
         """Test connection failure recovery."""
-        node = LLMAgentNode()
+        node = "LLMAgentNode"
 
         # Invalid server config
         result = node.run(
@@ -140,12 +140,12 @@ class TestMCPEndToEnd:
 
     def test_multi_round_tool_execution(self):
         """Test complex multi-round tool execution."""
-        from kailash import Workflow
+        from kailash.workflow.builder import WorkflowBuilder
         from kailash.runtime.local import LocalRuntime
 
         # Build workflow
-        workflow = Workflow("mcp-e2e")
-        workflow.add_node("agent", LLMAgentNode())
+        workflow = WorkflowBuilder()
+        workflow.add_node("LLMAgentNode", "agent", {}))
 
         # Execute with real MCP server
         runtime = LocalRuntime()
@@ -204,7 +204,7 @@ def test_jupyter_environment():
 
     try:
         # MCP should work despite active loop
-        node = LLMAgentNode()
+        node = "LLMAgentNode"
         result = node.run(
             provider="mock",
             model="gpt-4",
@@ -224,7 +224,7 @@ def test_jupyter_environment():
 ```python
 def test_mcp_timeout_handling():
     """Test timeout protection."""
-    node = LLMAgentNode()
+    node = "LLMAgentNode"
 
     result = node.run(
         provider="mock",
@@ -249,7 +249,7 @@ def test_mcp_timeout_handling():
 ```python
 def test_connection_failure_recovery():
     """Test connection failure handling."""
-    node = LLMAgentNode()
+    node = "LLMAgentNode"
 
     # Multiple servers, one failing
     result = node.run(
@@ -275,7 +275,7 @@ def test_mcp_performance():
     """Test MCP performance characteristics."""
     import time
 
-    node = LLMAgentNode()
+    node = "LLMAgentNode"
 
     # Measure tool discovery time
     start = time.time()

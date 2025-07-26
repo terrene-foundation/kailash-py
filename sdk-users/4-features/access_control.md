@@ -29,7 +29,7 @@ The Kailash SDK provides a **unified access control interface** supporting multi
 ### 3. Fine-Grained Control
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -39,8 +39,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Node-level permissions
 NodePermission.EXECUTE      # Can run the node
@@ -165,10 +166,10 @@ from kailash.workflow import Workflow
 from kailash.runtime.local import LocalRuntime
 
 # Your existing code works unchanged
-workflow = Workflow()
+workflow = WorkflowBuilder()
 # ... add nodes ...
 runtime = LocalRuntime()
-result = runtime.execute(workflow)
+result = runtime.execute(workflow.build())
 
 ```
 
@@ -195,7 +196,7 @@ manager = AccessControlManager(strategy="abac")
 
 # Use access-controlled runtime
 runtime = AccessControlledRuntime(user, access_control_manager=manager)
-result = runtime.execute(workflow)  # Same API!
+result = runtime.execute(workflow.build())  # Same API!
 
 ```
 
@@ -255,7 +256,7 @@ processor = add_access_control(
 ### 2. Admin-Only Operations
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -265,8 +266,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Only admins can export data
 exporter = add_access_control(

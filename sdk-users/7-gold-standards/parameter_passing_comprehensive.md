@@ -1,9 +1,9 @@
 # Gold Standard: Comprehensive Parameter Passing Guide for Kailash SDK
 
-**Version**: 3.0 (Consolidated)  
-**Last Updated**: 2025-07-22  
-**Status**: ✅ Authoritative Reference - Replaces All Previous Versions  
-**Purpose**: Complete guide for parameter passing in Kailash SDK with enterprise patterns  
+**Version**: 3.0 (Consolidated)
+**Last Updated**: 2025-07-22
+**Status**: ✅ Authoritative Reference - Replaces All Previous Versions
+**Purpose**: Complete guide for parameter passing in Kailash SDK with enterprise patterns
 **SDK Version**: Kailash SDK 0.8.x (tested with v0.6.6+)
 
 ## 📋 Table of Contents
@@ -32,10 +32,11 @@ This document consolidates all parameter passing knowledge for the Kailash SDK, 
 ## Three Methods of Parameter Passing
 
 ### Method 1: Node Configuration ⭐⭐⭐⭐⭐
-**Reliability**: Always works  
+**Reliability**: Always works
 **Best for**: Static values, test fixtures, default settings
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 workflow.add_node(MyNode, "node_id", {
     "param1": "static_value",
     "param2": {"nested": "data"},
@@ -50,7 +51,7 @@ workflow.add_node(MyNode, "node_id", {
 - Ideal for testing
 
 ### Method 2: Workflow Connections ⭐⭐⭐⭐⭐
-**Reliability**: Always works  
+**Reliability**: Always works
 **Best for**: Dynamic data flow, pipelines, transformations
 
 ```python
@@ -64,7 +65,7 @@ workflow.add_connection("source_node", "output_field", "target_node", "input_par
 - Natural for data pipelines
 
 ### Method 3: Runtime Parameters ⭐⭐⭐
-**Reliability**: Has edge case  
+**Reliability**: Has edge case
 **Best for**: User input, environment overrides, dynamic values
 
 ```python
@@ -126,13 +127,13 @@ from typing import Literal, Optional, Dict, Any
 
 class UserManagementContract(BaseModel):
     """Enterprise parameter contract with full validation."""
-    
+
     model_config = ConfigDict(
         extra="forbid",  # Security: reject unknown parameters
         validate_assignment=True,
         use_enum_values=True
     )
-    
+
     operation: Literal["create", "update", "delete", "get"] = Field(
         description="Operation to perform"
     )
@@ -146,7 +147,7 @@ class UserManagementContract(BaseModel):
     requestor_id: str = Field(
         description="User making the request"
     )
-    
+
     @model_validator(mode='after')
     def validate_operation_requirements(self):
         """Validate required fields for specific operations."""
@@ -175,7 +176,7 @@ from typing import Dict, Any
 
 class UserManagementEntryNode(Node):
     """Entry node with explicit parameter declaration."""
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Declare ALL expected parameters explicitly."""
         return {
@@ -196,20 +197,20 @@ class UserManagementEntryNode(Node):
                 description="Tenant ID"
             )
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Process with guaranteed parameters."""
         # Required parameters are guaranteed to exist
         operation = kwargs["operation"]
         tenant_id = kwargs["tenant_id"]
-        
+
         # Optional parameters need get() with defaults
         user_data = kwargs.get("user_data", {})
-        
+
         # Business logic validation
         if operation == "create" and not user_data:
             raise ValueError("user_data required for create operation")
-        
+
         return {
             "validated_params": {
                 "operation": operation,
@@ -227,12 +228,12 @@ from pydantic import BaseModel
 
 class MyNode(GovernedNode):
     """Node with automatic parameter governance."""
-    
+
     @classmethod
     def get_parameter_contract(cls) -> Type[BaseModel]:
         """Return Pydantic contract for automatic validation."""
         return UserManagementContract
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Parameters are pre-validated by governance framework."""
         # All parameters guaranteed valid per contract
@@ -247,18 +248,18 @@ The SDK passes internal parameters (like 'node_id', 'workflow_id') along with bu
 def execute(self, **kwargs) -> Dict[str, Any]:
     """Execute with parameter filtering and validation."""
     contract_class = self.get_parameter_contract()
-    
+
     # CRITICAL: Filter to contract fields only
     contract_fields = set(contract_class.model_fields.keys())
     filtered_params = {
-        k: v for k, v in kwargs.items() 
+        k: v for k, v in kwargs.items()
         if k in contract_fields
     }
-    
+
     # Validate against contract
     validated_contract = contract_class(**filtered_params)
     validated_params = validated_contract.model_dump()
-    
+
     # Apply governance and execute
     return self.run(**validated_params)
 ```
@@ -272,17 +273,17 @@ from src.tpc.tpc_user_management.nodes.base.secure_governed_node import SecureGo
 
 class ProductionNode(SecureGovernedNode):
     """Enhanced security for connection parameters."""
-    
+
     @classmethod
     def get_parameter_contract(cls):
         """Workflow parameters."""
         return MyParameterContract
-    
+
     @classmethod
     def get_connection_contract(cls):
         """Connection parameters (validated separately)."""
         return MyConnectionContract
-    
+
     def run(self, **kwargs):
         """Both parameter types are validated."""
         # Security: Undeclared parameters filtered and logged
@@ -300,7 +301,7 @@ if isinstance(user_result, dict) and 'data' in user_result:
     rows = user_result.get('data', [])
     if rows and len(rows) > 0:
         user_row = rows[0]
-        
+
         # CRITICAL: Parse JSON attributes
         attributes = user_row.get('attributes', '{}')
         if isinstance(attributes, str):
@@ -309,7 +310,7 @@ if isinstance(user_result, dict) and 'data' in user_result:
                 attributes = json.loads(attributes)
             except:
                 attributes = {}
-        
+
         result = {
             "user": user_row,
             "attributes": attributes  # Now a dict
@@ -382,7 +383,7 @@ Context-aware validation based on field names:
 ```python
 # User content fields - NEVER scan (allow O'Brien, user--admin)
 user_content_fields = {
-    'username', 'first_name', 'last_name', 'email', 
+    'username', 'first_name', 'last_name', 'email',
     'display_name', 'requestor_id', 'created_by'
 }
 
@@ -411,9 +412,9 @@ sql_dangerous_fields = {
 def test_method1_authentication_workflow(self, test_environment, database_url, admin_user):
     """Test authentication with node configuration."""
     runtime = test_environment.runtime
-    
+
     workflow = WorkflowBuilder()
-    
+
     # Method 1: All parameters in config
     workflow.add_node(TPCParameterPrepNode, "prep", {
         "credentials": {
@@ -422,17 +423,17 @@ def test_method1_authentication_workflow(self, test_environment, database_url, a
         },
         "tenant_id": "test"
     })
-    
+
     # Database node needs connection string
     workflow.add_node("AsyncSQLDatabaseNode", "lookup", {
         "connection_string": database_url,
         "query": "SELECT * FROM users WHERE username = $1"
     })
-    
+
     # Connect and execute
     workflow.add_connection("prep", "result.db_params", "lookup", "params")
     results, run_id = runtime.execute(workflow.build())
-    
+
     # Validate results
     assert results["prep"]["result"]["credentials"]["username"] == admin_user["username"]
 ```
@@ -471,7 +472,7 @@ class NewNode(Node):
         return {
             "some_param": NodeParameter(type=str, required=True)
         }
-    
+
     def run(self, **kwargs):
         value = kwargs['some_param']  # Guaranteed to exist
 ```

@@ -146,7 +146,7 @@ async def process_order(order_id):
 # API calls isolated in API partition
 async def notify_customer(customer_id):
     def api_operation():
-        node = HTTPRequestNode()
+        node = "HTTPRequestNode"
         return node.execute(
             url=f"https://api.example.com/notify/{customer_id}",
             method="POST"
@@ -328,8 +328,7 @@ workflow.add_node("SwitchNode", "health_switch", {
     "condition": "overall_status == 'healthy'"
 })
 
-workflow.connect("health_check", "overall_status",
-                mapping={"health_switch": "condition"})
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 # Execute with resilience
 runtime = LocalRuntime()

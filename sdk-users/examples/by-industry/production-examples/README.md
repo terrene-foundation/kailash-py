@@ -14,50 +14,26 @@ This directory contains production-tested patterns extracted from real applicati
 
 ```python
 # Advanced RAG implementation with hierarchical search
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 from kailash.nodes.data import VectorStoreNode, SearchRankingNode
 
-workflow = Workflow("production_rag", name="Production RAG Pipeline")
+workflow = WorkflowBuilder()
 
 # Multi-stage embedding generation
-workflow.add_node("embedder", EmbeddingGeneratorNode(
-    provider="openai",
-    model="text-embedding-ada-002",
-    batch_size=100,           # Production batch processing
-    retry_policy="exponential"
-))
+workflow.add_node("EmbeddingGeneratorNode", "embedder", {}))
 
 # Hierarchical vector search
-workflow.add_node("vector_search", VectorStoreNode(
-    provider="pinecone",
-    index_name="production-knowledge",
-    top_k=50,                 # Initial broad search
-    include_metadata=True
-))
+workflow.add_node("VectorStoreNode", "vector_search", {}))
 
 # Re-ranking for precision
-workflow.add_node("reranker", SearchRankingNode(
-    model="cross-encoder/ms-marco-MiniLM-L-12-v2",
-    top_k=10,                 # Final precision results
-    score_threshold=0.7
-))
+workflow.add_node("SearchRankingNode", "reranker", {}))
 
 # Context-aware response generation
-workflow.add_node("generator", LLMAgentNode(
-    provider="openai",
-    model="gpt-4",
-    temperature=0.1,          # Low temperature for accuracy
-    max_tokens=2000,
-    system_prompt="""You are a knowledgeable assistant. Use only the provided context to answer questions accurately and concisely."""
-))
+workflow.add_node("LLMAgentNode", "generator", {}))
 
 # Production error handling
-workflow.add_node("fallback_handler", LLMAgentNode(
-    provider="openai",
-    model="gpt-3.5-turbo",    # Faster fallback model
-    system_prompt="Provide a helpful response when primary search fails."
-))
+workflow.add_node("LLMAgentNode", "fallback_handler", {}))
 
 ```
 
@@ -96,15 +72,10 @@ testing_personas = [
 from kailash.nodes.ai.a2a import A2ACoordinatorNode
 from kailash.nodes.ai.self_organizing import AgentPoolManagerNode
 
-workflow = Workflow("qa_testing_suite", name="QA Agentic Testing")
+workflow = WorkflowBuilder()
 
 # Agent pool for 27 personas
-workflow.add_node("agent_pool", AgentPoolManagerNode(
-    max_active_agents=27,
-    agent_definitions=testing_personas,
-    specialization_enabled=True,
-    dynamic_allocation=True
-))
+workflow.add_node("AgentPoolManagerNode", "agent_pool", {}))
 
 # Intelligent test coordination
 workflow.add_node("test_coordinator", A2ACoordinatorNode(
@@ -138,7 +109,7 @@ def execute_comprehensive_testing(app_under_test):
 
 ```python
 # Complete enterprise application stack
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 from kailash.middleware.auth import KailashJWTAuth
 from kailash.middleware.realtime import RealtimeMiddleware
 
@@ -346,39 +317,10 @@ spec:
 from kailash.nodes.data import AsyncSQLDatabaseNode
 
 # Optimized database node
-workflow.add_node("optimized_db", AsyncSQLDatabaseNode(
-    connection_string="postgresql://user:pass@db-cluster:5432/production",
-
-    # Connection pooling for scale
-    pool_size=20,
-    max_overflow=50,
-    pool_recycle=3600,
-    pool_pre_ping=True,
-
-    # Query optimization
-    query_cache_enabled=True,
-    query_cache_size=1000,
-    prepared_statements=True,
-
-    # Async performance
-    async_execution=True,
-    batch_size=1000,
-    connection_timeout=30,
-
-    # Monitoring
-    performance_monitoring=True,
-    slow_query_threshold=1.0
-))
+workflow.add_node("AsyncSQLDatabaseNode", "optimized_db", {}))
 
 # Batch processing pattern
-workflow.add_node("batch_processor", PythonCodeNode(
-    name="batch_processor",
-    code='''
-# Process data in optimized batches
-processed_batches = []
-batch_size = 1000
-
-for i in range(0, len(data), batch_size):
+workflow.add_node("PythonCodeNode", "batch_processor", {}), batch_size):
     batch = data[i:i + batch_size]
 
     # Parallel processing within batch
@@ -486,37 +428,7 @@ security_middleware = [
 ```python
 from kailash.nodes.security import ThreatDetectionNode
 
-workflow.add_node("threat_detector", ThreatDetectionNode(
-    detection_rules=[
-        {
-            "name": "brute_force_login",
-            "pattern": "failed_login_count > 5 in 5_minutes",
-            "action": "block_ip",
-            "duration": 3600
-        },
-        {
-            "name": "sql_injection_attempt",
-            "pattern": "contains_sql_keywords AND special_characters",
-            "action": "block_request",
-            "severity": "high"
-        },
-        {
-            "name": "unusual_data_access",
-            "pattern": "data_access_volume > 10x_baseline",
-            "action": "alert_security_team",
-            "severity": "medium"
-        }
-    ],
-
-    # Machine learning for advanced detection
-    ml_enabled=True,
-    anomaly_threshold=0.95,
-    learning_period_days=30,
-
-    # Integration
-    siem_integration=True,
-    alert_channels=["slack", "email", "sms"]
-))
+workflow.add_node("ThreatDetectionNode", "threat_detector", {}))
 
 ```
 

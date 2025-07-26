@@ -7,24 +7,24 @@ Patterns for connecting Kailash workflows with external services, APIs, and syst
 **Purpose**: Create a unified REST API interface for multiple workflows
 
 ```python
-from kailash import Workflow
-from kailash.middleware import create_gateway
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.api.middleware import create_gateway
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode
 
 # Create workflows
-data_workflow = Workflow("example", name="Example")
-workflow.data_workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
-data_workflow.add_node("processor", PythonCodeNode(),
+data_workflow = WorkflowBuilder()
+workflow.data_workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
+data_workflow.add_node("PythonCodeNode", "processor", {}),
     code="result = {'record_count': len(data), 'processed': True}"
 )
-data_workflow.connect("reader", "processor", mapping={"data": "data"})
+data_workflow.add_connection("reader", "processor", "data", "data")
 
-ml_workflow = Workflow("example", name="Example")
-workflow.# ... define ML workflow nodes ...
+ml_workflow = WorkflowBuilder()
+# Workflow setup goes here  # ... define ML workflow nodes ...
 
-report_workflow = Workflow("example", name="Example")
-workflow.# ... define report workflow nodes ...
+report_workflow = WorkflowBuilder()
+# Workflow setup goes here  # ... define report workflow nodes ...
 
 # Create API Gateway with middleware
 gateway = create_gateway(
@@ -91,12 +91,12 @@ curl -X POST http://localhost:8000/process-data \
 **Purpose**: Integrate with third-party APIs using authentication and error handling
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.api import RESTClientNode, OAuth2Node
 from kailash.nodes.code import PythonCodeNode
 import os
 
-workflow = Workflow("external_api_integration", "External API Integration")
+workflow = WorkflowBuilder()
 
 # OAuth2 Authentication
 workflow.add_node("oauth", OAuth2Node(),
@@ -107,7 +107,7 @@ workflow.add_node("oauth", OAuth2Node(),
 )
 
 # REST API Client with authentication
-workflow.add_node("api_client", RESTClientNode(),
+workflow.add_node("RESTClientNode", "api_client", {}),
     base_url="https://api.example.com/v2",
     timeout=30,
     retry_count=3,
@@ -116,7 +116,7 @@ workflow.add_node("api_client", RESTClientNode(),
 )
 
 # Data transformer
-workflow.add_node("transformer", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "transformer", {}),
     code="""
 # Transform external API response to internal format
 transformed_data = []
@@ -139,7 +139,7 @@ result = {
 )
 
 # Error handler
-workflow.add_node("error_handler", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "error_handler", {}),
     code="""
 import json
 
@@ -177,22 +177,17 @@ else:
 )
 
 # Connect with error handling
-workflow.connect("oauth", "api_client", mapping={"access_token": "auth_token"})
+workflow.add_connection("oauth", "api_client", "access_token", "auth_token")
 
 # API calls with error routing
-workflow.add_node("api_switch", SwitchNode(),
+workflow.add_node("SwitchNode", "api_switch", {}),
     condition_field="success",
-    true_route="transformer",
-    false_route="error_handler"
-)
+    true_# route removed,
+    false_# route removed)
 
-workflow.connect("api_client", "api_switch", mapping={"response": "input"})
-workflow.connect("api_switch", "transformer",
-    route="transformer",
-    mapping={"input.data": "api_response"})
-workflow.connect("api_switch", "error_handler",
-    route="error_handler",
-    mapping={"input.error": "error"})
+workflow.add_connection("api_client", "api_switch", "response", "input")
+workflow.add_connection("api_switch", "result", "transformer", "input")
+workflow.add_connection("api_switch", "result", "error_handler", "input")
 
 ```
 
@@ -201,7 +196,7 @@ workflow.connect("api_switch", "error_handler",
 **Purpose**: Receive and process webhook events from external systems
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.api import HTTPServerNode
 
@@ -209,10 +204,10 @@ from kailash.nodes.api import HTTPServerNode
 # webhook endpoints natively, or use HTTPServerNode for simple cases
 
 # Define webhook processing workflow
-webhook_workflow = Workflow("webhook_processor", "Webhook Event Processor")
+webhook_workflow = WorkflowBuilder()
 
 # Event validator
-webhook_workflow.add_node("validator", PythonCodeNode(),
+webhook_workflow.add_node("PythonCodeNode", "validator", {}),
     code="""
 import hmac
 import hashlib
@@ -248,7 +243,7 @@ result = {
 )
 
 # Event router
-webhook_workflow.add_node("event_router", SwitchNode(),
+webhook_workflow.add_node("SwitchNode", "event_router", {}),
     condition_field="event_type",
     routes={
         "order.created": "order_processor",
@@ -259,7 +254,7 @@ webhook_workflow.add_node("event_router", SwitchNode(),
 )
 
 # Specific event processors
-webhook_workflow.add_node("order_processor", PythonCodeNode(),
+webhook_workflow.add_node("PythonCodeNode", "order_processor", {}),
     code="""
 # Process new order event
 order = data.get('order', {})
@@ -307,7 +302,7 @@ if __name__ == "__main__":
 **Purpose**: Connect workflows to various databases with production-grade connection pooling
 
 ```python
-from kailash import Workflow, WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder, WorkflowBuilder
 from kailash.nodes.data import WorkflowConnectionPool, SQLDatabaseNode, MongoNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
@@ -334,7 +329,7 @@ workflow.add_node("pg_pool", "WorkflowConnectionPool", {
 workflow.add_node("init_pool", "PythonCodeNode", {
     "code": "result = {'operation': 'initialize'}"
 })
-workflow.connect("init_pool", "pg_pool", mapping={"result": "inputs"})
+workflow.add_connection("init_pool", "pg_pool", "result", "inputs")
 
 # Read customer data with connection pool
 workflow.add_node("read_customers", "PythonCodeNode", {
@@ -383,7 +378,7 @@ result = {"customers": customers}
 })
 
 # MongoDB aggregation
-workflow.add_node("mongo_aggregator", MongoNode(),
+workflow.add_node("MongoNode", "mongo_aggregator", {}),
     connection_string=os.getenv("MONGO_URL"),
     database="analytics",
     collection="events",
@@ -402,7 +397,7 @@ workflow.add_node("mongo_aggregator", MongoNode(),
 )
 
 # Join data from multiple databases
-workflow.add_node("data_joiner", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "data_joiner", {}),
     code="""
 # Create lookup dictionary from MongoDB data
 user_events = {str(event['_id']): event for event in mongo_data}
@@ -537,10 +532,10 @@ if stats["current_state"]["available_connections"] == 0:
 })
 
 # Connect the workflow
-workflow.connect("read_customers", "data_joiner", mapping={"result.customers": "postgres_data"})
-workflow.connect("mongo_aggregator", "data_joiner", mapping={"result": "mongo_data"})
-workflow.connect("data_joiner", "write_analytics", mapping={"result.customers": "enriched_customers"})
-workflow.connect("write_analytics", "monitor_pool")
+workflow.add_connection("read_customers", "data_joiner", "result.customers", "postgres_data")
+workflow.add_connection("mongo_aggregator", "data_joiner", "result", "mongo_data")
+workflow.add_connection("data_joiner", "write_analytics", "result.customers", "enriched_customers")
+workflow.add_connection("write_analytics", "result", "monitor_pool", "input")
 
 # Execute workflow
 runtime = LocalRuntime()
@@ -636,14 +631,14 @@ await db_manager.create_pool("transactional", {
 **Purpose**: Integrate with message queues for async processing
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.integration import KafkaNode, RabbitMQNode
 from kailash.nodes.code import PythonCodeNode
 
-workflow = Workflow("message_queue_integration", "Message Queue Integration")
+workflow = WorkflowBuilder()
 
 # Kafka consumer
-workflow.add_node("kafka_consumer", KafkaNode(),
+workflow.add_node("KafkaNode", "kafka_consumer", {}),
     bootstrap_servers=os.getenv("KAFKA_BROKERS"),
     topic="orders",
     consumer_group="order_processor",
@@ -653,7 +648,7 @@ workflow.add_node("kafka_consumer", KafkaNode(),
 )
 
 # Process messages
-workflow.add_node("message_processor", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "message_processor", {}),
     code="""
 import json
 
@@ -697,7 +692,7 @@ def process_order(order_data):
 )
 
 # RabbitMQ publisher for results
-workflow.add_node("rabbitmq_publisher", RabbitMQNode(),
+workflow.add_node("RabbitMQNode", "rabbitmq_publisher", {}),
     connection_url=os.getenv("RABBITMQ_URL"),
     exchange="results",
     routing_key="order.processed",
@@ -705,7 +700,7 @@ workflow.add_node("rabbitmq_publisher", RabbitMQNode(),
 )
 
 # Dead letter queue for failures
-workflow.add_node("dlq_publisher", RabbitMQNode(),
+workflow.add_node("RabbitMQNode", "dlq_publisher", {}),
     connection_url=os.getenv("RABBITMQ_URL"),
     exchange="dlq",
     routing_key="order.failed",
@@ -713,12 +708,9 @@ workflow.add_node("dlq_publisher", RabbitMQNode(),
 )
 
 # Route successes and failures
-workflow.connect("kafka_consumer", "message_processor",
-    mapping={"messages": "messages"})
-workflow.connect("message_processor", "rabbitmq_publisher",
-    mapping={"result.processed": "messages"})
-workflow.connect("message_processor", "dlq_publisher",
-    mapping={"result.failed": "messages"})
+workflow.add_connection("kafka_consumer", "message_processor", "messages", "messages")
+workflow.add_connection("message_processor", "rabbitmq_publisher", "result.processed", "messages")
+workflow.add_connection("message_processor", "dlq_publisher", "result.failed", "messages")
 
 ```
 

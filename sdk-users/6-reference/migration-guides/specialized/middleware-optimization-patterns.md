@@ -15,6 +15,7 @@ This guide helps you migrate from custom middleware implementations to SDK-optim
 
 **Before (Custom Code):**
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 class SessionManager:
     def __init__(self):
         self.sessions = {}

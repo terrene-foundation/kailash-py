@@ -23,7 +23,7 @@
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -33,8 +33,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ PRODUCTION READY
 import logging
@@ -109,7 +110,7 @@ output_file = get_output_data_path(f"results_{timestamp}.json")
 ```python
 # ✅ PRODUCTION WORKFLOW STRUCTURE
 def create_production_workflow():
-    workflow = Workflow("production-etl", "Production ETL Pipeline")
+    workflow = WorkflowBuilder()
 
     # 1. Input validation (fail-fast)
     validator = PythonCodeNode.from_function(
@@ -130,10 +131,8 @@ def create_production_workflow():
     )
 
     # Connect with descriptive mappings
-    workflow.connect("input_validator", "main_processor",
-                    mapping={"result": "validated_inputs"})
-    workflow.connect("main_processor", "result_validator",
-                    mapping={"result": "processed_data"})
+    workflow.add_connection("input_validator", "main_processor", "result", "validated_inputs")
+    workflow.add_connection("main_processor", "result_validator", "result", "processed_data")
 
     return workflow
 
@@ -167,10 +166,10 @@ set_security_config(security_config)
 ```python
 from kailash.nodes.security import CredentialManagerNode
 
-workflow = Workflow("secure_pipeline", name="Secure Pipeline")
+workflow = WorkflowBuilder()
 
 # Get credentials securely
-workflow.add_node("get_api_key", CredentialManagerNode(),
+workflow.add_node("CredentialManagerNode", "get_api_key", {}),
     credential_name="openai",
     credential_type="api_key",
     credential_sources=["vault", "aws_secrets", "env"],
@@ -179,12 +178,12 @@ workflow.add_node("get_api_key", CredentialManagerNode(),
 )
 
 # Use credentials in another node
-workflow.add_node("llm_call", LLMAgentNode(),
+workflow.add_node("LLMAgentNode", "llm_call", {}),
     prompt="Analyze this data"
 )
 
 # Connect - credentials are passed securely
-workflow.connect("get_api_key", "llm_call", {"credentials.api_key": "api_key"})
+workflow.add_connection("get_api_key", "result", "llm_call", "input")
 
 ```
 
@@ -224,7 +223,7 @@ if decision.allowed:
         enable_audit=True,
         user_context=user
     )
-    results, run_id = runtime.execute(workflow)
+    results, run_id = runtime.execute(workflow.build())
 else:
     print(f"❌ Access denied: {decision.reason}")
 
@@ -308,7 +307,7 @@ results, run_id = runtime.execute(workflow, parameters=parameters)
 ### **Progressive Feature Adoption**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -318,8 +317,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Stage 1: Basic development
 runtime = LocalRuntime()
@@ -520,7 +520,7 @@ workflow.add_node("batch_processor", batch_processor)
 ### **Memory-Efficient Processing**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -530,8 +530,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Stream processing for large datasets
 workflow.add_node("stream_processor", "PythonCodeNode",
@@ -581,10 +582,10 @@ result = {
 ```python
 from kailash.workflow import Workflow, RetryStrategy
 
-workflow = Workflow("resilient_pipeline", name="Resilient Production Pipeline")
+workflow = WorkflowBuilder()
 
 # Configure retry policies
-workflow.add_node("api_call", HTTPRequestNode(), url="https://api.example.com/data")
+workflow.add_node("HTTPRequestNode", "api_call", {}), url="https://api.example.com/data")
 workflow.configure_retry(
     "api_call",
     max_retries=3,
@@ -603,8 +604,8 @@ workflow.configure_circuit_breaker(
 )
 
 # Configure fallback chain
-workflow.add_node("primary_service", LLMAgentNode(), model="gpt-4")
-workflow.add_node("fallback_service", LLMAgentNode(), model="claude-3-sonnet")
+workflow.add_node("LLMAgentNode", "primary_service", {}), model="gpt-4")
+workflow.add_node("LLMAgentNode", "fallback_service", {}), model="claude-3-sonnet")
 workflow.add_node("minimal_fallback", PythonCodeNode.from_function(
     name="fallback",
     func=lambda text: {"result": {"analysis": "Basic analysis", "confidence": 0.5}}
@@ -618,7 +619,7 @@ workflow.add_fallback("fallback_service", "minimal_fallback")
 ### **Comprehensive Error Handling**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -628,8 +629,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 import logging
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -736,7 +738,7 @@ spec:
 ### **Environment Configuration**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -746,8 +748,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 import os
 from dataclasses import dataclass
@@ -831,24 +834,7 @@ def readiness_check():
 from kailash.nodes.enterprise.data_lineage import DataLineageNode
 
 # Track data transformations for compliance
-workflow.add_node("lineage_tracker", DataLineageNode(
-    name="lineage_tracker",
-    operation="track_transformation",
-    source_info={
-        "system": "CRM",
-        "table": "customers",
-        "fields": ["name", "email", "purchase_history"]
-    },
-    transformation_type="anonymization",
-    target_info={
-        "system": "Analytics",
-        "table": "customer_segments"
-    },
-    compliance_frameworks=["GDPR", "CCPA"],
-    include_access_patterns=True,
-    audit_trail_enabled=True,
-    data_classification="PII"
-))
+workflow.add_node("DataLineageNode", "lineage_tracker", {}))
 
 # Generate compliance reports
 compliance_report = DataLineageNode(

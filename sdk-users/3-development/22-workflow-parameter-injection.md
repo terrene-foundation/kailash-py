@@ -19,7 +19,7 @@ Parameter injection allows dynamic configuration of workflows at runtime, enabli
 Based on extensive E2E testing, the WorkflowBuilder supports parameter injection through `add_workflow_inputs`:
 
 ```python
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 
 # Create workflow
 workflow_builder = WorkflowBuilder()
@@ -106,7 +106,7 @@ results, _ = runtime.execute(workflow, parameters={
 ### Runtime Parameter Injection
 
 ```python
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # Create parameterizable workflow
@@ -433,7 +433,7 @@ result["features_enabled"] = list(flags.keys())
 
         # Conditional connections
         if self.flags.get("data_validation", True):
-            workflow.connect("validator", "result", mapping={"processor": "data"})
+            workflow.add_connection("validator", "result", "processor", "data")
 
         return workflow.build()
 
@@ -551,7 +551,7 @@ class TestParameterInjection:
         workflow = create_workflow_with_dependencies()
         container.inject_into_workflow(workflow)
 
-        results, _ = runtime.execute(workflow)
+        results, _ = runtime.execute(workflow.build())
 
         # Verify interactions
         mock_db.query.assert_called_once()
@@ -589,7 +589,7 @@ def test_with_fixtures(test_config, test_container):
     workflow = ConfigurableWorkflowBuilder(test_config).build()
     test_container.inject_into_workflow(workflow)
 
-    results, _ = runtime.execute(workflow)
+    results, _ = runtime.execute(workflow.build())
     assert results["status"] == "success"
 ```
 

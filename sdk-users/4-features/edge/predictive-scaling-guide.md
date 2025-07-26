@@ -60,8 +60,8 @@ workflow.add_node("ResourceScalerNode", "predictor", {
 })
 
 # Connect workflow
-workflow.add_connection("scaler_start", "status", "recorder", "parameters")
-workflow.add_connection("recorder", "usage_recorded", "predictor", "parameters")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 # Execute
 runtime = LocalRuntime()
@@ -253,10 +253,10 @@ workflow.add_node("ResourceScalerNode", "evaluator", {
 async def evaluate_predictions():
     # Run periodically to evaluate past decisions
     recent_decisions = get_recent_scaling_decisions()
-    
+
     for decision in recent_decisions:
         actual_usage = get_actual_usage(decision.timestamp)
-        
+
         await scaler_node.execute_async(
             operation="evaluate_decision",
             decision_id=decision.decision_id,
@@ -307,7 +307,7 @@ workflow.add_node("PythonCodeNode", "aggregator", {
     for strategy in ['reactive', 'predictive', 'scheduled']:
         predictions = parameters.get(f'{strategy}_predictions', [])
         all_predictions.extend(predictions)
-    
+
     # Weight by confidence and strategy
     weighted_decisions = weight_predictions(all_predictions)
     result = {'ensemble_decisions': weighted_decisions}
@@ -453,7 +453,7 @@ async def continuous_monitoring():
         # Get current resource usage
         cpu_usage = get_cpu_usage()
         memory_usage = get_memory_usage()
-        
+
         # Record for predictions
         await scaler_node.execute_async(
             operation="record_usage",
@@ -461,14 +461,14 @@ async def continuous_monitoring():
             usage=cpu_usage.used,
             capacity=cpu_usage.total
         )
-        
+
         await scaler_node.execute_async(
             operation="record_usage",
             resource_type="memory",
             usage=memory_usage.used,
             capacity=memory_usage.total
         )
-        
+
         await asyncio.sleep(30)  # Every 30 seconds
 ```
 
@@ -509,14 +509,14 @@ confidence_threshold = 0.5
 async def weekly_evaluation():
     # Get all decisions from past week
     decisions = get_past_decisions(days=7)
-    
+
     for decision in decisions:
         # Get actual usage that occurred
         actual = get_historical_usage(
             decision.timestamp,
             decision.predictions[0].horizon
         )
-        
+
         # Evaluate accuracy
         await scaler.evaluate_scaling_decision(
             decision.decision_id,

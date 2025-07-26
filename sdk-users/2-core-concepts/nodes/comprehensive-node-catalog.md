@@ -254,14 +254,14 @@ Query → Retrieval → Generation → Response
 ### **❌ Don't Chain Too Many PythonCodeNodes**
 ```python
 # Bad: Multiple PythonCodeNodes in sequence
-workflow.add_node("step1", PythonCodeNode(...))
-workflow.add_node("step2", PythonCodeNode(...))
-workflow.add_node("step3", PythonCodeNode(...))
+workflow.add_node("PythonCodeNode", "step1", {}))
+workflow.add_node("PythonCodeNode", "step2", {}))
+workflow.add_node("PythonCodeNode", "step3", {}))
 
 # Good: Use specialized nodes
-workflow.add_node("reader", CSVReaderNode(...))
-workflow.add_node("filter", FilterNode(...))
-workflow.add_node("validator", DataValidatorNode(...))
+workflow.add_node("CSVReaderNode", "reader", {}))
+workflow.add_node("FilterNode", "filter", {}))
+workflow.add_node("DataValidatorNode", "validator", {}))
 
 ```
 
@@ -278,7 +278,7 @@ CSVReaderNode(file_path="file.csv")
 ### **❌ Don't Ignore Error Handling**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -288,8 +288,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Bad: No error handling
 HTTPRequestNode(url="https://api.example.com")
@@ -304,7 +305,7 @@ HTTPRequestNode(url="https://api.example.com")
 ### **❌ Don't Use Synchronous Nodes for High-Volume Data**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -314,8 +315,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Bad: Synchronous for large datasets
 SQLDatabaseNode(query="SELECT * FROM huge_table")
@@ -328,7 +330,7 @@ AsyncSQLDatabaseNode(query="SELECT * FROM huge_table")
 ### **❌ Don't Create Monolithic Workflows**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -338,8 +340,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Bad: Everything in one giant PythonCodeNode
 PythonCodeNode(code="""
@@ -351,7 +354,7 @@ PythonCodeNode(code="""
 """)
 
 # Good: Break into logical nodes
-CSVReaderNode() → DataCleanerNode() → DataValidatorNode() → ProcessorNode()
+"CSVReaderNode" → DataCleanerNode() → DataValidatorNode() → ProcessorNode()
 
 ```
 
@@ -449,7 +452,7 @@ CSVReaderNode() → DataCleanerNode() → DataValidatorNode() → ProcessorNode(
 - **LLMAgentNode**: General-purpose LLM agent with unified provider support
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -459,8 +462,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode calling OpenAI/Anthropic APIs
   node = LLMAgentNode(provider="openai", model="gpt-4")
@@ -469,7 +473,7 @@ workflow.runtime = LocalRuntime()
 - **MonitoredLLMAgentNode**: LLM agent with cost tracking and budget controls
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -479,8 +483,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Track costs and enforce budget limits
   node = MonitoredLLMAgentNode(model="gpt-4", budget_limit=10.0, alert_threshold=0.8)
@@ -489,14 +494,15 @@ workflow.runtime = LocalRuntime()
 - **IterativeLLMAgentNode**: Advanced LLM agent with iterative refinement, test-driven convergence, and real MCP tool execution
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai import IterativeLLMAgentNode
 from kailash.nodes.ai.iterative_llm_agent import ConvergenceMode
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Real MCP tool execution (default behavior)
   node = IterativeLLMAgentNode(
@@ -571,7 +577,7 @@ workflow.runtime = LocalRuntime()
 - **EmbeddingGeneratorNode**: Generate text embeddings with caching
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -581,8 +587,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode with OpenAI embeddings
   node = EmbeddingGeneratorNode(provider="openai", model="text-embedding-ada-002")
@@ -600,7 +607,7 @@ workflow.runtime = LocalRuntime()
 - **CSVReaderNode**: Read CSV files with configurable options
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -610,8 +617,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode with pd.read_csv()
   node = CSVReaderNode(file_path="data.csv", headers=True, delimiter=",")
@@ -620,7 +628,7 @@ workflow.runtime = LocalRuntime()
 - **JSONReaderNode**: Read JSON files into Python objects
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -630,8 +638,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode with json.load()
   node = JSONReaderNode(file_path="data.json")
@@ -640,7 +649,7 @@ workflow.runtime = LocalRuntime()
 - **TextReaderNode**: Read plain text files
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -650,8 +659,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode with open().read()
   node = TextReaderNode(file_path="document.txt")
@@ -667,7 +677,7 @@ workflow.runtime = LocalRuntime()
 - **SQLDatabaseNode**: Execute SQL queries and commands
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -677,8 +687,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode with database connections
   node = SQLDatabaseNode(
@@ -690,7 +701,7 @@ workflow.runtime = LocalRuntime()
 - **AsyncSQLDatabaseNode**: ⭐ NEW: High-performance async database operations
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -700,8 +711,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use for high-concurrency database operations (Session 065)
   node = AsyncSQLDatabaseNode(
@@ -715,13 +727,14 @@ workflow.runtime = LocalRuntime()
 - **WorkflowConnectionPool**: ⭐⭐⭐ PRODUCTION RECOMMENDED: Enterprise-grade connection pooling
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import WorkflowConnectionPool
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Production-grade connection pool with fault tolerance
   pool = WorkflowConnectionPool(
@@ -765,7 +778,7 @@ workflow.runtime = LocalRuntime()
 - **AsyncPostgreSQLVectorNode**: ⭐ NEW: pgvector similarity search
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -775,8 +788,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use for AI/ML vector operations (Session 065)
   node = AsyncPostgreSQLVectorNode(
@@ -819,7 +833,7 @@ workflow.runtime = LocalRuntime()
 - **HybridRetrieverNode**: State-of-the-art hybrid retrieval combining dense and sparse methods
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -829,8 +843,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use for production RAG systems - 20-30% better performance
   node = HybridRetrieverNode(
@@ -844,7 +859,7 @@ workflow.runtime = LocalRuntime()
 - **RelevanceScorerNode**: Advanced relevance scoring with embeddings
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -854,8 +869,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode for relevance ranking
   node = RelevanceScorerNode(
@@ -887,7 +903,7 @@ workflow.runtime = LocalRuntime()
 - **SemanticRAGNode**: Semantic chunking with dense embeddings for conceptual queries
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -897,8 +913,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Best for narrative content, general Q&A, conceptual queries
   node = SemanticRAGNode(config=RAGConfig(chunk_size=1000, retrieval_k=5))
@@ -907,7 +924,7 @@ workflow.runtime = LocalRuntime()
 - **StatisticalRAGNode**: Statistical chunking with sparse retrieval for technical content
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -917,8 +934,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Best for technical docs, code, structured content
   node = StatisticalRAGNode(config=RAGConfig(chunk_size=800, retrieval_k=3))
@@ -927,7 +945,7 @@ workflow.runtime = LocalRuntime()
 - **HybridRAGNode**: Combines semantic + statistical for optimal coverage (20-30% better performance)
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -937,8 +955,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Best for mixed content, general purpose, maximum coverage
   node = HybridRAGNode(config=RAGConfig(), fusion_method="rrf")
@@ -947,7 +966,7 @@ workflow.runtime = LocalRuntime()
 - **HierarchicalRAGNode**: Multi-level processing preserving document structure
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -957,8 +976,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Best for long documents, structured content, complex queries
   node = HierarchicalRAGNode(config=RAGConfig(chunk_size=1200))
@@ -969,7 +989,7 @@ workflow.runtime = LocalRuntime()
 - **SimpleRAGWorkflowNode**: Basic chunk → embed → store → retrieve pipeline
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -979,8 +999,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Perfect for getting started or simple document Q&A
   workflow = SimpleRAGWorkflowNode(config=RAGConfig())
@@ -989,7 +1010,7 @@ workflow.runtime = LocalRuntime()
 - **AdvancedRAGWorkflowNode**: Multi-stage with quality checks and strategy selection
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -999,8 +1020,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Production-ready with monitoring and validation
   workflow = AdvancedRAGWorkflowNode(config=RAGConfig())
@@ -1009,7 +1031,7 @@ workflow.runtime = LocalRuntime()
 - **AdaptiveRAGWorkflowNode**: AI-driven strategy selection using LLM analysis
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1019,8 +1041,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Fully automated with intelligent optimization
   workflow = AdaptiveRAGWorkflowNode(llm_model="gpt-4", config=RAGConfig())
@@ -1029,7 +1052,7 @@ workflow.runtime = LocalRuntime()
 - **RAGPipelineWorkflowNode**: Configurable pipeline for custom requirements
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1039,8 +1062,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Flexible runtime configuration
   workflow = RAGPipelineWorkflowNode(default_strategy="hybrid", config=RAGConfig())
@@ -1051,7 +1075,7 @@ workflow.runtime = LocalRuntime()
 - **RAGStrategyRouterNode**: LLM-powered intelligent strategy selection
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1061,8 +1085,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Automatically select optimal RAG strategy based on content analysis
   router = RAGStrategyRouterNode(llm_model="gpt-4", provider="openai")
@@ -1071,7 +1096,7 @@ workflow.runtime = LocalRuntime()
 - **RAGQualityAnalyzerNode**: Quality assessment and optimization recommendations
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1081,8 +1106,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Analyze RAG results and suggest improvements
   analyzer = RAGQualityAnalyzerNode()
@@ -1091,7 +1117,7 @@ workflow.runtime = LocalRuntime()
 - **RAGPerformanceMonitorNode**: Performance tracking and insights over time
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1101,8 +1127,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Monitor system performance and generate optimization insights
   monitor = RAGPerformanceMonitorNode()
@@ -1133,7 +1160,7 @@ workflow.runtime = LocalRuntime()
 - **HTTPRequestNode**: Make HTTP requests with full configuration
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1143,8 +1170,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode with requests library
   node = HTTPRequestNode(
@@ -1160,7 +1188,7 @@ workflow.runtime = LocalRuntime()
 - **RESTClientNode**: RESTful API client with built-in patterns
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1170,8 +1198,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode for REST APIs
   node = RESTClientNode(
@@ -1204,7 +1233,7 @@ workflow.runtime = LocalRuntime()
 - **DiscordAlertNode**: Send rich alerts to Discord channels via webhooks
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1214,8 +1243,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode with webhook requests
   node = DiscordAlertNode(
@@ -1252,7 +1282,7 @@ workflow.runtime = LocalRuntime()
 - **SwitchNode**: Conditional routing (if/else logic)
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1262,8 +1292,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode with if/else
   node = SwitchNode(
@@ -1279,7 +1310,7 @@ workflow.runtime = LocalRuntime()
 - **MergeNode**: Merge multiple data streams
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1289,8 +1320,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode combining multiple inputs
   node = MergeNode(merge_strategy="concat")
@@ -1312,7 +1344,7 @@ workflow.runtime = LocalRuntime()
 - **FilterNode**: Filter data based on conditions
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1322,8 +1354,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode with df[df['column'] > value]
   node = FilterNode(condition="age > 30")
@@ -1333,7 +1366,7 @@ workflow.runtime = LocalRuntime()
 - **Map**: Apply transformations to each item
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1343,8 +1376,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode with list comprehensions or df.apply()
   node = Map(function=lambda x: x.upper())
@@ -1353,7 +1387,7 @@ workflow.runtime = LocalRuntime()
 - **Sort**: Sort data by specified criteria
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1363,8 +1397,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of PythonCodeNode with sorted() or df.sort_values()
   node = Sort(key="timestamp", reverse=True)
@@ -1376,7 +1411,7 @@ workflow.runtime = LocalRuntime()
 - **SemanticChunkerNode**: ⭐ **NEW** Intelligent chunking based on semantic similarity
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1386,8 +1421,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use for narrative text and general documents
   node = SemanticChunkerNode(
@@ -1401,7 +1437,7 @@ workflow.runtime = LocalRuntime()
 - **StatisticalChunkerNode**: ⭐ **NEW** Variance-based chunking for structured content
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1411,8 +1447,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use for technical documents and structured content
   node = StatisticalChunkerNode(
@@ -1426,7 +1463,7 @@ workflow.runtime = LocalRuntime()
 - **ContextualCompressorNode**: ⭐ **NEW** Intelligent content compression for LLM context optimization
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1436,8 +1473,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use for RAG systems and token budget management
   node = ContextualCompressorNode(
@@ -1458,19 +1496,20 @@ workflow.runtime = LocalRuntime()
 - **CodeValidationNode**: ⭐ **NEW** Comprehensive code validation with multiple validation levels
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.validation import CodeValidationNode
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Multi-level code validation with sandbox execution
   node = CodeValidationNode(
       code="def process(data): return {'result': len(data)}",
       validation_levels=["syntax", "imports", "semantic", "functional"],
-      test_inputs={"data": [1, 2, 3, 4, 5]},
+      test_parameters={"data": [1, 2, 3, 4, 5]},
       expected_schema={"result": int},
       timeout=30,
       sandbox=True
@@ -1490,13 +1529,14 @@ workflow.runtime = LocalRuntime()
 - **WorkflowValidationNode**: ⭐ **NEW** Validate complete workflow definitions
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.validation import WorkflowValidationNode
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Validate workflow structure and execution
   node = WorkflowValidationNode(
@@ -1505,7 +1545,7 @@ from kailash.workflow.builder import WorkflowBuilder
 workflow = WorkflowBuilder()
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 workflow.add_node("PythonCodeNode", "processor", {"code": "result = data"})
-workflow.connect("reader", "processor", {"data": "data"})
+workflow.add_connection("reader", "result", "processor", "input")
       ''',
       validate_execution=True,
       expected_nodes=["reader", "processor"],
@@ -1526,13 +1566,14 @@ workflow.connect("reader", "processor", {"data": "data"})
 - **TestSuiteExecutorNode**: ⭐ **NEW** Execute comprehensive test suites against code
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.validation import TestSuiteExecutorNode
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Execute comprehensive test suite
   node = TestSuiteExecutorNode(
@@ -1579,7 +1620,7 @@ workflow.runtime = LocalRuntime()
 - **MultiFactorAuthNode**: ⭐ NEW: Complete MFA implementation with TOTP, SMS, email
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1589,8 +1630,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Enterprise-grade multi-factor authentication
   node = MultiFactorAuthNode(
@@ -1605,7 +1647,7 @@ workflow.runtime = LocalRuntime()
 - **SessionManagementNode**: ⭐ NEW: Advanced session management with security controls
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1615,8 +1657,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Secure session handling with anomaly detection
   node = SessionManagementNode(
@@ -1632,7 +1675,7 @@ workflow.runtime = LocalRuntime()
 - **SSOAuthenticationNode**: ⭐ NEW: Single sign-on with multiple identity providers
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1642,8 +1685,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Enterprise SSO with SAML, OIDC, Azure AD support
   node = SSOAuthenticationNode(
@@ -1658,7 +1702,7 @@ workflow.runtime = LocalRuntime()
 - **DirectoryIntegrationNode**: ⭐ NEW: Active Directory and LDAP integration
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1668,8 +1712,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Enterprise directory integration with group sync
   node = DirectoryIntegrationNode(
@@ -1684,7 +1729,7 @@ workflow.runtime = LocalRuntime()
 - **EnterpriseAuthProviderNode**: ⭐ NEW: Unified authentication provider interface
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1694,8 +1739,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Centralized authentication with multiple providers
   node = EnterpriseAuthProviderNode(
@@ -1710,7 +1756,7 @@ workflow.runtime = LocalRuntime()
 - **RiskAssessmentNode**: ⭐ NEW: Real-time authentication risk assessment
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1720,8 +1766,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # AI-powered authentication risk scoring
   node = RiskAssessmentNode(
@@ -1739,7 +1786,7 @@ workflow.runtime = LocalRuntime()
 - **GDPRComplianceNode**: ⭐ NEW: Complete GDPR compliance automation
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1749,8 +1796,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Comprehensive GDPR compliance workflows
   node = GDPRComplianceNode(
@@ -1766,7 +1814,7 @@ workflow.runtime = LocalRuntime()
 - **DataRetentionPolicyNode**: ⭐ NEW: Automated data retention and lifecycle management
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1776,8 +1824,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Enterprise data retention with automated cleanup
   node = DataRetentionPolicyNode(
@@ -1828,13 +1877,14 @@ workflow.runtime = LocalRuntime()
 
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.admin import RoleManagementNode
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Create hierarchical role structure
   node = RoleManagementNode(
@@ -1898,13 +1948,14 @@ workflow.runtime = LocalRuntime()
 
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.admin import PermissionCheckNode
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Single permission check with explanation
   node = PermissionCheckNode(
@@ -1979,13 +2030,14 @@ workflow.runtime = LocalRuntime()
 
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.admin import UserManagementNode
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Create user with ABAC attributes
   node = UserManagementNode(
@@ -2046,13 +2098,14 @@ workflow.runtime = LocalRuntime()
 
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.security import AuditLogNode
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Enterprise audit logging
   node = AuditLogNode(
@@ -2093,7 +2146,7 @@ workflow.runtime = LocalRuntime()
 - **SecurityEventNode**: ⭐ NEW: Security event monitoring with alerting (Session 067)
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2103,8 +2156,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use for security monitoring with automatic alerting
   node = SecurityEventNode(
@@ -2118,7 +2172,7 @@ workflow.runtime = LocalRuntime()
 - **CredentialManagerNode**: ⭐ NEW: Enterprise credential management (Session 067)
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2128,8 +2182,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Multi-source credential management with validation
   node = CredentialManagerNode(
@@ -2144,7 +2199,7 @@ workflow.runtime = LocalRuntime()
 - **RotatingCredentialNode**: ⭐ NEW: Automatic credential rotation (Session 067)
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2154,8 +2209,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Zero-downtime credential rotation with notifications
   node = RotatingCredentialNode(
@@ -2174,7 +2230,7 @@ workflow.runtime = LocalRuntime()
 - **ThreatDetectionNode**: ⭐ NEW: AI-powered threat detection and response
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2184,8 +2240,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Real-time threat detection with ML models
   node = ThreatDetectionNode(
@@ -2200,7 +2257,7 @@ workflow.runtime = LocalRuntime()
 - **ABACPermissionEvaluatorNode**: ⭐ NEW: Advanced attribute-based access control
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2210,8 +2267,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Complex permission evaluation with 16+ operators
   node = ABACPermissionEvaluatorNode(
@@ -2226,7 +2284,7 @@ workflow.runtime = LocalRuntime()
 - **BehaviorAnalysisNode**: ⭐ NEW: User behavior analytics for security
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2236,8 +2294,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # ML-powered behavior analysis for anomaly detection
   node = BehaviorAnalysisNode(
@@ -2253,7 +2312,7 @@ workflow.runtime = LocalRuntime()
 - **AuditLogNode**: Comprehensive audit logging with compliance tags
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2263,8 +2322,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use instead of custom logging
   node = AuditLogNode(compliance_tags=["SOC2", "HIPAA"])
@@ -2542,7 +2602,7 @@ for anomaly in result.get("anomalies_detected", []):
 - **AgentUIMiddleware**: Central orchestration hub for frontend communication
   ```python
   # Use for production frontend applications
-  from kailash.middleware import AgentUIMiddleware
+  from kailash.api.middleware import AgentUIMiddleware
 
   middleware = AgentUIMiddleware(
       enable_dynamic_workflows=True,
@@ -2565,7 +2625,7 @@ for anomaly in result.get("anomalies_detected", []):
 - **RealtimeMiddleware**: Multi-protocol real-time communication
   ```python
   # WebSocket, SSE, and webhook support
-  from kailash.middleware import RealtimeMiddleware
+  from kailash.api.middleware import RealtimeMiddleware
 
   realtime = RealtimeMiddleware(agent_ui_middleware)
 
@@ -2578,7 +2638,7 @@ for anomaly in result.get("anomalies_detected", []):
 - **APIGateway**: RESTful API layer with authentication
   ```python
   # Production API gateway with OpenAPI docs
-  from kailash.middleware import create_gateway
+  from kailash.api.middleware import create_gateway
 
   gateway = create_gateway(
       title="My Kailash API",
@@ -2592,7 +2652,7 @@ for anomaly in result.get("anomalies_detected", []):
 - **AIChatMiddleware**: AI-powered conversation management
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2602,11 +2662,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # AI chat with semantic search and context
-  from kailash.middleware import AIChatMiddleware
+  from kailash.api.middleware import AIChatMiddleware
 
   ai_chat = AIChatMiddleware(
       agent_ui_middleware,
@@ -2658,7 +2719,7 @@ workflow.runtime = LocalRuntime()
 - **BusinessWorkflowTemplates**: ⭐ NEW: Pre-built enterprise workflow templates (Session 067)
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2668,8 +2729,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Investment data pipeline template
   template = BusinessWorkflowTemplates.investment_data_pipeline(
@@ -2694,7 +2756,7 @@ workflow.runtime = LocalRuntime()
 - **DataLineageNode**: ⭐ NEW: Comprehensive data lineage tracking (Session 067)
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2704,8 +2766,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Track data transformations with compliance checking
   node = DataLineageNode(
@@ -2721,7 +2784,7 @@ workflow.runtime = LocalRuntime()
 - **BatchProcessorNode**: ⭐ NEW: Intelligent batch processing (Session 067)
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2731,8 +2794,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # High-performance batch processing with optimization
   node = BatchProcessorNode(
@@ -2753,7 +2817,7 @@ workflow.runtime = LocalRuntime()
 - **CredentialTestingNode**: Test authentication flows without external services
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2763,8 +2827,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Use for testing OAuth2, API keys, JWT, Basic auth
   node = CredentialTestingNode(
@@ -2799,7 +2864,7 @@ Use PythonCodeNode **only** when:
 ❌ **Reading/Writing Files**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2809,8 +2874,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Don't use PythonCodeNode:
 with open('data.csv') as f:
@@ -2834,7 +2900,7 @@ node = HTTPRequestNode(url='https://api.example.com/data', method='GET')
 ❌ **Data Filtering**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -2844,8 +2910,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Don't use PythonCodeNode:
 filtered = [x for x in data if x['age'] > 30]

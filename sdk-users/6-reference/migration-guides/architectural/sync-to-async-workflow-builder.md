@@ -18,7 +18,7 @@ This guide helps you migrate from the synchronous `WorkflowBuilder` to the new p
 
 **Before:**
 ```python
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 ```
 
@@ -321,7 +321,7 @@ builder.add_connection("source", "data", "parallel", "items")
 
 ```python
 # Before: Sync WorkflowBuilder
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 builder = WorkflowBuilder()

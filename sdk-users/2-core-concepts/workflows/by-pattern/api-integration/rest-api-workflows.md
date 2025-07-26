@@ -15,18 +15,14 @@ REST API workflows enable:
 
 ### 30-Second API Integration
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.api import RateLimitedAPINode, HTTPRequestNode
 from kailash.nodes.transform import DataTransformer
 from kailash.nodes.data import JSONWriterNode
 from kailash.runtime.local import LocalRuntime
 
 # API integration workflow using proper Kailash nodes
-workflow = Workflow(
-    workflow_id="api_001",
-    name="api_integration",
-    description="REST API workflow with rate limiting"
-)
+workflow = WorkflowBuilder()
 
 # Rate-limited API client
 api_client = RateLimitedAPINode(
@@ -57,7 +53,7 @@ else:
     ]
 )
 workflow.add_node("processor", response_processor)
-workflow.connect("api_client", "processor", mapping={"response": "data"})
+workflow.add_connection("api_client", "processor", "response", "data")
 
 # Save results
 writer = JSONWriterNode(
@@ -65,7 +61,7 @@ writer = JSONWriterNode(
     file_path="api_results.json"
 )
 workflow.add_node("writer", writer)
-workflow.connect("processor", "writer", mapping={"result": "data"})
+workflow.add_connection("processor", "writer", "result", "data")
 
 # Execute the workflow
 runtime = LocalRuntime()
@@ -86,11 +82,7 @@ from kailash.nodes.data import DatabaseWriterNode, CSVWriterNode
 from kailash.nodes.api import CircuitBreakerNode, RetryNode
 
 # Enterprise-grade API workflow
-workflow = Workflow(
-    workflow_id="enterprise_api_001",
-    name="enterprise_api_integration",
-    description="Production-ready API integration with comprehensive error handling"
-)
+workflow = WorkflowBuilder()
 
 # Circuit breaker for API reliability
 circuit_breaker = CircuitBreakerNode(
@@ -283,19 +275,15 @@ result = {
 workflow.add_node("error_handler", error_handler)
 
 # Connect the workflow
-workflow.connect("circuit_breaker", "primary_api")
-workflow.connect("primary_api", "validator", mapping={"response": "data"})
-workflow.connect("validator", "router", mapping={"result": "data"})
+workflow.add_connection("circuit_breaker", "result", "primary_api", "input")
+workflow.add_connection("primary_api", "validator", "response", "data")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 # Success path
-workflow.connect("router", "success_processor",
-               output_key="true_output",
-               mapping={"data": "data"})
+workflow.add_connection("source", "result", "target", "input")  # Fixed output mapping
 
 # Error path
-workflow.connect("router", "error_handler",
-               output_key="false_output",
-               mapping={"data": "data"})
+workflow.add_connection("source", "result", "target", "input")  # Fixed output mapping
 
 # Database storage for successful results
 db_writer = DatabaseWriterNode(
@@ -305,7 +293,7 @@ db_writer = DatabaseWriterNode(
     batch_size=100
 )
 workflow.add_node("db_writer", db_writer)
-workflow.connect("success_processor", "db_writer", mapping={"result": "records"})
+workflow.add_connection("success_processor", "db_writer", "result", "records")
 
 # CSV backup for all results
 csv_writer = CSVWriterNode(
@@ -318,9 +306,9 @@ workflow.add_node("csv_backup", csv_writer)
 # Merge successful and error results for backup
 result_merger = MergeNode(id="result_merger")
 workflow.add_node("result_merger", result_merger)
-workflow.connect("success_processor", "result_merger", mapping={"result": "data1"})
-workflow.connect("error_handler", "result_merger", mapping={"result": "data2"})
-workflow.connect("result_merger", "csv_backup", mapping={"merged_data": "data"})
+workflow.add_connection("success_processor", "result_merger", "result", "data1")
+workflow.add_connection("error_handler", "result_merger", "result", "data2")
+workflow.add_connection("result_merger", "csv_backup", "merged_data", "data")
 
 ```
 
@@ -330,10 +318,7 @@ workflow.connect("result_merger", "csv_backup", mapping={"merged_data": "data"})
 ```python
 from kailash.nodes.api import OAuth2Node
 
-workflow = Workflow(
-    workflow_id="oauth_001",
-    name="oauth_integration"
-)
+workflow = WorkflowBuilder()
 
 # OAuth2 authentication
 auth = OAuth2Node(
@@ -351,7 +336,7 @@ api_request = HTTPRequestNode(
     url="https://api.example.com/protected-data"
 )
 workflow.add_node("api_request", api_request)
-workflow.connect("oauth", "api_request", mapping={"access_token": "auth_token"})
+workflow.add_connection("oauth", "api_request", "access_token", "auth_token")
 
 ```
 
@@ -374,7 +359,7 @@ http_request = HTTPRequestNode(
     url="https://api.example.com/data"
 )
 workflow.add_node("request", http_request)
-workflow.connect("api_key", "request", mapping={"headers": "auth_headers"})
+workflow.add_connection("api_key", "request", "headers", "auth_headers")
 
 ```
 
@@ -608,10 +593,7 @@ result = {
 from kailash.nodes.data import StreamingDataNode, QueueNode
 
 # Streaming API integration for real-time data
-streaming_workflow = Workflow(
-    workflow_id="streaming_api_001",
-    name="real_time_api_streaming"
-)
+streaming_workflow = WorkflowBuilder()
 
 # Streaming data source
 stream_source = StreamingDataNode(
@@ -702,8 +684,8 @@ event_queue = QueueNode(
 streaming_workflow.add_node("event_queue", event_queue)
 
 # Connect streaming pipeline
-streaming_workflow.connect("stream_source", "stream_processor", mapping={"stream_data": "data"})
-streaming_workflow.connect("stream_processor", "event_queue", mapping={"result": "items"})
+streaming_workflow.add_connection("stream_source", "stream_processor", "stream_data", "data")
+streaming_workflow.add_connection("stream_processor", "event_queue", "result", "items")
 
 ```
 
@@ -779,14 +761,14 @@ result = {
 """
     ]
 )
-workflow.connect("webhook", "processor", mapping={"request": "data"})
+workflow.add_connection("webhook", "processor", "request", "data")
 
 ```
 
 ### Batch API Processing
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -796,8 +778,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Process multiple API calls
 batch_processor = DataTransformer(
@@ -845,7 +828,7 @@ pooled_client = HTTPRequestNode(
 ### Response Caching
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -855,8 +838,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Cache API responses
 cached_api = RateLimitedAPINode(
@@ -907,7 +891,7 @@ api_node = HTTPRequestNode(
 ### Don't Implement Rate Limiting Manually
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -917,8 +901,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # WRONG: Manual rate limiting
 rate_limiter = PythonCodeNode(

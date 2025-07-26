@@ -3,7 +3,7 @@
 ## Basic Setup
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.access_control import UserContext, AccessControlManager
 from kailash.runtime.access_controlled import AccessControlledRuntime
 
@@ -19,7 +19,7 @@ user = UserContext(
 secure_runtime = AccessControlledRuntime(user_context=user)
 
 # Execute with automatic permission checks
-results, run_id = secure_runtime.execute(workflow)
+results, run_id = secure_runtime.execute(workflow.build())
 
 ```
 
@@ -108,9 +108,7 @@ access_manager.add_policy({
 from kailash.nodes.data import SQLDatabaseNode
 
 # Automatic tenant filtering
-workflow.add_node("db_query", SQLDatabaseNode(
-    connection_string="postgresql://user:pass@localhost:5432/mydb"
-),
+workflow.add_node("SQLDatabaseNode", "db_query", {}),
     query="SELECT * FROM customers WHERE tenant_id = :tenant_id",
     parameters={"tenant_id": "${user.tenant_id}"}  # Injected from context
 )
@@ -118,7 +116,7 @@ workflow.add_node("db_query", SQLDatabaseNode(
 # Runtime enforces tenant isolation
 for tenant_user in users:
     runtime = AccessControlledRuntime(user_context=tenant_user)
-    results, _ = runtime.execute(workflow)
+    results, _ = runtime.execute(workflow.build())
     # Each tenant only sees their data
 
 ```
@@ -150,7 +148,7 @@ access_manager.add_policy({
 ### Data Encryption
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -160,12 +158,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Encrypt sensitive data per tenant
-workflow = Workflow("example", name="Example")
-workflow.add_node("encrypt", EncryptionNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("EncryptionNode", "encrypt", {}),
     encryption_key="${tenant.encryption_key}",
     algorithm="AES-256-GCM"
 )
@@ -175,7 +174,7 @@ workflow.add_node("encrypt", EncryptionNode(),
 ### Audit Logging
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -185,8 +184,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Automatic audit trail
 secure_runtime = AccessControlledRuntime(
@@ -197,7 +197,7 @@ secure_runtime = AccessControlledRuntime(
 
 # All operations logged with user context
 runtime = LocalRuntime()
-workflow.execute(workflow)
+runtime.execute(workflow.build(), workflow)
 
 ```
 
@@ -206,7 +206,7 @@ workflow.execute(workflow)
 ### Dynamic Permission Checking
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -216,8 +216,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def check_data_access(user, resource) -> bool:
     """Custom permission logic."""
@@ -230,8 +231,8 @@ def check_data_access(user, resource) -> bool:
     return True
 
 # Apply in workflow
-workflow = Workflow("example", name="Example")
-workflow.add_node("filter", FilterNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("FilterNode", "filter", {}),
     filter_function=lambda item: check_data_access(user, item)
 )
 

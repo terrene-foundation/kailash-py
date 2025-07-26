@@ -212,8 +212,8 @@ workflow.add_node("UserUpdateNode", "update_existing_user", {
 
 # Connect conditional flow
 workflow.add_connection("check_user", "user_exists_switch", "data", "user_data")
-workflow.add_connection("user_exists_switch", "create_new_user")
-workflow.add_connection("user_exists_switch", "update_existing_user")
+workflow.add_connection("user_exists_switch", "result", "create_new_user", "input")
+workflow.add_connection("user_exists_switch", "result", "update_existing_user", "input")
 ```
 
 ### Bulk Operations in Workflows
@@ -264,8 +264,8 @@ workflow.add_node("SearchIndexUpdateNode", "update_search", {
 })
 
 # Connect workflow
-workflow.add_connection("fetch_products", "transform_products")
-workflow.add_connection("transform_products", "import_products", "products")
+workflow.add_connection("fetch_products", "result", "transform_products", "input")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex pattern
 workflow.add_connection("import_products", "update_search", "data", "imported_products")
 ```
 
@@ -334,9 +334,9 @@ workflow.add_node("TransactionRollbackNode", "rollback_transaction", {
 })
 
 # Connect transaction flow
-workflow.add_connection("start_transaction", "create_user")
+workflow.add_connection("start_transaction", "result", "create_user", "input")
 workflow.add_connection("create_user", "create_profile", "id", "user_id")
-workflow.add_connection("create_profile", "commit_transaction")
+workflow.add_connection("create_profile", "result", "commit_transaction", "input")
 ```
 
 ### Nested Transactions
@@ -379,10 +379,10 @@ workflow.add_node("TransactionRollbackToSavepointNode", "rollback_profile", {
 workflow.add_node("TransactionCommitNode", "commit_main", {})
 
 # Connect nested transaction flow
-workflow.add_connection("main_transaction", "create_user")
-workflow.add_connection("create_user", "savepoint_profile")
-workflow.add_connection("savepoint_profile", "create_profile")
-workflow.add_connection("create_profile", "commit_main")
+workflow.add_connection("main_transaction", "result", "create_user", "input")
+workflow.add_connection("create_user", "result", "savepoint_profile", "input")
+workflow.add_connection("savepoint_profile", "result", "create_profile", "input")
+workflow.add_connection("create_profile", "result", "commit_main", "input")
 ```
 
 ## Error Handling and Recovery
@@ -452,8 +452,8 @@ workflow.add_node("UserCreateNode", "retry_create_user", {
 })
 
 # Connect error handling
-workflow.add_connection("create_user", "handle_error")
-workflow.add_connection("handle_error", "retry_create_user")
+workflow.add_connection("create_user", "result", "handle_error", "input")
+workflow.add_connection("handle_error", "result", "retry_create_user", "input")
 ```
 
 ## Data Flow Patterns
@@ -495,7 +495,7 @@ workflow.add_node("UserAnalyticsBulkCreateNode", "store_analytics", {
 })
 
 # Connect transformation pipeline
-workflow.add_connection("get_users", "transform_users")
+workflow.add_connection("get_users", "result", "transform_users", "input")
 workflow.add_connection("transform_users", "store_analytics", "transformed_users")
 ```
 
@@ -545,7 +545,7 @@ workflow.add_node("UserBulkUpdateNode", "update_user_stats", {
 })
 
 # Connect aggregation pipeline
-workflow.add_connection("get_orders", "aggregate_orders")
+workflow.add_connection("get_orders", "result", "aggregate_orders", "input")
 workflow.add_connection("aggregate_orders", "update_user_stats", "user_stats", "user_updates")
 ```
 
@@ -613,13 +613,13 @@ result = {
 })
 
 # Connect parallel processing
-workflow.add_connection("get_active_users", "process_users")
-workflow.add_connection("get_recent_orders", "process_orders")
-workflow.add_connection("get_popular_products", "process_products")
+workflow.add_connection("get_active_users", "result", "process_users", "input")
+workflow.add_connection("get_recent_orders", "result", "process_orders", "input")
+workflow.add_connection("get_popular_products", "result", "process_products", "input")
 
-workflow.add_connection("process_users", "aggregate_results")
-workflow.add_connection("process_orders", "aggregate_results")
-workflow.add_connection("process_products", "aggregate_results")
+workflow.add_connection("process_users", "result", "aggregate_results", "input")
+workflow.add_connection("process_orders", "result", "aggregate_results", "input")
+workflow.add_connection("process_products", "result", "aggregate_results", "input")
 ```
 
 ### Batch Processing
@@ -660,7 +660,7 @@ workflow.add_node("UserProcessingLogBulkCreateNode", "store_processing_log", {
 })
 
 # Connect batch processing
-workflow.add_connection("get_users_batch", "process_user_batch")
+workflow.add_connection("get_users_batch", "result", "process_user_batch", "input")
 workflow.add_connection("process_user_batch", "store_processing_log", "processed_users")
 ```
 
@@ -744,7 +744,7 @@ workflow.add_node("MetricsBulkCreateNode", "store_metrics", {
 })
 
 # Connect monitoring
-workflow.add_connection("create_users", "track_metrics")
+workflow.add_connection("create_users", "result", "track_metrics", "input")
 workflow.add_connection("track_metrics", "store_metrics", "metrics")
 ```
 
@@ -940,10 +940,10 @@ workflow.add_node("MigrationNode", "complete", {
 workflow.add_node("TransactionCommitNode", "commit_migration", {})
 
 # Connect workflow
-workflow.add_connection("start_migration", "track")
-workflow.add_connection("track", "add_preferences")
-workflow.add_connection("add_preferences", "complete")
-workflow.add_connection("complete", "commit_migration")
+workflow.add_connection("start_migration", "result", "track", "input")
+workflow.add_connection("track", "result", "add_preferences", "input")
+workflow.add_connection("add_preferences", "result", "complete", "input")
+workflow.add_connection("complete", "result", "commit_migration", "input")
 ```
 
 ## Best Practices

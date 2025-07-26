@@ -1,10 +1,10 @@
 # GOLD STANDARD: Custom Node Development Guide
 
-**Date**: 2025-07-18  
-**Target**: Kailash SDK Developers  
-**Priority**: Critical  
-**Category**: Gold Standard Documentation  
-**Status**: Production-Ready Enterprise Custom Node Development Guide  
+**Date**: 2025-07-18
+**Target**: Kailash SDK Developers
+**Priority**: Critical
+**Category**: Gold Standard Documentation
+**Status**: Production-Ready Enterprise Custom Node Development Guide
 
 ## Executive Summary
 
@@ -55,7 +55,7 @@ workflow.add_node("LLMAgentNode", "agent", {config})
 class BadCustomNode(Node):
     def get_parameters(self):
         return {"param": NodeParameter(type=str, required=True)}
-    
+
     def execute(self, **kwargs):  # ❌ WRONG METHOD NAME
         return {"result": kwargs.get("param")}
 
@@ -63,12 +63,12 @@ class BadCustomNode(Node):
 # Parameters: {} (empty - SDK can't find the method)
 ```
 
-### ✅ CORRECT Implementation  
+### ✅ CORRECT Implementation
 ```python
 class GoodCustomNode(Node):
     def get_parameters(self):
         return {"param": NodeParameter(type=str, required=True)}
-    
+
     def run(self, **kwargs):  # ✅ CORRECT METHOD NAME
         return {"result": kwargs.get("param")}
 
@@ -93,10 +93,10 @@ If you see empty inputs `{}` despite providing parameters, check the method name
 def test_node_receives_parameters():
     """Test that node receives configured parameters."""
     node = MyCustomNode()
-    
+
     # This will fail if node uses execute() instead of run()
     result = node.run(test_param="test_value")
-    
+
     assert "test_param" in result
 ```
 
@@ -206,36 +206,36 @@ logger = logging.getLogger(__name__)
 
 class EnterpriseBaseNode(Node):
     """Base class for all enterprise custom nodes."""
-    
+
     def __init__(self, **kwargs):
         """Initialize enterprise node with governance."""
         # CRITICAL: Set attributes BEFORE super().__init__()
         self.node_version = kwargs.get("node_version", "1.0.0")
         self.audit_enabled = kwargs.get("audit_enabled", True)
         self.validation_strict = kwargs.get("validation_strict", True)
-        
+
         # Initialize governance
         self.governance = self._init_governance()
-        
+
         # NOW call parent init
         super().__init__(**kwargs)
-        
+
         if self.audit_enabled:
             logger.info(f"Initialized {self.__class__.__name__} v{self.node_version}")
-    
+
     # 🚨 CRITICAL: Use run() method, NOT execute()
     def run(self, **kwargs) -> Dict[str, Any]:
         """
         MANDATORY: All custom nodes MUST implement run() method.
-        
+
         ❌ WRONG: def execute(self, **kwargs) - SDK will not call this
         ✅ CORRECT: def run(self, **kwargs) - SDK entry point
-        
+
         The SDK runtime calls node.run(**parameters), not node.execute().
         Using execute() will result in empty parameters: {}
         """
         raise NotImplementedError("Subclasses must implement run() method")
-    
+
     def _init_governance(self):
         """Initialize parameter governance."""
         return {
@@ -243,21 +243,21 @@ class EnterpriseBaseNode(Node):
             "compliance_mode": "strict",
             "audit_trail": True
         }
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """MANDATORY: Declare all expected parameters explicitly."""
         raise NotImplementedError(
             f"{self.__class__.__name__} must implement get_parameters(). "
             "This is required for SDK parameter injection to work."
         )
-    
+
     def validate_inputs(self, **kwargs) -> Dict[str, Any]:
         """Validate inputs before processing."""
         if not self.validation_strict:
             return kwargs
-            
+
         declared_params = self.get_parameters()
-        
+
         # Check for undeclared parameters
         for param_name in kwargs:
             if param_name not in declared_params:
@@ -265,40 +265,40 @@ class EnterpriseBaseNode(Node):
                     f"Undeclared parameter '{param_name}' received by {self.__class__.__name__}. "
                     f"Declared parameters: {list(declared_params.keys())}"
                 )
-        
+
         # Check required parameters
         for param_name, param_def in declared_params.items():
             if param_def.required and param_name not in kwargs:
                 raise ValueError(
                     f"Required parameter '{param_name}' missing for {self.__class__.__name__}"
                 )
-        
+
         return kwargs
-    
+
     def execute(self, **kwargs) -> Dict[str, Any]:
         """Execute with enterprise governance."""
         # Validate inputs
-        validated_inputs = self.validate_inputs(**kwargs)
-        
+        validated_parameters= self.validate_inputs(**kwargs)
+
         # Audit parameter access
         if self.audit_enabled:
             self._audit_parameter_access(validated_inputs)
-        
+
         # Execute main logic
         result = self.run(**validated_inputs)
-        
+
         # Audit result
         if self.audit_enabled:
             self._audit_execution_result(result)
-        
+
         return result
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """MANDATORY: Main execution logic."""
         raise NotImplementedError(
             f"{self.__class__.__name__} must implement run() method"
         )
-    
+
     def _audit_parameter_access(self, parameters: Dict[str, Any]):
         """Audit parameter access for compliance."""
         logger.info(
@@ -310,7 +310,7 @@ class EnterpriseBaseNode(Node):
                 "governance": self.governance
             }
         )
-    
+
     def _audit_execution_result(self, result: Dict[str, Any]):
         """Audit execution result."""
         logger.info(
@@ -332,10 +332,10 @@ class EnterpriseBaseNode(Node):
 ```python
 class UserManagementNode(EnterpriseBaseNode):
     """Enterprise user management node with complete parameter declaration."""
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Declare ALL expected parameters explicitly.
-        
+
         The SDK's parameter injection system requires this for security.
         Any parameter not declared here will NOT be injected.
         """
@@ -349,7 +349,7 @@ class UserManagementNode(EnterpriseBaseNode):
                 # Add validation if possible
                 enum=["create", "update", "delete", "get"] if hasattr(NodeParameter, 'enum') else None
             ),
-            
+
             "user_data": NodeParameter(
                 name="user_data",
                 type=dict,
@@ -357,14 +357,14 @@ class UserManagementNode(EnterpriseBaseNode):
                 description="User data for create/update operations",
                 default={}
             ),
-            
+
             "user_id": NodeParameter(
-                name="user_id", 
+                name="user_id",
                 type=str,
                 required=False,
                 description="User ID for get/update/delete operations"
             ),
-            
+
             # Enterprise governance parameters (ALWAYS include these)
             "tenant_id": NodeParameter(
                 name="tenant_id",
@@ -372,21 +372,21 @@ class UserManagementNode(EnterpriseBaseNode):
                 required=True,
                 description="Tenant identifier for multi-tenancy"
             ),
-            
+
             "requestor_id": NodeParameter(
                 name="requestor_id",
                 type=str,
                 required=True,
                 description="ID of user making the request (for audit trail)"
             ),
-            
+
             "request_id": NodeParameter(
                 name="request_id",
                 type=str,
                 required=False,
                 description="Correlation ID for request tracking"
             ),
-            
+
             # Security and compliance parameters
             "security_context": NodeParameter(
                 name="security_context",
@@ -395,7 +395,7 @@ class UserManagementNode(EnterpriseBaseNode):
                 default={},
                 description="Security context for authorization"
             ),
-            
+
             "audit_context": NodeParameter(
                 name="audit_context",
                 type=dict,
@@ -403,7 +403,7 @@ class UserManagementNode(EnterpriseBaseNode):
                 default={},
                 description="Audit context for compliance logging"
             ),
-            
+
             # Controlled extension point
             "metadata": NodeParameter(
                 name="metadata",
@@ -413,7 +413,7 @@ class UserManagementNode(EnterpriseBaseNode):
                 description="Additional metadata (must be validated)"
             )
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Execute user management operation."""
         # All parameters are guaranteed to be validated by SDK
@@ -422,17 +422,17 @@ class UserManagementNode(EnterpriseBaseNode):
         user_id = kwargs.get("user_id")
         tenant_id = kwargs["tenant_id"]  # Required
         requestor_id = kwargs["requestor_id"]  # Required
-        
+
         # Business logic validation
         if operation in ["update", "delete", "get"] and not user_id:
             raise ValueError(f"user_id required for {operation} operation")
-        
+
         if operation in ["create", "update"] and not user_data:
             raise ValueError(f"user_data required for {operation} operation")
-        
+
         # Execute operation
         result = self._execute_operation(operation, user_data, user_id, tenant_id)
-        
+
         return {
             "result": result,
             "operation": operation,
@@ -450,7 +450,7 @@ class UserManagementNode(EnterpriseBaseNode):
 ```python
 class DataProcessorNode(EnterpriseBaseNode):
     """Node demonstrating comprehensive parameter types."""
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
             # String parameters
@@ -460,7 +460,7 @@ class DataProcessorNode(EnterpriseBaseNode):
                 required=True,
                 description="Text to process"
             ),
-            
+
             # Numeric parameters
             "threshold": NodeParameter(
                 name="threshold",
@@ -469,7 +469,7 @@ class DataProcessorNode(EnterpriseBaseNode):
                 default=0.75,
                 description="Processing threshold (0.0 to 1.0)"
             ),
-            
+
             "max_items": NodeParameter(
                 name="max_items",
                 type=int,
@@ -477,7 +477,7 @@ class DataProcessorNode(EnterpriseBaseNode):
                 default=100,
                 description="Maximum items to process"
             ),
-            
+
             # Boolean parameters
             "verbose": NodeParameter(
                 name="verbose",
@@ -486,7 +486,7 @@ class DataProcessorNode(EnterpriseBaseNode):
                 default=False,
                 description="Enable verbose logging"
             ),
-            
+
             # List parameters
             "filter_list": NodeParameter(
                 name="filter_list",
@@ -495,7 +495,7 @@ class DataProcessorNode(EnterpriseBaseNode):
                 default=[],
                 description="List of items to filter"
             ),
-            
+
             # Dict parameters
             "config": NodeParameter(
                 name="config",
@@ -504,7 +504,7 @@ class DataProcessorNode(EnterpriseBaseNode):
                 default={},
                 description="Processing configuration"
             ),
-            
+
             # Optional parameters with None default
             "optional_data": NodeParameter(
                 name="optional_data",
@@ -523,7 +523,7 @@ Instead of one "universal" node, create specific entry nodes for different workf
 ```python
 class AuthenticationEntryNode(EnterpriseBaseNode):
     """Entry node specifically for authentication workflows."""
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Parameters specific to authentication."""
         return {
@@ -556,7 +556,7 @@ class AuthenticationEntryNode(EnterpriseBaseNode):
 
 class PermissionCheckEntryNode(EnterpriseBaseNode):
     """Entry node specifically for permission check workflows."""
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Parameters specific to permission checking."""
         return {
@@ -608,40 +608,40 @@ class PermissionCheckEntryNode(EnterpriseBaseNode):
 def _should_scan_for_sql(self, field_name: str) -> bool:
     """
     Gold Standard: Context-aware SQL injection detection.
-    
+
     Enterprise approach balances security with user experience:
     - User content fields (username, first_name): NEVER scan - allows "O'Brien"
     - SQL construction fields (query, where): ALWAYS scan - blocks injection
     - Mixed parameters: Selective scanning based on field context
-    
+
     Implementation in core/parameter_governance.py:263-314
     """
     if not field_name:
         return True  # Default: scan unknown fields (fail secure)
-    
+
     field_lower = field_name.lower()
-    
+
     # Layer 1: User content fields - NEVER scan (allow O'Brien, user--admin)
     user_content_fields = {
         'username', 'first_name', 'last_name', 'display_name', 'user_id',
         'email', 'description', 'company', 'title', 'name', 'full_name',
-        'nickname', 'alias', 'handle', 'bio', 'about', 'profile', 
+        'nickname', 'alias', 'handle', 'bio', 'about', 'profile',
         'requestor_id', 'created_by', 'updated_by'
     }
-    
+
     if field_lower in user_content_fields:
         return False  # Always allow - user experience priority
-    
+
     # Layer 2: SQL construction fields - ALWAYS scan (critical security)
     sql_dangerous_fields = {
         'query', 'sql', 'command', 'where', 'filter', 'expression',
         'order_by', 'group_by', 'having', 'where_clause', 'filter_condition',
         'sort_by', 'select', 'from', 'join', 'union', 'procedure', 'function'
     }
-    
+
     if field_lower in sql_dangerous_fields:
         return True  # Always scan - high risk fields
-    
+
     # Layer 3-5: Heuristic detection + content type + default minimal friction
     return True  # Scan unknown fields with context logging
 ```
@@ -655,39 +655,39 @@ def _should_scan_for_sql(self, field_name: str) -> bool:
 ```python
 class SecureGovernedNode(GovernedNode):
     """Enhanced GovernedNode with connection parameter validation.
-    
+
     CRITICAL SECURITY UPDATE: This class validates both workflow parameters
     AND connection parameters to prevent parameter injection attacks.
-    
+
     Use this instead of GovernedNode for all production custom nodes.
     """
-    
+
     @classmethod
     def get_connection_contract(cls) -> Optional[Type[BaseModel]]:
         """Declare connection parameter contract for security validation.
-        
+
         REQUIRED if your node receives connection parameters from other nodes.
         Connection parameters bypass GovernedNode validation - this fixes that.
         """
         return None  # Override in subclasses that receive connection parameters
-    
+
     def execute(self, **kwargs) -> Dict[str, Any]:
         """Execute with comprehensive parameter validation."""
-        
+
         # Get contracts for both parameter types
         parameter_contract = self.get_parameter_contract()
         connection_contract = self.get_connection_contract()
-        
+
         # Build complete validation field set
         all_valid_fields = set(parameter_contract.model_fields.keys())
         if connection_contract:
             all_valid_fields.update(connection_contract.model_fields.keys())
-        
+
         # Detect security violations (parameter injection attempts)
         incoming_params = set(kwargs.keys())
         sdk_internal = {'node_id', 'workflow_id', 'execution_id'}
         undeclared_params = incoming_params - all_valid_fields - sdk_internal
-        
+
         if undeclared_params:
             # SECURITY ALERT: Log potential injection attempt
             logger.warning(
@@ -702,26 +702,26 @@ class SecureGovernedNode(GovernedNode):
                     "audit_required": True
                 }
             )
-            
+
             # Filter out undeclared parameters for security
-            kwargs = {k: v for k, v in kwargs.items() 
+            kwargs = {k: v for k, v in kwargs.items()
                      if k in all_valid_fields or k in sdk_internal}
-        
+
         # Proceed with standard GovernedNode validation
         return super().execute(**kwargs)
 
 
 class SecureEnterpriseBaseNode(SecureGovernedNode):
     """Secure enterprise base class with connection parameter validation."""
-    
+
     def __init__(self, **kwargs):
         # Set security attributes BEFORE super().__init__()
         self.security_level = kwargs.get("security_level", "enterprise")
         self.connection_validation_enabled = kwargs.get("connection_validation", True)
         self.audit_security_events = kwargs.get("audit_security", True)
-        
+
         super().__init__(**kwargs)
-        
+
         if self.audit_security_events:
             logger.info(
                 f"Initialized secure node {self.__class__.__name__}",
@@ -735,12 +735,12 @@ class SecureEnterpriseBaseNode(SecureGovernedNode):
 # Connection Parameter Contracts for Common Patterns
 class DatabaseConnectionContract(BaseModel):
     """Contract for database connection parameters."""
-    
+
     model_config = ConfigDict(extra="forbid")
-    
+
     params: List[Any] = Field(description="SQL query parameters")
     query: Optional[str] = Field(default=None, description="SQL query string")
-    
+
     @field_validator('params')
     @classmethod
     def validate_params_list(cls, v):
@@ -752,53 +752,53 @@ class DatabaseConnectionContract(BaseModel):
 
 class TPCParameterPrepConnectionContract(BaseModel):
     """Connection contract for TPCParameterPrepNode outputs."""
-    
+
     model_config = ConfigDict(extra="forbid")
-    
+
     # Authentication workflow connections
     db_params: Optional[List[str]] = Field(default=None, description="Database query parameters")
     credentials: Optional[Dict[str, Any]] = Field(default=None, description="Authentication credentials")
-    
-    # User management workflow connections  
+
+    # User management workflow connections
     result: Optional[List[Any]] = Field(default=None, description="User creation parameters")
 
 
 # Secure Custom Node Examples
 class SecureUserManagementNode(SecureEnterpriseBaseNode):
     """Secure user management node with connection parameter validation."""
-    
+
     @classmethod
     def get_parameter_contract(cls):
         return UserManagementContract
-    
+
     @classmethod
     def get_connection_contract(cls):
         """Define connection parameters this node can receive."""
         return TPCParameterPrepConnectionContract
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         # All parameters (workflow + connection) are now validated
         operation = kwargs["operation"]
-        
+
         # Connection parameters are validated if present
         db_params = kwargs.get("db_params", [])
         credentials = kwargs.get("credentials", {})
-        
+
         return self._execute_secure_operation(operation, db_params, credentials)
 
 
 class SecureParameterPrepNode(SecureEnterpriseBaseNode):
     """Secure parameter preparation node - outputs validated connection parameters."""
-    
+
     @classmethod
     def get_parameter_contract(cls):
         return ParameterPrepContract
-    
+
     @classmethod
     def get_connection_contract(cls):
         """This node outputs connection parameters - must define contract."""
         return TPCParameterPrepConnectionContract
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         # Prepare parameters for downstream nodes
         return {
@@ -819,7 +819,7 @@ class MyProductionNode(GovernedNode):
     @classmethod
     def get_parameter_contract(cls):
         return MyContract
-    
+
     def run(self, **kwargs):
         return {"result": "vulnerable_to_injection"}
 
@@ -828,12 +828,12 @@ class MyProductionNode(SecureGovernedNode):
     @classmethod
     def get_parameter_contract(cls):
         return MyContract
-    
+
     @classmethod
     def get_connection_contract(cls):
         """REQUIRED if node receives connection parameters."""
         return MyConnectionContract  # or None if no connection params
-    
+
     def run(self, **kwargs):
         return {"result": "injection_protected"}
 ```
@@ -846,7 +846,7 @@ class MyProductionNode(SecureGovernedNode):
 def test_parameter_injection_prevention():
     """Test that parameter injection attacks are prevented."""
     node = MySecureNode()
-    
+
     # Test injection attempt
     result = node.execute(
         # Valid parameters
@@ -857,7 +857,7 @@ def test_parameter_injection_prevention():
         xss_injection="<script>alert('hack')</script>",
         command_injection="__import__('os').system('rm -rf /')"
     )
-    
+
     # Malicious parameters should not reach node
     assert "sql_injection" not in str(result)
     assert "xss_injection" not in str(result)
@@ -866,7 +866,7 @@ def test_parameter_injection_prevention():
 def test_connection_parameter_validation():
     """Test that connection parameters are validated."""
     node = MySecureNode()
-    
+
     # Valid connection parameters should work
     result = node.execute(
         operation="get_user",
@@ -874,26 +874,26 @@ def test_connection_parameter_validation():
         db_params=["valid_param"],  # From connection contract
         credentials={"username": "valid"}  # From connection contract
     )
-    
+
     assert result is not None
 
 def test_security_violation_logging():
     """Test that security violations are logged."""
     import logging
     from unittest.mock import patch
-    
+
     node = MySecureNode()
-    
+
     with patch('path.to.logger') as mock_logger:
         node.execute(
             operation="get_user",
             tenant_id="test",
             malicious_param="injection_attempt"
         )
-        
+
         # Security violation should be logged
         warning_calls = mock_logger.warning.call_args_list
-        security_logs = [call for call in warning_calls 
+        security_logs = [call for call in warning_calls
                         if 'security violation' in str(call).lower()]
         assert len(security_logs) > 0
 ```
@@ -903,27 +903,27 @@ def test_security_violation_logging():
 ```python
 class SecureProcessorNode(EnterpriseBaseNode):
     """Node demonstrating security best practices."""
-    
+
     def validate_inputs(self, **kwargs) -> Dict[str, Any]:
         """Enhanced input validation with security checks."""
         # Call parent validation first
         validated = super().validate_inputs(**kwargs)
-        
+
         # Business-specific validation
         operation = validated.get("operation")
         if operation and operation not in ["create", "read", "update", "delete"]:
             raise ValueError(f"Invalid operation: {operation}")
-        
+
         # Security validation
         user_data = validated.get("user_data", {})
         if user_data:
             self._validate_user_data_security(user_data)
-        
+
         # Data sanitization
         validated = self._sanitize_inputs(validated)
-        
+
         return validated
-    
+
     def _validate_user_data_security(self, user_data: dict):
         """Validate user data for security issues."""
         # Check for SQL injection patterns
@@ -933,14 +933,14 @@ class SecureProcessorNode(EnterpriseBaseNode):
                 for pattern in dangerous_patterns:
                     if pattern in value.lower():
                         raise ValueError(f"Potential security issue in {key}: {pattern}")
-        
+
         # Check for required fields
         if "email" in user_data:
             import re
             email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
             if not re.match(email_pattern, user_data["email"]):
                 raise ValueError("Invalid email format")
-    
+
     def _sanitize_inputs(self, inputs: dict) -> dict:
         """Sanitize inputs to prevent attacks."""
         sanitized = {}
@@ -959,19 +959,19 @@ class SecureProcessorNode(EnterpriseBaseNode):
 ```python
 class GovernedProcessorNode(EnterpriseBaseNode):
     """Node with comprehensive parameter governance."""
-    
+
     def __init__(self, **kwargs):
         # Governance configuration
         self.allowed_operations = kwargs.get("allowed_operations", ["read", "create"])
         self.max_data_size = kwargs.get("max_data_size", 1000000)  # 1MB
         self.audit_all_access = kwargs.get("audit_all_access", True)
-        
+
         super().__init__(**kwargs)
-    
+
     def validate_inputs(self, **kwargs) -> Dict[str, Any]:
         """Governance-aware input validation."""
         validated = super().validate_inputs(**kwargs)
-        
+
         # Operation governance
         operation = validated.get("operation")
         if operation and operation not in self.allowed_operations:
@@ -979,7 +979,7 @@ class GovernedProcessorNode(EnterpriseBaseNode):
                 f"Operation '{operation}' not allowed. "
                 f"Permitted operations: {self.allowed_operations}"
             )
-        
+
         # Data size governance
         user_data = validated.get("user_data", {})
         if user_data:
@@ -989,13 +989,13 @@ class GovernedProcessorNode(EnterpriseBaseNode):
                 raise ValueError(
                     f"Data size {data_size} exceeds limit {self.max_data_size}"
                 )
-        
+
         # Governance audit
         if self.audit_all_access:
             self._audit_governance_check(validated)
-        
+
         return validated
-    
+
     def _audit_governance_check(self, parameters: dict):
         """Audit governance enforcement."""
         logger.info(
@@ -1018,12 +1018,13 @@ class GovernedProcessorNode(EnterpriseBaseNode):
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 import warnings
 
 def create_user_management_workflow():
     """Create workflow using custom entry node."""
     workflow = WorkflowBuilder()
-    
+
     # 🚨 CRITICAL: Custom nodes use class references
     # This will generate a warning - this is EXPECTED and CORRECT!
     workflow.add_node(UserManagementEntryNode, "user_mgmt_entry", {
@@ -1031,7 +1032,7 @@ def create_user_management_workflow():
         "audit_enabled": True,
         "validation_strict": True
     })
-    
+
     # Map workflow inputs to the entry node
     workflow.add_workflow_inputs("user_mgmt_entry", {
         "operation": "operation",
@@ -1040,25 +1041,22 @@ def create_user_management_workflow():
         "tenant_id": "tenant_id",
         "requestor_id": "requestor_id"
     })
-    
+
     # SDK nodes use string references (no warnings)
     workflow.add_node("AsyncSQLDatabaseNode", "database_operation", {
         **get_database_config()
     })
-    
+
     # Connect nodes
-    workflow.add_connection(
-        "user_mgmt_entry", "result",
-        "database_operation", "input"
-    )
-    
+    workflow.add_connection("user_mgmt_entry", "result", "result", "input")
+
     return workflow.build()
 
 # Alternative: 0 Warning Policy with Suppression
 def create_user_management_workflow_zero_warnings():
     """Create workflow with warning suppression for enterprise 0-warning policy."""
     workflow = WorkflowBuilder()
-    
+
     # Suppress expected warning for custom nodes
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Alternative API usage detected")
@@ -1067,7 +1065,7 @@ def create_user_management_workflow_zero_warnings():
             "audit_enabled": True,
             "validation_strict": True
         })
-    
+
     # Rest of workflow...
     return workflow.build()
 
@@ -1075,7 +1073,7 @@ def create_user_management_workflow_zero_warnings():
 def execute_user_workflow():
     workflow = create_user_management_workflow()
     runtime = LocalRuntime()
-    
+
     # Parameters match what the entry node expects
     parameters = {
         "operation": "create",
@@ -1086,7 +1084,7 @@ def execute_user_workflow():
         "tenant_id": "enterprise_tenant",
         "requestor_id": "admin_user_123"
     }
-    
+
     results, run_id = runtime.execute(workflow, parameters)
     return results
 ```
@@ -1106,18 +1104,18 @@ from typing import Literal, Optional
 
 class UserManagementContract(BaseModel):
     """Parameter contract for user management operations."""
-    
+
     model_config = ConfigDict(
         extra="forbid",  # Security: reject unknown parameters
         validate_assignment=True
     )
-    
+
     operation: Literal["create", "update", "delete", "get"]
     user_data: Optional[Dict[str, Any]] = Field(default=None)
     user_id: Optional[str] = Field(default=None)
     tenant_id: str = Field(description="Tenant identifier")
     requestor_id: str = Field(description="Requestor for audit")
-    
+
     @field_validator('user_data')
     @classmethod
     def validate_user_data(cls, v, info):
@@ -1129,17 +1127,17 @@ class UserManagementContract(BaseModel):
 # Step 2: Register contract in your custom node
 class ContractBasedNode(EnterpriseBaseNode):
     """Node using Pydantic contract for parameters."""
-    
+
     @classmethod
     def get_parameter_contract(cls):
         """🚨 CRITICAL: Return the parameter contract for governance."""
         return UserManagementContract
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Auto-generate parameters from contract."""
         contract = self.get_parameter_contract()
         parameters = {}
-        
+
         # Convert Pydantic fields to NodeParameter
         for field_name, field in contract.model_fields.items():
             parameters[field_name] = NodeParameter(
@@ -1149,9 +1147,9 @@ class ContractBasedNode(EnterpriseBaseNode):
                 default=field.default,
                 description=field.description
             )
-        
+
         return parameters
-    
+
     def validate_inputs(self, **kwargs) -> Dict[str, Any]:
         """Validate using Pydantic contract."""
         contract = self.get_parameter_contract()
@@ -1229,29 +1227,29 @@ from unittest.mock import patch
 
 class TestUserManagementNode:
     """Test suite for custom nodes."""
-    
+
     def test_parameter_declaration(self):
         """Test that all expected parameters are declared."""
         node = UserManagementNode()
         params = node.get_parameters()
-        
+
         # Required parameters
         assert "operation" in params
         assert "tenant_id" in params
         assert "requestor_id" in params
-        
+
         # Optional parameters
         assert "user_data" in params
         assert "user_id" in params
-        
+
         # Check parameter properties
         assert params["operation"].required is True
         assert params["user_data"].required is False
-    
+
     def test_parameter_injection(self):
         """Test that SDK parameter injection works."""
         node = UserManagementNode()
-        
+
         # Simulate SDK parameter injection
         parameters = {
             "operation": "create",
@@ -1259,24 +1257,24 @@ class TestUserManagementNode:
             "requestor_id": "test_user",
             "user_data": {"username": "test"}
         }
-        
+
         result = node.execute(**parameters)
-        
+
         assert result["operation"] == "create"
         assert result["tenant_id"] == "test_tenant"
-    
+
     def test_missing_required_parameter(self):
         """Test validation of required parameters."""
         node = UserManagementNode()
-        
+
         # Missing required parameter
         with pytest.raises(ValueError, match="Required parameter"):
             node.execute(operation="create")  # Missing tenant_id
-    
+
     def test_undeclared_parameter(self):
         """Test rejection of undeclared parameters."""
         node = UserManagementNode(validation_strict=True)
-        
+
         # Undeclared parameter
         with pytest.raises(ValueError, match="Undeclared parameter"):
             node.execute(
@@ -1294,16 +1292,16 @@ def test_workflow_parameter_flow():
     """Test custom node in complete workflow."""
     workflow = create_user_management_workflow()
     runtime = LocalRuntime()
-    
+
     parameters = {
         "operation": "create",
         "user_data": {"username": "test_user"},
         "tenant_id": "test_tenant",
         "requestor_id": "test_admin"
     }
-    
+
     results, run_id = runtime.execute(workflow, parameters)
-    
+
     # Verify entry node received parameters
     entry_result = results["user_mgmt_entry"]
     assert entry_result["operation"] == "create"
@@ -1319,7 +1317,7 @@ def test_workflow_parameter_flow():
 class BadNode(Node):
     def get_parameters(self):
         return {}  # SDK will inject NOTHING!
-    
+
     def run(self, **kwargs):
         # kwargs will always be empty!
         operation = kwargs.get("operation")  # Always None
@@ -1342,7 +1340,7 @@ class BadNode(Node):
         return {
             "known_param": NodeParameter(type=str, required=True)
         }
-    
+
     def run(self, **kwargs):
         # This will fail - unknown_param was not declared!
         unknown = kwargs.get("unknown_param")  # Always None
@@ -1377,39 +1375,39 @@ class GoodNode(Node):
 ### 1. Parameterized Node Factories
 
 ```python
-def create_user_operation_node(operation_type: str, 
+def create_user_operation_node(operation_type: str,
                               allowed_roles: List[str] = None) -> Type[Node]:
     """Factory for creating operation-specific nodes."""
-    
+
     class UserOperationNode(EnterpriseBaseNode):
         def __init__(self, **kwargs):
             self.operation_type = operation_type
             self.allowed_roles = allowed_roles or ["admin"]
             super().__init__(**kwargs)
-        
+
         def get_parameters(self):
             params = {
                 "user_data": NodeParameter(type=dict, required=True),
                 "tenant_id": NodeParameter(type=str, required=True),
                 "requestor_role": NodeParameter(type=str, required=True)
             }
-            
+
             # Add operation-specific parameters
             if operation_type == "create":
                 params["password"] = NodeParameter(type=str, required=True)
             elif operation_type in ["update", "delete"]:
                 params["user_id"] = NodeParameter(type=str, required=True)
-            
+
             return params
-        
+
         def run(self, **kwargs):
             # Validate role
             requestor_role = kwargs["requestor_role"]
             if requestor_role not in self.allowed_roles:
                 raise PermissionError(f"Role {requestor_role} not allowed")
-            
+
             return self._execute_operation(kwargs)
-    
+
     UserOperationNode.__name__ = f"User{operation_type.title()}Node"
     return UserOperationNode
 
@@ -1423,7 +1421,7 @@ UpdateUserNode = create_user_operation_node("update", ["admin", "manager"])
 ```python
 def with_governance(audit=True, security_scan=True, rate_limit=None):
     """Decorator to add governance to custom nodes."""
-    
+
     def decorator(node_class):
         class GovernedNode(node_class):
             def __init__(self, **kwargs):
@@ -1431,24 +1429,24 @@ def with_governance(audit=True, security_scan=True, rate_limit=None):
                 self._governance_security = security_scan
                 self._governance_rate_limit = rate_limit
                 super().__init__(**kwargs)
-            
+
             def execute(self, **kwargs):
                 if self._governance_security:
                     self._security_scan(kwargs)
-                
+
                 if self._governance_rate_limit:
                     self._check_rate_limit()
-                
+
                 result = super().execute(**kwargs)
-                
+
                 if self._governance_audit:
                     self._audit_execution(kwargs, result)
-                
+
                 return result
-        
+
         GovernedNode.__name__ = f"Governed{node_class.__name__}"
         return GovernedNode
-    
+
     return decorator
 
 # Usage
@@ -1470,21 +1468,21 @@ From SDK source analysis (`kailash/nodes/base.py`):
 ```python
 class NodeRegistry:
     """Global registry for node discovery and management.
-    
+
     The NodeRegistry is a singleton that manages all registered nodes.
     It uses _nodes (not _registry) as the internal storage.
     """
-    
+
     @classmethod
     def register(cls, node_class: type[Node], alias: str = None):
         """Register a node class.
-        
+
         Args:
             node_class: Node class to register (must inherit from Node)
             alias: Optional alias for the node (defaults to class name)
         """
         # Implementation details...
-    
+
     @classmethod
     def get(cls, node_type: str) -> type[Node]:
         """Get node class by type name."""
@@ -1537,32 +1535,32 @@ from kailash.nodes.base import NodeRegistry
 
 class TestNodeRegistration:
     """Test node registration following SDK patterns."""
-    
+
     def setup_method(self):
         """Store registry state before test."""
         # NodeRegistry is a singleton, get instance
         self.registry = NodeRegistry()
         # Store original nodes
         self._original_nodes = self.registry._nodes.copy()
-    
+
     def teardown_method(self):
         """Restore registry state after test."""
         # Clear and restore
         self.registry.clear()
         for name, node_class in self._original_nodes.items():
             self.registry.register(node_class, alias=name)
-    
+
     def test_custom_node_registration(self):
         """Test registering a custom node."""
         from my_module.nodes import MyCustomNode
-        
+
         # Register the node
         NodeRegistry.register(MyCustomNode, alias="MyCustomNode")
-        
+
         # Verify registration
         assert "MyCustomNode" in self.registry._nodes
         assert self.registry._nodes["MyCustomNode"] is MyCustomNode
-        
+
         # Test retrieval
         retrieved = NodeRegistry.get("MyCustomNode")
         assert retrieved is MyCustomNode
@@ -1676,12 +1674,12 @@ from typing import Dict, Any
 @register_node()  # MANDATORY
 class TPCCustomNode(Node):
     """Standard custom node implementation."""
-    
+
     def __init__(self, **kwargs):
         # Set attributes BEFORE super().__init__()
         self.custom_param = kwargs.get("custom_param", "default")
         super().__init__(**kwargs)
-    
+
     def execute(self, **kwargs) -> Dict[str, Any]:
         # Implementation
         return {"result": "success"}
@@ -1704,7 +1702,7 @@ This approach ensures your custom nodes integrate seamlessly with the SDK while 
 
 ---
 
-**Contact**: TPC Development Team  
-**Version**: 3.0 (Gold Standard)  
-**Based on**: Kailash SDK v0.7.0 + Root Cause Analysis  
+**Contact**: TPC Development Team
+**Version**: 3.0 (Gold Standard)
+**Based on**: Kailash SDK v0.7.0 + Root Cause Analysis
 **Replaces**: All previous custom node documentation

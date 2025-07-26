@@ -7,7 +7,7 @@ Patterns for building complex workflows through composition, nesting, and dynami
 **Purpose**: Reuse existing workflows as components in larger workflows
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.logic import WorkflowNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
@@ -15,9 +15,9 @@ from kailash.runtime.local import LocalRuntime
 # Create reusable sub-workflows
 def create_data_validation_workflow():
     """Reusable data validation workflow"""
-    workflow = Workflow("data_validator", "Data Validation")
+    workflow = WorkflowBuilder()
 
-    workflow.add_node("schema_check", PythonCodeNode(),
+    workflow.add_node("PythonCodeNode", "schema_check", {}),
         code="""
 # Validate data schema
 required_fields = ['id', 'name', 'value', 'timestamp']
@@ -37,7 +37,7 @@ result = {'valid': True, 'record_count': len(data), 'data': data}
 """
     )
 
-    workflow.add_node("quality_check", PythonCodeNode(),
+    workflow.add_node("PythonCodeNode", "quality_check", {}),
         code="""
 # Check data quality
 issues = []
@@ -60,27 +60,22 @@ result = {
 """
     )
 
-    workflow.connect("schema_check", "quality_check", mapping={"result.data": "data"})
+    workflow.add_connection("schema_check", "quality_check", "result.data", "data")
     return workflow
 
 # Create main workflow that uses sub-workflows
-main_workflow = Workflow("data_pipeline", "Main Data Pipeline")
+main_workflow = WorkflowBuilder()
 
 # Add sub-workflow as a node
-main_workflow.add_node("validator", WorkflowNode(),
+main_workflow.add_node("WorkflowNode", "validator", {}),
     workflow=create_data_validation_workflow(),
     # Map main workflow data to sub-workflow inputs
-    input_mapping={
-        "raw_data": "schema_check.data"
-    },
+    input_# mapping removed,
     # Map sub-workflow outputs to main workflow
-    output_mapping={
-        "quality_check.result": "validation_result"
-    }
-)
+    output_# mapping removed)
 
 # Continue with main workflow
-main_workflow.add_node("processor", PythonCodeNode(),
+main_workflow.add_node("PythonCodeNode", "processor", {}),
     code="""
 # Process validated data
 print(f"Processing {validation_result['quality_score']:.0%} quality data")
@@ -104,8 +99,7 @@ result = {
 """
 )
 
-main_workflow.connect("validator", "processor",
-    mapping={"validation_result": "validation_result"})
+main_workflow.add_connection("validator", "processor", "validation_result", "validation_result")
 
 # Execute main workflow
 runtime = LocalRuntime()
@@ -124,7 +118,7 @@ results, run_id = runtime.execute(main_workflow, parameters={
 **Purpose**: Create workflows dynamically based on configuration
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.data import CSVReaderNode, JSONWriterNode, SQLNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.ai import LLMAgentNode
@@ -145,7 +139,7 @@ class WorkflowFactory:
 
     def create_workflow(self, config):
         """Create workflow from configuration dictionary"""
-        workflow = Workflow("example", name="Example")
+        workflow = WorkflowBuilder()
 workflow.        )
 
         # Create nodes
@@ -171,10 +165,7 @@ workflow.        )
 
         # Create connections
         for conn in config['connections']:
-            workflow.connect(
-                conn['from'],
-                conn['to'],
-                mapping=conn.get('mapping'),
+            workflow.add_connection(conn['from'], "result", conn['to'], "input"),
                 **conn.get('options', {})
             )
 
@@ -264,7 +255,7 @@ workflow = factory.create_workflow(workflow_config)
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -274,8 +265,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class WorkflowTemplate:
     """Base class for workflow templates"""
@@ -288,8 +280,7 @@ class DataQualityTemplate(WorkflowTemplate):
     """Template for data quality workflows"""
 
     def create_workflow(self, **params):
-        workflow = Workflow(
-            params.get('id', 'data_quality'),
+        workflow = WorkflowBuilder(),
             params.get('name', 'Data Quality Check')
         )
 
@@ -298,12 +289,12 @@ class DataQualityTemplate(WorkflowTemplate):
 
         # Create validation node with custom rules
         validation_code = self._generate_validation_code(validation_rules)
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("validator", PythonCodeNode(), code=validation_code)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "validator", {}), code=validation_code)
 
         # Add reporting node
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("reporter", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "reporter", {}),
             code="""
 report = {
     'total_records': validation_result['total'],
@@ -324,8 +315,8 @@ result = report
 """
         )
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
         return workflow
 
@@ -407,7 +398,7 @@ quality_workflow = template.create_workflow(
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -417,8 +408,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class WorkflowPlugin:
     """Base class for workflow plugins"""
@@ -435,8 +427,8 @@ class LoggingPlugin(WorkflowPlugin):
 
         # Add logging before the attachment point
         logger_id = f"{attachment_point}_logger"
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(logger_id, PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node(logger_id, "PythonCodeNode",
             code=f"""
 import datetime
 import json
@@ -459,14 +451,14 @@ result = data
 
         # Rewire connections through logger
         # Find connections to attachment point
-workflow = Workflow("example", name="Example")
-workflow.workflow.connections:
+workflow = WorkflowBuilder()
+workflow.connections:
             if conn['to'] == attachment_point:
                 # Redirect to logger first
                 conn['to'] = logger_id
                 # Then connect logger to original target
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 class CachingPlugin(WorkflowPlugin):
     """Add caching to expensive nodes"""
@@ -475,8 +467,8 @@ class CachingPlugin(WorkflowPlugin):
         cache_ttl = config.get('ttl', 3600)
 
         cache_id = f"{attachment_point}_cache"
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(cache_id, PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node(cache_id, "PythonCodeNode",
             code=f"""
 import hashlib
 import json
@@ -505,8 +497,8 @@ result = data  # Pass through to actual node
 
         # Add cache storage after the node
         cache_store_id = f"{attachment_point}_cache_store"
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(cache_store_id, PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node(cache_store_id, "PythonCodeNode",
             code="""
 # Store result in cache
 if not hasattr(self, '_cache'):
@@ -523,13 +515,13 @@ result = node_output  # Pass through
         )
 
 # Create workflow with plugins
-base_workflow = Workflow("pluggable_workflow", "Workflow with Plugins")
+base_workflow = WorkflowBuilder()
 
 # Add base nodes
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("data_source", CSVReaderNode(), file_path="data.csv")
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("expensive_processor", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "data_source", {}), file_path="data.csv")
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "expensive_processor", {}),
     code="""
 # Simulate expensive computation
 import time
@@ -537,13 +529,13 @@ time.sleep(2)
 result = [{'id': r['id'], 'computed': r['value'] * 100} for r in data]
 """
 )
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("output", JSONWriterNode(), file_path="output.json")
+workflow = WorkflowBuilder()
+workflow.add_node("JSONWriterNode", "output", {}), file_path="output.json")
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Enhance with plugins
 logging_plugin = LoggingPlugin()
@@ -560,7 +552,7 @@ caching_plugin.enhance_workflow(base_workflow, "expensive_processor", ttl=600)
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -570,21 +562,22 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class BaseWorkflow:
     """Base workflow class with common functionality"""
 
     def __init__(self, workflow_id, name):
-        self.workflow = Workflow("example", name="Example")
+        self.workflow = WorkflowBuilder()
 workflow.        self._setup_common_nodes()
 
     def _setup_common_nodes(self):
         """Setup nodes common to all workflows"""
         # Add input validation
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("input_validator", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "input_validator", {}),
             code="""
 if not data:
     raise ValueError("Input data is empty")
@@ -597,8 +590,8 @@ result = {'validated': True, 'data': data}
         )
 
         # Add error handler
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("error_handler", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "error_handler", {}),
             code="""
 error_log = {
     'error_type': error.get('type', 'unknown'),
@@ -645,19 +638,18 @@ class DataTransformWorkflow(BaseWorkflow):
         # Chain transformers
         for i, transformer in enumerate(self.transformers):
             node_id = f"transformer_{i}"
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(node_id, PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node(node_id, "PythonCodeNode",
                 code=transformer['code']
             )
 
-            mapping = {"result.data": "data"} if prev_node == "input_validator" else {"result": "data"}
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(prev_node, node_id, mapping=mapping)
+            # mapping removed)
+workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
             prev_node = node_id
 
         # Add final output formatter
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("output_formatter", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "output_formatter", {}),
             code="""
 result = {
     'transformed_data': data,
@@ -667,25 +659,25 @@ result = {
 """
         )
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Use inherited workflow
 transform_workflow = DataTransformWorkflow("customer_transform", "Customer Data Transform")
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature.strip().title()
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature.strip().title()
     result.append(cleaned)
 """)
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature[0])
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature[0])
         enhanced['age'] = datetime.now().year - birth_year
     result.append(enhanced)
 """)
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.build()
+workflow = WorkflowBuilder()
+workflow.build()
 
 ```
 

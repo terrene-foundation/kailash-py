@@ -103,7 +103,7 @@ def run(self, **kwargs):
 
 ### Self-Contained Convergence
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.base import CycleAwareNode
 
@@ -125,11 +125,9 @@ class SelfConvergingNode(CycleAwareNode):
         }
 
 # Usage
-workflow = Workflow("self-converging-example")
-workflow.add_node("improver", SelfConvergingNode())
-workflow.connect("improver", "improver",
-    cycle=True, max_iterations=20,
-    convergence_check="converged == True")
+workflow = WorkflowBuilder()
+workflow.add_node("SelfConvergingNode", "improver", {}))
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 ```
 
@@ -138,7 +136,7 @@ workflow.connect("improver", "improver",
 from kailash.nodes.logic import ConvergenceCheckerNode
 
 # Add to workflow
-workflow.add_node("convergence", ConvergenceCheckerNode())
+workflow.add_node("ConvergenceCheckerNode", "convergence", {}))
 
 # Runtime parameters (not initialization)
 runtime.execute(workflow, parameters={
@@ -196,18 +194,15 @@ def run(self, **kwargs):
 ## 🔄 Simple Cycle Setup
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # Create cycle-aware node (assuming OptimizerNode is defined above)
-workflow = Workflow("simple-cycle-example")
-workflow.add_node("optimizer", OptimizerNode())
+workflow = WorkflowBuilder()
+workflow.add_node("OptimizerNode", "optimizer", {}))
 
 # Connect to itself
-workflow.connect("optimizer", "optimizer",
-    cycle=True,
-    max_iterations=15,
-    convergence_check="converged == True")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Execute
 runtime = LocalRuntime()

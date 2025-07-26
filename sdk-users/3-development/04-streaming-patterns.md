@@ -91,7 +91,7 @@ result = {
 })
 
 # Connect stream to processor
-workflow.connect("websocket_stream", "stream_processor", mapping={"messages": "stream_data"})
+workflow.add_connection("websocket_stream", "stream_processor", "messages", "stream_data")
 ```
 
 ### Real-time Data Pipeline
@@ -481,9 +481,9 @@ result = {
 })
 
 # Connect event processing pipeline
-event_workflow.connect("event_source", "event_filter", mapping={"events": "raw_events"})
-event_workflow.connect("event_filter", "event_transform", mapping={"filtered_events": "events"})
-event_workflow.connect("event_transform", "event_aggregator", mapping={"transformed_events": "events"})
+event_workflow.add_connection("event_source", "event_filter", "events", "raw_events")
+event_workflow.add_connection("event_filter", "event_transform", "filtered_events", "events")
+event_workflow.add_connection("event_transform", "event_aggregator", "transformed_events", "events")
 ```
 
 ### Custom Event Processor

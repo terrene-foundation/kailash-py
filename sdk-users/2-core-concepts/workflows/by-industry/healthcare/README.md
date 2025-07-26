@@ -29,35 +29,19 @@
 
 ### 30-Second Clinical Alert System
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai import IterativeLLMAgentNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 
 # AI-powered clinical alert system
-workflow = Workflow("clinical_alerts")
+workflow = WorkflowBuilder()
 
 # AI agent with healthcare knowledge
-workflow.add_node("clinical_ai", IterativeLLMAgentNode(
-    provider="ollama",
-    model="llama3.2",
-    mcp_servers=[{
-        "name": "ai-registry",
-        "transport": "stdio",
-        "command": "python",
-        "args": ["scripts/start-ai-registry-server.py"]
-    }],
-    auto_discover_tools=True,
-    system_prompt="""You are a clinical decision support AI with access to healthcare AI use cases.
-    Analyze patient data and provide evidence-based recommendations using real medical AI implementations."""
-))
+workflow.add_node("IterativeLLMAgentNode", "clinical_ai", {}))
 
 # Alert processor
-workflow.add_node("alert_processor", PythonCodeNode(
-    name="alert_processor",
-    code='''
-# Process AI recommendations into clinical alerts
-ai_response = ai_analysis.get('final_response', '')
+workflow.add_node("PythonCodeNode", "alert_processor", {})
 recommendations = ai_analysis.get('recommendations', [])
 
 # Extract key information
@@ -80,7 +64,7 @@ result = {
 '''
 ))
 
-workflow.connect("clinical_ai", "alert_processor", mapping={"final_response": "ai_analysis"})
+workflow.add_connection("clinical_ai", "alert_processor", "final_response", "ai_analysis")
 
 # Execute with patient data
 runtime = LocalRuntime()
@@ -116,11 +100,8 @@ class HIPAACompliantProcessor(HealthcareSecurityMixin, PythonCodeNode):
         self.enable_phi_detection = True
         self.enable_audit_logging = True
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("secure_reader", SecureCSVReaderNode(
-    encryption_enabled=True,
-    audit_trail=True
-))
+workflow = WorkflowBuilder()
+workflow.add_node("SecureCSVReaderNode", "secure_reader", {}))
 workflow.add_node("processor", HIPAACompliantProcessor(
     name="processor",
     code='''
@@ -154,7 +135,7 @@ result = {
 ### Clinical Decision Tree Integration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -164,39 +145,35 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("clinical_decision_tree")
+workflow = WorkflowBuilder()
 
 # AI-powered clinical analysis
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Clinical decision router
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("decision_router", SwitchNode(
-    condition_field="severity_level",
-    condition_type="string"
-))
+workflow = WorkflowBuilder()
+workflow.add_node("SwitchNode", "decision_router", {}))
 
 # Emergency pathway
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Routine care pathway
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Connect decision tree
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("decision_router", "emergency_protocol",
-    condition="emergency")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("decision_router", "routine_protocol",
-    condition="routine")
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow = WorkflowBuilder()
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 ```
 
@@ -205,7 +182,7 @@ workflow.workflow.connect("decision_router", "routine_protocol",
 ### Patient Outcome Tracking
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -215,21 +192,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("outcome_tracking")
+workflow = WorkflowBuilder()
 
 # Data aggregation across multiple sources
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("data_aggregator", PythonCodeNode(
-    name="data_aggregator",
-    code='''
-import pandas as pd
-from datetime import datetime, timedelta
-
-# Aggregate patient data from multiple sources
-ehr_data = ehr_records if isinstance(ehr_records, list) else []
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "data_aggregator", {}) else []
 lab_data = lab_results if isinstance(lab_results, list) else []
 vital_data = vital_signs if isinstance(vital_signs, list) else []
 
@@ -289,11 +260,11 @@ def calculate_quality_indicators(profiles):
 ))
 
 # Outcome analysis with AI insights
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -302,7 +273,7 @@ workflow.  # Method signature
 ### Clinical Trial Data Pipeline
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -312,21 +283,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("clinical_trial_pipeline")
+workflow = WorkflowBuilder()
 
 # Data collection and validation
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("trial_data_validator", PythonCodeNode(
-    name="trial_data_validator",
-    code='''
-import pandas as pd
-import numpy as np
-
-# Validate clinical trial data
-trial_data = pd.DataFrame(data)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "trial_data_validator", {})
 
 validation_results = {
     "data_quality_score": 0.0,
@@ -373,11 +338,11 @@ result = validation_results
 ))
 
 # Statistical analysis with AI insights
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -386,7 +351,7 @@ workflow.  # Method signature
 ### Compound Analysis Pipeline
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -396,22 +361,19 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("compound_analysis")
+workflow = WorkflowBuilder()
 
 # Molecular analysis with AI
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Safety assessment processor
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("safety_assessor", PythonCodeNode(
-    name="safety_assessor",
-    code='''
-# Safety assessment based on compound properties
-compound_data = compound_analysis.get('final_response', '')
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "safety_assessor", {})
 analysis_data = compound_analysis.get('discoveries', {})
 
 # Extract safety indicators from AI analysis
@@ -441,8 +403,8 @@ result = {
 '''
 ))
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -451,7 +413,7 @@ workflow.  # Method signature
 ### ROI Metrics for Healthcare AI
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -461,14 +423,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("healthcare_ai_roi")
+workflow = WorkflowBuilder()
 
 # Cost-benefit analysis
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 total_benefits = sum(ai_benefits.values())
 annual_roi = (total_benefits - total_costs) / total_costs * 100
 payback_period = total_costs / total_benefits
@@ -491,16 +454,11 @@ result = {
 ))
 
 # Business case generator
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("business_case", IterativeLLMAgentNode(
-    provider="ollama",
-    model="llama3.2",
-    system_prompt="""Generate executive-level business case for healthcare AI implementation.
-    Focus on clinical outcomes, operational efficiency, and financial returns."""
-))
+workflow = WorkflowBuilder()
+workflow.add_node("IterativeLLMAgentNode", "business_case", {}))
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 

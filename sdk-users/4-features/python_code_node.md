@@ -24,7 +24,7 @@ Convert any Python function into a Kailash node:
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -34,8 +34,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example -> pd.DataFrame:
     """Filter data based on threshold."""
@@ -49,8 +50,8 @@ node = PythonCodeNode.from_function(
 )
 
 # Use in workflow
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(node)
+workflow = WorkflowBuilder()
+workflow.add_node(node)
 
 ```
 
@@ -60,7 +61,7 @@ Create stateful nodes that maintain state between executions:
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -70,8 +71,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class MovingAverage:
     def __init__(self, window_size: int = 3):
@@ -128,7 +130,7 @@ Load Python code from external files:
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -138,8 +140,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Load a function from file
 node = PythonCodeNode.from_file(
@@ -207,7 +210,7 @@ PythonCodeNodes integrate seamlessly with other Kailash nodes:
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -217,11 +220,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Create workflow
-workflow = Workflow(name="data_pipeline")
+workflow = WorkflowBuilder()
 
 # Add nodes
 reader = CSVReaderNode(name="reader")
@@ -232,10 +236,10 @@ custom_processor = PythonCodeNode.from_function(
 writer = CSVWriterNode(name="writer")
 
 # Connect nodes
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_edge(reader, custom_processor)
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_edge(custom_processor, writer)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Use workflow.add_connection(source, source_port, target, target_port)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Use workflow.add_connection(source, source_port, target, target_port)
 
 # Execute workflow
 runner = LocalRunner()
@@ -249,7 +253,7 @@ PythonCodeNode leverages the base Node class validation system:
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -259,8 +263,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Using the standard execute() method enforces validation
 node = PythonCodeNode.from_function(func, name="processor")
@@ -286,7 +291,7 @@ node.executor = executor
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -296,8 +301,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example:
     """Create a node with dynamic input types."""

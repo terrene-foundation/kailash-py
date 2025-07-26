@@ -2,32 +2,29 @@
 
 ## Basic Setup
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai.a2a import A2ACoordinatorNode, SharedMemoryPoolNode
 from kailash.runtime.local import LocalRuntime
 
 # Create coordination workflow
-workflow = Workflow("a2a-coord", name="Agent Coordination")
+workflow = WorkflowBuilder()
 
 # Shared memory for agent communication
-workflow.add_node("memory", SharedMemoryPoolNode(
-    memory_size_limit=1000,
-    attention_window=50
-))
+workflow.add_node("SharedMemoryPoolNode", "memory", {}))
 
 # A2A coordinator
 workflow.add_node("coordinator", A2ACoordinatorNode())
-workflow.connect("memory", "coordinator")
+workflow.add_connection("memory", "result", "coordinator", "input")
 
 # Execute
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
 ## Agent Registration
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai.a2a import A2ACoordinatorNode
 
@@ -47,7 +44,7 @@ agents = [
     }
 ]
 
-workflow = Workflow("agent-registration")
+workflow = WorkflowBuilder()
 workflow.add_node("coordinator", A2ACoordinatorNode())
 runtime = LocalRuntime()
 
@@ -66,11 +63,11 @@ for agent in agents:
 
 ### Skill-Based Matching
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai.a2a import A2ACoordinatorNode
 
-workflow = Workflow("skill-matching")
+workflow = WorkflowBuilder()
 workflow.add_node("coordinator", A2ACoordinatorNode())
 runtime = LocalRuntime()
 
@@ -92,11 +89,11 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ### Load Balancing
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai.a2a import A2ACoordinatorNode
 
-workflow = Workflow("load-balancing")
+workflow = WorkflowBuilder()
 workflow.add_node("coordinator", A2ACoordinatorNode())
 runtime = LocalRuntime()
 
@@ -117,11 +114,11 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ## Dynamic Team Formation
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai.a2a import A2ACoordinatorNode
 
-workflow = Workflow("team-formation")
+workflow = WorkflowBuilder()
 workflow.add_node("coordinator", A2ACoordinatorNode())
 runtime = LocalRuntime()
 
@@ -155,12 +152,12 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ## Shared Memory Integration
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai.a2a import SharedMemoryPoolNode
 
-workflow = Workflow("memory-integration")
-workflow.add_node("memory", SharedMemoryPoolNode())
+workflow = WorkflowBuilder()
+workflow.add_node("SharedMemoryPoolNode", "memory", {}))
 runtime = LocalRuntime()
 
 # Store agent findings
@@ -191,11 +188,11 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ## Performance Tracking
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai.a2a import A2ACoordinatorNode
 
-workflow = Workflow("performance-tracking")
+workflow = WorkflowBuilder()
 workflow.add_node("coordinator", A2ACoordinatorNode())
 runtime = LocalRuntime()
 

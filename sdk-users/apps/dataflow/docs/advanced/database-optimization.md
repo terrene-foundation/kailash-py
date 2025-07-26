@@ -7,6 +7,7 @@ Advanced techniques for optimizing database performance in DataFlow applications
 ### Index Strategy
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 @db.model
 class Order:
     id: int

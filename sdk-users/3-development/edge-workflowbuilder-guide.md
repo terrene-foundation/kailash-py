@@ -68,7 +68,7 @@ WorkflowBuilder automatically detects edge nodes by:
 ```python
 # These are automatically detected as edge nodes:
 workflow.add_node("EdgeDataNode", ...)      # ✅ Contains "Edge"
-workflow.add_node("EdgeStateMachine", ...)  # ✅ Contains "Edge" 
+workflow.add_node("EdgeStateMachine", ...)  # ✅ Contains "Edge"
 workflow.add_node("MyCustomEdgeNode", ...)  # ✅ Contains "Edge"
 workflow.add_node("DataProcessor", ...)     # ❌ Not an edge node
 ```
@@ -168,7 +168,7 @@ workflow.add_node("EdgeDataNode", "critical_data", {
 ### Eventual Consistency
 ```python
 workflow.add_node("EdgeDataNode", "analytics_data", {
-    "action": "write", 
+    "action": "write",
     "consistency": "eventual",  # Async replication
     "data": {"event": "page_view"}
 })
@@ -251,8 +251,7 @@ workflow.add_node("EdgeDataNode", "financial_processor", {
 })
 
 # Connect with compliance-aware routing
-workflow.add_connection("eu_processor", "financial_processor", 
-    mapping={"user_id": "customer_id"})
+workflow.add_connection("eu_processor", "result", "financial_processor", "input")
 ```
 
 ## Integration with DataFlow

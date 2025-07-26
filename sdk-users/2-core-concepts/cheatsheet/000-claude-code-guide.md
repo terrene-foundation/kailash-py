@@ -7,17 +7,17 @@
 ### ✅ Always Use These Patterns
 ```python
 # 1. STANDARD IMPORTS - Import exactly this way
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.code import PythonCodeNode
 
 # 2. WORKFLOW CREATION - Always include name
-workflow = Workflow("workflow_id", name="Descriptive Name")
+workflow = WorkflowBuilder()
 
 # 3. EXECUTION PATTERN - Always use runtime.execute()
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 # 4. PARAMETER PASSING - Use parameters={} dict
 results, run_id = runtime.execute(workflow, parameters={
@@ -29,18 +29,18 @@ results, run_id = runtime.execute(workflow, parameters={
 ### ❌ Never Use These Patterns
 ```python
 # ❌ WRONG - Missing runtime
-workflow = Workflow("example", name="Example")
-workflow.execute()  # AttributeError - workflows don't have execute()
+workflow = WorkflowBuilder()
+runtime.execute(workflow.build(), )  # AttributeError - workflows don't have execute()
 
 # ❌ WRONG - Wrong parameter name
 runtime = LocalRuntime()
-runtime.execute(workflow, inputs={"data": []})  # Wrong param name
+runtime.execute(workflow, parameters={"data": []})  # Wrong param name
 
 # ❌ WRONG - Missing workflow name
-workflow = Workflow("id")
+workflow = WorkflowBuilder()
 
 # ❌ WRONG - Direct node execution
-node = CSVReaderNode()
+node = "CSVReaderNode"
 result = node.run()
 
 ```
@@ -50,7 +50,7 @@ result = node.run()
 ### Runtime Parameters (Most Common)
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -60,8 +60,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Override node configurations at runtime
 runtime = LocalRuntime()
@@ -80,7 +81,7 @@ results, run_id = runtime.execute(workflow, parameters={
 ### PythonCodeNode Parameter Patterns
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -90,31 +91,22 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ CORRECT - Use input_types for parameters
-workflow.add_node("processor", PythonCodeNode(
-    name="processor",
-    code='''
-result = {
-    "filtered": [x for x in input_data if x > threshold],
-    "threshold": threshold
-}
-''',
-    input_types={"input_data": list, "threshold": int}  # CRITICAL
-))
+workflow.add_node("PythonCodeNode", "processor", {}))
 
 # Connect with proper mapping
-workflow.connect("source", "processor",
-    mapping={"result.data": "input_data", "result.threshold": "threshold"})
+workflow.add_connection("source", "result", "processor", "input")
 
 ```
 
 ### Connection Mapping Patterns
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -124,20 +116,18 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ CORRECT - Map outputs to inputs
-workflow.connect("reader", "processor",
-    mapping={"data": "input_data"})  # Map 'data' output to 'input_data' input
+workflow.add_connection("reader", "processor", "data", "input_data")  # Map 'data' output to 'input_data' input
 
 # ✅ COMPLEX - Nested data mapping
-workflow.connect("api_call", "processor",
-    mapping={"result.items": "data", "result.meta.count": "total_count"})
+workflow.add_connection("api_call", "result", "processor", "input")
 
 # ✅ MULTIPLE OUTPUTS - Route specific outputs
-workflow.connect("analyzer", "report_generator",
-    mapping={"metrics": "input_metrics", "summary": "input_summary"})
+workflow.add_connection("analyzer", "result", "report_generator", "input")
 
 ```
 
@@ -178,7 +168,7 @@ from kailash.nodes.ai import (
 ### Agent Coordination Patterns
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -188,8 +178,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # PATTERN 1: Basic A2A Coordination
 workflow.add_node("A2ACoordinatorNode", "coordinator", {})
@@ -197,7 +188,7 @@ workflow.add_node("SharedMemoryPoolNode", "memory", {
     "memory_size_limit": 1000,
     "attention_window": 50
 })
-workflow.connect("memory", "coordinator")
+workflow.add_connection("memory", "result", "coordinator", "input")
 
 # Execute with agent registration
 runtime = LocalRuntime()
@@ -213,15 +204,9 @@ results, run_id = runtime.execute(workflow, parameters={
 })
 
 # PATTERN 2: Self-Organizing System
-workflow.add_node("pool", AgentPoolManagerNode(
-    max_active_agents=20,
-    agent_timeout=120
-))
-workflow.add_node("orchestrator", OrchestrationManagerNode(
-    max_iterations=10,
-    quality_threshold=0.85
-))
-workflow.connect("orchestrator", "pool")
+workflow.add_node("AgentPoolManagerNode", "pool", {}))
+workflow.add_node("OrchestrationManagerNode", "orchestrator", {}))
+workflow.add_connection("orchestrator", "result", "pool", "input")
 
 ```
 
@@ -230,7 +215,7 @@ workflow.connect("orchestrator", "pool")
 ### Create Gateway (Primary Pattern)
 ```python
 # ✅ CORRECT - Use create_gateway for all middleware
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 
 # Basic gateway
 gateway = create_gateway(
@@ -252,7 +237,7 @@ gateway.run(port=8000)
 ### Session-Based Workflows
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -262,8 +247,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Create session for user isolation
 session_id = await agent_ui.create_session(user_id="user123")
@@ -290,7 +276,7 @@ workflow_id = await agent_ui.create_dynamic_workflow(
 execution_id = await agent_ui.execute_workflow(
     session_id=session_id,
     workflow_id=workflow_id,
-    inputs={"custom_param": "value"}
+    parameters={"custom_param": "value"}
 )
 
 ```
@@ -327,7 +313,7 @@ ws.onmessage = (event) => {
 ### ETL Pipeline
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -337,10 +323,11 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("etl_pipeline", name="Data ETL Pipeline")
+workflow = WorkflowBuilder()
 
 # Extract
 workflow.add_node("CSVReaderNode", "extractor", {
@@ -349,12 +336,7 @@ workflow.add_node("CSVReaderNode", "extractor", {
 })
 
 # Transform
-workflow.add_node("transformer", PythonCodeNode(
-    name="transformer",
-    code='''
-result = {
-    "processed": [
-        {"id": row["id"], "name": row["name"].upper()}
+workflow.add_node("PythonCodeNode", "transformer", {})}
         for row in data if row.get("active") == "true"
     ]
 }
@@ -369,19 +351,19 @@ workflow.add_node("JSONWriterNode", "loader", {
 })
 
 # Connect pipeline
-workflow.connect("extractor", "transformer", mapping={"data": "data"})
-workflow.connect("transformer", "loader", mapping={"result.processed": "data"})
+workflow.add_connection("extractor", "transformer", "data", "data")
+workflow.add_connection("transformer", "loader", "result.processed", "data")
 
 # Execute
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
 ### Conditional Processing
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -391,8 +373,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Route data based on conditions
 workflow.add_node("SwitchNode", "router", {
@@ -404,16 +387,16 @@ workflow.add_node("SwitchNode", "router", {
 )
 
 # Connect to different handlers
-workflow.connect("router", "high_handler", output_port="high")
-workflow.connect("router", "medium_handler", output_port="medium")
-workflow.connect("router", "low_handler", output_port="low")
+workflow.add_connection("source", "result", "target", "input")  # Fixed output mapping
+workflow.add_connection("source", "result", "target", "input")  # Fixed output mapping
+workflow.add_connection("source", "result", "target", "input")  # Fixed output mapping
 
 ```
 
 ### Agent Coordination
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -423,8 +406,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Multi-agent problem solving
 workflow.add_node("A2ACoordinatorNode", "coordinator", {})
@@ -449,7 +433,7 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ## 🚨 Critical Success Rules
 
-1. **ALWAYS** use `from kailash import Workflow` and `LocalRuntime()`
+1. **ALWAYS** use `from kailash.workflow.builder import WorkflowBuilder` and `LocalRuntime()`
 2. **ALWAYS** include workflow `name=` parameter
 3. **ALWAYS** use `runtime.execute(workflow, parameters={})`
 4. **ALWAYS** use `input_types={}` with PythonCodeNode

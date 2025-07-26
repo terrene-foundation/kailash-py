@@ -61,8 +61,8 @@ workflow.add_node("ResourceOptimizerNode", "cost_optimizer", {
 })
 
 # Connect workflow
-workflow.add_connection("optimizer_start", "status", "cost_recorder", "parameters")
-workflow.add_connection("cost_recorder", "cost_recorded", "cost_optimizer", "parameters")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 # Execute
 runtime = LocalRuntime()
@@ -305,7 +305,7 @@ workflow.add_node("ResourceOptimizerNode", "rightsizing", {
 
 # Right-sizing recommendations based on utilization:
 # - <50% utilization: Aggressive right-sizing
-# - 50-70% utilization: Conservative right-sizing  
+# - 50-70% utilization: Conservative right-sizing
 # - >70% utilization: Monitor only
 ```
 
@@ -593,14 +593,14 @@ async def cost_monitoring():
         aws_costs = get_aws_costs()
         gcp_costs = get_gcp_costs()
         azure_costs = get_azure_costs()
-        
+
         # Record costs
         for cost_data in [aws_costs, gcp_costs, azure_costs]:
             await optimizer_node.execute_async(
                 operation="record_cost",
                 **cost_data
             )
-        
+
         await asyncio.sleep(3600)  # Every hour
 ```
 
@@ -640,14 +640,14 @@ risk_controls = {
 async def optimization_monitoring():
     # Track optimization effectiveness
     implemented_opts = get_implemented_optimizations()
-    
+
     for opt in implemented_opts:
         # Measure actual vs predicted savings
         actual_savings = calculate_actual_savings(opt)
         predicted_savings = opt.estimated_savings
-        
+
         accuracy = actual_savings / predicted_savings
-        
+
         # Learn from results
         await optimizer.evaluate_optimization(
             opt.optimization_id,

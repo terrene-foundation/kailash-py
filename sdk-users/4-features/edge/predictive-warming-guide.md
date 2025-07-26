@@ -67,7 +67,7 @@ workflow.add_node(
 
 # Make predictions
 workflow.add_node(
-    "EdgeWarmingNode", 
+    "EdgeWarmingNode",
     "predictor",
     {
         "operation": "predict",
@@ -77,7 +77,7 @@ workflow.add_node(
 )
 
 # Connect and execute
-workflow.add_connection("recorder", "predictor")
+workflow.add_connection("recorder", "result", "predictor", "input")
 runtime = LocalRuntime()
 results, run_id = await runtime.execute_async(workflow.build())
 
@@ -336,9 +336,9 @@ workflow.add_node(
 )
 
 # Connect with conditional logic
-workflow.add_connection("state_checker", "usage_recorder")
-workflow.add_connection("usage_recorder", "predictor")
-workflow.add_connection("predictor", "warmer")
+workflow.add_connection("state_checker", "result", "usage_recorder", "input")
+workflow.add_connection("usage_recorder", "result", "predictor", "input")
+workflow.add_connection("predictor", "result", "warmer", "input")
 
 # Execute
 runtime = LocalRuntime()

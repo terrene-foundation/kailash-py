@@ -7,7 +7,7 @@ Patterns for building secure workflows with authentication, authorization, data 
 **Purpose**: Safely process files with path validation, size limits, and sanitization
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.security import SecurityConfig, set_security_config
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.code import PythonCodeNode
@@ -38,10 +38,10 @@ security_config = SecurityConfig(
 set_security_config(security_config)
 
 # Create secure workflow
-workflow = Workflow("secure_file_processor", "Secure File Processing")
+workflow = WorkflowBuilder()
 
 # Secure file reader with validation
-workflow.add_node("validator", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "validator", {}),
     code="""
 import os
 import hashlib
@@ -90,10 +90,10 @@ result = {
 )
 
 # Secure CSV reader - automatically validates paths
-workflow.add_node("reader", CSVReaderNode())
+workflow.add_node("CSVReaderNode", "reader", {}))
 
 # Data processor with sanitization
-workflow.add_node("processor", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "processor", {}),
     code="""
 import re
 import html
@@ -134,12 +134,12 @@ result = sanitized_data
 )
 
 # Secure writer with path validation
-workflow.add_node("writer", CSVWriterNode())
+workflow.add_node("CSVWriterNode", "writer", {}))
 
 # Connect workflow
-workflow.connect("validator", "reader", mapping={"result.validated_path": "file_path"})
-workflow.connect("reader", "processor", mapping={"data": "data"})
-workflow.connect("processor", "writer", mapping={"result": "data"})
+workflow.add_connection("validator", "reader", "result.validated_path", "file_path")
+workflow.add_connection("reader", "processor", "data", "data")
+workflow.add_connection("processor", "writer", "result", "data")
 
 # Execute with sandboxing
 runtime = LocalRuntime(security_config=security_config)
@@ -218,9 +218,9 @@ class SandboxedCodeNode(SecurePythonCodeNode):
             raise
 
 # Use sandboxed execution
-workflow = Workflow("user_analytics", "User-Provided Analytics")
+workflow = WorkflowBuilder()
 
-workflow.add_node("sandbox", SandboxedCodeNode(),
+workflow.add_node("SandboxedCodeNode", "sandbox", {}),
     timeout=10,
     allowed_variables=['data', 'config'],
     max_iterations=1000
@@ -362,14 +362,14 @@ class AuthorizationNode(SecureNode):
         return False
 
 # Create secure workflow with auth
-secure_workflow = Workflow("secure_data_access", "Authenticated Data Access")
+secure_workflow = WorkflowBuilder()
 
 # Add auth nodes
-secure_workflow.add_node("authenticate", AuthenticationNode())
-secure_workflow.add_node("authorize", AuthorizationNode())
+secure_workflow.add_node("AuthenticationNode", "authenticate", {}))
+secure_workflow.add_node("AuthorizationNode", "authorize", {}))
 
 # Protected operation
-secure_workflow.add_node("protected_operation", PythonCodeNode(),
+secure_workflow.add_node("PythonCodeNode", "protected_operation", {}),
     code="""
 # This operation requires authentication and authorization
 result = {
@@ -381,10 +381,8 @@ result = {
 )
 
 # Connect with auth flow
-secure_workflow.connect("authenticate", "authorize",
-    mapping={"result": "auth_context"})
-secure_workflow.connect("authorize", "protected_operation",
-    mapping={"auth_context.user_id": "user_id"})
+secure_workflow.add_connection("authenticate", "authorize", "result", "auth_context")
+secure_workflow.add_connection("authorize", "protected_operation", "auth_context.user_id", "user_id")
 
 ```
 
@@ -464,20 +462,20 @@ class EncryptionNode(SecureNode):
         return {'data': decrypted_data}
 
 # Workflow with encryption
-encryption_workflow = Workflow("secure_pii_processing", "PII Data Processing")
+encryption_workflow = WorkflowBuilder()
 
 # Read sensitive data
-encryption_workflow.add_node("reader", CSVReaderNode(),
+encryption_workflow.add_node("CSVReaderNode", "reader", {}),
     file_path="/secure/customer_data.csv"
 )
 
 # Encrypt PII fields
-encryption_workflow.add_node("encrypt", EncryptionNode(),
+encryption_workflow.add_node("EncryptionNode", "encrypt", {}),
     encrypt_fields=["ssn", "credit_card", "email", "phone"]
 )
 
 # Process encrypted data
-encryption_workflow.add_node("processor", PythonCodeNode(),
+encryption_workflow.add_node("PythonCodeNode", "processor", {}),
     code="""
 # Safe to process - PII is encrypted
 processed = []
@@ -493,14 +491,14 @@ result = processed
 )
 
 # Decrypt for authorized output
-encryption_workflow.add_node("decrypt", EncryptionNode(),
+encryption_workflow.add_node("EncryptionNode", "decrypt", {}),
     operation="decrypt"
 )
 
 # Connect workflow
-encryption_workflow.connect("reader", "encrypt", mapping={"data": "data"})
-encryption_workflow.connect("encrypt", "processor", mapping={"result.data": "data"})
-encryption_workflow.connect("processor", "decrypt", mapping={"result": "data"})
+encryption_workflow.add_connection("reader", "encrypt", "data", "data")
+encryption_workflow.add_connection("encrypt", "processor", "result.data", "data")
+encryption_workflow.add_connection("processor", "decrypt", "result", "data")
 
 ```
 
@@ -677,7 +675,7 @@ audit_events = audited_runner.audit_logger.query(
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -687,8 +685,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class ZeroTrustNode(SecureNode):
     """Base node with zero trust security"""

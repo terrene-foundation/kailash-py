@@ -7,6 +7,7 @@ Critical patterns for optimizing Kailash workflows and preventing common perform
 ### Prevent Memory Leaks in Cycles
 ```python
 from kailash.nodes.base import CycleAwareNode
+from kailash.workflow.builder import WorkflowBuilder
 import psutil
 import gc
 
@@ -44,6 +45,7 @@ class MemoryEfficientNode(CycleAwareNode):
 from collections import deque
 import asyncio
 from kailash.nodes.base import CycleAwareNode
+from kailash.workflow.builder import WorkflowBuilder
 
 class OptimizedProcessor(CycleAwareNode):
     """Use generators and efficient structures."""
@@ -236,6 +238,7 @@ print(f"Avg routing time: {router_metrics['router_metrics']['avg_routing_time_ms
 import time
 import hashlib
 from kailash.nodes.base import CycleAwareNode
+from kailash.workflow.builder import WorkflowBuilder
 
 class CachedProcessor(CycleAwareNode):
     """Intelligent caching for expensive operations."""
@@ -296,6 +299,7 @@ class CachedProcessor(CycleAwareNode):
 ```python
 import psutil
 from kailash.nodes.base import CycleAwareNode
+from kailash.workflow.builder import WorkflowBuilder
 
 class BatchProcessor(CycleAwareNode):
     """Dynamic batch processing."""
@@ -353,6 +357,7 @@ class BatchProcessor(CycleAwareNode):
 import time
 import psutil
 from kailash.nodes.base import CycleAwareNode
+from kailash.workflow.builder import WorkflowBuilder
 
 class PerformanceMonitor(CycleAwareNode):
     """Track performance metrics."""

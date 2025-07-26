@@ -7,40 +7,40 @@ Patterns for handling complex data flows, aggregation, and large-scale processin
 **Purpose**: Combine outputs from multiple nodes into a single aggregator node
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.logic import MergeNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
 
-workflow = Workflow("multi_agent_analysis", "Multi-Agent Analysis")
+workflow = WorkflowBuilder()
 
 # Multiple AI agents for different perspectives
-workflow.add_node("market_analyst", LLMAgentNode(),
+workflow.add_node("LLMAgentNode", "market_analyst", {}),
     provider="openai",
     model="gpt-4",
     system_prompt="You are a market analysis expert. Analyze the market potential."
 )
 
-workflow.add_node("tech_analyst", LLMAgentNode(),
+workflow.add_node("LLMAgentNode", "tech_analyst", {}),
     provider="openai",
     model="gpt-4",
     system_prompt="You are a technical feasibility expert. Assess technical viability."
 )
 
-workflow.add_node("risk_analyst", LLMAgentNode(),
+workflow.add_node("LLMAgentNode", "risk_analyst", {}),
     provider="openai",
     model="gpt-4",
     system_prompt="You are a risk assessment expert. Identify potential risks."
 )
 
 # MergeNode to combine all outputs
-workflow.add_node("merger", MergeNode(),
+workflow.add_node("MergeNode", "merger", {}),
     merge_strategy="concat"  # Options: concat, zip, merge_dict
 )
 
 # Aggregator to synthesize insights
-workflow.add_node("synthesizer", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "synthesizer", {}),
     code="""
 # merged_data is a list containing all inputs
 market_analysis = merged_data[0] if len(merged_data) > 0 else {}
@@ -70,12 +70,12 @@ result = {
 )
 
 # Connect all agents to merger
-workflow.connect("market_analyst", "merger", mapping={"response": "data1"})
-workflow.connect("tech_analyst", "merger", mapping={"response": "data2"})
-workflow.connect("risk_analyst", "merger", mapping={"response": "data3"})
+workflow.add_connection("market_analyst", "merger", "response", "data1")
+workflow.add_connection("tech_analyst", "merger", "response", "data2")
+workflow.add_connection("risk_analyst", "merger", "response", "data3")
 
 # Connect merger to synthesizer
-workflow.connect("merger", "synthesizer", mapping={"merged_data": "merged_data"})
+workflow.add_connection("merger", "synthesizer", "merged_data", "merged_data")
 
 # Execute with a business proposal
 runtime = LocalRuntime()
@@ -99,7 +99,7 @@ results, run_id = runtime.execute(workflow, parameters={
 **Common Mistake**: Trying to connect multiple nodes directly to one node
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -109,22 +109,23 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ WRONG - This will fail
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("agent1", "processor")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("agent2", "processor")  # Error: Multiple inputs!
+workflow = WorkflowBuilder()
+workflow.add_connection("agent1", "result", "processor", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("agent2", "result", "processor", "input")  # Error: Multiple inputs!
 
 # ✅ CORRECT - Use MergeNode
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -133,15 +134,15 @@ workflow.  # Method signature
 **Purpose**: Process multiple data streams concurrently for performance
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.parallel import ParallelRuntime
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.logic import MergeNode
 
-workflow = Workflow("parallel_processing", "Parallel Data Processing")
+workflow = WorkflowBuilder()
 
 # Split data into chunks
-workflow.add_node("splitter", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "splitter", {}),
     code="""
 # Split data into 4 chunks for parallel processing
 chunk_size = len(data) // 4
@@ -160,7 +161,7 @@ result = {
 
 # Create parallel processors
 for i in range(1, 5):
-    workflow.add_node(f"processor_{i}", PythonCodeNode(),
+    workflow.add_node(f"processor_{i}", "PythonCodeNode",
         code=f"""
 # Process chunk {i}
 import time
@@ -183,18 +184,17 @@ print(f"Processor {i} completed in {{processing_time:.2f}}s")
     )
 
 # Merge results
-workflow.add_node("merger", MergeNode(), merge_strategy="concat")
+workflow.add_node("MergeNode", "merger", {}), merge_strategy="concat")
 
 # Connect splitter to processors
 for i in range(1, 5):
-    workflow.connect("splitter", f"processor_{i}",
-        mapping={f"result.chunk{i}": "data"})
+    workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
 
 # Connect processors to merger
-workflow.connect("processor_1", "merger", mapping={"result": "data1"})
-workflow.connect("processor_2", "merger", mapping={"result": "data2"})
-workflow.connect("processor_3", "merger", mapping={"result": "data3"})
-workflow.connect("processor_4", "merger", mapping={"result": "data4"})
+workflow.add_connection("processor_1", "merger", "result", "data1")
+workflow.add_connection("processor_2", "merger", "result", "data2")
+workflow.add_connection("processor_3", "merger", "result", "data3")
+workflow.add_connection("processor_4", "merger", "result", "data4")
 
 # Execute with parallel runtime
 runtime = ParallelRuntime()
@@ -210,7 +210,7 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -220,14 +220,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("batch_processor", "Batch Processing")
+workflow = WorkflowBuilder()
 
 # Batch processor with progress tracking
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("batch_processor", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "batch_processor", {}),
     code="""
 import math
 
@@ -295,8 +296,8 @@ result = {
 )
 
 # Memory-efficient file writer
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("stream_writer", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "stream_writer", {}),
     code="""
 import json
 
@@ -329,8 +330,8 @@ result = {
     config={"output_file": "results.jsonl"}
 )
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("batch_processor", "stream_writer")
+workflow = WorkflowBuilder()
+workflow.add_connection("batch_processor", "result", "stream_writer", "input")
 
 ```
 
@@ -342,10 +343,10 @@ workflow.workflow.connect("batch_processor", "stream_writer")
 from kailash.nodes.data.streaming import StreamReaderNode
 from kailash.nodes.code import PythonCodeNode
 
-workflow = Workflow("stream_processor", "Real-time Stream Processing")
+workflow = WorkflowBuilder()
 
 # Streaming data source
-workflow.add_node("stream_reader", StreamReaderNode(),
+workflow.add_node("StreamReaderNode", "stream_reader", {}),
     source_type="kafka",
     topic="events",
     batch_size=50,
@@ -353,7 +354,7 @@ workflow.add_node("stream_reader", StreamReaderNode(),
 )
 
 # Windowed aggregation
-workflow.add_node("windowed_aggregator", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "windowed_aggregator", {}),
     code="""
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -396,7 +397,7 @@ result = {
 )
 
 # Real-time alerting
-workflow.add_node("alerting", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "alerting", {}),
     code="""
 # Check for anomalies
 if window_stats['average'] > config.get('threshold', 100):
@@ -417,8 +418,8 @@ else:
     config={"threshold": 100}
 )
 
-workflow.connect("stream_reader", "windowed_aggregator", mapping={"data": "events"})
-workflow.connect("windowed_aggregator", "alerting", mapping={"result": "window_data"})
+workflow.add_connection("stream_reader", "windowed_aggregator", "data", "events")
+workflow.add_connection("windowed_aggregator", "alerting", "result", "window_data")
 
 ```
 
@@ -428,7 +429,7 @@ workflow.connect("windowed_aggregator", "alerting", mapping={"result": "window_d
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -438,14 +439,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("fan_out_fan_in", "Fan-Out/Fan-In Processing")
+workflow = WorkflowBuilder()
 
 # Distributor node
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("distributor", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "distributor", {}),
     code="""
 # Distribute items to different queues based on type
 queues = {
@@ -467,28 +469,28 @@ result = queues
 )
 
 # Specialized processors for each type
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("processor_a", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "processor_a", {}),
     code="result = [{'id': item['id'], 'processed_by': 'A', 'value': item['value'] * 1.1} for item in data]"
 )
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("processor_b", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "processor_b", {}),
     code="result = [{'id': item['id'], 'processed_by': 'B', 'value': item['value'] * 1.2} for item in data]"
 )
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("processor_c", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "processor_c", {}),
     code="result = [{'id': item['id'], 'processed_by': 'C', 'value': item['value'] * 1.3} for item in data]"
 )
 
 # Collector with MergeNode
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("collector", MergeNode(), merge_strategy="concat")
+workflow = WorkflowBuilder()
+workflow.add_node("MergeNode", "collector", {}), merge_strategy="concat")
 
 # Final aggregation
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("aggregator", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "aggregator", {}),
     code="""
 # Flatten and sort results
 all_results = []
@@ -515,23 +517,23 @@ for item in all_results:
 )
 
 # Connect the fan-out
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Connect the fan-in
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 

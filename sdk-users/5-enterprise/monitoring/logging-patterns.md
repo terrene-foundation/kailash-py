@@ -6,6 +6,7 @@
 
 ### Basic Configuration
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 import structlog
 from kailash.logging import configure_logging
 
@@ -36,13 +37,10 @@ logger = structlog.get_logger()
 
 ### Workflow Logging
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("logged_processor", PythonCodeNode(
-    name="logged_processor",
-    code='''
-import structlog
-logger = structlog.get_logger()
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "logged_processor", {})
 
 # Context logging
 logger.info(
@@ -97,6 +95,7 @@ except Exception as e:
 
 ### Log Levels
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 
 # CRITICAL: System unusable
 logger.critical(
@@ -142,6 +141,7 @@ logger.debug(
 
 ### Log Categories
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Business events
 business_logger = structlog.get_logger("business")
 business_logger.info(
@@ -177,23 +177,11 @@ perf_logger.info(
 
 ### Comprehensive Audit Trail
 ```python
-workflow.add_node("audit_logger", AuditLoggerNode(
-    audit_events=[
-        "data_access", "data_modification", "user_action",
-        "permission_change", "configuration_change"
-    ],
-    retention_days=2555,  # 7 years for compliance
-    encryption_enabled=True,
-    tamper_protection=True
-))
+from kailash.workflow.builder import WorkflowBuilder
+workflow.add_node("AuditLoggerNode", "audit_logger", {}))
 
 # Custom audit logging
-workflow.add_node("custom_audit", PythonCodeNode(
-    name="custom_audit",
-    code='''
-from kailash.audit import AuditLogger
-
-audit = AuditLogger()
+workflow.add_node("PythonCodeNode", "custom_audit", {})
 
 # Record data access
 audit.log_event(
@@ -233,12 +221,13 @@ result = {"audited": True, "events_logged": len(modified_items) + 1}
 
 ### Compliance Logging
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 
 # GDPR compliance logging
-workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
 
 # SOX compliance logging
-workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
 
 ```
 
@@ -246,6 +235,7 @@ workflow = Workflow("example", name="Example")
 
 ### Context Enrichment
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.logging import LogEnrichmentMiddleware
 
 # Add context to all logs
@@ -275,8 +265,9 @@ workflow.add_middleware(enrichment)
 
 ### Sensitive Data Filtering
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 
-workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
 
 ```
 
@@ -284,19 +275,19 @@ workflow = Workflow("example", name="Example")
 
 ### Centralized Logging
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 
 # Export to multiple destinations
-workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
 
 ```
 
 ### Log Parsing & Analysis
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 
 # Parse structured logs
-workflow.add_node("log_parser", LogParserNode(
-    patterns={
-        "api_request": r"(?P<timestamp>\S+) (?P<level>\S+) (?P<method>\S+) (?P<path>\S+) (?P<status>\d+) (?P<duration>\d+)ms",
+workflow.add_node("LogParserNode", "log_parser", {}) (?P<level>\S+) (?P<method>\S+) (?P<path>\S+) (?P<status>\d+) (?P<duration>\d+)ms",
         "database_query": r"Query: (?P<query>.*) Duration: (?P<duration>\d+)ms Rows: (?P<rows>\d+)",
         "error_stack": r"(?P<error_type>\w+): (?P<message>.*) at (?P<location>.*)",
         "workflow_execution": r"Workflow (?P<workflow_id>\S+) (?P<status>\w+) in (?P<duration>\d+)ms",
@@ -308,16 +299,7 @@ workflow.add_node("log_parser", LogParserNode(
 ))
 
 # Advanced log analysis
-workflow.add_node("log_analyzer", PythonCodeNode(
-    name="log_analyzer",
-    code='''
-import re
-from collections import defaultdict, Counter
-from datetime import datetime, timedelta
-
-# Analyze parsed logs
-log_stats = {
-    "total_entries": len(parsed_logs),
+workflow.add_node("PythonCodeNode", "log_analyzer", {}),
     "by_level": Counter(log["level"] for log in parsed_logs),
     "by_service": Counter(log.get("service", "unknown") for log in parsed_logs),
     "error_patterns": Counter(),
@@ -410,12 +392,9 @@ fields @timestamp, level, message, error_type
 
 ### Log-based Metrics
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Extract metrics from logs
-workflow.add_node("log_metrics_extractor", LogMetricsExtractorNode(
-    metrics_config=[
-        {
-            "name": "response_time",
-            "pattern": r"duration:(\d+)ms",
+workflow.add_node("LogMetricsExtractorNode", "log_metrics_extractor", {})ms",
             "type": "histogram",
             "labels": ["method", "endpoint"],
             "buckets": [10, 50, 100, 500, 1000, 5000]
@@ -445,17 +424,7 @@ workflow.add_node("log_metrics_extractor", LogMetricsExtractorNode(
 ))
 
 # Custom log-based metrics
-workflow.add_node("custom_log_metrics", PythonCodeNode(
-    name="custom_log_metrics",
-    code='''
-from collections import defaultdict, Counter
-from datetime import datetime, timedelta
-
-# Extract custom business metrics from logs
-business_metrics = {
-    "orders_processed": 0,
-    "revenue_total": 0,
-    "unique_customers": set(),
+workflow.add_node("PythonCodeNode", "custom_log_metrics", {}),
     "feature_usage": Counter(),
     "conversion_funnel": defaultdict(int)
 }
@@ -512,6 +481,7 @@ result = {
 
 ### 1. **Log Structure**
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Good: Structured logging
 logger.info(
     "user_login",
@@ -529,6 +499,7 @@ logger.info(f"User 123 logged in from 192.168.1.1 using Chrome")
 
 ### 2. **Log Levels**
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Use appropriate levels
 logger.debug("Cache miss for key: user:123")  # Development info
 logger.info("User authenticated successfully")  # Normal operations
@@ -540,6 +511,7 @@ logger.critical("Service unavailable")          # Service down
 
 ### 3. **Performance Considerations**
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Lazy evaluation for expensive operations
 if logger.isEnabledFor(logging.DEBUG):
     logger.debug("Processing data: %s", expensive_serialize(data))

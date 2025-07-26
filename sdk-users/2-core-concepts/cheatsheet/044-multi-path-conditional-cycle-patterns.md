@@ -7,7 +7,7 @@ Complex workflows where SwitchNode routes to multiple processors, but only some 
 ### Pattern 1: Single Active Path with Fallback
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -17,38 +17,39 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Only one condition creates a cycle, others terminate normally
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("data_source", DataSourceNode())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("classifier", DataClassifierNode())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("routing_switch", SwitchNode())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("filter_processor", FilterProcessorNode())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("archive_processor", ArchiveProcessorNode())
+workflow = WorkflowBuilder()
+workflow.add_node("DataSourceNode", "data_source", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("DataClassifierNode", "classifier", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("SwitchNode", "routing_switch", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("FilterProcessorNode", "filter_processor", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("ArchiveProcessorNode", "archive_processor", {}))
 
 # Initial data flow
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Multiple exit paths from switch
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Only the filter path cycles back
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Archive processor doesn't cycle - workflow ends there
 
@@ -57,7 +58,7 @@ workflow.  # Method signature
 ### Pattern 2: Multiple Cycle Paths (Complex)
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -67,42 +68,43 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Multiple conditions can trigger different cycle paths
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("analyzer", DataAnalyzerNode())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("quality_switch", SwitchNode())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("improve_processor", QualityImproverNode())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("validate_processor", ValidationProcessorNode())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("complete_processor", CompletionProcessorNode())
+workflow = WorkflowBuilder()
+workflow.add_node("DataAnalyzerNode", "analyzer", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("SwitchNode", "quality_switch", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("QualityImproverNode", "improve_processor", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("ValidationProcessorNode", "validate_processor", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("CompletionProcessorNode", "complete_processor", {}))
 
 # Main analysis flow
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Different quality levels trigger different processing
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature  # This path doesn't cycle
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature  # This path doesn't cycle
 
 # Different cycle paths
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Complete processor terminates without cycling
 
@@ -113,7 +115,7 @@ workflow.  # Method signature
 ### Multi-Case SwitchNode Setup
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -123,8 +125,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Use cases parameter for multiple routing options
 runtime = LocalRuntime()
@@ -145,7 +148,7 @@ workflow.{
 ### Conditional Field Evaluation
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -155,8 +158,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # More complex condition evaluation
 runtime = LocalRuntime()
@@ -177,7 +181,7 @@ workflow.{
 ### ✅ Clear Cycle Termination
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -187,22 +191,20 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Always ensure cycles have clear termination conditions
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("processor", "analyzer",
-    cycle=True,
-    max_iterations=10,  # Safety limit
-    convergence_check="is_complete == True")  # Clear condition
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()  # Clear condition
 
 ```
 
 ### ✅ Asymmetric Flow Handling
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -212,8 +214,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Document which paths cycle and which terminate
 class DataClassifierNode(CycleAwareNode):
@@ -234,7 +237,7 @@ class DataClassifierNode(CycleAwareNode):
 ### ✅ Entry Point Documentation
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -244,8 +247,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Always use source nodes for complex multi-path cycles
 class DataSourceNode(CycleAwareNode):
@@ -271,7 +275,7 @@ workflow.{
 ### ❌ Incomplete Cycle Paths
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -281,26 +285,27 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Wrong - missing cycle connection for one path
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("switch", "processor_a", condition="path_a")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("switch", "processor_b", condition="path_b")
+workflow = WorkflowBuilder()
+workflow.add_connection("switch", "result", "processor_a", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("switch", "result", "processor_b", "input")
 
 # Only processor_a cycles back - processor_b path incomplete
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("processor_a", "switch", cycle=True)
-# Missing: workflow.connect("processor_b", ???)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+# Missing: workflow.add_connection("source", "result", "target", "input")
 
 ```
 
 ### ❌ Conflicting Convergence Conditions
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -310,17 +315,16 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Wrong - different cycle paths with conflicting convergence
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("processor_a", "analyzer",
-    cycle=True, convergence_check="quality > 0.8")  # High threshold
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()  # High threshold
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("processor_b", "analyzer",
-    cycle=True, convergence_check="quality > 0.5")  # Low threshold
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()  # Low threshold
 # These can interfere with each other
 
 ```
@@ -328,7 +332,7 @@ workflow.workflow.connect("processor_b", "analyzer",
 ### ❌ Missing Default Cases
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -338,12 +342,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Wrong - no handling for unmatched conditions
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("switch", "processor", condition="specific_case")
+workflow = WorkflowBuilder()
+workflow.add_connection("switch", "result", "processor", "input")
 # What happens if condition doesn't match?
 # Add default handling or ensure all cases are covered
 

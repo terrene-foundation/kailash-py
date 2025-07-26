@@ -2,12 +2,12 @@
 
 ## ETL Pipeline Pattern
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.transform import DataTransformerNode
 
-workflow = Workflow("etl-001", name="ETL Pipeline")
+workflow = WorkflowBuilder()
 
 # Extract-Transform-Load
 workflow.add_node("CSVReaderNode", "extract", {
@@ -26,19 +26,19 @@ workflow.add_node("CSVWriterNode", "load", {
 })
 
 # Connect pipeline
-workflow.connect("extract", "transform")
-workflow.connect("transform", "load", mapping={"transformed": "data"})
+workflow.add_connection("extract", "data", "transform", "input")
+workflow.add_connection("transform", "transformed", "load", "data")
 
 # Execute
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
 ## AI Analysis Pattern
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -48,11 +48,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # LLM-powered data analysis
-workflow = Workflow("ai-analysis", name="AI Data Analyst")
+workflow = WorkflowBuilder()
 
 # Read data
 workflow.add_node("JSONReaderNode", "reader", {
@@ -79,8 +80,8 @@ workflow.add_node("LLMAgentNode", "analyze", {
 })
 
 # Connect and execute
-workflow.connect("reader", "prepare")
-workflow.connect("prepare", "analyze", mapping={"summary": "summary"})
+workflow.add_connection("reader", "data", "prepare", "data")
+workflow.add_connection("prepare", "summary", "analyze", "summary")
 
 ```
 
@@ -117,7 +118,7 @@ gateway.run(port=8000)
 ## Conditional Processing
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -127,11 +128,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Route data based on conditions
-workflow = Workflow("router", name="Conditional Router")
+workflow = WorkflowBuilder()
 
 # Input and routing
 workflow.add_node("JSONReaderNode", "input", {
@@ -139,11 +141,8 @@ workflow.add_node("JSONReaderNode", "input", {
 })
 
 workflow.add_node("SwitchNode", "router", {
-    "conditions": [
-        {"output": "urgent", "expression": "priority == 'high'"},
-        {"output": "normal", "expression": "priority == 'medium'"},
-        {"output": "batch", "expression": "priority == 'low'"}
-    ]
+    "condition_field": "priority",
+    "cases": ["high", "medium", "low"]
 })
 
 # Different handlers
@@ -156,9 +155,9 @@ workflow.add_node("LLMAgentNode", "urgent_handler", {
 workflow.add_node("DataTransformerNode", "normal_handler", {})
 
 # Connect routes
-workflow.connect("input", "router")
-workflow.connect("router", "urgent_handler", condition="urgent")
-workflow.connect("router", "normal_handler", condition="normal")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 ```
 

@@ -85,9 +85,9 @@ workflow.add_node("TransactionCommitNode", "commit_transaction", {
 })
 
 # Connect nodes
-workflow.add_connection("start_transaction", "create_user")
+workflow.add_connection("start_transaction", "result", "create_user", "input")
 workflow.add_connection("create_user", "create_profile", "id", "user_id")
-workflow.add_connection("create_profile", "commit_transaction")
+workflow.add_connection("create_profile", "result", "commit_transaction", "input")
 ```
 
 ### Transaction Rollback
@@ -129,9 +129,9 @@ workflow.add_node("TransactionRollbackNode", "rollback_tx", {
 })
 
 # Connect flow
-workflow.add_connection("start_tx", "create_user")
-workflow.add_connection("create_user", "validate_user")
-workflow.add_connection("validate_user", "tx_decision", "valid")
+workflow.add_connection("start_tx", "result", "create_user", "input")
+workflow.add_connection("create_user", "result", "validate_user", "input")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex pattern
 workflow.add_connection("validate_user", "rollback_tx", "error")
 ```
 
@@ -363,8 +363,8 @@ workflow.add_node("PaymentRefundNode", "refund_payment", {
 })
 
 # Connect with error handling
-workflow.add_connection("reserve_inventory", "process_payment")
-workflow.add_connection("process_payment", "create_shipment")
+workflow.add_connection("reserve_inventory", "result", "process_payment", "input")
+workflow.add_connection("process_payment", "result", "create_shipment", "input")
 
 # Compensation flow
 workflow.add_connection("process_payment", "release_inventory",

@@ -177,7 +177,7 @@ circuit_breaker = CircuitBreaker(
 The SDK automatically collects detailed metrics:
 
 ```python
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.tracking import MetricsCollector
 
 # Enable metrics collection

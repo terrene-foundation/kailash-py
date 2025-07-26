@@ -16,7 +16,7 @@ Before building any application, make these key decisions:
 ### 1. **Microservice Pattern**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -27,8 +27,9 @@ from kailash.nodes.base import Node, NodeParameter
 from kailash.api.gateway import create_gateway
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Each workflow as a separate service
 gateway = create_gateway(
@@ -46,7 +47,7 @@ gateway = create_gateway(
 ### 2. **Monolithic Pattern**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -56,8 +57,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # All workflows in single deployment
 app = create_gateway(
@@ -71,7 +73,7 @@ app = create_gateway(
 ### 3. **Event-Driven Pattern**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -82,13 +84,12 @@ from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.events import EventListenerNode
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Workflows triggered by events
-workflow.add_node("listener", EventListenerNode(
-    event_types=["order.created", "user.registered"]
-))
+workflow.add_node("EventListenerNode", "listener", {}))
 
 ```
 **When to use**: Reactive systems, loose coupling, async processing
@@ -96,7 +97,7 @@ workflow.add_node("listener", EventListenerNode(
 ### 4. **Batch Processing Pattern**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode, BatchReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -106,14 +107,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Scheduled bulk operations
-workflow.add_node("reader", BatchReaderNode(
-    batch_size=1000,
-    parallel_workers=10
-))
+workflow.add_node("BatchReaderNode", "reader", {}))
 
 ```
 **When to use**: Large data volumes, scheduled jobs, ETL pipelines
@@ -166,7 +165,7 @@ gateway = create_gateway(
 ### Middleware Stack Pattern
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -176,8 +175,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Layer middleware for cross-cutting concerns
 gateway = create_gateway(
@@ -195,7 +195,7 @@ gateway = create_gateway(
 ### Agent Distribution Pattern
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -207,14 +207,13 @@ from kailash.nodes.coordination import A2ACoordinatorNode
 from kailash.nodes.management import AgentPoolManagerNode
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Distribute AI workload across agents
 workflow.add_node("coordinator", A2ACoordinatorNode())
-workflow.add_node("pool", AgentPoolManagerNode(
-    max_active_agents=50
-))
+workflow.add_node("AgentPoolManagerNode", "pool", {}))
 
 ```
 
@@ -223,7 +222,7 @@ workflow.add_node("pool", AgentPoolManagerNode(
 ### Caching Strategy
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -234,22 +233,21 @@ from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.cache import InMemoryCacheNode, RedisCacheNode, IntelligentCacheNode
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Multi-level caching
-workflow.add_node("l1_cache", InMemoryCacheNode(ttl=60))
-workflow.add_node("l2_cache", RedisCacheNode(ttl=3600))
-workflow.add_node("l3_cache", IntelligentCacheNode(
-    similarity_threshold=0.8
-))
+workflow.add_node("InMemoryCacheNode", "l1_cache", {}))
+workflow.add_node("RedisCacheNode", "l2_cache", {}))
+workflow.add_node("IntelligentCacheNode", "l3_cache", {}))
 
 ```
 
 ### Async Processing
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -259,8 +257,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Parallel execution
 runtime = LocalRuntime(
@@ -274,7 +273,7 @@ runtime = LocalRuntime(
 ### Load Balancing
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -285,14 +284,12 @@ from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.network import LoadBalancerNode
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Distribute across multiple instances
-workflow.add_node("balancer", LoadBalancerNode(
-    strategy="round_robin",
-    health_check_interval=30
-))
+workflow.add_node("LoadBalancerNode", "balancer", {}))
 
 ```
 
@@ -316,7 +313,7 @@ runtime = AccessControlledRuntime(
 ### Data Protection
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -327,16 +324,13 @@ from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.security import EncryptionNode, DataValidationNode
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Encryption and validation
-workflow.add_node("encryptor", EncryptionNode(
-    algorithm="AES-256-GCM"
-))
-workflow.add_node("validator", DataValidationNode(
-    schema=data_schema
-))
+workflow.add_node("EncryptionNode", "encryptor", {}))
+workflow.add_node("DataValidationNode", "validator", {}))
 
 ```
 

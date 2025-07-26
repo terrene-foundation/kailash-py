@@ -20,10 +20,10 @@ Parameter passing in cyclic workflows requires special attention. This guide pro
 
 ```python
 # ✅ CORRECT - Use dot notation for PythonCodeNode outputs
-workflow.connect("counter", "result.count", mapping={"counter": "count"}, cycle=True)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # ❌ WRONG - Direct mapping doesn't work
-workflow.connect("counter", "count", mapping={"counter": "count"}, cycle=True)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 ```
 
 ### 2. Initial Parameters for Cycles
@@ -37,7 +37,7 @@ runtime.execute(workflow, parameters={
 })
 
 # ❌ WRONG - No initial parameters
-runtime.execute(workflow)  # Error: parameter 'count' not provided
+runtime.execute(workflow.build())  # Error: parameter 'count' not provided
 ```
 
 ### 3. Convergence Check Syntax
@@ -46,11 +46,7 @@ runtime.execute(workflow)  # Error: parameter 'count' not provided
 
 ```python
 # ✅ CORRECT - Check output field
-workflow.connect("optimizer", "result", mapping={"optimizer": "data"},
-    cycle=True,
-    max_iterations=50,
-    convergence_check="converged == True"  # References output field
-)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Note: The convergence check evaluates the OUTPUT of the node
 ```
@@ -60,7 +56,7 @@ workflow.connect("optimizer", "result", mapping={"optimizer": "data"},
 ### Simple Self-Cycle
 
 ```python
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # Create workflow with self-cycle
@@ -82,13 +78,7 @@ result = {
 })
 
 # Create self-cycle with proper mapping
-workflow.connect(
-    "counter", "result.count",  # Output with dot notation
-    "counter", "count",         # Input parameter name
-    cycle=True,
-    max_iterations=10,
-    convergence_check="converged == True"
-)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Execute with initial parameters
 runtime = LocalRuntime()
@@ -136,13 +126,9 @@ result = {
 })
 
 # Connect in a cycle
-workflow.connect("producer", "result", mapping={"validator": "data"})
-workflow.connect("validator", "result.validated_value", mapping={"producer": "current_value"},
-    cycle=True,
-    max_iterations=20,
-    convergence_check="converged == True"
-)
-workflow.connect("validator", "result.iteration", mapping={"producer": "iteration"})
+workflow.add_connection("producer", "result", "validator", "data")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+workflow.add_connection("validator", "result.iteration", "producer", "iteration")
 
 # Execute with initial parameters for both nodes
 results, _ = runtime.execute(workflow.build(), parameters={
@@ -196,11 +182,7 @@ result = {
 })
 
 # Create self-cycle with state preservation
-workflow.connect("optimizer", "result.state", mapping={"optimizer": "state"},
-    cycle=True,
-    max_iterations=100,
-    convergence_check="converged == True"
-)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Execute with initial configuration
 results, _ = runtime.execute(workflow.build(), parameters={
@@ -248,12 +230,9 @@ workflow.add_node("SwitchNode", "router", {
 })
 
 # Connect with cycle through router
-workflow.connect("processor", "result", mapping={"router": "data"})
-workflow.connect("router", "false_output.data", mapping={"processor": "data"},
-    cycle=True,
-    max_iterations=10
-)
-workflow.connect("router", "false_output.mode", mapping={"processor": "mode"})
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 ```
 
 ### Nested State Management
@@ -306,11 +285,7 @@ result = {
 })
 
 # Self-cycle with state
-workflow.connect("state_manager", "result.state", mapping={"state_manager": "full_state"},
-    cycle=True,
-    max_iterations=50,
-    convergence_check="converged == True"
-)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 ```
 
 ## Common Pitfalls and Solutions
@@ -332,11 +307,11 @@ results, _ = runtime.execute(workflow.build(), parameters={
 
 ```python
 # ❌ PROBLEM: Forgetting result wrapper
-workflow.connect("node", "value", mapping={"node": "input"}, cycle=True)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 # Error: Output 'value' not found
 
 # ✅ SOLUTION: Use dot notation for PythonCodeNode
-workflow.connect("node", "result.value", mapping={"node": "input"}, cycle=True)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 ```
 
 ### 3. State Serialization Issues

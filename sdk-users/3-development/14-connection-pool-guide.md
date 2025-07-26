@@ -65,7 +65,7 @@ workflow.add_node("WorkflowConnectionPool", "db_pool", {
 ### Setting Up Connection Pool
 
 ```python
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # Create workflow
@@ -89,7 +89,7 @@ workflow.add_node("PythonCodeNode", "init", {
 })
 
 # Connect initialization
-workflow.connect("init", "result", mapping={"db_pool": "request"})
+workflow.add_connection("init", "result", "db_pool", "request")
 
 # Execute workflow
 runtime = LocalRuntime()
@@ -128,7 +128,7 @@ result = {
 })
 
 # Connect to pool
-workflow.connect("get_users", "result", mapping={"db_pool": "request"})
+workflow.add_connection("get_users", "result", "db_pool", "request")
 ```
 
 ## Connection Pool Operations

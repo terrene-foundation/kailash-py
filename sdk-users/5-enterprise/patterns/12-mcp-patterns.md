@@ -22,6 +22,8 @@ The Model Context Protocol (MCP) enables standardized communication between AI a
 ### Prototyping with SimpleMCPServer
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash.mcp_server import SimpleMCPServer
 
 # Create lightweight server for prototyping

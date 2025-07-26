@@ -5,9 +5,9 @@
 2. **Parameter types**: ONLY `str`, `int`, `float`, `bool`, `list`, `dict`, `Any`
 3. **Never use generics**: No `List[T]`, `Dict[K,V]`, `Optional[T]`, `Union[A,B]`
 4. **PythonCodeNode**: Input variables EXCLUDED from outputs! + **Dot Notation**
-   - `mapping={"result": "input_data"}` ✓ (simple mapping)
-   - `mapping={"result.data": "input_data"}` ✓ (nested access)
-   - `mapping={"result": "result"}` ✗ (self-reference)
+   - `# mapping removed)
+   - `# mapping removed)
+   - `# mapping removed)
 5. **Always include name**: `PythonCodeNode(name="processor", code="...")`
 6. **Node Creation**: Can create without required params (validated at execution)
 7. **Auto-Mapping**: NodeParameter supports automatic connection discovery:
@@ -91,19 +91,16 @@ builder.add_connection(
 )
 
 # Workflow uses connect() with mapping dict:
-workflow = Workflow("my_workflow")
-workflow.connect(
-    source_node,         # Source node object or name
-    target_node,         # Target node object or name
-    mapping={"output": "input"}  # Output to input mapping
-)
+workflow = WorkflowBuilder()
+workflow.add_connection(source_node, "result", # Source node object or name
+    target_node, "input")
 
 # ❌ WRONG: Don't mix the syntax!
 # This will fail on WorkflowBuilder:
-builder.connect(node1, node2, mapping={"output": "input"})
+builder.connect(node1, node2, # mapping removed)
 
 # This will fail on Workflow:
-workflow.connect("node1", "output", mapping={"node2": "input"})
+workflow.add_connection("node1", "output", "node2", "input")
 ```
 
 ### Unified Runtime (Enterprise Features)
@@ -114,7 +111,7 @@ from kailash.access_control import UserContext
 
 # Basic usage (backward compatible)
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 # With enterprise features
 user_context = UserContext(
@@ -145,7 +142,7 @@ results, run_id = runtime.execute(workflow, task_manager, parameters)
 ### Middleware Integration
 ```python
 # ✅ CORRECT: Middleware imports and usage
-from kailash.middleware import (
+from kailash.api.middleware import (
     AgentUIMiddleware,
     RealtimeMiddleware,
     APIGateway,
@@ -193,7 +190,7 @@ class YourNode(Node):
 **🚀 MANDATORY: Use `.from_function()` for code > 3 lines**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -203,8 +200,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ ALWAYS use from_function for complex logic:
 def workflow.()  # Type signature example -> dict:
@@ -225,7 +223,7 @@ processor = PythonCodeNode.from_function(
 **String code only for: dynamic generation, user input, templates, one-liners**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -235,8 +233,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # OK for simple one-liner
 node = PythonCodeNode(name="calc", code="result = value * 1.1")
@@ -250,7 +249,7 @@ node = PythonCodeNode(name="filter", code=code)
 **⚠️ Remember: Input variables EXCLUDED from outputs**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -260,12 +259,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # CORRECT: Different variable names for mapping
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -273,7 +273,7 @@ workflow.  # Method signature
 ```python
 from kailash.workflow import Workflow, RetryStrategy
 
-workflow = Workflow(workflow_id="resilient", name="Resilient Pipeline")
+workflow = WorkflowBuilder()
 
 # Add retry policy
 workflow.configure_retry(
@@ -346,7 +346,7 @@ file_discoverer = DirectoryReaderNode(
 ### MCP Gateway Integration
 ```python
 # Create gateway with MCP support
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 from kailash.api.mcp_integration import MCPIntegration, MCPToolNode
 
 # 1. Create gateway
@@ -376,8 +376,7 @@ builder = WorkflowBuilder("mcp_workflow")
 search_node = MCPToolNode(
     mcp_server="tools",
     tool_name="search",
-    mapping={"search_query": "query"}  # Map workflow -> tool params
-)
+    # mapping removed)
 builder.add_node("search", search_node)
 
 # Register workflow
@@ -390,7 +389,7 @@ await gateway.agent_ui.register_workflow(
 ### Centralized Data Access
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -400,8 +399,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 from examples.utils.data_paths import get_input_data_path, get_output_data_path
 

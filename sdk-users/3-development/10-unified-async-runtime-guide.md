@@ -175,8 +175,8 @@ result = {'processed': squared}
 })
 
 # Connect parallel branches
-workflow.connect("input", "result.data", mapping={"process1": "input_data"})
-workflow.connect("input", "result.data", mapping={"process2": "input_data"})
+workflow.add_connection("input", "result.data", "process1", "input_data")
+workflow.add_connection("input", "result.data", "process2", "input_data")
 
 # Both processors run simultaneously
 async def execute():
@@ -218,7 +218,7 @@ result = {"processed": processed}
 })
 
 # Connect nodes
-workflow.connect("fetch", "result.users", mapping={"process": "users"})
+workflow.add_connection("fetch", "result.users", "process", "users")
 
 # Runtime handles both node types automatically
 result = await runtime.execute_workflow_async(workflow.build(), {})
@@ -277,8 +277,8 @@ result = {"validated": valid_data, "valid_count": len(valid_data)}
 })
 
 # Connect pipeline
-workflow.connect("source", "result.data", mapping={"clean": "input_data"})
-workflow.connect("clean", "result.cleaned", mapping={"validate": "cleaned_data"})
+workflow.add_connection("source", "result.data", "clean", "input_data")
+workflow.add_connection("clean", "result.cleaned", "validate", "cleaned_data")
 
 # Execute pipeline
 result = await runtime.execute_workflow_async(workflow.build(), {})
@@ -347,12 +347,12 @@ result = {"profile": combined}
 })
 
 # Connect nodes
-workflow.connect("input", "result.user_id", mapping={"user_api": "user_id"})
-workflow.connect("input", "result.user_id", mapping={"orders_api": "user_id"})
-workflow.connect("input", "result.user_id", mapping={"preferences_api": "user_id"})
-workflow.connect("user_api", "result.user", mapping={"aggregate": "user"})
-workflow.connect("orders_api", "result.orders", mapping={"aggregate": "orders"})
-workflow.connect("preferences_api", "result.preferences", mapping={"aggregate": "preferences"})
+workflow.add_connection("input", "result.user_id", "user_api", "user_id")
+workflow.add_connection("input", "result.user_id", "orders_api", "user_id")
+workflow.add_connection("input", "result.user_id", "preferences_api", "user_id")
+workflow.add_connection("user_api", "result.user", "aggregate", "user")
+workflow.add_connection("orders_api", "result.orders", "aggregate", "orders")
+workflow.add_connection("preferences_api", "result.preferences", "aggregate", "preferences")
 
 # All API calls run concurrently, then aggregate
 result = await runtime.execute_workflow_async(workflow.build(), {})
@@ -519,7 +519,7 @@ result = {"output": processed_value}
 })
 
 # Connect using dot notation
-workflow.connect("source", "result.data", mapping={"processor": "input_value"})
+workflow.add_connection("source", "result.data", "processor", "input_value")
 ```
 
 ## Migration from LocalRuntime

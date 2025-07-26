@@ -150,8 +150,8 @@ processor_id = workflow.add_node("PythonCodeNode", node_id="processor", config={
 output_id = workflow.add_node("JSONWriterNode")  # Auto-generated ID
 
 # Connect using returned IDs
-workflow.connect(api_id, "response", mapping={processor_id: "input"})
-workflow.connect(processor_id, "result", mapping={output_id: "data"})
+workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
+workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
 ```
 
 ## 📐 Migration Patterns
@@ -251,12 +251,12 @@ workflow.add_node(
 # Manual IDs
 workflow.add_node("CSVReaderNode", "csv_reader_001", {"file_path": "data.csv"})
 workflow.add_node("PythonCodeNode", "processor_001", {"code": "..."})
-workflow.connect("csv_reader_001", "result", mapping={"processor_001": "input"})
+workflow.add_connection("csv_reader_001", "result", "processor_001", "input")
 
 # Auto IDs
 reader = workflow.add_node("CSVReaderNode", config={"file_path": "data.csv"})
 processor = workflow.add_node("PythonCodeNode", config={"code": "..."})
-workflow.connect(reader, "result", mapping={processor: "input"})
+workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
 ```
 
 ## 🎯 Choosing the Right Pattern

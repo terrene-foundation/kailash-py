@@ -17,6 +17,8 @@ Testing async workflows requires special considerations for concurrency, timing,
 ### Basic Async Test Setup
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 import pytest
 import asyncio
 from kailash.workflow.async_builder import AsyncWorkflowBuilder
@@ -360,7 +362,7 @@ async def isolated_runtime():
 async def test_with_isolation(isolated_runtime):
     """Test using isolated runtime."""
     workflow = create_test_workflow()
-    result = await isolated_runtime.execute(workflow)
+    result = await isolated_runtime.execute(workflow.build())
     assert result.success
 ```
 

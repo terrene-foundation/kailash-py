@@ -19,8 +19,8 @@ from kailash.nodes.enterprise import TenantAssignmentNode
 workflow.add_node("TenantAssignmentNode", "assign_tenant", {})
 
 # Connect SSO authentication outputs
-workflow.connect("sso_login", "user_id", mapping={"assign_tenant": "user_id"})
-workflow.connect("mfa_challenge", "verified", mapping={"assign_tenant": "verified"})
+workflow.add_connection("sso_login", "user_id", "assign_tenant", "user_id")
+workflow.add_connection("mfa_challenge", "verified", "assign_tenant", "verified")
 
 # Outputs: tenant, user_context, assignment_timestamp
 ```
@@ -33,8 +33,8 @@ from kailash.nodes.enterprise import MCPServiceDiscoveryNode
 workflow.add_node("MCPServiceDiscoveryNode", "discover_services", {})
 
 # Connect tenant context
-workflow.connect("assign_tenant", "tenant", mapping={"discover_services": "tenant"})
-workflow.connect("assign_tenant", "user_context", mapping={"discover_services": "user_context"})
+workflow.add_connection("assign_tenant", "tenant", "discover_services", "tenant")
+workflow.add_connection("assign_tenant", "user_context", "discover_services", "user_context")
 
 # Outputs: discovered_services, service_count, compliance_filters
 ```
@@ -50,7 +50,7 @@ workflow.add_node("EnterpriseMLCPExecutorNode", "mcp_executor", {
 })
 
 # Connect AI agent tool requests
-workflow.connect("ai_analyst", "response", mapping={"mcp_executor": "tool_request"})
+workflow.add_connection("ai_analyst", "response", "mcp_executor", "tool_request")
 
 # Outputs: success, data, execution_time_ms, circuit_state, execution_results
 ```
@@ -65,8 +65,8 @@ workflow.add_node("EnterpriseAuditLoggerNode", "audit_logger", {
 })
 
 # Connect execution results and user context
-workflow.connect("mcp_executor", "execution_results", mapping={"audit_logger": "execution_results"})
-workflow.connect("assign_tenant", "user_context", mapping={"audit_logger": "user_context"})
+workflow.add_connection("mcp_executor", "execution_results", "audit_logger", "execution_results")
+workflow.add_connection("assign_tenant", "user_context", "audit_logger", "user_context")
 
 # Outputs: audit_entry, audit_id, compliance_status, risk_assessment
 ```
@@ -127,15 +127,15 @@ healthcare_workflow.add_node("EnterpriseAuditLoggerNode", "audit_logger", {
 })
 
 # Connect components
-healthcare_workflow.connect("sso_login", "attributes", mapping={"mfa_challenge": "user_data"})
-healthcare_workflow.connect("sso_login", "user_id", mapping={"assign_tenant": "user_id"})
-healthcare_workflow.connect("mfa_challenge", "verified", mapping={"assign_tenant": "verified"})
-healthcare_workflow.connect("assign_tenant", "tenant", mapping={"discover_services": "tenant"})
-healthcare_workflow.connect("assign_tenant", "user_context", mapping={"discover_services": "user_context"})
-healthcare_workflow.connect("discover_services", "discovered_services", mapping={"patient_analyst": "available_tools"})
-healthcare_workflow.connect("patient_analyst", "response", mapping={"mcp_executor": "tool_request"})
-healthcare_workflow.connect("mcp_executor", "execution_results", mapping={"audit_logger": "execution_results"})
-healthcare_workflow.connect("assign_tenant", "user_context", mapping={"audit_logger": "user_context"})
+healthcare_workflow.add_connection("sso_login", "attributes", "mfa_challenge", "user_data")
+healthcare_workflow.add_connection("sso_login", "user_id", "assign_tenant", "user_id")
+healthcare_workflow.add_connection("mfa_challenge", "verified", "assign_tenant", "verified")
+healthcare_workflow.add_connection("assign_tenant", "tenant", "discover_services", "tenant")
+healthcare_workflow.add_connection("assign_tenant", "user_context", "discover_services", "user_context")
+healthcare_workflow.add_connection("discover_services", "discovered_services", "patient_analyst", "available_tools")
+healthcare_workflow.add_connection("patient_analyst", "response", "mcp_executor", "tool_request")
+healthcare_workflow.add_connection("mcp_executor", "execution_results", "audit_logger", "execution_results")
+healthcare_workflow.add_connection("assign_tenant", "user_context", "audit_logger", "user_context")
 
 # Execute with HIPAA-compliant parameters
 healthcare_wf = healthcare_workflow.build()
@@ -253,7 +253,7 @@ multi_tenant_workflow.add_node("AsyncSQLDatabaseNode", "tenant_db", {
 })
 
 # Connect tenant context for data isolation
-multi_tenant_workflow.connect("assign_tenant", "user_context", mapping={"tenant_db": "isolation_context"})
+multi_tenant_workflow.add_connection("assign_tenant", "user_context", "tenant_db", "isolation_context")
 
 # Validate tenant boundaries
 tenant_data = results["tenant_db"]["result"]
@@ -349,11 +349,11 @@ print(f"Enterprise workflow completed in {execution_time}ms")
 ### Connection Optimization
 ```python
 # Optimize parameter connections for better performance
-workflow.connect("assign_tenant", "tenant", mapping={"discover_services": "tenant"})
-workflow.connect("assign_tenant", "user_context", mapping={"discover_services": "user_context"})
+workflow.add_connection("assign_tenant", "tenant", "discover_services", "tenant")
+workflow.add_connection("assign_tenant", "user_context", "discover_services", "user_context")
 
 # Use dot notation for nested outputs
-workflow.connect("mcp_executor", "execution_results", mapping={"audit_logger": "execution_results"})
+workflow.add_connection("mcp_executor", "execution_results", "audit_logger", "execution_results")
 ```
 
 ## 🧪 Testing Enterprise Workflows
@@ -424,7 +424,7 @@ session_context = {
 }
 
 # Pass session context to audit logger
-workflow.connect("assign_tenant", "user_context", mapping={"audit_logger": "user_context"})
+workflow.add_connection("assign_tenant", "user_context", "audit_logger", "user_context")
 ```
 
 ## 📚 Related Guides

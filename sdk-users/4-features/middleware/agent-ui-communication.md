@@ -22,7 +22,7 @@ The AgentUIMiddleware provides the core communication layer between AI agents an
 
 ### Basic Setup
 ```python
-from kailash.middleware import AgentUIMiddleware
+from kailash.api.middleware import AgentUIMiddleware
 
 # Create agent-UI middleware
 agent_ui = AgentUIMiddleware(
@@ -42,7 +42,7 @@ session_id = await agent_ui.create_session(
 ### Dynamic Workflow Creation
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -52,8 +52,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Workflow configuration from frontend
 workflow_config = {
@@ -104,7 +105,7 @@ workflow_id = await agent_ui.create_dynamic_workflow(
 ### Workflow Execution
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -114,14 +115,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Execute workflow with monitoring
 execution_id = await agent_ui.execute(
     session_id=session_id,
     workflow_id=workflow_id,
-    inputs={"custom_param": "value"},
+    parameters={"custom_param": "value"},
     config_overrides={"timeout": 300}
 )
 
@@ -167,7 +169,7 @@ session_id = await agent_ui.create_session(
 ### Session Information
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -177,8 +179,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Get session details
 session = await agent_ui.get_session(session_id)
@@ -190,8 +193,8 @@ print(f"Executions: {len(session.executions)}")
 
 # List all workflows in session
 for workflow_id, workflow in session.workflows.items():
-workflow = Workflow("example", name="Example")
-workflow.workflow.name}")
+workflow = WorkflowBuilder()
+workflow.name}")
 
 # List executions
 for execution_id, execution in session.executions.items():
@@ -334,7 +337,7 @@ await agent_ui.subscribe_to_events(
 ### Filtering Events
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -344,8 +347,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Session-specific events only
 await agent_ui.subscribe_to_events(
@@ -381,7 +385,7 @@ await agent_ui.unsubscribe_from_events("my_app")
 ### Execution Control
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -391,14 +395,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Start execution
 execution_id = await agent_ui.execute(
     session_id=session_id,
     workflow_id=workflow_id,
-    inputs={"data": "input_value"}
+    parameters={"data": "input_value"}
 )
 
 # Cancel running execution
@@ -449,7 +454,7 @@ await monitor_execution(execution_id, session_id)
 ### Middleware Statistics
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -459,8 +464,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Get comprehensive stats
 stats = agent_ui.get_stats()
@@ -508,7 +514,7 @@ print(f"Execution completed in {execution_time:.2f} seconds")
 ### Common Error Patterns
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -518,8 +524,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 try:
     # Session operations
@@ -554,7 +561,7 @@ except Exception as e:
 ### Validation Errors
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -564,8 +571,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Handle workflow validation errors
 try:
@@ -592,7 +600,7 @@ except ValueError as e:
 
 ### With API Gateway
 ```python
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 
 # Create integrated gateway
 gateway = create_gateway(
@@ -610,7 +618,7 @@ session_id = await agent_ui.create_session(user_id="user123")
 
 ### With Real-time Middleware
 ```python
-from kailash.middleware import AgentUIMiddleware, RealtimeMiddleware
+from kailash.api.middleware import AgentUIMiddleware, RealtimeMiddleware
 
 # Create components
 agent_ui = AgentUIMiddleware()
@@ -624,7 +632,7 @@ session_id = await agent_ui.create_session(user_id="user123")
 
 ### With AI Chat
 ```python
-from kailash.middleware import AIChatMiddleware
+from kailash.api.middleware import AIChatMiddleware
 
 # Create AI chat integration
 ai_chat = AIChatMiddleware(agent_ui)
@@ -690,7 +698,7 @@ async def robust_execution(session_id, workflow_id, max_retries=3):
 ### 3. Performance Optimization
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -700,8 +708,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Batch workflow creations
 workflows_to_create = [config1, config2, config3]

@@ -123,17 +123,10 @@ from kailash.nodes.mcp import MCPToolNode
 workflow = WorkflowBuilder()
 
 # Add MCP tool node
-workflow.add_node("mcp_weather", MCPToolNode(
-    server_url="http://localhost:8080",
-    tool_name="get_weather",
-    connection_pool_size=5,
-    retry_attempts=3
-))
+workflow.add_node("MCPToolNode", "mcp_weather", {}))
 
 # Chain with other nodes
-workflow.add_node("process_weather", PythonCodeNode(
-    code="""
-def process_weather(weather_data):
+workflow.add_node("PythonCodeNode", "process_weather", {}):
     return {
         "summary": f"It's {weather_data['condition']} and {weather_data['temperature']}°F",
         "alert": weather_data['temperature'] > 90
@@ -142,7 +135,7 @@ def process_weather(weather_data):
     function_name="process_weather"
 ))
 
-workflow.connect("mcp_weather", "process_weather", mapping={"result": "weather_data"})
+workflow.add_connection("mcp_weather", "process_weather", "result", "weather_data")
 ```
 
 ## Resource Management Patterns
@@ -438,7 +431,7 @@ async def test_mcp_workflow_integration():
 
         result = await tester.test_workflow(
             workflow,
-            inputs={"location": "San Francisco"},
+            parameters={"location": "San Francisco"},
             expected_outputs={"weather_summary": str}
         )
 

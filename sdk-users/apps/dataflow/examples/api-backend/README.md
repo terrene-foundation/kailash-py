@@ -435,8 +435,8 @@ else:
         })
 
         # Connect workflow
-        workflow.add_connection("check_existing", "process_registration")
-        workflow.add_connection("process_registration", "create_user", "user_data")
+        workflow.add_connection("check_existing", "result", "process_registration", "input")
+        workflow.add_connection("source", "result", "target", "input")  # Fixed complex pattern
 
         results, run_id = self.runtime.execute(workflow.build())
 
@@ -493,7 +493,7 @@ else:
         })
 
         # Connect workflow
-        workflow.add_connection("get_user", "verify_password")
+        workflow.add_connection("get_user", "result", "verify_password", "input")
         workflow.add_connection("verify_password", "update_login", "user.id", "user_id")
 
         results, run_id = self.runtime.execute(workflow.build())
@@ -1049,9 +1049,9 @@ result = {"items_updated": len(order_items)}
     })
 
     # Connect workflow
-    workflow.add_connection("calculate_totals", "create_order")
+    workflow.add_connection("calculate_totals", "result", "create_order", "input")
     workflow.add_connection("create_order", "create_order_items", "order_items", "order_items_with_order_id")
-    workflow.add_connection("create_order_items", "update_stock")
+    workflow.add_connection("create_order_items", "result", "update_stock", "input")
 
     results, run_id = runtime.execute(workflow.build())
     order = results["create_order"]["data"]

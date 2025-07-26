@@ -282,7 +282,7 @@ async function streamEvents(sessionId) {
 ### Webhook Configuration
 
 ```python
-from kailash.middleware import RealtimeMiddleware, AgentUIMiddleware
+from kailash.api.middleware import RealtimeMiddleware, AgentUIMiddleware
 
 # Setup webhook support through RealtimeMiddleware
 agent_ui = AgentUIMiddleware(max_sessions=1000)
@@ -393,10 +393,7 @@ else:
 """
 })
 
-api_workflow.add_connection(
-    "external_api", "response",
-    "handle_response", "response"
-)
+api_workflow.add_connection("external_api", "result", "response", "input")
 ```
 
 ## 🌍 External System Integration
@@ -452,10 +449,7 @@ result = {'transformed': transformed_data}
 """
 })
 
-integration_workflow.add_connection(
-    "external_api", "response",
-    "process_external", "external_data"
-)
+integration_workflow.add_connection("external_api", "result", "response", "input")
 ```
 
 ### Database Integration
@@ -512,10 +506,7 @@ result = {
 """
 })
 
-db_workflow.add_connection(
-    "enterprise_db", "result",
-    "process_db_results", "db_results"
-)
+db_workflow.add_connection("enterprise_db", "result", "result", "input")
 ```
 
 ## 🔍 Service Discovery Patterns
@@ -570,10 +561,7 @@ result = {
 """
 })
 
-discovery_workflow.add_connection(
-    "discover_services", "services",
-    "validate_services", "discovered_services"
-)
+discovery_workflow.add_connection("discover_services", "result", "services", "input")
 ```
 
 ## 📊 Gateway Monitoring & Analytics

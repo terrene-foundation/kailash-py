@@ -6,15 +6,16 @@
 
 ### Basic Composition Pattern
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # ALWAYS start with this pattern
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Add nodes with clear naming
-workflow.add_node("step_1_extract", CSVReaderNode(),
+workflow.add_node("CSVReaderNode", "step_1_extract", {}),
     file_path="/data/input.csv", has_header=True)
 
 workflow.add_node("step_2_transform", PythonCodeNode.from_function(
@@ -22,17 +23,15 @@ workflow.add_node("step_2_transform", PythonCodeNode.from_function(
     func=lambda data: {'processed': len(data)}
 ))
 
-workflow.add_node("step_3_load", JSONWriterNode(),
+workflow.add_node("JSONWriterNode", "step_3_load", {}),
     file_path="/data/output.json")
 
 # Connect in sequence
-workflow.connect("step_1_extract", "step_2_transform",
-    mapping={"data": "data"})
-workflow.connect("step_2_transform", "step_3_load",
-    mapping={"processed": "data"})
+workflow.add_connection("step_1_extract", "step_2_transform", "data", "data")
+workflow.add_connection("step_2_transform", "step_3_load", "processed", "data")
 
 # Execute
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -40,7 +39,7 @@ results, run_id = runtime.execute(workflow)
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -50,8 +49,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Fan-out: Split data for parallel processing
 def workflow.()  # Type signature example -> dict:
@@ -71,8 +71,8 @@ def workflow.()  # Type signature example -> dict:
 splitter = PythonCodeNode.from_function(
     name="splitter", func=split_data_for_parallel
 )
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("splitter", splitter)
+workflow = WorkflowBuilder()
+workflow.add_node("splitter", splitter)
 
 # Parallel workers
 def workflow.()  # Type signature example -> dict:
@@ -91,19 +91,19 @@ for i in range(3):
         name=f"worker_{i+1}",
         func=lambda chunk_data, worker_id=f"worker_{i+1}": process_chunk(chunk_data, worker_id)
     )
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(f"worker_{i+1}", worker)
+workflow = WorkflowBuilder()
+workflow.add_node(f"worker_{i+1}", worker)
 
     # Connect splitter to each worker
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Fan-in: Merge results
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("merger", MergeNode(strategy="combine"))
+workflow = WorkflowBuilder()
+workflow.add_node("MergeNode", "merger", {}))
 for i in range(3):
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -111,7 +111,7 @@ workflow.  # Method signature
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -121,8 +121,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Route data based on conditions
 def workflow.()  # Type signature example -> dict:
@@ -139,8 +140,8 @@ def workflow.()  # Type signature example -> dict:
 classifier = PythonCodeNode.from_function(
     name="classifier", func=classify_data
 )
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("classifier", classifier)
+workflow = WorkflowBuilder()
+workflow.add_node("classifier", classifier)
 
 # Different processing for each branch
 def workflow.()  # Type signature example -> dict:
@@ -165,18 +166,18 @@ standard_processor = PythonCodeNode.from_function(
     name="standard_processor", func=process_standard
 )
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("high_processor", high_processor)
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("standard_processor", standard_processor)
+workflow = WorkflowBuilder()
+workflow.add_node("high_processor", high_processor)
+workflow = WorkflowBuilder()
+workflow.add_node("standard_processor", standard_processor)
 
 # Connect branches
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -184,7 +185,7 @@ workflow.  # Method signature
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -194,8 +195,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Sequential data transformations
 def workflow.()  # Type signature example -> dict:
@@ -245,14 +247,14 @@ transformations = [
 
 for name, func in transformations:
     node = PythonCodeNode.from_function(name=name, func=func)
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(name, node)
+workflow = WorkflowBuilder()
+workflow.add_node(name, node)
 
 # Connect chain
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -260,7 +262,7 @@ workflow.  # Method signature
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -270,8 +272,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example -> dict:
     """Workflow with persistent state."""
@@ -302,8 +305,8 @@ def workflow.()  # Type signature example -> dict:
 state_manager = PythonCodeNode.from_function(
     name="state_manager", func=manage_workflow_state
 )
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("state_manager", state_manager)
+workflow = WorkflowBuilder()
+workflow.add_node("state_manager", state_manager)
 
 ```
 
@@ -311,7 +314,7 @@ workflow.workflow.add_node("state_manager", state_manager)
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -321,8 +324,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example -> dict:
     """Process data with error handling and recovery."""
@@ -396,13 +400,13 @@ error_handler = PythonCodeNode.from_function(
     name="error_handler", func=handle_errors
 )
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("safe_processor", safe_processor)
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("error_handler", error_handler)
+workflow = WorkflowBuilder()
+workflow.add_node("safe_processor", safe_processor)
+workflow = WorkflowBuilder()
+workflow.add_node("error_handler", error_handler)
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -410,7 +414,7 @@ workflow.  # Method signature
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -420,8 +424,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example -> dict:
     """Basic iterative processing."""
@@ -439,12 +444,12 @@ def workflow.()  # Type signature example -> dict:
 iterator = PythonCodeNode.from_function(
     name="iterator", func=iterative_processor
 )
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("iterator", iterator)
+workflow = WorkflowBuilder()
+workflow.add_node("iterator", iterator)
 
 # Create cycle
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -452,7 +457,7 @@ workflow.  # Method signature
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -462,8 +467,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Sub-workflow for modular design
 def workflow.()  # Type signature example -> dict:
@@ -497,16 +503,16 @@ def workflow.()  # Type signature example -> dict:
     }
 
 # Create sub-workflow
-sub_workflow = Workflow("example", name="Example")
+sub_workflow = WorkflowBuilder()
 workflow.validator = PythonCodeNode.from_function(name="validator", func=validate_items)
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("validator", validator)
+workflow = WorkflowBuilder()
+workflow.add_node("validator", validator)
 
 # Use sub-workflow in main workflow
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("validation_step", WorkflowNode(sub_workflow))
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+workflow.add_node("WorkflowNode", "validation_step", {}))
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -514,7 +520,7 @@ workflow.  # Method signature
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -524,8 +530,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example -> dict:
     """Monitor workflow performance."""
@@ -557,8 +564,8 @@ def workflow.()  # Type signature example -> dict:
 performance_monitor = PythonCodeNode.from_function(
     name="performance_monitor", func=monitor_performance
 )
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("performance_monitor", performance_monitor)
+workflow = WorkflowBuilder()
+workflow.add_node("performance_monitor", performance_monitor)
 
 ```
 
@@ -590,8 +597,8 @@ def create_debug_node('node_id', 'debug_name'):
 # Insert debug nodes between processing steps
 debug_node = create_debug_node("debug_1", "After Data Load")
 workflow.add_node("debug_1", debug_node)
-workflow.connect("data_loader", "debug_1", mapping={"data": "data"})
-workflow.connect("debug_1", "processor", mapping={"debug_output": "data"})
+workflow.add_connection("data_loader", "debug_1", "data", "data")
+workflow.add_connection("debug_1", "processor", "debug_output", "data")
 
 ```
 
@@ -623,7 +630,7 @@ workflow.connect("debug_1", "processor", mapping={"debug_output": "data"})
 ### Common Connection Patterns
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -633,26 +640,27 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Simple pass-through
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Nested field access
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Multiple outputs
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Fan-out to multiple nodes
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -660,7 +668,7 @@ workflow.  # Method signature
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -670,27 +678,28 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def create_comprehensive_workflow():
     """Create a comprehensive workflow with all patterns."""
-    workflow = Workflow("example", name="Example")
+    workflow = WorkflowBuilder()
 workflow.method()  # Example
     # 1. Input validation
     validator = PythonCodeNode.from_function(
         name="validator",
         func=lambda data: {"valid": data} if isinstance(data, list) else {"error": "Invalid input"}
     )
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("validator", validator)
+workflow = WorkflowBuilder()
+workflow.add_node("validator", validator)
 
     # 2. Parallel processing
     splitter = PythonCodeNode.from_function(name="splitter", func=split_data_for_parallel)
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("splitter", splitter)
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+workflow.add_node("splitter", splitter)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
     # 3. Workers
     for i in range(3):
@@ -698,18 +707,18 @@ workflow.  # Method signature
             name=f"worker_{i+1}",
             func=lambda chunk: {"processed": [item * 2 for item in chunk]}
         )
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(f"worker_{i+1}", worker)
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+workflow.add_node(f"worker_{i+1}", worker)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
     # 4. Merge results
     merger = MergeNode(strategy="combine")
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("merger", merger)
+workflow = WorkflowBuilder()
+workflow.add_node("merger", merger)
     for i in range(3):
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
     # 5. Final aggregation
     aggregator = PythonCodeNode.from_function(
@@ -719,10 +728,10 @@ workflow.  # Method signature
             "total_items": sum(len(chunk) for chunk in combined_data.values())
         }
     )
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("aggregator", aggregator)
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+workflow.add_node("aggregator", aggregator)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
     return workflow
 

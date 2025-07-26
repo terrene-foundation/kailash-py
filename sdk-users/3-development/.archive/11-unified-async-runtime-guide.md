@@ -20,6 +20,7 @@ The Unified Async Runtime (AsyncLocalRuntime) brings first-class async support t
 ### Basic Usage
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.async_local import AsyncLocalRuntime
 
 # Create async runtime

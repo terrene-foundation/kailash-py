@@ -61,7 +61,7 @@ class TestLLMAgentNode:
 ```python
 # Example: Workflow integration test
 import pytest
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 @pytest.mark.integration
@@ -228,7 +228,7 @@ class TestAIWorkflows:
         ]
 
         for text, expected_sentiment in test_cases:
-            result = await workflow.execute({"sentiment_analyzer": {"text": text}})
+            result = await runtime.execute(workflow.build(), {"sentiment_analyzer": {"text": text}})
 
             analysis = json.loads(result["sentiment_analyzer"]["response"])
             assert analysis["sentiment"] == expected_sentiment
@@ -462,13 +462,13 @@ class TestSystemResilience:
 
         # Attempt workflow execution
         with pytest.raises(DatabaseConnectionError):
-            await workflow.execute()
+            await runtime.execute(workflow.build(), )
 
         # Restore database
         await production_database._restore()
 
         # Verify recovery
-        result = await workflow.execute()
+        result = await runtime.execute(workflow.build(), )
         assert result["status"] == "success"
 
     async def test_ai_service_timeout_handling(self, ai_workflow_factory):
@@ -479,7 +479,7 @@ class TestSystemResilience:
         })
 
         # This should handle timeout gracefully
-        result = await workflow.execute({"text": "Very long text..." * 1000})
+        result = await runtime.execute(workflow.build(), {"text": "Very long text..." * 1000})
 
         # Should have fallback response
         assert "error" in result or "timeout" in result

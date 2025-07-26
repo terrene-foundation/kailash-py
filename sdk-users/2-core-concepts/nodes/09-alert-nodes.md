@@ -51,10 +51,10 @@ timestamp: bool = True  # Include timestamp
 ### Simple Discord Alert
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.alerts import DiscordAlertNode
 
-workflow = Workflow(name="simple_alert")
+workflow = WorkflowBuilder()
 
 alert = workflow.add_node(
     DiscordAlertNode(
@@ -77,7 +77,7 @@ results = workflow.run(
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -87,19 +87,20 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(
+workflow = WorkflowBuilder()
+workflow.add_node(
     DiscordAlertNode(
         id="error_alert",
         webhook_url="${DISCORD_WEBHOOK}"
     )
 )
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -121,7 +122,7 @@ Alert nodes support five standard severity levels, each with associated colors:
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -131,11 +132,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(
+workflow = WorkflowBuilder()
+workflow.add_node(
     DiscordAlertNode(
         id="metrics_alert",
         webhook_url="${DISCORD_WEBHOOK}",
@@ -145,8 +147,8 @@ workflow.workflow.add_node(
     )
 )
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -154,7 +156,7 @@ workflow.  # Method signature
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -164,19 +166,20 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(
+workflow = WorkflowBuilder()
+workflow.add_node(
     DiscordAlertNode(
         id="critical_alert",
         webhook_url="${DISCORD_WEBHOOK}"
     )
 )
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -184,7 +187,7 @@ workflow.  # Method signature
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -194,11 +197,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(
+workflow = WorkflowBuilder()
+workflow.add_node(
     DiscordAlertNode(
         id="thread_update",
         webhook_url="${DISCORD_WEBHOOK}",
@@ -206,8 +210,8 @@ workflow.workflow.add_node(
     )
 )
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -245,13 +249,8 @@ error_alert = workflow.add_node(
 )
 
 # Connect error path
-workflow.connect(processor, switch)
-workflow.connect(
-    switch,
-    error_alert,
-    output_key="error",
-    mapping={"outputs.error": "input"}
-)
+workflow.add_connection(processor, "result", switch, "input")
+workflow.add_connection(switch, "result", error_alert, "input")
 
 ```
 
@@ -259,7 +258,7 @@ workflow.connect(
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -269,12 +268,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Generate daily report
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature.strftime("%Y-%m-%d"),
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature.strftime("%Y-%m-%d"),
                 "Uptime": "99.9%",
                 "Requests": "45,231",
                 "Errors": "12"
@@ -284,8 +284,8 @@ workflow.  # Method signature.strftime("%Y-%m-%d"),
 )
 
 # Send report
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(
+workflow = WorkflowBuilder()
+workflow.add_node(
     DiscordAlertNode(
         id="daily_report",
         webhook_url="${DISCORD_WEBHOOK}",
@@ -293,8 +293,8 @@ workflow.workflow.add_node(
     )
 )
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -325,7 +325,7 @@ Discord webhooks are limited to 30 requests per minute. The DiscordAlertNode han
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -335,13 +335,14 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Send multiple alerts - rate limiting applied automatically
 for i in range(50):
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(
+workflow = WorkflowBuilder()
+workflow.add_node(
         DiscordAlertNode(
             id=f"alert_{i}",
             webhook_url="${DISCORD_WEBHOOK}"

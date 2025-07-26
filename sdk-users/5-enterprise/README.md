@@ -34,7 +34,7 @@ This directory contains enterprise-specific patterns, architectures, and best pr
 
 ### Basic Enterprise Setup
 ```python
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 from kailash.runtime.access_controlled import AccessControlledRuntime
 from kailash.security import SecurityConfig
 
@@ -64,7 +64,7 @@ gateway.run(host="0.0.0.0", port=8000)
 ### Multi-Tenant Architecture
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -74,8 +74,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Tenant-isolated middleware
 gateway = create_gateway(
@@ -106,13 +107,7 @@ from kailash.nodes.ai.a2a import A2ACoordinatorNode
 from kailash.nodes.ai.self_organizing import AgentPoolManagerNode
 
 # Enterprise agent pool
-workflow.add_node("agent_pool", AgentPoolManagerNode(
-    max_active_agents=100,        # Scale for enterprise load
-    allocation_strategy="intelligent",
-    load_balancing=True,
-    health_monitoring=True,
-    auto_scaling=True
-))
+workflow.add_node("AgentPoolManagerNode", "agent_pool", {}))
 
 # High-throughput coordinator
 workflow.add_node("coordinator", A2ACoordinatorNode(
@@ -195,11 +190,7 @@ jwt_auth = KailashJWTAuth(
 )
 
 # Multi-factor authentication
-workflow.add_node("mfa", MultiFactorAuthNode(
-    methods=["totp", "sms", "email"],
-    require_multiple=True,
-    backup_codes=True
-))
+workflow.add_node("MultiFactorAuthNode", "mfa", {}))
 
 ```
 
@@ -271,7 +262,7 @@ logger = EnterpriseLogger(
 ### High-Throughput Configuration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -281,8 +272,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # High-performance gateway
 gateway = create_gateway(
@@ -310,14 +302,7 @@ runtime = AsyncLocalRuntime(
 from kailash.nodes.data import AsyncSQLDatabaseNode
 
 # Enterprise database configuration
-workflow.add_node("enterprise_db", AsyncSQLDatabaseNode(
-    connection_string="postgresql://user:pass@db-cluster/enterprise",
-    pool_size=20,                  # Connection pool for scale
-    max_overflow=50,
-    pool_recycle=3600,             # Prevent stale connections
-    echo=False,                    # Disable query logging in production
-    isolation_level="READ_COMMITTED"
-))
+workflow.add_node("AsyncSQLDatabaseNode", "enterprise_db", {}))
 
 ```
 
@@ -387,20 +372,10 @@ jobs:
 from kailash.nodes.security import GDPRComplianceNode
 
 # GDPR compliance
-workflow.add_node("gdpr_compliance", GDPRComplianceNode(
-    data_retention_days=730,
-    anonymization_enabled=True,
-    consent_tracking=True,
-    data_export_format="json"
-))
+workflow.add_node("GDPRComplianceNode", "gdpr_compliance", {}))
 
 # SOC2 compliance monitoring
-workflow.add_node("soc2_monitor", ComplianceMonitorNode(
-    compliance_framework="SOC2",
-    audit_trail=True,
-    access_logging=True,
-    data_encryption=True
-))
+workflow.add_node("ComplianceMonitorNode", "soc2_monitor", {}))
 
 ```
 

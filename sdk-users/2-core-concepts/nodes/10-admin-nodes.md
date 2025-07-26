@@ -730,7 +730,7 @@ Here's a comprehensive example demonstrating all admin node capabilities without
 Admin Nodes Validation Example - Demonstrating Complete RBAC Implementation
 
 This example validates the admin nodes functionality without requiring a real database,
-using mocked database operations to demonstrate the complete RBAC workflow.
+using mocked database operations to demonstrate the complete RBAC # Workflow setup goes here
 """
 
 from datetime import datetime

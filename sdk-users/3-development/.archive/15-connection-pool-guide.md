@@ -51,11 +51,12 @@ The `WorkflowConnectionPool` node provides enterprise-grade database connection 
 Here's how to perform common database operations:
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow import Workflow
 from kailash.runtime.local import LocalRuntime
 
 # Create a workflow for database operations
-workflow = Workflow("user_management")
+workflow = WorkflowBuilder()
 
 # Add the connection pool
 workflow.add_node("db", "WorkflowConnectionPool",
@@ -100,8 +101,8 @@ workflow.add_node("get_user", "PythonCodeNode", code="""
 """)
 
 # Connect the nodes
-workflow.add_connection("setup", "db")
-workflow.add_connection("db", "get_user")
+workflow.add_connection("setup", "result", "db", "input")
+workflow.add_connection("db", "result", "get_user", "input")
 
 # Execute
 runtime = LocalRuntime()
@@ -188,7 +189,7 @@ from kailash.workflow import Workflow
 from kailash.nodes.data.workflow_connection_pool import WorkflowConnectionPool
 
 # Create workflow
-workflow = Workflow("data_processing")
+workflow = WorkflowBuilder()
 
 # Add connection pool
 workflow.add_node("db_pool", WorkflowConnectionPool(),
@@ -222,11 +223,11 @@ workflow.add_node("query", "PythonCodeNode", code="""
 """)
 
 # Connect nodes
-workflow.add_connection("init", "db_pool")
-workflow.add_connection("db_pool", "get_conn", "acquire")
-workflow.add_connection("get_conn", "db_pool")
+workflow.add_connection("init", "result", "db_pool", "input")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex pattern
+workflow.add_connection("get_conn", "result", "db_pool", "input")
 workflow.add_connection("db_pool", "query", "query")
-workflow.add_connection("query", "db_pool")
+workflow.add_connection("query", "result", "db_pool", "input")
 ```
 
 ### Connection Pool Operations
@@ -835,7 +836,7 @@ Coming in future versions:
 
 ```python
 # E-commerce workflow with connection pooling
-ecommerce_workflow = Workflow("order_processing")
+ecommerce_workflow = WorkflowBuilder()
 
 # Connection pool for order database
 ecommerce_workflow.add_node("order_db", "WorkflowConnectionPool",
@@ -902,7 +903,7 @@ ecommerce_workflow.add_node("process_order", "PythonCodeNode", code="""
 
 ```python
 # Analytics workflow with concurrent queries
-analytics_workflow = Workflow("dashboard_analytics")
+analytics_workflow = WorkflowBuilder()
 
 # Pool optimized for read-heavy workload
 analytics_workflow.add_node("analytics_db", "WorkflowConnectionPool",
@@ -973,7 +974,7 @@ analytics_workflow.add_node("dashboard_metrics", "PythonCodeNode", code="""
 
 ```python
 # Data migration workflow
-migration_workflow = Workflow("data_migration")
+migration_workflow = WorkflowBuilder()
 
 # Source database pool
 migration_workflow.add_node("source_db", "WorkflowConnectionPool",
@@ -1061,7 +1062,7 @@ from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data.workflow_connection_pool import WorkflowConnectionPool
 
 async def create_analytics_workflow():
-    workflow = Workflow("production_analytics")
+    workflow = WorkflowBuilder()
 
     # Configure pool for production
     workflow.add_node("db_pool", WorkflowConnectionPool(),
@@ -1174,10 +1175,10 @@ async def create_analytics_workflow():
     """)
 
     # Connect workflow
-    workflow.add_connection("init", "db_pool")
-    workflow.add_connection("db_pool", "analytics")
-    workflow.add_connection("analytics", "execute_safe")
-    workflow.add_connection("execute_safe", "monitor")
+    workflow.add_connection("init", "result", "db_pool", "input")
+    workflow.add_connection("db_pool", "result", "analytics", "input")
+    workflow.add_connection("analytics", "result", "execute_safe", "input")
+    workflow.add_connection("execute_safe", "result", "monitor", "input")
 
     return workflow
 
@@ -1191,7 +1192,7 @@ async def main():
     await pool_node.on_workflow_start("analytics_123", "analytics")
 
     try:
-        result = await runtime.execute(workflow)
+        result = await runtime.execute(workflow.build())
         print("Analytics completed:", result)
     finally:
         # Ensure cleanup

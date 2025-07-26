@@ -47,7 +47,7 @@ Check the node catalog before writing PythonCodeNode:
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -57,8 +57,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ DON'T write custom code for standard operations
 processor = PythonCodeNode(
@@ -78,7 +79,7 @@ Extract → Transform → Load with validation at each step
 
 ```python
 def create_etl_workflow():
-    workflow = Workflow("etl-pattern", "ETL with Validation")
+    workflow = WorkflowBuilder()
 
     # Extract
     source_reader = CSVReaderNode(name="source", file_path=input_path)
@@ -97,9 +98,9 @@ def create_etl_workflow():
     workflow.add_node("writer", writer)
 
     # Connect with error handling
-    workflow.connect("source", "validator", mapping={"data": "raw_data"})
-    workflow.connect("validator", "transformer", mapping={"result": "validated_data"})
-    workflow.connect("transformer", "writer", mapping={"result": "data"})
+    workflow.add_connection("source", "validator", "data", "raw_data")
+    workflow.add_connection("validator", "transformer", "result", "validated_data")
+    workflow.add_connection("transformer", "writer", "result", "data")
 
     return workflow
 
@@ -110,7 +111,7 @@ Combine multiple data sources with proper ID normalization
 
 ```python
 def create_integration_workflow():
-    workflow = Workflow("integration", "Multi-Source Data Integration")
+    workflow = WorkflowBuilder()
 
     # Multiple data sources
     customer_reader = CSVReaderNode(name="customer_reader", file_path=customer_path)
@@ -126,8 +127,8 @@ def create_integration_workflow():
     merger = MergeNode(name="merger")
 
     # Connect sources to normalizer
-    workflow.connect("customer_reader", "id_normalizer", mapping={"data": "customers"})
-    workflow.connect("transaction_reader", "id_normalizer", mapping={"data": "transactions"})
+    workflow.add_connection("customer_reader", "id_normalizer", "data", "customers")
+    workflow.add_connection("transaction_reader", "id_normalizer", "data", "transactions")
 
     return workflow
 
@@ -140,7 +141,7 @@ Each node should have one clear purpose:
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -150,8 +151,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ BAD - One node doing too much
 def process_everything(data):
@@ -172,7 +174,7 @@ Make data transformations obvious in connections:
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -182,16 +184,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ CLEAR data flow with descriptive mapping names
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 

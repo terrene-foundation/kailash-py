@@ -7,21 +7,21 @@ Patterns for deploying, configuring, and managing Kailash workflows in various e
 **Purpose**: Export workflows for deployment across different environments
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.utils.export import WorkflowExporter, WorkflowImporter
 from kailash.nodes.data import CSVReaderNode, JSONWriterNode
 from kailash.nodes.code import PythonCodeNode
 
 # Create a workflow
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("reader", CSVReaderNode(), file_path="input.csv")
-workflow.add_node("processor", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}), file_path="input.csv")
+workflow.add_node("PythonCodeNode", "processor", {}),
     code="result = [{'id': r['id'], 'value': r['value'] * 1.1} for r in data]"
 )
-workflow.add_node("writer", JSONWriterNode(), file_path="output.json")
+workflow.add_node("JSONWriterNode", "writer", {}), file_path="output.json")
 
-workflow.connect("reader", "processor", mapping={"data": "data"})
-workflow.connect("processor", "writer", mapping={"result": "data"})
+workflow.add_connection("reader", "processor", "data", "data")
+workflow.add_connection("processor", "writer", "result", "data")
 
 # Export workflow
 exporter = WorkflowExporter(workflow)
@@ -90,7 +90,7 @@ else:
 ```python
 import os
 import yaml
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.config import ConfigManager
 
 class EnvironmentAwareWorkflow:
@@ -129,10 +129,7 @@ class EnvironmentAwareWorkflow:
 
     def build(self):
         """Build workflow with environment configuration"""
-        self.workflow = Workflow(
-            self.config['workflow']['id'],
-            self.config['workflow']['name']
-        )
+        self.workflow = WorkflowBuilder()
 
         # Add nodes with environment-specific configuration
         for node_config in self.config['nodes']:
@@ -152,10 +149,7 @@ class EnvironmentAwareWorkflow:
 
         # Add connections
         for conn in self.config['connections']:
-            self.workflow.connect(
-                conn['from'],
-                conn['to'],
-                mapping=conn.get('mapping')
+            self.workflow.add_connection(conn['from'], "result", conn['to'], "input")
             )
 
         return self.workflow

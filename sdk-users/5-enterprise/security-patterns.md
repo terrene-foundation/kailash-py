@@ -12,7 +12,7 @@ This guide covers enterprise security implementation for Kailash SDK workflows, 
 
 ```python
 from kailash.middleware.auth import KailashJWTAuth, EnterpriseAuthConfig
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 
 # Enterprise JWT configuration
 auth_config = EnterpriseAuthConfig(
@@ -79,10 +79,7 @@ mfa_workflow.add_node("SessionManagementNode", "session_validate", {
 })
 
 # Connect MFA to session
-mfa_workflow.add_connection(
-    "mfa_check", "authenticated",
-    "session_validate", "user_data"
-)
+mfa_workflow.add_connection("mfa_check", "result", "authenticated", "input")
 ```
 
 ## 👥 User Management
@@ -138,10 +135,7 @@ user_workflow.add_node("RoleManagementNode", "assign_roles", {
     }
 })
 
-user_workflow.add_connection(
-    "user_ops", "user_created",
-    "assign_roles", "user_info"
-)
+user_workflow.add_connection("user_ops", "result", "user_created", "input")
 ```
 
 ### LDAP/Active Directory Integration
@@ -172,8 +166,7 @@ ldap_config = LDAPIntegration(
     },
 
     # Group mapping for roles
-    group_role_mapping={
-        "CN=KailashAdmins,OU=Groups,DC=company,DC=com": "admin",
+    group_role_# mapping removed,OU=Groups,DC=company,DC=com": "admin",
         "CN=DataScientists,OU=Groups,DC=company,DC=com": "data_scientist",
         "CN=BusinessUsers,OU=Groups,DC=company,DC=com": "business_user"
     },
@@ -293,15 +286,9 @@ secure_workflow.add_node("LLMAgentNode", "process_data", {
 })
 
 # Connections with role validation
-secure_workflow.add_connection(
-    "auth_check", "authorized",
-    "role_filter", "user_context"
-)
+secure_workflow.add_connection("auth_check", "result", "authorized", "input")
 
-secure_workflow.add_connection(
-    "role_filter", "filtered_data",
-    "process_data", "input_data"
-)
+secure_workflow.add_connection("role_filter", "result", "filtered_data", "input")
 ```
 
 ## 🎯 Attribute-Based Access Control (ABAC)
@@ -448,15 +435,9 @@ security_workflow.add_node("AlertingNode", "security_alerts", {
 })
 
 # Connect threat detection pipeline
-security_workflow.add_connection(
-    "threat_scanner", "threats_detected",
-    "event_processor", "security_events"
-)
+security_workflow.add_connection("threat_scanner", "result", "threats_detected", "input")
 
-security_workflow.add_connection(
-    "event_processor", "processed_events",
-    "security_alerts", "alert_data"
-)
+security_workflow.add_connection("event_processor", "result", "processed_events", "input")
 ```
 
 ### Risk Assessment
@@ -508,10 +489,7 @@ risk_workflow.add_node("BehaviorAnalysisNode", "behavior_analysis", {
     ]
 })
 
-risk_workflow.add_connection(
-    "risk_analyzer", "risk_score",
-    "behavior_analysis", "user_context"
-)
+risk_workflow.add_connection("risk_analyzer", "result", "risk_score", "input")
 ```
 
 ## 🔐 Data Protection & Privacy
@@ -593,10 +571,7 @@ gdpr_workflow.add_node("ConsentManagementNode", "consent_mgmt", {
     "consent_expiry_days": 365
 })
 
-gdpr_workflow.add_connection(
-    "consent_mgmt", "consent_status",
-    "gdpr_processor", "compliance_data"
-)
+gdpr_workflow.add_connection("consent_mgmt", "result", "consent_status", "input")
 ```
 
 ## 🔒 Secure Credential Management
@@ -643,10 +618,7 @@ cred_workflow.add_node("CredentialManagerNode", "cred_store", {
     }
 })
 
-cred_workflow.add_connection(
-    "auto_rotate", "new_credentials",
-    "cred_store", "credentials_to_store"
-)
+cred_workflow.add_connection("auto_rotate", "result", "new_credentials", "input")
 ```
 
 ## 🛡️ Connection Parameter Validation (v0.6.7+)
@@ -658,8 +630,8 @@ Starting in v0.6.7, the Kailash SDK provides connection parameter validation to 
 ### Security Vulnerability Fixed
 
 Previously, parameters had two paths with different validation:
-- **Direct parameters** (via `runtime.execute()`) - ✅ VALIDATED  
-- **Connection parameters** (via `workflow.add_connection()`) - ❌ NOT VALIDATED
+- **Direct parameters** (via `runtime.execute()`) - ✅ VALIDATED
+- **Connection parameters** (via `workflow.add_connection("source", "result", "target", "input")`) - ❌ NOT VALIDATED
 
 This created attack vectors for SQL injection, command injection, and other parameter-based exploits.
 
@@ -698,10 +670,7 @@ workflow.add_node(SQLDatabaseNode, "db_operation", {
 })
 
 # Connection will now validate parameters
-workflow.add_connection(
-    "user_input", "query_params",
-    "db_operation", "parameters"
-)
+workflow.add_connection("user_input", "result", "query_params", "input")
 
 # Strict validation prevents SQL injection
 runtime = LocalRuntime(connection_validation="strict")
@@ -751,7 +720,7 @@ workflow.add_node("AsyncSQLDatabaseNode", "secure_query", {
 
 # Secure connection chain
 workflow.add_connection("rbac_check", "authorized", "validate", "proceed")
-workflow.add_connection("validate", "validated_data", "secure_query", "parameters")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 # Production configuration
 runtime = LocalRuntime(
@@ -795,7 +764,7 @@ runtime = LocalRuntime(
 ### Related Security Features
 
 - **Input Validation Nodes** - Schema-based validation
-- **SQL Parameter Binding** - Automatic SQL injection prevention  
+- **SQL Parameter Binding** - Automatic SQL injection prevention
 - **Command Sanitization** - Safe shell command execution
 - **Access Control Integration** - Combined with RBAC/ABAC
 
@@ -824,8 +793,7 @@ saml_config = SAMLIntegration(
     signature_algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
 
     # Attribute mapping
-    attribute_mapping={
-        "email": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+    attribute_# mapping removed,
         "first_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
         "last_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
         "groups": "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups",
@@ -930,10 +898,7 @@ incident_workflow.add_node("ForensicsNode", "evidence_collector", {
     "encrypted_storage": True
 })
 
-incident_workflow.add_connection(
-    "incident_handler", "incident_details",
-    "evidence_collector", "collection_params"
-)
+incident_workflow.add_connection("incident_handler", "result", "incident_details", "input")
 ```
 
 ## 📊 Security Auditing & Compliance
@@ -990,10 +955,7 @@ audit_workflow.add_node("ComplianceReportNode", "compliance_reporter", {
     }
 })
 
-audit_workflow.add_connection(
-    "audit_logger", "audit_data",
-    "compliance_reporter", "evidence_data"
-)
+audit_workflow.add_connection("audit_logger", "result", "audit_data", "input")
 ```
 
 ## 🔗 Quick Security Implementation Checklist

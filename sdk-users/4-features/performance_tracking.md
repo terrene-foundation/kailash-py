@@ -42,8 +42,8 @@ from kailash.runtime.local import LocalRuntime
 from kailash.tracking import TaskManager
 
 # Create workflow
-workflow = Workflow("example", name="Example")
-workflow.# ... add nodes and connections ...
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # ... add nodes and connections ...
 
 # Execute with tracking
 task_manager = TaskManager()
@@ -100,7 +100,7 @@ dashboard = workflow_viz.create_performance_dashboard(
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -110,16 +110,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Execute workflow multiple times
 run_ids = []
 for i in range(3):
-workflow = Workflow("example", name="Example")
-workflow.workflow.name)
+workflow = WorkflowBuilder()
+workflow.name)
 runtime = LocalRuntime()
-workflow.execute(workflow, task_manager)
+runtime.execute(workflow.build(), workflow, task_manager)
     run_ids.append(run_id)
 
 # Compare performance

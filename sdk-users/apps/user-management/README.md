@@ -368,7 +368,7 @@ for django_user in DjangoUser.objects.all():
 ```python
 from fastapi import FastAPI, HTTPException, Depends
 from kailash.nodes.admin import UserManagementNode, RoleManagementNode
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 
 # Create FastAPI app with Kailash
 app = create_gateway(

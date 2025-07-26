@@ -14,6 +14,7 @@ Nexus represents a fundamental evolution from traditional request-response archi
 
 **Traditional Approach:**
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Multiple separate systems, best-effort execution
 api_server = FastAPI()           # HTTP only
 cli_app = click.Command()        # Separate app

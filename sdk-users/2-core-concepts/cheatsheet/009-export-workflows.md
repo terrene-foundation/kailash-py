@@ -2,7 +2,7 @@
 
 ## Basic Export Patterns
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.utils.export import export_workflow, import_workflow
 
 # Export to YAML (recommended for version control)
@@ -19,7 +19,7 @@ export_workflow(workflow, "my_workflow.py", format="python")
 ## Dictionary-Based Export/Import
 ```python
 # Export to dictionary (in-memory operations)
-workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
 workflow_dict = workflow.to_dict()
 
 # Save dictionary manually
@@ -39,7 +39,7 @@ print(f"Loaded nodes: {len(loaded_workflow.nodes)}")
 ## Advanced Export Options
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -49,8 +49,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Export with configuration parameters
 export_workflow(workflow, "workflow_with_config.yaml",
@@ -63,7 +64,7 @@ export_workflow(workflow, "workflow_with_config.yaml",
 
 # Export with execution results
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 export_workflow(workflow, "workflow_with_results.json",
     format="json",
     include_execution_results=True,
@@ -76,7 +77,7 @@ export_workflow(workflow, "workflow_with_results.json",
 ## Selective Export
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -86,8 +87,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Export only specific nodes
 node_subset = ["reader", "processor", "writer"]
@@ -130,7 +132,7 @@ except Exception as e:
 ## Version Control Integration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -140,8 +142,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Export for Git version control
 export_workflow(workflow, "workflows/production/data_pipeline_v1.yaml",
@@ -266,7 +269,7 @@ with open("docker/docker-compose.yml", "w") as f:
 ## Kubernetes Deployment Export
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -276,8 +279,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Export for Kubernetes deployment
 export_workflow(workflow, "k8s/workflow-configmap.yaml",
@@ -387,7 +391,7 @@ imported_workflow = debug_import("problematic_workflow.yaml")
 ## Best Practices
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -397,8 +401,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Recommended export workflow
 def export_workflow_properly(workflow, name, version="1.0.0"):
@@ -436,7 +441,7 @@ export_workflow_properly(workflow, "data_pipeline", "2.1.0")
 ## Quick Export Commands
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -446,8 +451,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # One-liner exports
 workflow.export("workflow.yaml")                    # Quick YAML export

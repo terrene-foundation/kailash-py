@@ -240,9 +240,9 @@ workflow.add_node("JSONWriterNode", "output_writer", {
 })
 
 # Connect the workflow
-workflow.connect("data_reader", "age_filter", {"data": "data"})
-workflow.connect("age_filter", "data_processor", {"filtered_data": "data"})
-workflow.connect("data_processor", "output_writer", {"result": "data"})
+workflow.add_connection("data_reader", "result", "age_filter", "input")
+workflow.add_connection("age_filter", "result", "data_processor", "input")
+workflow.add_connection("data_processor", "result", "output_writer", "input")
     """,
     "validate_execution": False,  # Structure validation only
     "expected_nodes": ["data_reader", "age_filter", "data_processor", "output_writer"],
@@ -273,7 +273,7 @@ workflow.add_node("PythonCodeNode", "processor", {
     "code": "result = {'sum': sum(numbers), 'count': len(numbers)}"
 })
 
-workflow.connect("generator", "processor", {"result.numbers": "numbers"})
+workflow.add_connection("generator", "result", "processor", "input")
     """,
     "validate_execution": True,  # Actually run the workflow
     "test_parameters": {},       # Parameters for test execution
@@ -564,14 +564,14 @@ workflow.add_node("PythonCodeNode", "deploy", {
 })
 
 # Connect pipeline with quality gates
-workflow.connect("code_generator", "basic_validation", {"code": "code"})
-workflow.connect("basic_validation", "quality_gate", {"validation_status": "validation_status"})
-workflow.connect("quality_gate", "comprehensive_tests", route="passed")
-workflow.connect("comprehensive_tests", "workflow_validation", {"validated_code": "workflow_code"})
-workflow.connect("workflow_validation", "deploy", route="validated")
+workflow.add_connection("code_generator", "result", "basic_validation", "input")
+workflow.add_connection("basic_validation", "result", "quality_gate", "input")
+workflow.add_connection("quality_gate", "result", "comprehensive_tests", "input")
+workflow.add_connection("comprehensive_tests", "result", "workflow_validation", "input")
+workflow.add_connection("workflow_validation", "result", "deploy", "input")
 
 # Failed validations route back for improvement
-workflow.connect("quality_gate", "code_generator", route="failed", mapping={"error_details": "improvement_context"})
+workflow.add_connection("quality_gate", "result", "code_generator", "input")
 ```
 
 ### Continuous Validation Pipeline
@@ -623,10 +623,10 @@ workflow.add_node("CodeValidationNode", "security_scan", {
 })
 
 # Connect validation pipeline
-workflow.connect("primary_agent", "peer_review", {"generated_code": "code"})
-workflow.connect("peer_review", "integration_tests", {"validated_code": "code"})
-workflow.connect("integration_tests", "deployment_check", {"tested_code": "workflow_code"})
-workflow.connect("deployment_check", "security_scan", {"validated_workflow": "code"})
+workflow.add_connection("primary_agent", "result", "peer_review", "input")
+workflow.add_connection("peer_review", "result", "integration_tests", "input")
+workflow.add_connection("integration_tests", "result", "deployment_check", "input")
+workflow.add_connection("deployment_check", "result", "security_scan", "input")
 ```
 
 ## Best Practices
@@ -842,7 +842,7 @@ workflow.add_node("CodeValidationNode", "tool_validator", {
     "validation_levels": ["semantic", "functional"]
 })
 
-workflow.connect("mcp_agent", "tool_validator", {"tool_output": "code"})
+workflow.add_connection("mcp_agent", "result", "tool_validator", "input")
     """,
     "validate_execution": False  # Structure validation only
 })

@@ -6,7 +6,7 @@
 
 ### 1. SwitchNode Runtime Parameters
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.logic import SwitchNode
 
@@ -14,8 +14,8 @@ from kailash.nodes.logic import SwitchNode
 switch_node = SwitchNode(condition_field="should_continue")  # THIS IS WRONG!
 
 # ✅ CORRECT: Parameters at runtime
-workflow = Workflow("switch-test")
-workflow.add_node("switch", SwitchNode())
+workflow = WorkflowBuilder()
+workflow.add_node("SwitchNode", "switch", {}))
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow, parameters={
@@ -30,7 +30,7 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ### 2. Self-Cycle Pattern
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.base import CycleAwareNode, NodeParameter
 from typing import Dict, Any
@@ -58,16 +58,14 @@ class SimpleQualityImprover(CycleAwareNode):
 
 # Test self-cycle
 def test_self_cycle():
-    workflow = Workflow("self-cycle-test")
+    workflow = WorkflowBuilder()
     workflow.add_node("improver", SimpleQualityImprover())
 
     # Connect to itself
-    workflow.connect("improver", "improver",
-        cycle=True, max_iterations=15,
-        convergence_check="converged == True")
+    # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
     runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow)
+    results, run_id = runtime.execute(workflow.build())
 
     # Test for progress, not exact values
     final_result = results.get("improver", {})
@@ -77,20 +75,16 @@ def test_self_cycle():
 
 ### 3. PythonCodeNode in Cycles
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
 # ✅ CORRECT: Provide code at initialization
-workflow = Workflow("python-code-test")
-workflow.add_node("calculator", PythonCodeNode(
-    code="result = 2"  # Required
-))
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "calculator", {}))
 
 # Connect in cycle with parameter handling
-workflow.connect("calculator", "calculator",
-    cycle=True, max_iterations=8,
-    convergence_check="result > 1000")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Runtime code with try/except pattern
 runtime = LocalRuntime()
@@ -113,7 +107,7 @@ result = x * x
 
 ### Parameter Preservation Test
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.base import CycleAwareNode, NodeParameter
 from typing import Dict, Any
@@ -140,11 +134,11 @@ class CounterNode(CycleAwareNode):
         }
 
 def test_parameter_preservation():
-    workflow = Workflow("parameter-test")
-    workflow.add_node("counter", CounterNode())
+    workflow = WorkflowBuilder()
+    workflow.add_node("CounterNode", "counter", {}))
 
     # Self-cycle preserves parameters
-    workflow.connect("counter", "counter", cycle=True, max_iterations=5)
+    # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
     runtime = LocalRuntime()
     results, run_id = runtime.execute(workflow, parameters={
@@ -186,7 +180,7 @@ def test_realistic():
 ### Conditional Routing Test
 ```python
 def test_conditional_cycle():
-    from kailash import Workflow
+    from kailash.workflow.builder import WorkflowBuilder
     from kailash.runtime.local import LocalRuntime
     from kailash.nodes.logic import SwitchNode
     from kailash.nodes.base import CycleAwareNode
@@ -211,16 +205,13 @@ def test_conditional_cycle():
                 }
             }
 
-    workflow = Workflow("conditional-test")
-    workflow.add_node("processor", ConditionalNode())
-    workflow.add_node("switch", SwitchNode())
+    workflow = WorkflowBuilder()
+    workflow.add_node("ConditionalNode", "processor", {}))
+    workflow.add_node("SwitchNode", "switch", {}))
 
     # Connect with proper mapping
-    workflow.connect("processor", "switch", mapping={"input_data": "input_data"})
-    workflow.connect("switch", "processor",
-        condition="false_output",
-        mapping={"false_output.data": "data"},
-        cycle=True, max_iterations=20)
+    workflow.add_connection("processor", "switch", "input_data", "input_data")
+    # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
     runtime = LocalRuntime()
     results, run_id = runtime.execute(workflow, parameters={
@@ -236,7 +227,7 @@ def test_conditional_cycle():
 
 ### Error Handling Test
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.base import CycleAwareNode
 from typing import Dict, Any
@@ -261,10 +252,10 @@ class ErrorProneNode(CycleAwareNode):
         }
 
 def test_error_handling():
-    workflow = Workflow("error-test")
-    workflow.add_node("processor", ErrorProneNode())
+    workflow = WorkflowBuilder()
+    workflow.add_node("ErrorProneNode", "processor", {}))
 
-    workflow.connect("processor", "processor", cycle=True, max_iterations=10)
+    # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
     runtime = LocalRuntime()
     results, run_id = runtime.execute(workflow, parameters={
@@ -284,7 +275,7 @@ def test_error_handling():
 
 ### Performance Test
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.base import CycleAwareNode
 from typing import Dict, Any
@@ -310,10 +301,10 @@ class StateAccumulatorNode(CycleAwareNode):
         }
 
 def test_memory_limits():
-    workflow = Workflow("memory-test")
-    workflow.add_node("accumulator", StateAccumulatorNode())
+    workflow = WorkflowBuilder()
+    workflow.add_node("StateAccumulatorNode", "accumulator", {}))
 
-    workflow.connect("accumulator", "accumulator", cycle=True, max_iterations=20)
+    # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
     start_time = time.time()
 

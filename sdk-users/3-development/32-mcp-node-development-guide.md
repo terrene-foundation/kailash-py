@@ -327,7 +327,7 @@ from kailash.workflow.builder import WorkflowBuilder
 )
 async def data_analysis_workflow() -> WorkflowBuilder:
     """
-    Build a comprehensive data analysis workflow.
+    Build a comprehensive data analysis # Workflow setup goes here
     """
     workflow = WorkflowBuilder()
 
@@ -458,11 +458,11 @@ async def data_analysis_workflow() -> WorkflowBuilder:
     })
 
     # Connect workflow nodes
-    workflow.connect("data_reader", "data_cleaner", mapping={"data": "data"})
-    workflow.connect("data_cleaner", "statistical_analyzer", mapping={"result.cleaned_data": "cleaned_data"})
-    workflow.connect("data_cleaner", "correlation_analyzer", mapping={"result.cleaned_data": "cleaned_data"})
-    workflow.connect("statistical_analyzer", "insight_generator", mapping={"result": "statistics"})
-    workflow.connect("correlation_analyzer", "insight_generator", mapping={"result": "correlations"})
+    workflow.add_connection("data_reader", "data_cleaner", "data", "data")
+    workflow.add_connection("data_cleaner", "statistical_analyzer", "result.cleaned_data", "cleaned_data")
+    workflow.add_connection("data_cleaner", "correlation_analyzer", "result.cleaned_data", "cleaned_data")
+    workflow.add_connection("statistical_analyzer", "insight_generator", "result", "statistics")
+    workflow.add_connection("correlation_analyzer", "insight_generator", "result", "correlations")
 
     return workflow
 
@@ -474,7 +474,7 @@ async def execute_data_analysis(file_path: str) -> dict:
     workflow = await data_analysis_workflow()
 
     # Execute with input data
-    result = await workflow.execute({
+    result = await runtime.execute(workflow.build(), {
         "data_reader": {"file_path": file_path}
     })
 

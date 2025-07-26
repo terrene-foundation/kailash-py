@@ -277,8 +277,8 @@ workflow.add_node("HTTPRequestNode", "api_call", {
 })
 
 # Connect with resilience patterns
-workflow.connect("circuit_breaker", "retry_handler", mapping={"status": "circuit_status"})
-workflow.connect("retry_handler", "api_call", mapping={"execute": "trigger"})
+workflow.add_connection("circuit_breaker", "retry_handler", "status", "circuit_status")
+workflow.add_connection("retry_handler", "api_call", "execute", "trigger")
 ```
 
 ## Circuit Breaker Patterns

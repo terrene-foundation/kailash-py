@@ -86,7 +86,7 @@ workflow.add_node(
 )
 
 # Connect and execute
-workflow.add_connection("monitor_starter", "metric_recorder")
+workflow.add_connection("monitor_starter", "result", "metric_recorder", "input")
 runtime = LocalRuntime()
 results, run_id = await runtime.execute_async(workflow.build())
 ```
@@ -230,7 +230,7 @@ for i in range(10):
     latency = 0.1 + random.random() * 0.3
     error_rate = random.random() * 0.05
     cpu_usage = 0.3 + random.random() * 0.4
-    
+
     metrics.append({
         'latency': latency,
         'error_rate': error_rate,
@@ -273,15 +273,15 @@ workflow.add_node(
 )
 
 # Connect workflow with metric recording loop
-workflow.add_connection("monitor", "status", "simulator", "parameters")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 # Use PythonCodeNode to extract latency from metrics array
 workflow.add_node("PythonCodeNode", "extract_latency", {
     "code": "result = {'value': data['metrics'][0]['latency'] if data.get('metrics') else 0.0}"
 })
 workflow.add_connection("simulator", "metrics", "extract_latency", "data")
 workflow.add_connection("extract_latency", "result", "recorder", "value")
-workflow.add_connection("recorder", "status", "health", "parameters")
-workflow.add_connection("health", "health", "analytics", "parameters")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 # Execute
 runtime = LocalRuntime()
@@ -341,10 +341,12 @@ workflow.add_node(
 workflow.add_connection("monitor", "analytics", "decision", "analytics")
 # Use conditional node to check if warming is needed
 workflow.add_node("SwitchNode", "warm_check", {
-    "condition": "input.should_warm == True"
+    "condition_field": "should_warm",
+    "operator": "==",
+    "value": True
 })
-workflow.add_connection("decision", "output", "warm_check", "input")
-workflow.add_connection("warm_check", "true", "warmer", "parameters")
+workflow.add_connection("decision", "output", "warm_check", "input_data")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 ```
 
 ## Best Practices

@@ -107,12 +107,12 @@ ui_event = XAIEvent(
 ### Basic Agent Communication
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes import XAIUIBridgeNode
 from kailash.runtime.local import LocalRuntime
 
 # Create workflow with XAI-UI bridge
-workflow = Workflow("chat-workflow")
+workflow = WorkflowBuilder()
 
 # Add XAI-UI bridge for communication
 bridge = XAIUIBridgeNode(
@@ -123,8 +123,8 @@ bridge = XAIUIBridgeNode(
 workflow.add_node("bridge", bridge)
 
 # Add your agent logic
-workflow.add_node("agent", YourAgentNode())
-workflow.connect("agent", "bridge")
+workflow.add_node("YourAgentNode", "agent", {}))
+workflow.add_connection("agent", "result", "bridge", "input")
 
 # Execute with real-time UI updates
 runtime = LocalRuntime()
@@ -175,7 +175,7 @@ function ChatInterface() {
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -185,8 +185,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class StreamingAgentNode(AsyncNode):
     def __init__(self, **kwargs):
@@ -218,7 +219,7 @@ class StreamingAgentNode(AsyncNode):
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -228,8 +229,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class ToolAgentNode(AsyncNode):
     async def async_run(self, **inputs) -> Dict[str, Any]:
@@ -331,7 +333,7 @@ async def workflow.()  # Type signature example:
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -341,8 +343,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Before: Simple REST
 @app.post("/api/chat")

@@ -140,7 +140,7 @@ if decision.allowed:
     # Execute workflow with user context
     from kailash.runtime.local import LocalRuntime
     runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow)
+    results, run_id = runtime.execute(workflow.build())
 else:
     print(f"❌ Access denied: {decision.reason}")
 ```
@@ -168,7 +168,7 @@ workflow.add_node("LLMAgentNode", "llm_call", {
 })
 
 # Connect - credentials are passed securely
-workflow.connect("get_api_key", "result.api_key", mapping={"llm_call": "api_key"})
+workflow.add_connection("get_api_key", "result.api_key", "llm_call", "api_key")
 ```
 
 ### Data Masking & Compliance
@@ -295,7 +295,7 @@ api_breaker = get_circuit_breaker(
 @api_breaker
 async def call_external_api(data):
     """API call protected by circuit breaker."""
-    node = HTTPRequestNode()
+    node = "HTTPRequestNode"
     return node.execute(url="https://api.example.com", json_data=data)
 
 # Or use with context manager
@@ -459,8 +459,7 @@ workflow.add_node("SwitchNode", "health_router", {
 })
 
 # Connect health check to router
-workflow.connect("health_check", "overall_status",
-                mapping={"health_router": "condition"})
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 # Main processing with resilience
 @get_circuit_breaker("main_process", failure_threshold=3)
