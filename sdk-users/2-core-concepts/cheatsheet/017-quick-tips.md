@@ -9,11 +9,7 @@
 ## Workflow Basics
 - **Always provide ID and name**: `Workflow("wf-001", name="My Pipeline")`
 - **Use LocalRuntime**: `runtime.execute()` returns `(results, run_id)`
-- **Connect with dot notation**: `mapping={"result.data": "input"}`
-- **Override with parameters**: `parameters={"node_id": {"param": value}}`
-
-## PythonCodeNode Rules
-- **Name parameter first**: `PythonCodeNode(name="process", code="...")`
+- **Connect with dot notation**: `# mapping removed, code="...")`
 - **Wrap outputs in dict**: `result = {'data': processed}`
 - **Define input_types**: `input_types={"data": list, "config": dict}`
 - **No function definitions**: Direct statements only
@@ -39,7 +35,7 @@
 ## Debugging Techniques
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -49,26 +45,27 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Enable verbose logging
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
 # Inspect workflow structure
-workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
 workflow.to_dict())
 
 # Check node outputs
 runtime = LocalRuntime()
-workflow.execute(workflow)
+runtime.execute(workflow.build(), workflow)
 for node_id, output in results.items():
     print(f"{node_id}: {output}")
 
 # Validate before execution
 try:
-workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
 workflow.validate()
 except Exception as e:
     print(f"Validation error: {e}")
@@ -78,7 +75,7 @@ except Exception as e:
 ## Quick Patterns
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -88,24 +85,25 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Read → Process → Write
 # Create quick CSV-to-JSON converter
-workflow = Workflow("quick-convert", name="Quick Converter")
-workflow.add_node("read", CSVReaderNode(file_path="in.csv"))
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "read", {}))
 workflow.add_node("proc", PythonCodeNode.from_function(
     lambda data: {"converted": data}
 ))
-workflow.add_node("write", JSONWriterNode(file_path="out.json"))
-workflow.connect("read", "proc")
-workflow.connect("proc", "write")
+workflow.add_node("JSONWriterNode", "write", {}))
+workflow.add_connection("read", "result", "proc", "input")
+workflow.add_connection("proc", "result", "write", "input")
 
 # Quick execution
 runtime = LocalRuntime()
 runtime = LocalRuntime()
-workflow.execute(workflow)
+runtime.execute(workflow.build(), workflow)
 print(f"Processed {results['proc']['count']} records")
 
 ```

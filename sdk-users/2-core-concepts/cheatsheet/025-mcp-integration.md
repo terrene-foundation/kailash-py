@@ -35,7 +35,7 @@ nexus.enable_mcp(port=3000)     # MCP server - FULLY TESTED ✅
 
 ## Quick Setup - LLMAgentNode with MCP (v0.6.6+)
 ```python
-from kailash import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilderBuilder
 from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
 
@@ -199,7 +199,7 @@ mcp_servers = [
 
 ## Tool Discovery
 ```python
-from kailash import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilderBuilder
 from kailash.runtime.local import LocalRuntime
 
 builder = WorkflowBuilder()
@@ -238,7 +238,7 @@ if results["agent"]["success"]:
 
 ## Resource Access
 ```python
-from kailash import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilderBuilder
 from kailash.runtime.local import LocalRuntime
 
 builder = WorkflowBuilder()
@@ -265,7 +265,7 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ## Tool Calling
 ```python
-from kailash import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilderBuilder
 from kailash.runtime.local import LocalRuntime
 
 builder = WorkflowBuilder()
@@ -300,7 +300,7 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ## Error Handling
 ```python
-from kailash import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilderBuilder
 from kailash.runtime.local import LocalRuntime
 
 builder = WorkflowBuilder()
@@ -397,7 +397,7 @@ mcp_servers = [
 
 ### Iterative MCP Usage with Real Tool Execution
 ```python
-from kailash import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilderBuilder
 from kailash.runtime.local import LocalRuntime
 
 builder = WorkflowBuilder()
@@ -453,7 +453,7 @@ from kailash.nodes.ai import LLMAgentNode
 
 def test_mcp_tool_execution():
     """Test MCP tool execution with mocked server."""
-    node = LLMAgentNode()
+    node = "LLMAgentNode"
 
     # Mock MCP response
     mock_response = {
@@ -479,7 +479,7 @@ def test_mcp_tool_execution():
 @pytest.mark.integration
 def test_real_mcp_server():
     """Test with real MCP server running in Docker."""
-    node = LLMAgentNode()
+    node = "LLMAgentNode"
 
     result = node.execute(
         provider="ollama",

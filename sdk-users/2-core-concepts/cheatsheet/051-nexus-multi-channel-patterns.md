@@ -70,14 +70,14 @@ from kailash.workflow.builder import WorkflowBuilder
 workflow = WorkflowBuilder()
 workflow.add_node("HTTPRequestNode", "fetch", {"url": "https://api.example.com"})
 workflow.add_node("LLMAgentNode", "analyze", {"model": "gpt-4"})
-workflow.connect("fetch", "response", "analyze", "input_data")
+workflow.add_connection("fetch", "response", "analyze", "input_data")
 
 # Register with nexus - automatically available on all channels
 nexus.register_workflow("data_analysis", workflow.build())
 
 # Now accessible via:
 # - API: POST /api/executions {"workflow": "data_analysis", "inputs": {...}}
-# - CLI: nexus run data_analysis --inputs='{...}'
+# - CLI: nexus run data_analysis --parameters='{...}'
 # - MCP: Call "workflow_data_analysis" tool
 ```
 
@@ -174,7 +174,7 @@ eventSource.onmessage = (event) => {
 ### Command-Line Interface Access
 ```bash
 # Direct workflow execution
-nexus run data_analysis --inputs='{"url": "https://example.com"}'
+nexus run data_analysis --parameters='{"url": "https://example.com"}'
 
 # Interactive mode with session persistence
 nexus shell --session=dev_session_123

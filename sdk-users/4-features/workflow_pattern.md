@@ -14,7 +14,7 @@ In direct execution, you create nodes with all parameters and call `execute()` i
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -24,8 +24,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Create reader with file path
 reader = CSVReaderNode(file_path='input.csv')
@@ -52,7 +53,7 @@ In workflow execution, nodes are connected and data flows through the graph.
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -62,30 +63,31 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Create workflow
-workflow = Workflow(name="Data Pipeline")
+workflow = WorkflowBuilder()
 
 # Create nodes (writer doesn't need data yet)
 reader = CSVReaderNode(file_path='input.csv')
 writer = CSVWriterNode(file_path='output.csv')  # No data parameter
 
 # Add nodes to workflow
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(reader, node_id='reader')
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(writer, node_id='writer')
+workflow = WorkflowBuilder()
+workflow.add_node(reader, node_id='reader')
+workflow = WorkflowBuilder()
+workflow.add_node(writer, node_id='writer')
 
 # Connect nodes - data flows from reader to writer
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Execute workflow
 runtime = LocalRuntime()
 runtime = LocalRuntime()
-workflow.execute(workflow)
+runtime.execute(workflow.build(), workflow)
 
 ```
 
@@ -124,7 +126,7 @@ from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 
 # Create workflow
-workflow = Workflow(name="Customer Processing")
+workflow = WorkflowBuilder()
 
 # Create nodes
 reader = CSVReaderNode(file_path='customers.csv')
@@ -149,12 +151,12 @@ workflow.add_node(filter_node, node_id='filter', config={
 workflow.add_node(writer, node_id='writer')
 
 # Connect nodes
-workflow.connect('reader', 'filter', mapping={'data': 'data'})
-workflow.connect('filter', 'writer', mapping={'filtered_data': 'data'})
+workflow.add_connection('reader', "result", 'filter', "input")
+workflow.add_connection('filter', "result", 'writer', "input")
 
 # Execute
 runtime = LocalRuntime(debug=True)
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 print(f"Filtered {results['filter']['count']} customers")
 
@@ -166,7 +168,7 @@ print(f"Filtered {results['filter']['count']} customers")
 One node output feeds multiple downstream nodes:
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -176,13 +178,14 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -190,7 +193,7 @@ workflow.  # Method signature
 Multiple nodes feed into one downstream node:
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -200,13 +203,14 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -214,7 +218,7 @@ workflow.  # Method signature
 Data flows through multiple processing steps:
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -224,15 +228,16 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 

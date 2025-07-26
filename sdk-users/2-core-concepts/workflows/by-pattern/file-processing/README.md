@@ -56,7 +56,7 @@ python sdk-users/workflows/by-pattern/file-processing/scripts/document_processor
 ### File Discovery
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -66,8 +66,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Use DirectoryReaderNode for real file discovery
 file_discovery = DirectoryReaderNode(
@@ -82,7 +83,7 @@ file_discovery = DirectoryReaderNode(
 ### Multi-Format Processing
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -92,8 +93,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # CSV processing for structured data
 csv_processor = CSVReaderNode(
@@ -118,7 +120,7 @@ text_processor = TextReaderNode(
 ### Results Aggregation
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -128,8 +130,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Merge processing results
 results_merger = MergeNode(
@@ -205,8 +208,7 @@ Use SwitchNode to route files based on type, size, or content:
 # Route files by type for specialized processing
 file_router = SwitchNode(
     name="file_router",
-    condition_mapping={
-        "csv_files": "file_extension == 'csv'",
+    condition_# mapping removed,
         "json_files": "file_extension == 'json'",
         "text_files": "file_extension == 'txt'"
     }
@@ -218,7 +220,7 @@ file_router = SwitchNode(
 Use multiple processors for different file types simultaneously:
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -228,12 +230,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Process different file types in parallel
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("file_discovery", ["csv_processor", "json_processor", "text_processor"])
+workflow = WorkflowBuilder()
+workflow.add_connection("file_discovery", ["csv_processor", "json_processor", "text_processor"])
 
 ```
 
@@ -241,7 +244,7 @@ workflow.workflow.connect("file_discovery", ["csv_processor", "json_processor", 
 Transform and enrich file processing results:
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -251,8 +254,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Enhance results with additional analysis
 enhancer = PythonCodeNode.from_function(

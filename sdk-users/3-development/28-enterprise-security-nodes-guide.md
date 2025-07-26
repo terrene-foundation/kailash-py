@@ -392,7 +392,7 @@ Integrate security nodes with event logging and monitoring.
 ```python
 from kailash.nodes.security.audit_log import AuditLogNode
 from kailash.nodes.security.security_event import SecurityEventNode
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 
 # Create security monitoring workflow
 security_workflow = WorkflowBuilder()
@@ -427,12 +427,12 @@ security_workflow.add_node("AuditLogNode", "audit_logger", {
 })
 
 # Connect security pipeline
-security_workflow.connect("threat_detector", "audit_logger", mapping={"threat_detector.threats": "audit_logger.security_events"})
-security_workflow.connect("abac_evaluator", "audit_logger", mapping={"abac_evaluator.decisions": "audit_logger.access_decisions"})
-security_workflow.connect("behavior_analyzer", "threat_detector", mapping={"behavior_analyzer.anomalies": "threat_detector.behavioral_indicators"})
+security_workflow.add_connection("threat_detector", "audit_logger", "threat_detector.threats", "audit_logger.security_events")
+security_workflow.add_connection("abac_evaluator", "audit_logger", "abac_evaluator.decisions", "audit_logger.access_decisions")
+security_workflow.add_connection("behavior_analyzer", "threat_detector", "behavior_analyzer.anomalies", "threat_detector.behavioral_indicators")
 
 # Execute security workflow
-security_result = security_workflow.execute({
+security_result = security_runtime.execute(workflow.build(), {
     "security_events": security_events,
     "permission_requests": permission_requests,
     "user_activities": user_activities

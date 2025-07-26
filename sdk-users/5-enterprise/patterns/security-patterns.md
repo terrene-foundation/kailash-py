@@ -11,12 +11,7 @@ from kailash.security import AuthenticationManager
 from kailash.nodes.security import MultiFactorAuthNode, OAuth2Node
 
 # Multi-factor authentication
-workflow.add_node("mfa", MultiFactorAuthNode(
-    auth_methods=["password", "totp", "biometric"],
-    session_timeout=3600,
-    max_attempts=3,
-    lockout_duration=900  # 15 minutes
-))
+workflow.add_node("MultiFactorAuthNode", "mfa", {}))
 
 # OAuth2 integration
 workflow.add_node("oauth", OAuth2Node(
@@ -29,13 +24,7 @@ workflow.add_node("oauth", OAuth2Node(
 ))
 
 # JWT token management
-workflow.add_node("jwt_handler", JWTHandlerNode(
-    secret_key="${JWT_SECRET}",
-    algorithm="RS256",
-    expiration=3600,
-    refresh_enabled=True,
-    refresh_expiration=86400
-))
+workflow.add_node("JWTHandlerNode", "jwt_handler", {}))
 
 ```
 
@@ -91,7 +80,7 @@ runtime = AccessControlledRuntime(
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -101,28 +90,25 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Encryption at rest
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Decryption with key rotation
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Data masking
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Field-level encryption
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("field_encryptor", FieldEncryptionNode(
-    fields=["ssn", "credit_card", "medical_record"],
-    algorithm="AES-256-CBC",
-    preserve_format=True  # Format-preserving encryption
-))
+workflow = WorkflowBuilder()
+workflow.add_node("FieldEncryptionNode", "field_encryptor", {}))
 
 ```
 
@@ -132,7 +118,7 @@ workflow.workflow.add_node("field_encryptor", FieldEncryptionNode(
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -142,42 +128,36 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Every request is verified
-workflow = Workflow("zero-trust", name="Zero Trust Pipeline")
+workflow = WorkflowBuilder()
 
 # Identity verification
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("verify_identity", IdentityVerificationNode(
-    methods=["certificate", "token", "biometric"],
-    trust_score_threshold=0.8
-))
+workflow = WorkflowBuilder()
+workflow.add_node("IdentityVerificationNode", "verify_identity", {}))
 
 # Device verification
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("verify_device", DeviceVerificationNode(
-    check_compliance=True,
-    allowed_platforms=["windows", "macos", "linux"],
-    require_encryption=True
-))
+workflow = WorkflowBuilder()
+workflow.add_node("DeviceVerificationNode", "verify_device", {}))
 
 # Context verification
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Risk assessment
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Connect verification pipeline
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("verify_identity", "verify_device")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("verify_device", "verify_context")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("verify_context", "risk_scorer")
+workflow = WorkflowBuilder()
+workflow.add_connection("verify_identity", "result", "verify_device", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("verify_device", "result", "verify_context", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("verify_context", "result", "risk_scorer", "input")
 
 ```
 
@@ -238,7 +218,7 @@ gateway = create_gateway(
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -248,21 +228,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Centralized secrets management
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("secrets_manager", SecretsManagerNode(
-    provider="vault",
-    vault_url="${VAULT_URL}",
-    namespace="production",
-    auth_method="kubernetes"
-))
+workflow = WorkflowBuilder()
+workflow.add_node("SecretsManagerNode", "secrets_manager", {}))
 
 # Dynamic secret retrieval
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
     # Secrets have TTL
     if secret_data['ttl'] < 300:  # 5 minutes
@@ -281,8 +257,8 @@ except Exception as e:
 ))
 
 # Environment variable injection
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 ```
 
@@ -290,7 +266,7 @@ workflow.  # Method signature)
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -300,22 +276,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Comprehensive input validation
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Custom validation logic
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("custom_validator", PythonCodeNode(
-    name="custom_validator",
-    code='''
-import re
-from urllib.parse import urlparse
-
-def validate_url(url):
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "custom_validator", {}):
     try:
         result = urlparse(url)
         return all([result.scheme, result.netloc])
@@ -350,7 +321,7 @@ result = {
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -360,34 +331,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Comprehensive audit logging
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("audit_logger", AuditLoggerNode(
-    log_level="info",
-    destinations=["database", "siem", "file"],
-    include_fields=[
-        "user_id", "action", "resource",
-        "timestamp", "ip_address", "user_agent"
-    ],
-    exclude_fields=["password", "secret", "token"],
-    retention_days=2555  # 7 years for compliance
-))
+workflow = WorkflowBuilder()
+workflow.add_node("AuditLoggerNode", "audit_logger", {}))
 
 # Compliance reporting
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("compliance_reporter", ComplianceReporterNode(
-    standards=["SOC2", "HIPAA", "GDPR"],
-    report_frequency="daily",
-    include_metrics=[
-        "access_attempts",
-        "data_exports",
-        "permission_changes",
-        "security_incidents"
-    ]
-))
+workflow = WorkflowBuilder()
+workflow.add_node("ComplianceReporterNode", "compliance_reporter", {}))
 
 ```
 
@@ -397,7 +351,7 @@ workflow.workflow.add_node("compliance_reporter", ComplianceReporterNode(
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -407,23 +361,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # SQL injection prevention
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # XSS prevention
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("xss_prevention", PythonCodeNode(
-    name="xss_prevention",
-    code='''
-import html
-from markupsafe import Markup, escape
-
-# Escape user input
-safe_input = html.escape(user_input)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "xss_prevention", {})
 
 # Use template with auto-escaping
 template = '''
@@ -449,7 +397,7 @@ result = {
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -459,25 +407,19 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # TLS configuration
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("tls_client", HTTPRequestNode(
-    verify_ssl=True,
-    ssl_version="TLSv1.3",
-    cipher_suites=[
-        "TLS_AES_256_GCM_SHA384",
-        "TLS_CHACHA20_POLY1305_SHA256"
-    ],
-    client_cert=("client.crt", "client.key"),
+workflow = WorkflowBuilder()
+workflow.add_node("HTTPRequestNode", "tls_client", {}),
     ca_bundle="/path/to/ca-bundle.crt"
 ))
 
 # Network isolation
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 ```
 
@@ -524,7 +466,7 @@ CMD ["main.py"]
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -534,24 +476,21 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Anomaly detection
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("anomaly_detector", AnomalyDetectionNode(
-    models=["isolation_forest", "one_class_svm"],
-    sensitivity=0.95,
-    training_data="historical_patterns.pkl"
-))
+workflow = WorkflowBuilder()
+workflow.add_node("AnomalyDetectionNode", "anomaly_detector", {}))
 
 # Threat intelligence
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Intrusion detection
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 ```
 

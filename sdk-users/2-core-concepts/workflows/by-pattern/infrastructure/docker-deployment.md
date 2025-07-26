@@ -1,3 +1,4 @@
+from kailash.workflow.builder import WorkflowBuilder
 # Docker Deployment Workflows
 
 Deploy your Kailash SDK workflows using Docker for consistent, scalable execution.
@@ -12,18 +13,18 @@ from kailash.nodes.data import CSVReaderNode, DataTransformerNode
 from kailash.runtime.docker import DockerRuntime
 
 # Create workflow
-workflow = Workflow("data-processor", "Data Processing Workflow")
+workflow = WorkflowBuilder()
 
 # Add nodes
-workflow.add_node("input", InputNode())
-workflow.add_node("reader", CSVReaderNode())
-workflow.add_node("transformer", DataTransformerNode())
-workflow.add_node("output", OutputNode())
+workflow.add_node("InputNode", "input", {}))
+workflow.add_node("CSVReaderNode", "reader", {}))
+workflow.add_node("DataTransformerNode", "transformer", {}))
+workflow.add_node("OutputNode", "output", {}))
 
 # Connect nodes
-workflow.connect("input", "reader", mapping={"file_path": "file_path"})
-workflow.connect("reader", "transformer", mapping={"data": "input_data"})
-workflow.connect("transformer", "output", mapping={"result": "result"})
+workflow.add_connection("input", "reader", "file_path", "file_path")
+workflow.add_connection("reader", "transformer", "data", "input_data")
+workflow.add_connection("transformer", "output", "result", "result")
 
 # Run in Docker
 runtime = DockerRuntime()
@@ -47,29 +48,20 @@ from kailash.workflow import Workflow
 from kailash.nodes.api import DatabaseNode, CacheNode
 from kailash.nodes.data import StreamProcessorNode
 
-workflow = Workflow("multi-service", "Multi-Service Workflow")
+workflow = WorkflowBuilder()
 
 # Database operations
-workflow.add_node("db_reader", DatabaseNode(
-    connection_string="${DATABASE_URL}",
-    query="SELECT * FROM events WHERE created_at > %s"
-))
+workflow.add_node("DatabaseNode", "db_reader", {}))
 
 # Cache layer
-workflow.add_node("cache", CacheNode(
-    redis_url="${REDIS_URL}",
-    ttl=3600
-))
+workflow.add_node("CacheNode", "cache", {}))
 
 # Stream processing
-workflow.add_node("processor", StreamProcessorNode(
-    kafka_brokers="${KAFKA_BROKERS}",
-    topic="events"
-))
+workflow.add_node("StreamProcessorNode", "processor", {}))
 
 # Connect with caching strategy
-workflow.connect("db_reader", "cache", mapping={"data": "data"})
-workflow.connect("cache", "processor", mapping={"data": "events"})
+workflow.add_connection("db_reader", "cache", "data", "data")
+workflow.add_connection("cache", "processor", "data", "events")
 
 # Docker Compose Configuration
 docker_compose = """
@@ -168,8 +160,8 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 from kailash.workflow import Workflow
 from kailash.runtime.kubernetes import KubernetesRuntime
 
-workflow = Workflow("example", name="Example")
-workflow.# ... add nodes ...
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # ... add nodes ...
 
 # Kubernetes Job manifest
 k8s_job = {

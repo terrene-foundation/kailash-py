@@ -56,8 +56,8 @@ workflow.add_node("ResourceAnalyzerNode", "optimizer", {
 })
 
 # Connect nodes
-workflow.add_connection("recorder", "status", "analyzer", "parameters")
-workflow.add_connection("analyzer", "analysis_summary", "optimizer", "parameters")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 # Execute
 runtime = LocalRuntime()
@@ -437,7 +437,7 @@ async def collect_metrics():
         # Get actual resource usage
         cpu_usage = get_cpu_usage()  # Your implementation
         memory_usage = get_memory_usage()
-        
+
         await analyzer_node.execute_async(
             operation="record_metric",
             edge_node="edge-1",
@@ -445,7 +445,7 @@ async def collect_metrics():
             used=cpu_usage.used,
             total=cpu_usage.total
         )
-        
+
         await asyncio.sleep(10)
 ```
 

@@ -23,7 +23,7 @@ Event sourcing stores all changes to application state as a sequence of events, 
 ### Basic Event Store Implementation
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes import PythonCodeNode, DataWriterNode, DataReaderNode
 from kailash.runtime.local import LocalRuntime
 from datetime import datetime
@@ -164,14 +164,14 @@ result = {
 )
 
 # Build Event Sourcing Workflow
-es_workflow = Workflow("example", name="Example")
+es_workflow = WorkflowBuilder()
 workflow.es_workflow.add_node(event_store_writer)
 es_workflow.add_node(snapshot_manager)
 es_workflow.add_node(event_replay)
 
 # Connect for event processing
-es_workflow.connect("event_store_writer", "snapshot_manager", mapping={"result": "events"})
-es_workflow.connect("snapshot_manager", "event_replay", mapping={"snapshot": "initial_state"})
+es_workflow.add_connection("event_store_writer", "snapshot_manager", "result", "events")
+es_workflow.add_connection("snapshot_manager", "event_replay", "snapshot", "initial_state")
 
 ```
 
@@ -526,7 +526,7 @@ result = {
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -536,8 +536,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Command Handler
 command_handler = PythonCodeNode(
@@ -810,17 +811,17 @@ result = {
 )
 
 # Build CQRS Workflow
-cqrs_workflow = Workflow("example", name="Example")
-workflow.workflow = Workflow("example", name="Example")
+cqrs_workflow = WorkflowBuilder()
+workflow.workflow = WorkflowBuilder()
 workflow.add_node(command_handler)
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(read_model_updater)
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(query_handler)
+workflow = WorkflowBuilder()
+workflow.add_node(read_model_updater)
+workflow = WorkflowBuilder()
+workflow.add_node(query_handler)
 
 # Connect command flow
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -1652,7 +1653,7 @@ result = {
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1662,8 +1663,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Circuit Breaker Pattern
 circuit_breaker = PythonCodeNode(
@@ -1985,17 +1987,17 @@ result = {
 )
 
 # Build Production Event Handling Workflow
-production_workflow = Workflow("example", name="Example")
-workflow.workflow = Workflow("example", name="Example")
+production_workflow = WorkflowBuilder()
+workflow.workflow = WorkflowBuilder()
 workflow.add_node(circuit_breaker)
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(dlq_handler)
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(event_compaction)
+workflow = WorkflowBuilder()
+workflow.add_node(dlq_handler)
+workflow = WorkflowBuilder()
+workflow.add_node(event_compaction)
 
 # Connect for resilient processing
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 

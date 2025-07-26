@@ -117,7 +117,7 @@ When multiple parameter sources exist, they are applied in this order (highest t
 Example:
 ```python
 # Node configuration (lowest priority)
-workflow.add_node("processor", MyNode(default_value="config"))
+workflow.add_node("MyNode", "processor", {}))
 
 # Workflow-level parameter (medium priority)
 runtime.execute(workflow, parameters={
@@ -135,7 +135,7 @@ runtime.execute(workflow, parameters={
 ### User Registration Workflow
 
 ```python
-from kailash import Workflow, WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder, WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
@@ -223,10 +223,10 @@ class DataProcessor(Node):
         return {"processed": result}
 
 # Create workflow
-workflow = Workflow("pipeline", "Data processing pipeline")
+workflow = WorkflowBuilder()
 workflow.add_node("loader", DataLoader())
 workflow.add_node("processor", DataProcessor())
-workflow.connect("loader", "processor", {"data": "data"})
+workflow.add_connection("loader", "result", "processor", "input")
 
 # Execute with mixed parameters
 runtime = LocalRuntime()

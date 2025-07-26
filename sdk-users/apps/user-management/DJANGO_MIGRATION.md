@@ -300,7 +300,7 @@ class TenantMiddleware:
 
 #### Kailash Middleware
 ```python
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 
 app = create_gateway(title="My App")
 

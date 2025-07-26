@@ -13,6 +13,8 @@ Comprehensive guide to diagnosing and resolving common issues in DataFlow applic
 
 **Diagnosis:**
 ```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 # Check pool statistics
 workflow = WorkflowBuilder()
 workflow.add_node("PoolDiagnosticsNode", "check_pool", {

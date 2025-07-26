@@ -8,7 +8,7 @@ Complete user lifecycle and management workflows for enterprise applications.
 
 ### 🚀 Complete User Onboarding
 ```python
-from kailash import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilderBuilder
 from kailash.nodes.admin import UserManagementNode, RoleManagementNode, PermissionCheckNode
 
 # Create enterprise user onboarding workflow

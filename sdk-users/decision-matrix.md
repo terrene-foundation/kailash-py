@@ -66,7 +66,7 @@ from kailash.workflow.builder import WorkflowBuilder
 workflow = WorkflowBuilder()
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 workflow.add_node("LLMAgentNode", "analyzer", {"model": "gpt-4"})
-workflow.connect("reader", "result", mapping={"analyzer": "input_data"})
+workflow.add_connection("reader", "result", "analyzer", "input_data")
 ```
 
 **When to use:**
@@ -94,7 +94,7 @@ class CustomerAnalysisWorkflow:
             "model": "gpt-4",
             "system_prompt": "Analyze customer data for insights"
         })
-        workflow.connect("customer_reader", "analyzer")
+        workflow.add_connection("customer_reader", "result", "analyzer", "input")
         return workflow.build()
 ```
 

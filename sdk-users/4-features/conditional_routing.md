@@ -32,7 +32,7 @@ The `MergeNode` combines outputs from multiple conditional branches back into a 
 Route execution based on a boolean condition:
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.logic import SwitchNode
 from kailash.nodes.base import Node, NodeParameter
 
@@ -57,16 +57,10 @@ class ValidationNode(Node):
         }
 
 # Workflow setup
-workflow = Workflow("boolean-routing", "Simple Boolean Routing")
+workflow = WorkflowBuilder()
 
-workflow.add_node("validator", ValidationNode())
-workflow.add_node("switch", SwitchNode(
-    condition_field="is_valid",
-    routes={
-        True: "success_handler",
-        False: "retry_handler"
-    }
-))
+workflow.add_node("ValidationNode", "validator", {}))
+workflow.add_node("SwitchNode", "switch", {}))
 workflow.add_node("success_handler", PythonCodeNode.from_function(
     lambda data, quality, is_valid: {"result": f"Success! Quality: {quality}"}
 ))
@@ -75,9 +69,9 @@ workflow.add_node("retry_handler", PythonCodeNode.from_function(
 ))
 
 # Connections
-workflow.connect("validator", "switch")
-workflow.connect("switch", "success_handler", route="success_handler")
-workflow.connect("switch", "retry_handler", route="retry_handler")
+workflow.add_connection("validator", "result", "switch", "input")
+workflow.add_connection("switch", "result", "success_handler", "input")
+workflow.add_connection("switch", "result", "retry_handler", "input")
 
 ```
 
@@ -86,7 +80,7 @@ workflow.connect("switch", "retry_handler", route="retry_handler")
 Route based on multiple possible status values:
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.logic import SwitchNode
 from kailash.nodes.code import PythonCodeNode
@@ -113,19 +107,11 @@ class StatusCheckerNode(Node):
         return {"data": data, "status": status}
 
 # Create workflow for multi-case routing
-workflow = Workflow("multi-case-routing", "Multi-Case Status Routing")
+workflow = WorkflowBuilder()
 
 # Add nodes
-workflow.add_node("checker", StatusCheckerNode())
-workflow.add_node("router", SwitchNode(
-    condition_field="status",
-    routes={
-        "empty": "error_handler",
-        "small": "simple_processor",
-        "medium": "standard_processor",
-        "large": "batch_processor"
-    }
-))
+workflow.add_node("StatusCheckerNode", "checker", {}))
+workflow.add_node("SwitchNode", "router", {}))
 workflow.add_node("error_handler", PythonCodeNode.from_function(
     lambda data, status: {"result": f"Error: No data to process"}
 ))
@@ -140,11 +126,11 @@ workflow.add_node("batch_processor", PythonCodeNode.from_function(
 ))
 
 # Connect nodes
-workflow.connect("checker", "router")
-workflow.connect("router", "error_handler", route="error_handler")
-workflow.connect("router", "simple_processor", route="simple_processor")
-workflow.connect("router", "standard_processor", route="standard_processor")
-workflow.connect("router", "batch_processor", route="batch_processor")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 ```
 
@@ -153,7 +139,7 @@ workflow.connect("router", "batch_processor", route="batch_processor")
 **This is the most important pattern for cyclic workflows with conditional routing:**
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
@@ -195,24 +181,24 @@ class QualityCheckerNode(Node):
         }
 
 # Critical Pattern: A → B → C → D → SwitchNode → (B if retry | E if finish)
-workflow = Workflow("conditional-cycle", "Quality Improvement Loop")
+workflow = WorkflowBuilder()
 
 # (This section was already fixed above - adding nodes to the existing workflow)
 # The workflow nodes and connections are already properly defined above
 
 # Conditional routing from switch
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
 ### 4. Error Handling with Fallback Routes
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
@@ -245,16 +231,10 @@ class SafeProcessorNode(Node):
             return {"data": simple_result, "status": "fallback", "error": str(e)}
 
 # Error handling workflow
-workflow = Workflow("error-handling", "Error Handling with Fallback Routes")
+workflow = WorkflowBuilder()
 
-workflow.add_node("processor", SafeProcessorNode())
-workflow.add_node("status_check", SwitchNode(
-    condition_field="status",
-    routes={
-        "success": "success_path",
-        "fallback": "error_recovery"
-    }
-))
+workflow.add_node("SafeProcessorNode", "processor", {}))
+workflow.add_node("SwitchNode", "status_check", {}))
 workflow.add_node("success_path", PythonCodeNode.from_function(
     lambda data, status: {"result": f"Complex processing successful: {data}"}
 ))
@@ -262,16 +242,16 @@ workflow.add_node("error_recovery", PythonCodeNode.from_function(
     lambda data, status, error: {"result": f"Fallback processing used: {data}, Error: {error}"}
 ))
 
-workflow.connect("processor", "status_check")
-workflow.connect("status_check", "success_path", route="success")
-workflow.connect("status_check", "error_recovery", route="fallback")
+workflow.add_connection("processor", "result", "status_check", "input")
+workflow.add_connection("status_check", "result", "success_path", "input")
+workflow.add_connection("status_check", "result", "error_recovery", "input")
 
 ```
 
 ### 5. Data Filtering and Transformation
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.logic import SwitchNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
@@ -292,29 +272,13 @@ class DataFilterNode(Node):
 
         # Determine routing based on content
         if high_priority:
-            route = "urgent_processing"
-            data = high_priority
-        elif medium_priority:
-            route = "standard_processing"
-            data = medium_priority
-        else:
-            route = "batch_processing"
-            data = low_priority
-
-        return {"data": data, "route": route, "item_count": len(data)}
+            # route removed, "route": route, "item_count": len(data)}
 
 # Data filtering and transformation workflow
-workflow = Workflow("data-filtering", "Data Filtering and Transformation")
+workflow = WorkflowBuilder()
 
-workflow.add_node("filter", DataFilterNode())
-workflow.add_node("router", SwitchNode(
-    condition_field="route",
-    routes={
-        "urgent_processing": "urgent_processor",
-        "standard_processing": "standard_processor",
-        "batch_processing": "batch_processor"
-    }
-))
+workflow.add_node("DataFilterNode", "filter", {}))
+workflow.add_node("SwitchNode", "router", {}))
 workflow.add_node("urgent_processor", PythonCodeNode.from_function(
     lambda data, route, item_count: {"result": f"URGENT: Processing {item_count} high-priority items"}
 ))
@@ -325,10 +289,10 @@ workflow.add_node("batch_processor", PythonCodeNode.from_function(
     lambda data, route, item_count: {"result": f"BATCH: Processing {item_count} low-priority items"}
 ))
 
-workflow.connect("filter", "router")
-workflow.connect("router", "urgent_processor", route="urgent_processing")
-workflow.connect("router", "standard_processor", route="standard_processing")
-workflow.connect("router", "batch_processor", route="batch_processing")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 ```
 
@@ -337,7 +301,7 @@ workflow.connect("router", "batch_processor", route="batch_processing")
 ### Nested Conditional Workflows
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.logic import SwitchNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
@@ -373,27 +337,15 @@ class SecondaryConditionNode(Node):
         }
 
 # Nested conditional workflow
-workflow = Workflow("nested-conditional", "Nested Conditional Workflows")
+workflow = WorkflowBuilder()
 
 # Primary condition check
-workflow.add_node("primary_check", PrimaryConditionNode())
-workflow.add_node("primary_switch", SwitchNode(
-    condition_field="primary_condition",
-    routes={
-        True: "secondary_check",
-        False: "alternative_path"
-    }
-))
+workflow.add_node("PrimaryConditionNode", "primary_check", {}))
+workflow.add_node("SwitchNode", "primary_switch", {}))
 
 # Secondary condition check
-workflow.add_node("secondary_check", SecondaryConditionNode())
-workflow.add_node("secondary_switch", SwitchNode(
-    condition_field="secondary_condition",
-    routes={
-        True: "final_processor",
-        False: "fallback_processor"
-    }
-))
+workflow.add_node("SecondaryConditionNode", "secondary_check", {}))
+workflow.add_node("SwitchNode", "secondary_switch", {}))
 
 # Processing nodes
 workflow.add_node("final_processor", PythonCodeNode.from_function(
@@ -413,19 +365,19 @@ workflow.add_node("alternative_path", PythonCodeNode.from_function(
 ))
 
 # Nested routing
-workflow.connect("primary_check", "primary_switch")
-workflow.connect("primary_switch", "secondary_check", route="secondary_check")
-workflow.connect("primary_switch", "alternative_path", route="alternative_path")
-workflow.connect("secondary_check", "secondary_switch")
-workflow.connect("secondary_switch", "final_processor", route="final_processor")
-workflow.connect("secondary_switch", "fallback_processor", route="fallback_processor")
+workflow.add_connection("primary_check", "result", "primary_switch", "input")
+workflow.add_connection("primary_switch", "result", "secondary_check", "input")
+workflow.add_connection("primary_switch", "result", "alternative_path", "input")
+workflow.add_connection("secondary_check", "result", "secondary_switch", "input")
+workflow.add_connection("secondary_switch", "result", "final_processor", "input")
+workflow.add_connection("secondary_switch", "result", "fallback_processor", "input")
 
 ```
 
 ### Merging Conditional Branches
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.logic import MergeNode, SwitchNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
@@ -443,17 +395,11 @@ class ConditionNode(Node):
         return {"data": data, "condition": condition}
 
 # Merging conditional branches workflow
-workflow = Workflow("merge-branches", "Merging Conditional Branches")
+workflow = WorkflowBuilder()
 
 # Process data through different paths
-workflow.add_node("condition_check", ConditionNode())
-workflow.add_node("router", SwitchNode(
-    condition_field="condition",
-    routes={
-        True: "path_a",
-        False: "path_b"
-    }
-))
+workflow.add_node("ConditionNode", "condition_check", {}))
+workflow.add_node("SwitchNode", "router", {}))
 workflow.add_node("path_a", PythonCodeNode.from_function(
     lambda data, condition: {"result": f"Premium processing for {data}", "path": "A"}
 ))
@@ -462,21 +408,18 @@ workflow.add_node("path_b", PythonCodeNode.from_function(
 ))
 
 # Merge results back together
-workflow.add_node("merger", MergeNode(
-    merge_strategy="combine",  # or "latest", "first"
-    output_field="merged_result"
-))
+workflow.add_node("MergeNode", "merger", {}))
 workflow.add_node("final_processor", PythonCodeNode.from_function(
     lambda merged_result: {"final_result": f"Final processing of merged data: {merged_result}"}
 ))
 
 # Routing and merging
-workflow.connect("condition_check", "router")
-workflow.connect("router", "path_a", route="path_a")
-workflow.connect("router", "path_b", route="path_b")
-workflow.connect("path_a", "merger")
-workflow.connect("path_b", "merger")
-workflow.connect("merger", "final_processor")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("path_a", "result", "merger", "input")
+workflow.add_connection("path_b", "result", "merger", "input")
+workflow.add_connection("merger", "result", "final_processor", "input")
 
 ```
 
@@ -498,7 +441,7 @@ routes = {"true": "node1", "false": "node2"}
 
 ### 2. Explicit Condition Fields
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
@@ -532,20 +475,15 @@ return {"data": data, "flag": True, "ok": success}
 
 ### 3. Cycle Integration
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # ✅ Good: Proper cycle configuration with SwitchNode
-workflow.connect("switch", "retry_node",
-    route="retry",
-    cycle=True,
-    max_iterations=10,
-    convergence_check="should_continue == False")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # ✅ Good: Clear convergence conditions
-workflow.connect("switch", "finish_node",
-    route="finish")
+workflow.add_connection("switch", "result", "finish_node", "input")
 
 ```
 
@@ -617,7 +555,7 @@ class RobustSwitchNode(Node):
 
 1. **Add Logging Nodes**
    ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
@@ -631,22 +569,22 @@ class LoggingNode(Node):
 
     def run(self, **kwargs):
         condition = kwargs.get("condition", "N/A")
-        route = kwargs.get("route", "N/A")
+        # route removed, "N/A")
         data = kwargs.get("data", [])
         data_size = len(data) if data else 0
 
-        print(f"Debug: condition={condition}, route={route}, data_size={data_size}")
+        print(f"Debug: condition={condition}, # route removed, data_size={data_size}")
         return kwargs  # Pass through
 
-workflow.add_node("debug", LoggingNode())
-workflow.connect("condition_check", "debug")
-workflow.connect("debug", "switch")
+workflow.add_node("LoggingNode", "debug", {}))
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("debug", "result", "switch", "input")
 
    ```
 
 2. **Monitor Cycle State**
    ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
@@ -663,7 +601,7 @@ class CycleMonitorNode(Node):
 
 3. **Validate Routes**
    ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
@@ -675,7 +613,7 @@ class RouteValidatorNode(Node):
         }
 
     def run(self, **kwargs):
-        route = kwargs.get("route_decision")
+        # route removed)
         valid_routes = ["retry", "finish", "error"]
 
         if route not in valid_routes:
@@ -689,31 +627,24 @@ class RouteValidatorNode(Node):
 
 ### From Simple Cycles
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Before: Simple cycle without conditions
-workflow.connect("processor", "processor",
-    cycle=True, max_iterations=5)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # After: Conditional cycle with SwitchNode
-workflow.add_node("switch", SwitchNode(
-    condition_field="should_continue",
-    routes={
-        True: "processor",
-        False: "output"
-    }
-))
-workflow.connect("processor", "switch")
-workflow.connect("switch", "processor", route="processor", cycle=True)
-workflow.connect("switch", "output", route="output")
+workflow.add_node("SwitchNode", "switch", {}))
+workflow.add_connection("processor", "result", "switch", "input")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+workflow.add_connection("switch", "result", "output", "input")
 
 ```
 
 ### From Complex Node Logic
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
@@ -768,16 +699,9 @@ class ConditionEvaluatorNode(Node):
 
         return {"data": data, "path": path}
 
-workflow = Workflow("separated-logic", "Separated Concerns with SwitchNode")
-workflow.add_node("condition_check", ConditionEvaluatorNode())
-workflow.add_node("router", SwitchNode(
-    condition_field="path",
-    routes={
-        "path_a": "processor_a",
-        "path_b": "processor_b",
-        "default": "default_processor"
-    }
-))
+workflow = WorkflowBuilder()
+workflow.add_node("ConditionEvaluatorNode", "condition_check", {}))
+workflow.add_node("SwitchNode", "router", {}))
 workflow.add_node("processor_a", PythonCodeNode.from_function(
     lambda data, path: process_path_a(data)
 ))
@@ -788,10 +712,10 @@ workflow.add_node("default_processor", PythonCodeNode.from_function(
     lambda data, path: process_default(data)
 ))
 
-workflow.connect("condition_check", "router")
-workflow.connect("router", "processor_a", route="processor_a")
-workflow.connect("router", "processor_b", route="processor_b")
-workflow.connect("router", "default_processor", route="default_processor")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 ```
 

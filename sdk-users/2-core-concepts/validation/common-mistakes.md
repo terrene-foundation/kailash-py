@@ -7,7 +7,7 @@
 All examples in this guide assume these imports:
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode, JSONReaderNode, JSONWriterNode
 from kailash.nodes.ai import LLMAgentNode, IterativeLLMAgentNode, EmbeddingGeneratorNode
@@ -54,7 +54,7 @@ runtime.execute(workflow.build(), parameters={
 
 ```python
 # ❌ WRONG - Hardcoded secrets in workflow parameters
-workflow.add_node("api", HTTPRequestNode(), {
+workflow.add_node("HTTPRequestNode", "api", {}), {
     "url": "https://api.example.com",
     "headers": {"Authorization": "Bearer sk-abc123"}  # SECURITY RISK!
 })
@@ -62,12 +62,12 @@ workflow.add_node("api", HTTPRequestNode(), {
 # ❌ WRONG - Environment variables for secrets
 import os
 api_key = os.getenv("API_KEY")
-workflow.add_node("api", HTTPRequestNode(), {
+workflow.add_node("HTTPRequestNode", "api", {}), {
     "headers": {"Authorization": f"Bearer {api_key}"}
 })
 
 # ❌ WRONG - Template substitution for secrets
-workflow.add_node("api", HTTPRequestNode(), {
+workflow.add_node("HTTPRequestNode", "api", {}), {
     "headers": {"Authorization": "Bearer ${API_TOKEN}"}
 })
 
@@ -85,7 +85,7 @@ class APINode(Node):
         return [SecretRequirement("api-token", "auth_token")]
 
 # Secrets injected at runtime, not stored in workflow
-workflow.add_node("api", APINode(), {
+workflow.add_node("APINode", "api", {}), {
     "url": "https://api.example.com"
     # No secret in parameters - injected automatically!
 })
@@ -113,15 +113,15 @@ export API_TOKEN="sk-abc123"  # Avoid this pattern
 ```python
 # ❌ WRONG - Direct field mapping for PythonCodeNode
 counter = PythonCodeNode.from_function(lambda x=0: {"count": x+1}, name="counter")
-workflow.connect("counter", "counter", {"count": "x"}, cycle=True)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # ✅ CORRECT - Use dot notation for PythonCodeNode outputs
-workflow.connect("counter", "counter", {"result.count": "x"}, cycle=True)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 ```
 
 ```python
 # ❌ WRONG - No initial parameters for cycle
-runtime.execute(workflow)  # ERROR: Required parameter 'x' not provided
+runtime.execute(workflow.build())  # ERROR: Required parameter 'x' not provided
 
 # ✅ CORRECT - Provide initial parameters
 runtime.execute(workflow, parameters={"counter": {"x": 0}})
@@ -139,17 +139,17 @@ runtime.execute(workflow, parameters={"counter": {"x": 0}})
 ```python
 
 # ❌ WRONG - This will cause an error
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.workflow.execute(runtime)
+workflow = WorkflowBuilder()
+workflow.runtime.execute(workflow.build(), runtime)
 
 # ✅ CORRECT - Two valid patterns
 # Pattern 1: Direct execution (basic features)
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.execute()
+workflow = WorkflowBuilder()
+runtime.execute(workflow.build(), )
 
 # Pattern 2: Runtime execution (recommended)
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -158,11 +158,11 @@ results, run_id = runtime.execute(workflow)
 
 # ❌ WRONG - These parameter names don't exist
 runtime = LocalRuntime()
-workflow.execute(workflow, inputs={"reader": {"file_path": "data.csv"}})
+runtime.execute(workflow.build(), workflow, parameters={"reader": {"file_path": "data.csv"}})
 runtime = LocalRuntime()
-workflow.execute(workflow, config={"reader": {"file_path": "data.csv"}})
+runtime.execute(workflow.build(), workflow, config={"reader": {"file_path": "data.csv"}})
 runtime = LocalRuntime()
-workflow.execute(workflow, overrides={"reader": {"file_path": "data.csv"}})
+runtime.execute(workflow.build(), workflow, overrides={"reader": {"file_path": "data.csv"}})
 
 # ✅ CORRECT - Use 'parameters'
 runtime = LocalRuntime()
@@ -187,16 +187,16 @@ from kailash.nodes.api import HTTPRequestNode, RESTClientNode
 ```python
 
 # ❌ WRONG - camelCase methods don't exist
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.workflow.addNode("reader", CSVReaderNode())
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
+workflow = WorkflowBuilder()
+workflow.addNode("reader", "CSVReaderNode")
+workflow = WorkflowBuilder()
 workflow.connectNodes("reader", "processor")
 
 # ✅ CORRECT - Use snake_case
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.add_node("reader", CSVReaderNode())
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.connect("reader", "processor")
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}))
+workflow = WorkflowBuilder()
+workflow.add_connection("reader", "result", "processor", "input")
 
 ```
 
@@ -204,16 +204,16 @@ workflow.connect("reader", "processor")
 ```python
 
 # ❌ WRONG - Parameter order matters
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.add_node(CSVReaderNode(), "reader", file_path="data.csv")
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.connect("reader", "processor", mapping={"data": "input"})
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", file_path="data.csv")
+workflow = WorkflowBuilder()
+workflow.add_connection("reader", "processor", "data", "input")
 
 # ✅ CORRECT - node_id first, then node, then config
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.connect("reader", "processor", mapping={"data": "input"})
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
+workflow = WorkflowBuilder()
+workflow.add_connection("reader", "processor", "data", "input")
 
 ```
 
@@ -244,7 +244,7 @@ workflow.add_node("PythonCodeNode")  # Can't connect nodes!
 # ✅ CORRECT - Capture auto-generated IDs for connections
 reader_id = workflow.add_node("CSVReaderNode", {"file_path": "data.csv"})
 processor_id = workflow.add_node("PythonCodeNode", {"code": "..."})
-workflow.connect(reader_id, "result", mapping={processor_id: "input_data"})
+workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
 ```
 
 **See:** [WorkflowBuilder API Patterns Guide](../developer/55-workflow-builder-api-patterns.md) for comprehensive API usage
@@ -255,30 +255,30 @@ workflow.connect(reader_id, "result", mapping={processor_id: "input_data"})
 
 #### ❌ **Broken Code**
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.data import CSVReader  # WRONG: Missing "Node"
 
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.workflow.addNode("reader", CSVReader(),   # WRONG: camelCase method
+workflow = WorkflowBuilder()
+workflow.addNode("reader", CSVReader(),   # WRONG: camelCase method
     filePath="data.csv")                  # WRONG: camelCase config key
 
 runtime = LocalRuntime()
-results = workflow.execute(runtime)      # WRONG: backwards execution
+results = runtime.execute(workflow.build(), runtime)      # WRONG: backwards execution
 
 ```
 
 #### ✅ **Fixed Code**
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode  # CORRECT: With "Node"
 
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.add_node("reader", CSVReaderNode(),  # CORRECT: snake_case
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}),  # CORRECT: snake_case
     file_path="data.csv")                     # CORRECT: snake_case key
 
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)  # CORRECT: runtime executes workflow
+results, run_id = runtime.execute(workflow.build())  # CORRECT: runtime executes workflow
 
 ```
 
@@ -293,7 +293,7 @@ workflow.add_node("llm", LLMAgent(),      # WRONG: Class doesn't exist
     Model="gpt-4",                       # WRONG: Capital M
     Temperature=0.7)                     # WRONG: Capital T
 
-runtime.execute(workflow, inputs={       # WRONG: 'inputs' parameter
+runtime.execute(workflow, parameters={       # WRONG: 'inputs' parameter
     "llm": {"prompt": "Hello"}
 })
 
@@ -303,7 +303,7 @@ runtime.execute(workflow, inputs={       # WRONG: 'inputs' parameter
 ```python
 from kailash.nodes.ai import LLMAgentNode  # CORRECT: With "Node"
 
-workflow.add_node("llm", LLMAgentNode(),   # CORRECT: Proper class name
+workflow.add_node("LLMAgentNode", "llm", {}),   # CORRECT: Proper class name
     provider="openai",                     # CORRECT: lowercase
     model="gpt-4",                        # CORRECT: lowercase
     temperature=0.7)                      # CORRECT: lowercase
@@ -320,16 +320,16 @@ runtime.execute(workflow, parameters={    # CORRECT: 'parameters'
 ```python
 
 # Wrong mapping parameter order
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.connect("reader", "processor", mapping={"data": "input"})
+workflow = WorkflowBuilder()
+workflow.add_connection("reader", "processor", "data", "input")
 
 # Missing mapping parameter name
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.connect("reader", "processor", mapping={"data": "input"})
+workflow = WorkflowBuilder()
+workflow.add_connection("reader", "processor", "data", "input")
 
 # Self-referencing mapping in PythonCodeNode
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.connect("reader", "processor", mapping={"data": "input"})
+workflow = WorkflowBuilder()
+workflow.add_connection("reader", "processor", "data", "input")
 
 ```
 
@@ -337,16 +337,16 @@ workflow.connect("reader", "processor", mapping={"data": "input"})
 ```python
 
 # Correct parameter order with explicit mapping
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.connect("reader", "processor", mapping={"data": "input"})
+workflow = WorkflowBuilder()
+workflow.add_connection("reader", "processor", "data", "input")
 
 # Automatic mapping when names match
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.connect("reader", "processor")  # maps "data" → "data"
+workflow = WorkflowBuilder()
+workflow.add_connection("reader", "result", "processor", "input")  # maps "data" → "data"
 
 # Proper cyclic connection (different output/input names)
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.connect("reader", "processor", mapping={"data": "input"})
+workflow = WorkflowBuilder()
+workflow.add_connection("reader", "processor", "data", "input")
 
 ```
 
@@ -357,7 +357,7 @@ When your code fails, check these in order:
 ### **1. Import Errors**
 ```python
 # ✅ Check imports are correct
-from kailash import Workflow                           # Core
+from kailash.workflow.builder import WorkflowBuilder                           # Core
 from kailash.runtime.local import LocalRuntime        # Runtime
 from kailash.nodes.data import CSVReaderNode          # Data nodes
 from kailash.nodes.ai import LLMAgentNode             # AI nodes
@@ -369,14 +369,14 @@ from kailash.nodes.api import HTTPRequestNode         # API nodes
 ```python
 
 # ✅ Verify you're using correct method names
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
+workflow = WorkflowBuilder()
 workflow.add_node()    # NOT addNode()
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.connect()     # NOT connectNodes()
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.workflow.validate()    # NOT check()
-workflow = Workflow("mistakes_demo", name="Common Mistakes Demo")
-workflow.workflow.execute()     # NOT run()
+workflow = WorkflowBuilder()
+workflow.add_connection("source", "result", "target", "input")# NOT connectNodes()
+workflow = WorkflowBuilder()
+workflow.validate()    # NOT check()
+workflow = WorkflowBuilder()
+workflow.runtime.execute(workflow.build(), )     # NOT run()
 
 ```
 
@@ -395,7 +395,7 @@ PythonCodeNode    # NOT PythonCode
 # ✅ Check parameter names and order
 workflow.add_node("id", NodeClass(), **config)        # Correct order
 runtime.execute(workflow, parameters={...})           # Use 'parameters'
-workflow.connect("from", "to", mapping={...})         # Use 'mapping'
+workflow.add_connection("from", "result", "to", "input")         # Use 'mapping'
 
 ```
 
@@ -421,11 +421,11 @@ temperature=0.7     # NOT Temperature
 
 ### **"TypeError: execute() takes 1 positional argument but 2 were given"**
 - **Problem**: Using backwards execution pattern
-- **Fix**: Use `runtime.execute(workflow)` not `workflow.execute(runtime)`
+- **Fix**: Use `runtime.execute(workflow.build())` not `runtime.execute(workflow.build(), runtime)`
 
 ### **"TypeError: execute() got an unexpected keyword argument 'inputs'"**
 - **Problem**: Wrong parameter name for runtime overrides
-- **Fix**: Use `parameters={}` instead of `inputs={}`
+- **Fix**: Use `parameters={}` instead of `parameters={}`
 
 ### **"TypeError: add_node() missing 1 required positional argument"**
 - **Problem**: Wrong parameter order
@@ -451,12 +451,12 @@ def debug_workflow_code(workflow_code):
         issues.append("❌ Use 'LLMAgentNode' not 'LLMAgent'")
 
     # Check for wrong execution pattern
-    if "workflow.execute(runtime)" in workflow_code:
-        issues.append("❌ Use 'runtime.execute(workflow)' not 'workflow.execute(runtime)'")
+    if "runtime.execute(workflow.build(), runtime)" in workflow_code:
+        issues.append("❌ Use 'runtime.execute(workflow.build())' not 'runtime.execute(workflow.build(), runtime)'")
 
     # Check for wrong parameter names
-    if "inputs=" in workflow_code:
-        issues.append("❌ Use 'parameters=' not 'inputs='")
+    if "parameters=" in workflow_code:
+        issues.append("❌ Use 'parameters=' not 'parameters='")
 
     # Check for camelCase config keys
     if "filePath" in workflow_code:
@@ -475,7 +475,7 @@ def debug_workflow_code(workflow_code):
 
 # Usage
 your_code = '''
-workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
+workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
 runtime.execute(workflow, parameters={"reader": {"delimiter": ","}})
 '''
 
@@ -487,63 +487,59 @@ debug_workflow_code(your_code)
 
 ### **Template 1: Basic CSV Processing**
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.code import PythonCodeNode
 
-workflow = Workflow("csv_processing", name="CSV Processing")
+workflow = WorkflowBuilder()
 
-workflow.add_node("reader", CSVReaderNode(),
+workflow.add_node("CSVReaderNode", "reader", {}),
     file_path="input.csv",
     has_header=True,
     delimiter=","
 )
 
-workflow.add_node("processor", PythonCodeNode(
-    name="processor",
-    code="result = {'processed': [row for row in data]}",
-    input_types={"data": list}
-))
+workflow.add_node("PythonCodeNode", "processor", {}))
 
-workflow.add_node("writer", CSVWriterNode(),
+workflow.add_node("CSVWriterNode", "writer", {}),
     file_path="output.csv",
     include_header=True
 )
 
-workflow.connect("reader", "processor", mapping={"data": "data"})
-workflow.connect("processor", "writer", mapping={"processed": "data"})
+workflow.add_connection("reader", "processor", "data", "data")
+workflow.add_connection("processor", "writer", "processed", "data")
 
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
 ### **Template 2: API + LLM Processing**
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.api import HTTPRequestNode
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.code import PythonCodeNode
 
-workflow = Workflow("api_llm", name="API + LLM Processing")
+workflow = WorkflowBuilder()
 
-workflow.add_node("api", HTTPRequestNode(),
+workflow.add_node("HTTPRequestNode", "api", {}),
     url="https://api.example.com/data",
     method="GET"
 )
 
-workflow.add_node("llm", LLMAgentNode(),
+workflow.add_node("LLMAgentNode", "llm", {}),
     provider="openai",
     model="gpt-4",
     temperature=0.7
 )
 
-workflow.connect("api", "llm", mapping={"response": "prompt"})
+workflow.add_connection("api", "llm", "response", "prompt")
 
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -629,7 +625,7 @@ except Exception as e:
 
 ```python
 # ❌ WRONG - Disabling real MCP execution (reverts to mock)
-agent = IterativeLLMAgentNode()
+agent = Iterative"LLMAgentNode"
 result = agent.execute(
     provider="openai",
     model="gpt-4",

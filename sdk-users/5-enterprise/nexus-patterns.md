@@ -18,6 +18,7 @@ Enterprise Nexus patterns provide production-ready multi-channel orchestration w
 
 ### Production Deployment Pattern
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from nexus import Nexus
 from kailash.enterprise.auth import EnterpriseAuthProvider
 from kailash.enterprise.monitoring import PrometheusMonitoring
@@ -69,6 +70,7 @@ app.start()
 
 ### Multi-Factor Authentication Across Channels
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from nexus import Nexus
 from kailash.enterprise.auth import MultiFactorAuth
 
@@ -99,6 +101,7 @@ app.start()
 
 ### Role-Based Access Control (RBAC)
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.enterprise.auth import RBACManager
 
 # Define enterprise roles with channel permissions
@@ -135,6 +138,7 @@ nexus.set_rbac_manager(rbac)
 
 ### Attribute-Based Access Control (ABAC)
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.enterprise.auth import ABACPolicyEngine
 
 # Advanced policy-based access control
@@ -171,6 +175,7 @@ nexus.set_abac_engine(abac)
 
 ### Tenant Isolation Configuration
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.enterprise.tenancy import TenantManager
 
 # Enterprise tenant management
@@ -215,6 +220,7 @@ await nexus.create_tenant(
 
 ### Tenant-Aware Workflows
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Workflows with tenant context
 tenant_workflow = WorkflowBuilder()
 
@@ -255,6 +261,7 @@ nexus.register_workflow("tenant_data_processing", tenant_workflow.build(),
 
 ### Comprehensive Monitoring Stack
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.enterprise.monitoring import (
     PrometheusMonitoring,
     ElasticsearchLogging,
@@ -310,6 +317,7 @@ nexus = create_production_nexus(monitoring=monitoring_stack)
 
 ### Custom Enterprise Metrics
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Enterprise-specific monitoring
 nexus.register_custom_metrics([
     {
@@ -339,6 +347,7 @@ nexus.register_custom_metrics([
 
 ### Load Balancing Configuration
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.enterprise.clustering import NexusCluster
 
 # Multi-node Nexus cluster
@@ -373,6 +382,7 @@ nexus = create_production_nexus(cluster=cluster)
 
 ### Circuit Breaker Patterns
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.enterprise.resilience import CircuitBreakerManager
 
 # Circuit breakers for external dependencies
@@ -400,6 +410,7 @@ nexus.set_circuit_breaker_manager(circuit_breaker)
 
 ### GDPR Compliance Pattern
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.enterprise.compliance import GDPRCompliance
 
 gdpr = GDPRCompliance(
@@ -429,6 +440,7 @@ nexus.add_compliance_framework(gdpr)
 
 ### HIPAA Compliance Pattern
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.enterprise.compliance import HIPAACompliance
 
 hipaa = HIPAACompliance(
@@ -459,6 +471,7 @@ nexus.add_compliance_framework(hipaa)
 
 ### Enterprise Caching Strategy
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.enterprise.caching import MultiTierCaching
 
 # Multi-tier caching across channels
@@ -500,6 +513,7 @@ nexus.set_caching_manager(caching)
 
 ### Auto-Scaling Configuration
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.enterprise.scaling import AutoScaler
 
 # Kubernetes-based auto-scaling

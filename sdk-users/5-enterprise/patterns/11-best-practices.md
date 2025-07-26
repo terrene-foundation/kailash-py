@@ -221,7 +221,7 @@ class DocumentedNode(Node):
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -231,62 +231,63 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Create focused, reusable workflows
 def create_validation_workflow():
     """Reusable validation workflow"""
-    workflow = Workflow("validator", "Data Validation")
+    workflow = WorkflowBuilder()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("schema_validator", SchemaValidatorNode())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("business_rules", BusinessRulesNode())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("quality_checker", QualityCheckerNode())
+workflow = WorkflowBuilder()
+workflow.add_node("SchemaValidatorNode", "schema_validator", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("BusinessRulesNode", "business_rules", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("QualityCheckerNode", "quality_checker", {}))
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("schema_validator", "business_rules")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("business_rules", "quality_checker")
+workflow = WorkflowBuilder()
+workflow.add_connection("schema_validator", "result", "business_rules", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("business_rules", "result", "quality_checker", "input")
 
     return workflow
 
 def create_enrichment_workflow():
     """Reusable enrichment workflow"""
-    workflow = Workflow("enricher", "Data Enrichment")
+    workflow = WorkflowBuilder()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("geocoder", GeocoderNode())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("customer_scorer", CustomerScorerNode())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("category_tagger", CategoryTaggerNode())
+workflow = WorkflowBuilder()
+workflow.add_node("GeocoderNode", "geocoder", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("CustomerScorerNode", "customer_scorer", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("CategoryTaggerNode", "category_tagger", {}))
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("geocoder", "customer_scorer")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("customer_scorer", "category_tagger")
+workflow = WorkflowBuilder()
+workflow.add_connection("geocoder", "result", "customer_scorer", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("customer_scorer", "result", "category_tagger", "input")
 
     return workflow
 
 # Compose workflows together
-main_workflow = Workflow("main_pipeline", "Customer Processing Pipeline")
+main_workflow = WorkflowBuilder()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("validator", WorkflowNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("WorkflowNode", "validator", {}),
     workflow=create_validation_workflow())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("enricher", WorkflowNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("WorkflowNode", "enricher", {}),
     workflow=create_enrichment_workflow())
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("output", OutputNode())
+workflow = WorkflowBuilder()
+workflow.add_node("OutputNode", "output", {}))
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("validator", "enricher")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("enricher", "output")
+workflow = WorkflowBuilder()
+workflow.add_connection("validator", "result", "enricher", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("enricher", "result", "output", "input")
 
 ```
 
@@ -310,7 +311,7 @@ if not validation_result.is_valid:
 
 # Safe to execute
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -398,8 +399,8 @@ class AsyncAPINode(AsyncNode):
             return {'error': str(e), 'url': url}
 
 # Use in async workflow
-async_workflow = Workflow("example", name="Example")
-workflow.async_workflow.add_node("fetcher", AsyncAPINode())
+async_workflow = WorkflowBuilder()
+workflow.async_workflow.add_node("AsyncAPINode", "fetcher", {}))
 
 # Execute with async runtime
 from kailash.runtime.async_local import AsyncLocalRuntime
@@ -613,7 +614,7 @@ class ResilientNode(Node):
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -623,57 +624,58 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Good: Clear, self-documenting workflow structure
-workflow = Workflow("customer_analytics", "Customer Analytics Pipeline")
+workflow = WorkflowBuilder()
 
 # Data ingestion phase
-csv_reader = CSVReaderNode()
+csv_reader = "CSVReaderNode"
 data_validator = DataValidatorNode()
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("read_customers", csv_reader, file_path="customers.csv")
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("validate_data", data_validator, schema="customer_schema.json")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("read_customers", "validate_data")
+workflow = WorkflowBuilder()
+workflow.add_node("read_customers", csv_reader, file_path="customers.csv")
+workflow = WorkflowBuilder()
+workflow.add_node("validate_data", data_validator, schema="customer_schema.json")
+workflow = WorkflowBuilder()
+workflow.add_connection("read_customers", "result", "validate_data", "input")
 
 # Data enrichment phase
 geocoder = GeocoderNode()
 scorer = CustomerScorerNode()
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("add_location", geocoder, api_key=os.getenv("GEOCODING_API_KEY"))
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("calculate_scores", scorer, scoring_model="rfm")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("validate_data", "add_location")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("add_location", "calculate_scores")
+workflow = WorkflowBuilder()
+workflow.add_node("add_location", geocoder, api_key=os.getenv("GEOCODING_API_KEY"))
+workflow = WorkflowBuilder()
+workflow.add_node("calculate_scores", scorer, scoring_model="rfm")
+workflow = WorkflowBuilder()
+workflow.add_connection("validate_data", "result", "add_location", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("add_location", "result", "calculate_scores", "input")
 
 # Analytics phase
 segmenter = CustomerSegmenterNode()
 reporter = ReportGeneratorNode()
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("segment_customers", segmenter, method="kmeans", n_clusters=5)
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("generate_report", reporter, template="analytics_template.html")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("calculate_scores", "segment_customers")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("segment_customers", "generate_report")
+workflow = WorkflowBuilder()
+workflow.add_node("segment_customers", segmenter, method="kmeans", n_clusters=5)
+workflow = WorkflowBuilder()
+workflow.add_node("generate_report", reporter, template="analytics_template.html")
+workflow = WorkflowBuilder()
+workflow.add_connection("calculate_scores", "result", "segment_customers", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("segment_customers", "result", "generate_report", "input")
 
 # Output phase
 email_sender = EmailNotifierNode()
 dashboard_updater = DashboardUpdaterNode()
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("send_report", email_sender, recipients=["analytics@company.com"])
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("update_dashboard", dashboard_updater, dashboard_id="customer_insights")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("generate_report", "send_report")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("generate_report", "update_dashboard")
+workflow = WorkflowBuilder()
+workflow.add_node("send_report", email_sender, recipients=["analytics@company.com"])
+workflow = WorkflowBuilder()
+workflow.add_node("update_dashboard", dashboard_updater, dashboard_id="customer_insights")
+workflow = WorkflowBuilder()
+workflow.add_connection("generate_report", "result", "send_report", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("generate_report", "result", "update_dashboard", "input")
 
 ```
 
@@ -682,7 +684,7 @@ workflow.workflow.connect("generate_report", "update_dashboard")
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -692,8 +694,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # config/workflow_config.yaml
 """

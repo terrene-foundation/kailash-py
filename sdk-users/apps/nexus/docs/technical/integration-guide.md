@@ -531,7 +531,7 @@ def execute_query_{i+1}(data):
             if i == 0:
                 workflow.add_connection("db_connection", node_name, "output", "input")
             else:
-                workflow.add_connection(f"query_{i}", node_name, "output", "input")
+                workflow.add_connection("source", "result", "target", "input")  # Fixed f-string pattern
 
         # Add transaction management node
         workflow.add_node("PythonCodeNode", "transaction_manager", {

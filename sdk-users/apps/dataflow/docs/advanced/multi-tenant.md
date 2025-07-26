@@ -11,6 +11,8 @@ DataFlow provides first-class support for multi-tenant architectures, enabling y
 ### 1. Database Per Tenant
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash_dataflow import DataFlow, TenantManager
 
 # Configure tenant manager

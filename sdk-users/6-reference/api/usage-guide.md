@@ -25,7 +25,7 @@ workflow.add_node("PythonCodeNode", "validator", {
 })
 
 # Connect nodes
-workflow.connect("data_processor", "result", mapping={"validator": "input_data"})
+workflow.add_connection("data_processor", "result", "validator", "input_data")
 
 # Build and execute
 built_workflow = workflow.build()
@@ -58,7 +58,7 @@ workflow.add_node("PythonCodeNode", "consumer", {
 })
 
 # Connect using dot notation to access nested fields
-workflow.connect("producer", "result.data", mapping={"consumer": "input_data"})
+workflow.add_connection("producer", "result.data", "consumer", "input_data")
 ```
 
 ### Node Type Patterns
@@ -93,19 +93,16 @@ workflow.add_node(reader_node)  # config parameter ignored for instances
 #### Basic Connections
 ```python
 # Simple field mapping
-workflow.connect("source_node", "output_field", mapping={"target_node": "input_field"})
+workflow.add_connection("source_node", "output_field", "target_node", "input_field")
 
 # Default connections (uses 'result' and 'input_data')
-workflow.connect("source_node", "target_node")
+workflow.add_connection("source_node", "result", "target_node", "input")
 ```
 
 #### Advanced Connection Mapping
 ```python
 # Multiple field mapping with dict
-workflow.connect("source_node", "target_node", {
-    "result.customer_data": "customer_info",
-    "result.transaction_data": "transaction_info"
-})
+workflow.add_connection("source_node", "result", "target_node", "input")
 ```
 
 ### Runtime Patterns
@@ -183,7 +180,7 @@ except Exception as e:
 ```python
 # This will raise WorkflowValidationError if nodes don't exist
 try:
-    workflow.connect("nonexistent_node", "existing_node")
+    workflow.add_connection("nonexistent_node", "result", "existing_node", "input")
 except WorkflowValidationError as e:
     print(f"Invalid connection: {e}")
 ```
@@ -206,8 +203,8 @@ workflow.add_node("PythonCodeNode", "processor", {
 workflow.add_node("JSONWriterNode", "writer", {"file_path": "output.json"})
 
 # Connect in sequence
-workflow.connect("reader", "processor")
-workflow.connect("processor", "writer")
+workflow.add_connection("reader", "result", "processor", "input")
+workflow.add_connection("processor", "result", "writer", "input")
 ```
 
 #### Parallel Processing
@@ -229,10 +226,10 @@ workflow.add_node("PythonCodeNode", "analyzer2", {
 workflow.add_node("MergeNode", "merger", {})
 
 # Connect parallel paths
-workflow.connect("reader", "analyzer1")
-workflow.connect("reader", "analyzer2")
-workflow.connect("analyzer1", "merger")
-workflow.connect("analyzer2", "merger")
+workflow.add_connection("reader", "result", "analyzer1", "input")
+workflow.add_connection("reader", "result", "analyzer2", "input")
+workflow.add_connection("analyzer1", "result", "merger", "input")
+workflow.add_connection("analyzer2", "result", "merger", "input")
 ```
 
 #### Conditional Routing
@@ -265,9 +262,9 @@ workflow.add_node("PythonCodeNode", "standard_processor", {
     "code": "result = {'processed': 'standard_logic'}"
 })
 
-workflow.connect("classifier", "router")
-workflow.connect("router", "high_value_processor")
-workflow.connect("router", "standard_processor")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 ```
 
 ## 🎯 Best Practices

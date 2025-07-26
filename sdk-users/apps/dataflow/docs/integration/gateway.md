@@ -17,6 +17,7 @@ The DataFlow + Gateway integration provides:
 ### Basic Gateway Setup
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from dataflow import DataFlow
 from kailash.servers.gateway import create_gateway
 

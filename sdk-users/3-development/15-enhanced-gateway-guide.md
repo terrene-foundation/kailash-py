@@ -209,11 +209,11 @@ gateway.register_workflow(
 Execute workflows with resource specifications:
 
 ```python
-from kailash.gateway import WorkflowRequest
+from kailash.api.gateway import WorkflowRequest
 
 # Create request with resources
 request = WorkflowRequest(
-    inputs={"limit": 100},
+    parameters={"limit": 100},
     resources={
         "source_db": ResourceReference(
             type="database",
@@ -393,7 +393,7 @@ async with KailashClient("http://gateway.example.com") as client:
     # Execute workflow with resources
     result = await client.execute_workflow(
         "data_pipeline",
-        inputs={"process_date": "2024-01-15"},
+        parameters={"process_date": "2024-01-15"},
         resources={
             "source_db": db_resource,
             "result_cache": cache_resource,

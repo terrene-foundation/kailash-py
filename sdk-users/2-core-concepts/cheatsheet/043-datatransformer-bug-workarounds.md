@@ -21,16 +21,7 @@ The bug has been **completely fixed** as of Session 070:
 
 ### What Was Fixed
 - **LocalRuntime** `_prepare_node_inputs()` method now handles nested path navigation
-- Supports dot notation for mapping nested fields: `mapping={"result.files": "files"}`
-- Maintains backwards compatibility with direct key mapping
-
-## 🔧 Workaround Patterns
-
-### Pattern 1: Type Detection with Fallback
-```python
-transformation = """
-# WORKAROUND: Handle DataTransformer dict output bug
-print(f"INPUT DEBUG - Type: {type(data)}, Content: {data}")
+- Supports dot notation for mapping nested fields: `# mapping removed)}, Content: {data}")
 
 if isinstance(data, list):
     print("WORKAROUND: DataTransformer bug detected - got list of keys")
@@ -160,7 +151,7 @@ if bug_detected:
 ### Direct Variable Mapping
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -170,23 +161,24 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ Avoid complex dict through 'data'
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # ✅ Use specific variable mapping
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
 ### Simplify Transformations
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -196,8 +188,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ Break complex transformations into simple steps
 file_extractor = DataTransformer(transformations=["""
@@ -211,8 +204,8 @@ result = {"processed_files": processed}
 """])
 
 # Chain them instead of one complex transformation
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("extractor", "processor")
+workflow = WorkflowBuilder()
+workflow.add_connection("extractor", "result", "processor", "input")
 
 ```
 
@@ -244,7 +237,7 @@ except Exception as e:
 ### Testing for Bug Presence
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -254,16 +247,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Test workflow to detect if bug is present in your environment
-test_workflow = Workflow("bug_test", "DataTransformer Bug Test")
+test_workflow = WorkflowBuilder()
 
 # Create test data
 test_data = DirectoryReaderNode(directory_path="./test_data")
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("data_source", test_data)
+workflow = WorkflowBuilder()
+workflow.add_node("data_source", test_data)
 
 # Test transformer
 bug_tester = DataTransformer(transformations=["""
@@ -271,10 +265,10 @@ bug_detected = isinstance(data, list) and "files_by_type" in data
 result = {"bug_present": bug_detected, "data_type": type(data).__name__}
 """])
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("bug_tester", bug_tester)
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+workflow.add_node("bug_tester", bug_tester)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 

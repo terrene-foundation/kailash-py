@@ -162,7 +162,7 @@ node = AsyncSQLDatabaseNode(
 )
 
 # Execute in workflow
-workflow = Workflow()
+workflow = WorkflowBuilder()
 workflow.add_node("users", node)
 results = await runtime.execute_workflow(workflow)
 
@@ -172,7 +172,7 @@ results = await runtime.execute_workflow(workflow)
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -182,8 +182,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Using connection string
 node = AsyncSQLDatabaseNode(
@@ -200,7 +201,7 @@ node = AsyncSQLDatabaseNode(
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -210,8 +211,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Fetch single row
 single_node = AsyncSQLDatabaseNode(
@@ -666,15 +668,10 @@ async def secure_data_pipeline():
     ))
 
     # Create workflow
-    workflow = Workflow(name="secure_finance_pipeline")
+    workflow = WorkflowBuilder()
 
     # Add async database query
-    workflow.add_node("financial_query", AsyncSQLDatabaseNode(
-        connection_string="postgresql://localhost/financedb",
-        query="""
-            SELECT
-                department,
-                SUM(amount) as total_expenses,
+    workflow.add_node("AsyncSQLDatabaseNode", "financial_query", {}) as total_expenses,
                 AVG(amount) as avg_expense,
                 COUNT(*) as transaction_count
             FROM expenses
@@ -686,15 +683,7 @@ async def secure_data_pipeline():
     ))
 
     # Add vector search for similar transactions
-    workflow.add_node("similar_transactions", AsyncPostgreSQLVectorNode(
-        connection_string="postgresql://localhost/vectordb",
-        table_name="transaction_embeddings",
-        operation="search",
-        vector=[0.1] * 768,  # Example embedding
-        distance_metric="cosine",
-        limit=10,
-        metadata_filter="metadata->>'department' = 'finance'"
-    ))
+    workflow.add_node("AsyncPostgreSQLVectorNode", "similar_transactions", {}))
 
     # Create user
     user = UserContext(

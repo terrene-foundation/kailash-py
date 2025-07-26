@@ -1,3 +1,4 @@
+from kailash.workflow.builder import WorkflowBuilder
 # Kubernetes Deployment Workflows
 
 Deploy Kailash SDK workflows on Kubernetes for production-grade scalability and reliability.
@@ -11,20 +12,10 @@ from kailash.nodes.api import HTTPEndpointNode
 from kailash.runtime.kubernetes import KubernetesRuntime
 
 # Create API workflow
-workflow = Workflow("api-service", "API Service Workflow")
+workflow = WorkflowBuilder()
 
 # Add HTTP endpoint
-workflow.add_node("endpoint", HTTPEndpointNode(
-    path="/process",
-    method="POST",
-    response_schema={
-        "type": "object",
-        "properties": {
-            "status": {"type": "string"},
-            "result": {"type": "object"}
-        }
-    }
-))
+workflow.add_node("HTTPEndpointNode", "endpoint", {}))
 
 # Kubernetes Deployment manifest
 k8s_deployment = """
@@ -101,14 +92,10 @@ from kailash.workflow import Workflow
 from kailash.nodes.data import BatchProcessorNode
 from kailash.runtime.kubernetes import KubernetesRuntime
 
-workflow = Workflow("batch-job", "Batch Processing Job")
+workflow = WorkflowBuilder()
 
 # Add batch processor
-workflow.add_node("processor", BatchProcessorNode(
-    input_path="/data/input",
-    output_path="/data/output",
-    batch_size=1000
-))
+workflow.add_node("BatchProcessorNode", "processor", {}))
 
 # Kubernetes Job with CronJob
 k8s_cronjob = """
@@ -215,7 +202,7 @@ spec:
 from kailash.workflow import Workflow
 from kailash.tracking import MetricsCollector
 
-workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
 workflow.metrics = MetricsCollector()
 
 # Add metrics endpoint for HPA
@@ -366,8 +353,8 @@ spec:
 from kailash.workflow import Workflow
 from kailash.observability import TracingMiddleware
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_middleware(TracingMiddleware(
+workflow = WorkflowBuilder()
+workflow.add_middleware(TracingMiddleware(
     service_name="workflow-api",
     jaeger_endpoint="http://jaeger-collector:14268/api/traces"
 ))

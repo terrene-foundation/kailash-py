@@ -332,7 +332,7 @@ from kailash.nodes.code import PythonCodeNode
 
 def create_enterprise_onboarding_workflow():
     """Complete user onboarding with security checks and compliance."""
-    workflow = Workflow(name="enterprise_user_onboarding")
+    workflow = WorkflowBuilder()
 
     # 1. Validate user data and enrich with defaults
     validate = PythonCodeNode.from_function(
@@ -363,8 +363,7 @@ def create_enterprise_onboarding_workflow():
     assign_role = RoleManagementNode(
         name="assign_role",
         operation="assign_role_conditional",
-        role_mapping={
-            "finance.analyst": "financial_analyst",
+        role_# mapping removed,
             "finance.senior": "senior_financial_analyst",
             "engineering.developer": "software_engineer",
             "engineering.lead": "tech_lead"
@@ -403,29 +402,11 @@ def create_enterprise_onboarding_workflow():
     workflow.add_nodes([validate, create_user, assign_role,
                        configure_permissions, security_check, audit])
 
-    workflow.connect("validate_user", "create_user",
-                    mapping={"result.user_data": "user_data"})
-    workflow.connect("create_user", "assign_role",
-                    mapping={
-                        "result.user.user_id": "user_id",
-                        "result.user.attributes.department": "department",
-                        "result.user.attributes.level": "level"
-                    })
-    workflow.connect("assign_role", "configure_permissions",
-                    mapping={
-                        "result.assigned_roles": "roles",
-                        "result.user_id": "user_id"
-                    })
-    workflow.connect("configure_permissions", "security_check",
-                    mapping={
-                        "result.user_context": "user_context",
-                        "result.permissions_applied": "permissions"
-                    })
-    workflow.connect("security_check", "audit_onboarding",
-                    mapping={
-                        "result": "event_metadata",
-                        "result.verification_status": "security_status"
-                    })
+    workflow.add_connection("validate_user", "create_user", "result.user_data", "user_data")
+    workflow.add_connection("create_user", "result", "assign_role", "input")
+    workflow.add_connection("assign_role", "result", "configure_permissions", "input")
+    workflow.add_connection("configure_permissions", "result", "security_check", "input")
+    workflow.add_connection("security_check", "result", "audit_onboarding", "input")
 
     return workflow
 
@@ -452,7 +433,7 @@ result = await workflow.run({
 ```python
 def create_incident_response_workflow():
     """Automated security incident response with escalation."""
-    workflow = Workflow(name="security_incident_response")
+    workflow = WorkflowBuilder()
 
     # 1. Detect security event
     detect = SecurityEventNode(
@@ -525,7 +506,7 @@ def create_incident_response_workflow():
 ```python
 def create_compliance_audit_workflow():
     """Automated compliance reporting for GDPR, SOC2, HIPAA."""
-    workflow = Workflow(name="compliance_audit")
+    workflow = WorkflowBuilder()
 
     # 1. Gather user activity logs
     gather_logs = AuditLogNode(
@@ -735,6 +716,7 @@ access_manager.add_policy({
 Here's how to deploy a production-ready admin system:
 
 ```python
+# Code example goes here
 ```python
 from kailash.workflow import Workflow
 from kailash.nodes.admin import *
@@ -747,7 +729,7 @@ access_manager = EnhancedAccessControlManager()
 access_manager.load_policies("config/enterprise_admin_policies.json")
 
 # 2. Create comprehensive admin workflow
-admin_workflow = Workflow(name="enterprise_admin_system")
+admin_workflow = WorkflowBuilder()
 
 # 3. Configure admin nodes with enterprise settings
 user_mgmt = UserManagementNode(
@@ -921,7 +903,7 @@ user_data = {
 ### Step 2: Permission Migration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -931,8 +913,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Django
 user.groups.add(finance_group)
@@ -950,7 +933,7 @@ await RoleManagementNode(
 ### Step 3: Admin Action Migration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -960,8 +943,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Django
 @admin.action(description='Bulk approve')
@@ -969,8 +953,8 @@ def bulk_approve(modeladmin, request, queryset):
     queryset.update(status='approved')
 
 # Kailash
-workflow = Workflow("example", name="Example")
-workflow.workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
+workflow.workflow = WorkflowBuilder()
   # Method signature,
     AuditLogNode(
         operation="log_event",

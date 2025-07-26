@@ -9,14 +9,14 @@
 from kailash.nodes.api import HTTPRequestNode, RESTClientNode
 
 # Simple HTTP Request
-workflow.add_node("api_call", HTTPRequestNode(),
+workflow.add_node("HTTPRequestNode", "api_call", {}),
     url="https://api.example.com/data",
     method="GET",
     headers={"Authorization": "Bearer YOUR_TOKEN"}
 )
 
 # REST Client with Auth
-workflow.add_node("rest_client", RESTClientNode(),
+workflow.add_node("RESTClientNode", "rest_client", {}),
     base_url="https://api.example.com",
     auth_type="bearer",
     auth_config={"token": "YOUR_TOKEN"}
@@ -36,7 +36,7 @@ runtime.execute(workflow, parameters={
 ```python
 from kailash.nodes.api import GraphQLClientNode
 
-workflow.add_node("graphql", GraphQLClientNode(),
+workflow.add_node("GraphQLClientNode", "graphql", {}),
     endpoint="https://api.github.com/graphql",
     headers={"Authorization": "Bearer github_token"}
 )
@@ -73,9 +73,7 @@ workflow.add_node("oauth", OAuth2Node(),
 )
 
 # Use OAuth token in subsequent calls
-workflow.connect("oauth", "api_call", mapping={
-    "access_token": "auth_token"
-})
+workflow.add_connection("oauth", "api_call", "access_token", "auth_token")
 
 ```
 
@@ -86,14 +84,14 @@ workflow.connect("oauth", "api_call", mapping={
 from kailash.nodes.data import SQLDatabaseNode, AsyncSQLDatabaseNode
 
 # Synchronous database operations
-workflow.add_node("db_query", SQLDatabaseNode(),
+workflow.add_node("SQLDatabaseNode", "db_query", {}),
     connection_string="postgresql://user:pass@localhost/db",
     query="SELECT * FROM customers WHERE status = :status",
     parameters={"status": "active"}
 )
 
 # Asynchronous for better performance
-workflow.add_node("async_db", AsyncSQLDatabaseNode(),
+workflow.add_node("AsyncSQLDatabaseNode", "async_db", {}),
     connection_string="postgresql://user:pass@localhost/db",
     pool_size=10,
     max_overflow=20
@@ -114,7 +112,7 @@ runtime.execute(workflow, parameters={
 ### Database Transactions
 ```python
 # Multi-operation transaction
-workflow.add_node("transaction", AsyncSQLDatabaseNode(),
+workflow.add_node("AsyncSQLDatabaseNode", "transaction", {}),
     connection_string="postgresql://user:pass@localhost/db",
     transaction_mode=True
 )
@@ -143,7 +141,7 @@ runtime.execute(workflow, parameters={
 from kailash.nodes.data import DirectoryReaderNode, CSVReaderNode, JSONReaderNode
 
 # Directory scanning with filtering
-workflow.add_node("scanner", DirectoryReaderNode(),
+workflow.add_node("DirectoryReaderNode", "scanner", {}),
     directory_path="/data/inputs",
     file_pattern="*.csv",
     recursive=True,
@@ -161,16 +159,14 @@ batch_processor = PythonCodeNode.from_function(
     }
 )
 
-workflow.connect("scanner", "batch_processor", mapping={
-    "file_paths": "file_list"
-})
+workflow.add_connection("scanner", "batch_processor", "file_paths", "file_list")
 
 ```
 
 ### Cloud Storage Integration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -180,8 +176,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # S3/Cloud storage pattern
 s3_reader = PythonCodeNode.from_function(
@@ -212,7 +209,7 @@ def read_s3_object(bucket_name, object_key, access_key, secret_key):
 ```python
 from kailash.nodes.security import JWTAuthNode
 
-workflow.add_node("jwt_auth", JWTAuthNode(),
+workflow.add_node("JWTAuthNode", "jwt_auth", {}),
     secret_key="your-secret-key",
     algorithm="HS256",
     expire_minutes=60
@@ -243,7 +240,7 @@ runtime.execute(workflow, parameters={
 ### LDAP/Active Directory Integration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -253,8 +250,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 ldap_auth = PythonCodeNode.from_function(
     name="ldap_auth",
@@ -304,7 +302,7 @@ def authenticate_ldap(username, password, ldap_server, domain, search_base):
 ### Email Integration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -314,8 +312,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 email_sender = PythonCodeNode.from_function(
     name="email_sender",
@@ -355,7 +354,7 @@ def send_email(sender_email, recipient_email, subject, body, smtp_config):
 ### Slack Integration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -365,8 +364,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 slack_notify = PythonCodeNode.from_function(
     name="slack_notify",
@@ -399,7 +399,7 @@ def send_slack_message(webhook_url, channel, message, bot_name):
 ### Service Discovery Pattern
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -409,12 +409,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Service registry lookup
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("service_discovery", HTTPRequestNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("HTTPRequestNode", "service_discovery", {}),
     url="http://consul:8500/v1/health/service/user-service",
     method="GET"
 )
@@ -445,15 +446,15 @@ def call_healthy_service(services, params):
     except Exception as e:
         return {"error": str(e), "success": False}
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
 ### Event Streaming Integration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -463,8 +464,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Kafka integration
 kafka_producer = PythonCodeNode.from_function(
@@ -504,7 +506,7 @@ def send_kafka_message(bootstrap_servers, topic, message):
 ### Webhook Integration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -514,8 +516,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Webhook receiver workflow
 webhook_processor = PythonCodeNode.from_function(
@@ -553,7 +556,7 @@ def process_webhook(payload, signature, webhook_secret, headers):
 ### WebSocket Integration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -563,8 +566,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # WebSocket client
 websocket_client = PythonCodeNode.from_function(
@@ -605,7 +609,7 @@ def connect_websocket(websocket_url, message):
 ### Retry with Exponential Backoff
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -615,8 +619,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 resilient_api = PythonCodeNode.from_function(
     name="resilient_api",
@@ -663,7 +668,7 @@ def call_with_retry(api_url, headers, params, max_retries):
 ### Circuit Breaker Pattern
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -673,8 +678,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 circuit_breaker = PythonCodeNode.from_function(
     name="circuit_breaker",

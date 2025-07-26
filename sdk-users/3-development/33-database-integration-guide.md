@@ -19,6 +19,7 @@ The Kailash SDK provides robust database integration capabilities supporting SQL
 Production-ready SQL database integration with connection pooling.
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.data.sql import SQLDatabaseNode
 from kailash.nodes.data.async_connection import AsyncConnectionManager
 
@@ -1011,12 +1012,12 @@ async def production_database_workflow():
     })
 
     # Connect workflow
-    workflow.connect("data_ingester", "data_processor", mapping={"result": "raw_data_result"})
-    workflow.connect("data_processor", "embedding_generator", mapping={"result.processed_records": "data"})
-    workflow.connect("data_processor", "analytics_updater", mapping={"result": "processed_data"})
+    workflow.add_connection("data_ingester", "data_processor", "result", "raw_data_result")
+    workflow.add_connection("data_processor", "embedding_generator", "result.processed_records", "data")
+    workflow.add_connection("data_processor", "analytics_updater", "result", "processed_data")
 
     # Execute workflow
-    workflow_result = await workflow.execute({
+    workflow_result = await runtime.execute(workflow.build(), {
         "data_ingester": {
             "source": "api_endpoint",
             "data": json.dumps({"user_actions": ["login", "view_page", "logout"]})

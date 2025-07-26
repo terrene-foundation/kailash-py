@@ -21,11 +21,7 @@ request_counter = Counter(
 request_counter.labels(method="GET", endpoint="/api/users", status="200").inc()
 
 # In workflow
-workflow.add_node("counter_node", PythonCodeNode(
-    name="counter_node",
-    code='''
-# Count processed items
-items_processed = Counter("items_processed_total")
+workflow.add_node("PythonCodeNode", "counter_node", {})
 errors_encountered = Counter("errors_total", labels=["error_type"])
 
 for item in data:
@@ -64,11 +60,7 @@ queue_depth = Gauge(
 )
 
 # In workflow
-workflow.add_node("gauge_monitor", PythonCodeNode(
-    name="gauge_monitor",
-    code='''
-# Monitor resource usage
-memory_usage = Gauge("memory_usage_bytes")
+workflow.add_node("PythonCodeNode", "gauge_monitor", {})
 cpu_usage = Gauge("cpu_usage_percent")
 active_workers = Gauge("active_workers")
 
@@ -109,17 +101,7 @@ response_time = Histogram(
 )
 
 # In workflow
-workflow.add_node("histogram_timer", PythonCodeNode(
-    name="histogram_timer",
-    code='''
-import time
-from kailash.monitoring import Histogram
-
-# Processing time histogram
-processing_time = Histogram(
-    "processing_duration_seconds",
-    buckets=[0.01, 0.05, 0.1, 0.5, 1.0, 5.0]
-)
+workflow.add_node("PythonCodeNode", "histogram_timer", {})
 
 # Record size histogram
 item_size = Histogram(
@@ -201,12 +183,12 @@ class DataProcessor:
 
 ### Workflow Instrumentation
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.monitoring import WorkflowMetrics
 
 # Automatic workflow metrics
-workflow = Workflow("instrumented_workflow")
+workflow = WorkflowBuilder()
 runtime = LocalRuntime(enable_monitoring=True)
 
 workflow.enable_metrics(
@@ -226,13 +208,7 @@ workflow.add_metric(
 )
 
 # Node-level metrics
-workflow.add_node("instrumented_processor", PythonCodeNode(
-    name="instrumented_processor",
-    code='''
-from kailash.monitoring import Counter, Histogram, Gauge
-
-# Node-specific metrics
-processing_counter = Counter("items_processed_total", labels=["node_id"])
+workflow.add_node("PythonCodeNode", "instrumented_processor", {})
 processing_time = Histogram("node_processing_seconds", buckets=[0.1, 0.5, 1.0, 5.0])
 active_tasks = Gauge("active_tasks_current")
 
@@ -262,31 +238,12 @@ result = {"processed": len(data), "duration": duration}
 ```python
 from kailash.nodes.database import InstrumentedDatabaseNode
 
-workflow = Workflow("database_monitoring")
+workflow = WorkflowBuilder()
 
-workflow.add_node("instrumented_db", InstrumentedDatabaseNode(
-    connection_string="${DATABASE_URL}",
-    metrics=[
-        "query_duration",
-        "rows_returned",
-        "connection_pool_size",
-        "active_connections",
-        "slow_queries"
-    ],
-    slow_query_threshold=1.0,  # 1 second
-    enable_query_analysis=True,
-    track_connection_lifecycle=True
-))
+workflow.add_node("InstrumentedDatabaseNode", "instrumented_db", {}))
 
 # Custom database metrics
-workflow.add_node("db_metrics_collector", PythonCodeNode(
-    name="db_metrics_collector",
-    code='''
-from kailash.monitoring import Counter, Histogram, Gauge
-import psycopg2.pool
-
-# Database connection metrics
-db_connections_active = Gauge("db_connections_active")
+workflow.add_node("PythonCodeNode", "db_metrics_collector", {})
 db_connections_total = Counter("db_connections_total")
 query_duration = Histogram(
     "db_query_duration_seconds",
@@ -336,17 +293,7 @@ result = {"query_results": results, "pool_stats": pool_stats}
 
 ### Business Metrics
 ```python
-workflow.add_node("business_metrics", PythonCodeNode(
-    name="business_metrics",
-    code='''
-from kailash.monitoring import Counter, Gauge, Histogram
-
-# Business metrics
-revenue_counter = Counter(
-    "revenue_total_cents",
-    description="Total revenue in cents",
-    labels=["product", "region"]
-)
+workflow.add_node("PythonCodeNode", "business_metrics", {})
 
 conversion_rate = Gauge(
     "conversion_rate",
@@ -432,18 +379,9 @@ slo_manager = SLOManager(
     }
 )
 
-workflow = Workflow("slo_monitoring")
+workflow = WorkflowBuilder()
 
-workflow.add_node("slo_calculator", PythonCodeNode(
-    name="slo_calculator",
-    code='''
-from datetime import datetime, timedelta
-
-# Calculate SLI values
-current_slis = {}
-for sli_config in sli_configs:
-    if sli_config["type"] == "ratio":
-        good_events = sum(metrics["good_events"])
+workflow.add_node("PythonCodeNode", "slo_calculator", {})
         total_events = sum(metrics["total_events"])
         current_slis[sli_config["name"]] = good_events / total_events if total_events > 0 else 1.0
 
@@ -491,7 +429,7 @@ result = {"slo_status": slo_status}
 ```python
 from kailash.monitoring import MetricsPushGateway, MetricsEndpointNode
 
-workflow = Workflow("distributed_metrics")
+workflow = WorkflowBuilder()
 
 # Push-based metrics aggregation
 workflow.add_node("metrics_pusher", MetricsPushGateway(
@@ -506,44 +444,10 @@ workflow.add_node("metrics_pusher", MetricsPushGateway(
 ))
 
 # Or use pull-based aggregation
-workflow.add_node("metrics_endpoint", MetricsEndpointNode(
-    port=8000,
-    path="/metrics",
-    format="prometheus",
-    include_process_metrics=True,
-    include_runtime_metrics=True,
-    custom_labels={
-        "service": "kailash_workflow",
-        "version": "${APP_VERSION}"
-    }
-))
+workflow.add_node("MetricsEndpointNode", "metrics_endpoint", {}))
 
 # Cross-service metrics correlation
-workflow.add_node("service_metrics_aggregator", PythonCodeNode(
-    name="service_metrics_aggregator",
-    code='''
-import requests
-from datetime import datetime, timedelta
-
-# Collect metrics from multiple services
-service_endpoints = [
-    "http://service-a:8080/metrics",
-    "http://service-b:8080/metrics",
-    "http://service-c:8080/metrics"
-]
-
-aggregated_metrics = {
-    "total_requests": 0,
-    "total_errors": 0,
-    "avg_response_time": 0,
-    "service_health": {},
-    "cross_service_latency": {}
-}
-
-service_metrics = []
-for endpoint in service_endpoints:
-    try:
-        response = requests.get(endpoint, timeout=5)
+workflow.add_node("PythonCodeNode", "service_metrics_aggregator", {})
         response.raise_for_status()
 
         # Parse Prometheus metrics

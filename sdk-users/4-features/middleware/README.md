@@ -33,7 +33,7 @@ The Kailash Middleware layer provides a comprehensive communication framework be
 ### 1. Basic Middleware Setup
 
 ```python
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 
 # Create gateway with all middleware components
 gateway = create_gateway(
@@ -79,7 +79,7 @@ ws.onmessage = (event) => {
 ### 3. Dynamic Workflow Creation
 
 ```python
-from kailash.middleware import AgentUIMiddleware
+from kailash.api.middleware import AgentUIMiddleware
 
 async def create_dynamic_workflow():
     agent_ui = AgentUIMiddleware()
@@ -161,7 +161,7 @@ mcp = MCPServer(name="tools")
 ### New Pattern (Current)
 ```python
 # ✅ NEW - Use this
-from kailash.middleware import create_gateway, MiddlewareMCPServer
+from kailash.api.middleware import create_gateway, MiddlewareMCPServer
 
 gateway = create_gateway(title="App")
 mcp = MiddlewareMCPServer(name="tools", agent_ui=gateway.agent_ui)
@@ -202,7 +202,7 @@ mcp = MiddlewareMCPServer(name="tools", agent_ui=gateway.agent_ui)
 ### Common Issues
 1. **Connection timeouts** - Check CORS origins and network configuration
 2. **Session not found** - Verify session creation and cleanup timing
-3. **Import errors** - Use `from kailash.middleware import ...` patterns
+3. **Import errors** - Use `from kailash.api.middleware import ...` patterns
 4. **WebSocket disconnections** - Implement reconnection logic
 
 ### Debug Mode

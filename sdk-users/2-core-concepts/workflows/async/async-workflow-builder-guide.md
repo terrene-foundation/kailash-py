@@ -5,6 +5,8 @@
 The AsyncWorkflowBuilder makes it easy to create high-performance async workflows with built-in patterns and resource management.
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash.workflow import AsyncWorkflowBuilder
 from kailash.runtime import AsyncLocalRuntime
 

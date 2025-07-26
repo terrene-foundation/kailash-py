@@ -85,10 +85,14 @@ class SwitchNode(Node):
         ...     operator="==",
         ...     value=True
         ... ))
-        >>> workflow.connect("convergence", "switch")
-        >>> workflow.connect("switch", "processor",
-        ...     condition="false_output", cycle=True)
-        >>> workflow.connect("switch", "output", condition="true_output")
+        >>> workflow.add_connection("convergence", "result", "switch", "input_data")
+        >>> # Use CycleBuilder for cyclic connections
+        >>> cycle = workflow.create_cycle("convergence_loop")
+        >>> cycle.connect("switch", "false_output", "processor", "input")
+        >>> cycle.connect("processor", "result", "convergence", "data")
+        >>> cycle.max_iterations(50).build()
+        >>> # Non-cyclic output connection
+        >>> workflow.add_connection("switch", "true_output", "output", "data")
     """
 
     def get_parameters(self) -> dict[str, NodeParameter]:

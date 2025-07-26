@@ -394,9 +394,9 @@ workflow.add_node("UserUpdateNode", "update_related", {
 workflow.add_node("TransactionCommitNode", "commit_transaction", {})
 
 # Connect transaction flow
-workflow.add_connection("start_transaction", "create_user")
+workflow.add_connection("start_transaction", "result", "create_user", "input")
 workflow.add_connection("create_user", "update_related", "id", "new_user_id")
-workflow.add_connection("update_related", "commit_transaction")
+workflow.add_connection("update_related", "result", "commit_transaction", "input")
 ```
 
 ## Error Handling

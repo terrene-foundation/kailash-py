@@ -14,8 +14,7 @@ Real-world patterns for implementing cyclic workflows that solve common business
    - Use a `converged` field in the output
    - Set convergence_check="converged == True"
 4. **Field-Specific Mapping**: Map each field explicitly in cycle connections
-   - NEVER use generic mapping={"output": "output"}
-   - Always map individual fields: mapping={"field1": "field1", "field2": "field2"}
+   - NEVER use generic # mapping removed, "field2": "field2"}
 
 ## Common Scenario Patterns
 
@@ -23,7 +22,7 @@ Real-world patterns for implementing cyclic workflows that solve common business
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -33,8 +32,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class ETLRetryNode(CycleAwareNode):
     """ETL processor with retry logic."""
@@ -68,10 +68,10 @@ class ETLRetryNode(CycleAwareNode):
         }
 
 # Usage
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("etl", ETLRetryNode())
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+workflow.add_node("ETLRetryNode", "etl", {}))
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -79,7 +79,7 @@ workflow.  # Method signature
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -89,8 +89,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class APIPollerNode(CycleAwareNode):
     """Poll API until ready."""
@@ -124,7 +125,7 @@ class APIPollerNode(CycleAwareNode):
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -134,8 +135,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class DataQualityNode(CycleAwareNode):
     """Iteratively improve data quality."""
@@ -169,7 +171,7 @@ class DataQualityNode(CycleAwareNode):
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -179,8 +181,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class BatchProcessorNode(CycleAwareNode):
     """Process large datasets in batches."""
@@ -219,8 +222,8 @@ class BatchProcessorNode(CycleAwareNode):
         }
 
 # Important: Map processed_count to preserve progress
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -228,7 +231,7 @@ workflow.  # Method signature
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -238,8 +241,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class ResourceOptimizerNode(CycleAwareNode):
     """Optimize resource allocation iteratively."""
@@ -272,8 +276,7 @@ class ResourceOptimizerNode(CycleAwareNode):
 ### 1. State Preservation
 Always map state variables explicitly:
 ```python
-mapping={
-    "counter": "counter",
+# mapping removed,
     "state_var": "state_var",
     "config": "config"
 }
@@ -304,7 +307,7 @@ convergence_patterns = {
 For parameters that must persist across iterations:
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -314,8 +317,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def get_parameters(self):
     return {

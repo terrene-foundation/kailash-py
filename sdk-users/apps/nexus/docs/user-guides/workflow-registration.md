@@ -140,10 +140,7 @@ def register_from_config(config_file="workflows.yaml"):
 
         # Add connections
         for conn in workflow_config.get('connections', []):
-            workflow.add_connection(
-                conn['from_node'],
-                conn['to_node'],
-                conn.get('from_port', 'output'),
+            workflow.add_connection(conn['from_node'], "result", conn['to_node'], "input"),
                 conn.get('to_port', 'input')
             )
 

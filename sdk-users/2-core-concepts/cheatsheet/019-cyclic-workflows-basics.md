@@ -3,35 +3,35 @@
 ## Quick Setup
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.code import PythonCodeNode
 
 # Create cycle with PythonCodeNode
-workflow = Workflow("cycle-001", name="basic_cycle")
+workflow = WorkflowBuilder()
 
-workflow.add_node("counter", PythonCodeNode(), code='''
-try:
-    current_count = count  # From previous iteration
-except:
-    current_count = 0      # First iteration default
+workflow.add_node("PythonCodeNode", "counter", {
+    "code": """
+# First iteration starts with default values
+current_count = count if 'count' in locals() else 0
 
 current_count += 1
 result = {
     "count": current_count,
     "done": current_count >= 5
 }
-''')
+"""
+})
 
-# ONLY mark closing edge as cycle=True
-workflow.connect("counter", "counter",
-    mapping={"result.count": "count"},  # Nested path for PythonCodeNode
-    cycle=True,
-    max_iterations=10,
-    convergence_check="done == True")
+# Create cycle using CycleBuilder API
+cycle_builder = workflow.create_cycle("counter_cycle")
+cycle_builder.connect("counter", "result", "counter", "input_data") \
+             .max_iterations(10) \
+             .converge_when("done == True") \
+             .timeout(300) \
+             .build()
 
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -60,13 +60,14 @@ result = {"value": value + 1, "data": data + [value]}
 ```python
 # Assuming standard imports from earlier examples
 
-# ✅ CORRECT: Nested paths
-workflow.connect("counter", "processor",
-    mapping={"result.count": "count"})  # result.field syntax
+# ✅ CORRECT: 4-parameter connection syntax
+workflow.add_connection("counter", "result", "processor", "count")  # Direct connection
 
-# ❌ WRONG: Flat mapping
-workflow.connect("counter", "processor",
-    mapping={"count": "count"})  # Missing result prefix - THIS IS WRONG!
+# ✅ CORRECT: Nested field access with dot notation
+workflow.add_connection("counter", "result.count", "processor", "count")  # Access nested field
+
+# ❌ WRONG: Old mapping syntax - deprecated
+# workflow.add_connection("counter", "processor", "count", "count")  # THIS IS DEPRECATED!
 
 ```
 
@@ -74,13 +75,17 @@ workflow.connect("counter", "processor",
 ```python
 # Assuming standard imports from earlier examples
 
-# For A → B → C → A cycle
-workflow.connect("A", "B")  # Regular
-workflow.connect("B", "C")  # Regular
-workflow.connect("C", "A",  # ONLY closing edge
-    cycle=True,
-    max_iterations=20,
-    convergence_check="converged == True")
+# For A → B → C → A cycle using CycleBuilder
+workflow.add_connection("A", "result", "B", "input")  # Regular
+workflow.add_connection("B", "result", "C", "input")  # Regular
+
+# Create cycle for closing edge using CycleBuilder API
+cycle_builder = workflow.create_cycle("multi_node_cycle")
+cycle_builder.connect("C", "result", "A", "input") \
+             .max_iterations(20) \
+             .converge_when("converged == True") \
+             .timeout(600) \
+             .build()
 
 ```
 
@@ -88,7 +93,7 @@ workflow.connect("C", "A",  # ONLY closing edge
 
 ### Multi-Node Cycles Need Source
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import CycleAwareNode
@@ -98,11 +103,11 @@ class DataSourceNode(CycleAwareNode):
     def run(self, **kwargs):
         return {"data": kwargs.get("data", [])}
 
-workflow = Workflow("source-cycle")
-workflow.add_node("source", DataSourceNode())
-workflow.add_node("processor", PythonCodeNode())
-workflow.connect("source", "processor")
-workflow.connect("processor", "processor", cycle=True)
+workflow = WorkflowBuilder()
+workflow.add_node("DataSourceNode", "source", {}))
+workflow.add_node("PythonCodeNode", "processor", {}))
+workflow.add_connection("source", "result", "processor", "input")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Execute with node-specific parameters
 runtime = LocalRuntime()
@@ -114,14 +119,14 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ### Self-Loop Direct Parameters
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
 # Single node cycles can use direct parameters
-workflow = Workflow("self-loop")
-workflow.add_node("proc", PythonCodeNode())
-workflow.connect("proc", "proc", cycle=True)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "proc", {}))
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow, parameters={
@@ -136,10 +141,7 @@ results, run_id = runtime.execute(workflow, parameters={
 ```python
 # Assuming standard imports from earlier examples
 
-workflow.connect("node", "node",
-    cycle=True,
-    max_iterations=50,
-    convergence_check="quality >= 0.95 and stable == True")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 ```
 
@@ -153,9 +155,7 @@ def check_convergence(iteration, outputs, context):
         return True, "Error threshold reached"
     return False, f"Error: {error:.4f}"
 
-workflow.connect("processor", "processor",
-    cycle=True,
-    convergence_callback=check_convergence)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 ```
 
@@ -165,16 +165,14 @@ workflow.connect("processor", "processor",
 ```python
 # Assuming standard imports from earlier examples
 
-workflow = Workflow("quality-loop")
+workflow = WorkflowBuilder()
 
 # Process → Validate → Process (if needed)
-workflow.add_node("processor", PythonCodeNode())
-workflow.add_node("validator", PythonCodeNode())
+workflow.add_node("PythonCodeNode", "processor", {}))
+workflow.add_node("PythonCodeNode", "validator", {}))
 
-workflow.connect("processor", "validator")
-workflow.connect("validator", "processor",
-    cycle=True,
-    convergence_check="quality >= 0.95")
+workflow.add_connection("processor", "result", "validator", "input")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 ```
 
@@ -183,10 +181,8 @@ workflow.connect("validator", "processor",
 # Assuming standard imports from earlier examples
 
 # Optimize → Evaluate → Optimize (until converged)
-workflow.connect("optimizer", "evaluator")
-workflow.connect("evaluator", "optimizer",
-    cycle=True,
-    convergence_check="converged == True")
+workflow.add_connection("optimizer", "result", "evaluator", "input")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 ```
 
@@ -195,17 +191,13 @@ workflow.connect("evaluator", "optimizer",
 ```python
 # Assuming standard imports from earlier examples
 
-workflow.connect("processor", "processor",
-    cycle=True,
-    max_iterations=50,      # Prevent infinite loops
-    timeout=300.0,          # 5 minute timeout
-    convergence_check="done == True")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 ```
 
 ## Common Pitfalls
 
-1. **Multiple cycle=True**: Only mark closing edge
+1. **Multiple # Use CycleBuilder API instead**: Only mark closing edge
 2. **Wrong mapping**: Use "result.field" for PythonCodeNode
 3. **No try/except**: Always handle first iteration
 4. **No limits**: Set max_iterations and timeout

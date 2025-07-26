@@ -209,7 +209,7 @@ async def monitor_pool():
 ### 1. Workflow Integration
 
 ```python
-from kailash import Workflow, WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder, WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # Create workflow with connection pool
@@ -228,7 +228,7 @@ workflow.add_node("db_pool", "WorkflowConnectionPool", {
 workflow.add_node("init_pool", "PythonCodeNode", {
     "code": "result = {'operation': 'initialize'}"
 })
-workflow.connect("init_pool", "db_pool", mapping={"result": "inputs"})
+workflow.add_connection("init_pool", "db_pool", "result", "inputs")
 
 # Use pool in processing
 workflow.add_node("process_orders", "PythonCodeNode", {

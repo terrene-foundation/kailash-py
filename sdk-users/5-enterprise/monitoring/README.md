@@ -17,7 +17,7 @@ runtime = LocalRuntime(
 )
 
 # Execute with monitoring
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 # Get execution metrics
 metrics = runtime.get_metrics(run_id)
@@ -51,37 +51,23 @@ print(f"Node metrics: {metrics['node_metrics']}")
 ### Built-in Metrics
 ```python
 # Automatic metrics collection
-workflow.add_node("processor", DataProcessorNode(
-    enable_metrics=True,
-    metrics_tags={"environment": "production", "service": "etl"}
-))
+workflow.add_node("DataProcessorNode", "processor", {}))
 
 # Custom metrics collector
-workflow.add_node("metrics", MetricsCollectorNode(
-    export_to="prometheus://localhost:9090",
-    metrics=[
-        {"name": "items_processed", "type": "counter"},
-        {"name": "processing_time", "type": "histogram"},
-        {"name": "queue_depth", "type": "gauge"}
-    ]
-))
+workflow.add_node("MetricsCollectorNode", "metrics", {}))
 
 ```
 
 ### Custom Metrics
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
-workflow = Workflow("monitoring_example")
+workflow = WorkflowBuilder()
 runtime = LocalRuntime(enable_monitoring=True)
 
-workflow.add_node("custom_metrics", PythonCodeNode(
-    name="custom_metrics",
-    code='''
-import time
-start = time.time()
+workflow.add_node("PythonCodeNode", "custom_metrics", {})
 
 # Process data
 processed = process_items(data)
@@ -122,7 +108,7 @@ with tracing.start_span("workflow_execution") as span:
     span.set_attribute("workflow.id", workflow.id)
     span.set_attribute("workflow.name", workflow.name)
 
-    results, run_id = runtime.execute(workflow)
+    results, run_id = runtime.execute(workflow.build())
 
     span.set_attribute("execution.run_id", run_id)
     span.set_status("OK" if results else "ERROR")
@@ -131,10 +117,7 @@ with tracing.start_span("workflow_execution") as span:
 
 ### Trace Context Propagation
 ```python
-workflow.add_node("traced_api", HTTPRequestNode(
-    url="https://api.example.com/process",
-    headers_factory=lambda ctx: {
-        "traceparent": ctx.get_trace_header(),
+workflow.add_node("HTTPRequestNode", "traced_api", {}),
         "tracestate": ctx.get_trace_state()
     }
 ))
@@ -222,17 +205,7 @@ alerts.add_rule(
 
 ### Health Checks
 ```python
-workflow.add_node("health_check", HealthCheckNode(
-    checks=[
-        {"type": "database", "connection": db_pool},
-        {"type": "cache", "connection": redis_client},
-        {"type": "api", "endpoints": ["https://api.example.com/health"]},
-        {"type": "disk_space", "threshold": 0.8},
-        {"type": "memory", "threshold": 0.9}
-    ],
-    interval=30,
-    timeout=5
-))
+workflow.add_node("HealthCheckNode", "health_check", {}))
 
 ```
 
@@ -244,7 +217,7 @@ from kailash.monitoring import PerformanceProfiler
 
 # Profile workflow execution
 with PerformanceProfiler() as profiler:
-    results, run_id = runtime.execute(workflow)
+    results, run_id = runtime.execute(workflow.build())
 
 profile_data = profiler.get_profile()
 print(f"CPU time: {profile_data['cpu_time_ms']}ms")
@@ -255,14 +228,7 @@ print(f"Slowest nodes: {profile_data['slowest_nodes']}")
 
 ### Resource Monitoring
 ```python
-workflow.add_node("resource_monitor", PythonCodeNode(
-    name="resource_monitor",
-    code='''
-import psutil
-import time
-
-# Monitor system resources
-process = psutil.Process()
+workflow.add_node("PythonCodeNode", "resource_monitor", {})
 cpu_percent = process.cpu_percent(interval=1)
 memory_info = process.memory_info()
 
@@ -289,17 +255,14 @@ result = {"resource_metrics": resource_metrics}
 ### Structured Logging
 ```python
 import structlog
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 
 # Configure structured logging
 logger = structlog.get_logger()
-workflow = Workflow("logging_example")
+workflow = WorkflowBuilder()
 
-workflow.add_node("logged_processor", PythonCodeNode(
-    name="logged_processor",
-    code='''
-logger = get_logger()
+workflow.add_node("PythonCodeNode", "logged_processor", {})
 
 logger.info("processing_started",
     items_count=len(data),
@@ -331,18 +294,7 @@ except Exception as e:
 ### Log Export
 ```python
 # Export logs to centralized system
-workflow.add_node("log_exporter", PythonCodeNode(
-    name="log_exporter",
-    code='''
-import json
-import requests
-from datetime import datetime
-
-# Collect structured logs
-log_entries = []
-for event in processing_events:
-    log_entry = {
-        "timestamp": datetime.utcnow().isoformat(),
+workflow.add_node("PythonCodeNode", "log_exporter", {}).isoformat(),
         "level": "INFO",
         "service": "kailash_workflow",
         "event_type": event["type"],
@@ -374,20 +326,7 @@ result = {"logs_exported": len(log_entries)}
 
 ```python
 # SLA compliance monitoring
-workflow.add_node("sla_monitor", PythonCodeNode(
-    name="sla_monitor",
-    code='''
-from datetime import datetime, timedelta
-
-# Define SLA targets
-sla_targets = {
-    "availability": 0.999,  # 99.9% uptime
-    "response_time_p95": 2000,  # 2 seconds
-    "error_rate": 0.01  # 1% error rate
-}
-
-# Calculate SLA compliance
-current_time = datetime.utcnow()
+workflow.add_node("PythonCodeNode", "sla_monitor", {})
 window_start = current_time - timedelta(hours=24)
 
 # Availability calculation

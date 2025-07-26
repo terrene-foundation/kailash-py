@@ -6,7 +6,7 @@
 
 ### Complete Enterprise Stack
 ```python
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 from kailash.middleware.auth import KailashJWTAuth
 from kailash.middleware.database import SessionManager
 from kailash.runtime.access_controlled import AccessControlledRuntime
@@ -515,8 +515,7 @@ ldap_config = LDAPIntegration(
     },
 
     # Group mapping for roles
-    group_role_mapping={
-        "CN=KailashAdmins,OU=Groups,DC=company,DC=com": "admin",
+    group_role_# mapping removed,OU=Groups,DC=company,DC=com": "admin",
         "CN=DataScientists,OU=Groups,DC=company,DC=com": "data_scientist",
         "CN=BusinessUsers,OU=Groups,DC=company,DC=com": "business_user"
     }
@@ -533,8 +532,7 @@ saml_config = SAMLIntegration(
     private_key_file="/ssl/saml.key",
 
     # Attribute mapping
-    attribute_mapping={
-        "email": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress",
+    attribute_# mapping removed,
         "first_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname",
         "last_name": "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname",
         "groups": "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups"
@@ -691,7 +689,7 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
-from kailash.middleware import AgentUIMiddleware, EventStream
+from kailash.api.middleware import AgentUIMiddleware, EventStream
 from kailash.nodes.admin import PermissionCheckNode
 from kailash.nodes.data import AsyncSQLDatabaseNode
 from kailash.nodes.enterprise import BatchProcessorNode, DataLineageNode

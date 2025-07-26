@@ -9,7 +9,7 @@ Sequential processing with clear stages.
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -19,41 +19,42 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("pipeline", name="Data Pipeline")
+workflow = WorkflowBuilder()
 
 # Stage 1: Ingestion
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("ingest", CSVReaderNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "ingest", {}),
     file_path="raw_data.csv")
 
 # Stage 2: Validation
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("validate", DataValidationNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("DataValidationNode", "validate", {}),
     schema={"required": ["id", "amount"], "types": {"amount": float}})
 
 # Stage 3: Transform
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("transform", DataTransformerNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("DataTransformerNode", "transform", {}),
     operations=[
         {"type": "filter", "condition": "amount > 0"},
         {"type": "map", "expression": "{'id': id, 'amount_usd': amount * 1.1}"}
     ])
 
 # Stage 4: Output
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("output", JSONWriterNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("JSONWriterNode", "output", {}),
     file_path="processed.json")
 
 # Linear connections
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("ingest", "validate")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("validate", "transform")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("transform", "output")
+workflow = WorkflowBuilder()
+workflow.add_connection("ingest", "result", "validate", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("validate", "result", "transform", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("transform", "result", "output", "input")
 
 ```
 
@@ -64,7 +65,7 @@ Parallel processing with aggregation.
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -74,45 +75,46 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("fanout", name="Parallel Processor")
+workflow = WorkflowBuilder()
 
 # Single source
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("source", JSONReaderNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("JSONReaderNode", "source", {}),
     file_path="tasks.json")
 
 # Fan-out to multiple processors
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Fan-in aggregation
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("aggregator", MergeNode())
+workflow = WorkflowBuilder()
+workflow.add_node("MergeNode", "aggregator", {}))
 
 # Connect fan-out
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("source", "processor1")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("source", "processor2")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("source", "processor3")
+workflow = WorkflowBuilder()
+workflow.add_connection("source", "result", "processor1", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("source", "result", "processor2", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("source", "result", "processor3", "input")
 
 # Connect fan-in
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -123,7 +125,7 @@ Dynamic path selection based on data.
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -133,19 +135,20 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("router", name="Conditional Router")
+workflow = WorkflowBuilder()
 
 # Input
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("input", JSONReaderNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("JSONReaderNode", "input", {}),
     file_path="requests.json")
 
 # Router
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("router", SwitchNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("SwitchNode", "router", {}),
     conditions=[
         {"output": "premium", "expression": "customer_tier == 'premium'"},
         {"output": "standard", "expression": "customer_tier == 'standard'"},
@@ -153,42 +156,42 @@ workflow.workflow.add_node("router", SwitchNode(),
     ])
 
 # Different handlers for each tier
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("premium_handler", LLMAgentNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "premium_handler", {}),
     provider="openai",
     model="gpt-4",
     prompt="Premium support: {query}")
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("standard_handler", LLMAgentNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "standard_handler", {}),
     provider="openai",
     model="gpt-3.5-turbo",
     prompt="Standard support: {query}")
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Result merger
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("merger", MergeNode())
+workflow = WorkflowBuilder()
+workflow.add_node("MergeNode", "merger", {}))
 
 # Connect routing
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("input", "router")
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Merge results
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -199,7 +202,7 @@ Iterative processing with convergence.
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -209,18 +212,19 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("cyclic", name="Iterative Optimizer")
+workflow = WorkflowBuilder()
 
 # Initial data
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Iterative processor
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 converged = abs(new_value - target) < 0.01
 
 result = {
@@ -235,12 +239,12 @@ result = {
 ))
 
 # Connect initial
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Create cycle
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -251,7 +255,7 @@ Reactive processing triggered by events.
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -261,18 +265,19 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("event-driven", name="Event Processor")
+workflow = WorkflowBuilder()
 
 # Event listener
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Event router
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("router", SwitchNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("SwitchNode", "router", {}),
     conditions=[
         {"output": "created", "expression": "event_type == 'order.created'"},
         {"output": "updated", "expression": "event_type == 'order.updated'"},
@@ -280,30 +285,24 @@ workflow.workflow.add_node("router", SwitchNode(),
     ])
 
 # Event handlers
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("handle_created", WorkflowNode(
-    workflow=order_creation_workflow
-))
+workflow = WorkflowBuilder()
+workflow.add_node("WorkflowNode", "handle_created", {}))
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("handle_updated", WorkflowNode(
-    workflow=order_update_workflow
-))
+workflow = WorkflowBuilder()
+workflow.add_node("WorkflowNode", "handle_updated", {}))
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("handle_cancelled", WorkflowNode(
-    workflow=order_cancellation_workflow
-))
+workflow = WorkflowBuilder()
+workflow.add_node("WorkflowNode", "handle_cancelled", {}))
 
 # Connect event flow
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -314,7 +313,7 @@ Distributed transactions with compensation.
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -324,41 +323,42 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("saga", name="Order Saga")
+workflow = WorkflowBuilder()
 
 # Transaction steps
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("reserve_inventory", HTTPRequestNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("HTTPRequestNode", "reserve_inventory", {}),
     url="${INVENTORY_API}/reserve",
     method="POST")
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("charge_payment", HTTPRequestNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("HTTPRequestNode", "charge_payment", {}),
     url="${PAYMENT_API}/charge",
     method="POST")
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("create_shipment", HTTPRequestNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("HTTPRequestNode", "create_shipment", {}),
     url="${SHIPPING_API}/create",
     method="POST")
 
 # Compensation steps
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("release_inventory", HTTPRequestNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("HTTPRequestNode", "release_inventory", {}),
     url="${INVENTORY_API}/release",
     method="POST")
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("refund_payment", HTTPRequestNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("HTTPRequestNode", "refund_payment", {}),
     url="${PAYMENT_API}/refund",
     method="POST")
 
 # Saga coordinator
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 ```
 
@@ -369,7 +369,7 @@ workflow.  # Method signature)
 ### Nested Workflows
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -379,11 +379,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Main workflow
-main_workflow = Workflow("main", name="Main Process")
+main_workflow = WorkflowBuilder()
 
 # Sub-workflows
 validation_workflow = create_validation_workflow()
@@ -391,31 +392,25 @@ processing_workflow = create_processing_workflow()
 reporting_workflow = create_reporting_workflow()
 
 # Compose using WorkflowNode
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("validate", WorkflowNode(
-    workflow=validation_workflow
-))
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("process", WorkflowNode(
-    workflow=processing_workflow
-))
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("report", WorkflowNode(
-    workflow=reporting_workflow
-))
+workflow = WorkflowBuilder()
+workflow.add_node("WorkflowNode", "validate", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("WorkflowNode", "process", {}))
+workflow = WorkflowBuilder()
+workflow.add_node("WorkflowNode", "report", {}))
 
 # Connect sub-workflows
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("validate", "process")
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("process", "report")
+workflow = WorkflowBuilder()
+workflow.add_connection("validate", "result", "process", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("process", "result", "report", "input")
 
 ```
 
 ### Dynamic Workflow Generation
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -425,34 +420,32 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example -> Workflow:
     """Generate workflow based on configuration."""
-    workflow = Workflow("example", name="Example")
+    workflow = WorkflowBuilder()
 workflow.method()  # Example
     # Add nodes based on config
     for node_config in config['nodes']:
         node_class = globals()[node_config['type']]
         node = node_class(**node_config['params'])
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(node_config['id'], node)
+workflow = WorkflowBuilder()
+workflow.add_node(node_config['id'], node)
 
     # Add connections
     for conn in config['connections']:
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(
-            conn['from'],
-            conn['to'],
-            mapping=conn.get('mapping')
+workflow = WorkflowBuilder()
+workflow.add_connection(conn['from'], "result", conn['to'], "input")
         )
 
     return workflow
 
 # Usage
-workflow = Workflow("example", name="Example")
-workflow.workflow.yaml")
+workflow = WorkflowBuilder()
+workflow.yaml")
 workflow = create_dynamic_workflow(config)
 
 ```

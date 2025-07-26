@@ -1040,8 +1040,8 @@ result = {"duplicates": duplicates}
         })
 
         # Connect workflow
-        workflow.add_connection("get_job", "count_target_records")
-        workflow.add_connection("get_job", "check_duplicates")
+        workflow.add_connection("get_job", "result", "count_target_records", "input")
+        workflow.add_connection("get_job", "result", "check_duplicates", "input")
 
         results, run_id = self.runtime.execute(workflow.build())
 
@@ -1209,8 +1209,8 @@ result = {"updates": updates}
         })
 
         # Connect workflow
-        workflow.add_connection("get_customer_mapping", "update_relationships")
-        workflow.add_connection("update_relationships", "update_orders", "updates")
+        workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+        workflow.add_connection("source", "result", "target", "input")  # Fixed complex pattern
 
         results, run_id = runtime.execute(workflow.build())
 

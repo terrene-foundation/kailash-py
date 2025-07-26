@@ -110,8 +110,8 @@ workflow.add_node("MigrationNode", "complete_migration", {
 })
 
 # Connect nodes
-workflow.add_connection("track_migration", "apply_change")
-workflow.add_connection("apply_change", "complete_migration")
+workflow.add_connection("track_migration", "result", "apply_change", "input")
+workflow.add_connection("apply_change", "result", "complete_migration", "input")
 ```
 
 ### Migration Workflow Pattern
@@ -156,10 +156,10 @@ workflow.add_node("PythonCodeNode", "skip_migration", {
 })
 
 # Connect workflow
-workflow.add_connection("check_migration", "migration_decision", "status")
-workflow.add_connection("migration_decision", "apply_migration")
-workflow.add_connection("migration_decision", "skip_migration")
-workflow.add_connection("apply_migration", "update_status")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex pattern
+workflow.add_connection("migration_decision", "result", "apply_migration", "input")
+workflow.add_connection("migration_decision", "result", "skip_migration", "input")
+workflow.add_connection("apply_migration", "result", "update_status", "input")
 ```
 
 ## Schema Evolution Patterns
@@ -222,8 +222,8 @@ workflow.add_node("SchemaModificationNode", "drop_old_column", {
 })
 
 # Connect in sequence
-workflow.add_connection("add_new_column", "copy_data")
-workflow.add_connection("copy_data", "drop_old_column")
+workflow.add_connection("add_new_column", "result", "copy_data", "input")
+workflow.add_connection("copy_data", "result", "drop_old_column", "input")
 ```
 
 ## Integration with DataFlow Models

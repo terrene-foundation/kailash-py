@@ -10,28 +10,28 @@
 
 ### **Basic Workflow Structure**
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # Always create with ID and name
-workflow = Workflow("workflow_id", name="Descriptive Workflow Name")
+workflow = WorkflowBuilder()
 
 # Add nodes with configuration
-workflow.add_node("reader", CSVReaderNode(),
+workflow.add_node("CSVReaderNode", "reader", {}),
     file_path="/data/input.csv",
     has_header=True,
     delimiter=","
 )
 
 # Connect nodes to create data flow
-workflow.connect("reader", "processor", mapping={"data": "input_data"})
+workflow.add_connection("reader", "processor", "data", "input_data")
 
 # Validate structure before execution
 workflow.validate()
 
 # Execute with runtime
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -39,25 +39,21 @@ results, run_id = runtime.execute(workflow)
 ```python
 def build_data_pipeline():
     """Build a complete data processing pipeline"""
-    workflow = Workflow("data_pipeline", name="Customer Data Processing Pipeline")
+    workflow = WorkflowBuilder()
 
     # 1. Data Input Layer
-    workflow.add_node("csv_reader", CSVReaderNode(),
+    workflow.add_node("CSVReaderNode", "csv_reader", {}),
         file_path="/data/customers.csv",
         has_header=True,
         delimiter=","
     )
 
-    workflow.add_node("json_config", JSONReaderNode(),
+    workflow.add_node("JSONReaderNode", "json_config", {}),
         file_path="/config/processing_rules.json"
     )
 
     # 2. Data Processing Layer
-    workflow.add_node("validator", PythonCodeNode(
-        name="validator",
-        code='''
-# Access inputs
-customer_data = inputs.get("customer_data", [])
+    workflow.add_node("PythonCodeNode", "validator", {})
 
 valid_customers = []
 invalid_customers = []
@@ -83,11 +79,7 @@ result = {
         input_types={"customer_data": list}
     ))
 
-    workflow.add_node("enricher", PythonCodeNode(
-        name="enricher",
-        code='''
-# Access inputs
-valid_data = inputs.get("valid_data", [])
+    workflow.add_node("PythonCodeNode", "enricher", {})
 processing_rules = inputs.get("processing_rules", {})
 
 # Apply processing rules to enrich customer data
@@ -120,22 +112,22 @@ result = {
     ))
 
     # 3. Data Output Layer
-    workflow.add_node("csv_writer", CSVWriterNode(),
+    workflow.add_node("CSVWriterNode", "csv_writer", {}),
         file_path="/data/enriched_customers.csv",
         include_header=True
     )
 
-    workflow.add_node("json_writer", JSONWriterNode(),
+    workflow.add_node("JSONWriterNode", "json_writer", {}),
         file_path="/data/processing_summary.json",
         indent=2
     )
 
     # 4. Connect the pipeline
-    workflow.connect("csv_reader", "validator", mapping={"data": "customer_data"})
-    workflow.connect("validator", "enricher", mapping={"valid": "valid_data"})
-    workflow.connect("json_config", "enricher", mapping={"data": "processing_rules"})
-    workflow.connect("enricher", "csv_writer", mapping={"enriched": "data"})
-    workflow.connect("enricher", "json_writer", mapping={"enrichment_stats": "data"})
+    workflow.add_connection("csv_reader", "validator", "data", "customer_data")
+    workflow.add_connection("validator", "enricher", "valid", "valid_data")
+    workflow.add_connection("json_config", "enricher", "data", "processing_rules")
+    workflow.add_connection("enricher", "csv_writer", "enriched", "data")
+    workflow.add_connection("enricher", "json_writer", "enrichment_stats", "data")
 
     return workflow
 
@@ -146,7 +138,7 @@ result = {
 ### **Basic Connection Types**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -156,28 +148,29 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # 1. Automatic mapping (when names match)
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("reader", "processor")
+workflow = WorkflowBuilder()
+workflow.add_connection("reader", "result", "processor", "input")
 # Automatically maps: reader.data → processor.data
 
 # 2. Explicit simple mapping
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # 3. Nested data access with dot notation
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
 ### **Advanced Connection Patterns**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -187,28 +180,29 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Fan-out: One source to multiple targets
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Fan-in: Multiple sources to one target
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Conditional routing with SwitchNode
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("router", SwitchNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("SwitchNode", "router", {}),
     conditions=[
         {"output": "urgent", "expression": "priority == 'high' and urgency > 8"},
         {"output": "normal", "expression": "priority in ['medium', 'low']"},
@@ -217,14 +211,14 @@ workflow.workflow.add_node("router", SwitchNode(),
     default_output="unprocessed"
 )
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -232,14 +226,10 @@ workflow.  # Method signature
 ```python
 # Create a multi-stage transformation pipeline
 def create_transformation_chain():
-    workflow = Workflow("example", name="Example")
+    workflow = WorkflowBuilder()
 workflow.method()  # Example
     # Stage 1: Raw data cleaning
-    workflow.add_node("cleaner", PythonCodeNode(
-        name="cleaner",
-        code='''
-# Access inputs
-raw_data = inputs.get("raw_data", [])
+    workflow.add_node("PythonCodeNode", "cleaner", {})
 
 cleaned_data = []
 for item in raw_data:
@@ -260,11 +250,7 @@ result = {"cleaned": cleaned_data, "cleaned_count": len(cleaned_data)}
     ))
 
     # Stage 2: Data validation
-    workflow.add_node("validator", PythonCodeNode(
-        name="validator",
-        code='''
-# Access inputs
-cleaned_data = inputs.get("cleaned_data", [])
+    workflow.add_node("PythonCodeNode", "validator", {})
 
 import re
 email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -302,11 +288,7 @@ result = {
     ))
 
     # Stage 3: Data enrichment
-    workflow.add_node("enricher", PythonCodeNode(
-        name="enricher",
-        code='''
-# Access inputs
-validated_data = inputs.get("validated_data", [])
+    workflow.add_node("PythonCodeNode", "enricher", {})
 
 enriched_data = []
 
@@ -337,8 +319,8 @@ result = {
     ))
 
     # Connect the transformation chain
-    workflow.connect("cleaner", "validator", mapping={"cleaned": "cleaned_data"})
-    workflow.connect("validator", "enricher", mapping={"validated": "validated_data"})
+    workflow.add_connection("cleaner", "validator", "cleaned", "cleaned_data")
+    workflow.add_connection("validator", "enricher", "validated", "validated_data")
 
     return workflow
 
@@ -349,7 +331,7 @@ result = {
 ### **Essential PythonCodeNode Patterns**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -359,12 +341,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ CORRECT PythonCodeNode pattern
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature and item.get("value", 0) > threshold:
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature and item.get("value", 0) > threshold:
         processed_items.append({
             "id": item.get("id"),
             "processed_value": item["value"] * 2,
@@ -389,7 +372,7 @@ result = {
 ### **Advanced PythonCodeNode Patterns**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -399,12 +382,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Complex data processing with error handling
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature.isoformat(),
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature.isoformat(),
     "items_processed": 0,
     "errors": [],
     "batches": 0
@@ -481,7 +465,7 @@ result = {
 ### **PythonCodeNode with External Libraries**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -491,15 +475,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Using external libraries safely
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("data_science_processor", PythonCodeNode(
-    name="data_science_processor",
-    code='''
-# Import libraries (ensure they're available in environment)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "data_science_processor", {})
 try:
     import pandas as pd
     import numpy as np
@@ -557,7 +539,7 @@ else:
 ### **DirectoryReaderNode Patterns**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -567,12 +549,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Basic directory scanning
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("scanner", DirectoryReaderNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("DirectoryReaderNode", "scanner", {}),
     directory_path="/data/inputs",
     file_pattern="*.csv",
     recursive=True,
@@ -581,8 +564,8 @@ workflow.workflow.add_node("scanner", DirectoryReaderNode(),
 )
 
 # Advanced file discovery with filtering
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature,
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature,
     "filtered_files": 0,
     "size_filtered": 0,
     "date_filtered": 0
@@ -632,15 +615,15 @@ result = {
     input_types={"file_list": list}
 ))
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
 ### **Batch File Processing**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -650,12 +633,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Process multiple files in sequence
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
     try:
         file_data = None
@@ -713,7 +697,7 @@ result = {
 ### **Basic Iterative Processing**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -723,12 +707,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Simple iterative optimization
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature < 0.01
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature < 0.01
 iteration += 1
 
 result = {
@@ -750,15 +735,15 @@ result = {
 ))
 
 # Create cyclic connection
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
 ### **Complex State Preservation**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -768,12 +753,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Advanced cycle with complex state
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature for item in new_data) / len(new_data)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature for item in new_data) / len(new_data)
 
 # Update state
 state["history"].append(current_result)
@@ -816,8 +802,8 @@ result = {
     input_types={"state": dict, "new_data": list}
 ))
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -826,7 +812,7 @@ workflow.  # Method signature
 ### **Basic Execution**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -836,15 +822,16 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Standard execution pattern
 runtime = LocalRuntime()
 
 # Execute with default configuration
 runtime = LocalRuntime()
-workflow.execute(workflow)
+runtime.execute(workflow.build(), workflow)
 
 # Execute with parameter overrides
 runtime = LocalRuntime()
@@ -859,7 +846,7 @@ workflow.{
 ### **Advanced Execution with Monitoring**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -869,8 +856,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Enhanced execution with monitoring
 runtime = LocalRuntime(
@@ -883,7 +871,7 @@ runtime = LocalRuntime(
 start_time = time.time()
 try:
 runtime = LocalRuntime()
-workflow.execute(workflow,
+runtime.execute(workflow.build(), workflow,
 # Parameters setup
 workflow.{
             "data_source": {"file_path": "/data/large_dataset.csv"},

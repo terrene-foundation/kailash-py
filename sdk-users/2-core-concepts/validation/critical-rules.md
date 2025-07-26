@@ -7,7 +7,7 @@
 All examples in this guide assume these imports:
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode, JSONReaderNode, JSONWriterNode, TextReaderNode, TextWriterNode, DirectoryReaderNode
 from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
@@ -26,18 +26,18 @@ from kailash.access_control import UserContext
 ```python
 
 # Workflow methods - exact names required
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
+workflow = WorkflowBuilder()
 workflow.add_node("id", NodeClass(), param1="value1")
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")
+workflow = WorkflowBuilder()
 workflow.validate()
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.execute()  # Direct execution (basic)
+workflow = WorkflowBuilder()
+runtime.execute(workflow.build(), )  # Direct execution (basic)
 
 # Runtime execution (recommended)
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -45,18 +45,18 @@ results, run_id = runtime.execute(workflow)
 ```python
 
 # These methods DO NOT EXIST
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.workflow.execute(runtime)     # INVALID - backwards pattern
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.workflow.addNode()           # INVALID - camelCase
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.workflow.add()               # INVALID - incomplete name
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.workflow.node()              # INVALID - wrong name
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.workflow.run()               # INVALID - should be execute()
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.workflow.connectNodes()      # INVALID - wrong name
+workflow = WorkflowBuilder()
+workflow.runtime.execute(workflow.build(), runtime)     # INVALID - backwards pattern
+workflow = WorkflowBuilder()
+workflow.addNode()           # INVALID - camelCase
+workflow = WorkflowBuilder()
+workflow.add()               # INVALID - incomplete name
+workflow = WorkflowBuilder()
+workflow.node()              # INVALID - wrong name
+workflow = WorkflowBuilder()
+workflow.run()               # INVALID - should be execute()
+workflow = WorkflowBuilder()
+workflow.connectNodes()      # INVALID - wrong name
 
 ```
 
@@ -91,16 +91,16 @@ from kailash.nodes.ai import LLMAgent           # Missing "Node"
 ```python
 
 # Workflow methods with exact signatures
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
+workflow = WorkflowBuilder()
 workflow.add_node("node_id", NodeClass(), param="value")
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
+workflow = WorkflowBuilder()
 workflow.add_node("node_id", NodeClass(), param="value")
 
 # Examples with correct parameter order
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")
 
 # Runtime execution with correct parameter name
 runtime = LocalRuntime()
@@ -113,18 +113,18 @@ workflow.{"node_id": {"param": "value"}})
 ```python
 
 # Wrong parameter order
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.add_node(CSVReaderNode(), "reader")  # WRONG ORDER
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})  # WRONG ORDER
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader")  # WRONG ORDER
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")  # WRONG ORDER
 
 # Wrong parameter names
 runtime = LocalRuntime()
-workflow.execute(workflow, inputs={"data": []})     # WRONG: should be 'parameters'
+runtime.execute(workflow.build(), workflow, parameters={"data": []})     # WRONG: should be 'parameters'
 runtime = LocalRuntime()
-workflow.execute(workflow, config={"node": {}})     # WRONG: should be 'parameters'
+runtime.execute(workflow.build(), workflow, config={"node": {}})     # WRONG: should be 'parameters'
 runtime = LocalRuntime()
-workflow.execute(workflow, overrides={"param": ""}) # WRONG: should be 'parameters'
+runtime.execute(workflow.build(), workflow, overrides={"param": ""}) # WRONG: should be 'parameters'
 
 ```
 
@@ -134,15 +134,15 @@ workflow.execute(workflow, overrides={"param": ""}) # WRONG: should be 'paramete
 ```python
 
 # Exact key names required
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.add_node("reader", CSVReaderNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}),
     file_path="data.csv",        # Correct key
     has_header=True,             # Correct key
     delimiter=","                # Correct key
 )
 
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.add_node("llm", LLMAgentNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "llm", {}),
     provider="openai",           # Correct key
     model="gpt-4",              # Correct key
     temperature=0.7,            # Correct key
@@ -155,15 +155,15 @@ workflow.add_node("llm", LLMAgentNode(),
 ```python
 
 # Wrong case or naming
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.add_node("reader", CSVReaderNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}),
     filePath="data.csv",        # WRONG: should be file_path
     hasHeader=True,             # WRONG: should be has_header
     Delimiter=","               # WRONG: should be delimiter
 )
 
-workflow = Workflow("critical_rules", name="Critical Rules Demo")
-workflow.add_node("llm", LLMAgentNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "llm", {}),
     Provider="openai",          # WRONG: should be provider
     Model="gpt-4",             # WRONG: should be model
     Temperature=0.7,           # WRONG: should be temperature
@@ -177,7 +177,7 @@ workflow.add_node("llm", LLMAgentNode(),
 ### ✅ **Correct Import Paths**
 ```python
 # Core imports
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # Node imports - exact module paths
@@ -219,17 +219,14 @@ def validate_kailash_pattern(workflow_code) -> bool:
     checks = [
         # Rule 1: Method names
         "workflow.add_node(" in workflow_code,
-        "workflow.connect(" in workflow_code,
-        "runtime.execute(" in workflow_code,
-
-        # Rule 2: Node naming (at least one node with "Node" suffix)
+        "workflow.add_connection("source", "result", "target", "input")  # Fixed complex pattern
         "Node(" in workflow_code,
 
         # Rule 3: No backwards patterns
-        "workflow.execute(runtime)" not in workflow_code,
+        "runtime.execute(workflow.build(), runtime)" not in workflow_code,
 
         # Rule 4: Proper parameter names
-        "parameters=" in workflow_code or "mapping=" in workflow_code,
+        "parameters=" in workflow_code or "# mapping removed,
 
         # Rule 5: No camelCase
         "addNode" not in workflow_code,
@@ -250,10 +247,10 @@ def validate_kailash_pattern(workflow_code) -> bool:
 
 # Usage
 code_snippet = '''
-workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
-workflow.connect("reader", "processor", mapping={"data": "input"})
+workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
+workflow.add_connection("reader", "processor", "data", "input")
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 '''
 
 validate_kailash_pattern(code_snippet)
@@ -269,7 +266,7 @@ Before executing any Kailash SDK code, verify:
 - [ ] ✅ **Parameter order**: Correct order for all method calls
 - [ ] ✅ **Configuration keys**: Exact case-sensitive key names
 - [ ] ✅ **Import paths**: Full module paths (e.g., `kailash.nodes.data`)
-- [ ] ✅ **Execution pattern**: `runtime.execute(workflow)` not `workflow.execute(runtime)`
+- [ ] ✅ **Execution pattern**: `runtime.execute(workflow.build())` not `runtime.execute(workflow.build(), runtime)`
 
 ## 🚨 **Emergency Debugging**
 

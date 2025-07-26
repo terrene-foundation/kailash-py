@@ -7,7 +7,7 @@ Patterns for building intelligent agent systems with coordination, self-organiza
 **Purpose**: Create autonomous agent teams that solve problems collaboratively
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai import (
     OrchestrationManagerNode,
@@ -16,22 +16,22 @@ from kailash.nodes.ai import (
 )
 
 # Create self-organizing agent workflow
-workflow = Workflow("agent_pool", "Self-Organizing Agent Pool")
+workflow = WorkflowBuilder()
 
 # Shared infrastructure for agents
-workflow.add_node("memory", SharedMemoryPoolNode(),
+workflow.add_node("SharedMemoryPoolNode", "memory", {}),
     capacity=1000,
     eviction_policy="lru"
 )
 
-workflow.add_node("cache", IntelligentCacheNode(),
+workflow.add_node("IntelligentCacheNode", "cache", {}),
     ttl=3600,
     max_size=500,
     similarity_threshold=0.85
 )
 
 # Orchestration manager coordinates agents
-workflow.add_node("orchestrator", OrchestrationManagerNode(),
+workflow.add_node("OrchestrationManagerNode", "orchestrator", {}),
     max_iterations=5,
     quality_threshold=0.8,
     time_limit_minutes=10,
@@ -40,8 +40,8 @@ workflow.add_node("orchestrator", OrchestrationManagerNode(),
 )
 
 # Connect shared resources
-workflow.connect("memory", "orchestrator", mapping={"pool": "shared_memory"})
-workflow.connect("cache", "orchestrator", mapping={"cache": "shared_cache"})
+workflow.add_connection("memory", "orchestrator", "pool", "shared_memory")
+workflow.add_connection("cache", "orchestrator", "cache", "shared_cache")
 
 # Execute with dynamic agent configuration
 runtime = LocalRuntime()
@@ -126,29 +126,29 @@ class ResearchAgentNode(MCPMixin, LLMAgentNode):
         }
 
 # Create specialized agent team
-workflow = Workflow("mcp_agent_team", "MCP-Enhanced Agent Team")
+workflow = WorkflowBuilder()
 
 # Add specialized agents
-workflow.add_node("research_lead", ResearchAgentNode(),
+workflow.add_node("ResearchAgentNode", "research_lead", {}),
     model="gpt-4",
     mcp_server="research_tools",
     shared_cache=True
 )
 
-workflow.add_node("data_analyst", LLMAgentNode(),
+workflow.add_node("LLMAgentNode", "data_analyst", {}),
     model="gpt-4",
     mcp_server="data_tools",
     mcp_capabilities=["sql_query", "data_visualization", "statistical_analysis"]
 )
 
-workflow.add_node("strategist", LLMAgentNode(),
+workflow.add_node("LLMAgentNode", "strategist", {}),
     model="claude-3-opus",
     mcp_server="strategy_tools",
     mcp_capabilities=["swot_analysis", "scenario_planning", "risk_assessment"]
 )
 
 # Coordinator to manage agent collaboration
-workflow.add_node("coordinator", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "coordinator", {}),
     code="""
 # Coordinate agent outputs
 research = research_summary.get('research_summary')
@@ -176,12 +176,9 @@ result = synthesis
 )
 
 # Connect agents through coordinator
-workflow.connect("research_lead", "coordinator",
-    mapping={"result": "research_summary"})
-workflow.connect("data_analyst", "coordinator",
-    mapping={"result": "data_analysis"})
-workflow.connect("strategist", "coordinator",
-    mapping={"result": "strategy_recommendation"})
+workflow.add_connection("research_lead", "coordinator", "result", "research_summary")
+workflow.add_connection("data_analyst", "coordinator", "result", "data_analysis")
+workflow.add_connection("strategist", "coordinator", "result", "strategy_recommendation")
 
 ```
 
@@ -192,43 +189,43 @@ workflow.connect("strategist", "coordinator",
 ```python
 from kailash.nodes.ai import AgentSupervisorNode, AgentWorkerNode
 
-workflow = Workflow("hierarchical_agents", "Hierarchical Agent Organization")
+workflow = WorkflowBuilder()
 
 # Top-level supervisor
-workflow.add_node("ceo_agent", AgentSupervisorNode(),
+workflow.add_node("AgentSupervisorNode", "ceo_agent", {}),
     role="strategic_oversight",
     decision_authority=["approve", "reject", "delegate"],
     subordinates=["cto_agent", "cfo_agent", "cmo_agent"]
 )
 
 # Department heads
-workflow.add_node("cto_agent", AgentSupervisorNode(),
+workflow.add_node("AgentSupervisorNode", "cto_agent", {}),
     role="technology_leadership",
     expertise=["architecture", "innovation", "technical_feasibility"],
     subordinates=["dev_team_lead", "qa_team_lead", "devops_lead"]
 )
 
-workflow.add_node("cfo_agent", AgentSupervisorNode(),
+workflow.add_node("AgentSupervisorNode", "cfo_agent", {}),
     role="financial_oversight",
     expertise=["budgeting", "roi_analysis", "risk_assessment"],
     subordinates=["budget_analyst", "risk_analyst"]
 )
 
 # Worker agents
-workflow.add_node("dev_team_lead", AgentWorkerNode(),
+workflow.add_node("AgentWorkerNode", "dev_team_lead", {}),
     role="development_execution",
     skills=["coding", "architecture", "estimation"],
     report_to="cto_agent"
 )
 
-workflow.add_node("budget_analyst", AgentWorkerNode(),
+workflow.add_node("AgentWorkerNode", "budget_analyst", {}),
     role="budget_analysis",
     skills=["financial_modeling", "cost_analysis"],
     report_to="cfo_agent"
 )
 
 # Task delegation flow
-workflow.add_node("task_delegator", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "task_delegator", {}),
     code="""
 # Parse high-level request
 request = parse_request(input_request)
@@ -275,11 +272,11 @@ result = {
 )
 
 # Connect hierarchy
-workflow.connect("task_delegator", "ceo_agent", mapping={"result": "strategic_input"})
-workflow.connect("ceo_agent", "cto_agent", mapping={"tech_initiatives": "tasks"})
-workflow.connect("ceo_agent", "cfo_agent", mapping={"financial_initiatives": "tasks"})
-workflow.connect("cto_agent", "dev_team_lead", mapping={"dev_tasks": "assignments"})
-workflow.connect("cfo_agent", "budget_analyst", mapping={"budget_tasks": "assignments"})
+workflow.add_connection("task_delegator", "ceo_agent", "result", "strategic_input")
+workflow.add_connection("ceo_agent", "cto_agent", "tech_initiatives", "tasks")
+workflow.add_connection("ceo_agent", "cfo_agent", "financial_initiatives", "tasks")
+workflow.add_connection("cto_agent", "dev_team_lead", "dev_tasks", "assignments")
+workflow.add_connection("cfo_agent", "budget_analyst", "budget_tasks", "assignments")
 
 ```
 
@@ -289,7 +286,7 @@ workflow.connect("cfo_agent", "budget_analyst", mapping={"budget_tasks": "assign
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -299,14 +296,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("swarm_intelligence", "Swarm Intelligence Pattern")
+workflow = WorkflowBuilder()
 
 # Swarm configuration
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("swarm_controller", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "swarm_controller", {}),
     code="""
 import random
 import numpy as np
@@ -411,8 +409,8 @@ def calculate_diversity(agents):
 
 # Parallel agent executors
 for i in range(5):  # 5 parallel swarm executors
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node(f"swarm_executor_{i}", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node(f"swarm_executor_{i}", "PythonCodeNode",
         code="""
 # Execute subset of swarm agents
 agent_subset = agents[start_idx:end_idx]
@@ -442,7 +440,7 @@ result = results
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -452,11 +450,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("consensus_builder", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "consensus_builder", {}),
     code="""
 from collections import Counter
 import numpy as np
@@ -595,7 +594,7 @@ result = consensus_result
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -605,11 +604,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("adaptive_agent", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "adaptive_agent", {}),
     code="""
 class AdaptiveAgent:
     def __init__(self, agent_id, initial_strategy="balanced"):

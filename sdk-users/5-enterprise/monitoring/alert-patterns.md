@@ -40,18 +40,13 @@ alerts.add_rule(AlertRule(
 
 ### Anomaly Detection Alerts
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.monitoring import AnomalyDetectorNode
 
-workflow = Workflow("anomaly_monitoring")
+workflow = WorkflowBuilder()
 
 # ML-based anomaly detection
-workflow.add_node("anomaly_detector", AnomalyDetectorNode(
-    models=["isolation_forest", "local_outlier_factor"],
-    sensitivity=0.95,
-    training_window="7d",
-    detection_window="5m"
-))
+workflow.add_node("AnomalyDetectorNode", "anomaly_detector", {}))
 
 # Anomaly alert configuration
 alerts.add_rule(AlertRule(
@@ -143,8 +138,7 @@ alerts.add_rule(AlertRule(
         {"window": "5m", "threshold": 6.0},    # Medium burn
         {"window": "30m", "threshold": 1.0}    # Slow burn
     ],
-    severity_mapping={
-        "1m": "critical",
+    severity_# mapping removed,
         "5m": "warning",
         "30m": "info"
     },
@@ -610,24 +604,10 @@ from kailash.monitoring import AlertTester
 from kailash.nodes.code import PythonCodeNode
 
 # Create alert testing workflow
-workflow = Workflow("alert_testing")
+workflow = WorkflowBuilder()
 
 # Automated alert testing
-workflow.add_node("alert_tester", PythonCodeNode(
-    name="alert_tester",
-    code='''
-from kailash.monitoring import AlertTester
-import random
-
-# Test different alert scenarios
-test_scenarios = [
-    {"type": "threshold_breach", "metric": "cpu_usage", "value": 95},
-    {"type": "error_spike", "metric": "error_rate", "value": 0.1},
-    {"type": "service_down", "metric": "health_check", "value": 0},
-    {"type": "anomaly", "metric": "request_rate", "pattern": "sudden_drop"}
-]
-
-tester = AlertTester()
+workflow.add_node("PythonCodeNode", "alert_tester", {})
 test_results = []
 
 for scenario in test_scenarios:

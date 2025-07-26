@@ -66,19 +66,17 @@ export default KailashWorkflowComponent;
 
 ```python
 from kailash.api.gateway import create_gateway
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.code import PythonCodeNode
 
 # Create workflow
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
-workflow.add_node("processor", PythonCodeNode(
-    name="processor",
-    code="result = {'processed': len(data), 'summary': data[:5]}",
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
+workflow.add_node("PythonCodeNode", "processor", {}), 'summary': data[:5]}",
     input_types={"data": list}
 ))
-workflow.connect("reader", "processor")
+workflow.add_connection("reader", "result", "processor", "input")
 
 # Create gateway with frontend features
 gateway = create_gateway(

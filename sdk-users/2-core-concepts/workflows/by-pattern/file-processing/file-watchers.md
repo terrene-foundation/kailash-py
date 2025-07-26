@@ -19,7 +19,7 @@ This guide provides comprehensive patterns for file processing workflows in Kail
 ### Basic File Watcher Pattern
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes import PythonCodeNode, SwitchNode
 from kailash.runtime import CyclicRunner
 import time
@@ -27,7 +27,7 @@ import os
 from pathlib import Path
 
 # File watcher workflow with auto-processing
-workflow = Workflow(name="file_watcher_auto_process")
+workflow = WorkflowBuilder()
 
 # Monitor directory for new files
 watch_code = """
@@ -144,16 +144,9 @@ workflow.add_node(watcher)
 workflow.add_node(processor)
 workflow.add_node(decider)
 
-workflow.connect(watcher, processor, mapping={"new_files": "new_files"})
-workflow.connect(processor, decider, mapping={"continue_watching": "continue_watching"})
-workflow.connect(
-    decider, watcher,
-    output_port="True",
-    mapping={
-        "_state": "cycle_info.node_state"
-    },
-    cycle=True
-)
+workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
+workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Execute with file watching
 runner = CyclicRunner(max_iterations=100)
@@ -1854,12 +1847,12 @@ parallel_processor = PythonCodeNode(
 ### Complete File Processing Workflow
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes import PythonCodeNode, SwitchNode
 from kailash.runtime import CyclicRunner
 
 # Complete file processing workflow with all components
-workflow = Workflow(name="complete_file_processor")
+workflow = WorkflowBuilder()
 
 # Add all nodes
 workflow.add_node(realtime_monitor)
@@ -1876,24 +1869,11 @@ router = SwitchNode(
 )
 
 # Connect monitoring cycle
-workflow.connect(realtime_monitor, router, mapping={"has_events": "has_events", "events": "events"})
-workflow.connect(
-    router,
-    change_processor,
-    output_port="True",
-    mapping={"events": "events"}
-)
+workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 # Route back to monitor
-workflow.connect(
-    change_processor,
-    realtime_monitor,
-    mapping={
-        "continue_monitoring": "continue_monitoring",
-        "_state": "cycle_info.node_state"
-    },
-    cycle=True
-)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Execute with comprehensive configuration
 runner = CyclicRunner(max_iterations=1000)

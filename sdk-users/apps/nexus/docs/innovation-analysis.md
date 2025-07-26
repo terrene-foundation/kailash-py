@@ -10,6 +10,8 @@ Kailash represents a **paradigm shift** from traditional request-response archit
 
 **Traditional Approach (Django/Express/FastAPI):**
 ```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 # Best-effort execution - failure = lost work
 @app.post("/process")
 def process_data(data):
@@ -130,7 +132,7 @@ app.start()
 **Before (Singleton Problem):**
 ```python
 # Old pattern (removed)
-# from nexus import create_nexus  
+# from nexus import create_nexus
 # n1 = create_nexus()  # Hidden global singleton
 # n2 = create_nexus()  # Same instance! Confusing ownership
 ```

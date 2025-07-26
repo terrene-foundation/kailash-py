@@ -75,7 +75,7 @@ AsyncPatterns.circuit_breaker(
 
 ### Comprehensive Performance Analysis Workflow
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow import CycleAnalyzer, CycleProfiler, CycleDebugger
 from kailash.runtime.local import LocalRuntime
 
@@ -455,14 +455,14 @@ def create_workflow_from_config(config):
 **Purpose**: Reduce redundant computations and external calls
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 
-workflow = Workflow("caching_workflow", "Caching Pattern")
+workflow = WorkflowBuilder()
 
 # Advanced caching with TTL and LRU eviction
-workflow.add_node("smart_cache", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "smart_cache", {}),
     code="""
 import hashlib
 import json
@@ -558,7 +558,7 @@ def perform_expensive_operation(data):
 )
 
 # Distributed cache pattern with Redis
-workflow.add_node("redis_cache", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "redis_cache", {}),
     code="""
 import redis
 import json
@@ -628,7 +628,7 @@ result = {
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -638,11 +638,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("lazy_loader", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "lazy_loader", {}),
     code="""
 class LazyDataLoader:
     def __init__(self, data_config):
@@ -726,7 +727,7 @@ def process_item(item):
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -736,11 +737,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("connection_pool", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "connection_pool", {}),
     code="""
 import queue
 import threading
@@ -867,7 +869,7 @@ def perform_database_operation(conn, data):
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -877,11 +879,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("prefetcher", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "prefetcher", {}),
     code="""
 import threading
 import queue
@@ -990,7 +993,7 @@ self._prefetcher.stop()
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1000,11 +1003,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("stream_processor", PythonCodeNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "stream_processor", {}),
     code="""
 import io
 import csv
@@ -1087,7 +1091,7 @@ result = {
 
 ```python
 # Async workflow node
-workflow.add_node("async_io_processor", PythonCodeNode(),
+workflow.add_node("PythonCodeNode", "async_io_processor", {}),
     code="""
 import asyncio
 import aiohttp
@@ -1185,7 +1189,7 @@ result = {
 ```python
 from kailash.nodes.data import WorkflowConnectionPool
 from kailash.nodes.data.query_router import QueryRouterNode
-from kailash import Workflow, WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder, WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 import asyncio
 from contextlib import asynccontextmanager
@@ -1422,7 +1426,7 @@ result = {
 }
 """,
     imports=["asyncio", "logging"],
-    inputs={"order_ids": []}
+    parameters={"order_ids": []}
 })
 
 ```
@@ -1431,7 +1435,7 @@ result = {
 
 ```python
 from kailash.nodes.data.query_router import QueryRouterNode
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 
 # Create workflow with intelligent routing
 async def create_intelligent_db_workflow():
@@ -1730,7 +1734,7 @@ if metrics["performance"]["p99_acquisition_time_ms"] > 100:
     result["recommendations"].append("Connection acquisition slow, increase min_connections")
 """,
     imports=["json", "datetime"],
-    inputs={"pool": None}
+    parameters={"pool": None}
 )
 ```
 

@@ -12,12 +12,12 @@
 ## 🆕 v0.6.2+ LLMAgentNode with Ollama
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
 
 # Basic usage with improved async support
-workflow = Workflow("ollama_v062", "Ollama with LLMAgentNode")
+workflow = WorkflowBuilder()
 llm_node = LLMAgentNode(name="ollama_llm")
 workflow.add_node("llm", llm_node)
 
@@ -52,7 +52,7 @@ result, _ = await runtime.execute_async(workflow, parameters={
 ## 🚀 Alternative: Direct API with PythonCodeNode
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
@@ -84,7 +84,7 @@ def ollama_generate(prompt="Hello", model="llama3.2:1b"):
         return {"success": False, "error": str(e)}
 
 # Create workflow
-workflow = Workflow("ollama_basic", "Basic Ollama LLM")
+workflow = WorkflowBuilder()
 llm_node = PythonCodeNode.from_function(ollama_generate, name="llm")
 workflow.add_node("generate", llm_node)
 
@@ -183,7 +183,7 @@ def iterative_improver(text="", iteration=0, target_length=50):
         return {"text": text, "iteration": iteration, "converged": True, "error": str(e)}
 
 # Cyclic workflow
-workflow = Workflow("ollama_cycles", "Iterative improvement")
+workflow = WorkflowBuilder()
 writer = PythonCodeNode.from_function(iterative_improver, name="writer")
 workflow.add_node("improve", writer)
 
@@ -286,12 +286,12 @@ data_gen = PythonCodeNode.from_function(
 
 analyzer = PythonCodeNode.from_function(analyze_sentiment, name="analyzer")
 
-workflow = Workflow("sentiment_pipeline", "Ollama sentiment analysis")
+workflow = WorkflowBuilder()
 workflow.add_node("data", data_gen)
 workflow.add_node("analyze", analyzer)
-workflow.connect("data", "analyze", {"result.reviews": "reviews"})
+workflow.add_connection("data", "result", "analyze", "input")
 
-result, _ = runtime.execute(workflow)
+result, _ = runtime.execute(workflow.build())
 analyzed = result["analyze"]["result"]["analyzed_reviews"]
 print(f"Analyzed {len(analyzed)} reviews")
 for review in analyzed:

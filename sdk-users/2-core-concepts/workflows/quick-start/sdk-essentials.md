@@ -7,7 +7,7 @@
 ### 1. Config vs Runtime (Mistake #001 - THE #1 ISSUE)
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -17,12 +17,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ CORRECT: Config = HOW (static setup), Runtime = WHAT (dynamic data)
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # Execution: Runtime = WHAT data to process
 runtime = LocalRuntime()
@@ -32,15 +33,15 @@ workflow.{
 })
 
 # ❌ WRONG: Mixing config and runtime
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 ```
 
 ### 2. Node Naming Convention
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -50,8 +51,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ CORRECT: ALL node classes end with "Node"
 CSVReaderNode, PythonCodeNode, SwitchNode
@@ -64,7 +66,7 @@ CSVReader, PythonCode, Switch
 ### 3. Workflow Connection Pattern
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -74,12 +76,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ CORRECT: Use Workflow.connect() with mapping
-workflow = Workflow("example", name="Example")
-workflow.workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
+workflow.workflow = WorkflowBuilder()
   # Method signature
 
 # ❌ WRONG: Using WorkflowBuilder (different API)
@@ -102,7 +105,7 @@ PythonCodeNode(code="result = data * 2")  # TypeError
 ### Basic Cycle Setup
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -112,16 +115,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Create cycle with specific field mapping (NOT generic)
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # ✅ CRITICAL: Use specific field mapping in cycles
 # ❌ NEVER: {"output": "output"} - generic mapping fails in cycles
@@ -131,7 +135,7 @@ workflow.  # Method signature
 ### Cycle Parameter Access (Safe Pattern)
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -141,11 +145,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 ```
 
@@ -166,7 +171,7 @@ convergence_check="result.converged == True"  # Fails
 ### PythonCodeNode Data Processing
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -176,11 +181,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 result = {
     "data": df.to_dict('records'),        # JSON serializable
     "summary": df.describe().to_dict(),   # Convert all pandas objects
@@ -204,7 +210,7 @@ except:  # ✅ Bare except works in sandbox
 ### Multi-Node Input Pattern
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -214,18 +220,19 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ CORRECT: Use MergeNode for multiple inputs
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("merger", MergeNode())
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+workflow.add_node("MergeNode", "merger", {}))
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # ❌ WRONG: Direct multi-input without merge
 # Multiple connections to same node without MergeNode fails
@@ -237,7 +244,7 @@ workflow.  # Method signature
 ### LLMAgentNode with MCP (Modern Pattern)
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -247,32 +254,24 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ CORRECT: Built-in MCP capabilities
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature)
 
 # ❌ WRONG: Separate MCPClient node (deprecated pattern)
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("mcp_client", MCPClientNode())  # Overly complex
+workflow = WorkflowBuilder()
+workflow.add_node("MCPClientNode", "mcp_client", {}))  # Overly complex
 
 ```
 
 ### Iterative Agent Pattern
 ```python
 # ✅ MODERN: Use IterativeLLMAgentNode for complex analysis
-workflow.add_node("strategy_agent", IterativeLLMAgentNode(
-    provider="ollama",
-    model="llama3.2",
-    max_iterations=4,
-    convergence_criteria={
-        "goal_satisfaction": {"threshold": 0.85}
-    },
-    mcp_servers=[...],  # MCP integration built-in
-    auto_discover_tools=True
-))
+workflow.add_node("IterativeLLMAgentNode", "strategy_agent", {}))
 
 ```
 
@@ -304,7 +303,7 @@ except RuntimeError as e:
 ### 1. Parameter Validation Errors
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -314,12 +313,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ PREVENT: "Required parameter 'data' not provided"
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("node", SomeNode(required=False))  # Use defaults
+workflow = WorkflowBuilder()
+workflow.add_node("SomeNode", "node", {}))  # Use defaults
 # OR provide all required parameters in runtime.execute()
 
 ```
@@ -335,7 +335,7 @@ prev_state = cycle_info.get("node_state") or {}  # Safe access
 ### 3. SwitchNode Mapping Issues
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -345,21 +345,14 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ PREVENT: "ValueError: Required parameter 'input_data' not provided"
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-# NOT mapping={"output": "output"}
-
-```
-
-### 4. NumPy Compatibility Issues
-```python
-# ✅ PREVENT: "AttributeError: module 'numpy' has no attribute 'float128'"
-import numpy as np
-if hasattr(np, 'float128'):
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+# NOT # mapping removed, 'float128'):
     use_extended_precision = True
 else:
     use_extended_precision = False
@@ -370,23 +363,21 @@ else:
 
 ### 30-Second ETL Pipeline
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 
 # Create workflow
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("reader", CSVReaderNode())
-workflow.add_node("processor", PythonCodeNode(
-    name="processor",
-    code="result = [row for row in data if row.get('amount', 0) > 100]"
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}))
+workflow.add_node("PythonCodeNode", "processor", {}) > 100]"
 ))
-workflow.add_node("writer", CSVWriterNode())
+workflow.add_node("CSVWriterNode", "writer", {}))
 
 # Connect
-workflow.connect("reader", "processor", mapping={"data": "data"})
-workflow.connect("processor", "writer", mapping={"result": "data"})
+workflow.add_connection("reader", "processor", "data", "data")
+workflow.add_connection("processor", "writer", "result", "data")
 
 # Execute
 runtime = LocalRuntime()
@@ -399,14 +390,12 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ### 30-Second API Integration
 ```python
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("api_call", RestClientNode())
-workflow.add_node("transformer", PythonCodeNode(
-    name="transformer",
-    code="result = {'processed': len(response.get('data', []))}"
+workflow = WorkflowBuilder()
+workflow.add_node("RestClientNode", "api_call", {}))
+workflow.add_node("PythonCodeNode", "transformer", {}))}"
 ))
 
-workflow.connect("api_call", "transformer", mapping={"response": "response"})
+workflow.add_connection("api_call", "transformer", "response", "response")
 
 runtime.execute(workflow, parameters={
     "api_call": {

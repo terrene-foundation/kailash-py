@@ -15,6 +15,8 @@ The admin node system consists of three core components:
 ### Basic User Management
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.admin import UserManagementNode
 
 # Create user management node
@@ -380,7 +382,7 @@ builder.add_connection("create_user", "send_welcome", "result.user.email", "to_e
 
 # Build and run
 workflow = builder.build()
-result = workflow.execute({
+result = runtime.execute(workflow.build(), {
     "operation": "create_user",
     "user_data": {
         "email": "newuser@example.com",
@@ -397,7 +399,7 @@ result = workflow.execute({
 ### Middleware Integration
 
 ```python
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 
 # Create gateway with admin endpoints
 app = create_gateway(

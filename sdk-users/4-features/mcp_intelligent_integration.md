@@ -19,13 +19,13 @@ The LLMAgentNode now includes an internal MCP client, eliminating the need for s
 
 ```python
 # Before: Complex multi-node setup
-workflow.add_node("mcp_server", AIRegistryMCPServerNode())
+workflow.add_node("AIRegistryMCPServerNode", "mcp_server", {}))
 workflow.add_node("mcp_client", MCPClient())
-workflow.add_node("agent", LLMAgentNode())
+workflow.add_node("LLMAgentNode", "agent", {}))
 # ... multiple connections required
 
 # After: Simple integrated approach
-workflow.add_node("ai_agent", LLMAgentNode(),
+workflow.add_node("LLMAgentNode", "ai_agent", {}),
     provider="ollama",
     model="llama3.2",
     mcp_servers=["http://localhost:8080/ai-registry"],
@@ -55,7 +55,7 @@ MCP servers can now have built-in AI for handling complex queries:
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -65,12 +65,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Intelligent server with AI capabilities
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("intelligent_registry", IntelligentAIRegistryMCPServerNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("IntelligentAIRegistryMCPServerNode", "intelligent_registry", {}),
     llm_provider="ollama",
     llm_model="llama3.2",
     registry_file="research/combined_ai_registry.json"
@@ -85,7 +86,7 @@ workflow.workflow.add_node("intelligent_registry", IntelligentAIRegistryMCPServe
 Agents can delegate complex analysis to intelligent servers:
 
 ```python
-workflow.add_node("consultant", LLMAgentNode(),
+workflow.add_node("LLMAgentNode", "consultant", {}),
     mcp_servers=[{
         "url": "http://localhost:8080/intelligent-registry",
         "mode": "delegate"  # Prefers delegation for complex queries
@@ -209,11 +210,11 @@ if function_call.name.startswith("mcp_"):
 ```python
 # Old pattern
 workflow.add_node("client", MCPClient(), server_url="...")
-workflow.add_node("agent", LLMAgentNode())
-workflow.connect("client", "agent")
+workflow.add_node("LLMAgentNode", "agent", {}))
+workflow.add_connection("client", "result", "agent", "input")
 
 # New pattern
-workflow.add_node("agent", LLMAgentNode(),
+workflow.add_node("LLMAgentNode", "agent", {}),
     mcp_servers=["..."]  # Just add server URL
 )
 
@@ -223,7 +224,7 @@ workflow.add_node("agent", LLMAgentNode(),
 
 ```python
 # Old pattern with PythonCodeNode
-workflow.add_node("tool_caller", PythonCodeNode(), code="""
+workflow.add_node("PythonCodeNode", "tool_caller", {}), code="""
     # Manual HTTP calls to MCP endpoints
     # Complex result parsing
     # Error handling
@@ -231,7 +232,7 @@ workflow.add_node("tool_caller", PythonCodeNode(), code="""
 
 # New pattern
 # Agent handles everything automatically
-workflow.add_node("agent", LLMAgentNode(),
+workflow.add_node("LLMAgentNode", "agent", {}),
     mcp_servers=["..."],
     auto_discover_tools=True
 )

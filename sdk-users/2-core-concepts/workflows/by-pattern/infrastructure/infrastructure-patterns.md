@@ -1,3 +1,4 @@
+from kailash.workflow.builder import WorkflowBuilder
 # Infrastructure Patterns for Kailash Workflows
 
 Common infrastructure patterns and best practices for deploying Kailash SDK workflows.
@@ -297,7 +298,7 @@ from kailash.workflow import Workflow
 from kailash.deployment import EdgeDeployment
 
 # Lightweight workflow for edge
-edge_workflow = Workflow("edge-processor", "Edge Processing")
+edge_workflow = WorkflowBuilder()
 
 # Configure for resource constraints
 edge_config = {
@@ -372,11 +373,10 @@ secrets = SecretsManager(
 )
 
 # Workflow with secrets
-workflow = Workflow("secret-workflow", "Workflow with Secrets")
+workflow = WorkflowBuilder()
 
 # Add node with secret reference
-workflow.add_node("db_query", DatabaseNode(
-    connection_string=secrets.get_secret("db/prod/connection_string"),
+workflow.add_node("DatabaseNode", "db_query", {}),
     query="SELECT * FROM sensitive_data"
 ))
 

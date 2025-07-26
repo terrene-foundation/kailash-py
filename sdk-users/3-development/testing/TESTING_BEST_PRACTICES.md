@@ -114,7 +114,7 @@ workflow = AsyncWorkflowBuilder("my_workflow").with_description("My async workfl
 ### 3. Using CycleBuilder API
 ```python
 # ❌ Deprecated
-workflow.connect("node1", "node2", cycle=True, max_iterations=5)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # ✅ New CycleBuilder API
 workflow.create_cycle("my_cycle")
@@ -178,7 +178,7 @@ ModuleNotFoundError: No module named 'aioredis'
 
 ### 3. Deprecated API Usage
 ```
-DeprecationWarning: Using workflow.connect() with cycle=True is deprecated
+DeprecationWarning: Using workflow.add_connection("source", "result", "target", "input")with # Use CycleBuilder API instead is deprecated
 ```
 **Solution**: Update to new CycleBuilder API
 

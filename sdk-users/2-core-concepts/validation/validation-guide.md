@@ -39,6 +39,7 @@ This guide provides comprehensive validation strategies for Kailash SDK workflow
 
 ### Basic Workflow Validation
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow import Workflow
 from kailash.validation import WorkflowValidator
 
@@ -46,7 +47,7 @@ from kailash.validation import WorkflowValidator
 validator = WorkflowValidator()
 
 # Validate workflow structure
-workflow = Workflow("data_pipeline")
+workflow = WorkflowBuilder()
 validation_result = validator.validate_structure(workflow)
 
 if not validation_result.is_valid:

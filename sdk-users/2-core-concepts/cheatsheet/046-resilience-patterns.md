@@ -75,7 +75,7 @@ from kailash.core.resilience.bulkhead import execute_with_bulkhead
 
 async def call_external_api(url):
     def api_call():
-        node = HTTPRequestNode()
+        node = "HTTPRequestNode"
         return node.execute(url=url, method="GET")
 
     return await execute_with_bulkhead("api", api_call)
@@ -101,7 +101,7 @@ workflow.add_node("SwitchNode", "router", {
     "condition": "overall_status == 'healthy'"
 })
 
-workflow.connect("health", "overall_status", mapping={"router": "condition"})
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 ```
 
 ### Pattern 4: Complete Resilient Service

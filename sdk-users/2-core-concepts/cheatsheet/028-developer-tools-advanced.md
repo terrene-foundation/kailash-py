@@ -201,17 +201,17 @@ def ab_test_cycle_variants():
 
     def create_baseline_cycle():
         """Mock function to create baseline cycle."""
-        from kailash import Workflow
+        from kailash.workflow.builder import WorkflowBuilder
         return Workflow("baseline")
 
     def create_optimized_v1():
         """Mock function to create optimized v1."""
-        from kailash import Workflow
+        from kailash.workflow.builder import WorkflowBuilder
         return Workflow("optimized_v1")
 
     def create_optimized_v2():
         """Mock function to create optimized v2."""
-        from kailash import Workflow
+        from kailash.workflow.builder import WorkflowBuilder
         return Workflow("optimized_v2")
 
     def execute_workflow_with_profiling(workflow):
@@ -263,7 +263,7 @@ def ab_test_cycle_variants():
 ### Custom Analysis Hooks
 ```python
 import time
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow import CycleAnalyzer
 
 class CustomCycleAnalyzer(CycleAnalyzer):

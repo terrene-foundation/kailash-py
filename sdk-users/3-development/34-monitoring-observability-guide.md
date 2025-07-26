@@ -19,6 +19,7 @@ The Kailash SDK provides enterprise-grade monitoring and observability capabilit
 Comprehensive metrics collection with performance tracking and analysis.
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.core.monitoring.connection_metrics import ConnectionMetricsCollector
 
@@ -902,11 +903,11 @@ async def create_production_monitoring_stack():
     })
 
     # Connect monitoring pipeline
-    monitoring_workflow.connect("metrics", "performance", mapping={"system_metrics": "baseline_metrics"})
-    monitoring_workflow.connect("health", "performance", mapping={"health_status": "system_health"})
+    monitoring_workflow.add_connection("metrics", "performance", "system_metrics", "baseline_metrics")
+    monitoring_workflow.add_connection("health", "performance", "health_status", "system_health")
 
     # Execute monitoring workflow
-    monitoring_result = await monitoring_workflow.execute({
+    monitoring_result = await monitoring_runtime.execute(workflow.build(), {
         "metrics": {"operation": "collect"},
         "health": {"operation": "check_all"},
         "performance": {"operation": "benchmark"}

@@ -19,6 +19,7 @@ Cyclic workflows enable iterative processing patterns including optimization loo
 The main execution engine for cyclic workflows with hybrid DAG/Cycle execution.
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 from kailash.workflow.cycle_state import CycleState
 from kailash.workflow.cycle_config import CycleConfig
@@ -66,8 +67,7 @@ cycle_config = CycleConfig(
         "regularization": 0.001
     },
 
-    parameter_mapping={
-        "previous_iteration.optimized_params": "current_iteration.initial_params",
+    parameter_# mapping removed,
         "previous_iteration.quality_score": "current_iteration.target_quality"
     }
 )
@@ -437,7 +437,7 @@ retry_cycle = CycleTemplates.retry_cycle(
 
 # Use template in workflow
 workflow.add_cycle(training_loop)
-await workflow.execute()
+await runtime.execute(workflow.build(), )
 ```
 
 ## Safety and Resource Management
@@ -577,7 +577,7 @@ cycle_debugger = CycleDebugger(
     cycle_id="optimization_cycle_001",
 
     # Debug configuration
-    capture_node_inputs=True,
+    capture_node_parameters=True,
     capture_node_outputs=True,
     capture_state_changes=True,
     capture_convergence_data=True,
@@ -750,12 +750,12 @@ async def create_production_optimization_workflow():
     })
 
     # Connect workflow nodes
-    workflow.connect("data_loader", "feature_engineer", mapping={"dataset": "raw_data"})
-    workflow.connect("feature_engineer", "model_trainer", mapping={"features": "training_data"})
-    workflow.connect("model_trainer", "model_evaluator", mapping={"model": "trained_model"})
-    workflow.connect("model_evaluator", "hyperopt", mapping={"metrics": "current_performance"})
-    workflow.connect("hyperopt", "model_trainer", mapping={"optimized_params": "hyperparameters"})
-    workflow.connect("model_evaluator", "convergence", mapping={"metrics": "current_metrics"})
+    workflow.add_connection("data_loader", "feature_engineer", "dataset", "raw_data")
+    workflow.add_connection("feature_engineer", "model_trainer", "features", "training_data")
+    workflow.add_connection("model_trainer", "model_evaluator", "model", "trained_model")
+    workflow.add_connection("model_evaluator", "hyperopt", "metrics", "current_performance")
+    workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+    workflow.add_connection("model_evaluator", "convergence", "metrics", "current_metrics")
 
     # Configure optimization cycle
     optimization_cycle = (workflow.create_cycle("model_optimization")

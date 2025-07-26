@@ -7,7 +7,7 @@
 All examples in this guide assume these imports:
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime, AccessControlledRuntime
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode, JSONReaderNode, JSONWriterNode, TextReaderNode, TextWriterNode, DirectoryReaderNode
 from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
@@ -23,7 +23,7 @@ from kailash.workflow.builder import WorkflowBuilder
 
 ### **Workflow Class**
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 
 # Constructor
 Workflow(id: str, name: str = None) -> Workflow
@@ -34,18 +34,13 @@ workflow.remove_node(node_id: str) -> None
 workflow.get_node(node_id: str) -> Node
 
 # Connections
-workflow.connect(from_node: str, to_node: str,
-                mapping: Dict[str, str] = None,
-                output_key: str = None,
-                cycle: bool = False,
-                max_iterations: int = None,
-                convergence_check: str = None) -> None
+workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern -> None
 
 workflow.disconnect(from_node: str, to_node: str) -> None
 
 # Validation and execution
 workflow.validate() -> bool
-workflow.execute() -> Dict
+runtime.execute(workflow.build(), ) -> Dict
 
 # Utility methods
 workflow.get_nodes() -> Dict[str, Node]
@@ -198,8 +193,7 @@ MergeNode(
 # WorkflowNode (nested workflows)
 WorkflowNode(
     workflow: Workflow = None,
-    mapping={"output": "input"}
-)
+    # mapping removed)
 
 ```
 
@@ -226,8 +220,8 @@ PythonCodeNode(
 ```python
 
 # Configuration parameters (set at node creation)
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.add_node("reader", CSVReaderNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}),
     file_path="default.csv",    # Configuration parameter
     has_header=True,           # Configuration parameter
     delimiter=","              # Configuration parameter
@@ -269,13 +263,13 @@ results, run_id = runtime.execute(workflow, parameters=parameters)
 ```python
 
 # Pattern 1: Source nodes with no external inputs
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
 # No external parameters needed
 
 # Pattern 2: External data injection
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})}",
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")}",
     input_types={"external_data": list}
 ))
 
@@ -285,8 +279,8 @@ results, run_id = runtime.execute(workflow, parameters={
 })
 
 # Pattern 3: Hybrid (source + runtime override)
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.add_node("reader", CSVReaderNode(), file_path="default.csv")
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}), file_path="default.csv")
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow, parameters={
 runtime = LocalRuntime()
@@ -301,17 +295,17 @@ workflow.csv"}  # Override default
 ```python
 
 # Automatic mapping (when names match)
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.connect("reader", "processor")
+workflow = WorkflowBuilder()
+workflow.add_connection("reader", "result", "processor", "input")
 # Maps: reader.data → processor.data (automatic)
 
 # Explicit mapping
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")
 
 # Nested data access
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")
 
 ```
 
@@ -319,20 +313,20 @@ workflow.connect("from_node", "to_node", mapping={"output": "input"})
 ```python
 
 # Multiple inputs to one node (MergeNode)
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")
 
 # Multiple outputs from one node (SwitchNode)
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")
 
 ```
 
@@ -340,12 +334,12 @@ workflow.connect("from_node", "to_node", mapping={"output": "input"})
 ```python
 
 # Basic cycle
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")
 
 # Complex cycle with state preservation
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.connect("from_node", "to_node", mapping={"output": "input"}) < 0.01"
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input") < 0.01"
 )
 
 ```
@@ -356,13 +350,13 @@ workflow.connect("from_node", "to_node", mapping={"output": "input"}) < 0.01"
 ```python
 
 # Direct workflow connection (simpler)
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.workflow = Workflow("api_reference", name="API Reference Example")
-workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.add_node("processor", PythonCodeNode(name="proc", code="result = data"))
-workflow = Workflow("api_reference", name="API Reference Example")
-workflow.connect("from_node", "to_node", mapping={"output": "input"})
+workflow = WorkflowBuilder()
+workflow.workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "processor", {}))
+workflow = WorkflowBuilder()
+workflow.add_connection("from_node", "to_node", "output", "input")
 
 ```
 
@@ -384,33 +378,30 @@ workflow = builder.build()
 
 ### **Template 1: Data Processing Pipeline**
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.transform import DataTransformerNode
 from kailash.nodes.code import PythonCodeNode
 
 # Create workflow
-workflow = Workflow("data_pipeline", name="Data Processing Pipeline")
+workflow = WorkflowBuilder()
 
 # Add nodes with configuration
-workflow.add_node("reader", CSVReaderNode(),
+workflow.add_node("CSVReaderNode", "reader", {}),
     file_path="input.csv",
     has_header=True,
     delimiter=","
 )
 
-workflow.add_node("transformer", DataTransformerNode(),
+workflow.add_node("DataTransformerNode", "transformer", {}),
     operations=[
         {"type": "filter", "condition": "age > 18"},
         {"type": "map", "expression": "{'name': name.upper(), 'age': age}"}
     ]
 )
 
-workflow.add_node("processor", PythonCodeNode(
-    name="processor",
-    code='''
-processed_count = len(data)
+workflow.add_node("PythonCodeNode", "processor", {})
 result = {
     "processed_data": data,
     "total_processed": processed_count,
@@ -420,15 +411,15 @@ result = {
     input_types={"data": list}
 ))
 
-workflow.add_node("writer", CSVWriterNode(),
+workflow.add_node("CSVWriterNode", "writer", {}),
     file_path="output.csv",
     include_header=True
 )
 
 # Connect nodes
-workflow.connect("reader", "transformer", mapping={"data": "data"})
-workflow.connect("transformer", "processor", mapping={"transformed": "data"})
-workflow.connect("processor", "writer", mapping={"processed_data": "data"})
+workflow.add_connection("reader", "transformer", "data", "data")
+workflow.add_connection("transformer", "processor", "transformed", "data")
+workflow.add_connection("processor", "writer", "processed_data", "data")
 
 # Execute
 runtime = LocalRuntime()
@@ -441,40 +432,40 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ### **Template 2: AI Processing Pipeline**
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
 from kailash.nodes.data import JSONReaderNode, JSONWriterNode
 
-workflow = Workflow("ai_pipeline", name="AI Processing Pipeline")
+workflow = WorkflowBuilder()
 
-workflow.add_node("reader", JSONReaderNode(),
+workflow.add_node("JSONReaderNode", "reader", {}),
     file_path="prompts.json"
 )
 
-workflow.add_node("llm", LLMAgentNode(),
+workflow.add_node("LLMAgentNode", "llm", {}),
     provider="openai",
     model="gpt-4",
     temperature=0.7,
     max_tokens=1000
 )
 
-workflow.add_node("embedder", EmbeddingGeneratorNode(),
+workflow.add_node("EmbeddingGeneratorNode", "embedder", {}),
     provider="openai",
     model="text-embedding-ada-002"
 )
 
-workflow.add_node("writer", JSONWriterNode(),
+workflow.add_node("JSONWriterNode", "writer", {}),
     file_path="results.json",
     indent=2
 )
 
-workflow.connect("reader", "llm", mapping={"data": "prompt"})
-workflow.connect("llm", "embedder", mapping={"response": "text"})
-workflow.connect("embedder", "writer", mapping={"embeddings": "data"})
+workflow.add_connection("reader", "llm", "data", "prompt")
+workflow.add_connection("llm", "embedder", "response", "text")
+workflow.add_connection("embedder", "writer", "embeddings", "data")
 
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 

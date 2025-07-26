@@ -18,6 +18,7 @@ Security in DataFlow is implemented at multiple layers:
 Encrypt sensitive fields automatically:
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from dataflow import DataFlow
 from dataflow.fields import Field
 

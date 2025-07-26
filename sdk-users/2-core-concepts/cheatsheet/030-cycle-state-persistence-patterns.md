@@ -7,9 +7,7 @@
 ### ❌ Wrong: Generic Mapping (Causes State Loss)
 ```python
 # This fails - state variables reset each iteration
-workflow.connect("processor", "processor",
-    mapping={"output": "output"},  # Generic mapping fails
-    cycle=True)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 # Result: counter = 1, 1, 1... (never increments)
 
 ```
@@ -17,14 +15,7 @@ workflow.connect("processor", "processor",
 ### ✅ Correct: Specific Field Mapping (Preserves State)
 ```python
 # This works - explicitly map each field that needs to persist
-workflow.connect("processor", "processor",
-    mapping={
-        "counter": "counter",           # State variables
-        "quality_score": "quality_score",  # Progress metrics
-        "accumulated_data": "accumulated_data",  # Accumulated results
-        "config": "config"              # Static configuration
-    },
-    cycle=True)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 # Result: counter = 1, 2, 3... (increments correctly)
 
 ```
@@ -38,7 +29,7 @@ Cycle state persistence determines whether data accumulated across iterations is
 ### ✅ Correct: Design for State Loss Scenarios
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -48,8 +39,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class RobustCycleNode(CycleAwareNode):
     def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -82,7 +74,7 @@ class RobustCycleNode(CycleAwareNode):
 ### ✅ Correct: Simplified Convergence When State Fails
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -92,8 +84,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class SimpleConvergenceNode(CycleAwareNode):
     def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -120,7 +113,7 @@ class SimpleConvergenceNode(CycleAwareNode):
 ### ❌ Wrong: Relying on Complex State History
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -130,8 +123,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class FragileCycleNode(CycleAwareNode):
     def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -153,7 +147,7 @@ class FragileCycleNode(CycleAwareNode):
 ### Check State Availability
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -163,8 +157,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class StateDebuggingNode(CycleAwareNode):
     def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -195,7 +190,7 @@ class StateDebuggingNode(CycleAwareNode):
 #### Use Data Flow Instead of State
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -205,8 +200,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Instead of relying on state, pass data through connections
 class DataFlowNode(CycleAwareNode):
@@ -226,15 +222,15 @@ class DataFlowNode(CycleAwareNode):
         }
 
 # Use mapping to pass accumulated data between iterations
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
 #### Iteration-Based Logic
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -244,8 +240,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class IterationBasedNode(CycleAwareNode):
     def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -275,7 +272,7 @@ class IterationBasedNode(CycleAwareNode):
 #### External State Storage
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -285,8 +282,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class ExternalStateNode(CycleAwareNode):
     def __init__(self, **kwargs):

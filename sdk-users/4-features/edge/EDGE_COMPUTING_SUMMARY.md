@@ -40,7 +40,7 @@ The Kailash SDK now provides a complete edge computing solution with state manag
 | **EdgeAffinityNode** | ✅ Complete | Optimal placement | Geographic, data locality, compliance |
 | **EdgeInfrastructure** | ✅ Complete | Centralized management | Global registry, shared state, discovery |
 
-### Phase 2: Edge Coordination ✅ Complete  
+### Phase 2: Edge Coordination ✅ Complete
 
 | Feature | Status | Description | Key Capabilities |
 |---------|--------|-------------|------------------|
@@ -361,9 +361,9 @@ workflow.add_node("EdgeMigrationNode", "migrate", {
 })
 
 # Connect nodes
-workflow.add_connection("state_check", "state", "monitor", "parameters")
-workflow.add_connection("monitor", "status", "warmer", "parameters")
-workflow.add_connection("warmer", "predictions", "migrate", "parameters")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 # Execute
 runtime = LocalRuntime()
@@ -382,7 +382,7 @@ class UserProfile:
     user_id: str
     location: tuple
     preferences: dict
-    
+
     class Config:
         edge_enabled = True
         edge_strategy = "geographic"

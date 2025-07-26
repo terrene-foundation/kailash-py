@@ -8,7 +8,7 @@
 **Update**: Initial parameters are now preserved throughout all cycle iterations!
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.base import Node, CycleAwareNode
 
@@ -71,16 +71,14 @@ result = {"count": current_count, "done": done}
 
 ### 3. Infinite Cycles
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.base import Node
 from kailash.nodes.code import PythonCodeNode
 
 # ❌ Problem: Convergence never satisfied
-workflow = Workflow("convergence-problem")
-workflow.connect("processor", "processor",
-    cycle=True, max_iterations=10,
-    convergence_check="done == True")  # 'done' never becomes True
+workflow = WorkflowBuilder()
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()  # 'done' never becomes True
 
 # ✅ Solution: Debug convergence field
 class DebugNode(Node):
@@ -90,32 +88,32 @@ class DebugNode(Node):
         return kwargs  # Pass through
 
 # Insert debug node before convergence check
-workflow = Workflow("debug-convergence")
-workflow.add_node("processor", PythonCodeNode())
-workflow.add_node("debug", DebugNode())
-workflow.connect("processor", "debug")
-workflow.connect("debug", "processor", cycle=True)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "processor", {}))
+workflow.add_node("DebugNode", "debug", {}))
+workflow.add_connection("processor", "result", "debug", "input")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 ```
 
 ### 4. Multi-Node Cycle Detection Issues
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 
 # ❌ Problem: Middle nodes not detected in A → B → C → A
-workflow = Workflow("multi-node-cycle-problem")
-workflow.connect("A", "B")           # Regular
-workflow.connect("B", "C")           # Regular
-workflow.connect("C", "A", cycle=True) # Only closing edge marked
+workflow = WorkflowBuilder()
+workflow.add_connection("A", "result", "B", "input")           # Regular
+workflow.add_connection("B", "result", "C", "input")           # Regular
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build() # Only closing edge marked
 # Result: B is treated as separate DAG node
 
 # ✅ Solution: Use direct cycles when possible
 workflow_fixed = Workflow("two-node-cycle")
-workflow_fixed.add_node("A", PythonCodeNode())
-workflow_fixed.add_node("B", PythonCodeNode())
+workflow_fixed.add_node("A", "PythonCodeNode")
+workflow_fixed.add_node("B", "PythonCodeNode")
 workflow_fixed.connect("A", "B")
-workflow_fixed.connect("B", "A", cycle=True)  # Simple 2-node cycle
+workflow_fixed.connect("B", "A", # Use CycleBuilder API instead)  # Simple 2-node cycle
 
 # Note: cycle detection is internal to the runtime
 print("Workflow configured with 2-node cycle")
@@ -126,7 +124,7 @@ print("Workflow configured with 2-node cycle")
 
 ### Add Logging Node
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.base import Node
 from kailash.nodes.code import PythonCodeNode
 
@@ -142,11 +140,11 @@ class CycleLoggerNode(Node):
         return kwargs  # Pass through unchanged
 
 # Insert into cycle for debugging
-workflow = Workflow("debug-cycle")
-workflow.add_node("processor", PythonCodeNode())
-workflow.add_node("logger", CycleLoggerNode())
-workflow.connect("processor", "logger")
-workflow.connect("logger", "processor", cycle=True)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "processor", {}))
+workflow.add_node("CycleLoggerNode", "logger", {}))
+workflow.add_connection("processor", "result", "logger", "input")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 ```
 
@@ -190,34 +188,21 @@ def run(self, **kwargs):
 ### Simple Test Cycle
 ```python
 def test_cycle_execution():
-    from kailash import Workflow
+    from kailash.workflow.builder import WorkflowBuilder
     from kailash.runtime.local import LocalRuntime
     from kailash.nodes.code import PythonCodeNode
 
-    workflow = Workflow("test-cycle")
+    workflow = WorkflowBuilder()
 
     # Simple counter node
-    workflow.add_node("counter", PythonCodeNode(
-        code='''
-try:
-    count = count
-except:
-    count = 0
-
-count += 1
-result = {"count": count, "done": count >= 3}
-'''
-    ))
+    workflow.add_node("PythonCodeNode", "counter", {}))
 
     # Self-cycle
-    workflow.connect("counter", "counter",
-        mapping={"result.count": "count"},
-        cycle=True, max_iterations=10,
-        convergence_check="done == True")
+    # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
     # Execute and verify
     runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow)
+    results, run_id = runtime.execute(workflow.build())
 
     final_result = results.get("counter", {})
     assert final_result.get("result", {}).get("count") == 3

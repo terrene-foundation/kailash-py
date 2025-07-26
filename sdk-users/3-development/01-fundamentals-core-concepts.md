@@ -45,7 +45,7 @@ result = {'processed_items': processed, 'count': len(processed)}
 })
 
 # Connect nodes
-workflow.connect("reader", "result", mapping={"processor": "input_data"})
+workflow.add_connection("reader", "result", "processor", "input_data")
 
 # Execute
 runtime = LocalRuntime()

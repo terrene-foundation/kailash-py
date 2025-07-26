@@ -19,6 +19,7 @@ The Kailash SDK provides comprehensive compliance and governance capabilities in
 Automated GDPR compliance with data protection and privacy controls.
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.enterprise.gdpr_compliance import GDPRComplianceNode
 
 # Initialize GDPR compliance node
@@ -449,7 +450,7 @@ async def data_governance_implementation():
         classification_method="ml_assisted",
         sensitivity_analysis=True,
         privacy_risk_assessment=True,
-        regulatory_mapping=True,
+        regulatory_# mapping removed,
         auto_apply_controls=True
     )
 
@@ -963,12 +964,12 @@ async def create_enterprise_compliance_stack():
     })
 
     # Connect compliance pipeline
-    compliance_workflow.connect("gdpr", "audit", mapping={"compliance_results": "gdpr_findings"})
-    compliance_workflow.connect("governance", "risk", mapping={"quality_metrics": "data_quality_risks"})
-    compliance_workflow.connect("audit", "risk", mapping={"audit_findings": "audit_risks"})
+    compliance_workflow.add_connection("gdpr", "audit", "compliance_results", "gdpr_findings")
+    compliance_workflow.add_connection("governance", "risk", "quality_metrics", "data_quality_risks")
+    compliance_workflow.add_connection("audit", "risk", "audit_findings", "audit_risks")
 
     # Execute compliance workflow
-    compliance_result = await compliance_workflow.execute({
+    compliance_result = await compliance_runtime.execute(workflow.build(), {
         "gdpr": {"data_sources": ["user_database", "analytics_warehouse"]},
         "audit": {"audit_type": "quarterly_assessment"},
         "governance": {"quality_dimensions": ["completeness", "accuracy"]},

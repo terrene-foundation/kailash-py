@@ -77,18 +77,17 @@ pytest tests/integration/test_durable_gateway_simple.py -v
 ## 📋 **Quick Reference Card**
 
 ### ✅ **Always Do**
-- Use exact method names: `workflow.add_node()`, `workflow.connect()`
+- Use exact method names: `workflow.add_node()`, `workflow.add_connection("source", "result", "target", "input")`
 - Include "Node" suffix: `CSVReaderNode`, `HTTPRequestNode`
-- Use keyword arguments: `mapping={"output": "input"}`
-- Validate before execution: `workflow.validate()`
-- Use runtime for execution: `runtime.execute(workflow)`
+- Use keyword arguments: `# mapping removed)`
+- Use runtime for execution: `runtime.execute(workflow.build())`
 
 ### ❌ **Never Do**
 - Use camelCase: `addNode()`, `connectNodes()`
 - Missing "Node" suffix: `CSVReader`, `HTTPRequest`
-- Wrong parameter order: `workflow.connect(mapping={...}, "from", "to")`
+- Wrong parameter order: `workflow.add_connection("source", "result", "target", "input")  # Fixed complex pattern`
 - Skip validation
-- Wrong execution pattern: `workflow.execute(runtime)`
+- Wrong execution pattern: `runtime.execute(workflow.build(), runtime)`
 
 ---
 

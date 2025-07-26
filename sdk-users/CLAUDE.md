@@ -22,9 +22,9 @@ results, run_id = runtime.execute(workflow.build())  # ALWAYS .build()
 ### Common Mistakes
 ```python
 # ❌ NEVER
-workflow.add_node("reader", CSVReaderNode(), {})  # Instance-based
-workflow.connect("a", "b")                       # 2-param
-runtime.execute(workflow)                        # Missing .build()
+workflow.add_node("CSVReaderNode", "reader", {}), {})  # Instance-based
+workflow.add_connection("a", "result", "b", "input")                       # 2-param
+runtime.execute(workflow.build())                        # Missing .build()
 
 # ✅ ALWAYS
 workflow.add_node("CSVReaderNode", "reader", {})  # String-based

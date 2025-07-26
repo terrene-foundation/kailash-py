@@ -94,7 +94,7 @@ secret_provider = EnvironmentSecretProvider()
 runtime = LocalRuntime(secret_provider=secret_provider)
 
 # Secrets are automatically injected during workflow execution
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Workflow Secret Declaration
@@ -129,7 +129,7 @@ class TokenGeneratorNode(Node):
 ```python
 # ✅ Runtime secret injection
 runtime = LocalRuntime(secret_provider=provider)
-workflow.add_node("api", HTTPRequestNode(), {
+workflow.add_node("HTTPRequestNode", "api", {}), {
     "url": "https://api.example.com",
     "headers": {"Authorization": "Bearer {injected_token}"}
 })
@@ -151,7 +151,7 @@ providers = {
 ### ❌ Anti-Patterns to Avoid
 ```python
 # ❌ Hardcoded secrets
-workflow.add_node("api", HTTPRequestNode(), {
+workflow.add_node("HTTPRequestNode", "api", {}), {
     "headers": {"Authorization": "Bearer sk-abc123"}  # NEVER DO THIS
 })
 
@@ -160,7 +160,7 @@ import os
 secret = os.getenv("API_KEY")  # Avoid this pattern
 
 # ❌ Template substitution
-workflow.add_node("api", HTTPRequestNode(), {
+workflow.add_node("HTTPRequestNode", "api", {}), {
     "headers": {"Authorization": "Bearer ${API_TOKEN}"}  # Legacy pattern
 })
 ```
@@ -240,14 +240,14 @@ secrets = provider.get_secrets(requirements)
 # Before (insecure)
 import os
 api_key = os.getenv("API_KEY")
-workflow.add_node("api", HTTPRequestNode(), {
+workflow.add_node("HTTPRequestNode", "api", {}), {
     "headers": {"Authorization": f"Bearer {api_key}"}
 })
 
 # After (secure)
 secret_provider = EnvironmentSecretProvider()
 runtime = LocalRuntime(secret_provider=secret_provider)
-workflow.add_node("api", HTTPRequestNode(), {
+workflow.add_node("HTTPRequestNode", "api", {}), {
     "headers": {"Authorization": "Bearer {api_key}"}  # Injected at runtime
 })
 ```
@@ -298,7 +298,7 @@ def create_production_runtime():
 
 # Usage
 runtime = create_production_runtime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ## Next Steps

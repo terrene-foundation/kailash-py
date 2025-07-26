@@ -3,53 +3,62 @@
 ## Basic Setup
 
 ```python
-from kailash import Workflow
-from kailash.nodes.logic import SwitchNode
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
 # Boolean routing
-workflow.add_node("switch", SwitchNode(
-    condition_field="is_valid",
-    operator="==",
-    value=True
-))
+workflow = WorkflowBuilder()
+workflow.add_node("SwitchNode", "switch", {
+    "condition_field": "is_valid",
+    "operator": "==",
+    "value": True
+})
 
 # Connect outputs: true_output or false_output
-workflow.connect("switch", "success_handler", condition="true_output")
-workflow.connect("switch", "retry_handler", condition="false_output")
+workflow.add_connection("switch", "true_output", "success_handler", "input")
+workflow.add_connection("switch", "false_output", "retry_handler", "input")
 
 ```
 
 ## Critical Pattern: A → B → Switch → (Back to A | Exit)
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.logic import SwitchNode
-from kailash.nodes.code import PythonCodeNode
 
 # Quality improvement loop with conditional exit
-workflow = Workflow("conditional-cycle")
+workflow = WorkflowBuilder()
 
-# Linear flow
-workflow.add_node("processor", PythonCodeNode())
-workflow.add_node("checker", PythonCodeNode())
-workflow.add_node("switch", SwitchNode(
-    condition_field="needs_improvement",
-    operator="==",
-    value=True
-))
-workflow.add_node("output", PythonCodeNode())
+# Linear flow nodes
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'data': data, 'iteration': iteration + 1}"
+})
+workflow.add_node("PythonCodeNode", "checker", {
+    "code": "result = {'needs_improvement': iteration < 5, 'data': data, 'iteration': iteration}"
+})
+workflow.add_node("SwitchNode", "switch", {
+    "condition_field": "needs_improvement",
+    "operator": "==",
+    "value": True
+})
+workflow.add_node("PythonCodeNode", "output", {
+    "code": "result = {'final_data': data, 'iterations': iteration}"
+})
 
-# Connect flow
-workflow.connect("processor", "checker")
-workflow.connect("checker", "switch",
-    mapping={"result": "input_data"})
+# Connect linear flow
+workflow.add_connection("processor", "result", "checker", "input_data")
+workflow.add_connection("checker", "result", "switch", "input_data")
 
-# Conditional routing
-workflow.connect("switch", "processor",
-    condition="true_output", cycle=True, max_iterations=10)
-workflow.connect("switch", "output",
-    condition="false_output")
+# Create cycle using CycleBuilder API
+cycle_builder = workflow.create_cycle("quality_improvement")
+cycle_builder.connect("switch", "true_output", "processor", "input_data") \
+             .max_iterations(10) \
+             .converge_when("needs_improvement == False") \
+             .timeout(300) \
+             .build()
+
+# Exit condition
+workflow.add_connection("switch", "false_output", "output", "input_data")
 
 ```
 
@@ -57,41 +66,36 @@ workflow.connect("switch", "output",
 
 ### ✅ Correct Patterns
 ```python
-from kailash import Workflow
-from kailash.nodes.logic import SwitchNode
+from kailash.workflow.builder import WorkflowBuilder
 
-workflow = Workflow("mapping-examples")
+workflow = WorkflowBuilder()
 
 # ✅ Complete output transfer
-workflow.connect("processor", "switch",
-    mapping={"result": "input_data"})  # Entire dict → input_data
+workflow.add_connection("processor", "result", "switch", "input_data")  # Entire dict → input_data
 
-# ✅ Specific field mapping
-workflow.connect("processor", "switch",
-    mapping={"result.status": "input_data"})  # Single field → input_data
+# ✅ Specific field mapping with dot notation
+workflow.add_connection("processor", "result.status", "switch", "input_data")  # Single field → input_data
 
-# ✅ Multi-field mapping
-workflow.connect("processor", "switch",
-    mapping={
-        "result.data": "input_data",
-        "result.metadata": "metadata"
-    })
+# ✅ Multi-field connections (separate connections for each field)
+workflow.add_connection("processor", "result.data", "switch", "input_data")
+workflow.add_connection("processor", "result.metadata", "switch", "metadata")
 
 ```
 
 ### ❌ Common Mistakes
 ```python
-from kailash import Workflow
-from kailash.nodes.logic import SwitchNode
+from kailash.workflow.builder import WorkflowBuilder
 
-workflow = Workflow("mistake-examples")
+workflow = WorkflowBuilder()
 
-# ❌ Missing input_data - THIS IS WRONG!
-workflow.connect("processor", "switch")  # ERROR: No input_data
+# ❌ Missing port names - THIS IS WRONG!
+# workflow.add_connection("processor", "result", "switch", "input")  # ERROR: Missing ports
 
 # ❌ Wrong parameter name - THIS IS WRONG!
-workflow.connect("processor", "switch",
-    mapping={"result": "data"})  # ERROR: Needs "input_data"
+# workflow.add_connection("processor", "result", "switch", "data")  # ERROR: Needs "input_data"
+
+# ✅ CORRECT - Always use proper port names
+workflow.add_connection("processor", "result", "switch", "input_data")
 
 ```
 
@@ -99,34 +103,36 @@ workflow.connect("processor", "switch",
 
 ### Multi-Case Routing
 ```python
-from kailash import Workflow
-from kailash.nodes.logic import SwitchNode
-from kailash.nodes.code import PythonCodeNode
+from kailash.workflow.builder import WorkflowBuilder
 
-workflow = Workflow("multi-case-example")
+workflow = WorkflowBuilder()
 
-switch = SwitchNode(
-    condition_field="status",
-    cases=["success", "warning", "error"]
-)
+workflow.add_node("SwitchNode", "switch", {
+    "condition_field": "status",
+    "cases": ["success", "warning", "error"]
+})
 
-workflow.add_node("switch", switch)
+# Add processor nodes
+workflow.add_node("PythonCodeNode", "success_proc", {"code": "result = 'Success processed'"})
+workflow.add_node("PythonCodeNode", "warning_proc", {"code": "result = 'Warning processed'"})
+workflow.add_node("PythonCodeNode", "error_proc", {"code": "result = 'Error processed'"})
+workflow.add_node("PythonCodeNode", "default_proc", {"code": "result = 'Default processed'"})
 
 # Outputs: case_success, case_warning, case_error, default
-workflow.connect("switch", "success_proc", condition="case_success")
-workflow.connect("switch", "warning_proc", condition="case_warning")
-workflow.connect("switch", "error_proc", condition="case_error")
-workflow.connect("switch", "default_proc", condition="default")
+workflow.add_connection("switch", "case_success", "success_proc", "input")
+workflow.add_connection("switch", "case_warning", "warning_proc", "input")
+workflow.add_connection("switch", "case_error", "error_proc", "input")
+workflow.add_connection("switch", "default", "default_proc", "input")
 
 ```
 
 ### Numeric Thresholds
 ```python
-switch = SwitchNode(
-    condition_field="score",
-    operator=">=",
-    value=0.8
-)
+workflow.add_node("SwitchNode", "threshold_switch", {
+    "condition_field": "score",
+    "operator": ">=",
+    "value": 0.8
+})
 # true_output: score >= 0.8
 # false_output: score < 0.8
 
@@ -136,79 +142,111 @@ switch = SwitchNode(
 
 ### Complete Example with Source Node
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.logic import SwitchNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, CycleAwareNode
 
-# Data source for cycle entry
-class DataSourceNode(CycleAwareNode):
-    def run(self, context, **kwargs):
-        return {"data": kwargs.get("data", [])}
+# Build workflow using WorkflowBuilder
+workflow = WorkflowBuilder()
 
-# Quality checker with routing decision
-class QualityCheckerNode(Node):
-    def run(self, context, **kwargs):
-        data = kwargs.get("data", [])
-        quality = len([x for x in data if x < 50]) / len(data)  # Simple quality calc
+# Data source
+workflow.add_node("PythonCodeNode", "source", {
+    "code": "result = {'data': [1, 2, 3, 60, 4, 5]}"
+})
 
-        return {
-            "data": data,
-            "quality": quality,
-            "needs_improvement": quality < 0.85,
-            "reason": f"Quality: {quality:.2f}"
-        }
+# Processor
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": """
+# Simulate processing
+import random
+processed_data = [x + random.randint(1, 10) for x in data.get('data', [])]
+result = {'data': processed_data, 'iteration': iteration + 1 if 'iteration' in locals() else 1}
+"""
+})
 
-# Build workflow
-workflow = Workflow("complete-switch-example")
-workflow.add_node("source", DataSourceNode())
-workflow.add_node("processor", PythonCodeNode())
-workflow.add_node("checker", QualityCheckerNode())
-workflow.add_node("switch", SwitchNode(
-    condition_field="needs_improvement",
-    operator="==",
-    value=True
-))
+# Quality checker
+workflow.add_node("PythonCodeNode", "checker", {
+    "code": """
+data_list = data.get('data', [])
+if data_list:
+    quality = len([x for x in data_list if x < 50]) / len(data_list)
+else:
+    quality = 0.0
 
-# Connect with proper mappings
-workflow.connect("source", "processor")
-workflow.connect("processor", "checker")
-workflow.connect("checker", "switch",
-    mapping={"result": "input_data"})
+result = {
+    'data': data_list,
+    'quality': quality,
+    'needs_improvement': quality < 0.85,
+    'reason': f'Quality: {quality:.2f}',
+    'iteration': data.get('iteration', 1)
+}
+"""
+})
 
-# Conditional paths
-workflow.connect("switch", "processor",
-    condition="true_output", cycle=True, max_iterations=5)
+# Switch node
+workflow.add_node("SwitchNode", "switch", {
+    "condition_field": "needs_improvement",
+    "operator": "==",
+    "value": True
+})
+
+# Output node
+workflow.add_node("PythonCodeNode", "output", {
+    "code": "result = {'final_quality': data.get('quality'), 'iterations': data.get('iteration')}"
+})
+
+# Connect linear flow
+workflow.add_connection("source", "result", "processor", "data")
+workflow.add_connection("processor", "result", "checker", "data")
+workflow.add_connection("checker", "result", "switch", "input_data")
+
+# Create cycle using CycleBuilder API
+cycle_builder = workflow.create_cycle("quality_improvement")
+cycle_builder.connect("switch", "true_output", "processor", "data") \
+             .max_iterations(5) \
+             .converge_when("needs_improvement == False") \
+             .timeout(300) \
+             .build()
+
+# Exit path
+workflow.add_connection("switch", "false_output", "output", "data")
 
 # Execute
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={
-    "source": {"data": [1, 2, 3, 60, 4, 5]}
-})
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
 ## Error Handling Pattern
 
 ```python
-from kailash import Workflow
-from kailash.nodes.logic import SwitchNode
-from kailash.nodes.code import PythonCodeNode
+from kailash.workflow.builder import WorkflowBuilder
 
-workflow = Workflow("error-handling-example")
+workflow = WorkflowBuilder()
+
+# Add processor and handlers
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'data': 'processed', 'has_error': False}"
+})
 
 # Route based on error status
-workflow.add_node("error_switch", SwitchNode(
-    condition_field="has_error",
-    operator="==",
-    value=True
-))
+workflow.add_node("SwitchNode", "error_switch", {
+    "condition_field": "has_error",
+    "operator": "==",
+    "value": True
+})
 
-workflow.connect("processor", "error_switch",
-    mapping={"result": "input_data"})
-workflow.connect("error_switch", "error_handler", condition="true_output")
-workflow.connect("error_switch", "success_flow", condition="false_output")
+workflow.add_node("PythonCodeNode", "error_handler", {
+    "code": "result = {'status': 'error handled'}"
+})
+
+workflow.add_node("PythonCodeNode", "success_flow", {
+    "code": "result = {'status': 'success processed'}"
+})
+
+# Connect the flow
+workflow.add_connection("processor", "result", "error_switch", "input_data")
+workflow.add_connection("error_switch", "true_output", "error_handler", "input")
+workflow.add_connection("error_switch", "false_output", "success_flow", "input")
 
 ```
 
@@ -227,26 +265,28 @@ workflow.connect("error_switch", "success_flow", condition="false_output")
 
    ```
 
-3. **Proper Cycle Limits**: Always set max_iterations
+3. **Proper Cycle Limits**: Always set max_iterations with CycleBuilder
    ```python
-from kailash import Workflow
-from kailash.nodes.logic import SwitchNode
+from kailash.workflow.builder import WorkflowBuilder
 
-workflow = Workflow("cycle-limits-example")
+workflow = WorkflowBuilder()
 
-workflow.connect("switch", "retry",
-       condition="true_output",
-       cycle=True,
-       max_iterations=20)
+# Create cycle with proper limits
+cycle_builder = workflow.create_cycle("retry_cycle")
+cycle_builder.connect("switch", "true_output", "retry", "input") \
+             .max_iterations(20) \
+             .converge_when("success == True") \
+             .timeout(600) \
+             .build()
 
    ```
 
 ## Common Pitfalls
 
-1. **Empty Mapping**: `mapping={}` transfers no data
-2. **Generic Output**: `mapping={"output": "output"}` loses fields
-3. **Multiple cycle=True**: Only mark switch→retry edge
-4. **Missing input_data**: SwitchNode requires this parameter
+1. **Missing Port Names**: Always specify both source and target ports in connections
+2. **Wrong Parameter Names**: SwitchNode requires `input_data` parameter
+3. **Multiple Cycles**: Only create one cycle per workflow - use CycleBuilder
+4. **Missing input_data**: SwitchNode always requires this input parameter
 
 ## Next Steps
 - [Cyclic workflows](019-cyclic-workflows-basics.md)

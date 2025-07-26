@@ -12,7 +12,7 @@ Cyclic workflows enable iterative processing, optimization loops, and state-base
 **Script**: [scripts/cyclic_retry_pattern.py](scripts/cyclic_retry_pattern.py)
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.cycle_builder import CycleBuilder
 from kailash.nodes.api import RestClientNode
 from kailash.nodes.logic import SwitchNode
@@ -86,9 +86,9 @@ result = {'waited': wait_time, 'ready_to_retry': True}
 
     # Connect the retry cycle
     cycle_builder.connect_cycle_nodes("retry_tracker", "api_caller",
-                                     mapping={"result": "retry_state"})
+                                     # mapping removed)
     cycle_builder.connect_cycle_nodes("api_caller", "retry_decider",
-                                     mapping={"response": "api_response"})
+                                     # mapping removed)
 
     # Exit on success or max retries
     cycle_builder.set_cycle_exit_condition("retry_decider", exit_on="true_output")
@@ -96,9 +96,9 @@ result = {'waited': wait_time, 'ready_to_retry': True}
     # Continue cycle on failure
     cycle_builder.connect_cycle_nodes("retry_decider", "wait_handler",
                                      output_key="false_output",
-                                     mapping={"retry_state": "retry_state"})
+                                     # mapping removed)
     cycle_builder.connect_cycle_nodes("wait_handler", "retry_tracker",
-                                     mapping={"result": "wait_result"})
+                                     # mapping removed)
 
     return workflow
 
@@ -217,11 +217,11 @@ result = {
 
     # Connect optimization cycle
     cycle_builder.connect_cycle_nodes("initializer", "gradient_computer",
-                                     mapping={"result": "current_state"})
+                                     # mapping removed)
     cycle_builder.connect_cycle_nodes("gradient_computer", "parameter_updater",
-                                     mapping={"result": "gradient_result"})
+                                     # mapping removed)
     cycle_builder.connect_cycle_nodes("parameter_updater", "convergence_checker",
-                                     mapping={"result": "updated_state"})
+                                     # mapping removed)
 
     # Exit when converged
     cycle_builder.set_cycle_exit_condition("convergence_checker", exit_on="true_output")
@@ -229,7 +229,7 @@ result = {
     # Continue optimization if not converged
     cycle_builder.connect_cycle_nodes("convergence_checker", "initializer",
                                      output_key="false_output",
-                                     mapping={"updated_state": "cycle_state"})
+                                     # mapping removed)
 
     # Set maximum iterations
     cycle_builder.set_max_iterations(1000)
@@ -379,9 +379,9 @@ result = {
 
     # Connect state machine cycle
     cycle_builder.connect_cycle_nodes("state_manager", "state_processor",
-                                     mapping={"result": "state_info"})
+                                     # mapping removed)
     cycle_builder.connect_cycle_nodes("state_processor", "terminal_checker",
-                                     mapping={"result": "process_result"})
+                                     # mapping removed)
 
     # Exit when terminal state reached
     cycle_builder.set_cycle_exit_condition("terminal_checker", exit_on="true_output")
@@ -389,7 +389,7 @@ result = {
     # Continue cycle if not terminal
     cycle_builder.connect_cycle_nodes("terminal_checker", "state_manager",
                                      output_key="false_output",
-                                     mapping={"updated_order": "order"})
+                                     # mapping removed)
 
     # Safety limit
     cycle_builder.set_max_iterations(20)
@@ -534,11 +534,11 @@ result = {
 
     # Connect feedback loop
     cycle_builder.connect_cycle_nodes("recommender", "feedback_collector",
-                                     mapping={"result": "recommendation_data"})
+                                     # mapping removed)
     cycle_builder.connect_cycle_nodes("feedback_collector", "model_updater",
-                                     mapping={"result": "feedback_data"})
+                                     # mapping removed)
     cycle_builder.connect_cycle_nodes("model_updater", "convergence_checker",
-                                     mapping={"result": "updated_model"})
+                                     # mapping removed)
 
     # Exit when performance is good enough
     cycle_builder.set_cycle_exit_condition("convergence_checker", exit_on="true_output")
@@ -546,7 +546,7 @@ result = {
     # Continue learning
     cycle_builder.connect_cycle_nodes("convergence_checker", "recommender",
                                      output_key="false_output",
-                                     mapping={"updated_model": "learning_state"})
+                                     # mapping removed)
 
     return workflow
 
@@ -607,7 +607,7 @@ state = {
 ### 3. **Monitor Progress**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -617,8 +617,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # GOOD: Log cycle metrics
 cycle_profiler = CycleProfiler()
