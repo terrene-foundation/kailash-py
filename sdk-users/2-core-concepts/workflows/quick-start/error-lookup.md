@@ -13,7 +13,7 @@ from kailash.runtime.local import LocalRuntime
 
 ✅ SOLUTION: Separate config (HOW) from runtime (WHAT)
 # Config: How the node works (static)
-workflow.add_node("PythonCodeNode", "node", {}))
+workflow.add_node("PythonCodeNode", "node", {})
 
 # Runtime: What data to process (dynamic)
 runtime.execute(workflow, parameters={"node": {"data": [1,2,3]}})
@@ -23,8 +23,8 @@ runtime.execute(workflow, parameters={"node": {"data": [1,2,3]}})
 ```
 ❌ ERROR: "TypeError: PythonCodeNode.__init__() missing 1 required positional argument: 'name'"
 
-✅ SOLUTION: Always include name parameter FIRST
-PythonCodeNode(name="my_node", code="result = data * 2")
+✅ SOLUTION: Always use workflow.add_node
+workflow.add_node("PythonCodeNode", "my_node", {"code": "result = data * 2"})
 ```
 
 ### Cycle Parameter Mapping Failures
@@ -35,11 +35,11 @@ PythonCodeNode(name="my_node", code="result = data * 2")
 
 ✅ SOLUTION: Use specific field mapping in cycles
 # ❌ NEVER: Generic mapping
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+# workflow.connect("source", "target", mapping={"output": "output"})  # Generic fails
 
 # ✅ ALWAYS: Specific field mapping
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+cycle_builder = workflow.create_cycle("improvement_cycle")
+cycle_builder.connect("source", "target", mapping={"specific_field": "input_field"}).build()
 ```
 
 ## 🔧 PythonCodeNode Errors
@@ -122,8 +122,8 @@ elif hasattr(np, 'string_'):
 ❌ ERROR: "TypeError: Workflow.connect() got unexpected keyword argument 'output_key'"
 
 ✅ SOLUTION: Use correct Workflow API (not WorkflowBuilder)
-workflow = WorkflowBuilder()  # ✅ Use Workflow
-workflow.add_node("SomeNode", "node", {}))  # ✅ add_node method
+workflow = WorkflowBuilder()  # ✅ Use WorkflowBuilder
+workflow.add_node("SomeNode", "node", {})  # ✅ add_node method
 workflow.add_connection("a", "b", "output", "input")  # ✅ mapping parameter
 ```
 
@@ -133,7 +133,7 @@ workflow.add_connection("a", "b", "output", "input")  # ✅ mapping parameter
 
 ✅ SOLUTION: Add source node OR use parameters
 # Option 1: Add source node
-workflow.add_node("CSVReaderNode", "source", {}))
+workflow.add_node("CSVReaderNode", "source", {})
 
 # Option 2: Use parameters (any node can receive initial data)
 runtime.execute(workflow, parameters={
@@ -147,7 +147,7 @@ runtime.execute(workflow, parameters={
 ❌ ERROR: "NameError: name 'data' is not defined" (multi-input aggregation)
 
 ✅ SOLUTION: Use MergeNode for multiple inputs
-workflow.add_node("MergeNode", "merger", {}))
+workflow.add_node("MergeNode", "merger", {})
 workflow.add_connection("source1", "merger", "data", "input1")
 workflow.add_connection("source2", "merger", "data", "input2")
 workflow.add_connection("merger", "processor", "merged", "combined_data")
@@ -161,7 +161,7 @@ workflow.add_connection("merger", "processor", "merged", "combined_data")
 ❌ ANTI-PATTERN: Separate MCPClientNode + complex routing
 
 ✅ SOLUTION: Use LLMAgentNode with built-in MCP
-workflow.add_node("LLMAgentNode", "ai_agent", {}))
+workflow.add_node("LLMAgentNode", "ai_agent", {})
 ```
 
 ### Async Execution Issues
@@ -216,7 +216,7 @@ assert cycle_count > 0
 ❌ ERROR: "ValidationError: Input should be a type [Union[float, int]]"
 
 ✅ SOLUTION: Use required=False with defaults for cycle-aware nodes
-workflow.add_node("SomeNode", "cycle_node", {}))
+workflow.add_node("SomeNode", "cycle_node", {})
 ```
 
 ### Input Types in Cycles
@@ -225,7 +225,7 @@ workflow.add_node("SomeNode", "cycle_node", {}))
 
 ✅ SOLUTION: Map ALL parameters in cycles when using input_types
 # When using input_types, EVERYTHING must be mapped
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+# Use CycleBuilder API: workflow.create_cycle("name").connect(...).build()
 ```
 
 ## 🛠️ Quick Debugging Checklist

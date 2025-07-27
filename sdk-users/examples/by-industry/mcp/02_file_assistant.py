@@ -6,17 +6,16 @@ Requirements: @modelcontextprotocol/server-filesystem (optional)
 
 import os
 
-from kailash import Workflow
-from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 def main():
     # Create workflow
-    workflow = Workflow("file-assistant", "File Assistant")
+    workflow = WorkflowBuilder()
 
     # Add file analysis agent
-    workflow.add_node("file_agent", LLMAgentNode())
+    workflow.add_node("LLMAgentNode", "file_agent", {})
 
     # Create runtime
     runtime = LocalRuntime()

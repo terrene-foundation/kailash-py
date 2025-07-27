@@ -27,17 +27,16 @@ from kailash.access_control import UserContext
 
 # Workflow methods - exact names required
 workflow = WorkflowBuilder()
-workflow.add_node("id", NodeClass(), param1="value1")
-workflow = WorkflowBuilder()
-workflow.add_connection("from_node", "to_node", "output", "input")
-workflow = WorkflowBuilder()
-workflow.validate()
-workflow = WorkflowBuilder()
-runtime.execute(workflow.build(), )  # Direct execution (basic)
+workflow.add_node("PythonCodeNode", "node_id", {"code": "result = {'value': 42}"})
+workflow.add_connection("from_node", "result", "to_node", "input_data")
+
+# Validation
+built_workflow = workflow.build()
+built_workflow.validate()
 
 # Runtime execution (recommended)
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
+results, run_id = runtime.execute(built_workflow)
 
 ```
 
@@ -92,20 +91,17 @@ from kailash.nodes.ai import LLMAgent           # Missing "Node"
 
 # Workflow methods with exact signatures
 workflow = WorkflowBuilder()
-workflow.add_node("node_id", NodeClass(), param="value")
-workflow = WorkflowBuilder()
-workflow.add_node("node_id", NodeClass(), param="value")
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = input_data"})
 
 # Examples with correct parameter order
-workflow = WorkflowBuilder()
-workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
-workflow = WorkflowBuilder()
-workflow.add_connection("from_node", "to_node", "output", "input")
+workflow.add_connection("reader", "data", "processor", "input_data")
 
 # Runtime execution with correct parameter name
 runtime = LocalRuntime()
-# Parameters setup
-workflow.{"node_id": {"param": "value"}})
+results, run_id = runtime.execute(workflow.build(), parameters={
+    "processor": {"additional_param": "value"}
+})
 
 ```
 
@@ -114,17 +110,14 @@ workflow.{"node_id": {"param": "value"}})
 
 # Wrong parameter order
 workflow = WorkflowBuilder()
-workflow.add_node("CSVReaderNode", "reader")  # WRONG ORDER
-workflow = WorkflowBuilder()
-workflow.add_connection("from_node", "to_node", "output", "input")  # WRONG ORDER
+workflow.add_node("reader", "CSVReaderNode", {"file_path": "data.csv"})  # WRONG ORDER - should be node_type, node_id, config
+workflow.add_connection("from_node", "to_node", "output", "input")  # WRONG ORDER - should be from_node, output, to_node, input
 
 # Wrong parameter names
 runtime = LocalRuntime()
-runtime.execute(workflow.build(), workflow, parameters={"data": []})     # WRONG: should be 'parameters'
-runtime = LocalRuntime()
-runtime.execute(workflow.build(), workflow, config={"node": {}})     # WRONG: should be 'parameters'
-runtime = LocalRuntime()
-runtime.execute(workflow.build(), workflow, overrides={"param": ""}) # WRONG: should be 'parameters'
+runtime.execute(workflow.build(), config={"node": {}})     # WRONG: should be 'parameters'
+runtime.execute(workflow.build(), overrides={"param": ""}) # WRONG: should be 'parameters'
+runtime.execute(workflow.build(), inputs={"data": []})     # WRONG: should be 'parameters'
 
 ```
 
@@ -135,11 +128,11 @@ runtime.execute(workflow.build(), workflow, overrides={"param": ""}) # WRONG: sh
 
 # Exact key names required
 workflow = WorkflowBuilder()
-workflow.add_node("CSVReaderNode", "reader", {}),
-    file_path="data.csv",        # Correct key
-    has_header=True,             # Correct key
-    delimiter=","                # Correct key
-)
+workflow.add_node("CSVReaderNode", "reader", {
+    "file_path": "data.csv",        # Correct key
+    "has_header": True,             # Correct key
+    "delimiter": ","                # Correct key
+})
 
 workflow = WorkflowBuilder()
 workflow.add_node("LLMAgentNode", "llm", {}),

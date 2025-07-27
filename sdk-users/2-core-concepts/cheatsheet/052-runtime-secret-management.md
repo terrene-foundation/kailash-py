@@ -129,7 +129,7 @@ class TokenGeneratorNode(Node):
 ```python
 # ✅ Runtime secret injection
 runtime = LocalRuntime(secret_provider=provider)
-workflow.add_node("HTTPRequestNode", "api", {}), {
+workflow.add_node("HTTPRequestNode", "api", {
     "url": "https://api.example.com",
     "headers": {"Authorization": "Bearer {injected_token}"}
 })
@@ -151,7 +151,7 @@ providers = {
 ### ❌ Anti-Patterns to Avoid
 ```python
 # ❌ Hardcoded secrets
-workflow.add_node("HTTPRequestNode", "api", {}), {
+workflow.add_node("HTTPRequestNode", "api", {
     "headers": {"Authorization": "Bearer sk-abc123"}  # NEVER DO THIS
 })
 
@@ -160,7 +160,7 @@ import os
 secret = os.getenv("API_KEY")  # Avoid this pattern
 
 # ❌ Template substitution
-workflow.add_node("HTTPRequestNode", "api", {}), {
+workflow.add_node("HTTPRequestNode", "api", {
     "headers": {"Authorization": "Bearer ${API_TOKEN}"}  # Legacy pattern
 })
 ```

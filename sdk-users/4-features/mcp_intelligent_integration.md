@@ -19,14 +19,14 @@ The LLMAgentNode now includes an internal MCP client, eliminating the need for s
 
 ```python
 # Before: Complex multi-node setup
-workflow.add_node("AIRegistryMCPServerNode", "mcp_server", {}))
+workflow.add_node("AIRegistryMCPServerNode", "mcp_server", {})
 workflow.add_node("mcp_client", MCPClient())
-workflow.add_node("LLMAgentNode", "agent", {}))
+workflow.add_node("LLMAgentNode", "agent", {})
 # ... multiple connections required
 
 # After: Simple integrated approach
-workflow.add_node("LLMAgentNode", "ai_agent", {}),
-    provider="ollama",
+workflow.add_node("LLMAgentNode", "ai_agent", {
+    "provider": "ollama",
     model="llama3.2",
     mcp_servers=["http://localhost:8080/ai-registry"],
     auto_discover_tools=True
@@ -210,7 +210,7 @@ if function_call.name.startswith("mcp_"):
 ```python
 # Old pattern
 workflow.add_node("client", MCPClient(), server_url="...")
-workflow.add_node("LLMAgentNode", "agent", {}))
+workflow.add_node("LLMAgentNode", "agent", {})
 workflow.add_connection("client", "result", "agent", "input")
 
 # New pattern

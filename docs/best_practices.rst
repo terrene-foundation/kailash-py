@@ -588,28 +588,31 @@ Cycle Safety Guidelines
 .. code-block:: python
 
     # Good: Multiple convergence criteria
-    workflow.connect("processor", "processor",
-        cycle=True,
-        max_iterations=100,
-        convergence_check="converged == True or error < 0.001")
+    workflow.create_cycle("processing_cycle") \
+            .connect("processor", "processor") \
+            .max_iterations(100) \
+            .converge_when("converged == True or error < 0.001") \
+            .build()
 
-    # Bad: No convergence check
-    workflow.connect("processor", "processor", cycle=True)  # Dangerous!
+    # Bad: No convergence check - NEVER DO THIS!
+    # workflow.connect("processor", "processor", cycle=True)  # Dangerous!
 
 2. **Use Reasonable Iteration Limits**:
 
 .. code-block:: python
 
     # Consider the problem domain
-    workflow.connect("optimizer", "optimizer",
-        cycle=True,
-        max_iterations=1000,      # Machine learning: higher limit
-        convergence_check="loss < 0.01")
+    workflow.create_cycle("optimizer_cycle") \
+            .connect("optimizer", "optimizer") \
+            .max_iterations(1000) \
+            .converge_when("loss < 0.01") \
+            .build()
 
-    workflow.connect("retry", "retry",
-        cycle=True,
-        max_iterations=5,         # Retry logic: lower limit
-        convergence_check="success == True")
+    workflow.create_cycle("retry_cycle") \
+            .connect("retry", "retry") \
+            .max_iterations(5) \
+            .converge_when("success == True") \
+            .build()
 
 3. **Implement Memory Management**:
 
@@ -653,10 +656,11 @@ Performance Optimization for Cycles
     # Add multiple optimizers
     for i in range(4):
         workflow.add_node(f"optimizer_{i}", OptimizerNode())
-        workflow.connect(f"optimizer_{i}", f"optimizer_{i}",
-            cycle=True,
-            max_iterations=100,
-            convergence_check="converged == True")
+        workflow.create_cycle(f"optimizer_{i}_cycle") \
+                .connect(f"optimizer_{i}", f"optimizer_{i}") \
+                .max_iterations(100) \
+                .converge_when("converged == True") \
+                .build()
 
     # Execute all optimizers in parallel
     results = runtime.execute(workflow, parameters={
@@ -671,15 +675,19 @@ Common Pitfalls to Avoid
 
 .. code-block:: python
 
-    # Wrong: Marking all edges as cycles
-    workflow.connect("A", "B", cycle=True)  # ❌
-    workflow.connect("B", "C", cycle=True)  # ❌
-    workflow.connect("C", "A", cycle=True)  # ❌
+    # Wrong: Marking all edges as cycles - DEPRECATED PATTERN
+    # workflow.connect("A", "B", cycle=True)  # ❌
+    # workflow.connect("B", "C", cycle=True)  # ❌
+    # workflow.connect("C", "A", cycle=True)  # ❌
 
-    # Correct: Only mark the closing edge
-    workflow.connect("A", "B")              # ✓ Regular edge
-    workflow.connect("B", "C")              # ✓ Regular edge
-    workflow.connect("C", "A", cycle=True)  # ✓ Closing edge only
+    # Correct: Use CycleBuilder API
+    workflow.connect("A", "B")    # ✓ Regular forward edge
+    workflow.connect("B", "C")    # ✓ Regular forward edge
+    workflow.create_cycle("abc_cycle") \
+            .connect("C", "A") \
+            .max_iterations(50) \
+            .converge_when("converged == True") \
+            .build()              # ✓ Cycle with proper configuration
 
 2. **Poor State Management**:
 

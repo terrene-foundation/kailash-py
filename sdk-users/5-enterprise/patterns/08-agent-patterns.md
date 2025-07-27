@@ -19,33 +19,33 @@ from kailash.nodes.ai import (
 workflow = WorkflowBuilder()
 
 # Shared infrastructure for agents
-workflow.add_node("SharedMemoryPoolNode", "memory", {}),
-    capacity=1000,
-    eviction_policy="lru"
-)
+workflow.add_node("SharedMemoryPoolNode", "memory", {
+    "capacity": 1000,
+    "eviction_policy": "lru"
+})
 
-workflow.add_node("IntelligentCacheNode", "cache", {}),
-    ttl=3600,
-    max_size=500,
-    similarity_threshold=0.85
-)
+workflow.add_node("IntelligentCacheNode", "cache", {
+    "ttl": 3600,
+    "max_size": 500,
+    "similarity_threshold": 0.85
+})
 
 # Orchestration manager coordinates agents
-workflow.add_node("OrchestrationManagerNode", "orchestrator", {}),
-    max_iterations=5,
-    quality_threshold=0.8,
-    time_limit_minutes=10,
-    min_confidence=0.7,
-    enable_learning=True
-)
+workflow.add_node("OrchestrationManagerNode", "orchestrator", {
+    "max_iterations": 5,
+    "quality_threshold": 0.8,
+    "time_limit_minutes": 10,
+    "min_confidence": 0.7,
+    "enable_learning": True
+})
 
 # Connect shared resources
-workflow.add_connection("memory", "orchestrator", "pool", "shared_memory")
-workflow.add_connection("cache", "orchestrator", "cache", "shared_cache")
+workflow.add_connection("memory", "pool", "orchestrator", "shared_memory")
+workflow.add_connection("cache", "cache", "orchestrator", "shared_cache")
 
 # Execute with dynamic agent configuration
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(workflow.build(), parameters={
     "orchestrator": {
         "query": "Analyze market trends and recommend investment strategy",
         "agent_pool_config": {

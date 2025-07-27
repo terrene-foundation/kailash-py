@@ -67,27 +67,23 @@ workflow = WorkflowBuilder()
 # Runtime should be created separately
 runtime = LocalRuntime()
 
-# Create workflow
+# Create workflow with string-based API
 workflow = WorkflowBuilder()
 
-# Create nodes (writer doesn't need data yet)
-reader = CSVReaderNode(file_path='input.csv')
-writer = CSVWriterNode(file_path='output.csv')  # No data parameter
-
-# Add nodes to workflow
-workflow = WorkflowBuilder()
-workflow.add_node(reader, node_id='reader')
-workflow = WorkflowBuilder()
-workflow.add_node(writer, node_id='writer')
+# Add nodes using string-based API
+workflow.add_node("CSVReaderNode", "reader", {
+    "file_path": "input.csv"
+})
+workflow.add_node("CSVWriterNode", "writer", {
+    "file_path": "output.csv"
+})
 
 # Connect nodes - data flows from reader to writer
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
+workflow.add_connection("reader", "data", "writer", "data")
 
 # Execute workflow
 runtime = LocalRuntime()
-runtime = LocalRuntime()
-runtime.execute(workflow.build(), workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -109,8 +105,8 @@ runtime.execute(workflow.build(), workflow)
 - Workflow: Dynamic parameters come through connections
 
 ### 3. Configuration
-- Use `config` parameter in `add_node()` for runtime parameters
-- These override node defaults but can still receive connection data
+- Use configuration dict in `add_node()` for node parameters
+- These provide node defaults but can be overridden by connection data
 
 ### 4. Connections
 - Map source node outputs to target node inputs
@@ -119,43 +115,39 @@ runtime.execute(workflow.build(), workflow)
 ## Complete Example
 
 ```python
-from kailash.workflow import Workflow
-from kailash.nodes.data.readers import CSVReaderNode
-from kailash.nodes.data.writers import CSVWriterNode
-from kailash.nodes.code.python import PythonCodeNode
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 
 # Create workflow
 workflow = WorkflowBuilder()
 
-# Create nodes
-reader = CSVReaderNode(file_path='customers.csv')
-
-# Create custom filter node
+# Create custom filter function
 def filter_customers(data: list, threshold: float) -> dict:
     filtered = [d for d in data if d['amount'] > threshold]
     return {'filtered_data': filtered, 'count': len(filtered)}
 
-filter_node = PythonCodeNode.from_function(
+# Add nodes using string-based API
+workflow.add_node("CSVReaderNode", "reader", {
+    "file_path": "customers.csv"
+})
+
+# Add filter node using from_function
+workflow.add_node("filter", PythonCodeNode.from_function(
     func=filter_customers,
     name="customer_filter"
-)
+))
 
-writer = CSVWriterNode(file_path='filtered_customers.csv')
-
-# Add nodes with configuration
-workflow.add_node(reader, node_id='reader')
-workflow.add_node(filter_node, node_id='filter', config={
-    'threshold': 1000.0  # Configuration parameter
+workflow.add_node("CSVWriterNode", "writer", {
+    "file_path": "filtered_customers.csv"
 })
-workflow.add_node(writer, node_id='writer')
 
 # Connect nodes
-workflow.add_connection('reader', "result", 'filter', "input")
-workflow.add_connection('filter', "result", 'writer', "input")
+workflow.add_connection("reader", "data", "filter", "data")
+workflow.add_connection("filter", "result", "writer", "data")
 
 # Execute
-runtime = LocalRuntime(debug=True)
+runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 
 print(f"Filtered {results['filter']['count']} customers")
@@ -167,78 +159,101 @@ print(f"Filtered {results['filter']['count']} customers")
 ### 1. Fork Pattern
 One node output feeds multiple downstream nodes:
 ```python
-# SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
 
-# Example setup
+# Create workflow
 workflow = WorkflowBuilder()
-# Runtime should be created separately
+
+# Add source node
+workflow.add_node("CSVReaderNode", "source", {
+    "file_path": "input.csv"
+})
+
+# Add multiple processing nodes
+workflow.add_node("PythonCodeNode", "process_a", {
+    "code": "result = {'type': 'A', 'data': input_data}"
+})
+workflow.add_node("PythonCodeNode", "process_b", {
+    "code": "result = {'type': 'B', 'data': input_data}"
+})
+
+# Fork the data flow
+workflow.add_connection("source", "data", "process_a", "input_data")
+workflow.add_connection("source", "data", "process_b", "input_data")
+
+# Execute
 runtime = LocalRuntime()
-
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ### 2. Join Pattern
 Multiple nodes feed into one downstream node:
 ```python
-# SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
 
-# Example setup
+# Create workflow
 workflow = WorkflowBuilder()
-# Runtime should be created separately
+
+# Add source nodes
+workflow.add_node("CSVReaderNode", "source_a", {
+    "file_path": "data_a.csv"
+})
+workflow.add_node("CSVReaderNode", "source_b", {
+    "file_path": "data_b.csv"
+})
+
+# Add merge node
+workflow.add_node("MergeNode", "merger", {
+    "strategy": "concatenate"
+})
+
+# Join the data flows
+workflow.add_connection("source_a", "data", "merger", "input_a")
+workflow.add_connection("source_b", "data", "merger", "input_b")
+
+# Execute
 runtime = LocalRuntime()
-
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ### 3. Sequential Pipeline
 Data flows through multiple processing steps:
 ```python
-# SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
 
-# Example setup
+# Create workflow
 workflow = WorkflowBuilder()
-# Runtime should be created separately
+
+# Add sequential processing steps
+workflow.add_node("CSVReaderNode", "reader", {
+    "file_path": "raw_data.csv"
+})
+workflow.add_node("PythonCodeNode", "cleaner", {
+    "code": """
+# Clean and validate data
+cleaned = [row for row in input_data if row.get('value') is not None]
+result = {'cleaned_data': cleaned, 'count': len(cleaned)}
+"""
+})
+workflow.add_node("LLMAgentNode", "analyzer", {
+    "model": "gpt-4",
+    "prompt": "Analyze this data and provide insights"
+})
+workflow.add_node("CSVWriterNode", "writer", {
+    "file_path": "analyzed_data.csv"
+})
+
+# Chain the processing steps
+workflow.add_connection("reader", "data", "cleaner", "input_data")
+workflow.add_connection("cleaner", "result", "analyzer", "data")
+workflow.add_connection("analyzer", "result", "writer", "data")
+
+# Execute pipeline
 runtime = LocalRuntime()
-
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ## Best Practices

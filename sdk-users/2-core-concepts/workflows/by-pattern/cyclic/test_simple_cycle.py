@@ -52,15 +52,10 @@ def test_simple_cycle():
     counter = SimpleCounterNode(name="counter")
     workflow.add_node("counter", counter)
 
-    # Create self-loop
-    workflow.connect(
-        "counter",
-        "counter",
-        mapping={"count": "count"},
-        cycle=True,
-        max_iterations=10,
-        convergence_check="count >= 5",
-    )
+    # Create cycle using CycleBuilder API
+    workflow.create_cycle("simple_cycle").connect(
+        "counter", "counter", mapping={"count": "count"}
+    ).max_iterations(10).converge_when("count >= 5").build()
 
     # Execute
     runtime = LocalRuntime(enable_cycles=True)

@@ -80,7 +80,7 @@ workflow.add_connection("merger", "synthesizer", "merged_data", "merged_data")
 # Execute with a business proposal
 runtime = LocalRuntime()
 proposal = "Launch a new AI-powered customer service platform"
-results, run_id = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(workflow.build(), parameters={
     "market_analyst": {"prompt": f"Analyze market potential for: {proposal}"},
     "tech_analyst": {"prompt": f"Assess technical feasibility of: {proposal}"},
     "risk_analyst": {"prompt": f"Identify risks for: {proposal}"}
@@ -114,18 +114,14 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # ❌ WRONG - This will fail
-workflow = WorkflowBuilder()
 workflow.add_connection("agent1", "result", "processor", "input")
-workflow = WorkflowBuilder()
 workflow.add_connection("agent2", "result", "processor", "input")  # Error: Multiple inputs!
 
 # ✅ CORRECT - Use MergeNode
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
+workflow.add_node("MergeNode", "merger", {})
+workflow.add_connection("agent1", "result", "merger", "data1")
+workflow.add_connection("agent2", "result", "merger", "data2")
+workflow.add_connection("merger", "merged_data", "processor", "input")
 
 ```
 
@@ -142,8 +138,8 @@ from kailash.nodes.logic import MergeNode
 workflow = WorkflowBuilder()
 
 # Split data into chunks
-workflow.add_node("PythonCodeNode", "splitter", {}),
-    code="""
+workflow.add_node("PythonCodeNode", "splitter", {
+    "code": """
 # Split data into 4 chunks for parallel processing
 chunk_size = len(data) // 4
 chunks = []
@@ -157,12 +153,12 @@ result = {
     'chunk4': chunks[3] if len(chunks) > 3 else []
 }
 """
-)
+})
 
 # Create parallel processors
 for i in range(1, 5):
-    workflow.add_node(f"processor_{i}", "PythonCodeNode",
-        code=f"""
+    workflow.add_node("PythonCodeNode", f"processor_{i}", {
+        "code": f"""
 # Process chunk {i}
 import time
 start_time = time.time()
@@ -180,25 +176,25 @@ for item in data:
 processing_time = time.time() - start_time
 print(f"Processor {i} completed in {{processing_time:.2f}}s")
 """,
-        imports=["time"]
-    )
+        "imports": ["time"]
+    })
 
 # Merge results
-workflow.add_node("MergeNode", "merger", {}), merge_strategy="concat")
+workflow.add_node("MergeNode", "merger", {"merge_strategy": "concat"})
 
 # Connect splitter to processors
 for i in range(1, 5):
-    workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
+    workflow.add_connection("splitter", f"chunk{i}", f"processor_{i}", "data")
 
 # Connect processors to merger
-workflow.add_connection("processor_1", "merger", "result", "data1")
-workflow.add_connection("processor_2", "merger", "result", "data2")
-workflow.add_connection("processor_3", "merger", "result", "data3")
-workflow.add_connection("processor_4", "merger", "result", "data4")
+workflow.add_connection("processor_1", "result", "merger", "data1")
+workflow.add_connection("processor_2", "result", "merger", "data2")
+workflow.add_connection("processor_3", "result", "merger", "data3")
+workflow.add_connection("processor_4", "result", "merger", "data4")
 
 # Execute with parallel runtime
 runtime = ParallelRuntime()
-results, run_id = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(workflow.build(), parameters={
     "splitter": {"data": list(range(1000))}
 })
 
@@ -227,9 +223,8 @@ runtime = LocalRuntime()
 workflow = WorkflowBuilder()
 
 # Batch processor with progress tracking
-workflow = WorkflowBuilder()
-workflow.add_node("PythonCodeNode", "batch_processor", {}),
-    code="""
+workflow.add_node("PythonCodeNode", "batch_processor", {
+    "code": """
 import math
 
 # Configuration

@@ -234,29 +234,35 @@ def setup_data_team_rbac():
     )
 
     # 2. Assign users to roles
-    role_node.run(
-        operation="bulk_assign",
-        role_id="data_analyst",
-        user_ids=["alice", "bob", "charlie"]
-    )
+    runtime.execute(workflow.build(), parameters={
+        "role_manager": {
+            "operation": "bulk_assign",
+            "role_id": "data_analyst",
+            "user_ids": ["alice", "bob", "charlie"]
+        }
+    })
 
-    role_node.run(
-        operation="assign_user",
-        user_id="david",
-        role_id="senior_data_analyst"
-    )
+    runtime.execute(workflow.build(), parameters={
+        "role_manager": {
+            "operation": "assign_user",
+            "user_id": "david",
+            "role_id": "senior_data_analyst"
+        }
+    })
 
     # 3. Verify permissions work correctly
     for user in ["alice", "david"]:
-        result = permission_node.run(
-            operation="check_permission",
-            user_id=user,
-            resource_id="data",
-            permission="export"
-        )
+        result, run_id = runtime.execute(workflow.build(), parameters={
+            "permission_checker": {
+                "operation": "check_permission",
+                "user_id": user,
+                "resource_id": "data",
+                "permission": "export"
+            }
+        })
 
         expected = user == "david"  # Only senior analyst should have export
-        assert result["result"]["check"]["allowed"] == expected
+        assert result["permission_checker"]["result"]["check"]["allowed"] == expected
 
     print("✅ RBAC workflow completed successfully")
 
@@ -313,57 +319,68 @@ print(f"Access check completed in {access_result['evaluation_time']:.2f}ms")
 ```python
 def setup_multi_tenant_roles():
     """Demonstrate multi-tenant role isolation."""
-    role_node = RoleManagementNode()
+    workflow = WorkflowBuilder()
+    workflow.add_node("RoleManagementNode", "role_manager", {})
+    workflow.add_node("PermissionCheckNode", "permission_checker", {})
+    runtime = LocalRuntime()
 
     # Create identical roles in different tenants
     for tenant in ["company_a", "company_b"]:
-        role_node.run(
-            operation="create_role",
-            role_data={
-                "name": "Manager",
-                "description": "Department manager",
-                "permissions": ["team:manage", "budget:view"]
-            },
-            tenant_id=tenant
-        )
+        runtime.execute(workflow.build(), parameters={
+            "role_manager": {
+                "operation": "create_role",
+                "role_data": {
+                    "name": "Manager",
+                    "description": "Department manager",
+                    "permissions": ["team:manage", "budget:view"]
+                },
+                "tenant_id": tenant
+            }
+        })
 
     # Assign users in each tenant
-    role_node.run(
-        operation="assign_user",
-        user_id="alice",
-        role_id="manager",
-        tenant_id="company_a"
-    )
+    runtime.execute(workflow.build(), parameters={
+        "role_manager": {
+            "operation": "assign_user",
+            "user_id": "alice",
+            "role_id": "manager",
+            "tenant_id": "company_a"
+        }
+    })
 
-    role_node.run(
-        operation="assign_user",
-        user_id="bob",
-        role_id="manager",
-        tenant_id="company_b"
-    )
+    runtime.execute(workflow.build(), parameters={
+        "role_manager": {
+            "operation": "assign_user",
+            "user_id": "bob",
+            "role_id": "manager",
+            "tenant_id": "company_b"
+        }
+    })
 
     # Verify tenant isolation
-    permission_node = PermissionCheckNode()
-
     # Alice should have access in company_a but not company_b
-    result_a = permission_node.run(
-        operation="check_permission",
-        user_id="alice",
-        resource_id="team",
-        permission="manage",
-        tenant_id="company_a"
-    )
+    result_a, run_id = runtime.execute(workflow.build(), parameters={
+        "permission_checker": {
+            "operation": "check_permission",
+            "user_id": "alice",
+            "resource_id": "team",
+            "permission": "manage",
+            "tenant_id": "company_a"
+        }
+    })
 
-    result_b = permission_node.run(
-        operation="check_permission",
-        user_id="alice",
-        resource_id="team",
-        permission="manage",
-        tenant_id="company_b"
-    )
+    result_b, run_id = runtime.execute(workflow.build(), parameters={
+        "permission_checker": {
+            "operation": "check_permission",
+            "user_id": "alice",
+            "resource_id": "team",
+            "permission": "manage",
+            "tenant_id": "company_b"
+        }
+    })
 
-    assert result_a["result"]["check"]["allowed"] == True
-    assert result_b["result"]["check"]["allowed"] == False
+    assert result_a["permission_checker"]["result"]["check"]["allowed"] == True
+    assert result_b["permission_checker"]["result"]["check"]["allowed"] == False
 
     print("✅ Multi-tenant isolation verified")
 

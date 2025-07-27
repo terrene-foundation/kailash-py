@@ -221,15 +221,14 @@ result = {
 }
 '''
 
-workflow.add_node("PythonCodeNode", "improver", {}))
+workflow.add_node("PythonCodeNode", "improver", {"code": python_code})
 
 # ✅ ESSENTIAL: Include mapping for data flow between iterations
 # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()       # Direct field name
 
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={
-    "current_value": 10,
-    "target": 50
+results, run_id = runtime.execute(workflow.build(), parameters={
+    "improver": {"current_value": 10, "target": 50}
 })
 
 ```
@@ -303,11 +302,11 @@ runtime = LocalRuntime()
 
 # ✅ CORRECT: Use direct field names from result
 workflow = WorkflowBuilder()
-workflow.add_connection("source", "result", "target", "input")  # Fixed convergence pattern      # Direct access
+workflow.add_connection("source", "converged", "target", "input")  # Direct field name
 
 # ❌ WRONG: Nested path access
 workflow = WorkflowBuilder()
-workflow.add_connection("source", "result", "target", "input")  # Fixed convergence pattern  # Will fail
+workflow.add_connection("source", "result.converged", "target", "input")  # Will fail
 
 ```
 
@@ -398,7 +397,7 @@ runtime = LocalRuntime()
 
 # Always debug the actual result structure first
 runtime = LocalRuntime()
-runtime.execute(workflow.build(), workflow)
+results, run_id = runtime.execute(workflow.build())
 print(f"Result keys: {list(results['node_name'].keys())}")
 print(f"Sample values: {results['node_name']}")
 
@@ -456,13 +455,11 @@ workflow = WorkflowBuilder()
 # Runtime should be created separately
 runtime = LocalRuntime()
 
-  mcp_tool = MCPToolNode()
-  result = mcp_tool.run(
-      mcp_server="ai_tools",
-      tool_name="analyze",
-# Parameters setup
-workflow.{"method": "regression", "data": input_data}
-  )
+  workflow.add_node("MCPToolNode", "mcp_tool", {
+      "mcp_server": "ai_tools",
+      "tool_name": "analyze",
+      "parameters": {"method": "regression", "data": "input_data"}
+  })
 
   ```
 

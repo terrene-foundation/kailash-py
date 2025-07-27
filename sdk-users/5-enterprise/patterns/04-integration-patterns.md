@@ -14,11 +14,11 @@ from kailash.nodes.data import CSVReaderNode
 
 # Create workflows
 data_workflow = WorkflowBuilder()
-workflow.data_workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
-data_workflow.add_node("PythonCodeNode", "processor", {}),
-    code="result = {'record_count': len(data), 'processed': True}"
-)
-data_workflow.add_connection("reader", "processor", "data", "data")
+data_workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+data_workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'record_count': len(data), 'processed': True}"
+})
+data_workflow.add_connection("reader", "data", "processor", "data")
 
 ml_workflow = WorkflowBuilder()
 # Workflow setup goes here  # ... define ML workflow nodes ...
@@ -99,25 +99,25 @@ import os
 workflow = WorkflowBuilder()
 
 # OAuth2 Authentication
-workflow.add_node("oauth", OAuth2Node(),
-    client_id=os.getenv("CLIENT_ID"),
-    client_secret=os.getenv("CLIENT_SECRET"),
-    token_url="https://auth.example.com/oauth/token",
-    scope="read:data write:data"
-)
+workflow.add_node("OAuth2Node", "oauth", {
+    "client_id": os.getenv("CLIENT_ID"),
+    "client_secret": os.getenv("CLIENT_SECRET"),
+    "token_url": "https://auth.example.com/oauth/token",
+    "scope": "read:data write:data"
+})
 
 # REST API Client with authentication
-workflow.add_node("RESTClientNode", "api_client", {}),
-    base_url="https://api.example.com/v2",
-    timeout=30,
-    retry_count=3,
-    retry_delay=1.0,
-    rate_limit=100  # requests per minute
-)
+workflow.add_node("RESTClientNode", "api_client", {
+    "base_url": "https://api.example.com/v2",
+    "timeout": 30,
+    "retry_count": 3,
+    "retry_delay": 1.0,
+    "rate_limit": 100  # requests per minute
+})
 
 # Data transformer
-workflow.add_node("PythonCodeNode", "transformer", {}),
-    code="""
+workflow.add_node("PythonCodeNode", "transformer", {
+    "code": """
 # Transform external API response to internal format
 transformed_data = []
 for item in api_response.get('data', []):
@@ -136,11 +136,11 @@ result = {
     'source_api': api_response.get('api_version', 'unknown')
 }
 """
-)
+})
 
 # Error handler
-workflow.add_node("PythonCodeNode", "error_handler", {}),
-    code="""
+workflow.add_node("PythonCodeNode", "error_handler", {
+    "code": """
 import json
 
 error_type = error.get('type', 'unknown')
@@ -174,20 +174,21 @@ else:
         'details': json.dumps(error, indent=2)
     }
 """
-)
+})
 
 # Connect with error handling
-workflow.add_connection("oauth", "api_client", "access_token", "auth_token")
+workflow.add_connection("oauth", "access_token", "api_client", "auth_token")
 
 # API calls with error routing
-workflow.add_node("SwitchNode", "api_switch", {}),
-    condition_field="success",
-    true_# route removed,
-    false_# route removed)
+workflow.add_node("SwitchNode", "api_switch", {
+    "condition": "success == True",
+    "true_path": "transformer",
+    "false_path": "error_handler"
+})
 
-workflow.add_connection("api_client", "api_switch", "response", "input")
-workflow.add_connection("api_switch", "result", "transformer", "input")
-workflow.add_connection("api_switch", "result", "error_handler", "input")
+workflow.add_connection("api_client", "response", "api_switch", "input")
+workflow.add_connection("api_switch", "true_output", "transformer", "api_response")
+workflow.add_connection("api_switch", "false_output", "error_handler", "error")
 
 ```
 
@@ -207,8 +208,8 @@ from kailash.nodes.api import HTTPServerNode
 webhook_workflow = WorkflowBuilder()
 
 # Event validator
-webhook_workflow.add_node("PythonCodeNode", "validator", {}),
-    code="""
+webhook_workflow.add_node("PythonCodeNode", "validator", {
+    "code": """
 import hmac
 import hashlib
 
@@ -239,23 +240,23 @@ result = {
     'valid': True
 }
 """,
-    config={"webhook_secret": os.getenv("WEBHOOK_SECRET")}
-)
+    "config": {"webhook_secret": os.getenv("WEBHOOK_SECRET")}
+})
 
 # Event router
-webhook_workflow.add_node("SwitchNode", "event_router", {}),
-    condition_field="event_type",
-    routes={
+webhook_workflow.add_node("SwitchNode", "event_router", {
+    "condition": "event_type in ['order.created', 'payment.received', 'user.updated']",
+    "routes": {
         "order.created": "order_processor",
         "payment.received": "payment_processor",
         "user.updated": "user_processor",
         "default": "unknown_event_handler"
     }
-)
+})
 
 # Specific event processors
-webhook_workflow.add_node("PythonCodeNode", "order_processor", {}),
-    code="""
+webhook_workflow.add_node("PythonCodeNode", "order_processor", {
+    "code": """
 # Process new order event
 order = data.get('order', {})
 result = {
@@ -269,7 +270,7 @@ result = {
 # Trigger order fulfillment workflow
 print(f"New order received: {order.get('id')}")
 """
-)
+})
 
 # Connect webhook receiver to workflow
 webhook.register_handler(
@@ -302,23 +303,17 @@ if __name__ == "__main__":
 **Purpose**: Connect workflows to various databases with production-grade connection pooling
 
 ```python
-from kailash.workflow.builder import WorkflowBuilder, WorkflowBuilder
-from kailash.nodes.data import WorkflowConnectionPool, SQLDatabaseNode, MongoNode
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.nodes.data import SQLDatabaseNode, MongoNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 
 # Create workflow
-workflow = WorkflowBuilder("database_integration")
+workflow = WorkflowBuilder()
 
-# Production PostgreSQL with WorkflowConnectionPool
-workflow.add_node("pg_pool", "WorkflowConnectionPool", {
-    "name": "main_pool",
-    "database_type": "postgresql",
-    "host": os.getenv("POSTGRES_HOST", "localhost"),
-    "port": int(os.getenv("POSTGRES_PORT", 5432)),
-    "database": os.getenv("POSTGRES_DB", "production"),
-    "user": os.getenv("POSTGRES_USER", "postgres"),
-    "password": os.getenv("POSTGRES_PASSWORD"),
+# Production PostgreSQL with connection pooling
+workflow.add_node("SQLDatabaseNode", "pg_pool", {
+    "connection_string": f"postgresql://{os.getenv('POSTGRES_USER', 'postgres')}:{os.getenv('POSTGRES_PASSWORD')}@{os.getenv('POSTGRES_HOST', 'localhost')}:{os.getenv('POSTGRES_PORT', 5432)}/{os.getenv('POSTGRES_DB', 'production')}",
     "min_connections": 10,
     "max_connections": 50,
     "health_threshold": 70,
@@ -326,13 +321,13 @@ workflow.add_node("pg_pool", "WorkflowConnectionPool", {
 })
 
 # Initialize pool
-workflow.add_node("init_pool", "PythonCodeNode", {
+workflow.add_node("PythonCodeNode", "init_pool", {
     "code": "result = {'operation': 'initialize'}"
 })
-workflow.add_connection("init_pool", "pg_pool", "result", "inputs")
+workflow.add_connection("init_pool", "result", "pg_pool", "input")
 
 # Read customer data with connection pool
-workflow.add_node("read_customers", "PythonCodeNode", {
+workflow.add_node("PythonCodeNode", "read_customers", {
     "code": """
 # Acquire connection from pool
 conn_result = await pool.execute({"operation": "acquire"})
@@ -378,12 +373,12 @@ result = {"customers": customers}
 })
 
 # MongoDB aggregation
-workflow.add_node("MongoNode", "mongo_aggregator", {}),
-    connection_string=os.getenv("MONGO_URL"),
-    database="analytics",
-    collection="events",
-    operation="aggregate",
-    pipeline=[
+workflow.add_node("MongoNode", "mongo_aggregator", {
+    "connection_string": os.getenv("MONGO_URL"),
+    "database": "analytics",
+    "collection": "events",
+    "operation": "aggregate",
+    "pipeline": [
         {"$match": {"timestamp": {"$gte": "$$start_date"}}},
         {"$group": {
             "_id": "$user_id",
@@ -393,12 +388,12 @@ workflow.add_node("MongoNode", "mongo_aggregator", {}),
         {"$sort": {"event_count": -1}},
         {"$limit": 100}
     ],
-    options={"allowDiskUse": True}
-)
+    "options": {"allowDiskUse": True}
+})
 
 # Join data from multiple databases
-workflow.add_node("PythonCodeNode", "data_joiner", {}),
-    code="""
+workflow.add_node("PythonCodeNode", "data_joiner", {
+    "code": """
 # Create lookup dictionary from MongoDB data
 user_events = {str(event['_id']): event for event in mongo_data}
 
@@ -428,10 +423,10 @@ result = {
 def calculate_engagement_score(orders, events):
     return min(100, (orders * 10) + (events * 2))
 """
-)
+})
 
 # Write results back using connection pool (transactional)
-workflow.add_node("write_analytics", "PythonCodeNode", {
+workflow.add_node("PythonCodeNode", "write_analytics", {
     "code": """
 # Use connection pool for transactional write
 conn_result = await pool.execute({"operation": "acquire"})
@@ -506,7 +501,7 @@ finally:
 })
 
 # Monitor pool performance
-workflow.add_node("monitor_pool", "PythonCodeNode", {
+workflow.add_node("PythonCodeNode", "monitor_pool", {
     "code": """
 # Get pool statistics
 stats = await pool.execute({"operation": "stats"})
@@ -532,14 +527,14 @@ if stats["current_state"]["available_connections"] == 0:
 })
 
 # Connect the workflow
-workflow.add_connection("read_customers", "data_joiner", "result.customers", "postgres_data")
-workflow.add_connection("mongo_aggregator", "data_joiner", "result", "mongo_data")
-workflow.add_connection("data_joiner", "write_analytics", "result.customers", "enriched_customers")
+workflow.add_connection("read_customers", "customers", "data_joiner", "postgres_data")
+workflow.add_connection("mongo_aggregator", "result", "data_joiner", "mongo_data")
+workflow.add_connection("data_joiner", "customers", "write_analytics", "enriched_customers")
 workflow.add_connection("write_analytics", "result", "monitor_pool", "input")
 
 # Execute workflow
 runtime = LocalRuntime()
-result = runtime.execute(workflow.build())
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -638,18 +633,18 @@ from kailash.nodes.code import PythonCodeNode
 workflow = WorkflowBuilder()
 
 # Kafka consumer
-workflow.add_node("KafkaNode", "kafka_consumer", {}),
-    bootstrap_servers=os.getenv("KAFKA_BROKERS"),
-    topic="orders",
-    consumer_group="order_processor",
-    auto_offset_reset="earliest",
-    batch_size=100,
-    batch_timeout=5000  # 5 seconds
-)
+workflow.add_node("KafkaNode", "kafka_consumer", {
+    "bootstrap_servers": os.getenv("KAFKA_BROKERS"),
+    "topic": "orders",
+    "consumer_group": "order_processor",
+    "auto_offset_reset": "earliest",
+    "batch_size": 100,
+    "batch_timeout": 5000  # 5 seconds
+})
 
 # Process messages
-workflow.add_node("PythonCodeNode", "message_processor", {}),
-    code="""
+workflow.add_node("PythonCodeNode", "message_processor", {
+    "code": """
 import json
 
 processed_messages = []
@@ -689,28 +684,28 @@ def process_order(order_data):
     # Business logic here
     return {'order_id': order_data['id'], 'status': 'processed'}
 """
-)
+})
 
 # RabbitMQ publisher for results
-workflow.add_node("RabbitMQNode", "rabbitmq_publisher", {}),
-    connection_url=os.getenv("RABBITMQ_URL"),
-    exchange="results",
-    routing_key="order.processed",
-    operation="publish"
-)
+workflow.add_node("RabbitMQNode", "rabbitmq_publisher", {
+    "connection_url": os.getenv("RABBITMQ_URL"),
+    "exchange": "results",
+    "routing_key": "order.processed",
+    "operation": "publish"
+})
 
 # Dead letter queue for failures
-workflow.add_node("RabbitMQNode", "dlq_publisher", {}),
-    connection_url=os.getenv("RABBITMQ_URL"),
-    exchange="dlq",
-    routing_key="order.failed",
-    operation="publish"
-)
+workflow.add_node("RabbitMQNode", "dlq_publisher", {
+    "connection_url": os.getenv("RABBITMQ_URL"),
+    "exchange": "dlq",
+    "routing_key": "order.failed",
+    "operation": "publish"
+})
 
 # Route successes and failures
-workflow.add_connection("kafka_consumer", "message_processor", "messages", "messages")
-workflow.add_connection("message_processor", "rabbitmq_publisher", "result.processed", "messages")
-workflow.add_connection("message_processor", "dlq_publisher", "result.failed", "messages")
+workflow.add_connection("kafka_consumer", "messages", "message_processor", "messages")
+workflow.add_connection("message_processor", "processed", "rabbitmq_publisher", "messages")
+workflow.add_connection("message_processor", "failed", "dlq_publisher", "messages")
 
 ```
 

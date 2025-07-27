@@ -596,7 +596,7 @@ async def cost_monitoring():
 
         # Record costs
         for cost_data in [aws_costs, gcp_costs, azure_costs]:
-            await optimizer_node.execute_async(
+            optimizer_node.execute(
                 operation="record_cost",
                 **cost_data
             )

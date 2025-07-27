@@ -26,44 +26,57 @@ The A2ACoordinatorNode acts as a centralized project manager, orchestrating spec
 ### Core Actions
 ```python
 # Register agents for a specific project
-coordinator.run(
-    action="register",
-    agent_info={
+workflow = WorkflowBuilder()
+workflow.add_node("A2ACoordinatorNode", "coordinator", {
+    "action": "register",
+    "agent_info": {
         "id": "analyst_001",
         "skills": ["data_analysis", "reporting"],
         "role": "analyst"
     }
-)
+})
+
+runtime = LocalRuntime()
+result, run_id = runtime.execute(workflow.build())
 
 # Delegate tasks with strategies
-coordinator.run(
-    action="delegate",
-    task={
+workflow = WorkflowBuilder()
+workflow.add_node("A2ACoordinatorNode", "coordinator", {
+    "action": "delegate",
+    "task": {
         "name": "Analyze Q3 Data",
         "required_skills": ["data_analysis"],
         "priority": "high"
     },
-    coordination_strategy="best_match"  # or "round_robin", "auction"
-)
+    "coordination_strategy": "best_match"  # or "round_robin", "auction"
+})
+
+result, run_id = runtime.execute(workflow.build())
 
 # Broadcast messages to teams
-coordinator.run(
-    action="broadcast",
-    message={
+workflow = WorkflowBuilder()
+workflow.add_node("A2ACoordinatorNode", "coordinator", {
+    "action": "broadcast",
+    "message": {
         "content": "Phase 1 complete, begin synthesis",
         "target_roles": ["analyst", "synthesizer"],
         "priority": "high"
     }
-)
+})
+
+result, run_id = runtime.execute(workflow.build())
 
 # Build consensus on decisions
-coordinator.run(
-    action="consensus",
-    consensus_proposal={
+workflow = WorkflowBuilder()
+workflow.add_node("A2ACoordinatorNode", "coordinator", {
+    "action": "consensus",
+    "consensus_proposal": {
         "proposal": "Accept analysis results",
         "require_unanimous": False
     }
-)
+})
+
+result, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -95,35 +108,48 @@ The AgentPoolManagerNode maintains a dynamic registry of available agents, track
 ### Core Actions
 ```python
 # Register agents to the pool
-pool_manager.run(
-    action="register",
-    agent_id="ml_expert_007",
-    capabilities=["machine_learning", "deep_learning", "pytorch"],
-    metadata={
+workflow = WorkflowBuilder()
+workflow.add_node("AgentPoolManagerNode", "pool_manager", {
+    "action": "register",
+    "agent_id": "ml_expert_007",
+    "capabilities": ["machine_learning", "deep_learning", "pytorch"],
+    "metadata": {
         "experience_years": 5,
         "specialization": "computer_vision"
     }
-)
+})
+
+runtime = LocalRuntime()
+result, run_id = runtime.execute(workflow.build())
 
 # Find agents by capability
-pool_manager.run(
-    action="find_by_capability",
-    required_capabilities=["machine_learning", "data_analysis"],
-    min_performance=0.8  # Only high performers
-)
+workflow = WorkflowBuilder()
+workflow.add_node("AgentPoolManagerNode", "pool_manager", {
+    "action": "find_by_capability",
+    "required_capabilities": ["machine_learning", "data_analysis"],
+    "min_performance": 0.8  # Only high performers
+})
+
+result, run_id = runtime.execute(workflow.build())
 
 # Update agent status
-pool_manager.run(
-    action="update_status",
-    agent_id="ml_expert_007",
-    status="busy"
-)
+workflow = WorkflowBuilder()
+workflow.add_node("AgentPoolManagerNode", "pool_manager", {
+    "action": "update_status",
+    "agent_id": "ml_expert_007",
+    "status": "busy"
+})
+
+result, run_id = runtime.execute(workflow.build())
 
 # Track performance metrics
-pool_manager.run(
-    action="get_metrics",
-    agent_id="ml_expert_007"
-)
+workflow = WorkflowBuilder()
+workflow.add_node("AgentPoolManagerNode", "pool_manager", {
+    "action": "get_metrics",
+    "agent_id": "ml_expert_007"
+})
+
+result, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -159,72 +185,80 @@ pool_manager.run(
 The most powerful multi-agent systems combine both approaches:
 
 ```python
-# SDK Setup for example
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
-
-# Example setup
-workflow = WorkflowBuilder()
-# Runtime should be created separately
-runtime = LocalRuntime()
-
 # Step 1: Maintain the talent pool
-pool_manager.run(
-    action="register",
-    agent_id="expert_001",
-    capabilities=["nlp", "sentiment_analysis"]
-)
+workflow = WorkflowBuilder()
+workflow.add_node("AgentPoolManagerNode", "pool_manager", {
+    "action": "register",
+    "agent_id": "expert_001",
+    "capabilities": ["nlp", "sentiment_analysis"]
+})
+
+runtime = LocalRuntime()
+result, run_id = runtime.execute(workflow.build())
 
 # Step 2: Analyze problem requirements
-problem_analysis = problem_analyzer.run(
-    problem_description="Analyze customer sentiment across channels"
-)
+workflow = WorkflowBuilder()
+workflow.add_node("ProblemAnalyzerNode", "problem_analyzer", {
+    "problem_description": "Analyze customer sentiment across channels"
+})
+
+problem_analysis, run_id = runtime.execute(workflow.build())
 
 # Step 3: Find suitable agents from pool
-available_agents = pool_manager.run(
-    action="find_by_capability",
-    required_capabilities=problem_analysis["required_capabilities"],
-    min_performance=0.75
-)
+workflow = WorkflowBuilder()
+workflow.add_node("AgentPoolManagerNode", "pool_manager", {
+    "action": "find_by_capability",
+    "required_capabilities": ["nlp", "sentiment_analysis"],  # Simulated from problem analysis
+    "min_performance": 0.75
+})
+
+available_agents, run_id = runtime.execute(workflow.build())
 
 # Step 4: Form optimal team
-team = team_formation.run(
-    problem_analysis=problem_analysis,
-    available_agents=available_agents["agents"],
-    formation_strategy="capability_matching"
-)
+workflow = WorkflowBuilder()
+workflow.add_node("TeamFormationNode", "team_formation", {
+    "problem_analysis": {"required_capabilities": ["nlp", "sentiment_analysis"]},
+    "available_agents": [{"id": "expert_001", "capabilities": ["nlp", "sentiment_analysis"]}],  # Simulated
+    "formation_strategy": "capability_matching"
+})
+
+team, run_id = runtime.execute(workflow.build())
 
 # Step 5: Register team with coordinator
-coordinator = A2ACoordinatorNode()
-for agent in team["selected_agents"]:
-    coordinator.run(action="register", agent_info=agent)
+workflow = WorkflowBuilder()
+# In practice, you would loop through team members
+workflow.add_node("A2ACoordinatorNode", "coordinator", {
+    "action": "register",
+    "agent_info": {"id": "expert_001", "capabilities": ["nlp", "sentiment_analysis"]}
+})
+
+result, run_id = runtime.execute(workflow.build())
 
 # Step 6: Coordinate the actual work
-coordinator.run(
-    action="delegate",
-    task={
+workflow = WorkflowBuilder()
+workflow.add_node("A2ACoordinatorNode", "coordinator", {
+    "action": "delegate",
+    "task": {
         "name": "Sentiment Analysis Phase 1",
         "required_skills": ["sentiment_analysis"]
     }
-)
+})
+
+result, run_id = runtime.execute(workflow.build())
 
 # Step 7: Update pool metrics after completion
-for agent in team["selected_agents"]:
-    pool_manager.run(
-        action="update_status",
-        agent_id=agent["id"],
-        status="available",
-        performance_update={
-            "task_completed": True,
-            "success_score": 0.95
-        }
-    )
+workflow = WorkflowBuilder()
+workflow.add_node("AgentPoolManagerNode", "pool_manager", {
+    "action": "update_status",
+    "agent_id": "expert_001",
+    "status": "available",
+    "performance_update": {
+        "task_completed": True,
+        "success_score": 0.95
+    }
+})
+
+result, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -511,9 +545,22 @@ Do you have a specific workflow to execute?
 ```python
 # You have 3 analysts working on monthly reports
 # Register them once, coordinate their work
-coordinator.run(action="register", agent_info=analyst_1)
-coordinator.run(action="register", agent_info=analyst_2)
-coordinator.run(action="register", agent_info=analyst_3)
+workflow = WorkflowBuilder()
+workflow.add_node("A2ACoordinatorNode", "register_1", {
+    "action": "register",
+    "agent_info": {"id": "analyst_1", "role": "analyst"}
+})
+workflow.add_node("A2ACoordinatorNode", "register_2", {
+    "action": "register",
+    "agent_info": {"id": "analyst_2", "role": "analyst"}
+})
+workflow.add_node("A2ACoordinatorNode", "register_3", {
+    "action": "register",
+    "agent_info": {"id": "analyst_3", "role": "analyst"}
+})
+
+runtime = LocalRuntime()
+result, run_id = runtime.execute(workflow.build())
 # Delegate report sections, broadcast deadlines, build consensus on findings
 
 ```
@@ -523,9 +570,23 @@ coordinator.run(action="register", agent_info=analyst_3)
 ```python
 # Researchers join/leave dynamically
 # Form teams based on research topics
-pool.run(action="register", agent_id="quantum_researcher_42", capabilities=["quantum", "physics"])
+workflow = WorkflowBuilder()
+workflow.add_node("AgentPoolManagerNode", "pool", {
+    "action": "register",
+    "agent_id": "quantum_researcher_42",
+    "capabilities": ["quantum", "physics"]
+})
+
+runtime = LocalRuntime()
+result, run_id = runtime.execute(workflow.build())
+
 # When new research project arrives, find and form optimal team
-team = formation.run(problem_analysis={"required": ["quantum", "ml"]})
+workflow = WorkflowBuilder()
+workflow.add_node("TeamFormationNode", "formation", {
+    "problem_analysis": {"required": ["quantum", "ml"]}
+})
+
+team, run_id = runtime.execute(workflow.build())
 
 ```
 

@@ -37,7 +37,7 @@ This document consolidates all parameter passing knowledge for the Kailash SDK, 
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
-workflow.add_node(MyNode, "node_id", {
+workflow.add_node("MyNode", "node_id", {
     "param1": "static_value",
     "param2": {"nested": "data"},
     "connection_string": database_url
@@ -416,7 +416,7 @@ def test_method1_authentication_workflow(self, test_environment, database_url, a
     workflow = WorkflowBuilder()
 
     # Method 1: All parameters in config
-    workflow.add_node(TPCParameterPrepNode, "prep", {
+    workflow.add_node("TPCParameterPrepNode", "prep", {
         "credentials": {
             "username": admin_user["username"],
             "password": "test_password"
@@ -455,7 +455,7 @@ def test_method1_authentication_workflow(self, test_environment, database_url, a
 builder.add_workflow_inputs("node", {"param": "value"})
 
 # New pattern (Method 1)
-builder.add_node(Node, "node", {"param": "value"})
+builder.add_node("Node", "node", {"param": "value"})
 ```
 
 ### From Dynamic to Explicit Parameters

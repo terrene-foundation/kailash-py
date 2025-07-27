@@ -72,11 +72,13 @@ from kailash.nodes.code import PythonCodeNode
 
 # Create workflow
 workflow = WorkflowBuilder()
-workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
-workflow.add_node("PythonCodeNode", "processor", {}), 'summary': data[:5]}",
-    input_types={"data": list}
-))
-workflow.add_connection("reader", "result", "processor", "input")
+workflow.add_node("CSVReaderNode", "reader", {
+    "file_path": "data.csv"
+})
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'count': len(input_data), 'summary': input_data[:5]}"
+})
+workflow.add_connection("reader", "data", "processor", "input_data")
 
 # Create gateway with frontend features
 gateway = create_gateway(

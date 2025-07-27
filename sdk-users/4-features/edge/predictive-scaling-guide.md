@@ -257,7 +257,7 @@ async def evaluate_predictions():
     for decision in recent_decisions:
         actual_usage = get_actual_usage(decision.timestamp)
 
-        await scaler_node.execute_async(
+        scaler_node.execute(
             operation="evaluate_decision",
             decision_id=decision.decision_id,
             actual_usage=actual_usage
@@ -455,14 +455,14 @@ async def continuous_monitoring():
         memory_usage = get_memory_usage()
 
         # Record for predictions
-        await scaler_node.execute_async(
+        scaler_node.execute(
             operation="record_usage",
             resource_type="cpu",
             usage=cpu_usage.used,
             capacity=cpu_usage.total
         )
 
-        await scaler_node.execute_async(
+        scaler_node.execute(
             operation="record_usage",
             resource_type="memory",
             usage=memory_usage.used,

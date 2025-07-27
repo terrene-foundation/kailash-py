@@ -37,12 +37,13 @@ graph TD
 from kailash.workflow.builder import WorkflowBuilder
 # ✅ RECOMMENDED: Workflow approach
 workflow = WorkflowBuilder()
-workflow.add_node("ValidationNode", "validator", {}))
-workflow.add_node("UserManagementNode", "creator", {}))
+workflow.add_node("ValidationNode", "validator", {})
+workflow.add_node("UserManagementNode", "creator", {})
 workflow.add_connection("validator", "result", "creator", "input")
 
 # With new parameter injection (v0.6.2+)
-results = runtime.execute(workflow, parameters={
+runtime = LocalRuntime()
+results = runtime.execute(workflow.build(), parameters={
     "email": "user@example.com",
     "password": "secure123"
 })
@@ -68,14 +69,16 @@ results = runtime.execute(workflow, parameters={
 
 **Example**:
 ```python
-from kailash.workflow.builder import WorkflowBuilder
 # ⚠️ ONLY when justified by requirements
-node = UserManagementNode(
+from kailash.nodes.auth import UserManagementNode
+node = UserManagementNode()
+result = node.execute(
     operation="verify_password",
     tenant_id="default",
-    database_config=db_config
+    database_config=db_config,
+    identifier=email,
+    password=password
 )
-result = node.execute(identifier=email, password=password)
 ```
 
 **Limitations**:
@@ -90,8 +93,9 @@ result = node.execute(identifier=email, password=password)
 
 ### Scenario 1: User Registration
 ```python
-from kailash.workflow.builder import WorkflowBuilder
 # ❌ AVOID: Direct node chain
+from kailash.nodes.validation import ValidationNode
+from kailash.nodes.auth import UserManagementNode
 validator = ValidationNode()
 valid_result = validator.execute(data=user_data)
 if valid_result["valid"]:

@@ -40,64 +40,75 @@ This guide helps you migrate from `AsyncSQLDatabaseNode` to `WorkflowConnectionP
 ### Step 1: Identify Current Usage
 
 ```python
-# Current AsyncSQLDatabaseNode usage
-from kailash.nodes.data import AsyncSQLDatabaseNode
+# Current AsyncSQLDatabaseNode usage (workflow-based)
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Single connection approach
-db_node = AsyncSQLDatabaseNode(
-    database_type="postgresql",
-    host="localhost",
-    port=5432,
-    database="myapp",
-    user="postgres",
-    password="password"
-)
-
-# In workflow
-result = await db_node.process({
-    "query": "SELECT * FROM orders WHERE status = $1",
-    "params": ["pending"],
+# Single connection approach using workflow
+workflow = WorkflowBuilder()
+workflow.add_node("AsyncSQLDatabaseNode", "db_node", {
+    "database_type": "postgresql",
+    "host": "localhost",
+    "port": 5432,
+    "database": "myapp",
+    "user": "postgres",
+    "password": "password",
+    "query": "SELECT * FROM orders WHERE status = :status",
+    "parameters": {"status": "pending"},
     "fetch_mode": "all"
 })
+
+# Execute workflow
+runtime = LocalRuntime()
+results, run_id = await runtime.execute_async(workflow.build())
+result = results["db_node"]["result"]
 ```
 
 ### Step 2: Replace with WorkflowConnectionPool
 
 ```python
-# New WorkflowConnectionPool approach
-from kailash.nodes.data import WorkflowConnectionPool
+# New WorkflowConnectionPool approach using workflow
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Create connection pool
-pool = WorkflowConnectionPool(
-    name="main_pool",
-    database_type="postgresql",
-    host="localhost",
-    port=5432,
-    database="myapp",
-    user="postgres",
-    password="password",
-    min_connections=5,
-    max_connections=20,
-    health_threshold=70,
-    pre_warm=True
-)
+# Create workflow with connection pool
+workflow = WorkflowBuilder()
+workflow.add_node("WorkflowConnectionPool", "main_pool", {
+    "name": "main_pool",
+    "database_type": "postgresql",
+    "host": "localhost",
+    "port": 5432,
+    "database": "myapp",
+    "user": "postgres",
+    "password": "password",
+    "min_connections": 5,
+    "max_connections": 20,
+    "health_threshold": 70,
+    "pre_warm": True,
+    "operation": "initialize"
+})
 
 # Initialize once at startup
-await pool.process({"operation": "initialize"})
+runtime = LocalRuntime()
+results, run_id = await runtime.execute_async(workflow.build())
 ```
 
 ### Step 3: Update Query Execution Pattern
 
-#### Before (AsyncSQLDatabaseNode)
+#### Before (AsyncSQLDatabaseNode with workflow)
 ```python
-# Direct query execution
+# Query execution using workflow
 async def get_pending_orders():
-    result = await db_node.process({
-        "query": "SELECT * FROM orders WHERE status = $1",
-        "params": ["pending"],
+    workflow = WorkflowBuilder()
+    workflow.add_node("AsyncSQLDatabaseNode", "query_orders", {
+        "query": "SELECT * FROM orders WHERE status = :status",
+        "parameters": {"status": "pending"},
         "fetch_mode": "all"
     })
-    return result["data"]
+
+    runtime = LocalRuntime()
+    results, run_id = await runtime.execute_async(workflow.build())
+    return results["query_orders"]["result"]["data"]
 ```
 
 #### After (WorkflowConnectionPool)
@@ -209,14 +220,14 @@ async def monitor_pool():
 ### 1. Workflow Integration
 
 ```python
-from kailash.workflow.builder import WorkflowBuilder, WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # Create workflow with connection pool
-workflow = WorkflowBuilder("order_processing")
+workflow = WorkflowBuilder()
 
 # Add pool as a node
-workflow.add_node("db_pool", "WorkflowConnectionPool", {
+workflow.add_node("WorkflowConnectionPool", "db_pool", {
     "name": "order_pool",
     "database_type": "postgresql",
     "host": "localhost",
@@ -225,13 +236,13 @@ workflow.add_node("db_pool", "WorkflowConnectionPool", {
 })
 
 # Initialize pool at workflow start
-workflow.add_node("init_pool", "PythonCodeNode", {
+workflow.add_node("PythonCodeNode", "init_pool", {
     "code": "result = {'operation': 'initialize'}"
 })
 workflow.add_connection("init_pool", "db_pool", "result", "inputs")
 
 # Use pool in processing
-workflow.add_node("process_orders", "PythonCodeNode", {
+workflow.add_node("PythonCodeNode", "process_orders", {
     "code": """
 async def process():
     # Acquire connection
@@ -325,41 +336,42 @@ async def get_user(user_id):
 # Formula: max_connections = (concurrent_users * queries_per_user) / reuse_factor
 
 # Low traffic app
-low_traffic_pool = WorkflowConnectionPool(
-    name="low_traffic",
-    min_connections=2,
-    max_connections=10,
+workflow = WorkflowBuilder()
+workflow.add_node("WorkflowConnectionPool", "low_traffic_pool", {
+    "name": "low_traffic",
+    "min_connections": 2,
+    "max_connections": 10
     # ... other config
-)
+})
 
 # Medium traffic app
-medium_traffic_pool = WorkflowConnectionPool(
-    name="medium_traffic",
-    min_connections=5,
-    max_connections=25,
+workflow.add_node("WorkflowConnectionPool", "medium_traffic_pool", {
+    "name": "medium_traffic",
+    "min_connections": 5,
+    "max_connections": 25
     # ... other config
-)
+})
 
 # High traffic app
-high_traffic_pool = WorkflowConnectionPool(
-    name="high_traffic",
-    min_connections=10,
-    max_connections=50,
-    health_threshold=60,  # More aggressive recycling
+workflow.add_node("WorkflowConnectionPool", "high_traffic_pool", {
+    "name": "high_traffic",
+    "min_connections": 10,
+    "max_connections": 50,
+    "health_threshold": 60  # More aggressive recycling
     # ... other config
-)
+})
 ```
 
 ### 2. Health Monitoring
 
 ```python
 # Configure health monitoring
-pool = WorkflowConnectionPool(
-    name="monitored_pool",
+workflow.add_node("WorkflowConnectionPool", "monitored_pool", {
+    "name": "monitored_pool",
     # ... connection config ...
-    health_threshold=70,  # Recycle connections below 70% health
-    pre_warm=True,       # Pre-warm connections based on patterns
-)
+    "health_threshold": 70,  # Recycle connections below 70% health
+    "pre_warm": True       # Pre-warm connections based on patterns
+})
 
 # Custom health check query (if needed)
 pool.health_check_query = "SELECT 1"  # Lightweight query
@@ -416,15 +428,26 @@ If you need to rollback to AsyncSQLDatabaseNode:
 4. Gradually migrate traffic
 
 ```python
-# Feature flag approach
+# Feature flag approach with workflows
 USE_CONNECTION_POOL = os.getenv("USE_CONNECTION_POOL", "false").lower() == "true"
 
+workflow = WorkflowBuilder()
+
 if USE_CONNECTION_POOL:
-    db = WorkflowConnectionPool(...)
-    # Use pool pattern
+    # Use WorkflowConnectionPool pattern
+    workflow.add_node("WorkflowConnectionPool", "db_pool", {
+        "name": "main_pool",
+        "database_type": "postgresql",
+        "min_connections": 10,
+        "max_connections": 50
+    })
 else:
-    db = AsyncSQLDatabaseNode(...)
-    # Use direct pattern
+    # Use AsyncSQLDatabaseNode pattern
+    workflow.add_node("AsyncSQLDatabaseNode", "db_node", {
+        "database_type": "postgresql",
+        "host": "localhost",
+        "database": "myapp"
+    })
 ```
 
 ## Next Steps

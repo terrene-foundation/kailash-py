@@ -86,7 +86,7 @@ gateway = create_gateway(
 )
 
 # Tenant-aware session management
-async def workflow.()  # Type signature example:
+async def create_tenant_session(gateway, tenant_id, user_id):
     return await gateway.agent_ui.create_session(
         user_id=f"{tenant_id}:{user_id}",
         metadata={
@@ -107,15 +107,15 @@ from kailash.nodes.ai.a2a import A2ACoordinatorNode
 from kailash.nodes.ai.self_organizing import AgentPoolManagerNode
 
 # Enterprise agent pool
-workflow.add_node("AgentPoolManagerNode", "agent_pool", {}))
+workflow.add_node("AgentPoolManagerNode", "agent_pool", {})
 
 # High-throughput coordinator
-workflow.add_node("coordinator", A2ACoordinatorNode(
-    max_concurrent_tasks=200,     # Enterprise throughput
-    task_queue_limit=10000,
-    coordination_strategy="weighted_round_robin",
-    performance_monitoring=True
-))
+workflow.add_node("A2ACoordinatorNode", "coordinator", {
+    "max_concurrent_tasks": 200,     # Enterprise throughput
+    "task_queue_limit": 10000,
+    "coordination_strategy": "weighted_round_robin",
+    "performance_monitoring": True
+})
 
 ```
 
@@ -124,30 +124,32 @@ workflow.add_node("coordinator", A2ACoordinatorNode(
 from kailash.nodes.transaction import DistributedTransactionManagerNode
 
 # Automatic pattern selection for enterprise transactions
-dtm = DistributedTransactionManagerNode(
-    transaction_name="enterprise_order_processing",
-    state_storage="database",
-    storage_config={
-        "db_pool": enterprise_db_pool,
+workflow.add_node("DistributedTransactionManagerNode", "dtm", {
+    "transaction_name": "enterprise_order_processing",
+    "state_storage": "database",
+    "storage_config": {
+        "connection_string": "postgresql://localhost:5432/enterprise_db",
         "table_name": "enterprise_transaction_states"
     }
-)
+})
 
-# Create transaction with enterprise requirements
-await dtm.async_run(
-    operation="create_transaction",
-    requirements={
-        "consistency": "strong",        # Enterprise data consistency
-        "availability": "high",         # 99.9% uptime requirement
-        "timeout": 300,                # 5-minute timeout
-        "isolation_level": "serializable"
-    },
-    context={
-        "enterprise_id": "ENT001",
-        "compliance_required": True,
-        "audit_trail": True
+# Execute workflow with enterprise requirements
+results, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "dtm": {
+        "operation": "create_transaction",
+        "requirements": {
+            "consistency": "strong",        # Enterprise data consistency
+            "availability": "high",         # 99.9% uptime requirement
+            "timeout": 300,                # 5-minute timeout
+            "isolation_level": "serializable"
+        },
+        "context": {
+            "enterprise_id": "ENT001",
+            "compliance_required": True,
+            "audit_trail": True
+        }
     }
-)
+})
 
 # Add enterprise service participants
 enterprise_services = [
@@ -157,20 +159,11 @@ enterprise_services = [
     {"id": "audit_service", "2pc": True, "saga": True}
 ]
 
-for service in enterprise_services:
-    await dtm.async_run(
-        operation="add_participant",
-        participant_id=service["id"],
-        endpoint=f"https://internal.{service['id']}.company.com/api/v1/transactions",
-        supports_2pc=service["2pc"],
-        supports_saga=service["saga"],
-        timeout=60,
-        retry_count=3
-    )
+# In a real implementation, you would add participants as part of the workflow configuration
+# or via additional workflow nodes. The DTM node handles participant management internally.
 
-# Execute with automatic pattern selection
-result = await dtm.async_run(operation="execute_transaction")
-print(f"Selected pattern: {result['selected_pattern']}")
+print(f"Transaction ID: {results['dtm']['transaction_id']}")
+print(f"Selected pattern: {results['dtm']['selected_pattern']}")
 ```
 
 ## 🛡️ Security Patterns
@@ -190,7 +183,7 @@ jwt_auth = KailashJWTAuth(
 )
 
 # Multi-factor authentication
-workflow.add_node("MultiFactorAuthNode", "mfa", {}))
+workflow.add_node("MultiFactorAuthNode", "mfa", {})
 
 ```
 
@@ -199,16 +192,13 @@ workflow.add_node("MultiFactorAuthNode", "mfa", {}))
 from kailash.access_control import AccessControlManager
 
 # Enterprise access control
-access_manager = AccessControlManager(
-    strategy="hybrid",             # RBAC + ABAC
+from kailash.runtime.access_controlled import AccessControlledRuntime
+
+runtime = AccessControlledRuntime(
+    access_control_strategy="hybrid",  # RBAC + ABAC
     policies_file="/config/policies.yaml",
     dynamic_policies=True,
-    audit_enabled=True
-)
-
-# Role-based workflow access
-runtime = AccessControlledRuntime(
-    access_control_manager=access_manager,
+    audit_enabled=True,
     require_authorization=True,
     log_all_access=True
 )

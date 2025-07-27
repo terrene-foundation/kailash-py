@@ -53,51 +53,48 @@
 # ✅ CORRECT: String-based node creation
 from kailash.workflow.builder import WorkflowBuilder
 
-builder = WorkflowBuilder()
+workflow = WorkflowBuilder()
 
 # Create nodes using string types
-reader_id = builder.add_node(
+workflow.add_node(
     "CSVReaderNode",           # Node type as string
-    node_id="csv_reader",      # Optional custom ID
-    config={                   # Configuration dictionary
-        "name": "csv_reader",
+    "csv_reader",              # Node ID as string
+    {                          # Configuration dictionary
         "file_path": "/data/inputs/customers.csv"
     }
 )
 
-processor_id = builder.add_node(
+workflow.add_node(
     "PythonCodeNode",
-    node_id="data_processor",
-    config={
-        "name": "data_processor",
+    "data_processor",
+    {
         "code": "result = {'processed': len(input_data)}"
     }
 )
 
 # Connect using add_connection (4 parameters required)
-builder.add_connection(reader_id, "output", processor_id, "input")
+workflow.add_connection("csv_reader", "data", "data_processor", "input_data")
 
 ```
 
 ### ⚠️ IMPORTANT: Connection Syntax Difference
 ```python
 # WorkflowBuilder uses add_connection() with 4 parameters:
-builder = WorkflowBuilder()
-builder.add_connection(
-    source_node_id,      # Source node ID
-    source_output,       # Source output parameter name
-    target_node_id,      # Target node ID
-    target_input         # Target input parameter name
+workflow = WorkflowBuilder()
+workflow.add_connection(
+    "source_node",       # Source node ID
+    "output",            # Source output parameter name
+    "target_node",       # Target node ID
+    "input"              # Target input parameter name
 )
 
-# Workflow uses connect() with mapping dict:
+# Standard workflow connection pattern:
 workflow = WorkflowBuilder()
-workflow.add_connection(source_node, "result", # Source node object or name
-    target_node, "input")
+workflow.add_connection("source_node", "result", "target_node", "input")
 
-# ❌ WRONG: Don't mix the syntax!
-# This will fail on WorkflowBuilder:
-builder.connect(node1, node2, # mapping removed)
+# ❌ WRONG: Don't use old syntax!
+# This will fail:
+# workflow.connect(node1, node2, mapping={"output": "input"})
 
 # This will fail on Workflow:
 workflow.add_connection("node1", "output", "node2", "input")
@@ -135,7 +132,7 @@ runtime = LocalRuntime(
 )
 
 # Execute with automatic enterprise integration
-results, run_id = runtime.execute(workflow, task_manager, parameters)
+results, run_id = runtime.execute(workflow.build(), parameters=parameters)
 
 ```
 
@@ -205,7 +202,7 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # ✅ ALWAYS use from_function for complex logic:
-def workflow.()  # Type signature example -> dict:
+def process_files(input_data: dict) -> dict:
     """Full IDE support: highlighting, completion, debugging!"""
     files = input_data.get("files", [])
     # Complex processing with IDE support
@@ -238,11 +235,11 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # OK for simple one-liner
-node = PythonCodeNode(name="calc", code="result = value * 1.1")
+workflow.add_node("PythonCodeNode", "calc", {"code": "result = value * 1.1"})
 
 # OK for dynamic generation
 code = f"result = data['{user_field}'] > {threshold}"
-node = PythonCodeNode(name="filter", code=code)
+workflow.add_node("PythonCodeNode", "filter", {"code": code})
 
 ```
 
@@ -265,7 +262,7 @@ runtime = LocalRuntime()
 
 # CORRECT: Different variable names for mapping
 workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
+workflow.add_connection("source", "output_data", "processor", "processed_data")
 
 ```
 
@@ -295,12 +292,13 @@ workflow.configure_circuit_breaker("api_call", failure_threshold=5)
 from kailash.nodes.security import CredentialManagerNode
 
 # Never hardcode credentials!
-cred_node = CredentialManagerNode(
-    credential_name="api_service",
-    credential_type="api_key",
-    credential_sources=["vault", "env"],  # Try vault first
-    cache_duration_seconds=3600
-)
+workflow = WorkflowBuilder()
+workflow.add_node("CredentialManagerNode", "cred_manager", {
+    "credential_name": "api_service",
+    "credential_type": "api_key",
+    "credential_sources": ["vault", "env"],  # Try vault first
+    "cache_duration_seconds": 3600
+})
 
 ```
 
@@ -309,22 +307,28 @@ cred_node = CredentialManagerNode(
 from kailash.nodes.data import SharePointGraphReaderEnhanced
 
 # Certificate auth (production)
-sp_node = SharePointGraphReaderEnhanced()
-result = await sp_node.execute(
-    auth_method="certificate",
-    certificate_path="/secure/cert.pem",
-    tenant_id="tenant-id",
-    client_id="app-id",
-    site_url="https://company.sharepoint.com/sites/data",
-    operation="list_files"
-)
+workflow = WorkflowBuilder()
+workflow.add_node("SharePointGraphReaderEnhanced", "sp_reader", {})
+runtime = AsyncLocalRuntime()
+results, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "sp_reader": {
+        "auth_method": "certificate",
+        "certificate_path": "/secure/cert.pem",
+        "tenant_id": "tenant-id",
+        "client_id": "app-id",
+        "site_url": "https://company.sharepoint.com/sites/data",
+        "operation": "list_files"
+    }
+})
 
 # Managed Identity (Azure)
-result = await sp_node.execute(
-    auth_method="managed_identity",
-    site_url="https://company.sharepoint.com/sites/data",
-    operation="list_files"
-)
+results, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "sp_reader": {
+        "auth_method": "managed_identity",
+        "site_url": "https://company.sharepoint.com/sites/data",
+        "operation": "list_files"
+    }
+})
 
 ```
 
@@ -333,13 +337,13 @@ result = await sp_node.execute(
 from kailash.nodes.data import DirectoryReaderNode
 
 # Better than manual file discovery
-file_discoverer = DirectoryReaderNode(
-    name="discoverer",
-    directory_path="data/inputs",
-    recursive=False,
-    file_patterns=["*.csv", "*.json", "*.txt"],
-    include_metadata=True
-)
+workflow = WorkflowBuilder()
+workflow.add_node("DirectoryReaderNode", "discoverer", {
+    "directory_path": "data/inputs",
+    "recursive": False,
+    "file_patterns": ["*.csv", "*.json", "*.txt"],
+    "include_metadata": True
+})
 
 ```
 
@@ -359,7 +363,7 @@ gateway = create_gateway(
 mcp = MCPIntegration("tools")
 
 # Add tools (sync or async)
-async def search_web('query', limit: int = 10):
+async def search_web(query: str, limit: int = 10):
     return {"results": ["result1", "result2"]}
 
 mcp.add_tool("search", search_web, "Search web", {
@@ -370,18 +374,17 @@ mcp.add_tool("search", search_web, "Search web", {
 # 3. Use in workflows
 from kailash.workflow.builder import WorkflowBuilder
 
-builder = WorkflowBuilder("mcp_workflow")
+workflow = WorkflowBuilder()
 
 # Add MCP tool node
-search_node = MCPToolNode(
-    mcp_server="tools",
-    tool_name="search",
-    # mapping removed)
-builder.add_node("search", search_node)
+workflow.add_node("MCPToolNode", "search", {
+    "mcp_server": "tools",
+    "tool_name": "search"
+})
 
 # Register workflow
 await gateway.agent_ui.register_workflow(
-    "mcp_workflow", builder.build(), make_shared=True
+    "mcp_workflow", workflow.build(), make_shared=True
 )
 
 ```
@@ -409,10 +412,10 @@ from examples.utils.data_paths import get_input_data_path, get_output_data_path
 customer_file = get_input_data_path("customers.csv")
 output_file = get_output_data_path("processed_data.csv")
 
-reader = CSVReaderNode(name="reader", file_path=str(customer_file))
+workflow.add_node("CSVReaderNode", "reader", {"file_path": str(customer_file)})
 
 # WRONG: Hardcoded paths
-reader = CSVReaderNode(name="reader", file_path="examples/data/customers.csv")
+# reader = CSVReaderNode(name="reader", file_path="examples/data/customers.csv")  # Instance-based
 
 ```
 
@@ -423,7 +426,7 @@ reader = CSVReaderNode(name="reader", file_path="examples/data/customers.csv")
 4. **Missing PythonCodeNode name**: `PythonCodeNode(code=...)` → `PythonCodeNode(name="x", code=...)`
 5. **Manual file operations**: Use `DirectoryReaderNode` not `os.listdir`
 6. **Hardcoded data paths**: `"examples/data/file.csv"` → Use `get_input_data_path("file.csv")`
-7. **Old execution pattern**: `node.execute()` → Use `node.execute()` for complete lifecycle
+7. **Old execution pattern**: `node.execute()` → Use workflow execution with `runtime.execute(workflow.build())`
 
 ## 🎯 **Find What You Need**
 

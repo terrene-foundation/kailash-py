@@ -1012,7 +1012,10 @@ workflow = builder.from_dict({
     "connections": [...]
 })
 
-results = await workflow.execute_async(inputs)
+# Execute with runtime
+from kailash.runtime.local import LocalRuntime
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ## 🚀 Performance Tips

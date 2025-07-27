@@ -104,16 +104,44 @@ class DataSourceNode(CycleAwareNode):
         return {"data": kwargs.get("data", [])}
 
 workflow = WorkflowBuilder()
-workflow.add_node("DataSourceNode", "source", {}))
-workflow.add_node("PythonCodeNode", "processor", {}))
-workflow.add_connection("source", "result", "processor", "input")
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
-
-# Execute with node-specific parameters
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={
-    "source": {"data": [1, 2, 3]}
+workflow.add_node("PythonCodeNode", "source", {
+    "code": "result = {'data': [1, 2, 3], 'iteration': 0}"
 })
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": """
+try:
+    data = input_data.get('data', [])
+    iteration = input_data.get('iteration', 0)
+except NameError:
+    data = []
+    iteration = 0
+
+# Simple processing
+processed = [x * 2 for x in data]
+iteration += 1
+
+result = {
+    'data': processed,
+    'iteration': iteration,
+    'done': iteration >= 3
+}
+"""
+})
+
+workflow.add_connection("source", "result", "processor", "input_data")
+
+# Build workflow and create cycle
+built_workflow = workflow.build()
+cycle_builder = built_workflow.create_cycle("processing_cycle")
+cycle_builder.connect("processor", "processor", mapping={"result": "input_data"}) \
+             .max_iterations(5) \
+             .converge_when("done == True") \
+             .timeout(300) \
+             .build()
+
+# Execute workflow
+runtime = LocalRuntime()
+results, run_id = runtime.execute(built_workflow)
 
 ```
 
@@ -123,15 +151,40 @@ from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
-# Single node cycles can use direct parameters
+# Single node cycles with self-loop
 workflow = WorkflowBuilder()
-workflow.add_node("PythonCodeNode", "proc", {}))
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+workflow.add_node("PythonCodeNode", "proc", {
+    "code": """
+try:
+    value = input_value
+    count = input_count
+except NameError:
+    value = 10
+    count = 0
+
+# Process value
+value = value * 0.9
+count += 1
+
+result = {
+    'value': value,
+    'count': count,
+    'done': value < 1.0
+}
+"""
+})
+
+# Create self-loop cycle
+built_workflow = workflow.build()
+cycle_builder = built_workflow.create_cycle("self_loop")
+cycle_builder.connect("proc", "proc", mapping={"result": "input_value"}) \
+             .max_iterations(20) \
+             .converge_when("done == True") \
+             .timeout(300) \
+             .build()
 
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={
-    "value": 10  # Direct parameters work
-})
+results, run_id = runtime.execute(built_workflow)
 
 ```
 
@@ -168,11 +221,54 @@ def check_convergence(iteration, outputs, context):
 workflow = WorkflowBuilder()
 
 # Process → Validate → Process (if needed)
-workflow.add_node("PythonCodeNode", "processor", {}))
-workflow.add_node("PythonCodeNode", "validator", {}))
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": """
+try:
+    data = input_data.get('data', [100, 110, 120])
+    iteration = input_data.get('iteration', 0)
+except NameError:
+    data = [100, 110, 120]
+    iteration = 0
 
-workflow.add_connection("processor", "result", "validator", "input")
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+# Improve data quality
+improved_data = [x * 0.95 for x in data]
+iteration += 1
+
+result = {
+    'data': improved_data,
+    'iteration': iteration,
+    'quality': sum(improved_data) / len(improved_data)
+}
+"""
+})
+
+workflow.add_node("PythonCodeNode", "validator", {
+    "code": """
+data = input_data.get('data', [])
+iteration = input_data.get('iteration', 0)
+quality = input_data.get('quality', 0)
+
+# Check if quality is acceptable
+quality_acceptable = quality < 100
+result = {
+    'data': data,
+    'iteration': iteration,
+    'quality': quality,
+    'converged': quality_acceptable
+}
+"""
+})
+
+workflow.add_connection("processor", "result", "validator", "input_data")
+
+# Build workflow and create quality improvement cycle
+built_workflow = workflow.build()
+cycle_builder = built_workflow.create_cycle("quality_improvement")
+cycle_builder.connect("validator", "processor", mapping={"result": "input_data"}) \
+             .max_iterations(10) \
+             .converge_when("converged == True") \
+             .timeout(300) \
+             .build()
 
 ```
 

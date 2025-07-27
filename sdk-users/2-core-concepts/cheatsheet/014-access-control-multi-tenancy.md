@@ -108,10 +108,10 @@ access_manager.add_policy({
 from kailash.nodes.data import SQLDatabaseNode
 
 # Automatic tenant filtering
-workflow.add_node("SQLDatabaseNode", "db_query", {}),
-    query="SELECT * FROM customers WHERE tenant_id = :tenant_id",
-    parameters={"tenant_id": "${user.tenant_id}"}  # Injected from context
-)
+workflow.add_node("SQLDatabaseNode", "db_query", {
+    "query": "SELECT * FROM customers WHERE tenant_id = :tenant_id",
+    "parameters": {"tenant_id": "${user.tenant_id}"}  # Injected from context
+})
 
 # Runtime enforces tenant isolation
 for tenant_user in users:
@@ -164,10 +164,10 @@ runtime = LocalRuntime()
 
 # Encrypt sensitive data per tenant
 workflow = WorkflowBuilder()
-workflow.add_node("EncryptionNode", "encrypt", {}),
-    encryption_key="${tenant.encryption_key}",
-    algorithm="AES-256-GCM"
-)
+workflow.add_node("EncryptionNode", "encrypt", {
+    "encryption_key": "${tenant.encryption_key}",
+    "algorithm": "AES-256-GCM"
+})
 
 ```
 
@@ -196,8 +196,7 @@ secure_runtime = AccessControlledRuntime(
 )
 
 # All operations logged with user context
-runtime = LocalRuntime()
-runtime.execute(workflow.build(), workflow)
+results, run_id = secure_runtime.execute(workflow.build())
 
 ```
 
@@ -232,9 +231,9 @@ def check_data_access(user, resource) -> bool:
 
 # Apply in workflow
 workflow = WorkflowBuilder()
-workflow.add_node("FilterNode", "filter", {}),
-    filter_function=lambda item: check_data_access(user, item)
-)
+workflow.add_node("FilterNode", "filter", {
+    "filter_function": lambda item: check_data_access(user, item)
+})
 
 ```
 

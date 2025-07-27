@@ -23,33 +23,32 @@ runtime = LocalRuntime()
 
 # Only one condition creates a cycle, others terminate normally
 
-workflow = WorkflowBuilder()
-workflow.add_node("DataSourceNode", "data_source", {}))
-workflow = WorkflowBuilder()
-workflow.add_node("DataClassifierNode", "classifier", {}))
-workflow = WorkflowBuilder()
-workflow.add_node("SwitchNode", "routing_switch", {}))
-workflow = WorkflowBuilder()
-workflow.add_node("FilterProcessorNode", "filter_processor", {}))
-workflow = WorkflowBuilder()
-workflow.add_node("ArchiveProcessorNode", "archive_processor", {}))
+workflow.add_node("PythonCodeNode", "data_source", {
+    "code": "result = {'data': [1, 2, 3, 4, 5]}"
+})
+workflow.add_node("PythonCodeNode", "classifier", {
+    "code": "result = {'status': 'needs_processing', 'quality': 0.6}"
+})
+workflow.add_node("SwitchNode", "routing_switch", {
+    "conditions": {"filter": "status == 'needs_processing'", "archive": "status == 'complete'"}
+})
+workflow.add_node("PythonCodeNode", "filter_processor", {
+    "code": "result = {'filtered_data': input_data, 'status': 'processed'}"
+})
+workflow.add_node("PythonCodeNode", "archive_processor", {
+    "code": "result = {'archived': True, 'timestamp': '2024-01-01'}"
+})
 
 # Initial data flow
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
+workflow.add_connection("data_source", "result", "classifier", "input")
+workflow.add_connection("classifier", "result", "routing_switch", "input")
 
 # Multiple exit paths from switch
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
+workflow.add_connection("routing_switch", "filter", "filter_processor", "input")
+workflow.add_connection("routing_switch", "archive", "archive_processor", "input")
 
 # Only the filter path cycles back
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
+workflow.add_connection("filter_processor", "result", "classifier", "input")
 
 # Archive processor doesn't cycle - workflow ends there
 
@@ -74,37 +73,33 @@ runtime = LocalRuntime()
 
 # Multiple conditions can trigger different cycle paths
 
-workflow = WorkflowBuilder()
-workflow.add_node("DataAnalyzerNode", "analyzer", {}))
-workflow = WorkflowBuilder()
-workflow.add_node("SwitchNode", "quality_switch", {}))
-workflow = WorkflowBuilder()
-workflow.add_node("QualityImproverNode", "improve_processor", {}))
-workflow = WorkflowBuilder()
-workflow.add_node("ValidationProcessorNode", "validate_processor", {}))
-workflow = WorkflowBuilder()
-workflow.add_node("CompletionProcessorNode", "complete_processor", {}))
+workflow.add_node("PythonCodeNode", "analyzer", {
+    "code": "result = {'quality_level': 'medium', 'score': 0.7}"
+})
+workflow.add_node("SwitchNode", "quality_switch", {
+    "conditions": {"improve": "quality_level == 'low'", "validate": "quality_level == 'medium'", "complete": "quality_level == 'high'"}
+})
+workflow.add_node("PythonCodeNode", "improve_processor", {
+    "code": "result = {'improved_data': input_data, 'quality_level': 'medium'}"
+})
+workflow.add_node("PythonCodeNode", "validate_processor", {
+    "code": "result = {'validated_data': input_data, 'quality_level': 'high'}"
+})
+workflow.add_node("PythonCodeNode", "complete_processor", {
+    "code": "result = {'completed': True, 'final_data': input_data}"
+})
 
 # Main analysis flow
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
+workflow.add_connection("analyzer", "result", "quality_switch", "input")
 
 # Different quality levels trigger different processing
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature  # This path doesn't cycle
+workflow.add_connection("quality_switch", "improve", "improve_processor", "input")
+workflow.add_connection("quality_switch", "validate", "validate_processor", "input")
+workflow.add_connection("quality_switch", "complete", "complete_processor", "input")  # This path doesn't cycle
 
 # Different cycle paths
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
+workflow.add_connection("improve_processor", "result", "analyzer", "input")
+workflow.add_connection("validate_processor", "result", "analyzer", "input")
 
 # Complete processor terminates without cycling
 
@@ -130,16 +125,15 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Use cases parameter for multiple routing options
-runtime = LocalRuntime()
-# Parameters setup
-workflow.{
+parameters = {
     "quality_switch": {
         "condition_field": "quality_level",
         "cases": ["low", "medium", "high"],  # Multiple cases
         "case_prefix": "case_",
         "pass_condition_result": True
     }
-})
+}
+results, run_id = runtime.execute(workflow.build(), parameters=parameters)
 
 # Results in outputs: case_low, case_medium, case_high, default
 
@@ -163,16 +157,15 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # More complex condition evaluation
-runtime = LocalRuntime()
-# Parameters setup
-workflow.{
+parameters = {
     "routing_switch": {
         "condition_field": "status",
         "operator": "in",
         "value": ["needs_processing", "needs_validation"],  # Multiple trigger values
         "pass_condition_result": True
     }
-})
+}
+results, run_id = runtime.execute(workflow.build(), parameters=parameters)
 
 ```
 
@@ -196,8 +189,8 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Always ensure cycles have clear termination conditions
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()  # Clear condition
+workflow.add_connection("processor", "result", "evaluator", "input")  # Basic cycle connection
+# Note: Use proper convergence conditions in production workflows
 
 ```
 
@@ -219,18 +212,21 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Document which paths cycle and which terminate
-class DataClassifierNode(CycleAwareNode):
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        data = kwargs.get("data", [])
-        quality = self.calculate_quality(data)
+workflow.add_node("PythonCodeNode", "data_classifier", {
+    "code": """
+# Calculate quality and determine flow path
+data = input_data.get("data", [])
+quality = len(data) / 10.0  # Simple quality calculation
 
-        return {
-            "processed_data": data,
-            "quality_level": quality,
-            "needs_processing": quality < 0.8,      # Will cycle back
-            "is_complete": quality >= 0.8,          # Will terminate
-            "processing_complete": quality >= 0.95  # Final convergence
-        }
+result = {
+    "processed_data": data,
+    "quality_level": quality,
+    "needs_processing": quality < 0.8,      # Will cycle back
+    "is_complete": quality >= 0.8,          # Will terminate
+    "processing_complete": quality >= 0.95  # Final convergence
+}
+"""
+})
 
 ```
 
@@ -252,21 +248,19 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Always use source nodes for complex multi-path cycles
-class DataSourceNode(CycleAwareNode):
-    def get_parameters(self) -> Dict[str, NodeParameter]:
-        return {
-            "initial_data": NodeParameter(name="initial_data", type=list, required=False, default=[])
-        }
-
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        return {"data": kwargs.get("initial_data", [])}
+workflow.add_node("PythonCodeNode", "data_source", {
+    "code": """
+# Source node for multi-path cycles
+initial_data = parameters.get("initial_data", [])
+result = {"data": initial_data}
+"""
+})
 
 # Execute with node-specific parameters
-runtime = LocalRuntime()
-# Parameters setup
-workflow.{
+parameters = {
     "data_source": {"initial_data": [1, 2, 3, 4, 5]}
-})
+}
+results, run_id = runtime.execute(workflow.build(), parameters=parameters)
 
 ```
 
@@ -290,15 +284,12 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Wrong - missing cycle connection for one path
-workflow = WorkflowBuilder()
-workflow.add_connection("switch", "result", "processor_a", "input")
-workflow = WorkflowBuilder()
-workflow.add_connection("switch", "result", "processor_b", "input")
+workflow.add_connection("switch", "output_a", "processor_a", "input")
+workflow.add_connection("switch", "output_b", "processor_b", "input")
 
 # Only processor_a cycles back - processor_b path incomplete
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
-# Missing: workflow.add_connection("source", "result", "target", "input")
+workflow.add_connection("processor_a", "result", "switch", "input")  # Cycles back
+# Missing: workflow.add_connection("processor_b", "result", "switch", "input")
 
 ```
 
@@ -320,11 +311,8 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Wrong - different cycle paths with conflicting convergence
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()  # High threshold
-
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()  # Low threshold
+workflow.add_connection("path_a", "result", "evaluator_high", "input")  # High threshold
+workflow.add_connection("path_b", "result", "evaluator_low", "input")   # Low threshold
 # These can interfere with each other
 
 ```
@@ -347,10 +335,9 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Wrong - no handling for unmatched conditions
-workflow = WorkflowBuilder()
-workflow.add_connection("switch", "result", "processor", "input")
+workflow.add_connection("switch", "match_condition", "processor", "input")
 # What happens if condition doesn't match?
-# Add default handling or ensure all cases are covered
+# Add default handling: workflow.add_connection("switch", "default", "default_processor", "input")
 
 ```
 

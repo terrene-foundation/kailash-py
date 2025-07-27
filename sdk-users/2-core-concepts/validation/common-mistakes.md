@@ -54,7 +54,7 @@ runtime.execute(workflow.build(), parameters={
 
 ```python
 # ❌ WRONG - Hardcoded secrets in workflow parameters
-workflow.add_node("HTTPRequestNode", "api", {}), {
+workflow.add_node("HTTPRequestNode", "api", {
     "url": "https://api.example.com",
     "headers": {"Authorization": "Bearer sk-abc123"}  # SECURITY RISK!
 })
@@ -62,61 +62,58 @@ workflow.add_node("HTTPRequestNode", "api", {}), {
 # ❌ WRONG - Environment variables for secrets
 import os
 api_key = os.getenv("API_KEY")
-workflow.add_node("HTTPRequestNode", "api", {}), {
+workflow.add_node("HTTPRequestNode", "api", {
     "headers": {"Authorization": f"Bearer {api_key}"}
 })
 
 # ❌ WRONG - Template substitution for secrets
-workflow.add_node("HTTPRequestNode", "api", {}), {
+workflow.add_node("HTTPRequestNode", "api", {
     "headers": {"Authorization": "Bearer ${API_TOKEN}"}
 })
 
-# ✅ CORRECT - Runtime secret management (v0.8.1+)
-from kailash.runtime.secret_provider import EnvironmentSecretProvider
+# ✅ CORRECT - Use environment variables with runtime parameters
 from kailash.runtime.local import LocalRuntime
+import os
 
-secret_provider = EnvironmentSecretProvider()
-runtime = LocalRuntime(secret_provider=secret_provider)
-
-# Node declares secret requirements
-class APINode(Node):
-    @classmethod
-    def get_secret_requirements(cls):
-        return [SecretRequirement("api-token", "auth_token")]
-
-# Secrets injected at runtime, not stored in workflow
-workflow.add_node("APINode", "api", {}), {
+# Keep secrets out of workflow definition
+workflow.add_node("HTTPRequestNode", "api", {
     "url": "https://api.example.com"
-    # No secret in parameters - injected automatically!
+    # No secret in node config!
+})
+
+# Provide secrets at runtime only
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build(), parameters={
+    "api": {"headers": {"Authorization": f"Bearer {os.getenv('API_TOKEN')}"}}
 })
 ```
 
 **Environment Setup for Secrets:**
 ```bash
-# ✅ CORRECT - Use KAILASH_SECRET_ prefix
-export KAILASH_SECRET_API_TOKEN="sk-abc123"
-export KAILASH_SECRET_JWT_SIGNING_KEY="secret-key"
-
-# ❌ WRONG - Direct environment variables
-export API_TOKEN="sk-abc123"  # Avoid this pattern
+# ✅ CORRECT - Use environment variables
+export API_TOKEN="sk-abc123"
+export JWT_SIGNING_KEY="secret-key"
 ```
 
 **Why this matters:**
 - Hardcoded secrets are visible in logs and stored in workflow definitions
-- Environment variables expose secrets in process lists and crash dumps
-- Runtime secret management fetches secrets only when needed
-- Supports enterprise providers (Vault, AWS Secrets Manager)
+- Runtime parameter injection keeps secrets out of workflow definitions
+- Environment variables are only accessed at runtime execution
 - Enables secret rotation without code changes
 
 ### **Mistake #1: Cycle Parameter Passing Errors**
 
 ```python
 # ❌ WRONG - Direct field mapping for PythonCodeNode
-counter = PythonCodeNode.from_function(lambda x=0: {"count": x+1}, name="counter")
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "counter", {"code": "count = x + 1; result = {'count': count}"})
+# Use CycleBuilder API: workflow.create_cycle("name").connect(...).build()
 
 # ✅ CORRECT - Use dot notation for PythonCodeNode outputs
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "counter", {"code": "count = x + 1; result = {'count': count}"})
+cycle_builder = workflow.create_cycle("counter_cycle")
+cycle_builder.connect("counter", "counter", mapping={"count": "x"}).max_iterations(10).build()
 ```
 
 ```python
@@ -124,7 +121,7 @@ counter = PythonCodeNode.from_function(lambda x=0: {"count": x+1}, name="counter
 runtime.execute(workflow.build())  # ERROR: Required parameter 'x' not provided
 
 # ✅ CORRECT - Provide initial parameters
-runtime.execute(workflow, parameters={"counter": {"x": 0}})
+runtime.execute(workflow.build(), parameters={"counter": {"x": 0}})
 ```
 
 ```python
@@ -138,40 +135,39 @@ runtime.execute(workflow, parameters={"counter": {"x": 0}})
 ### **Mistake #2: Wrong Execution Pattern**
 ```python
 
-# ❌ WRONG - This will cause an error
+# ❌ WRONG - These will cause errors
 workflow = WorkflowBuilder()
-workflow.runtime.execute(workflow.build(), runtime)
+# These patterns will cause errors:
+# workflow.runtime.execute(workflow.build(), runtime)  # workflow has no runtime attribute
+# workflow.execute(runtime)  # ❌ workflow has no execute method
 
-# ✅ CORRECT - Two valid patterns
-# Pattern 1: Direct execution (basic features)
+# ✅ CORRECT - Runtime execution pattern
 workflow = WorkflowBuilder()
-runtime.execute(workflow.build(), )
+workflow.add_node("PythonCodeNode", "test", {"code": "result = {'value': 42}"})
 
-# Pattern 2: Runtime execution (recommended)
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 
 ```
 
-### **Mistake #2: Wrong Parameter Name for Overrides**
+### **Mistake #3: Wrong Parameter Name for Overrides**
 ```python
 
 # ❌ WRONG - These parameter names don't exist
 runtime = LocalRuntime()
-runtime.execute(workflow.build(), workflow, parameters={"reader": {"file_path": "data.csv"}})
-runtime = LocalRuntime()
-runtime.execute(workflow.build(), workflow, config={"reader": {"file_path": "data.csv"}})
-runtime = LocalRuntime()
-runtime.execute(workflow.build(), workflow, overrides={"reader": {"file_path": "data.csv"}})
+runtime.execute(workflow.build(), config={"reader": {"file_path": "data.csv"}})
+runtime.execute(workflow.build(), overrides={"reader": {"file_path": "data.csv"}})
+runtime.execute(workflow.build(), inputs={"reader": {"file_path": "data.csv"}})
 
 # ✅ CORRECT - Use 'parameters'
 runtime = LocalRuntime()
-# Parameters setup
-workflow.{"reader": {"file_path": "data.csv"}})
+results, run_id = runtime.execute(workflow.build(), parameters={
+    "reader": {"file_path": "data.csv"}
+})
 
 ```
 
-### **Mistake #3: Missing "Node" Suffix**
+### **Mistake #4: Missing "Node" Suffix**
 ```python
 # ❌ WRONG - These classes don't exist
 from kailash.nodes.data import CSVReader, JSONWriter
@@ -180,44 +176,44 @@ from kailash.nodes.api import HTTPRequest, RESTClient
 # ✅ CORRECT - All classes end with "Node"
 from kailash.nodes.data import CSVReaderNode, JSONWriterNode
 from kailash.nodes.api import HTTPRequestNode, RESTClientNode
+from kailash.nodes.logic import SwitchNode, MergeNode
+from kailash.nodes.code import PythonCodeNode
 
 ```
 
-### **Mistake #4: CamelCase Method Names**
+### **Mistake #5: CamelCase Method Names**
 ```python
 
 # ❌ WRONG - camelCase methods don't exist
 workflow = WorkflowBuilder()
-workflow.addNode("reader", "CSVReaderNode")
-workflow = WorkflowBuilder()
+workflow.addNode("CSVReaderNode", "reader", {"file_path": "data.csv"})
 workflow.connectNodes("reader", "processor")
 
 # ✅ CORRECT - Use snake_case
 workflow = WorkflowBuilder()
-workflow.add_node("CSVReaderNode", "reader", {}))
-workflow = WorkflowBuilder()
-workflow.add_connection("reader", "result", "processor", "input")
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = input_data"})
+workflow.add_connection("reader", "data", "processor", "input_data")
 
 ```
 
-### **Mistake #5: Wrong Parameter Order**
+### **Mistake #6: Wrong Parameter Order**
 ```python
 
 # ❌ WRONG - Parameter order matters
 workflow = WorkflowBuilder()
-workflow.add_node("CSVReaderNode", "reader", file_path="data.csv")
-workflow = WorkflowBuilder()
-workflow.add_connection("reader", "processor", "data", "input")
+workflow.add_node("reader", "CSVReaderNode", {"file_path": "data.csv"})  # Wrong order
+workflow.add_connection("reader", "processor", "data", "input")  # Wrong order
 
-# ✅ CORRECT - node_id first, then node, then config
+# ✅ CORRECT - node_type, node_id, config
 workflow = WorkflowBuilder()
-workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
-workflow = WorkflowBuilder()
-workflow.add_connection("reader", "processor", "data", "input")
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = input_data"})
+workflow.add_connection("reader", "data", "processor", "input_data")
 
 ```
 
-### **Mistake #6: WorkflowBuilder API Confusion (v0.6.6+)**
+### **Mistake #7: WorkflowBuilder API Confusion**
 
 ```python
 # ❌ WRONG - Inconsistent API usage
@@ -225,26 +221,26 @@ from kailash.workflow.builder import WorkflowBuilder
 
 workflow = WorkflowBuilder()
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
-workflow.add_node(node_type="PythonCodeNode", node_id="processor", config={"code": "..."})
-auto_id = workflow.add_node("JSONWriterNode")
-workflow.add_node(SomeNode, "instance_node")  # Mixed patterns confuse readers
+workflow.add_node(node_type="PythonCodeNode", node_id="processor", config={"code": "..."})  # Keyword args
+auto_id = workflow.add_node("JSONWriterNode")  # No node_id
+workflow.add_node(SomeNode(), "instance_node")  # Instance instead of string
 
-# ✅ CORRECT - Consistent style throughout workflow
+# ✅ CORRECT - Consistent string-based API
 workflow = WorkflowBuilder()
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
-workflow.add_node("PythonCodeNode", "processor", {"code": "..."})
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = input_data"})
 workflow.add_node("JSONWriterNode", "writer", {"file_path": "output.json"})
 ```
 
 ```python
-# ❌ WRONG - Ignoring auto-generated IDs
-workflow.add_node("CSVReaderNode")  # ID not captured
-workflow.add_node("PythonCodeNode")  # Can't connect nodes!
+# ❌ WRONG - Missing node IDs makes connections impossible
+workflow.add_node("CSVReaderNode")  # How to reference this node?
+workflow.add_node("PythonCodeNode")  # Can't connect without IDs!
 
-# ✅ CORRECT - Capture auto-generated IDs for connections
-reader_id = workflow.add_node("CSVReaderNode", {"file_path": "data.csv"})
-processor_id = workflow.add_node("PythonCodeNode", {"code": "..."})
-workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
+# ✅ CORRECT - Always provide explicit node IDs
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = input_data"})
+workflow.add_connection("reader", "data", "processor", "input_data")
 ```
 
 **See:** [WorkflowBuilder API Patterns Guide](../developer/55-workflow-builder-api-patterns.md) for comprehensive API usage
@@ -271,11 +267,11 @@ results = runtime.execute(workflow.build(), runtime)      # WRONG: backwards exe
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode  # CORRECT: With "Node"
 
 workflow = WorkflowBuilder()
-workflow.add_node("CSVReaderNode", "reader", {}),  # CORRECT: snake_case
-    file_path="data.csv")                     # CORRECT: snake_case key
+workflow.add_node("CSVReaderNode", "reader", {  # CORRECT: snake_case, string-based
+    "file_path": "data.csv"                     # CORRECT: snake_case key
+})
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())  # CORRECT: runtime executes workflow
@@ -303,10 +299,11 @@ runtime.execute(workflow, parameters={       # WRONG: 'inputs' parameter
 ```python
 from kailash.nodes.ai import LLMAgentNode  # CORRECT: With "Node"
 
-workflow.add_node("LLMAgentNode", "llm", {}),   # CORRECT: Proper class name
-    provider="openai",                     # CORRECT: lowercase
-    model="gpt-4",                        # CORRECT: lowercase
-    temperature=0.7)                      # CORRECT: lowercase
+workflow.add_node("LLMAgentNode", "llm", {     # CORRECT: Proper class name
+    "provider": "openai",                     # CORRECT: lowercase
+    "model": "gpt-4",                        # CORRECT: lowercase
+    "temperature": 0.7                       # CORRECT: lowercase
+})
 
 runtime.execute(workflow, parameters={    # CORRECT: 'parameters'
     "llm": {"prompt": "Hello"}
@@ -321,15 +318,15 @@ runtime.execute(workflow, parameters={    # CORRECT: 'parameters'
 
 # Wrong mapping parameter order
 workflow = WorkflowBuilder()
-workflow.add_connection("reader", "processor", "data", "input")
+workflow.add_connection("reader", "processor", "data", "input")  # WRONG: wrong order
 
-# Missing mapping parameter name
+# Missing output/input specification
 workflow = WorkflowBuilder()
-workflow.add_connection("reader", "processor", "data", "input")
+workflow.add_connection("reader", "processor")  # WRONG: missing output/input ports
 
-# Self-referencing mapping in PythonCodeNode
+# Incorrect connection patterns
 workflow = WorkflowBuilder()
-workflow.add_connection("reader", "processor", "data", "input")
+workflow.add_connection("reader", "reader", "data", "input")  # WRONG: self-connection
 
 ```
 
@@ -338,15 +335,16 @@ workflow.add_connection("reader", "processor", "data", "input")
 
 # Correct parameter order with explicit mapping
 workflow = WorkflowBuilder()
-workflow.add_connection("reader", "processor", "data", "input")
+workflow.add_connection("reader", "data", "processor", "input")
 
-# Automatic mapping when names match
+# Correct 4-parameter connection pattern
 workflow = WorkflowBuilder()
-workflow.add_connection("reader", "result", "processor", "input")  # maps "data" → "data"
+workflow.add_connection("reader", "data", "processor", "input_data")
 
 # Proper cyclic connection (different output/input names)
 workflow = WorkflowBuilder()
-workflow.add_connection("reader", "processor", "data", "input")
+cycle_builder = workflow.create_cycle("data_cycle")
+cycle_builder.connect("processor", "reader", mapping={"result": "input"}).build()
 
 ```
 
@@ -370,13 +368,11 @@ from kailash.nodes.api import HTTPRequestNode         # API nodes
 
 # ✅ Verify you're using correct method names
 workflow = WorkflowBuilder()
-workflow.add_node()    # NOT addNode()
-workflow = WorkflowBuilder()
-workflow.add_connection("source", "result", "target", "input")# NOT connectNodes()
-workflow = WorkflowBuilder()
+workflow.add_node("NodeType", "id", {})    # NOT addNode()
+workflow.add_connection("source", "result", "target", "input")  # NOT connectNodes()
 workflow.validate()    # NOT check()
-workflow = WorkflowBuilder()
-workflow.runtime.execute(workflow.build(), )     # NOT run()
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())     # NOT workflow.run()
 
 ```
 
@@ -393,9 +389,9 @@ PythonCodeNode    # NOT PythonCode
 ### **4. Parameter Errors**
 ```python
 # ✅ Check parameter names and order
-workflow.add_node("id", NodeClass(), **config)        # Correct order
-runtime.execute(workflow, parameters={...})           # Use 'parameters'
-workflow.add_connection("from", "result", "to", "input")         # Use 'mapping'
+workflow.add_node("NodeType", "id", config)        # Correct order
+runtime.execute(workflow.build(), parameters={...})           # Use 'parameters'
+workflow.add_connection("from", "output", "to", "input")         # 4-parameter format
 
 ```
 
@@ -494,21 +490,23 @@ from kailash.nodes.code import PythonCodeNode
 
 workflow = WorkflowBuilder()
 
-workflow.add_node("CSVReaderNode", "reader", {}),
-    file_path="input.csv",
-    has_header=True,
-    delimiter=","
-)
+workflow.add_node("CSVReaderNode", "reader", {
+    "file_path": "input.csv",
+    "has_header": True,
+    "delimiter": ","
+})
 
-workflow.add_node("PythonCodeNode", "processor", {}))
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'processed': data}"
+}))
 
-workflow.add_node("CSVWriterNode", "writer", {}),
-    file_path="output.csv",
-    include_header=True
-)
+workflow.add_node("CSVWriterNode", "writer", {
+    "file_path": "output.csv",
+    "include_header": True
+})
 
-workflow.add_connection("reader", "processor", "data", "data")
-workflow.add_connection("processor", "writer", "processed", "data")
+workflow.add_connection("reader", "data", "processor", "data")
+workflow.add_connection("processor", "result", "writer", "data")
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
@@ -525,18 +523,18 @@ from kailash.nodes.code import PythonCodeNode
 
 workflow = WorkflowBuilder()
 
-workflow.add_node("HTTPRequestNode", "api", {}),
-    url="https://api.example.com/data",
-    method="GET"
-)
+workflow.add_node("HTTPRequestNode", "api", {
+    "url": "https://api.example.com/data",
+    "method": "GET"
+})
 
-workflow.add_node("LLMAgentNode", "llm", {}),
-    provider="openai",
-    model="gpt-4",
-    temperature=0.7
-)
+workflow.add_node("LLMAgentNode", "llm", {
+    "provider": "openai",
+    "model": "gpt-4",
+    "temperature": 0.7
+})
 
-workflow.add_connection("api", "llm", "response", "prompt")
+workflow.add_connection("api", "response", "llm", "prompt")
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
@@ -547,126 +545,141 @@ results, run_id = runtime.execute(workflow.build())
 
 ```python
 # ❌ WRONG - Hard-coding pattern choice when capabilities are mixed
-coordinator = TwoPhaseCommitCoordinatorNode(...)  # Will fail if participants don't support 2PC
+workflow = WorkflowBuilder()
+workflow.add_node("TwoPhaseCommitCoordinatorNode", "coordinator", {})  # Will fail if participants don't support 2PC
 # or
-coordinator = SagaCoordinatorNode(...)  # Sub-optimal for services that support 2PC
+workflow.add_node("SagaCoordinatorNode", "coordinator", {})  # Sub-optimal for services that support 2PC
 
 # ✅ CORRECT - Use DTM for automatic pattern selection
-manager = DistributedTransactionManagerNode(
-    transaction_name="mixed_services",
-    state_storage="redis",
-    storage_config={"redis_client": redis_client}
-)
+workflow.add_node("DistributedTransactionManagerNode", "manager", {
+    "transaction_name": "mixed_services",
+    "state_storage": "redis",
+    "storage_config": {"redis_client": "redis_connection"}
+})
 
 # DTM will automatically select the best pattern
-await manager.async_run(
-    operation="create_transaction",
-    requirements={"consistency": "strong", "availability": "high"}
-)
+runtime = LocalRuntime()
+results, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "manager": {
+        "operation": "create_transaction",
+        "requirements": {"consistency": "strong", "availability": "high"}
+    }
+})
 ```
 
 ### **Mistake #16: Saga Compensation Logic**
 
 ```python
 # ❌ WRONG - Not providing compensation for saga steps
-coordinator = SagaCoordinatorNode(saga_name="order_processing")
-coordinator.execute(
-    operation="add_step",
-    name="payment",
-    node_id="PaymentNode"
-    # Missing compensation_node_id!
-)
+workflow = WorkflowBuilder()
+workflow.add_node("SagaCoordinatorNode", "coordinator", {"saga_name": "order_processing"})
+# Missing compensation configuration in node setup
 
 # ✅ CORRECT - Always provide compensation for saga steps
-coordinator.execute(
-    operation="add_step",
-    name="payment",
-    node_id="PaymentNode",
-    compensation_node_id="RefundNode",
-    compensation_parameters={"action": "refund_payment"}
-)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build(), parameters={
+    "coordinator": {
+        "operation": "add_step",
+        "name": "payment",
+        "node_id": "PaymentNode",
+        "compensation_node_id": "RefundNode",
+        "compensation_parameters": {"action": "refund_payment"}
+    }
+})
 ```
 
 ### **Mistake #17: Async/Sync Method Confusion**
 
 ```python
 # ❌ WRONG - Using sync execute on async transaction nodes
-coordinator = TwoPhaseCommitCoordinatorNode(...)
-result = coordinator.execute(operation="execute_transaction")  # Will fail
+workflow = WorkflowBuilder()
+workflow.add_node("TwoPhaseCommitCoordinatorNode", "coordinator", {})
+runtime = LocalRuntime()
+result = runtime.execute(workflow.build())  # Will fail with async node
 
-# ✅ CORRECT - Use async_run for transaction nodes
-result = await coordinator.async_run(operation="execute_transaction")
+# ✅ CORRECT - Use async runtime for async transaction nodes
+result, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "coordinator": {"operation": "execute_transaction"}
+})
 ```
 
 ### **Mistake #18: Missing Transaction Recovery**
 
 ```python
 # ❌ WRONG - Not implementing recovery for failed transactions
-coordinator = SagaCoordinatorNode(...)
+workflow = WorkflowBuilder()
+workflow.add_node("SagaCoordinatorNode", "coordinator", {})
+runtime = LocalRuntime()
 try:
-    await coordinator.async_run(operation="execute_saga")
+    await runtime.execute_async(workflow.build(), parameters={"coordinator": {"operation": "execute_saga"}})
 except Exception:
     pass  # Transaction state is lost!
 
 # ✅ CORRECT - Always implement recovery patterns
 try:
-    result = await coordinator.async_run(operation="execute_saga")
+    result, run_id = await runtime.execute_async(workflow.build(), parameters={
+        "coordinator": {"operation": "execute_saga"}
+    })
 except Exception as e:
     # Attempt to recover the transaction
-    recovery_result = await coordinator.async_run(
-        operation="load_saga",
-        saga_id=coordinator.saga_id
-    )
+    recovery_result, _ = await runtime.execute_async(workflow.build(), parameters={
+        "coordinator": {"operation": "load_saga", "saga_id": "saga_id_value"}
+    })
     if recovery_result["status"] == "success":
-        await coordinator.async_run(operation="resume")
+        await runtime.execute_async(workflow.build(), parameters={
+            "coordinator": {"operation": "resume"}
+        })
 ```
 
 ### **Mistake #19: IterativeLLMAgent Mock Execution**
 
 ```python
 # ❌ WRONG - Disabling real MCP execution (reverts to mock)
-agent = Iterative"LLMAgentNode"
-result = agent.execute(
-    provider="openai",
-    model="gpt-4",
-    messages=[{"role": "user", "content": "Search for data"}],
-    mcp_servers=[{"name": "data-server", "transport": "stdio", "command": "mcp-server"}],
-    use_real_mcp=False  # This causes mock execution!
-)
+workflow = WorkflowBuilder()
+workflow.add_node("IterativeLLMAgentNode", "agent", {
+    "provider": "openai",
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Search for data"}],
+    "mcp_servers": [{"name": "data-server", "transport": "stdio", "command": "mcp-server"}],
+    "use_real_mcp": False  # This causes mock execution!
+})
 
 # ✅ CORRECT - Use real MCP execution (default behavior)
-result = agent.execute(
-    provider="openai",
-    model="gpt-4",
-    messages=[{"role": "user", "content": "Search for data"}],
-    mcp_servers=[{"name": "data-server", "transport": "stdio", "command": "mcp-server"}],
-    use_real_mcp=True  # Default: True (real tool execution)
-)
+workflow.add_node("IterativeLLMAgentNode", "agent", {
+    "provider": "openai",
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Search for data"}],
+    "mcp_servers": [{"name": "data-server", "transport": "stdio", "command": "mcp-server"}],
+    "use_real_mcp": True  # Default: True (real tool execution)
+})
+runtime = LocalRuntime()
+result, run_id = runtime.execute(workflow.build())
 ```
 
 ```python
 # ❌ WRONG - No MCP servers but expecting tool execution
-result = agent.execute(
-    provider="openai",
-    model="gpt-4",
-    messages=[{"role": "user", "content": "Search for data"}]
+workflow.add_node("IterativeLLMAgentNode", "agent", {
+    "provider": "openai",
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Search for data"}]
     # Missing mcp_servers!
-)
+})
 
 # ✅ CORRECT - Always provide MCP servers for tool execution
-result = agent.execute(
-    provider="openai",
-    model="gpt-4",
-    messages=[{"role": "user", "content": "Search for data"}],
-    mcp_servers=[{
+workflow.add_node("IterativeLLMAgentNode", "agent", {
+    "provider": "openai",
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Search for data"}],
+    "mcp_servers": [{
         "name": "data-server",
         "transport": "stdio",
         "command": "python",
         "args": ["-m", "data_mcp_server"]
     }],
-    auto_discover_tools=True,
-    auto_execute_tools=True
-)
+    "auto_discover_tools": True,
+    "auto_execute_tools": True
+})
+result, run_id = runtime.execute(workflow.build())
 ```
 
 ## 🔗 **Next Steps**

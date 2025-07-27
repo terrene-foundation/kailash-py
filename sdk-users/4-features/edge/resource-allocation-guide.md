@@ -56,12 +56,12 @@ workflow.add_node("ResourceAnalyzerNode", "optimizer", {
 })
 
 # Connect nodes
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("recorder", "result", "analyzer", "metrics")
+workflow.add_connection("analyzer", "analysis", "optimizer", "input_data")
 
 # Execute
 runtime = LocalRuntime()
-results, run_id = await runtime.execute_async(workflow.build())
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Resource Pool Management

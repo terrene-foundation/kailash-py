@@ -278,7 +278,7 @@ class EnterpriseBaseNode(Node):
     def execute(self, **kwargs) -> Dict[str, Any]:
         """Execute with enterprise governance."""
         # Validate inputs
-        validated_parameters= self.validate_inputs(**kwargs)
+        validated_inputs = self.validate_inputs(**kwargs)
 
         # Audit parameter access
         if self.audit_enabled:
@@ -292,12 +292,6 @@ class EnterpriseBaseNode(Node):
             self._audit_execution_result(result)
 
         return result
-
-    def run(self, **kwargs) -> Dict[str, Any]:
-        """MANDATORY: Main execution logic."""
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement run() method"
-        )
 
     def _audit_parameter_access(self, parameters: Dict[str, Any]):
         """Audit parameter access for compliance."""
@@ -330,6 +324,7 @@ class EnterpriseBaseNode(Node):
 **CRITICAL RULE (CONFIRMED BY SDK INVESTIGATION)**: Every parameter your node expects must be declared in `get_parameters()`. The SDK's WorkflowParameterInjector will ONLY inject parameters that are explicitly declared in the node's parameter definition. This is a security feature that prevents arbitrary parameter injection attacks.
 
 ```python
+@register_node()
 class UserManagementNode(EnterpriseBaseNode):
     """Enterprise user management node with complete parameter declaration."""
 
@@ -448,6 +443,7 @@ class UserManagementNode(EnterpriseBaseNode):
 ### 2. Parameter Types and Validation
 
 ```python
+@register_node()
 class DataProcessorNode(EnterpriseBaseNode):
     """Node demonstrating comprehensive parameter types."""
 
@@ -521,6 +517,7 @@ class DataProcessorNode(EnterpriseBaseNode):
 Instead of one "universal" node, create specific entry nodes for different workflows:
 
 ```python
+@register_node()
 class AuthenticationEntryNode(EnterpriseBaseNode):
     """Entry node specifically for authentication workflows."""
 
@@ -554,6 +551,7 @@ class AuthenticationEntryNode(EnterpriseBaseNode):
             )
         }
 
+@register_node()
 class PermissionCheckEntryNode(EnterpriseBaseNode):
     """Entry node specifically for permission check workflows."""
 
@@ -901,6 +899,7 @@ def test_security_violation_logging():
 ### 4. Input Validation
 
 ```python
+@register_node()
 class SecureProcessorNode(EnterpriseBaseNode):
     """Node demonstrating security best practices."""
 
@@ -957,6 +956,7 @@ class SecureProcessorNode(EnterpriseBaseNode):
 ### 2. Parameter Governance
 
 ```python
+@register_node()
 class GovernedProcessorNode(EnterpriseBaseNode):
     """Node with comprehensive parameter governance."""
 
@@ -1025,9 +1025,8 @@ def create_user_management_workflow():
     """Create workflow using custom entry node."""
     workflow = WorkflowBuilder()
 
-    # 🚨 CRITICAL: Custom nodes use class references
-    # This will generate a warning - this is EXPECTED and CORRECT!
-    workflow.add_node(UserManagementEntryNode, "user_mgmt_entry", {
+    # 🚨 CRITICAL: With @register_node() decorator, use string references
+    workflow.add_node("UserManagementEntryNode", "user_mgmt_entry", {
         "node_version": "2.0.0",
         "audit_enabled": True,
         "validation_strict": True
@@ -1048,7 +1047,7 @@ def create_user_management_workflow():
     })
 
     # Connect nodes
-    workflow.add_connection("user_mgmt_entry", "result", "result", "input")
+    workflow.add_connection("user_mgmt_entry", "result", "database_operation", "input")
 
     return workflow.build()
 
@@ -1057,10 +1056,8 @@ def create_user_management_workflow_zero_warnings():
     """Create workflow with warning suppression for enterprise 0-warning policy."""
     workflow = WorkflowBuilder()
 
-    # Suppress expected warning for custom nodes
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message="Alternative API usage detected")
-        workflow.add_node(UserManagementEntryNode, "user_mgmt_entry", {
+    # With @register_node() decorator, no warnings to suppress
+    workflow.add_node("UserManagementEntryNode", "user_mgmt_entry", {
             "node_version": "2.0.0",
             "audit_enabled": True,
             "validation_strict": True
@@ -1125,6 +1122,7 @@ class UserManagementContract(BaseModel):
         return v
 
 # Step 2: Register contract in your custom node
+@register_node()
 class ContractBasedNode(EnterpriseBaseNode):
     """Node using Pydantic contract for parameters."""
 
@@ -1680,7 +1678,14 @@ class TPCCustomNode(Node):
         self.custom_param = kwargs.get("custom_param", "default")
         super().__init__(**kwargs)
 
-    def execute(self, **kwargs) -> Dict[str, Any]:
+    def get_parameters(self):
+        """Declare expected parameters."""
+        return {
+            "input_data": NodeParameter(type=dict, required=True),
+            "custom_param": NodeParameter(type=str, required=False, default="default")
+        }
+
+    def run(self, **kwargs) -> Dict[str, Any]:
         # Implementation
         return {"result": "success"}
 ```

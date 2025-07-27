@@ -28,20 +28,7 @@ The Kailash SDK provides a **unified access control interface** supporting multi
 
 ### 3. Fine-Grained Control
 ```python
-# SDK Setup for example
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
-
-# Example setup
-workflow = WorkflowBuilder()
-# Runtime should be created separately
-runtime = LocalRuntime()
+from kailash.access_control import NodePermission, WorkflowPermission
 
 # Node-level permissions
 NodePermission.EXECUTE      # Can run the node
@@ -147,14 +134,18 @@ complex_condition = create_complex_condition(
 
 ### Database Integration with Access Control
 ```python
-from kailash.nodes.data import AsyncSQLDatabaseNode
+from kailash.workflow.builder import WorkflowBuilder
 
-# Create database node with access control
-db_node = AsyncSQLDatabaseNode(
-    name="sensitive_query",
-    query="SELECT * FROM financial_data",
-    access_control_manager=manager  # Pass the unified manager
-)
+# Create workflow with database access
+workflow = WorkflowBuilder()
+workflow.add_node("AsyncSQLDatabaseNode", "sensitive_query", {
+    "connection_string": "postgresql://localhost/db",
+    "query": "SELECT * FROM financial_data",
+    "operation": "select"
+})
+
+# Access control would be enforced at runtime
+# using AccessControlledRuntime with the manager
 
 ```
 
@@ -162,14 +153,14 @@ db_node = AsyncSQLDatabaseNode(
 
 ### Basic Usage (No Access Control)
 ```python
-from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # Your existing code works unchanged
 workflow = WorkflowBuilder()
 # ... add nodes ...
 runtime = LocalRuntime()
-result = runtime.execute(workflow.build())
+result, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -196,24 +187,29 @@ manager = AccessControlManager(strategy="abac")
 
 # Use access-controlled runtime
 runtime = AccessControlledRuntime(user, access_control_manager=manager)
-result = runtime.execute(workflow.build())  # Same API!
+result, run_id = runtime.execute(workflow.build())  # Same API!
 
 ```
 
 ### Adding Access Control to a Node
 ```python
 from kailash.nodes.base_with_acl import add_access_control
+from kailash.nodes.code import PythonCodeNode
 
-# Take any existing node
-node = PythonCodeNode(...)
+# Create a workflow with a node
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'data': input_data, 'ssn': '123-45-6789'}"
+})
 
-# Add access control
-secure_node = add_access_control(
-    node,
-    enable_access_control=True,
-    required_permission=NodePermission.EXECUTE,
-    mask_output_fields=["ssn", "credit_card"]
-)
+# Add access control to the node
+# In practice, this would be done at the workflow level
+# secure_node = add_access_control(
+#     node,
+#     enable_access_control=True,
+#     required_permission=NodePermission.EXECUTE,
+#     mask_output_fields=["ssn", "credit_card"]
+# )
 
 ```
 
@@ -245,37 +241,35 @@ secure_node = add_access_control(
 
 ### 1. Sensitive Data Processing
 ```python
-# Mask sensitive fields for non-admin users
-processor = add_access_control(
-    data_processor_node,
-    mask_output_fields=["ssn", "credit_card", "bank_account"]
-)
+# Create workflow with sensitive data processing
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "data_processor", {
+    "code": """result = {
+    'name': input_data.get('name'),
+    'ssn': input_data.get('ssn'),  # Will be masked for non-admin
+    'credit_card': input_data.get('credit_card'),  # Will be masked
+    'bank_account': input_data.get('bank_account')  # Will be masked
+}"""
+})
+
+# In practice, access control would be applied at runtime
+# with mask_output_fields=["ssn", "credit_card", "bank_account"]
 
 ```
 
 ### 2. Admin-Only Operations
 ```python
-# SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
+from kailash.access_control import AccessControlManager, PermissionRule, NodePermission
 
-# Example setup
+# Create workflow
 workflow = WorkflowBuilder()
-# Runtime should be created separately
-runtime = LocalRuntime()
+workflow.add_node("CSVWriterNode", "export_sensitive_data", {
+    "file_path": "sensitive_data.csv"
+})
 
-# Only admins can export data
-exporter = add_access_control(
-    csv_writer_node,
-    required_permission=NodePermission.EXECUTE,
-    node_id="export_sensitive_data"
-)
+# Create access control manager
+acm = AccessControlManager(strategy="rbac")
 
 # Add rule for admin role
 acm.add_rule(PermissionRule(
@@ -288,11 +282,21 @@ acm.add_rule(PermissionRule(
 
 ### 3. Conditional Execution Paths
 ```python
-# High-privilege path
-detailed_analysis = add_access_control(
-    complex_ml_node,
-    fallback_node="simple_analysis"  # Redirect low-privilege users
-)
+# Create workflow with conditional paths based on privileges
+workflow = WorkflowBuilder()
+
+# High-privilege path (complex ML analysis)
+workflow.add_node("PythonCodeNode", "complex_ml_analysis", {
+    "code": "result = {'analysis': 'detailed ML results'}"
+})
+
+# Low-privilege fallback path
+workflow.add_node("PythonCodeNode", "simple_analysis", {
+    "code": "result = {'analysis': 'basic summary statistics'}"
+})
+
+# In practice, routing would be based on user permissions
+# using SwitchNode or access control runtime
 
 ```
 

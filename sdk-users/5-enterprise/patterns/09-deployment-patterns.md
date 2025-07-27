@@ -14,14 +14,14 @@ from kailash.nodes.code import PythonCodeNode
 
 # Create a workflow
 workflow = WorkflowBuilder()
-workflow.add_node("CSVReaderNode", "reader", {}), file_path="input.csv")
-workflow.add_node("PythonCodeNode", "processor", {}),
-    code="result = [{'id': r['id'], 'value': r['value'] * 1.1} for r in data]"
-)
-workflow.add_node("JSONWriterNode", "writer", {}), file_path="output.json")
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "input.csv"})
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = [{'id': r['id'], 'value': r['value'] * 1.1} for r in data]"
+})
+workflow.add_node("JSONWriterNode", "writer", {"file_path": "output.json"})
 
-workflow.add_connection("reader", "processor", "data", "data")
-workflow.add_connection("processor", "writer", "result", "data")
+workflow.add_connection("reader", "data", "processor", "data")
+workflow.add_connection("processor", "result", "writer", "data")
 
 # Export workflow
 exporter = WorkflowExporter(workflow)

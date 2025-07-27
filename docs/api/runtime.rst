@@ -193,10 +193,11 @@ Specialized executor for workflows containing cycles.
    # Create workflow with cycles
    workflow = Workflow("optimization")
    workflow.add_node("optimizer", OptimizerNode())
-   workflow.connect("optimizer", "optimizer",
-                    cycle=True,
-                    max_iterations=100,
-                    convergence_check="converged == True")
+   workflow.create_cycle("optimization_cycle") \
+           .connect("optimizer", "optimizer") \
+           .max_iterations(100) \
+           .converge_when("converged == True") \
+           .build()
 
    # Execute with cyclic executor
    executor = CyclicWorkflowExecutor()

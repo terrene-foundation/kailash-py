@@ -362,12 +362,12 @@ workflow.add_node("EdgeMigrationNode", "migrate", {
 
 # Connect nodes
 workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("migrator", "plan", "monitor", "input")
+workflow.add_connection("monitor", "metrics", "analytics", "input")
 
 # Execute
 runtime = LocalRuntime()
-results, run_id = await runtime.execute_async(workflow.build())
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ### DataFlow Integration

@@ -193,8 +193,7 @@ print(f"Executions: {len(session.executions)}")
 
 # List all workflows in session
 for workflow_id, workflow in session.workflows.items():
-workflow = WorkflowBuilder()
-workflow.name}")
+    print(f"Workflow: {workflow_id} - {workflow.name}")
 
 # List executions
 for execution_id, execution in session.executions.items():
@@ -223,12 +222,12 @@ from kailash.workflow.builder import WorkflowBuilder
 # Create workflow with builder
 builder = WorkflowBuilder()
 
-reader_id = builder.add_node("CSVReaderNode",
-    config={"name": "reader", "file_path": "/data/input.csv"}
+reader_id = builder.add_node("CSVReaderNode", "reader",
+    {"file_path": "/data/input.csv"}
 )
 
-processor_id = builder.add_node("PythonCodeNode",
-    config={"name": "processor", "code": "result = {'processed': True}"}
+processor_id = builder.add_node("PythonCodeNode", "processor",
+    {"code": "result = {'processed': True}"}
 )
 
 builder.add_connection(reader_id, "output", processor_id, "input_data")
@@ -661,7 +660,7 @@ if response.get("workflow_config"):
 ### 1. Session Management
 ```python
 # Use context managers for automatic cleanup
-async def with_session('user_id'):
+async def with_session(user_id):
     session_id = await agent_ui.create_session(user_id=user_id)
     try:
         yield session_id

@@ -729,118 +729,135 @@ class OptimizedAgentUIMiddleware(AgentUIMiddleware):
     def _init_performance_nodes(self):
         """Initialize SDK nodes for performance optimization."""
 
-        # Batch processor for event handling
-        self.event_batch_processor = BatchProcessorNode(
-            name="event_batch_processor"
-        )
+        # Create workflows for middleware operations
+        self.event_processor_workflow = WorkflowBuilder()
+        self.event_processor_workflow.add_node("BatchProcessorNode", "event_batch_processor", {
+            "batch_size": 100,
+            "timeout": 5.0
+        })
 
-        # Rotating credentials for security
-        self.rotating_credentials = RotatingCredentialNode(
-            name="middleware_rotating_creds",
-            credential_name="middleware_secrets",
-            rotation_interval_days=30
-        )
+        self.security_workflow = WorkflowBuilder()
+        self.security_workflow.add_node("RotatingCredentialNode", "middleware_rotating_creds", {
+            "credential_name": "middleware_secrets",
+            "rotation_interval_days": 30
+        })
 
-        # Data lineage for tracking
-        self.data_lineage = DataLineageNode(
-            name="middleware_lineage_tracker"
-        )
+        self.tracking_workflow = WorkflowBuilder()
+        self.tracking_workflow.add_node("DataLineageNode", "middleware_lineage_tracker", {})
 
-        # Permission checker for authorization
-        self.permission_checker = PermissionCheckNode(
-            name="middleware_permission_check"
-        )
+        self.auth_workflow = WorkflowBuilder()
+        self.auth_workflow.add_node("PermissionCheckNode", "middleware_permission_check", {})
 
-        # Audit logger for compliance
-        self.audit_logger = AuditLogNode(
-            name="middleware_audit_log"
-        )
+        self.audit_workflow = WorkflowBuilder()
+        self.audit_workflow.add_node("AuditLogNode", "middleware_audit_log", {})
 
-        # Data transformer for caching
-        self.cache_transformer = DataTransformer(
-            name="middleware_cache"
-        )
+        self.cache_workflow = WorkflowBuilder()
+        self.cache_workflow.add_node("PythonCodeNode", "middleware_cache", {
+            "code": "result = parameters.get('data', {})"
+        })
 
-        # Async SQL node for database operations
+        # Async SQL workflow for database operations
         if self.enable_persistence:
-            self.async_db = AsyncSQLDatabaseNode(
-                name="middleware_async_db",
-                connection_string=self.database_url
-            )
+            self.db_workflow = WorkflowBuilder()
+            self.db_workflow.add_node("AsyncSQLDatabaseNode", "middleware_async_db", {
+                "connection_string": self.database_url
+            })
 
     def _init_workflow_processors(self):
         """Create workflow-based processors for common operations."""
 
         # Session management workflow
-        self.session_workflow = (
-            WorkflowBuilder("session_management")
-            .add_node("PermissionCheckNode", "check_permissions")
-            .add_node("DataTransformer", "validate_session", {
-                "transformation_type": "validation"
-            })
-            .add_node("AsyncSQLDatabaseNode", "store_session", {
-                "query": "INSERT INTO sessions (id, user_id, data) VALUES (?, ?, ?)"
-            })
-            .add_connection("check_permissions", "result", "validate_session", "input_data")
-            .add_connection("validate_session", "result", "store_session", "params")
-            .build()
-        )
+        session_builder = WorkflowBuilder()
+        session_builder.add_node("PermissionCheckNode", "check_permissions", {})
+        session_builder.add_node("PythonCodeNode", "validate_session", {
+            "code": """# Session validation
+result = {'valid': True, 'data': parameters.get('input_data', {})}"""
+        })
+        session_builder.add_node("AsyncSQLDatabaseNode", "store_session", {
+            "query": "INSERT INTO sessions (id, user_id, data) VALUES (:id, :user_id, :data)"
+        })
+        session_builder.add_connection("check_permissions", "result", "validate_session", "input_data")
+        session_builder.add_connection("validate_session", "result", "store_session", "parameters")
+        self.session_workflow = session_builder.build()
 
         # Event processing workflow
-        self.event_workflow = (
-            WorkflowBuilder("event_processing")
-            .add_node("BatchProcessorNode", "batch_events", {
-                "batch_size": 100,
-                "timeout": 5.0
-            })
-            .add_node("DataLineageNode", "track_lineage")
-            .add_node("AuditLogNode", "log_events")
-            .add_connection("batch_events", "result", "track_lineage", "data")
-            .add_connection("track_lineage", "result", "log_events", "events")
-            .build()
-        )
+        event_builder = WorkflowBuilder()
+        event_builder.add_node("BatchProcessorNode", "batch_events", {
+            "batch_size": 100,
+            "timeout": 5.0
+        })
+        event_builder.add_node("DataLineageNode", "track_lineage", {})
+        event_builder.add_node("AuditLogNode", "log_events", {})
+        event_builder.add_connection("batch_events", "result", "track_lineage", "data")
+        event_builder.add_connection("track_lineage", "result", "log_events", "events")
+        self.event_workflow = event_builder.build()
 
     async def process_agent_request(self, request_data):
         """Process agent request using SDK nodes."""
 
-        # Use permission checker node
-        permission_result = await self.permission_checker.run_async({
-            "operation": "check_permission",
-            "user_id": request_data.get("user_id"),
-            "resource_id": request_data.get("workflow_id"),
-            "permission": "execute"
-        })
+        # Use permission checker workflow
+        runtime = LocalRuntime()
+        permission_results, _ = await runtime.execute_async(
+            self.auth_workflow.build(),
+            parameters={
+                "middleware_permission_check": {
+                    "operation": "check_permission",
+                    "user_id": request_data.get("user_id"),
+                    "resource_id": request_data.get("workflow_id"),
+                    "permission": "execute"
+                }
+            }
+        )
 
-        if not permission_result["result"]["check"]["allowed"]:
+        if not permission_results["middleware_permission_check"]["result"]["check"]["allowed"]:
             raise PermissionError("Access denied")
 
-        # Process with batch processor for efficiency
-        batch_result = await self.event_batch_processor.run_async({
-            "items": [request_data],
+        # Process with batch processor workflow
+        batch_results, _ = await runtime.execute_async(
+            self.event_processor_workflow.build(),
+            parameters={
+                "event_batch_processor": {
+                    "items": [request_data],
             "process_function": self._process_single_request
         })
 
         # Track data lineage
-        await self.data_lineage.run_async({
-            "source": "agent_request",
-            "target": "workflow_execution",
-            "data": batch_result["result"]
-        })
+        lineage_results, _ = await runtime.execute_async(
+            self.tracking_workflow.build(),
+            parameters={
+                "middleware_lineage_tracker": {
+                    "source": "agent_request",
+                    "target": "workflow_execution",
+                    "data": batch_results["event_batch_processor"]["result"]
+                }
+            }
+        )
 
-        return batch_result["result"][0]
+        return batch_results["event_batch_processor"]["result"][0]
 
     async def handle_websocket_connection(self, websocket, path):
         """Handle WebSocket using SDK components."""
 
         # Rotate credentials if needed
-        creds_result = await self.rotating_credentials.run_async({
-            "action": "get_current"
-        })
+        runtime = LocalRuntime()
+        creds_results, _ = await runtime.execute_async(
+            self.security_workflow.build(),
+            parameters={
+                "middleware_rotating_creds": {
+                    "action": "get_current"
+                }
+            }
+        )
 
         # Use SDK-based session management
-        session_result = await self.runtime.execute_workflow_async(
+        session_results, _ = await runtime.execute_async(
             self.session_workflow,
-            {"websocket": websocket, "credentials": creds_result["result"]}
+            parameters={
+                "check_permissions": {
+                    "websocket": websocket,
+                    "credentials": creds_results["middleware_rotating_creds"]["result"]
+                }
+            }
         )
 
         # Process events with workflow

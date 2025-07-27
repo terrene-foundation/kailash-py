@@ -22,52 +22,59 @@ schema_manager = AdminSchemaManager(db_config)
 schema_manager.create_full_schema()
 ```
 
-### Basic Usage - Just Like Django!
+### Basic Usage - Workflow Integration!
 
 ```python
-# Initialize the user manager (like Django's User model)
-User = UserManagementNode()
+# Use UserManagementNode in workflows with string-based API
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Create a user (like User.objects.create_user())
-user = User.execute(
-    operation="create_user",
-    tenant_id="default",
-    database_config=db_config,
-    user_data={
+workflow = WorkflowBuilder()
+
+# Create a user workflow
+workflow.add_node("UserManagementNode", "create_user", {
+    "operation": "create_user",
+    "tenant_id": "default",
+    "database_config": db_config,
+    "user_data": {
         "email": "john@example.com",
         "username": "john_doe",
         "first_name": "John",
         "last_name": "Doe"
     },
-    password="SecurePass123!"  # Automatically hashed
-)
+    "password": "SecurePass123!"  # Automatically hashed
+})
 
-# Get a user (like User.objects.get())
-user = User.execute(
-    operation="get_user",
-    tenant_id="default",
-    database_config=db_config,
-    user_id="user-uuid-here"
-)
+# Get a user workflow
+workflow.add_node("UserManagementNode", "get_user", {
+    "operation": "get_user",
+    "tenant_id": "default",
+    "database_config": db_config,
+    "user_id": "user-uuid-here"
+})
 
-# List users (like User.objects.filter())
-users = User.execute(
-    operation="list_users",
-    tenant_id="default",
-    database_config=db_config,
-    filters={"status": "active"},
-    limit=10
-)
+# List users workflow
+workflow.add_node("UserManagementNode", "list_users", {
+    "operation": "list_users",
+    "tenant_id": "default",
+    "database_config": db_config,
+    "filters": {"status": "active"},
+    "limit": 10
+})
 
-# Authenticate (like authenticate())
-result = User.execute(
-    operation="authenticate",
-    tenant_id="default",
-    database_config=db_config,
-    username="john_doe",
-    password="SecurePass123!"
-)
-if result["authenticated"]:
+# Authenticate workflow
+workflow.add_node("UserManagementNode", "authenticate", {
+    "operation": "authenticate",
+    "tenant_id": "default",
+    "database_config": db_config,
+    "username": "john_doe",
+    "password": "SecurePass123!"
+})
+
+# Execute workflow
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+if results["authenticate"]["result"]["authenticated"]:
     print("Login successful!")
 ```
 
@@ -77,17 +84,16 @@ if result["authenticated"]:
 
 #### Create User
 ```python
-from kailash.nodes.admin import UserManagementNode
-import hashlib
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-User = UserManagementNode()
-
-# Simple creation with automatic password hashing
-result = User.execute(
-    operation="create_user",
-    tenant_id="my_app",
-    database_config=db_config,
-    user_data={
+# Create user workflow
+workflow = WorkflowBuilder()
+workflow.add_node("UserManagementNode", "create_user", {
+    "operation": "create_user",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "user_data": {
         "email": "user@example.com",
         "username": "newuser",
         "first_name": "Jane",
@@ -97,64 +103,81 @@ result = User.execute(
             "employee_id": "EMP001"
         }
     },
-    password="MySecurePassword123!"  # Auto-hashed
-)
+    "password": "MySecurePassword123!"  # Auto-hashed
+})
 
-user_id = result["result"]["user"]["user_id"]
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+user_id = results["create_user"]["result"]["user"]["user_id"]
 ```
 
 #### Update User
 ```python
-# Update user details
-result = User.execute(
-    operation="update_user",
-    tenant_id="my_app",
-    database_config=db_config,
-    user_id=user_id,
-    user_data={
+# Update user details workflow
+update_workflow = WorkflowBuilder()
+update_workflow.add_node("UserManagementNode", "update_user", {
+    "operation": "update_user",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "user_id": user_id,
+    "user_data": {
         "first_name": "Jane",
         "last_name": "Doe",
         "attributes": {
             "department": "Management"
         }
     }
-)
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(update_workflow.build())
 ```
 
 #### List & Search Users
 ```python
-# List with filters (like Django QuerySet)
-active_users = User.execute(
-    operation="list_users",
-    tenant_id="my_app",
-    database_config=db_config,
-    filters={"status": "active"},
-    limit=20,
-    offset=0
-)
+# List with filters workflow
+list_workflow = WorkflowBuilder()
+list_workflow.add_node("UserManagementNode", "list_users", {
+    "operation": "list_users",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "filters": {"status": "active"},
+    "limit": 20,
+    "offset": 0
+})
 
-# Search users
-search_results = User.execute(
-    operation="search_users",
-    tenant_id="my_app",
-    database_config=db_config,
-    search_query="john",
-    limit=10
-)
+# Search users workflow
+list_workflow.add_node("UserManagementNode", "search_users", {
+    "operation": "search_users",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "search_query": "john",
+    "limit": 10
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(list_workflow.build())
+active_users = results["list_users"]["result"]
+search_results = results["search_users"]["result"]
 ```
 
 ### 2. Authentication & Password Management
 
 #### Login
 ```python
-# Authenticate user
-auth_result = User.execute(
-    operation="authenticate",
-    tenant_id="my_app",
-    database_config=db_config,
-    username="john_doe",  # or use email
-    password="UserPassword123!"
-)
+# Authenticate user workflow
+auth_workflow = WorkflowBuilder()
+auth_workflow.add_node("UserManagementNode", "authenticate", {
+    "operation": "authenticate",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "username": "john_doe",  # or use email
+    "password": "UserPassword123!"
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(auth_workflow.build())
+auth_result = results["authenticate"]["result"]
 
 if auth_result["authenticated"]:
     user_id = auth_result["user_id"]
@@ -163,40 +186,46 @@ if auth_result["authenticated"]:
 
 #### Password Reset Flow
 ```python
-# 1. Generate reset token
-token_result = User.execute(
-    operation="generate_reset_token",
-    tenant_id="my_app",
-    database_config=db_config,
-    user_id=user_id
-)
-reset_token = token_result["token"]
-# Send reset_token via email
+# 1. Generate reset token workflow
+reset_workflow = WorkflowBuilder()
+reset_workflow.add_node("UserManagementNode", "generate_token", {
+    "operation": "generate_reset_token",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "user_id": user_id
+})
 
 # 2. Reset password with token
-reset_result = User.execute(
-    operation="reset_password",
-    tenant_id="my_app",
-    database_config=db_config,
-    token=reset_token,
-    new_password="NewSecurePass123!"
-)
+reset_workflow.add_node("UserManagementNode", "reset_password", {
+    "operation": "reset_password",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "token": "reset_token_from_previous_step",
+    "new_password": "NewSecurePass123!"
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(reset_workflow.build())
+reset_token = results["generate_token"]["result"]["token"]
+# Send reset_token via email
 ```
 
 ### 3. Role-Based Access Control (RBAC)
 
 #### Create and Manage Roles
 ```python
-from kailash.nodes.admin import RoleManagementNode
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-Role = RoleManagementNode()
+# Role management workflow
+role_workflow = WorkflowBuilder()
 
 # Create role with permissions
-admin_role = Role.execute(
-    operation="create_role",
-    tenant_id="my_app",
-    database_config=db_config,
-    role_data={
+role_workflow.add_node("RoleManagementNode", "create_role", {
+    "operation": "create_role",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "role_data": {
         "name": "admin",
         "description": "System Administrator",
         "permissions": [
@@ -204,31 +233,38 @@ admin_role = Role.execute(
             "roles.manage", "system.configure"
         ]
     }
-)
+})
 
 # Assign role to user
-Role.execute(
-    operation="assign_user",
-    tenant_id="my_app",
-    database_config=db_config,
-    user_id=user_id,
-    role_id=admin_role["result"]["role"]["role_id"]
-)
+role_workflow.add_node("RoleManagementNode", "assign_user", {
+    "operation": "assign_user",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "user_id": user_id,
+    "role_id": "role_id_from_create_role"
+})
 
 # Check user permissions
-user_roles = Role.execute(
-    operation="get_user_roles",
-    tenant_id="my_app",
-    database_config=db_config,
-    user_id=user_id
-)
+role_workflow.add_node("RoleManagementNode", "get_user_roles", {
+    "operation": "get_user_roles",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "user_id": user_id
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(role_workflow.build())
+admin_role = results["create_role"]["result"]
+user_roles = results["get_user_roles"]["result"]
 ```
 
 ### 4. Bulk Operations
 
 #### Bulk Create Users
 ```python
-# Create multiple users at once
+# Create multiple users at once with workflow
+bulk_workflow = WorkflowBuilder()
+
 users_data = [
     {
         "email": f"user{i}@company.com",
@@ -241,84 +277,115 @@ users_data = [
     for i in range(100)
 ]
 
-bulk_result = User.execute(
-    operation="bulk_create",
-    tenant_id="my_app",
-    database_config=db_config,
-    users_data=users_data
-)
-print(f"Created {bulk_result['result']['bulk_result']['created_count']} users")
+bulk_workflow.add_node("UserManagementNode", "bulk_create", {
+    "operation": "bulk_create",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "users_data": users_data
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(bulk_workflow.build())
+bulk_result = results["bulk_create"]["result"]
+print(f"Created {bulk_result['bulk_result']['created_count']} users")
 ```
 
 #### Bulk Update
 ```python
-# Update multiple users
+# Update multiple users workflow
+bulk_update_workflow = WorkflowBuilder()
+
 updates = [
     {"user_id": "uuid1", "status": "inactive"},
     {"user_id": "uuid2", "status": "inactive"},
     {"user_id": "uuid3", "attributes": {"department": "HR"}}
 ]
 
-bulk_update = User.execute(
-    operation="bulk_update",
-    tenant_id="my_app",
-    database_config=db_config,
-    users_data=updates
-)
+bulk_update_workflow.add_node("UserManagementNode", "bulk_update", {
+    "operation": "bulk_update",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "users_data": updates
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(bulk_update_workflow.build())
+bulk_update = results["bulk_update"]["result"]
 ```
 
 #### Bulk Delete
 ```python
-# Delete multiple users
+# Delete multiple users workflow
+bulk_delete_workflow = WorkflowBuilder()
+
 user_ids = ["uuid1", "uuid2", "uuid3"]
 
-bulk_delete = User.execute(
-    operation="bulk_delete",
-    tenant_id="my_app",
-    database_config=db_config,
-    user_ids=user_ids
-)
+bulk_delete_workflow.add_node("UserManagementNode", "bulk_delete", {
+    "operation": "bulk_delete",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "user_ids": user_ids
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(bulk_delete_workflow.build())
+bulk_delete = results["bulk_delete"]["result"]
 ```
 
 ### 5. Advanced Features
 
 #### Multi-Tenancy
 ```python
-# All operations support multi-tenancy
-# Users are isolated by tenant_id
+# All operations support multi-tenancy - Users are isolated by tenant_id
+multi_tenant_workflow = WorkflowBuilder()
 
 # Tenant A users
-users_a = User.execute(
-    operation="list_users",
-    tenant_id="tenant_a",
-    database_config=db_config
-)
+multi_tenant_workflow.add_node("UserManagementNode", "list_tenant_a", {
+    "operation": "list_users",
+    "tenant_id": "tenant_a",
+    "database_config": db_config
+})
 
 # Tenant B users (completely isolated)
-users_b = User.execute(
-    operation="list_users",
-    tenant_id="tenant_b",
-    database_config=db_config
-)
+multi_tenant_workflow.add_node("UserManagementNode", "list_tenant_b", {
+    "operation": "list_users",
+    "tenant_id": "tenant_b",
+    "database_config": db_config
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(multi_tenant_workflow.build())
+users_a = results["list_tenant_a"]["result"]
+users_b = results["list_tenant_b"]["result"]
 ```
 
 #### Export Users
 ```python
-# Export to JSON
-export_result = User.execute(
-    operation="export_users",
-    tenant_id="my_app",
-    database_config=db_config,
-    export_format="json"
-)
+# Export to JSON workflow
+export_workflow = WorkflowBuilder()
+export_workflow.add_node("UserManagementNode", "export_users", {
+    "operation": "export_users",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "export_format": "json"
+})
 
-# Export to CSV
-csv_export = User.execute(
-    operation="export_users",
-    tenant_id="my_app",
-    database_config=db_config,
-    export_format="csv"
-)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(export_workflow.build())
+export_result = results["export_users"]["result"]
+
+# Export to CSV workflow
+csv_workflow = WorkflowBuilder()
+csv_workflow.add_node("UserManagementNode", "csv_export", {
+    "operation": "export_users",
+    "tenant_id": "my_app",
+    "database_config": db_config,
+    "export_format": "csv"
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(csv_workflow.build())
+csv_export = results["csv_export"]["result"]
 ```
 
 ## 🔄 Migration from Django
@@ -327,12 +394,12 @@ csv_export = User.execute(
 
 | Django | Kailash |
 |--------|---------|
-| `User.objects.create_user()` | `User.execute(operation="create_user")` |
-| `User.objects.get(id=x)` | `User.execute(operation="get_user", user_id=x)` |
-| `User.objects.filter(is_active=True)` | `User.execute(operation="list_users", filters={"status": "active"})` |
-| `authenticate(username, password)` | `User.execute(operation="authenticate", username=x, password=y)` |
-| `user.groups.add(group)` | `Role.execute(operation="assign_user", user_id=x, role_id=y)` |
-| `user.has_perm('app.perm')` | `PermissionCheck.execute(operation="check_permission", user_id=x, permission="app.perm")` |
+| `User.objects.create_user()` | `workflow.add_node("UserManagementNode", "create", {"operation": "create_user"})` |
+| `User.objects.get(id=x)` | `workflow.add_node("UserManagementNode", "get", {"operation": "get_user", "user_id": x})` |
+| `User.objects.filter(is_active=True)` | `workflow.add_node("UserManagementNode", "list", {"operation": "list_users", "filters": {"status": "active"}})` |
+| `authenticate(username, password)` | `workflow.add_node("UserManagementNode", "auth", {"operation": "authenticate", "username": x, "password": y})` |
+| `user.groups.add(group)` | `workflow.add_node("RoleManagementNode", "assign", {"operation": "assign_user", "user_id": x, "role_id": y})` |
+| `user.has_perm('app.perm')` | `workflow.add_node("PermissionCheckNode", "check", {"operation": "check_permission", "user_id": x, "permission": "app.perm"})` |
 
 ### Migration Script Example
 ```python
