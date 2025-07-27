@@ -26,34 +26,27 @@ runtime = LocalRuntime()
 workflow = WorkflowBuilder()
 
 # Stage 1: Ingestion
-workflow = WorkflowBuilder()
-workflow.add_node("CSVReaderNode", "ingest", {}),
-    file_path="raw_data.csv")
+workflow.add_node("CSVReaderNode", "ingest", {
+    "file_path": "raw_data.csv"})
 
 # Stage 2: Validation
-workflow = WorkflowBuilder()
-workflow.add_node("DataValidationNode", "validate", {}),
-    schema={"required": ["id", "amount"], "types": {"amount": float}})
+workflow.add_node("DataValidationNode", "validate", {
+    "schema": {"required": ["id", "amount"], "types": {"amount": float}}})
 
 # Stage 3: Transform
-workflow = WorkflowBuilder()
-workflow.add_node("DataTransformerNode", "transform", {}),
-    operations=[
+workflow.add_node("DataTransformerNode", "transform", {
+    "operations": [
         {"type": "filter", "condition": "amount > 0"},
         {"type": "map", "expression": "{'id': id, 'amount_usd': amount * 1.1}"}
-    ])
+    ]})
 
 # Stage 4: Output
-workflow = WorkflowBuilder()
-workflow.add_node("JSONWriterNode", "output", {}),
-    file_path="processed.json")
+workflow.add_node("JSONWriterNode", "output", {
+    "file_path": "processed.json"})
 
 # Linear connections
-workflow = WorkflowBuilder()
 workflow.add_connection("ingest", "result", "validate", "input")
-workflow = WorkflowBuilder()
 workflow.add_connection("validate", "result", "transform", "input")
-workflow = WorkflowBuilder()
 workflow.add_connection("transform", "result", "output", "input")
 
 ```
@@ -82,22 +75,24 @@ runtime = LocalRuntime()
 workflow = WorkflowBuilder()
 
 # Single source
-workflow = WorkflowBuilder()
-workflow.add_node("JSONReaderNode", "source", {}),
-    file_path="tasks.json")
+workflow.add_node("JSONReaderNode", "source", {
+    "file_path": "tasks.json"})
 
 # Fan-out to multiple processors
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature)
+workflow.add_node("LLMAgentNode", "processor1", {
+    "model": "gpt-4",
+    "system_prompt": "Process task type A"})
 
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature)
+workflow.add_node("LLMAgentNode", "processor2", {
+    "model": "gpt-4",
+    "system_prompt": "Process task type B"})
 
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature)
+workflow.add_node("LLMAgentNode", "processor3", {
+    "model": "gpt-4",
+    "system_prompt": "Process task type C"})
 
 # Fan-in aggregation
-workflow = WorkflowBuilder()
+workflow.add_node("MergeNode", "aggregator", {"merge_strategy": "concat"})
 workflow.add_node("MergeNode", "aggregator", {}))
 
 # Connect fan-out

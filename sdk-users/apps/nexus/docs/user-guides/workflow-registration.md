@@ -24,7 +24,7 @@ workflow.add_node("HTTPRequestNode", "api_call", {
 })
 
 # Register with basic metadata
-app.register("data-fetcher", workflow)
+app.register("data-fetcher", workflow.build())
 ```
 
 ### Enhanced Registration with Metadata
@@ -42,7 +42,7 @@ workflow.add_node("HTTPRequestNode", "fetch", {
 })
 
 # Register with comprehensive metadata
-app.register("enhanced-data-fetcher", workflow, metadata={
+app.register("enhanced-data-fetcher", workflow.build(), metadata={
     "version": "1.0.0",
     "description": "Fetches data from JSON placeholder API",
     "author": "Development Team",
@@ -568,7 +568,7 @@ workflow.add_node("HTTPRequestNode", "health_test", {
     "method": "GET"
 })
 
-app.register("monitored-workflow", workflow)
+app.register("monitored-workflow", workflow.build())
 
 # Add health check and recovery
 health_monitor.add_health_check("monitored-workflow", check_api_workflow_health, interval=30)
@@ -647,7 +647,7 @@ conditional_register(
 
 conditional_register(
     "experimental-feature",
-    lambda: WorkflowBuilder().add_node("PythonCodeNode", "test", {"code": "return {'experimental': True}"}),
+    lambda: WorkflowBuilder().add_node("PythonCodeNode", "test", {"code": "result = {'experimental': True}"}).build(),
     lambda: is_feature_enabled("experimental"),
     metadata={"experimental": True}
 )

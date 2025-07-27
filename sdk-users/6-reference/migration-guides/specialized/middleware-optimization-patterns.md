@@ -54,7 +54,7 @@ builder.add_node("AuditLogNode", node_id="audit",
 
 # Connect and execute
 workflow = builder.build()
-results = await runtime.execute(workflow, parameters={"user_id": user_id})
+results, run_id = await runtime.execute_async(workflow, parameters={"user_id": user_id})
 ```
 
 ### 2. Event Processing
@@ -75,16 +75,17 @@ class EventProcessor:
 
 **After (SDK Nodes):**
 ```python
-# Use BatchProcessorNode
-batch_processor = BatchProcessorNode(name="event_processor")
+# Use workflow with BatchProcessorNode
+workflow = WorkflowBuilder()
+workflow.add_node("BatchProcessorNode", "event_processor", {
+    "operation": "process_events",
+    "data_items": events,
+    "batch_size": 100,
+    "processing_function": transform_event
+})
 
-# Process with SDK node
-results = await batch_processor.execute(
-    operation="process_events",
-    data_items=events,
-    batch_size=100,
-    processing_function=transform_event
-)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ### 3. Database Operations
@@ -101,17 +102,16 @@ async def save_workflow(self, workflow_data):
 
 **After (SDK Nodes):**
 ```python
-# Use AsyncSQLDatabaseNode
-db_node = AsyncSQLDatabaseNode(
-    name="workflow_db",
-    connection_string=database_url
-)
+# Use workflow with AsyncSQLDatabaseNode
+workflow = WorkflowBuilder()
+workflow.add_node("AsyncSQLDatabaseNode", "workflow_db", {
+    "connection_string": database_url,
+    "query": "INSERT INTO workflows (id, data) VALUES (:id, :data)",
+    "parameters": {"id": workflow_id, "data": workflow_data}
+})
 
-# Execute with proper error handling and retries
-result = await db_node.execute(
-    query="INSERT INTO workflows (id, data) VALUES (:id, :data)",
-    parameters={"id": workflow_id, "data": workflow_data}
-)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ### 4. Caching
@@ -180,15 +180,16 @@ class MetricsCollector:
 
 **After (SDK Nodes):**
 ```python
-# Use DataLineageNode for tracking
-lineage_node = DataLineageNode(name="metrics_tracker")
+# Use workflow with DataLineageNode for tracking
+workflow = WorkflowBuilder()
+workflow.add_node("DataLineageNode", "metrics_tracker", {
+    "data_source": "middleware",
+    "data_target": "metrics",
+    "metadata": {"event_type": event_type, "timestamp": datetime.utcnow()}
+})
 
-# Track operations
-await lineage_node.execute(
-    data_source="middleware",
-    data_target="metrics",
-    metadata={"event_type": event_type, "timestamp": datetime.utcnow()}
-)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 
 # Use MetricsCollectorNode when available
 ```

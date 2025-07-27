@@ -377,7 +377,7 @@ class AppDiscovery:
             "spec": {
                 "rules": [
                     {
-                        "host": f"{app_name}.${DOMAIN:-localhost}",
+                        "host": f"{app_name}.localhost",
                         "http": {
                             "paths": [
                                 {

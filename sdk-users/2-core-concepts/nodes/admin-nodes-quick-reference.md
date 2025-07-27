@@ -3,139 +3,176 @@
 ## Node Setup
 
 ```python
-from kailash.nodes.admin import UserManagementNode, RoleManagementNode, PermissionCheckNode
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-db_config = {
-    "connection_string": "postgresql://user:pass@localhost/db",
-    "database_type": "postgresql"
-}
+# Create workflow with admin nodes
+workflow = WorkflowBuilder()
+workflow.add_node("UserManagementNode", "user_mgmt", {
+    "database_config": {
+        "connection_string": "postgresql://user:pass@localhost/db",
+        "database_type": "postgresql"
+    }
+})
+workflow.add_node("RoleManagementNode", "role_mgmt", {
+    "database_config": {
+        "connection_string": "postgresql://user:pass@localhost/db",
+        "database_type": "postgresql"
+    }
+})
+workflow.add_node("PermissionCheckNode", "perm_check", {
+    "database_config": {
+        "connection_string": "postgresql://user:pass@localhost/db",
+        "database_type": "postgresql"
+    },
+    "cache_backend": "redis",
+    "cache_config": {"host": "localhost", "port": 6379}
+})
 
-user_node = UserManagementNode(database_config=db_config)
-role_node = RoleManagementNode(database_config=db_config)
-perm_node = PermissionCheckNode(
-    database_config=db_config,
-    cache_backend="redis",
-    cache_config={"host": "localhost", "port": 6379}
-)
+runtime = LocalRuntime()
 ```
 
 ## User Operations
 
 ```python
 # Create user
-user = user_node.run(
-    operation="create_user",
-    user_data={
-        "email": "user@example.com",
-        "username": "username",
-        "password": "SecurePass123!",
-        "first_name": "John",
-        "last_name": "Doe",
-        "roles": ["viewer"]
-    },
-    tenant_id="tenant_001"
-)
+user, run_id = runtime.execute(workflow.build(), parameters={
+    "user_mgmt": {
+        "operation": "create_user",
+        "user_data": {
+            "email": "user@example.com",
+            "username": "username",
+            "password": "SecurePass123!",
+            "first_name": "John",
+            "last_name": "Doe",
+            "roles": ["viewer"]
+        },
+        "tenant_id": "tenant_001"
+    }
+})
 
 # Update user
-updated = user_node.run(
-    operation="update_user",
-    user_id="user_123",
-    user_data={"roles": ["editor", "viewer"]},
-    tenant_id="tenant_001"
-)
+updated, run_id = runtime.execute(workflow.build(), parameters={
+    "user_mgmt": {
+        "operation": "update_user",
+        "user_id": "user_123",
+        "user_data": {"roles": ["editor", "viewer"]},
+        "tenant_id": "tenant_001"
+    }
+})
 
 # List users
-users = user_node.run(
-    operation="list_users",
-    limit=50,
-    offset=0,
-    tenant_id="tenant_001"
-)
+users, run_id = runtime.execute(workflow.build(), parameters={
+    "user_mgmt": {
+        "operation": "list_users",
+        "limit": 50,
+        "offset": 0,
+        "tenant_id": "tenant_001"
+    }
+})
 
 # Delete user
-deleted = user_node.run(
-    operation="delete_user",
-    user_id="user_123",
-    hard_delete=False,
-    tenant_id="tenant_001"
-)
+deleted, run_id = runtime.execute(workflow.build(), parameters={
+    "user_mgmt": {
+        "operation": "delete_user",
+        "user_id": "user_123",
+        "hard_delete": False,
+        "tenant_id": "tenant_001"
+    }
+})
 
 # Bulk operations
-bulk_result = user_node.run(
-    operation="bulk_create",
-    users_data=[{...}, {...}],
-    tenant_id="tenant_001"
-)
+bulk_result, run_id = runtime.execute(workflow.build(), parameters={
+    "user_mgmt": {
+        "operation": "bulk_create",
+        "users_data": [{...}, {...}],
+        "tenant_id": "tenant_001"
+    }
+})
 ```
 
 ## Role Operations
 
 ```python
 # Create role
-role = role_node.run(
-    operation="create_role",
-    role_data={
-        "name": "editor",
-        "description": "Content editor",
-        "permissions": ["content:read", "content:write"],
-        "parent_roles": ["viewer"]
-    },
-    tenant_id="tenant_001"
-)
+role, run_id = runtime.execute(workflow.build(), parameters={
+    "role_mgmt": {
+        "operation": "create_role",
+        "role_data": {
+            "name": "editor",
+            "description": "Content editor",
+            "permissions": ["content:read", "content:write"],
+            "parent_roles": ["viewer"]
+        },
+        "tenant_id": "tenant_001"
+    }
+})
 
 # Assign role
-assignment = role_node.run(
-    operation="assign_user",
-    user_id="user_123",
-    role_id="editor",
-    tenant_id="tenant_001"
-)
+assignment, run_id = runtime.execute(workflow.build(), parameters={
+    "role_mgmt": {
+        "operation": "assign_user",
+        "user_id": "user_123",
+        "role_id": "editor",
+        "tenant_id": "tenant_001"
+    }
+})
 
 # Get user roles
-roles = role_node.run(
-    operation="get_user_roles",
-    user_id="user_123",
-    tenant_id="tenant_001"
-)
+roles, run_id = runtime.execute(workflow.build(), parameters={
+    "role_mgmt": {
+        "operation": "get_user_roles",
+        "user_id": "user_123",
+        "tenant_id": "tenant_001"
+    }
+})
 
 # Add permission
-updated_role = role_node.run(
-    operation="add_permission",
-    role_id="editor",
-    permission="content:publish",
-    tenant_id="tenant_001"
-)
+updated_role, run_id = runtime.execute(workflow.build(), parameters={
+    "role_mgmt": {
+        "operation": "add_permission",
+        "role_id": "editor",
+        "permission": "content:publish",
+        "tenant_id": "tenant_001"
+    }
+})
 ```
 
 ## Permission Checks
 
 ```python
 # Single check
-check = perm_node.run(
-    operation="check_permission",
-    user_id="user_123",
-    resource_id="document_456",
-    permission="edit",
-    tenant_id="tenant_001"
-)
+check, run_id = runtime.execute(workflow.build(), parameters={
+    "perm_check": {
+        "operation": "check_permission",
+        "user_id": "user_123",
+        "resource_id": "document_456",
+        "permission": "edit",
+        "tenant_id": "tenant_001"
+    }
+})
 
 # Batch check
-batch = perm_node.run(
-    operation="batch_check",
-    user_id="user_123",
-    checks=[
-        {"resource_id": "doc1", "permissions": ["read", "write"]},
-        {"resource_id": "doc2", "permissions": ["delete"]}
-    ],
-    tenant_id="tenant_001"
-)
+batch, run_id = runtime.execute(workflow.build(), parameters={
+    "perm_check": {
+        "operation": "batch_check",
+        "user_id": "user_123",
+        "checks": [
+            {"resource_id": "doc1", "permissions": ["read", "write"]},
+            {"resource_id": "doc2", "permissions": ["delete"]}
+        ],
+        "tenant_id": "tenant_001"
+    }
+})
 
 # Clear cache
-perm_node.run(
-    operation="clear_cache",
-    user_id="user_123",
-    tenant_id="tenant_001"
-)
+runtime.execute(workflow.build(), parameters={
+    "perm_check": {
+        "operation": "clear_cache",
+        "user_id": "user_123",
+        "tenant_id": "tenant_001"
+    }
+})
 ```
 
 ## Permission Format
@@ -163,11 +200,10 @@ viewer → contributor → editor → admin
 ### Error Handling
 ```python
 try:
-    result = node.run(...)
-except NodeValidationError:
-    # Invalid input
-except NodeExecutionError:
-    # Runtime error
+    result, run_id = runtime.execute(workflow.build(), parameters={...})
+except Exception as e:
+    # Handle error
+    print(f"Error: {e}")
 ```
 
 ## Required Fields
@@ -195,16 +231,19 @@ pytest tests/e2e/test_admin_nodes_complete_workflow.py -v
 
 ```python
 # Generate realistic enterprise users with Ollama
-from kailash.nodes.ai import LLMAgentNode
-
-llm_agent = LLMAgentNode(agent_config={
-    "provider": "ollama",
-    "model": "llama3.2:latest",
-    "base_url": "http://localhost:11435"
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "llm_agent", {
+    "agent_config": {
+        "provider": "ollama",
+        "model": "llama3.2:latest",
+        "base_url": "http://localhost:11435"
+    }
 })
 
-# Generate realistic user profiles
-users_data = await generate_realistic_user_data(llm_agent, count=20)
+runtime = LocalRuntime()
+
+# Generate realistic user profiles using workflow
+# Implementation would use the LLM to generate user data
 ```
 
 ### Docker Services Required

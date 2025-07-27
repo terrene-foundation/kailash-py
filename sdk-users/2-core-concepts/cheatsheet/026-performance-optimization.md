@@ -80,7 +80,7 @@ class OptimizedProcessor(CycleAwareNode):
 ### Concurrent Task Execution
 ```python
 import asyncio
-from kailash.nodes.base import AsyncNode
+from kailash.nodes.base_async import AsyncNode
 
 class ConcurrentProcessor(AsyncNode):
     """Process multiple tasks concurrently."""
@@ -127,7 +127,7 @@ class ConcurrentProcessor(AsyncNode):
 from kailash.nodes.data import WorkflowConnectionPool
 from kailash.nodes.data.query_router import QueryRouterNode
 from contextlib import asynccontextmanager
-from kailash.nodes.base import AsyncNode
+from kailash.nodes.base_async import AsyncNode
 
 # Create production-grade connection pool with Phase 2 features
 pool = WorkflowConnectionPool(
@@ -150,34 +150,43 @@ pool = WorkflowConnectionPool(
 await pool.execute({"operation": "initialize"})
 
 # NEW: Query Router for intelligent routing (Phase 2)
-router = QueryRouterNode(
-    name="smart_router",
-    connection_pool="production_pool",
-    enable_read_write_split=True,  # Route reads to any connection
-    cache_size=2000,               # Cache prepared statements
-    pattern_learning=True,         # Learn from patterns
-    health_threshold=60            # Min health for routing
-)
+workflow = WorkflowBuilder()
+workflow.add_node("QueryRouterNode", "smart_router", {
+    "connection_pool": "production_pool",
+    "enable_read_write_split": True,  # Route reads to any connection
+    "cache_size": 2000,               # Cache prepared statements
+    "pattern_learning": True,         # Learn from patterns
+    "health_threshold": 60            # Min health for routing
+})
 
 # Simple usage with router - no manual connection management!
-result = await router.execute({
-    "query": "SELECT * FROM users WHERE active = ?",
-    "parameters": [True]
+runtime = AsyncLocalRuntime()
+results, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "smart_router": {
+        "query": "SELECT * FROM users WHERE active = ?",
+        "parameters": [True]
+    }
 })
 
 # Transaction support with session affinity
-await router.execute({
-    "query": "BEGIN",
-    "session_id": "user_123"
+results, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "smart_router": {
+        "query": "BEGIN",
+        "session_id": "user_123"
+    }
 })
-await router.execute({
-    "query": "UPDATE accounts SET balance = balance - ? WHERE id = ?",
-    "parameters": [100, 1],
-    "session_id": "user_123"
+results, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "smart_router": {
+        "query": "UPDATE accounts SET balance = balance - ? WHERE id = ?",
+        "parameters": [100, 1],
+        "session_id": "user_123"
+    }
 })
-await router.execute({
-    "query": "COMMIT",
-    "session_id": "user_123"
+results, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "smart_router": {
+        "query": "COMMIT",
+        "session_id": "user_123"
+    }
 })
 
 # Context manager for direct pool access (when needed)

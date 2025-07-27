@@ -456,17 +456,16 @@ class EnterpriseSecurityFramework:
         )
 
         # Layer 2: Access Control
-        self.abac_evaluator = ABACPermissionEvaluatorNode(
-            enable_ai_reasoning=True,
-            strict_mode=True
-        )
+        self.security_workflow.add_node("ABACPermissionEvaluatorNode", "enterprise_abac", {
+            "enable_ai_reasoning": True,
+            "strict_mode": True
+        })
 
         # Layer 3: Authentication
-        self.mfa_enforcer = MultiFactorAuthNode(
-            name="enterprise_mfa",
-            methods=["totp", "sms", "backup_codes"],
-            default_method="totp"
-        )
+        self.security_workflow.add_node("MultiFactorAuthNode", "enterprise_mfa", {
+            "methods": ["totp", "sms", "backup_codes"],
+            "default_method": "totp"
+        })
 
         # Layer 4: Behavior Monitoring
         self.behavior_monitor = BehaviorAnalysisNode(

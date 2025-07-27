@@ -23,18 +23,17 @@ runtime = LocalRuntime()
 
 # ✅ CORRECT: Config = HOW (static setup), Runtime = WHAT (dynamic data)
 workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature)
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = data"})  # Config: HOW to process
 
 # Execution: Runtime = WHAT data to process
 runtime = LocalRuntime()
-# Parameters setup
-workflow.{
+results, run_id = runtime.execute(workflow.build(), parameters={
     "processor": {"data": [1, 2, 3]}  # Runtime: WHAT actual data
 })
 
 # ❌ WRONG: Mixing config and runtime
 workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature)
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = data"})
 
 ```
 
@@ -80,10 +79,9 @@ workflow = WorkflowBuilder()
 # Runtime should be created separately
 runtime = LocalRuntime()
 
-# ✅ CORRECT: Use Workflow.connect() with mapping
+# ✅ CORRECT: Use workflow.add_connection() with 4 parameters
 workflow = WorkflowBuilder()
-workflow.workflow = WorkflowBuilder()
-  # Method signature
+workflow.add_connection("source", "output", "target", "input")
 
 # ❌ WRONG: Using WorkflowBuilder (different API)
 builder = WorkflowBuilder()  # Different API, causes confusion
@@ -121,11 +119,9 @@ runtime = LocalRuntime()
 
 # Create cycle with specific field mapping (NOT generic)
 workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = {'count': x + 1}"})
+cycle_builder = workflow.create_cycle("improvement_cycle")
+cycle_builder.connect("processor", "processor", mapping={"count": "x"}).max_iterations(10).build()
 
 # ✅ CRITICAL: Use specific field mapping in cycles
 # ❌ NEVER: {"output": "output"} - generic mapping fails in cycles
@@ -150,7 +146,7 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature)
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = kwargs"})
 
 ```
 
@@ -186,12 +182,15 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
+workflow.add_node("PythonCodeNode", "processor", {"code": """
+import pandas as pd
+import numpy as np
 result = {
     "data": df.to_dict('records'),        # JSON serializable
     "summary": df.describe().to_dict(),   # Convert all pandas objects
     "shape": df.shape                     # Tuples are fine
 }
+"""})
 
 # ✅ CRITICAL: NumPy array serialization
 arr = np.array([1, 2, 3])
@@ -397,7 +396,7 @@ workflow.add_node("PythonCodeNode", "transformer", {}))}"
 
 workflow.add_connection("api_call", "transformer", "response", "response")
 
-runtime.execute(workflow, parameters={
+runtime.execute(workflow.build(), parameters={
     "api_call": {
         "url": "https://api.example.com/data",
         "method": "GET",

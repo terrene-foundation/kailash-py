@@ -100,11 +100,11 @@ tracking in cyclic workflows.
    workflow.add_node("optimizer", OptimizerNode())
 
    # Create optimization cycle
-   workflow.connect("optimizer", "optimizer",
-                    mapping={"value": "initial_value"},
-                    cycle=True,
-                    max_iterations=100,
-                    convergence_check="converged == True")
+   workflow.create_cycle("optimization_cycle") \
+           .connect("optimizer", "optimizer", mapping={"value": "initial_value"}) \
+           .max_iterations(100) \
+           .converge_when("converged == True") \
+           .build()
 
 **Common Patterns:**
 

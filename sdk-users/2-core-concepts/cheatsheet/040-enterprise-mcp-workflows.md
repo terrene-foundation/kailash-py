@@ -82,7 +82,7 @@ from kailash.nodes.enterprise import (
 )
 
 # Healthcare compliance workflow
-healthcare_workflow = WorkflowBuilder(name="Healthcare HIPAA Workflow")
+healthcare_workflow = WorkflowBuilder()
 
 # Step 1: SSO Authentication (Azure AD/Okta)
 healthcare_workflow.add_node("SSOAuthenticationNode", "sso_login", {
@@ -170,7 +170,7 @@ print(f"Compliance Status: {audit_entry['compliance']['data_residency_compliant'
 
 ```python
 # Finance SOX compliance workflow
-finance_workflow = WorkflowBuilder(name="Finance SOX Workflow")
+finance_workflow = WorkflowBuilder()
 
 # Enhanced authentication for financial data
 finance_workflow.add_node("SSOAuthenticationNode", "sso_login", {
@@ -218,7 +218,7 @@ finance_workflow.add_node("EnterpriseAuditLoggerNode", "audit_logger", {
 # ... [connection setup similar to healthcare] ...
 
 # Execute with SOX parameters
-results, run_id = await runtime.execute_async(finance_wf, parameters={
+results, run_id = await runtime.execute_async(finance_workflow.build(), parameters={
     "sso_login": {
         "action": "validate",
         "provider": "okta",
@@ -237,19 +237,13 @@ results, run_id = await runtime.execute_async(finance_wf, parameters={
 
 ```python
 # Multi-tenant workflow with strict isolation
-multi_tenant_workflow = WorkflowBuilder(name="Multi-Tenant Isolation")
-
-# Tenant isolation manager
-from kailash.nodes.admin.tenant_isolation import TenantIsolationManager
+multi_tenant_workflow = WorkflowBuilder()
 
 # Database with tenant isolation
 multi_tenant_workflow.add_node("AsyncSQLDatabaseNode", "tenant_db", {
     "connection_string": "postgresql://localhost:5434/multi_tenant_test",
-    "query": "SELECT * FROM tenant_data WHERE tenant_id = %(tenant_id)s",
-    "isolation_manager": TenantIsolationManager(
-        db_node=async_db_node,
-        strategy="strict"
-    )
+    "query": "SELECT * FROM tenant_data WHERE tenant_id = :tenant_id",
+    "isolation_strategy": "strict"
 })
 
 # Connect tenant context for data isolation
@@ -265,8 +259,7 @@ assert tenant_data["tenant_id"] == expected_tenant_id
 ### Circuit Breaker with Custom Thresholds
 ```python
 # Enhanced circuit breaker configuration
-enterprise_mcp = EnterpriseMLCPExecutorNode("mcp_executor")
-enterprise_mcp.configure({
+workflow.add_node("EnterpriseMLCPExecutorNode", "mcp_executor", {
     "circuit_breaker_enabled": True,
     "success_rate_threshold": 0.8,
     "failure_threshold": 5,  # Open after 5 failures
@@ -278,8 +271,7 @@ enterprise_mcp.configure({
 ### Risk-Based Audit Logging
 ```python
 # Risk assessment in audit logging
-audit_logger = EnterpriseAuditLoggerNode("audit_logger")
-audit_logger.configure({
+workflow.add_node("EnterpriseAuditLoggerNode", "audit_logger", {
     "audit_level": "detailed",
     "risk_threshold": 0.7,  # Flag high-risk operations
     "compliance_zones": ["sox", "pci_dss"],

@@ -21,19 +21,19 @@ from kailash.nodes.data import VectorStoreNode, SearchRankingNode
 workflow = WorkflowBuilder()
 
 # Multi-stage embedding generation
-workflow.add_node("EmbeddingGeneratorNode", "embedder", {}))
+workflow.add_node("EmbeddingGeneratorNode", "embedder", {})
 
 # Hierarchical vector search
-workflow.add_node("VectorStoreNode", "vector_search", {}))
+workflow.add_node("VectorStoreNode", "vector_search", {})
 
 # Re-ranking for precision
-workflow.add_node("SearchRankingNode", "reranker", {}))
+workflow.add_node("SearchRankingNode", "reranker", {})
 
 # Context-aware response generation
-workflow.add_node("LLMAgentNode", "generator", {}))
+workflow.add_node("LLMAgentNode", "generator", {})
 
 # Production error handling
-workflow.add_node("LLMAgentNode", "fallback_handler", {}))
+workflow.add_node("LLMAgentNode", "fallback_handler", {})
 
 ```
 
@@ -69,24 +69,25 @@ testing_personas = [
 ]
 
 # Multi-agent testing coordination
-from kailash.nodes.ai.a2a import A2ACoordinatorNode
-from kailash.nodes.ai.self_organizing import AgentPoolManagerNode
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
 workflow = WorkflowBuilder()
 
 # Agent pool for 27 personas
-workflow.add_node("AgentPoolManagerNode", "agent_pool", {}))
+workflow.add_node("AgentPoolManagerNode", "agent_pool", {})
 
 # Intelligent test coordination
-workflow.add_node("test_coordinator", A2ACoordinatorNode(
-    coordination_strategy="expertise_based",
-    task_distribution="parallel",
-    result_aggregation=True
-))
+workflow.add_node("A2ACoordinatorNode", "test_coordinator", {
+    "coordination_strategy": "expertise_based",
+    "task_distribution": "parallel",
+    "result_aggregation": True
+})
 
 # Test execution pipeline
 def execute_comprehensive_testing(app_under_test):
-    return runtime.execute(workflow, parameters={
+    runtime = LocalRuntime()
+    return runtime.execute(workflow.build(), parameters={
         "test_coordinator": {
             "action": "coordinate_testing",
             "target_application": app_under_test,
@@ -317,10 +318,17 @@ spec:
 from kailash.nodes.data import AsyncSQLDatabaseNode
 
 # Optimized database node
-workflow.add_node("AsyncSQLDatabaseNode", "optimized_db", {}))
+workflow.add_node("AsyncSQLDatabaseNode", "optimized_db", {})
 
 # Batch processing pattern
-workflow.add_node("PythonCodeNode", "batch_processor", {}), batch_size):
+workflow.add_node("PythonCodeNode", "batch_processor", {
+    "code": '''import gc
+
+data = parameters.get('data', [])
+batch_size = parameters.get('batch_size', 1000)
+processed_batches = []
+
+for i in range(0, len(data), batch_size):
     batch = data[i:i + batch_size]
 
     # Parallel processing within batch
@@ -371,9 +379,10 @@ cache_manager = ProductionCacheManager(
 
 # Cache-aware workflow
 @cache_manager.cached(ttl=600, key_pattern="workflow_{workflow_id}_{params_hash}")
-async def execute_cached_workflow('workflow_id', parameters: dict):
+async def execute_cached_workflow(workflow_id: str, parameters: dict):
     """Execute workflow with intelligent caching"""
-    return await runtime.execute(workflow, parameters=parameters)
+    runtime = LocalRuntime()
+    return await runtime.execute_async(workflow.build(), parameters=parameters)
 
 ```
 
@@ -428,7 +437,7 @@ security_middleware = [
 ```python
 from kailash.nodes.security import ThreatDetectionNode
 
-workflow.add_node("ThreatDetectionNode", "threat_detector", {}))
+workflow.add_node("ThreatDetectionNode", "threat_detector", {})
 
 ```
 

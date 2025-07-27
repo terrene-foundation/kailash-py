@@ -89,7 +89,7 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Workflows triggered by events
-workflow.add_node("EventListenerNode", "listener", {}))
+workflow.add_node("EventListenerNode", "listener", {})
 
 ```
 **When to use**: Reactive systems, loose coupling, async processing
@@ -112,7 +112,7 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Scheduled bulk operations
-workflow.add_node("BatchReaderNode", "reader", {}))
+workflow.add_node("BatchReaderNode", "reader", {})
 
 ```
 **When to use**: Large data volumes, scheduled jobs, ETL pipelines
@@ -212,8 +212,8 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Distribute AI workload across agents
-workflow.add_node("coordinator", A2ACoordinatorNode())
-workflow.add_node("AgentPoolManagerNode", "pool", {}))
+workflow.add_node("A2ACoordinatorNode", "coordinator", {})
+workflow.add_node("AgentPoolManagerNode", "pool", {})
 
 ```
 
@@ -238,9 +238,9 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Multi-level caching
-workflow.add_node("InMemoryCacheNode", "l1_cache", {}))
-workflow.add_node("RedisCacheNode", "l2_cache", {}))
-workflow.add_node("IntelligentCacheNode", "l3_cache", {}))
+workflow.add_node("InMemoryCacheNode", "l1_cache", {})
+workflow.add_node("RedisCacheNode", "l2_cache", {})
+workflow.add_node("IntelligentCacheNode", "l3_cache", {})
 
 ```
 
@@ -289,7 +289,7 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Distribute across multiple instances
-workflow.add_node("LoadBalancerNode", "balancer", {}))
+workflow.add_node("LoadBalancerNode", "balancer", {})
 
 ```
 
@@ -329,8 +329,8 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Encryption and validation
-workflow.add_node("EncryptionNode", "encryptor", {}))
-workflow.add_node("DataValidationNode", "validator", {}))
+workflow.add_node("EncryptionNode", "encryptor", {})
+workflow.add_node("DataValidationNode", "validator", {})
 
 ```
 

@@ -56,15 +56,17 @@ Optimization Techniques
 .. code-block:: python
 
     # Optimized cycle configuration
-    workflow.connect("processor", "processor",
-        cycle=True,
-        max_iterations=10000,
-        convergence_check="converged == True",
-        # Performance optimizations
-        state_history_size=100,  # Limit state history
-        enable_profiling=False,  # Disable profiling in production
-        batch_size=10           # Process multiple iterations per batch
-    )
+    workflow.create_cycle("performance_cycle") \
+            .connect("processor", "processor") \
+            .max_iterations(10000) \
+            .converge_when("converged == True") \
+            .timeout(300) \
+            .build()
+
+    # Additional performance optimizations can be set at runtime:
+    # - state_history_size: Limit state history
+    # - enable_profiling: Disable profiling in production
+    # - batch_size: Process multiple iterations per batch
 
 Memory Optimization
 -------------------

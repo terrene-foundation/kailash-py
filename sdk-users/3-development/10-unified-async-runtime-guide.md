@@ -634,13 +634,13 @@ The AsyncNode base class has been significantly enhanced to handle complex event
 
 ```python
 from kailash.nodes.monitoring import TransactionMetricsNode
-from kailash.nodes.base_async import AsyncNode
+from kailash.nodes.base import Node
 
-# AsyncNode now handles all event loop scenarios automatically
-class MyAsyncNode(AsyncNode):
-    async def async_run(self, **kwargs):
-        # Your async logic here
-        return {"result": "async processing complete"}
+# Custom node for async processing
+class MyAsyncNode(Node):
+    def run(self, **kwargs):
+        # Your processing logic here
+        return {"result": "processing complete"}
 
 # Works in any context - main thread, worker threads, existing event loops
 node = MyAsyncNode()

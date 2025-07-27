@@ -482,10 +482,11 @@ Infinite Loops
 .. code-block:: python
 
     # 1. Always set convergence conditions
-    workflow.connect("processor", "processor",
-        cycle=True,
-        max_iterations=100,  # Safety limit
-        convergence_check="converged == True or error < 0.001")
+    workflow.create_cycle("processing_cycle") \
+            .connect("processor", "processor") \
+            .max_iterations(100) \
+            .converge_when("converged == True or error < 0.001") \
+            .build()
 
     # 2. Implement proper convergence logic in your node
     class MyNode(CycleAwareNode):
@@ -533,14 +534,14 @@ Parameter Mapping Issues
 .. code-block:: python
 
     # For PythonCodeNode - use nested path mapping
-    workflow.connect("processor", "processor",
-        mapping={"result.count": "count"},  # Note: result.count
-        cycle=True)
+    workflow.create_cycle("processor_cycle") \
+            .connect("processor", "processor", mapping={"result.count": "count"}) \
+            .build()
 
     # For regular nodes - use direct mapping
-    workflow.connect("optimizer", "optimizer",
-        mapping={"value": "input_value"},
-        cycle=True)
+    workflow.create_cycle("optimizer_cycle") \
+            .connect("optimizer", "optimizer", mapping={"value": "input_value"}) \
+            .build()
 
     # Debug parameter flow
     class DebugNode(CycleAwareNode):
@@ -630,11 +631,11 @@ Connection Parameter Issues (v0.8.4+)
 
        # Enable strict validation for security
        runtime = LocalRuntime(connection_validation="strict")
-       
+
        # Monitor security violations
        metrics = runtime.get_validation_metrics()
        security_report = metrics["security_report"]
-       
+
        if security_report["violations_detected"] > 0:
            print("Security violations detected!")
            for violation in security_report["violations"]:

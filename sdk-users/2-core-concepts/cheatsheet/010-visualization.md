@@ -48,8 +48,7 @@ runtime = LocalRuntime()
 mermaid_code = MermaidVisualizer.generate(workflow,
     direction="TD",         # Top-Down (or LR for Left-Right)
     include_node_types=True,
-# Parameters setup
-workflow.False,
+    include_parameters=False,
     style="minimal"         # minimal, detailed, or full
 )
 
@@ -83,7 +82,7 @@ runtime = LocalRuntime()
 
 # Visualize workflow with execution results
 runtime = LocalRuntime()
-runtime.execute(workflow.build(), workflow)
+results, run_id = runtime.execute(workflow.build())
 
 # Show execution flow with timing
 execution_visualizer = WorkflowVisualizer(include_execution_data=True)
@@ -116,13 +115,11 @@ runtime = LocalRuntime()
 
 # Detailed visualization with all information
 visualizer.visualize(workflow,
-workflow = WorkflowBuilder()
-workflow.svg",
+    output_path="detailed_workflow.svg",
     format="svg",
 
     # Node information
-# Parameters setup
-workflow.True,
+    include_parameters=True,
     include_node_types=True,
     include_descriptions=True,
 
@@ -168,13 +165,11 @@ debug_visualizer = WorkflowVisualizer(debug_mode=True)
 
 # Show potential issues
 debug_visualizer.visualize(workflow,
-workflow = WorkflowBuilder()
-workflow.png",
+    output_path="debug_workflow.png",
 
     # Highlight problems
     highlight_unconnected_nodes=True,
-# Parameters setup
-workflow.True,
+    highlight_missing_parameters=True,
     highlight_type_mismatches=True,
 
     # Show validation info
@@ -212,11 +207,9 @@ formats = ["png", "svg", "pdf", "html", "mermaid"]
 
 for fmt in formats:
     visualizer.visualize(workflow,
-workflow = WorkflowBuilder()
-workflow.{fmt}",
+        output_path=f"workflow.{fmt}",
         format=fmt,
-# Parameters setup
-workflow.True
+        include_parameters=True
     )
 
 # Programmatic access to graph data
@@ -271,15 +264,12 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # One-liner for quick debugging
-workflow = WorkflowBuilder()
 workflow.visualize()  # Opens default viewer
 
 # Quick validation check
-workflow = WorkflowBuilder()
 workflow.validate_and_visualize()  # Shows issues visually
 
 # Performance analysis
-workflow = WorkflowBuilder()
 workflow.analyze_performance()  # Shows bottlenecks
 
 ```
@@ -305,8 +295,7 @@ runtime = LocalRuntime()
 mermaid_code = MermaidVisualizer.generate(workflow, style="minimal")
 
 # For debugging - use detailed PNG/SVG
-# Parameters setup
-workflow.True)
+visualizer.visualize(workflow, "debug.png", include_parameters=True)
 
 # For presentations - use clean HTML
 visualizer.visualize(workflow, "presentation.html",
@@ -351,8 +340,7 @@ custom_theme = {
 
 # Apply theme
 visualizer.visualize(workflow,
-workflow = WorkflowBuilder()
-workflow.png",
+    output_path="themed_workflow.png",
     theme=custom_theme
 )
 

@@ -21,33 +21,71 @@ from kailash.nodes.code import PythonCodeNode
 workflow = WorkflowBuilder()
 
 # Add nodes
-workflow.add_node("PythonCodeNode", "data_source", {}))
-workflow.add_node("PythonCodeNode", "processor", {}):
-        result = [x * 0.9 for x in data]
-    else:
-        result = data
+workflow.add_node("PythonCodeNode", "data_source", {
+    "code": "result = {'data': [110, 120, 130], 'iteration': 0}"
+})
+
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": """
+try:
+    data = input_data.get('data', [100])
+    iteration = input_data.get('iteration', 0)
 except NameError:
     # First iteration - no feedback yet
-    result = data
-"""))
-workflow.add_node("PythonCodeNode", "evaluator", {}) / len(result) if result else 0
+    data = [100]
+    iteration = 0
+
+# Process data (reduce by 10%)
+processed_data = [x * 0.9 for x in data]
+iteration += 1
+
+result = {
+    'data': processed_data,
+    'iteration': iteration,
+    'average': sum(processed_data) / len(processed_data)
+}
+"""
+})
+
+workflow.add_node("PythonCodeNode", "evaluator", {
+    "code": """
+# Get processed data
+data = input_data.get('data', [])
+iteration = input_data.get('iteration', 0)
+average = input_data.get('average', 0)
+
+# Check convergence
+converged = average < 100
 feedback = {
     'average': average,
-    'needs_adjustment': average > 100,
-    'quality_score': 1.0 / (average / 100) if average > 0 else 1.0
+    'needs_adjustment': not converged,
+    'quality_score': 1.0 / (average / 100) if average > 0 else 1.0,
+    'converged': converged,
+    'iteration': iteration
 }
-# Must set result for PythonCodeNode
-result = feedback
-"""))
 
-# Connect nodes with cycle
-workflow.add_connection("data_source", "processor", "result", "data")
-workflow.add_connection("processor", "evaluator", "result", "result")
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+result = feedback
+"""
+})
+
+# Connect nodes
+workflow.add_connection("data_source", "result", "processor", "input_data")
+workflow.add_connection("processor", "result", "evaluator", "input_data")
+
+# Build workflow first, then create cycle
+built_workflow = workflow.build()
+
+# Create cycle using modern CycleBuilder API
+cycle_builder = built_workflow.create_cycle("quality_improvement")
+cycle_builder.connect("evaluator", "processor", mapping={"result": "input_data"}) \
+             .max_iterations(10) \
+             .converge_when("converged == True") \
+             .timeout(300) \
+             .build()
 
 # Execute workflow
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
+results, run_id = runtime.execute(built_workflow)
 print(f"Final results: {results}")
 ```
 
@@ -149,30 +187,63 @@ from kailash.nodes.code import PythonCodeNode
 workflow = WorkflowBuilder()
 
 # Add nodes
-workflow.add_node("PythonCodeNode", "source", {}))
-workflow.add_node("PythonCodeNode", "processor", {}):
-        result = [x * 0.9 for x in data]
-    else:
-        result = data
+workflow.add_node("PythonCodeNode", "source", {
+    "code": "result = {'data': [120, 150, 110], 'iteration': 0}"
+})
+
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": """
+try:
+    data = input_data.get('data', [100])
+    iteration = input_data.get('iteration', 0)
 except NameError:
-    # First iteration - no feedback yet
-    result = data
-"""))
+    data = [100]
+    iteration = 0
 
-workflow.add_node("PythonCodeNode", "validator", {}) / len(result) if result else 0
-feedback = {'adjust': quality > 100, 'quality': quality}
-# Must set result for PythonCodeNode
-result = feedback
-"""))
+# Process data - reduce by 10%
+processed_data = [x * 0.9 for x in data]
+iteration += 1
 
-# Connect with cycle
-workflow.add_connection("source", "processor", "result", "data")
-workflow.add_connection("processor", "validator", "result", "result")
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+result = {
+    'data': processed_data,
+    'iteration': iteration,
+    'quality': sum(processed_data) / len(processed_data)
+}
+"""
+})
+
+workflow.add_node("PythonCodeNode", "validator", {
+    "code": """
+data = input_data.get('data', [])
+iteration = input_data.get('iteration', 0)
+quality = input_data.get('quality', 0)
+
+converged = quality <= 100
+result = {
+    'data': data,
+    'iteration': iteration,
+    'quality': quality,
+    'converged': converged
+}
+"""
+})
+
+# Connect nodes
+workflow.add_connection("source", "result", "processor", "input_data")
+workflow.add_connection("processor", "result", "validator", "input_data")
+
+# Build workflow and create cycle
+built_workflow = workflow.build()
+cycle_builder = built_workflow.create_cycle("refinement_cycle")
+cycle_builder.connect("validator", "processor", mapping={"result": "input_data"}) \
+             .max_iterations(15) \
+             .converge_when("converged == True") \
+             .timeout(300) \
+             .build()
 
 # Execute
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
+results, run_id = runtime.execute(built_workflow)
 
 ```
 

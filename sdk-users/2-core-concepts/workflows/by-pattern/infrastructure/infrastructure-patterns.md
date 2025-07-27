@@ -1,4 +1,3 @@
-from kailash.workflow.builder import WorkflowBuilder
 # Infrastructure Patterns for Kailash Workflows
 
 Common infrastructure patterns and best practices for deploying Kailash SDK workflows.
@@ -30,7 +29,8 @@ python src/solutions/my_workflow.py
 ```python
 """Development environment setup"""
 import os
-from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash.config import EnvironmentConfig
 
 # Auto-detect environment
@@ -48,8 +48,14 @@ else:
         use_docker_services=False
     )
 
-# Load workflow with environment config
-workflow = Workflow.from_yaml("workflow.yaml", config=config)
+# Create workflow with environment config
+workflow = WorkflowBuilder()
+# Add nodes as needed
+# workflow.add_node("NodeType", "node_id", {})
+
+# Execute workflow
+runtime = LocalRuntime(config=config)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -294,7 +300,7 @@ deployment.deploy_with_failover(
 
 ```python
 """Deploy workflows at the edge"""
-from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.deployment import EdgeDeployment
 
 # Lightweight workflow for edge
@@ -314,7 +320,7 @@ deployment = EdgeDeployment()
 locations = ["store-001", "store-002", "warehouse-west"]
 for location in locations:
     deployment.deploy_edge(
-        workflow=edge_workflow,
+        workflow=edge_workflow.build(),
         location=location,
         config=edge_config,
         sync_interval=300  # Sync with cloud every 5 minutes
@@ -329,7 +335,8 @@ for location in locations:
 ```python
 """Implement zero-trust security"""
 from kailash.security import ZeroTrustConfig
-from kailash.workflow import SecureWorkflow
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
 # Configure zero-trust
 security = ZeroTrustConfig(
@@ -339,22 +346,23 @@ security = ZeroTrustConfig(
     audit_all_actions=True
 )
 
-# Create secure workflow
-workflow = SecureWorkflow(
-    "secure-processor",
-    "Secure Data Processor",
-    security_config=security
-)
+# Create workflow with security configuration
+workflow = WorkflowBuilder()
 
-# Add security policies
-workflow.add_policy("data-access", {
-    "effect": "Allow",
-    "principal": {"groups": ["data-scientists"]},
-    "action": ["read", "process"],
-    "resource": "s3://secure-bucket/*",
-    "condition": {
-        "IpAddress": {"aws:SourceIp": ["10.0.0.0/8"]}
-    }
+# Configure runtime with security
+runtime = LocalRuntime(security_config=security)
+
+# Add nodes with security policies
+workflow.add_node("SecureDatabaseNode", "secure_db", {
+    "policies": [{
+        "effect": "Allow",
+        "principal": {"groups": ["data-scientists"]},
+        "action": ["read", "process"],
+        "resource": "s3://secure-bucket/*",
+        "condition": {
+            "IpAddress": {"aws:SourceIp": ["10.0.0.0/8"]}
+        }
+    }]
 })
 
 ```
@@ -376,9 +384,10 @@ secrets = SecretsManager(
 workflow = WorkflowBuilder()
 
 # Add node with secret reference
-workflow.add_node("DatabaseNode", "db_query", {}),
-    query="SELECT * FROM sensitive_data"
-))
+workflow.add_node("DatabaseNode", "db_query", {
+    "query": "SELECT * FROM sensitive_data",
+    "connection_string_secret": "db/prod/connection_string"
+})
 
 # Rotate secrets automatically
 secrets.enable_auto_rotation(

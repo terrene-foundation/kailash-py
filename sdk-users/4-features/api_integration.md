@@ -18,15 +18,27 @@ python simple_api_test.py
 The SDK provides both synchronous and asynchronous HTTP client nodes:
 
 ```python
-from kailash.nodes.api import HTTPRequestNode, AsyncHTTPRequestNode
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
 # Basic HTTP request
-http_node = HTTPRequestNode(node_id="api_call", url="https://api.example.com/data")
-result = runtime.execute_node(http_node, method="GET")
+workflow = WorkflowBuilder()
+workflow.add_node("HTTPRequestNode", "api_call", {
+    "url": "https://api.example.com/data",
+    "method": "GET"
+})
+
+runtime = LocalRuntime()
+result, run_id = runtime.execute(workflow.build())
 
 # Async version for better performance
-async_http = AsyncHTTPRequestNode(node_id="async_call", url="https://api.example.com/data")
-result = await async_runtime.execute_node_async(async_http, method="GET")
+workflow_async = WorkflowBuilder()
+workflow_async.add_node("AsyncHTTPRequestNode", "async_call", {
+    "url": "https://api.example.com/data",
+    "method": "GET"
+})
+
+result, run_id = runtime.execute(workflow_async.build())
 
 ```
 
@@ -35,20 +47,19 @@ result = await async_runtime.execute_node_async(async_http, method="GET")
 High-level interface for REST APIs with resource patterns:
 
 ```python
-from kailash.nodes.api import RESTClientNode
+from kailash.workflow.builder import WorkflowBuilder
 
-rest_client = RESTClientNode(
-    node_id="api_client",
-    base_url="https://api.example.com",
-    resource="users/{id}"
-)
+workflow = WorkflowBuilder()
+workflow.add_node("RESTClientNode", "api_client", {
+    "base_url": "https://api.example.com",
+    "resource": "users/{id}",
+    "method": "GET",
+    "path_params": {"id": 123}
+})
 
 # GET /users/123
-result = runtime.execute_node(
-    rest_client,
-    path_params={"id": 123},
-    method="GET"
-)
+runtime = LocalRuntime()
+result, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -58,43 +69,47 @@ Multiple authentication methods are supported:
 
 #### Basic Authentication
 ```python
-from kailash.nodes.api import BasicAuthNode
+workflow = WorkflowBuilder()
+workflow.add_node("BasicAuthNode", "auth", {
+    "username": "myuser",
+    "password": "mypass"
+})
 
-auth_node = BasicAuthNode(node_id="auth", username="user", password="pass")
-auth_result = runtime.execute_node(auth_node, username="myuser", password="mypass")
+runtime = LocalRuntime()
+result, run_id = runtime.execute(workflow.build())
 
 # Use auth headers in API calls
-api_headers = auth_result["headers"]
+api_headers = result["auth"]["headers"]
 
 ```
 
 #### API Key Authentication
 ```python
-from kailash.nodes.api import APIKeyNode
-
 # Header-based API key
-api_key_node = APIKeyNode(node_id="api_key", api_key="my-key")
-auth_result = runtime.execute_node(
-    api_key_node,
-    api_key="your-api-key",
-    location="header",
-    param_name="X-API-Key"
-)
+workflow = WorkflowBuilder()
+workflow.add_node("APIKeyNode", "api_key", {
+    "api_key": "your-api-key",
+    "location": "header",
+    "param_name": "X-API-Key"
+})
+
+runtime = LocalRuntime()
+result, run_id = runtime.execute(workflow.build())
 
 ```
 
 #### OAuth 2.0
 ```python
-from kailash.nodes.api import OAuth2Node
+workflow = WorkflowBuilder()
+workflow.add_node("OAuth2Node", "oauth", {
+    "token_url": "https://api.example.com/oauth/token",
+    "client_id": "your-client-id",
+    "client_secret": "your-secret",
+    "grant_type": "client_credentials"
+})
 
-oauth_node = OAuth2Node(node_id="oauth", client_id="client", client_secret="secret")
-auth_result = runtime.execute_node(
-    oauth_node,
-    token_url="https://api.example.com/oauth/token",
-    client_id="your-client-id",
-    client_secret="your-secret",
-    grant_type="client_credentials"
-)
+runtime = LocalRuntime()
+result, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -196,24 +211,24 @@ This demonstrates:
 
 ### Token Bucket Strategy
 ```python
-RateLimitConfig(
-    max_requests=100,
-    time_window=60.0,
-    strategy="token_bucket",
-    burst_limit=120,  # Allow occasional bursts
-    backoff_factor=1.5
-)
+rate_limit_config = {
+    "max_requests": 100,
+    "time_window": 60.0,
+    "strategy": "token_bucket",
+    "burst_limit": 120,  # Allow occasional bursts
+    "backoff_factor": 1.5
+}
 
 ```
 
 ### Sliding Window Strategy
 ```python
-RateLimitConfig(
-    max_requests=100,
-    time_window=60.0,
-    strategy="sliding_window",
-    backoff_factor=2.0  # More aggressive backoff
-)
+rate_limit_config = {
+    "max_requests": 100,
+    "time_window": 60.0,
+    "strategy": "sliding_window",
+    "backoff_factor": 2.0  # More aggressive backoff
+}
 
 ```
 

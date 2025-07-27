@@ -79,7 +79,7 @@ mfa_workflow.add_node("SessionManagementNode", "session_validate", {
 })
 
 # Connect MFA to session
-mfa_workflow.add_connection("mfa_check", "result", "authenticated", "input")
+mfa_workflow.add_connection("mfa_check", "authenticated", "session_validate", "input")
 ```
 
 ## 👥 User Management
@@ -89,15 +89,15 @@ mfa_workflow.add_connection("mfa_check", "result", "authenticated", "input")
 ```python
 from kailash.nodes.admin import UserManagementNode
 
-# User management configuration
-user_mgmt = UserManagementNode(
-    name="enterprise_user_management",
-    provider="ldap",  # or "database", "azure_ad", "okta"
+# User management configuration in a workflow
+workflow = WorkflowBuilder()
+workflow.add_node("UserManagementNode", "user_mgmt", {
+    "provider": "ldap",  # or "database", "azure_ad", "okta"
 
     # User lifecycle
-    auto_provisioning=True,
-    deprovisioning_policy="immediate",
-    account_lockout_enabled=True,
+    "auto_provisioning": True,
+    "deprovisioning_policy": "immediate",
+    "account_lockout_enabled": True,
 
     # Password policies
     password_min_length=12,

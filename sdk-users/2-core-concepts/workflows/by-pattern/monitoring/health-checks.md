@@ -21,7 +21,7 @@ This guide provides comprehensive monitoring and observability patterns for DevO
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.api import RESTClientNode
-from kailash.nodes.logic import SwitchNode, ConvergenceNode
+from kailash.nodes.logic import SwitchNode, MergeNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 from datetime import datetime
@@ -71,7 +71,7 @@ services = [
 result = {"services": services, "timestamp": datetime.now().isoformat()}
 """
     )
-    workflow.add_node(services_config)
+    workflow.add_node("PythonCodeNode", "services_config", {"code": services_config.code})
 
     # Health check executor
     health_checker = PythonCodeNode(
@@ -169,7 +169,7 @@ result = loop.run_until_complete(check_all_services())
 loop.close()
 """
     )
-    workflow.add_node(health_checker)
+    workflow.add_node("PythonCodeNode", "health_checker", {"code": health_checker.code})
     workflow.add_connection("services_config", "result", "health_checker", "input")
 
     # Alert decision node
@@ -177,7 +177,7 @@ loop.close()
         name="alert_decision",
         condition_field="overall_status"
     )
-    workflow.add_node(alert_decision)
+    workflow.add_node("SwitchNode", "alert_decision", {"condition_field": "overall_status"})
     workflow.add_connection("health_checker", "result", "alert_decision", "input")
 
     # Alert formatter for critical issues
@@ -213,7 +213,7 @@ result = {
 }
 """
     )
-    workflow.add_node(alert_formatter)
+    workflow.add_node("PythonCodeNode", "alert_formatter", {"code": alert_formatter.code})
     workflow.add_connection("alert_decision", "result", "alert_formatter", "input")
 
     # Success formatter
@@ -245,12 +245,11 @@ result = {
 }
 """
     )
-    workflow.add_node(success_formatter)
+    workflow.add_node("PythonCodeNode", "success_formatter", {"code": success_formatter.code})
     workflow.add_connection("alert_decision", "result", "success_formatter", "input")
 
     # Convergence for results
-    results_merger = ConvergenceNode(name="results_merger")
-    workflow.add_node(results_merger)
+    workflow.add_node("MergeNode", "results_merger", {})
     workflow.add_connection("alert_formatter", "result", "results_merger", "input")
     workflow.add_connection("success_formatter", "result", "results_merger", "input")
 
@@ -259,7 +258,7 @@ result = {
 # Execute health check
 runtime = LocalRuntime()
 workflow = create_health_check_workflow()
-results = runtime.execute(workflow.build())
+results, run_id = runtime.execute(workflow.build())
 print(json.dumps(results["results_merger"], indent=2))
 
 ```
@@ -314,7 +313,7 @@ services = {
 result = {"services": services, "check_time": datetime.now().isoformat()}
 """
     )
-    workflow.add_node(dependency_config)
+    workflow.add_node("PythonCodeNode", "dependency_config", {"code": dependency_config.code})
 
     # Dependency-aware health checker
     dep_health_checker = PythonCodeNode(
@@ -353,7 +352,7 @@ async def check_all_with_dependencies():
     for service, config in services.items():
         G.add_node(service)
         for dep in config['depends_on']:
-            G.add_connection(dep, service)  # dep -> service
+            G.add_edge(dep, service)  # dep -> service
 
     # Check all services
     async with aiohttp.ClientSession() as session:
@@ -418,7 +417,7 @@ result = loop.run_until_complete(check_all_with_dependencies())
 loop.close()
 """
     )
-    workflow.add_node(dep_health_checker)
+    workflow.add_node("PythonCodeNode", "dep_health_checker", {"code": dep_health_checker.code})
     workflow.add_connection("dependency_config", "result", "dep_health_checker", "input")
 
     return workflow
@@ -492,7 +491,7 @@ result = {
 }
 """
     )
-    workflow.add_node(metrics_config)
+    workflow.add_node("PythonCodeNode", "metrics_config", {"code": metrics_config.code})
 
     # Metrics collector
     metrics_collector = PythonCodeNode(
@@ -628,7 +627,7 @@ result = loop.run_until_complete(collect_all_metrics())
 loop.close()
 """
     )
-    workflow.add_node(metrics_collector)
+    workflow.add_node("PythonCodeNode", "metrics_collector", {"code": metrics_collector.code})
     workflow.add_connection("metrics_config", "result", "metrics_collector", "input")
 
     # Performance analyzer
@@ -718,7 +717,7 @@ result = {
 }
 """
     )
-    workflow.add_node(performance_analyzer)
+    workflow.add_node("PythonCodeNode", "performance_analyzer", {"code": performance_analyzer.code})
     workflow.add_connection("metrics_collector", "result", "performance_analyzer", "input")
 
     return workflow
@@ -794,7 +793,7 @@ result = {
 }
 """
     )
-    workflow.add_node(alert_ingestion)
+    workflow.add_node("PythonCodeNode", "alert_ingestion", {"code": alert_ingestion.code})
 
     # Alert correlation and deduplication
     alert_processor = PythonCodeNode(
@@ -909,7 +908,7 @@ result = {
 }
 """
     )
-    workflow.add_node(alert_processor)
+    workflow.add_node("PythonCodeNode", "alert_processor", {"code": alert_processor.code})
     workflow.add_connection("alert_ingestion", "result", "alert_processor", "input")
 
     # Notification dispatcher
@@ -1006,7 +1005,7 @@ result = {
 }
 """
     )
-    workflow.add_node(notification_dispatcher)
+    workflow.add_node("PythonCodeNode", "notification_dispatcher", {"code": notification_dispatcher.code})
     workflow.add_connection("alert_processor", "result", "notification_dispatcher", "input")
 
     return workflow
@@ -1100,7 +1099,7 @@ result = {
 }
 """
     )
-    workflow.add_node(system_inventory)
+    workflow.add_node("PythonCodeNode", "system_inventory", {"code": system_inventory.code})
 
     # Resource collector
     resource_collector = PythonCodeNode(
@@ -1286,7 +1285,7 @@ result = loop.run_until_complete(collect_all_systems())
 loop.close()
 """
     )
-    workflow.add_node(resource_collector)
+    workflow.add_node("PythonCodeNode", "resource_collector", {"code": resource_collector.code})
     workflow.add_connection("system_inventory", "result", "resource_collector", "input")
 
     # Capacity analyzer
@@ -1375,7 +1374,7 @@ result = {
 }
 """
     )
-    workflow.add_node(capacity_analyzer)
+    workflow.add_node("PythonCodeNode", "capacity_analyzer", {"code": capacity_analyzer.code})
     workflow.add_connection("resource_collector", "result", "capacity_analyzer", "input")
 
     return workflow
@@ -1468,7 +1467,7 @@ result = {
 }
 """
     )
-    workflow.add_node(log_sources)
+    workflow.add_node("PythonCodeNode", "log_sources", {"code": log_sources.code})
 
     # Log collector and parser
     log_collector = PythonCodeNode(
@@ -1650,7 +1649,7 @@ result = loop.run_until_complete(collect_all_logs())
 loop.close()
 """
     )
-    workflow.add_node(log_collector)
+    workflow.add_node("PythonCodeNode", "log_collector", {"code": log_collector.code})
     workflow.add_connection("log_sources", "result", "log_collector", "input")
 
     # Intelligent log analyzer
@@ -1751,7 +1750,7 @@ result = {
 }
 """
     )
-    workflow.add_node(log_analyzer)
+    workflow.add_node("PythonCodeNode", "log_analyzer", {"code": log_analyzer.code})
     workflow.add_connection("log_collector", "result", "log_analyzer", "input")
 
     return workflow
@@ -1829,7 +1828,7 @@ result = {
 }
 """
     )
-    workflow.add_node(uptime_config)
+    workflow.add_node("PythonCodeNode", "uptime_config", {"code": uptime_config.code})
 
     # Multi-region uptime checker
     uptime_checker = PythonCodeNode(
@@ -1974,7 +1973,7 @@ result = loop.run_until_complete(check_all_services())
 loop.close()
 """
     )
-    workflow.add_node(uptime_checker)
+    workflow.add_node("PythonCodeNode", "uptime_checker", {"code": uptime_checker.code})
     workflow.add_connection("uptime_config", "result", "uptime_checker", "input")
 
     # SLA compliance analyzer
@@ -2081,7 +2080,7 @@ result = {
 }
 """
     )
-    workflow.add_node(sla_analyzer)
+    workflow.add_node("PythonCodeNode", "sla_analyzer", {"code": sla_analyzer.code})
     workflow.add_connection("uptime_checker", "result", "sla_analyzer", "input")
 
     return workflow
@@ -2104,10 +2103,6 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = WorkflowBuilder()
-# Runtime should be created separately
-runtime = LocalRuntime()
-
 def create_production_dashboard_workflow():
     """
     Unified dashboard workflow that combines all monitoring data into actionable insights.
@@ -2171,8 +2166,7 @@ result = {
 }
 """
     )
-workflow = WorkflowBuilder()
-workflow.add_node(dashboard_config)
+    workflow.add_node("PythonCodeNode", "dashboard_config", {"code": dashboard_config.code})
 
     # Collect all monitoring data (would run sub-workflows in production)
     data_collector = PythonCodeNode(
@@ -2262,10 +2256,8 @@ result = {
 }
 """
     )
-workflow = WorkflowBuilder()
-workflow.add_node(data_collector)
-workflow = WorkflowBuilder()
-workflow.add_connection("dashboard_config", "result", "data_collector", "input")
+    workflow.add_node("PythonCodeNode", "data_collector", {"code": data_collector.code})
+    workflow.add_connection("dashboard_config", "result", "data_collector", "input")
 
     # Dashboard analyzer and formatter
     dashboard_analyzer = PythonCodeNode(
@@ -2433,10 +2425,8 @@ result = {
 }
 """
     )
-workflow = WorkflowBuilder()
-workflow.add_node(dashboard_analyzer)
-workflow = WorkflowBuilder()
-workflow.add_connection("data_collector", "result", "dashboard_analyzer", "input")
+    workflow.add_node("PythonCodeNode", "dashboard_analyzer", {"code": dashboard_analyzer.code})
+    workflow.add_connection("data_collector", "result", "dashboard_analyzer", "input")
 
     # Dashboard publisher
     dashboard_publisher = PythonCodeNode(
@@ -2524,10 +2514,8 @@ result = {
 }
 """
     )
-workflow = WorkflowBuilder()
-workflow.add_node(dashboard_publisher)
-workflow = WorkflowBuilder()
-workflow.add_connection("dashboard_analyzer", "result", "dashboard_publisher", "input")
+    workflow.add_node("PythonCodeNode", "dashboard_publisher", {"code": dashboard_publisher.code})
+    workflow.add_connection("dashboard_analyzer", "result", "dashboard_publisher", "input")
 
     return workflow
 
@@ -2538,22 +2526,19 @@ if __name__ == "__main__":
     # Run health check
     print("=== HEALTH CHECK ===")
     health_workflow = create_health_check_workflow()
-runtime = LocalRuntime()
-runtime.execute(workflow.build(), health_workflow)
+    health_results, run_id = runtime.execute(health_workflow.build())
     print(json.dumps(health_results["results_merger"], indent=2))
 
     # Run performance monitoring
     print("\\n=== PERFORMANCE MONITORING ===")
     perf_workflow = create_performance_tracking_workflow()
-runtime = LocalRuntime()
-runtime.execute(workflow.build(), perf_workflow)
+    perf_results, run_id = runtime.execute(perf_workflow.build())
     print(json.dumps(perf_results["performance_analyzer"]["analysis"], indent=2))
 
     # Run production dashboard
     print("\\n=== PRODUCTION DASHBOARD ===")
     dashboard_workflow = create_production_dashboard_workflow()
-runtime = LocalRuntime()
-runtime.execute(workflow.build(), dashboard_workflow)
+    dashboard_results, run_id = runtime.execute(dashboard_workflow.build())
     print(json.dumps(dashboard_results["dashboard_publisher"]["dashboard_url"], indent=2))
 
 ```

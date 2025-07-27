@@ -545,8 +545,8 @@ spec:
 ### LLM Agent with MCP Tools
 
 ```python
-from kailash.core import LocalRuntime
-from kailash.nodes.ai import LLMAgentNode
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 # Create runtime
 runtime = LocalRuntime()
@@ -564,57 +564,51 @@ agent_config = {
     }
 }
 
-agent = LLMAgentNode(
-    name="mcp_agent",
-    **agent_config
-)
+# Create workflow with MCP-enabled agent
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "mcp_agent", agent_config)
 
-# The agent can now discover and use MCP tools
-response = await agent.process({
-    "messages": [{
-        "role": "user",
-        "content": "Calculate the sum of 15 and 27"
-    }]
+# Execute workflow
+results, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "mcp_agent": {
+        "messages": [{
+            "role": "user",
+            "content": "Calculate the sum of 15 and 27"
+        }]
+    }
 })
+
+response = results["mcp_agent"]["result"]
 ```
 
 ### Workflow with MCP Integration
 
 ```python
-from kailash.core import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 
 # Create workflow with MCP tools
-builder = WorkflowBuilder("mcp-workflow")
+builder = WorkflowBuilder()
 
 # Add MCP-enabled agent
-builder.add_node(
-    "agent",
-    "LLMAgentNode",
-    config={
-        "mcp_servers": ["mcp://localhost:8080"],
-        "enable_mcp": True
-    }
-)
+builder.add_node("LLMAgentNode", "agent", {
+    "mcp_servers": ["mcp://localhost:8080"],
+    "enable_mcp": True
+})
 
 # Add data processor that uses MCP resources
-builder.add_node(
-    "processor",
-    "PythonCodeNode",
-    config={
-        "code": """
-async def process(context):
-    # Access MCP resources
-    mcp_client = context.get_mcp_client()
-    schema = await mcp_client.get_resource("database_schema")
+builder.add_node("PythonCodeNode", "processor", {
+    "code": """
+# Access MCP resources from parameters
+mcp_data = parameters.get('mcp_data', {})
+schema = mcp_data.get('database_schema', {})
 
-    # Process with schema
-    return {"processed": True, "schema": schema}
+# Process with schema
+result = {"processed": True, "schema": schema}
 """
-    }
-)
+})
 
-# Connect nodes
-builder.add_connection("agent", "output", "processor", "input")
+# Connect nodes with proper 4-parameter syntax
+builder.add_connection("agent", "result", "processor", "mcp_data")
 
 workflow = builder.build()
 ```
@@ -639,14 +633,15 @@ class MCPAgentOrchestrator:
 
     def create_specialized_agent(self, name, specialty, mcp_servers):
         """Create agent specialized for specific tasks."""
-        agent = LLMAgentNode(
-            name=f"{name}_agent",
-            system_prompt=f"You are a specialist in {specialty}.",
-            mcp_servers=[self.mcp_servers[s]["url"] for s in mcp_servers],
-            enable_mcp=True
-        )
-        self.agents[name] = agent
-        return agent
+        # Create workflow for specialized agent
+        workflow = WorkflowBuilder()
+        workflow.add_node("LLMAgentNode", f"{name}_agent", {
+            "system_prompt": f"You are a specialist in {specialty}.",
+            "mcp_servers": [self.mcp_servers[s]["url"] for s in mcp_servers],
+            "enable_mcp": True
+        })
+        self.agents[name] = workflow.build()
+        return self.agents[name]
 
     async def route_task(self, task):
         """Route task to appropriate agent based on content."""
@@ -658,10 +653,13 @@ class MCPAgentOrchestrator:
         else:
             agent = self.agents["general"]
 
-        # Execute with agent
-        return await agent.process({
-            "messages": [{"role": "user", "content": task}]
+        # Execute with agent workflow
+        results, run_id = await self.runtime.execute_async(agent, parameters={
+            f"{agent.nodes[0].id}": {
+                "messages": [{"role": "user", "content": task}]
+            }
         })
+        return results[list(results.keys())[0]]["result"]
 
 # Usage
 orchestrator = MCPAgentOrchestrator(runtime)

@@ -1,4 +1,3 @@
-from kailash.workflow.builder import WorkflowBuilder
 # Docker Deployment Workflows
 
 Deploy your Kailash SDK workflows using Docker for consistent, scalable execution.
@@ -7,29 +6,27 @@ Deploy your Kailash SDK workflows using Docker for consistent, scalable executio
 
 ```python
 """Basic workflow that runs in Docker container"""
-from kailash.workflow import Workflow
-from kailash.nodes.base import InputNode, OutputNode
-from kailash.nodes.data import CSVReaderNode, DataTransformerNode
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.docker import DockerRuntime
 
 # Create workflow
 workflow = WorkflowBuilder()
 
 # Add nodes
-workflow.add_node("InputNode", "input", {}))
-workflow.add_node("CSVReaderNode", "reader", {}))
-workflow.add_node("DataTransformerNode", "transformer", {}))
-workflow.add_node("OutputNode", "output", {}))
+workflow.add_node("InputNode", "input", {})
+workflow.add_node("CSVReaderNode", "reader", {})
+workflow.add_node("DataTransformerNode", "transformer", {})
+workflow.add_node("OutputNode", "output", {})
 
 # Connect nodes
-workflow.add_connection("input", "reader", "file_path", "file_path")
-workflow.add_connection("reader", "transformer", "data", "input_data")
-workflow.add_connection("transformer", "output", "result", "result")
+workflow.add_connection("input", "file_path", "reader", "file_path")
+workflow.add_connection("reader", "data", "transformer", "input_data")
+workflow.add_connection("transformer", "result", "output", "result")
 
 # Run in Docker
 runtime = DockerRuntime()
 result = runtime.execute(
-    workflow,
+    workflow.build(),
     parameters={"file_path": "/data/input.csv"},
     docker_config={
         "image": "kailash-sdk:latest",
@@ -44,24 +41,22 @@ result = runtime.execute(
 
 ```python
 """Workflow using multiple Docker services"""
-from kailash.workflow import Workflow
-from kailash.nodes.api import DatabaseNode, CacheNode
-from kailash.nodes.data import StreamProcessorNode
+from kailash.workflow.builder import WorkflowBuilder
 
 workflow = WorkflowBuilder()
 
 # Database operations
-workflow.add_node("DatabaseNode", "db_reader", {}))
+workflow.add_node("DatabaseNode", "db_reader", {})
 
 # Cache layer
-workflow.add_node("CacheNode", "cache", {}))
+workflow.add_node("CacheNode", "cache", {})
 
 # Stream processing
-workflow.add_node("StreamProcessorNode", "processor", {}))
+workflow.add_node("StreamProcessorNode", "processor", {})
 
 # Connect with caching strategy
-workflow.add_connection("db_reader", "cache", "data", "data")
-workflow.add_connection("cache", "processor", "data", "events")
+workflow.add_connection("db_reader", "data", "cache", "data")
+workflow.add_connection("cache", "data", "processor", "events")
 
 # Docker Compose Configuration
 docker_compose = """
@@ -99,12 +94,14 @@ services:
 ```python
 """Production-ready Docker deployment"""
 import os
-from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.docker import DockerRuntime
 from kailash.security import SecurityConfig
 
-# Load from environment
-workflow = Workflow.from_yaml("workflows/production.yaml")
+# Create workflow
+workflow = WorkflowBuilder()
+# Load nodes from configuration or add them programmatically
+# workflow.add_node("NodeType", "node_id", {})
 
 # Configure security
 security = SecurityConfig(
@@ -157,11 +154,11 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 
 ```python
 """Deploy workflow as Kubernetes Job"""
-from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.kubernetes import KubernetesRuntime
 
 workflow = WorkflowBuilder()
-# Workflow setup goes here  # ... add nodes ...
+# Add nodes to workflow
 
 # Kubernetes Job manifest
 k8s_job = {
@@ -210,15 +207,20 @@ runtime.deploy_job(workflow, k8s_job)
 ```python
 """Configure workflows for different environments"""
 import os
-from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.docker import DockerRuntime
+import yaml
 
 # Load environment-specific config
 env = os.environ.get("ENVIRONMENT", "development")
 config_file = f"config/{env}.yaml"
 
-workflow = Workflow.from_yaml("workflow.yaml")
-workflow.apply_config(config_file)
+# Create workflow using WorkflowBuilder
+workflow = WorkflowBuilder()
+# Load workflow configuration from YAML
+with open("workflow.yaml", "r") as f:
+    workflow_config = yaml.safe_load(f)
+# Apply configuration to workflow (add nodes based on config)
 
 # Environment-specific Docker settings
 docker_configs = {
@@ -241,7 +243,7 @@ docker_configs = {
 }
 
 runtime = DockerRuntime()
-runtime.execute(workflow, docker_config=docker_configs[env])
+result, run_id = runtime.execute(workflow.build(), docker_config=docker_configs[env])
 
 ```
 

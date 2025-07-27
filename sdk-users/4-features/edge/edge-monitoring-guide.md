@@ -273,15 +273,15 @@ workflow.add_node(
 )
 
 # Connect workflow with metric recording loop
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("monitor", "result", "simulator", "input")
 # Use PythonCodeNode to extract latency from metrics array
 workflow.add_node("PythonCodeNode", "extract_latency", {
     "code": "result = {'value': data['metrics'][0]['latency'] if data.get('metrics') else 0.0}"
 })
 workflow.add_connection("simulator", "metrics", "extract_latency", "data")
 workflow.add_connection("extract_latency", "result", "recorder", "value")
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("recorder", "result", "health", "input")
+workflow.add_connection("health", "result", "analytics", "input")
 
 # Execute
 runtime = LocalRuntime()
@@ -346,7 +346,7 @@ workflow.add_node("SwitchNode", "warm_check", {
     "value": True
 })
 workflow.add_connection("decision", "output", "warm_check", "input_data")
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("warm_check", "result", "warmer", "input")
 ```
 
 ## Best Practices
