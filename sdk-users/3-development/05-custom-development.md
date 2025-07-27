@@ -26,7 +26,7 @@ workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 ```python
 # ✅ Custom nodes use class references
 from myapp.nodes import CustomProcessorNode
-workflow.add_node(CustomProcessorNode, "processor", {"threshold": 0.8})
+workflow.add_node("CustomProcessorNode", "processor", {"threshold": 0.8})
 ```
 
 #### **Common Mistake**
@@ -132,7 +132,7 @@ class BrokenNode(Node):
         return {"result": data}
 
 # In workflow:
-workflow.add_node(BrokenNode, "broken", {"data": [1,2,3]})
+workflow.add_node("BrokenNode", "broken", {"data": [1,2,3]})
 # The "data" parameter is SILENTLY DROPPED!
 ```
 
@@ -262,7 +262,7 @@ from src.myapp.nodes.custom import CustomProcessorNode
 workflow = WorkflowBuilder()
 
 # ✅ CORRECT: Use class reference for custom nodes
-workflow.add_node(CustomProcessorNode, "processor", {
+workflow.add_node("CustomProcessorNode", "processor", {
     "threshold": 0.8,
     "mode": "advanced"
 })
@@ -325,7 +325,7 @@ def test_custom_node_in_workflow():
     workflow = WorkflowBuilder()
 
     # Add custom node
-    workflow.add_node(CustomProcessorNode, "processor", {
+    workflow.add_node("CustomProcessorNode", "processor", {
         "threshold": 0.5
     })
 
@@ -371,7 +371,7 @@ def run(self, **kwargs):  # Implement run() instead
 workflow.add_node("MyCustomNode", "node1", {})  # Not registered!
 
 # ✅ CORRECT
-workflow.add_node(MyCustomNode, "node1", {})  # Use class
+workflow.add_node("MyCustomNode", "node1", {})  # Use class
 ```
 
 ### **4. Relative Imports**
@@ -390,7 +390,8 @@ from src.myapp.nodes.utils import helper  # Absolute import
 For async operations, inherit from `AsyncNode`:
 
 ```python
-from kailash.nodes.base import AsyncNode, NodeParameter
+from kailash.nodes.base_async import AsyncNode
+from kailash.nodes.base import NodeParameter
 
 class AsyncDataFetcher(AsyncNode):
     """Async node for external data fetching."""

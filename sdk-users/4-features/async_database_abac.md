@@ -163,8 +163,13 @@ node = AsyncSQLDatabaseNode(
 
 # Execute in workflow
 workflow = WorkflowBuilder()
-workflow.add_node("users", node)
-results = await runtime.execute_workflow(workflow)
+workflow.add_node("AsyncSQLDatabaseNode", "users", {
+    "query": "SELECT * FROM users WHERE active = true",
+    "pool_size": 10,
+    "max_pool_size": 20
+})
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -671,19 +676,24 @@ async def secure_data_pipeline():
     workflow = WorkflowBuilder()
 
     # Add async database query
-    workflow.add_node("AsyncSQLDatabaseNode", "financial_query", {}) as total_expenses,
+    workflow.add_node("AsyncSQLDatabaseNode", "financial_query", {
+        "query": """
+            SELECT department,
+                SUM(amount) as total_expenses,
                 AVG(amount) as avg_expense,
                 COUNT(*) as transaction_count
             FROM expenses
             WHERE date >= :start_date
             GROUP BY department
         """,
-        params={"start_date": "2024-01-01"},
-        pool_size=20
-    ))
+        "params": {"start_date": "2024-01-01"},
+        "pool_size": 20
+    })
 
     # Add vector search for similar transactions
-    workflow.add_node("AsyncPostgreSQLVectorNode", "similar_transactions", {}))
+    workflow.add_node("AsyncPostgreSQLVectorNode", "similar_transactions", {
+        "query": "SELECT * FROM transactions WHERE vector_similarity > 0.8"
+    })
 
     # Create user
     user = UserContext(

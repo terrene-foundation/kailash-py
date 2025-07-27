@@ -11,7 +11,7 @@ from kailash.workflow.async_patterns import AsyncPatterns
 
 # Build high-performance async workflow with built-in patterns
 workflow = (
-    AsyncWorkflowBuilder("high_performance_pipeline")
+    AsyncWorkflowBuilder()
     # Resource management
     .with_database("db", host="localhost", min_size=10, max_size=50)
     .with_http_client("api", connection_limit=100)
@@ -108,7 +108,7 @@ def analyze_and_optimize_workflow(workflow, initial_params):
     # Execute workflow with tracking
     runtime = LocalRuntime()
     start_time = time.time()
-    results, run_id = runtime.execute(workflow, parameters=initial_params)
+    results, run_id = runtime.execute(workflow.build(), parameters=initial_params)
     baseline_time = time.time() - start_time
 
     # Complete baseline analysis
@@ -158,7 +158,7 @@ def analyze_and_optimize_workflow(workflow, initial_params):
         )
 
         opt_start = time.time()
-        opt_results, opt_run_id = runtime.execute(optimized_workflow, parameters=initial_params)
+        opt_results, opt_run_id = runtime.execute(optimized_workflow.build(), parameters=initial_params)
         opt_time = time.time() - opt_start
 
         analyzer.complete_cycle_analysis(opt_trace, converged=True, termination_reason="optimization_test")

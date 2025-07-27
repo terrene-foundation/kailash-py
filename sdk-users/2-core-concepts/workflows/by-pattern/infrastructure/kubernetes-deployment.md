@@ -1,4 +1,3 @@
-from kailash.workflow.builder import WorkflowBuilder
 # Kubernetes Deployment Workflows
 
 Deploy Kailash SDK workflows on Kubernetes for production-grade scalability and reliability.
@@ -7,15 +6,14 @@ Deploy Kailash SDK workflows on Kubernetes for production-grade scalability and 
 
 ```python
 """Deploy workflow as Kubernetes Deployment"""
-from kailash.workflow import Workflow
-from kailash.nodes.api import HTTPEndpointNode
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.kubernetes import KubernetesRuntime
 
 # Create API workflow
 workflow = WorkflowBuilder()
 
 # Add HTTP endpoint
-workflow.add_node("HTTPEndpointNode", "endpoint", {}))
+workflow.add_node("HTTPEndpointNode", "endpoint", {})
 
 # Kubernetes Deployment manifest
 k8s_deployment = """
@@ -88,14 +86,13 @@ spec:
 
 ```python
 """Batch processing with Kubernetes Jobs"""
-from kailash.workflow import Workflow
-from kailash.nodes.data import BatchProcessorNode
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.kubernetes import KubernetesRuntime
 
 workflow = WorkflowBuilder()
 
 # Add batch processor
-workflow.add_node("BatchProcessorNode", "processor", {}))
+workflow.add_node("BatchProcessorNode", "processor", {})
 
 # Kubernetes Job with CronJob
 k8s_cronjob = """
@@ -199,20 +196,21 @@ spec:
 """
 
 # Workflow with metrics
-from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.tracking import MetricsCollector
 
 workflow = WorkflowBuilder()
-workflow.metrics = MetricsCollector()
+metrics = MetricsCollector()
 
-# Add metrics endpoint for HPA
-@workflow.metrics_endpoint("/metrics")
-def get_metrics():
-    return {
-        "workflow_queue_depth": metrics.get_queue_depth(),
-        "processing_rate": metrics.get_processing_rate(),
-        "error_rate": metrics.get_error_rate()
+# Add metrics collection node
+workflow.add_node("MetricsCollectorNode", "metrics_collector", {
+    "metrics_path": "/metrics",
+    "metrics_config": {
+        "workflow_queue_depth": "queue_depth",
+        "processing_rate": "processing_rate",
+        "error_rate": "error_rate"
     }
+})
 
 ```
 
@@ -270,21 +268,18 @@ spec:
 """
 
 # Workflow with state management
-from kailash.workflow import Workflow
-from kailash.workflow.state import StatefulWorkflow
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-workflow = StatefulWorkflow(
-    "stateful-processor",
-    "Stateful Processing Workflow",
-    state_backend="disk",
-    state_path="/data/state"
-)
+workflow = WorkflowBuilder()
 
 # Add stateful nodes
-workflow.add_stateful_node("accumulator", AccumulatorNode(
-    checkpoint_interval=100,
-    recovery_mode="continue"
-))
+workflow.add_node("AccumulatorNode", "accumulator", {
+    "checkpoint_interval": 100,
+    "recovery_mode": "continue",
+    "state_backend": "disk",
+    "state_path": "/data/state"
+})
 
 ```
 
@@ -350,14 +345,17 @@ spec:
 """
 
 # Workflow with distributed tracing
-from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.observability import TracingMiddleware
 
 workflow = WorkflowBuilder()
-workflow.add_middleware(TracingMiddleware(
-    service_name="workflow-api",
-    jaeger_endpoint="http://jaeger-collector:14268/api/traces"
-))
+# In production, configure tracing at runtime level
+runtime = LocalRuntime(
+    middleware=[TracingMiddleware(
+        service_name="workflow-api",
+        jaeger_endpoint="http://jaeger-collector:14268/api/traces"
+    )]
+)
 
 ```
 
@@ -414,7 +412,7 @@ namespace: production
 
 # Python configuration
 import os
-from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.config import KubernetesConfig
 
 # Load environment-specific config
@@ -426,7 +424,10 @@ config = KubernetesConfig(
     auto_reload=True
 )
 
-workflow = Workflow.from_kubernetes_config(config)
+# Create workflow using standard builder
+workflow = WorkflowBuilder()
+# Configure workflow based on Kubernetes config
+# Add nodes based on environment configuration
 
 ```
 

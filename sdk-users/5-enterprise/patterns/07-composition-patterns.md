@@ -17,8 +17,8 @@ def create_data_validation_workflow():
     """Reusable data validation workflow"""
     workflow = WorkflowBuilder()
 
-    workflow.add_node("PythonCodeNode", "schema_check", {}),
-        code="""
+    workflow.add_node("PythonCodeNode", "schema_check", {
+        "code": """
 # Validate data schema
 required_fields = ['id', 'name', 'value', 'timestamp']
 missing_fields = [f for f in required_fields if f not in data[0].keys()]
@@ -35,10 +35,10 @@ for record in data:
 
 result = {'valid': True, 'record_count': len(data), 'data': data}
 """
-    )
+    })
 
-    workflow.add_node("PythonCodeNode", "quality_check", {}),
-        code="""
+    workflow.add_node("PythonCodeNode", "quality_check", {
+        "code": """
 # Check data quality
 issues = []
 clean_data = []
@@ -58,25 +58,26 @@ result = {
     'quality_score': len(clean_data) / len(data) if data else 0
 }
 """
-    )
+    })
 
-    workflow.add_connection("schema_check", "quality_check", "result.data", "data")
+    workflow.add_connection("schema_check", "data", "quality_check", "data")
     return workflow
 
 # Create main workflow that uses sub-workflows
 main_workflow = WorkflowBuilder()
 
 # Add sub-workflow as a node
-main_workflow.add_node("WorkflowNode", "validator", {}),
-    workflow=create_data_validation_workflow(),
+main_workflow.add_node("WorkflowNode", "validator", {
+    "workflow": create_data_validation_workflow(),
     # Map main workflow data to sub-workflow inputs
-    input_# mapping removed,
+    "input_mapping": {"data": "data"},
     # Map sub-workflow outputs to main workflow
-    output_# mapping removed)
+    "output_mapping": {"validation_result": "result"}
+})
 
 # Continue with main workflow
-main_workflow.add_node("PythonCodeNode", "processor", {}),
-    code="""
+main_workflow.add_node("PythonCodeNode", "processor", {
+    "code": """
 # Process validated data
 print(f"Processing {validation_result['quality_score']:.0%} quality data")
 
@@ -97,9 +98,9 @@ result = {
     }
 }
 """
-)
+})
 
-main_workflow.add_connection("validator", "processor", "validation_result", "validation_result")
+main_workflow.add_connection("validator", "validation_result", "processor", "validation_result")
 
 # Execute main workflow
 runtime = LocalRuntime()

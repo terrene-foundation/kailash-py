@@ -45,6 +45,7 @@ examples_dir = project_root / "examples"
 sys.path.insert(0, str(examples_dir))
 
 from examples.utils.paths import get_data_dir
+from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import SwitchNode
 from kailash.runtime.local import LocalRuntime
@@ -735,21 +736,22 @@ def example3_conditional_retry_loops():
     workflow.connect("checker", "prep2")
     workflow.connect("prep2", "switch", mapping={"input_data": "input_data"})
 
-    # Conditional routing from switch
-    workflow.connect(
-        "switch",
-        "processor",  # Cycle back to B
-        mapping={"case_retry": "data"},
-        cycle=True,
-        max_iterations=10,
-        convergence_check="should_continue == False",
-    )
-
+    # Route to completion when converged
     workflow.connect(
         "switch",
         "output",  # Continue to E
         mapping={"case_finish": "data"},
     )
+
+    # Build workflow first, then create cycle for conditional retry
+    built_workflow = workflow.build()
+    cycle_builder = built_workflow.create_cycle("conditional_retry_cycle")
+    cycle_builder.connect(
+        "switch", "processor", condition="case_retry", mapping={"case_retry": "data"}
+    )
+    cycle_builder.max_iterations(10)
+    cycle_builder.converge_when("should_continue == False")
+    cycle_builder.build()
 
     # Execute the conditional cycle
     runtime = LocalRuntime()
@@ -758,7 +760,7 @@ def example3_conditional_retry_loops():
     print("Will iterate until quality >= 0.8 or max 10 iterations")
 
     results, _ = runtime.execute(
-        workflow,
+        built_workflow,
         parameters={
             "input": {"size": 5, "base_quality": 0.3},
             "checker": {"threshold": 0.8},

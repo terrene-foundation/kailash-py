@@ -267,7 +267,7 @@ The system tracks:
 
 ```python
 # Get current metrics
-result = await warming_node.execute_async(operation="get_metrics")
+result = warming_node.execute(operation="get_metrics")
 print(f"Precision: {result['metrics']['precision']:.2f}")
 print(f"Recall: {result['metrics']['recall']:.2f}")
 print(f"F1 Score: {result['metrics']['f1_score']:.2f}")

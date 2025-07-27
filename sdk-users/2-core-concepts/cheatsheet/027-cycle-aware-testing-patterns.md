@@ -8,68 +8,74 @@
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.logic import SwitchNode
 
 # ❌ WRONG: Parameters at initialization
 switch_node = SwitchNode(condition_field="should_continue")  # THIS IS WRONG!
 
 # ✅ CORRECT: Parameters at runtime
 workflow = WorkflowBuilder()
-workflow.add_node("SwitchNode", "switch", {}))
+workflow.add_node("SwitchNode", "switch", {})
 
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(workflow.build(), parameters={
     "switch": {
         "condition_field": "should_continue",
         "operator": "==",
-        "value": True
+        "value": True,
+        "input_data": {"should_continue": True}
     }
 })
 
 ```
 
-### 2. Self-Cycle Pattern
+### 2. Quality Improvement Cycle Pattern
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.base import CycleAwareNode, NodeParameter
-from typing import Dict, Any
 
-class SimpleQualityImprover(CycleAwareNode):
-    def get_parameters(self) -> Dict[str, NodeParameter]:
-        return {
-            "quality": NodeParameter(name="quality", type=float, required=False, default=0.0),
-            "target": NodeParameter(name="target", type=float, required=False, default=0.8)
-        }
+# Quality improvement using PythonCodeNode with cycle awareness
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "improver", {
+    "code": """
+# Get quality from input_data or use parameter default
+try:
+    quality = input_data.get('quality', 0.0)
+    target = input_data.get('target', 0.8)
+except NameError:
+    # First iteration - use node parameters
+    quality = 0.0
+    target = 0.8
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        quality = kwargs.get("quality", 0.0)
-        target = kwargs.get("target", 0.8)
+# Improve quality
+improved_quality = min(1.0, quality + 0.1)
+converged = improved_quality >= target
 
-        # Improve quality
-        improved_quality = min(1.0, quality + 0.1)
-        converged = improved_quality >= target
+result = {
+    'quality': improved_quality,
+    'converged': converged,
+    'target': target
+}
+"""
+})
 
-        return {
-            "quality": improved_quality,
-            "converged": converged,  # Self-contained convergence
-            "iteration": self.get_iteration(context)
-        }
+# Build workflow and create cycle
+built_workflow = workflow.build()
+cycle_builder = built_workflow.create_cycle("quality_improvement")
+cycle_builder.connect("improver", "improver", mapping={"result": "input_data"}) \
+             .max_iterations(10) \
+             .converge_when("converged == True") \
+             .timeout(300) \
+             .build()
 
-# Test self-cycle
-def test_self_cycle():
-    workflow = WorkflowBuilder()
-    workflow.add_node("improver", SimpleQualityImprover())
+runtime = LocalRuntime()
+results, run_id = runtime.execute(built_workflow, parameters={
+    "improver": {"quality": 0.0, "target": 0.8}
+})
 
-    # Connect to itself
-    # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
-
-    runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow.build())
-
-    # Test for progress, not exact values
-    final_result = results.get("improver", {})
-    assert final_result.get("quality", 0) > 0.0
+# Test for progress, not exact values
+final_result = results.get("improver", {}).get("result", {})
+assert final_result.get("quality", 0) >= 0.8
+assert final_result.get("converged") == True
 
 ```
 
@@ -77,77 +83,78 @@ def test_self_cycle():
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.code import PythonCodeNode
 
-# ✅ CORRECT: Provide code at initialization
+# ✅ CORRECT: Use input_data with try/except pattern
 workflow = WorkflowBuilder()
-workflow.add_node("PythonCodeNode", "calculator", {}))
-
-# Connect in cycle with parameter handling
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
-
-# Runtime code with try/except pattern
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={
-    "calculator": {
-        "code": """
+workflow.add_node("PythonCodeNode", "calculator", {
+    "code": """
+# Cycle-aware parameter handling
 try:
-    x = result  # From previous iteration
-except:
+    x = input_data.get('result', 2)  # From previous iteration
+except NameError:
     x = 2  # First iteration
 
 result = x * x
 """
-    }
 })
+
+# Connect in cycle with proper mapping
+built_workflow = workflow.build()
+cycle_builder = built_workflow.create_cycle("calculation_cycle")
+cycle_builder.connect("calculator", "calculator", mapping={"result": "input_data"}) \
+             .max_iterations(3) \
+             .converge_when("result >= 16") \
+             .timeout(300) \
+             .build()
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(built_workflow)
 
 ```
 
 ## 🧪 Test Patterns
 
-### Parameter Preservation Test
+### Simple Counter Test
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.base import CycleAwareNode, NodeParameter
-from typing import Dict, Any
 
-class CounterNode(CycleAwareNode):
-    def get_parameters(self) -> Dict[str, NodeParameter]:
-        return {
-            "increment": NodeParameter(name="increment", type=int, required=False, default=1),
-            "start_value": NodeParameter(name="start_value", type=int, required=False, default=0)
-        }
-
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        increment = kwargs.get("increment", 1)
-        start_value = kwargs.get("start_value", 0)
-        iteration = self.get_iteration(context)
-
-        # Calculate based on iteration
-        current_count = start_value + (iteration * increment)
-
-        return {
-            "count": current_count,
-            "increment": increment,  # Preserve parameters
-            "start_value": start_value
-        }
-
-def test_parameter_preservation():
+def test_simple_counter():
     workflow = WorkflowBuilder()
-    workflow.add_node("CounterNode", "counter", {}))
+    workflow.add_node("PythonCodeNode", "counter", {
+        "code": """
+# Get current count from input_data or start at 0
+try:
+    current_count = input_data.get('count', 0)
+except NameError:
+    current_count = 0
 
-    # Self-cycle preserves parameters
-    # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+new_count = current_count + 1
+done = new_count >= 3
 
-    runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow, parameters={
-        "counter": {"increment": 2, "start_value": 10}
+result = {
+    'count': new_count,
+    'done': done
+}
+"""
     })
 
-    # Test that parameters affected the result
-    counter_result = results.get("counter", {})
-    assert counter_result.get("count", 0) > 10  # Should be affected by start_value
+    # Build workflow and create cycle
+    built_workflow = workflow.build()
+    cycle_builder = built_workflow.create_cycle("counter_cycle")
+    cycle_builder.connect("counter", "counter", mapping={"result": "input_data"}) \
+                 .max_iterations(5) \
+                 .converge_when("done == True") \
+                 .timeout(300) \
+                 .build()
+
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(built_workflow)
+
+    # Test that cycle worked
+    final_result = results.get("counter", {}).get("result", {})
+    assert final_result.get("count") == 3
+    assert final_result.get("done") == True
 
 ```
 
@@ -172,7 +179,6 @@ def test_realistic():
         assert final_quality >= 0.8
 
     # Test that process worked
-    assert result.get("iteration", 0) >= 0
     assert "quality" in result
 
 ```
@@ -182,144 +188,56 @@ def test_realistic():
 def test_conditional_cycle():
     from kailash.workflow.builder import WorkflowBuilder
     from kailash.runtime.local import LocalRuntime
-    from kailash.nodes.logic import SwitchNode
-    from kailash.nodes.base import CycleAwareNode
-    from typing import Dict, Any
 
-    class ConditionalNode(CycleAwareNode):
-        def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-            data = kwargs.get("data", [])
-            iteration = self.get_iteration(context)
-
-            # Process data
-            processed_data = [x * (1 + 0.1 * iteration) for x in data]
-            current_sum = sum(processed_data)
-            should_exit = current_sum >= 100
-
-            return {
-                "data": processed_data,
-                "should_exit": should_exit,
-                "input_data": {  # Package for SwitchNode
-                    "should_exit": should_exit,
-                    "data": processed_data
-                }
-            }
-
+    # Simple processor for conditional routing
     workflow = WorkflowBuilder()
-    workflow.add_node("ConditionalNode", "processor", {}))
-    workflow.add_node("SwitchNode", "switch", {}))
+    workflow.add_node("PythonCodeNode", "processor", {
+        "code": """
+# Get data from input_data or use defaults
+try:
+    data = input_data.get('data', [1, 2, 3])
+    iteration = input_data.get('iteration', 0)
+except NameError:
+    data = [1, 2, 3]
+    iteration = 0
 
-    # Connect with proper mapping
-    workflow.add_connection("processor", "switch", "input_data", "input_data")
-    # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+current_iteration = iteration + 1
+processed_sum = sum(data) + current_iteration
+should_exit = processed_sum >= 20
+
+result = {
+    'data': data,
+    'iteration': current_iteration,
+    'sum': processed_sum,
+    'should_exit': should_exit
+}
+"""
+    })
+
+    workflow.add_node("SwitchNode", "switch", {})
+
+    # Connect processor to switch
+    workflow.add_connection("processor", "result", "switch", "input_data")
+
+    # Build workflow and create cycle
+    built_workflow = workflow.build()
+    cycle_builder = built_workflow.create_cycle("conditional_cycle")
+    cycle_builder.connect("switch", "processor", mapping={"true_output": "input_data"}) \
+                 .max_iterations(10) \
+                 .converge_when("should_exit == True") \
+                 .timeout(300) \
+                 .build()
 
     runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow, parameters={
-        "processor": {"data": [5, 10, 15]},
+    results, run_id = runtime.execute(built_workflow, parameters={
+        "processor": {"data": [1, 2, 3]},
         "switch": {"condition_field": "should_exit", "operator": "==", "value": True}
     })
 
     # Test that workflow completed
-    processor_result = results.get("processor", {})
+    processor_result = results.get("processor", {}).get("result", {})
     assert processor_result is not None
-
-```
-
-### Error Handling Test
-```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
-from kailash.nodes.base import CycleAwareNode
-from typing import Dict, Any
-
-class ErrorProneNode(CycleAwareNode):
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        iteration = self.get_iteration(context)
-        fail_on = kwargs.get("fail_on_iteration", 3)
-
-        # Return error state instead of raising
-        if iteration == fail_on:
-            return {
-                "error": True,
-                "error_message": f"Simulated failure on iteration {iteration}",
-                "iteration": iteration
-            }
-
-        return {
-            "data": f"processed_{iteration}",
-            "error": False,
-            "iteration": iteration
-        }
-
-def test_error_handling():
-    workflow = WorkflowBuilder()
-    workflow.add_node("ErrorProneNode", "processor", {}))
-
-    # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
-
-    runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow, parameters={
-        "processor": {"fail_on_iteration": 2}
-    })
-
-    # Test graceful error handling
-    error_result = results.get("processor", {})
-    assert error_result is not None
-    assert error_result.get("iteration", 0) >= 0
-
-    # Test error was recorded
-    if error_result.get("error"):
-        assert "error_message" in error_result
-
-```
-
-### Performance Test
-```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
-from kailash.nodes.base import CycleAwareNode
-from typing import Dict, Any
-import time
-
-class StateAccumulatorNode(CycleAwareNode):
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        data_size = kwargs.get("data_size", 100)
-        iteration = self.get_iteration(context)
-
-        # Generate data
-        current_data = list(range(iteration * data_size, (iteration + 1) * data_size))
-
-        # Accumulate with size limit
-        accumulated_data = self.accumulate_values(
-            context, "large_data", current_data, max_history=5
-        )
-
-        return {
-            "chunks_count": len(accumulated_data),
-            "iteration": iteration,
-            **self.set_cycle_state({"large_data": accumulated_data})
-        }
-
-def test_memory_limits():
-    workflow = WorkflowBuilder()
-    workflow.add_node("StateAccumulatorNode", "accumulator", {}))
-
-    # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
-
-    start_time = time.time()
-
-    runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow, parameters={
-        "accumulator": {"data_size": 50}
-    })
-
-    execution_time = time.time() - start_time
-    result = results.get("accumulator", {})
-
-    # Performance assertions
-    assert result.get("chunks_count", 0) <= 5  # max_history respected
-    assert execution_time < 5.0  # Reasonable time
-    assert result.get("iteration", 0) > 0  # Multiple iterations
+    assert processor_result.get("should_exit") == True
 
 ```
 
@@ -327,27 +245,31 @@ def test_memory_limits():
 
 1. **Test Patterns, Not Exact Values**
    ```python
-# ✅ Good
-assert final_quality > initial_quality  # Progress made
+   # ✅ Good
+   assert final_quality > initial_quality  # Progress made
 
-# ❌ Bad
-assert final_quality == 0.85  # Too rigid
+   # ❌ Bad
+   assert final_quality == 0.85  # Too rigid
 
    ```
 
-2. **Use Self-Contained Convergence**
+2. **Use input_data with try/except**
    ```python
-# ✅ Good: Node checks own convergence
-return {"result": data, "converged": converged}
+   # ✅ Good: Handle both first iteration and cycles
+   try:
+       value = input_data.get('value', default)
+   except NameError:
+       value = default
 
-# ❌ Bad: Multi-node convergence dependencies
+   # ❌ Bad: Assumes input_data always exists
+   value = input_data.get('value', default)
 
    ```
 
 3. **Provide Required Configuration**
-   - PythonCodeNode needs code at initialization
-   - SwitchNode needs parameters at runtime
-   - Always use required=False in cycle parameters
+   - Always use `{"result": "input_data"}` mapping for cycles
+   - Use `workflow.build()` before creating cycles
+   - Always set max_iterations, converge_when, and timeout
 
 4. **Test Incrementally**
    - Individual nodes first

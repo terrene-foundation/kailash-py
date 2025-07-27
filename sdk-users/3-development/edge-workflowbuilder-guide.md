@@ -23,7 +23,8 @@ edge_config = {
 }
 
 # Create workflow with edge support
-workflow = WorkflowBuilder(edge_config=edge_config)
+workflow = WorkflowBuilder()
+# Edge config passed to runtime
 
 # Add edge nodes - infrastructure is automatically injected
 workflow.add_node("EdgeDataNode", "writer", {
@@ -134,7 +135,8 @@ edge_config = {
     }
 }
 
-workflow = WorkflowBuilder(edge_config=edge_config)
+workflow = WorkflowBuilder()
+# Edge config passed to runtime
 
 # Data is automatically routed to compliant edges
 workflow.add_node("EdgeDataNode", "gdpr_store", {
@@ -209,7 +211,8 @@ edge_config = {
     }
 }
 
-workflow = WorkflowBuilder(edge_config=edge_config)
+workflow = WorkflowBuilder()
+# Edge config passed to runtime
 
 # Data automatically replicated across regions
 workflow.add_node("EdgeDataNode", "global_data", {
@@ -274,7 +277,8 @@ edge_config = {
     "dataflow_integration": True  # Enable DataFlow hooks
 }
 
-workflow = WorkflowBuilder(edge_config=edge_config)
+workflow = WorkflowBuilder()
+# Edge config passed to runtime
 
 # DataFlow operations automatically use edge infrastructure
 workflow.add_node("UserProfileCreateNode", "create_user", {
@@ -296,7 +300,8 @@ edge_config = {
     }
 }
 
-workflow = WorkflowBuilder(edge_config=edge_config)
+workflow = WorkflowBuilder()
+# Edge config passed to runtime
 
 # Add monitoring node
 workflow.add_node("EdgeMonitoringNode", "monitor", {
@@ -316,8 +321,8 @@ workflow.add_node("EdgeMonitoringNode", "monitor", {
 edge_config = {"discovery": {"locations": ["us-east-1"]}}
 
 # Multiple workflows share the same EdgeInfrastructure
-workflow1 = WorkflowBuilder(edge_config=edge_config)
-workflow2 = WorkflowBuilder(edge_config=edge_config)  # Reuses infrastructure
+workflow1 = WorkflowBuilder()
+workflow2 = WorkflowBuilder()  # Reuses infrastructure via runtime
 ```
 
 ### 2. Graceful Degradation
@@ -367,10 +372,11 @@ logging.getLogger("kailash.workflow.edge_infrastructure").setLevel(logging.DEBUG
 logging.getLogger("kailash.edge").setLevel(logging.DEBUG)
 
 # Create workflow with debug info
-workflow = WorkflowBuilder(edge_config={
+workflow = WorkflowBuilder()
+edge_config = {
     "debug": True,
     "discovery": {"locations": ["us-east-1"]}
-})
+}
 ```
 
 ## Migration Guide
@@ -388,7 +394,8 @@ node = EdgeDataNode(discovery=discovery, router=router)
 After:
 ```python
 # Automatic with WorkflowBuilder
-workflow = WorkflowBuilder(edge_config=edge_config)
+workflow = WorkflowBuilder()
+# Edge config passed to runtime
 workflow.add_node("EdgeDataNode", "node_id", params)
 # Infrastructure automatically injected!
 ```
@@ -397,14 +404,15 @@ workflow.add_node("EdgeDataNode", "node_id", params)
 
 Before:
 ```python
-# Hypothetical separate builder
-workflow = EdgeWorkflowBuilder(edge_config)
+# Hypothetical separate builder (deprecated pattern)
+# workflow = EdgeWorkflowBuilder(edge_config)  # No longer exists
 ```
 
 After:
 ```python
 # Integrated into main WorkflowBuilder
-workflow = WorkflowBuilder(edge_config=edge_config)
+workflow = WorkflowBuilder()
+# Edge config passed to runtime
 # Same API, better integration!
 ```
 

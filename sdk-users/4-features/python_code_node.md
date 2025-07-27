@@ -38,20 +38,16 @@ workflow = WorkflowBuilder()
 # Runtime should be created separately
 runtime = LocalRuntime()
 
-def workflow.()  # Type signature example -> pd.DataFrame:
+def process_data(data: pd.DataFrame, threshold: float) -> pd.DataFrame:
     """Filter data based on threshold."""
     return data[data['value'] > threshold]
 
-# Create node from function
-node = PythonCodeNode.from_function(
-    func=process_data,
-    name="threshold_filter",
-    description="Filter data by threshold value"
-)
-
-# Use in workflow
+# Create node from function and use in workflow
 workflow = WorkflowBuilder()
-workflow.add_node(node)
+workflow.add_node("PythonCodeNode", "threshold_filter", {
+    **PythonCodeNode.from_function(process_data).config,
+    "description": "Filter data by threshold value"
+})
 
 ```
 
@@ -87,12 +83,11 @@ class MovingAverage:
             self.values.pop(0)
         return sum(self.values) / len(self.values)
 
-# Create node from class
-node = PythonCodeNode.from_class(
-    cls=MovingAverage,
-    name="moving_avg",
-    description="Calculate moving average"
-)
+# Create node from class and use in workflow
+workflow.add_node("PythonCodeNode", "moving_avg", {
+    **PythonCodeNode.from_class(MovingAverage).config,
+    "description": "Calculate moving average"
+})
 
 ```
 
@@ -114,13 +109,12 @@ grouped.reset_index(inplace=True)
 result = grouped
 '''
 
-node = PythonCodeNode(
-    name="custom_aggregator",
-    code=code,
-    input_types={'data': pd.DataFrame},
-    output_type=pd.DataFrame,
-    description="Custom data aggregation"
-)
+# Add to workflow using string node type
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "custom_aggregator", {
+    "code": code,
+    "description": "Custom data aggregation"
+})
 
 ```
 
@@ -145,17 +139,19 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Load a function from file
-node = PythonCodeNode.from_file(
-    file_path="custom_processor.py",
-    function_name="process_data",
-    name="file_processor"
+workflow.add_node("PythonCodeNode", "file_processor",
+    PythonCodeNode.from_file(
+        file_path="custom_processor.py",
+        function_name="process_data"
+    ).config
 )
 
 # Load a class from file
-node = PythonCodeNode.from_file(
-    file_path="custom_processor.py",
-    class_name="DataProcessor",
-    name="file_class_processor"
+workflow.add_node("PythonCodeNode", "file_class_processor",
+    PythonCodeNode.from_file(
+        file_path="custom_processor.py",
+        class_name="DataProcessor"
+    ).config
 )
 
 ```
@@ -228,22 +224,26 @@ runtime = LocalRuntime()
 workflow = WorkflowBuilder()
 
 # Add nodes
-reader = CSVReaderNode(name="reader")
-custom_processor = PythonCodeNode.from_function(
-    func=my_processing_function,
-    name="processor"
+workflow.add_node("CSVReaderNode", "reader", {
+    "file_path": "input.csv"
+})
+
+# Add custom processor using from_function
+workflow.add_node("PythonCodeNode", "processor",
+    PythonCodeNode.from_function(my_processing_function).config
 )
-writer = CSVWriterNode(name="writer")
+
+workflow.add_node("CSVWriterNode", "writer", {
+    "file_path": "output.csv"
+})
 
 # Connect nodes
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Use workflow.add_connection(source, source_port, target, target_port)
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Use workflow.add_connection(source, source_port, target, target_port)
+workflow.add_connection("reader", "data", "processor", "data")
+workflow.add_connection("processor", "result", "writer", "data")
 
 # Execute workflow
-runner = LocalRunner()
-results = runner.run(workflow)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -267,12 +267,16 @@ workflow = WorkflowBuilder()
 # Runtime should be created separately
 runtime = LocalRuntime()
 
-# Using the standard execute() method enforces validation
-node = PythonCodeNode.from_function(func, name="processor")
-result = node.execute(x=5, y=10)  # Validates inputs
-
-# Using execute_code() bypasses validation for direct execution
-result = node.execute_code({'x': 5, 'y': 10})  # No validation
+# Using workflow execution (recommended approach)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "processor",
+    PythonCodeNode.from_function(func).config
+)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build(), parameters={
+    "processor": {"x": 5, "y": 10}
+})
+result = results["processor"]
 
 ```
 
@@ -281,9 +285,11 @@ result = node.execute_code({'x': 5, 'y': 10})  # No validation
 ### Custom Module Access
 
 ```python
-# Create executor with custom allowed modules
-executor = CodeExecutor(allowed_modules=['scipy', 'sklearn'])
-node.executor = executor
+# Create node with custom allowed modules
+workflow.add_node("PythonCodeNode", "custom_node", {
+    "code": "result = custom_function(data)",
+    "allowed_modules": ['scipy', 'sklearn']
+})
 
 ```
 
@@ -305,14 +311,14 @@ workflow = WorkflowBuilder()
 # Runtime should be created separately
 runtime = LocalRuntime()
 
-def workflow.()  # Type signature example:
+def create_dynamic_node(input_types: dict):
     """Create a node with dynamic input types."""
-    return PythonCodeNode(
-        name="dynamic_processor",
-        code="result = sum(inputs.values())",
-        input_types=input_types,
-        output_type=float
-    )
+    workflow = WorkflowBuilder()
+    workflow.add_node("PythonCodeNode", "dynamic_processor", {
+        "code": "result = sum(inputs.values())",
+        "description": "Dynamic input processor"
+    })
+    return workflow
 
 ```
 

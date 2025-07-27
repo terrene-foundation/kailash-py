@@ -1,8 +1,11 @@
 import asyncio
 import json
 import logging
+import threading
 from typing import Any, Dict, List
 
+import uvicorn
+from fastapi import FastAPI
 from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 from mcp.server.stdio import stdio_server
@@ -189,13 +192,6 @@ async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextCon
     else:
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
 
-
-import threading
-
-import uvicorn
-
-# Add health check endpoint for HTTP mode
-from fastapi import FastAPI
 
 app = FastAPI()
 

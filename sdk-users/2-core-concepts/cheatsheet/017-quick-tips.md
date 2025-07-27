@@ -7,12 +7,12 @@
 - **Workflow IDs use hyphens**: `"my-workflow-001"` ✓
 
 ## Workflow Basics
-- **Always provide ID and name**: `Workflow("wf-001", name="My Pipeline")`
+- **Use WorkflowBuilder**: `workflow = WorkflowBuilder()`
 - **Use LocalRuntime**: `runtime.execute()` returns `(results, run_id)`
-- **Connect with dot notation**: `# mapping removed, code="...")`
+- **Connect nodes properly**: `workflow.add_connection(from_node, output, to_node, input)`
 - **Wrap outputs in dict**: `result = {'data': processed}`
-- **Define input_types**: `input_types={"data": list, "config": dict}`
-- **No function definitions**: Direct statements only
+- **Always call .build()**: `runtime.execute(workflow.build())`
+- **Use string-based API**: `workflow.add_node("NodeType", "id", config)`
 
 ## Common Pitfalls
 - **Set attributes BEFORE super().__init__()** in custom nodes
@@ -55,18 +55,20 @@ logging.basicConfig(level=logging.DEBUG)
 
 # Inspect workflow structure
 workflow = WorkflowBuilder()
-workflow.to_dict())
+built_workflow = workflow.build()
+built_workflow.to_dict()
 
 # Check node outputs
 runtime = LocalRuntime()
-runtime.execute(workflow.build(), workflow)
+results, run_id = runtime.execute(workflow.build())
 for node_id, output in results.items():
     print(f"{node_id}: {output}")
 
 # Validate before execution
 try:
 workflow = WorkflowBuilder()
-workflow.validate()
+built_workflow = workflow.build()
+built_workflow.validate()
 except Exception as e:
     print(f"Validation error: {e}")
 
@@ -92,19 +94,18 @@ runtime = LocalRuntime()
 # Read → Process → Write
 # Create quick CSV-to-JSON converter
 workflow = WorkflowBuilder()
-workflow.add_node("CSVReaderNode", "read", {}))
-workflow.add_node("proc", PythonCodeNode.from_function(
-    lambda data: {"converted": data}
-))
-workflow.add_node("JSONWriterNode", "write", {}))
+workflow.add_node("CSVReaderNode", "read", {})
+workflow.add_node("PythonCodeNode", "proc", {
+    "code": "result = {'converted': input_data}"
+})
+workflow.add_node("JSONWriterNode", "write", {})
 workflow.add_connection("read", "result", "proc", "input")
 workflow.add_connection("proc", "result", "write", "input")
 
 # Quick execution
 runtime = LocalRuntime()
-runtime = LocalRuntime()
-runtime.execute(workflow.build(), workflow)
-print(f"Processed {results['proc']['count']} records")
+results, run_id = runtime.execute(workflow.build())
+print(f"Processed {len(results)} nodes")
 
 ```
 

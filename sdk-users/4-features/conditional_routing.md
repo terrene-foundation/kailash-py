@@ -59,19 +59,56 @@ class ValidationNode(Node):
 # Workflow setup
 workflow = WorkflowBuilder()
 
-workflow.add_node("ValidationNode", "validator", {}))
-workflow.add_node("SwitchNode", "switch", {}))
-workflow.add_node("success_handler", PythonCodeNode.from_function(
-    lambda data, quality, is_valid: {"result": f"Success! Quality: {quality}"}
-))
-workflow.add_node("retry_handler", PythonCodeNode.from_function(
-    lambda data, quality, is_valid: {"result": f"Retry needed. Quality: {quality}"}
-))
+# Add source data
+workflow.add_node("PythonCodeNode", "source", {
+    "code": "result = [100, 90, 110]"  # Test data
+})
+
+workflow.add_node("PythonCodeNode", "validator", {
+    "code": """
+data = input_data if isinstance(input_data, list) else [100, 90, 110]
+threshold = 95.0
+
+quality = sum(data) / len(data) if data else 0
+is_valid = quality >= threshold
+
+result = {
+    "data": data,
+    "quality": quality,
+    "is_valid": is_valid
+}
+"""
+})
+
+workflow.add_node("SwitchNode", "switch", {
+    "condition_field": "is_valid",
+    "operator": "==",
+    "value": True
+})
+
+workflow.add_node("PythonCodeNode", "success_handler", {
+    "code": """
+quality = input_data.get('quality', 0)
+result = {"result": f"Success! Quality: {quality}"}
+"""
+})
+
+workflow.add_node("PythonCodeNode", "retry_handler", {
+    "code": """
+quality = input_data.get('quality', 0)
+result = {"result": f"Retry needed. Quality: {quality}"}
+"""
+})
 
 # Connections
-workflow.add_connection("validator", "result", "switch", "input")
-workflow.add_connection("switch", "result", "success_handler", "input")
-workflow.add_connection("switch", "result", "retry_handler", "input")
+workflow.add_connection("source", "result", "validator", "input_data")
+workflow.add_connection("validator", "result", "switch", "input_data")
+workflow.add_connection("switch", "true_output", "success_handler", "input_data")
+workflow.add_connection("switch", "false_output", "retry_handler", "input_data")
+
+# Execute
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -126,10 +163,10 @@ workflow.add_node("batch_processor", PythonCodeNode.from_function(
 ))
 
 # Connect nodes
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("condition_check", "result", "router", "input_data")
+workflow.add_connection("router", "path_a", "processor_a", "input_data")
+workflow.add_connection("router", "path_b", "processor_b", "input_data")
+workflow.add_connection("router", "default", "default_processor", "input_data")
 workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 ```
@@ -199,6 +236,7 @@ workflow = WorkflowBuilder()
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
@@ -252,6 +290,7 @@ workflow.add_connection("status_check", "result", "error_recovery", "input")
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.logic import SwitchNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
@@ -289,10 +328,10 @@ workflow.add_node("batch_processor", PythonCodeNode.from_function(
     lambda data, route, item_count: {"result": f"BATCH: Processing {item_count} low-priority items"}
 ))
 
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("condition_check", "result", "router", "input_data")
+workflow.add_connection("router", "path_a", "processor_a", "input_data")
+workflow.add_connection("router", "path_b", "processor_b", "input_data")
+workflow.add_connection("router", "default", "default_processor", "input_data")
 
 ```
 
@@ -302,6 +341,7 @@ workflow.add_connection("source", "result", "target", "input")  # Fixed complex 
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.logic import SwitchNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
@@ -378,6 +418,7 @@ workflow.add_connection("secondary_switch", "result", "fallback_processor", "inp
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.logic import MergeNode, SwitchNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
@@ -712,10 +753,10 @@ workflow.add_node("default_processor", PythonCodeNode.from_function(
     lambda data, path: process_default(data)
 ))
 
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
-workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("condition_check", "result", "router", "input_data")
+workflow.add_connection("router", "path_a", "processor_a", "input_data")
+workflow.add_connection("router", "path_b", "processor_b", "input_data")
+workflow.add_connection("router", "default", "default_processor", "input_data")
 
 ```
 

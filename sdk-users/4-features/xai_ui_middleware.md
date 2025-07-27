@@ -115,20 +115,22 @@ from kailash.runtime.local import LocalRuntime
 workflow = WorkflowBuilder()
 
 # Add XAI-UI bridge for communication
-bridge = XAIUIBridgeNode(
-    session_id="chat-123",
-    transport="sse",
-    enable_explanations=True
-)
-workflow.add_node("bridge", bridge)
+workflow.add_node("XAIUIBridgeNode", "bridge", {
+    "session_id": "chat-123",
+    "transport": "sse",
+    "enable_explanations": True
+})
 
 # Add your agent logic
-workflow.add_node("YourAgentNode", "agent", {}))
+workflow.add_node("LLMAgentNode", "agent", {
+    "model": "gpt-4",
+    "prompt": "You are a helpful AI assistant"
+})
 workflow.add_connection("agent", "result", "bridge", "input")
 
 # Execute with real-time UI updates
 runtime = LocalRuntime()
-await runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(workflow.build(), parameters={
     "agent": {"query": "Explain quantum computing"}
 })
 
@@ -192,26 +194,23 @@ runtime = LocalRuntime()
 class StreamingAgentNode(AsyncNode):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.bridge = XAIUIBridgeNode(session_id=self.id)
+        # Bridge will be connected via workflow
+        self.session_id = kwargs.get('session_id', self.id)
 
-    async def async_run(self, 'prompt') -> Dict[str, Any]:
-        # Start text stream
-        await self.bridge.emit(XAIEvent(
-            type=XAIEventType.TEXT_MESSAGE_START,
-            metadata={"model": "gpt-4"}
-        ))
+    async def async_run(self, prompt: str) -> Dict[str, Any]:
+        # Example streaming response
+        response = "Quantum computing uses quantum bits (qubits) that can be in superposition."
 
-        # Stream tokens
-        async for token in self.generate_tokens(prompt):
-            await self.bridge.emit(XAIEvent(
-                type=XAIEventType.TEXT_MESSAGE_CHUNK,
-                chunk=token
-            ))
-
-        # End stream
-        await self.bridge.emit(XAIEvent(
-            type=XAIEventType.TEXT_MESSAGE_END
-        ))
+        # Return structured result for the bridge
+        return {
+            "text": response,
+            "metadata": {"model": "gpt-4"},
+            "stream_events": [
+                {"type": "TEXT_MESSAGE_START"},
+                {"type": "TEXT_MESSAGE_CONTENT", "content": response},
+                {"type": "TEXT_MESSAGE_END"}
+            ]
+        }
 
 ```
 
@@ -235,17 +234,27 @@ runtime = LocalRuntime()
 
 class ToolAgentNode(AsyncNode):
     async def async_run(self, **inputs) -> Dict[str, Any]:
-        # Execute tool with approval
-        result = await self.bridge.execute_tool(
-            tool_name="database_query",
-            args={"query": "SELECT * FROM users"},
-            require_approval=True
-        )
+        # Example tool execution with approval request
+        tool_request = {
+            "tool_name": "database_query",
+            "args": {"query": "SELECT * FROM users"},
+            "require_approval": True
+        }
 
-        if result is None:
-            return {"status": "cancelled"}
+        # Simulate approval flow
+        # In real implementation, this would interact with the bridge
+        approved = inputs.get("user_approved", True)
 
-        return {"result": result}
+        if not approved:
+            return {"status": "cancelled", "reason": "User denied approval"}
+
+        # Simulate database query result
+        result = [
+            {"id": 1, "name": "Alice"},
+            {"id": 2, "name": "Bob"}
+        ]
+
+        return {"result": result, "tool_request": tool_request}
 
 ```
 

@@ -7,7 +7,7 @@
 ### ❌ Wrong: Generic Mapping (Causes State Loss)
 ```python
 # This fails - state variables reset each iteration
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+# Use CycleBuilder API: built_workflow.create_cycle("name").connect(...).build()
 # Result: counter = 1, 1, 1... (never increments)
 
 ```
@@ -15,7 +15,7 @@
 ### ✅ Correct: Specific Field Mapping (Preserves State)
 ```python
 # This works - explicitly map each field that needs to persist
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+# Use CycleBuilder API: built_workflow.create_cycle("name").connect(...).build()
 # Result: counter = 1, 2, 3... (increments correctly)
 
 ```
@@ -43,31 +43,28 @@ workflow = WorkflowBuilder()
 # Runtime should be created separately
 runtime = LocalRuntime()
 
-class RobustCycleNode(CycleAwareNode):
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        iteration = self.get_iteration(context)
+# Create robust cycle node using PythonCodeNode
+robust_cycle_code = '''
+# Always check if state exists and provide fallbacks
+accumulated_data = input_data.get("accumulated", []) if input_data else []
+new_data = input_data.get("data", []) if input_data else []
 
-        # Always check if state exists and provide fallbacks
-        prev_state = self.get_previous_state(context)
-        accumulated_data = prev_state.get("accumulated", []) if prev_state else []
+# Use iteration count when state history is unreliable
+iteration = input_data.get("iteration", 0)
+if iteration >= 3:  # Simple iteration-based convergence
+    converged = True
+else:
+    converged = len(accumulated_data) > 10  # State-based when available
 
-        # Process data with iteration-based logic as backup
-        new_data = kwargs.get("data", [])
+result = {
+    "processed_data": new_data,
+    "accumulated": accumulated_data + new_data,
+    "iteration": iteration + 1,
+    "converged": converged
+}
+'''
 
-        # Use iteration count when state history is unreliable
-        if iteration >= 3:  # Simple iteration-based convergence
-            converged = True
-        else:
-            converged = len(accumulated_data) > 10  # State-based when available
-
-        # Update state (may or may not persist)
-        self.set_cycle_state({"accumulated": accumulated_data + new_data})
-
-        return {
-            "processed_data": new_data,
-            "iteration": iteration + 1,
-            "converged": converged
-        }
+workflow.add_node("PythonCodeNode", "robust_cycle", {"code": robust_cycle_code})
 
 ```
 
@@ -88,25 +85,28 @@ workflow = WorkflowBuilder()
 # Runtime should be created separately
 runtime = LocalRuntime()
 
-class SimpleConvergenceNode(CycleAwareNode):
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        iteration = self.get_iteration(context)
-        data = kwargs.get("data", [])
+# Create simple convergence node using PythonCodeNode
+simple_convergence_code = '''
+data = input_data.get("data", []) if input_data else []
+iteration = input_data.get("iteration", 0)
 
-        # Use simple iteration-based convergence instead of complex state tracking
-        # when state persistence is unreliable
-        improved_data = [x for x in data if x <= 50]  # Simple processing
-        quality_score = len(improved_data) / max(len(data), 1) if data else 0
+# Use simple iteration-based convergence instead of complex state tracking
+# when state persistence is unreliable
+improved_data = [x for x in data if x <= 50]  # Simple processing
+quality_score = len(improved_data) / max(len(data), 1) if data else 0
 
-        # Iteration-based convergence (works regardless of state persistence)
-        converged = iteration >= 2 or quality_score >= 0.8
+# Iteration-based convergence (works regardless of state persistence)
+converged = iteration >= 2 or quality_score >= 0.8
 
-        return {
-            "improved_data": improved_data,
-            "quality_score": quality_score,
-            "converged": converged,
-            "iteration": iteration + 1
-        }
+result = {
+    "improved_data": improved_data,
+    "quality_score": quality_score,
+    "converged": converged,
+    "iteration": iteration + 1
+}
+'''
+
+workflow.add_node("PythonCodeNode", "simple_convergence", {"code": simple_convergence_code})
 
 ```
 
@@ -127,18 +127,21 @@ workflow = WorkflowBuilder()
 # Runtime should be created separately
 runtime = LocalRuntime()
 
-class FragileCycleNode(CycleAwareNode):
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        # This breaks when state doesn't persist
-        prev_state = self.get_previous_state(context)
-        all_previous_results = prev_state["results"]  # KeyError if state lost
+# Example of fragile cycle logic (DON'T USE)
+fragile_cycle_code = '''
+# This breaks when state doesn't persist
+try:
+    all_previous_results = input_data["results"]  # KeyError if state lost
+    # Complex history-dependent logic would go here
+    converged = len(all_previous_results) > 10
+except (KeyError, TypeError):
+    # This logic fails without state persistence
+    converged = False
 
-        # Complex history-dependent logic
-        improvement_trend = self._calculate_trend(all_previous_results)
-        converged = improvement_trend < 0.01
+result = {"converged": converged}
+'''
 
-        # This logic fails without state persistence
-        return {"converged": converged}
+# DON'T USE: workflow.add_node("PythonCodeNode", "fragile_cycle", {"code": fragile_cycle_code})
 
 ```
 
@@ -161,27 +164,29 @@ workflow = WorkflowBuilder()
 # Runtime should be created separately
 runtime = LocalRuntime()
 
-class StateDebuggingNode(CycleAwareNode):
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        iteration = self.get_iteration(context)
-        prev_state = self.get_previous_state(context)
+# Create state debugging node using PythonCodeNode
+state_debugging_code = '''
+iteration = input_data.get("iteration", 0)
+prev_state = input_data.get("prev_state")
 
-        # Debug state persistence
-        if self.logger:
-            self.logger.debug(f"Iteration {iteration}: State available: {prev_state is not None}")
-            if prev_state:
-                self.logger.debug(f"State keys: {list(prev_state.keys())}")
-            else:
-                self.logger.debug("No previous state - using defaults")
+# Debug state persistence
+print(f"Iteration {iteration}: State available: {prev_state is not None}")
+if prev_state:
+    print(f"State keys: {list(prev_state.keys())}")
+else:
+    print("No previous state - using defaults")
 
-        # Graceful handling regardless of state
-        accumulated_count = prev_state.get("count", 0) if prev_state else 0
+# Graceful handling regardless of state
+accumulated_count = prev_state.get("count", 0) if prev_state else 0
 
-        return {
-            "count": accumulated_count + 1,
-            "state_available": prev_state is not None,
-            "iteration": iteration
-        }
+result = {
+    "count": accumulated_count + 1,
+    "state_available": prev_state is not None,
+    "iteration": iteration
+}
+'''
+
+workflow.add_node("PythonCodeNode", "state_debugging", {"code": state_debugging_code})
 
 ```
 
@@ -205,21 +210,24 @@ workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Instead of relying on state, pass data through connections
-class DataFlowNode(CycleAwareNode):
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        # Get accumulated data from input (passed via mapping)
-        accumulated = kwargs.get("accumulated_data", [])
-        new_item = kwargs.get("new_item", None)
+# Create data flow node using PythonCodeNode
+data_flow_code = '''
+# Get accumulated data from input (passed via mapping)
+accumulated = input_data.get("accumulated_data", [])
+new_item = input_data.get("new_item")
 
-        # Update accumulation
-        if new_item:
-            accumulated.append(new_item)
+# Update accumulation
+if new_item:
+    accumulated.append(new_item)
 
-        # Return updated accumulation for next iteration
-        return {
-            "accumulated_data": accumulated,
-            "converged": len(accumulated) >= 5
-        }
+# Return updated accumulation for next iteration
+result = {
+    "accumulated_data": accumulated,
+    "converged": len(accumulated) >= 5
+}
+'''
+
+workflow.add_node("PythonCodeNode", "data_flow", {"code": data_flow_code})
 
 # Use mapping to pass accumulated data between iterations
 workflow = WorkflowBuilder()
@@ -244,28 +252,31 @@ workflow = WorkflowBuilder()
 # Runtime should be created separately
 runtime = LocalRuntime()
 
-class IterationBasedNode(CycleAwareNode):
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        iteration = self.get_iteration(context)
+# Create iteration-based node using PythonCodeNode
+iteration_based_code = '''
+iteration = input_data.get("iteration", 0)
 
-        # Base logic on iteration count rather than accumulated state
-        # This works regardless of state persistence
+# Base logic on iteration count rather than accumulated state
+# This works regardless of state persistence
 
-        if iteration < 3:
-            processing_intensity = "low"
-        elif iteration < 6:
-            processing_intensity = "medium"
-        else:
-            processing_intensity = "high"
+if iteration < 3:
+    processing_intensity = "low"
+elif iteration < 6:
+    processing_intensity = "medium"
+else:
+    processing_intensity = "high"
 
-        # Simple convergence based on iteration
-        converged = iteration >= 5
+# Simple convergence based on iteration
+converged = iteration >= 5
 
-        return {
-            "processing_intensity": processing_intensity,
-            "converged": converged,
-            "iteration": iteration + 1
-        }
+result = {
+    "processing_intensity": processing_intensity,
+    "converged": converged,
+    "iteration": iteration + 1
+}
+'''
+
+workflow.add_node("PythonCodeNode", "iteration_based", {"code": iteration_based_code})
 
 ```
 
@@ -286,32 +297,46 @@ workflow = WorkflowBuilder()
 # Runtime should be created separately
 runtime = LocalRuntime()
 
-class ExternalStateNode(CycleAwareNode):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.external_state = {}  # Store state externally
+# Create external state node using PythonCodeNode with global state
+external_state_code = '''
+import json
+import os
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        iteration = self.get_iteration(context)
-        run_id = context.get("run_id", "default")
+iteration = input_data.get("iteration", 0)
+run_id = input_data.get("run_id", "default")
+new_data = input_data.get("data", [])
 
-        # Use external state storage
-        state_key = f"{run_id}_{iteration}"
+# Use external state storage (file-based for persistence)
+state_file = f"/tmp/cycle_state_{run_id}.json"
 
-        if state_key in self.external_state:
-            previous_data = self.external_state[state_key]
-        else:
-            previous_data = []
+try:
+    with open(state_file, "r") as f:
+        external_state = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    external_state = {}
 
-        # Process and store
-        new_data = kwargs.get("data", [])
-        combined_data = previous_data + new_data
-        self.external_state[f"{run_id}_{iteration + 1}"] = combined_data
+state_key = f"{run_id}_{iteration}"
 
-        return {
-            "combined_data": combined_data,
-            "converged": len(combined_data) >= 10
-        }
+if state_key in external_state:
+    previous_data = external_state[state_key]
+else:
+    previous_data = []
+
+# Process and store
+combined_data = previous_data + new_data
+external_state[f"{run_id}_{iteration + 1}"] = combined_data
+
+# Save state back to file
+with open(state_file, "w") as f:
+    json.dump(external_state, f)
+
+result = {
+    "combined_data": combined_data,
+    "converged": len(combined_data) >= 10
+}
+'''
+
+workflow.add_node("PythonCodeNode", "external_state", {"code": external_state_code})
 
 ```
 

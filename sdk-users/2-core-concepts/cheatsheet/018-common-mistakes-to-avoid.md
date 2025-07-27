@@ -10,9 +10,9 @@ from kailash.runtime.local import LocalRuntime
 # Example setup
 workflow = WorkflowBuilder()
 
-# ❌ WRONG - Instance-based node creation (deprecated)
-workflow.add_node("CSVReaderNode", "reader", {}), {})
-workflow.add_node("DataTransformerNode", "processor", {}), {})
+# ❌ WRONG - Syntax errors and malformed parameters
+workflow.add_node("CSVReaderNode", "reader", {}), {})  # Extra parentheses and comma
+workflow.add_node("DataTransformerNode", "processor", {}), {})  # Extra parentheses and comma
 
 # ✅ CORRECT - String-based node creation with WorkflowBuilder
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
@@ -30,17 +30,17 @@ from kailash.runtime.local import LocalRuntime
 # Example setup
 workflow = WorkflowBuilder()
 
-# ❌ WRONG - Using 'inputs' instead of 'parameters'
+# ❌ WRONG - Missing .build() and wrong parameter structure
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={"data": [1,2,3]})
+results, run_id = runtime.execute(workflow, parameters={"data": [1,2,3]})  # Missing .build()
 
 # ❌ WRONG - Flat parameters for node-specific data
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={"data": [1,2,3]})
+results, run_id = runtime.execute(workflow.build(), parameters={"data": [1,2,3]})  # Should be node-specific
 
-# ✅ CORRECT - Node-specific parameters
+# ✅ CORRECT - Node-specific parameters with .build()
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(workflow.build(), parameters={
     "processor": {"data": [1,2,3], "threshold": 0.8}
 })
 
@@ -56,15 +56,16 @@ from kailash.runtime.local import LocalRuntime
 # Example setup
 workflow = WorkflowBuilder()
 
-# ❌ WRONG - Using camelCase
+# ❌ WRONG - Using camelCase and undefined variables
 workflow = WorkflowBuilder()
-workflow.addNode("reader", node)
-workflow.connectNodes("reader", "processor")
+workflow.addNode("CSVReaderNode", "reader", {"file_path": "data.csv"})  # camelCase method
+workflow.connectNodes("reader", "processor")  # camelCase method
 
-# ✅ CORRECT - Use snake_case
+# ✅ CORRECT - Use snake_case with string-based API
 workflow = WorkflowBuilder()
-workflow.add_node("reader", node)
-workflow.add_connection("reader", "result", "processor", "input")
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = input_data"})
+workflow.add_connection("reader", "data", "processor", "input_data")
 
 ```
 
@@ -78,15 +79,18 @@ from kailash.runtime.local import LocalRuntime
 # Example setup
 workflow = WorkflowBuilder()
 
-# ❌ WRONG - Direct workflow execution
+# ❌ WRONG - Syntax errors and incorrect execution
 workflow = WorkflowBuilder()
-runtime.execute(workflow.build(), )  # Workflow has no execute method
+runtime.execute(workflow.build(), )  # Missing parameter and trailing comma
 
-# ❌ WRONG - Expecting only results
+# ❌ WRONG - Expecting only results (runtime returns tuple)
 runtime = LocalRuntime()
-results = runtime.execute(workflow.build())  # Returns tuple
+results = runtime.execute(workflow.build())  # Missing run_id
 
 # ✅ CORRECT - Runtime returns tuple with built workflow
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "test", {"code": "result = {'value': 42}"})
+
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 
@@ -115,20 +119,20 @@ from kailash.runtime.local import LocalRuntime
 # Example setup
 workflow = WorkflowBuilder()
 
-# ❌ WRONG - Deprecated # Use CycleBuilder API instead syntax
-# # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()  # DEPRECATED
-# # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()  # DEPRECATED
+# ❌ WRONG - Deprecated cycle syntax (use CycleBuilder API instead)
+workflow.add_connection("A", "B", cycle=True)  # DEPRECATED
+workflow.connect_cycle("A", "B", "C")  # DEPRECATED
 
 # ✅ CORRECT - Use CycleBuilder API
-workflow.add_connection("A", "result", "B", "input")  # Regular
-workflow.add_connection("B", "result", "C", "input")  # Regular
+workflow.add_connection("A", "result", "B", "input_data")  # Regular
+workflow.add_connection("B", "result", "C", "input_data")  # Regular
 
 # For cycles, build workflow first then create cycle
 built_workflow = workflow.build()
 cycle = built_workflow.create_cycle("main_cycle")
-cycle.connect("C", "A") \
+cycle.connect("C", "A", mapping={"result": "input_data"}) \
      .max_iterations(10) \
-     .converge_when("condition == True") \
+     .converge_when("value == 3") \
      .build()
 
 ```

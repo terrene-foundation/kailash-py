@@ -381,7 +381,7 @@ import aiohttp
 class AsyncAPINode(AsyncNode):
     """Async node for parallel API calls"""
 
-    async def run(self, **kwargs):
+    async def async_run(self, **kwargs):
         urls = kwargs['urls']
 
         async with aiohttp.ClientSession() as session:
@@ -632,49 +632,26 @@ runtime = LocalRuntime()
 workflow = WorkflowBuilder()
 
 # Data ingestion phase
-csv_reader = "CSVReaderNode"
-data_validator = DataValidatorNode()
-workflow = WorkflowBuilder()
-workflow.add_node("read_customers", csv_reader, file_path="customers.csv")
-workflow = WorkflowBuilder()
-workflow.add_node("validate_data", data_validator, schema="customer_schema.json")
-workflow = WorkflowBuilder()
-workflow.add_connection("read_customers", "result", "validate_data", "input")
+workflow.add_node("CSVReaderNode", "read_customers", {"file_path": "customers.csv"})
+workflow.add_node("FilterNode", "validate_data", {"filter_condition": "id is not None and name != ''"})
+workflow.add_connection("read_customers", "data", "validate_data", "data")
 
 # Data enrichment phase
-geocoder = GeocoderNode()
-scorer = CustomerScorerNode()
-workflow = WorkflowBuilder()
-workflow.add_node("add_location", geocoder, api_key=os.getenv("GEOCODING_API_KEY"))
-workflow = WorkflowBuilder()
-workflow.add_node("calculate_scores", scorer, scoring_model="rfm")
-workflow = WorkflowBuilder()
+workflow.add_node("HTTPRequestNode", "add_location", {"url": "https://geocoding.api.com/geocode", "method": "POST"})
+workflow.add_node("PythonCodeNode", "calculate_scores", {"code": "result = {'score': sum(data.get('values', [0])) if data else 0}"})
 workflow.add_connection("validate_data", "result", "add_location", "input")
-workflow = WorkflowBuilder()
 workflow.add_connection("add_location", "result", "calculate_scores", "input")
 
 # Analytics phase
-segmenter = CustomerSegmenterNode()
-reporter = ReportGeneratorNode()
-workflow = WorkflowBuilder()
-workflow.add_node("segment_customers", segmenter, method="kmeans", n_clusters=5)
-workflow = WorkflowBuilder()
-workflow.add_node("generate_report", reporter, template="analytics_template.html")
-workflow = WorkflowBuilder()
+workflow.add_node("DataTransformer", "segment_customers", {"transformations": ["data['segment'] = 'high' if data.get('score', 0) > 80 else 'medium' if data.get('score', 0) > 50 else 'low'"]})
+workflow.add_node("PythonCodeNode", "generate_report", {"code": "result = {'report': f'Analytics Report: {len(data)} records processed'}"})
 workflow.add_connection("calculate_scores", "result", "segment_customers", "input")
-workflow = WorkflowBuilder()
 workflow.add_connection("segment_customers", "result", "generate_report", "input")
 
 # Output phase
-email_sender = EmailNotifierNode()
-dashboard_updater = DashboardUpdaterNode()
-workflow = WorkflowBuilder()
-workflow.add_node("send_report", email_sender, recipients=["analytics@company.com"])
-workflow = WorkflowBuilder()
-workflow.add_node("update_dashboard", dashboard_updater, dashboard_id="customer_insights")
-workflow = WorkflowBuilder()
+workflow.add_node("DiscordAlertNode", "send_report", {"webhook_url": "https://discord.com/api/webhooks/example", "message": "Report generated"})
+workflow.add_node("HTTPRequestNode", "update_dashboard", {"url": "https://dashboard.company.com/api/update", "method": "POST"})
 workflow.add_connection("generate_report", "result", "send_report", "input")
-workflow = WorkflowBuilder()
 workflow.add_connection("generate_report", "result", "update_dashboard", "input")
 
 ```
@@ -828,7 +805,7 @@ def test_complete_workflow():
     ]
 
     # Execute workflow
-    results, run_id = runtime.execute(workflow, parameters={
+    results, run_id = runtime.execute(workflow.build(), parameters={
         'reader': {'data': test_data}
     })
 

@@ -10,38 +10,57 @@
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.base import Node, CycleAwareNode
 
-# ✅ This now works correctly (v0.5.1+)
-class ProcessorNode(CycleAwareNode):
-    def get_parameters(self):
-        return {
-            "quality_target": NodeParameter(type=float, required=False, default=0.95),
-            "improvement_rate": NodeParameter(type=float, required=False, default=0.1)
-        }
+# ✅ This now works correctly (v0.5.1+) using PythonCodeNode
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": """
+# Cycle-aware processing with persistent state
+class ProcessorState:
+    _instance = None
 
-    def run(self, **kwargs):
-        # Initial parameters are available in ALL iterations
-        quality_target = kwargs.get("quality_target", 0.95)
-        improvement_rate = kwargs.get("improvement_rate", 0.1)
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.state = {}
+        return cls._instance
 
-        context = kwargs.get("context", {})
-        prev_quality = self.get_previous_state(context).get("quality", 0.0)
+    def get_previous_state(self):
+        return self.state.copy()
 
-        new_quality = min(prev_quality + improvement_rate, 1.0)
-        converged = new_quality >= quality_target
+    def set_cycle_state(self, data):
+        self.state.update(data)
+        return data
 
-        return {
-            "quality": new_quality,
-            "converged": converged,
-            **self.set_cycle_state({"quality": new_quality})
-        }
+# Initialize state
+processor_state = ProcessorState()
+
+# Initial parameters are available in ALL iterations
+quality_target = input_data.get("quality_target", 0.95)
+improvement_rate = input_data.get("improvement_rate", 0.1)
+
+prev_quality = processor_state.get_previous_state().get("quality", 0.0)
+
+new_quality = min(prev_quality + improvement_rate, 1.0)
+converged = new_quality >= quality_target
+
+processor_state.set_cycle_state({"quality": new_quality})
+
+result = {
+    "quality": new_quality,
+    "converged": converged
+}
+"""
+})
 
 # Parameters persist across all iterations
-runtime.execute(workflow, parameters={
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build(), parameters={
     "processor": {
-        "quality_target": 0.90,      # Available in iterations 0-N
-        "improvement_rate": 0.05     # No longer reverts to default!
+        "input_data": {
+            "quality_target": 0.90,      # Available in iterations 0-N
+            "improvement_rate": 0.05     # No longer reverts to default!
+        }
     }
 })
 ```
@@ -89,8 +108,8 @@ class DebugNode(Node):
 
 # Insert debug node before convergence check
 workflow = WorkflowBuilder()
-workflow.add_node("PythonCodeNode", "processor", {}))
-workflow.add_node("DebugNode", "debug", {}))
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = {"done": input_data.get("count", 0) >= 5}"})
+workflow.add_node("PythonCodeNode", "debug", {"code": "print(f\"Debug: {input_data}\"); result = input_data"})
 workflow.add_connection("processor", "result", "debug", "input")
 # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
@@ -141,8 +160,8 @@ class CycleLoggerNode(Node):
 
 # Insert into cycle for debugging
 workflow = WorkflowBuilder()
-workflow.add_node("PythonCodeNode", "processor", {}))
-workflow.add_node("CycleLoggerNode", "logger", {}))
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = {"iteration": input_data.get("iteration", 0) + 1}"})
+workflow.add_node("PythonCodeNode", "logger", {"code": "print(f\"Cycle Debug: {input_data}\"); result = input_data"})
 workflow.add_connection("processor", "result", "logger", "input")
 # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
@@ -195,7 +214,7 @@ def test_cycle_execution():
     workflow = WorkflowBuilder()
 
     # Simple counter node
-    workflow.add_node("PythonCodeNode", "counter", {}))
+    workflow.add_node("PythonCodeNode", "counter", {"code": "result = {"count": input_data.get("count", 0) + 1, "done": input_data.get("count", 0) >= 2}"})
 
     # Self-cycle
     # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()

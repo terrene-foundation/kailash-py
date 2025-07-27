@@ -49,9 +49,12 @@ workflow.add_node("PythonCodeNode", "output", {
 workflow.add_connection("processor", "result", "checker", "input_data")
 workflow.add_connection("checker", "result", "switch", "input_data")
 
+# Build workflow and create cycle using modern API
+built_workflow = workflow.build()
+
 # Create cycle using CycleBuilder API
-cycle_builder = workflow.create_cycle("quality_improvement")
-cycle_builder.connect("switch", "true_output", "processor", "input_data") \
+cycle_builder = built_workflow.create_cycle("quality_improvement")
+cycle_builder.connect("switch", "processor", mapping={"true_output": "input_data"}) \
              .max_iterations(10) \
              .converge_when("needs_improvement == False") \
              .timeout(300) \
@@ -199,9 +202,12 @@ workflow.add_connection("source", "result", "processor", "data")
 workflow.add_connection("processor", "result", "checker", "data")
 workflow.add_connection("checker", "result", "switch", "input_data")
 
+# Build workflow and create cycle using modern API
+built_workflow = workflow.build()
+
 # Create cycle using CycleBuilder API
-cycle_builder = workflow.create_cycle("quality_improvement")
-cycle_builder.connect("switch", "true_output", "processor", "data") \
+cycle_builder = built_workflow.create_cycle("quality_improvement")
+cycle_builder.connect("switch", "processor", mapping={"true_output": "data"}) \
              .max_iterations(5) \
              .converge_when("needs_improvement == False") \
              .timeout(300) \
@@ -271,9 +277,11 @@ from kailash.workflow.builder import WorkflowBuilder
 
 workflow = WorkflowBuilder()
 
-# Create cycle with proper limits
-cycle_builder = workflow.create_cycle("retry_cycle")
-cycle_builder.connect("switch", "true_output", "retry", "input") \
+# Build workflow and create cycle with proper limits
+built_workflow = workflow.build()
+
+cycle_builder = built_workflow.create_cycle("retry_cycle")
+cycle_builder.connect("switch", "retry", mapping={"true_output": "input"}) \
              .max_iterations(20) \
              .converge_when("success == True") \
              .timeout(600) \

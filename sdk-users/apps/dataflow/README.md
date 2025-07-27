@@ -316,12 +316,12 @@ workflow.add_node("OrderItemBulkCreateNode", "add_items", {
 
 # Calculate and update total
 workflow.add_node("OrderUpdateNode", "update_total", {
-    "conditions": {"id": "{{create_order.id}}"},
     "updates": {"total": 200.00, "status": "confirmed"}
 })
 
 # Connect nodes
-workflow.add_connection("create_order", "result", "add_items", "input")
+workflow.add_connection("create_order", "id", "add_items", "order_id")
+workflow.add_connection("create_order", "id", "update_total", "order_id")
 workflow.add_connection("add_items", "result", "update_total", "input")
 
 runtime = LocalRuntime()
@@ -352,8 +352,8 @@ analytics_workflow.add_node("OrderItemListNode", "top_products", {
 
 # Execute analytics
 results, run_id = runtime.execute(analytics_workflow.build())
-print(f"Today's orders: {len(results['today_sales']['output'])}")
-print(f"Top products: {results['top_products']['output']}")
+print(f"Today's orders: {len(results['today_sales']['result'])}")
+print(f"Top products: {results['top_products']['result']}")
 ```
 
 ## Performance & Optimization
@@ -365,35 +365,63 @@ print(f"Top products: {results['top_products']['output']}")
 
 ### Performance Monitoring
 ```python
-# Built-in performance monitoring
-with app.benchmark("complex_query"):
-    results = app.query("large_table").where({...}).aggregate([...])
+# Built-in performance monitoring with workflow
+workflow.add_node("PerformanceMonitorNode", "monitor", {
+    "operation": "complex_query",
+    "track_metrics": True
+})
 
-# View performance metrics
-print(app.metrics.summary())
-# Query: complex_query - Avg: 45ms, P95: 120ms, Count: 1,247
+workflow.add_node("UserListNode", "large_query", {
+    "filter": {"status": "active"},
+    "aggregate": [
+        {"$group": {"_id": "$department", "count": {"$sum": 1}}}
+    ]
+})
+
+# Execute with monitoring
+results, run_id = runtime.execute(workflow.build())
+# Performance metrics available in results['monitor']['metrics']
 ```
 
 ## Enterprise Features
 
 ### Security & Compliance
 ```python
-# GDPR/CCPA compliance built-in
-@app.compliance("gdpr")
-def handle_data_request(user_id, request_type):
-    if request_type == "export":
-        return app.export_user_data(user_id)
-    elif request_type == "delete":
-        return app.anonymize_user_data(user_id)
+# GDPR/CCPA compliance built-in with workflows
+workflow.add_node("GDPRComplianceNode", "gdpr_handler", {
+    "user_id": 123,
+    "request_type": "export",  # or "delete"
+    "include_audit_trail": True
+})
 
-# Comprehensive audit trails
-app.enable_audit_log()
+# Data export workflow
+workflow.add_node("UserDataExportNode", "export_data", {
+    "user_id": 123,
+    "format": "json",
+    "include_deleted": True
+})
+
+# Data anonymization workflow
+workflow.add_node("UserDataAnonymizeNode", "anonymize_data", {
+    "user_id": 123,
+    "retention_policy": "strict",
+    "cascade_delete": True
+})
+
+# Audit trail is automatically enabled with multi_tenant: True
 ```
 
 ### Health Monitoring
 ```python
-# Automatic health checks
-health = app.health_check()
+# Automatic health checks with workflow
+workflow.add_node("HealthCheckNode", "health_monitor", {
+    "check_database": True,
+    "check_cache": True,
+    "check_connections": True
+})
+
+results, run_id = runtime.execute(workflow.build())
+health = results["health_monitor"]["result"]
 # {
 #   "status": "healthy",
 #   "database": "connected",

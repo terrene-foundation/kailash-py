@@ -220,6 +220,60 @@ class CyclicWorkflowExecutor:
         else:
             return obj
 
+    def _should_skip_conditional_node_cyclic(
+        self, workflow: Workflow, node_id: str, merged_inputs: dict[str, Any]
+    ) -> bool:
+        """Determine if a node should be skipped due to conditional routing in cyclic execution.
+
+        This is similar to LocalRuntime._should_skip_conditional_node but adapted for cyclic execution.
+
+        Args:
+            workflow: The workflow being executed.
+            node_id: Node ID to check.
+            merged_inputs: Merged inputs for the node.
+
+        Returns:
+            True if the node should be skipped, False otherwise.
+        """
+        # Get all incoming edges for this node
+        incoming_edges = list(workflow.graph.in_edges(node_id, data=True))
+
+        # If the node has no incoming connections, don't skip it
+        if not incoming_edges:
+            return False
+
+        # Check if any incoming edges are from conditional nodes
+        has_conditional_inputs = False
+        for source_node_id, _, edge_data in incoming_edges:
+            try:
+                source_node = workflow.get_node(source_node_id)
+                if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
+                    has_conditional_inputs = True
+                    break
+            except:
+                continue
+
+        # If no conditional inputs, don't skip
+        if not has_conditional_inputs:
+            return False
+
+        # Check if all connected inputs are None
+        has_non_none_input = False
+        for _, _, edge_data in incoming_edges:
+            mapping = edge_data.get("mapping", {})
+            for source_key, target_key in mapping.items():
+                if (
+                    target_key in merged_inputs
+                    and merged_inputs[target_key] is not None
+                ):
+                    has_non_none_input = True
+                    break
+            if has_non_none_input:
+                break
+
+        # Skip the node if all connected inputs are None
+        return not has_non_none_input
+
     def _execute_with_cycles(
         self,
         workflow: Workflow,
@@ -862,6 +916,20 @@ class CyclicWorkflowExecutor:
                     task_manager.update_task_status(task.task_id, TaskStatus.RUNNING)
             except Exception as e:
                 logger.warning(f"Failed to create task for node '{node_id}': {e}")
+
+        # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
+        if self._should_skip_conditional_node_cyclic(workflow, node_id, merged_inputs):
+            logger.info(f"Skipping node {node_id} - all conditional inputs are None")
+            # Store None result to indicate the node was skipped
+            if task and task_manager:
+                task_manager.update_task_status(
+                    task.task_id,
+                    TaskStatus.COMPLETED,
+                    result=None,
+                    ended_at=datetime.now(UTC),
+                    metadata={"skipped": True, "reason": "conditional_routing"},
+                )
+            return None
 
         # Execute node with metrics collection
         collector = MetricsCollector()

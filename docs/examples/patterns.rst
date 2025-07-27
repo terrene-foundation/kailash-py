@@ -94,10 +94,11 @@ Retry Pattern with Backoff
    # Create workflow with retry cycle
    workflow = Workflow("retry_pattern")
    workflow.add_node("retry", RetryNode())
-   workflow.connect("retry", "retry",
-                    cycle=True,
-                    max_iterations=5,
-                    convergence_check="success == True")
+   workflow.create_cycle("retry_cycle") \
+           .connect("retry", "retry") \
+           .max_iterations(5) \
+           .converge_when("success == True") \
+           .build()
 
 Iterative Optimization Pattern
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -144,10 +145,11 @@ Iterative Optimization Pattern
    # Create optimization workflow
    workflow = Workflow("optimization")
    workflow.add_node("optimizer", GradientDescentNode())
-   workflow.connect("optimizer", "optimizer",
-                    cycle=True,
-                    max_iterations=1000,
-                    convergence_check="converged == True")
+   workflow.create_cycle("optimization_cycle") \
+           .connect("optimizer", "optimizer") \
+           .max_iterations(1000) \
+           .converge_when("converged == True") \
+           .build()
 
 Data Quality Improvement Pattern
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -228,9 +230,10 @@ Stream Processing Pattern
    # Create stream processing workflow
    workflow = Workflow("stream_processor")
    workflow.add_node("processor", StreamProcessorNode())
-   workflow.connect("processor", "processor",
-                    cycle=True,
-                    convergence_check="more_data == False")
+   workflow.create_cycle("stream_cycle") \
+           .connect("processor", "processor") \
+           .converge_when("more_data == False") \
+           .build()
 
 Multi-Node Cycle Pattern
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -250,10 +253,11 @@ Multi-Node Cycle Pattern
    workflow.connect("collector", "processor")
    workflow.connect("processor", "validator")
    workflow.connect("validator", "decider")
-   workflow.connect("decider", "collector",
-                    cycle=True,  # Only mark the closing edge
-                    max_iterations=50,
-                    convergence_check="should_continue == False")
+   workflow.create_cycle("processing_cycle") \
+           .connect("decider", "collector") \
+           .max_iterations(50) \
+           .converge_when("should_continue == False") \
+           .build()
 
 Best Practices for Cyclic Workflows
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

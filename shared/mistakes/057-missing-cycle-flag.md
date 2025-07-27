@@ -1,4 +1,4 @@
-# Mistake #057: Missing Cycle Flag
+# Mistake #057: Using Deprecated cycle=True Pattern Instead of CycleBuilder API
 
 ## Category
 Cycles
@@ -7,57 +7,88 @@ Cycles
 High
 
 ## Problem
-Creating a connection that forms a cycle in the workflow but forgetting to set `cycle=True`, causing validation to fail.
+Using the deprecated `cycle=True` parameter instead of the modern CycleBuilder API for creating cyclic workflows.
 
 ## Symptoms
+- Error message: `TypeError: unexpected keyword argument 'cycle'`
 - Error message: `WorkflowValidationError: Cycle detected in workflow`
-- Error message: `Workflow contains cycles but no cycle=True connections`
-- Workflow validation fails before execution
-- Legitimate feedback loops are rejected
+- Workflow validation fails when using old cycle patterns
+- Cannot create properly converging cycles
 
 ## Example
 ```python
-# ❌ WRONG - Cycle without marking it
-workflow = Workflow(name="iterative_improvement")
-workflow.add_node("generator", LLMAgentNode(), ...)
-workflow.add_node("validator", PythonCodeNode(), ...)
-workflow.connect("generator", "validator")
-workflow.connect("validator", "generator")  # Creates cycle but not marked!
+# ❌ WRONG - Deprecated cycle=True approach
+from kailash.workflow.builder import WorkflowBuilder
 
-# ✅ CORRECT - Explicitly mark the cycle
-workflow = Workflow(name="iterative_improvement")
-workflow.add_node("generator", LLMAgentNode(), ...)
-workflow.add_node("validator", PythonCodeNode(), ...)
-workflow.connect("generator", "validator")
-workflow.connect("validator", "generator",
-    cycle=True,                        # Required for cycles
-    max_iterations=10,                 # Safety limit
-    convergence_check="score >= 0.9"   # Stop condition
-)
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "generator", {"model": "gpt-4"})
+workflow.add_node("PythonCodeNode", "validator", {"code": "result = {'score': 0.8}"})
+workflow.add_connection("generator", "result", "validator", "input")
+workflow.add_connection("validator", "result", "generator", "input", cycle=True)  # DEPRECATED!
+
+# ✅ CORRECT - Use CycleBuilder API
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "generator", {
+    "code": """
+try:
+    iteration = feedback.get("iteration", 0)
+    score = feedback.get("score", 0.5)
+except NameError:
+    iteration = 0
+    score = 0.5
+
+new_iteration = iteration + 1
+improved_score = min(score + 0.1, 1.0)
+
+result = {
+    "iteration": new_iteration,
+    "score": improved_score,
+    "converged": improved_score >= 0.9
+}
+"""
+})
+
+# Build workflow first
+built_workflow = workflow.build()
+
+# Create cycle using CycleBuilder API
+cycle_builder = built_workflow.create_cycle('improvement_cycle')
+cycle_builder.connect('generator', 'generator', mapping={'result': 'feedback'})
+cycle_builder.max_iterations(10)
+cycle_builder.converge_when('converged == True')
+cycle_builder.build()
+
+# Execute with runtime
+runtime = LocalRuntime()
+results, run_id = runtime.execute(built_workflow)
 ```
 
 ## Root Cause
-Kailash requires explicit cycle marking to:
-1. Prevent accidental infinite loops
-2. Enable cycle-specific safety features
-3. Optimize execution for iterative patterns
+The `cycle=True` pattern was deprecated in favor of the CycleBuilder API which provides:
+1. Better control over cycle configuration
+2. Proper convergence conditions
+3. Clear separation between workflow building and cycle creation
+4. Runtime-based execution instead of direct node execution
 
 This mistake happens because:
-- Developers expect cycles to "just work"
-- The validation error doesn't suggest the solution
-- It's not obvious that cycles need special handling
+- Old documentation still shows `cycle=True` examples
+- Developers use outdated patterns from earlier versions
+- The new CycleBuilder API requires different workflow structure
 
 ## Solution
-1. Identify the connection that completes the cycle
-2. Add `cycle=True` to that connection
-3. Add `max_iterations` for safety
-4. Consider adding `convergence_check` for early stopping
+1. Build the workflow first using `workflow.build()`
+2. Create cycles using `built_workflow.create_cycle('name')`
+3. Configure cycles with `.connect()`, `.max_iterations()`, `.converge_when()`
+4. Execute using `runtime.execute(built_workflow)`
 
 ## Prevention
-- Always use `cycle=True` when creating feedback loops
-- Set reasonable `max_iterations` (default is 100)
-- Add convergence checks for efficiency
-- Use workflow visualization to spot cycles
+- Always use CycleBuilder API for cycles: `built_workflow.create_cycle()`
+- Build workflow before creating cycles: `workflow.build()`
+- Use runtime execution: `runtime.execute(workflow)`
+- Set proper convergence conditions with `.converge_when()`
 
 ## Related Mistakes
 - [#058 - Unsafe State Access](058-unsafe-state-access.md)
