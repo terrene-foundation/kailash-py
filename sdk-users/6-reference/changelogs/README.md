@@ -9,25 +9,29 @@ This directory contains the organized changelog for the Kailash Python SDK.
 
 ## Current Version
 
-The current version is **0.8.6** (released 2025-07-22).
+The current version is **0.9.0** (released 2025-01-27).
 
 ## Recent Releases
 
+- [v0.9.0 - 2025-07-27](releases/v0.9.0-2025-07-27.md) - CycleBuilder API Migration
+- [v0.8.7 - 2025-01-25](releases/v0.8.7-2025-01-25.md) - MCP Parameter Validation & Phase 2 Enhancements
 - [v0.8.6 - 2025-07-22](releases/v0.8.6-2025-07-22.md) - Enhanced Parameter Validation & Debugging
 - [v0.8.5 - 2025-01-22](releases/v0.8.5-2025-01-22.md) - Test Infrastructure & Application Framework Enhancement
 - [v0.7.0 - 2025-07-10](releases/v0.7.0-2025-07-10.md) - Major Framework Release
 - [v0.6.6 - 2025-07-08](releases/v0.6.6-2025-07-08.md) - Infrastructure Enhancements
 - [v0.6.5 - 2025-07-08](releases/v0.6.5-2025-07-08.md) - Real MCP Execution Default
-- [v0.6.4 - 2025-07-06](releases/v0.6.4-2025-07-06.md) - AsyncSQL & Transaction Monitoring
-- [v0.6.3 - 2025-07-05](releases/v0.6.3-2025-07-05.md) - Enterprise Features
 
 ## All Releases
 
 ### 2025
 
-#### July
+#### January
+- [v0.9.0 - 2025-07-27](releases/v0.9.0-2025-07-27.md) (pending)
+- [v0.8.7 - 2025-01-25](releases/v0.8.7-2025-01-25.md)
 - [v0.8.6 - 2025-07-22](releases/v0.8.6-2025-07-22.md)
 - [v0.8.5 - 2025-01-22](releases/v0.8.5-2025-01-22.md)
+
+#### July
 - [v0.7.0 - 2025-07-10](releases/v0.7.0-2025-07-10.md)
 - [v0.6.6 - 2025-07-08](releases/v0.6.6-2025-07-08.md)
 - [v0.6.5 - 2025-07-08](releases/v0.6.5-2025-07-08.md)
