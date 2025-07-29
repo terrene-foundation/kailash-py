@@ -129,7 +129,7 @@ class TestMCPClientInitialization:
         client = MCPClient(connection_pool_config=pool_config)
 
         assert client.connection_pool_config == pool_config
-        assert client._connection_pools == {}
+        assert client._websocket_pools == {}
 
     def test_init_with_circuit_breaker_config(self):
         """Test initialization with circuit breaker configuration."""

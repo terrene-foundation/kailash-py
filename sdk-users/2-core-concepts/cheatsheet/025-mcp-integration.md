@@ -26,6 +26,8 @@ nexus = Nexus()
 nexus.enable_api(port=8000)    # REST API
 nexus.enable_cli()              # Command line
 nexus.enable_mcp(port=3000)     # MCP server - FULLY TESTED ✅
+# With WebSocket transport support:
+nexus.enable_mcp(port=3000, transport="websocket")  # WebSocket MCP server
 
 # Workflows automatically available across all channels:
 # - API: POST /api/executions
@@ -128,6 +130,19 @@ async def get_status(service: str) -> dict:
 
 if __name__ == "__main__":
     server.run()
+    
+# WebSocket production server
+from kailash.mcp_server.transports import WebSocketServerTransport
+
+ws_transport = WebSocketServerTransport(
+    host="0.0.0.0", 
+    port=3001,
+    ping_interval=30.0,
+    max_message_size=5*1024*1024  # 5MB
+)
+
+ws_server = MCPServer("websocket-server", transport=ws_transport)
+# Tools registered same way - automatic WebSocket support
 ```
 
 ### Simple Server for Prototyping (SimpleMCPServer)
@@ -194,7 +209,50 @@ mcp_servers = [
         }
     }
 ]
+```
 
+### WebSocket Transport (Real-time)
+```python
+# WebSocket MCP client with connection pooling
+mcp_servers = [
+    {
+        "name": "realtime-server",
+        "transport": "websocket",
+        "url": "ws://localhost:3001/mcp",
+        "connection_pool_config": {
+            "max_connections": 10,
+            "connection_timeout": 30.0,
+            "ping_interval": 20.0
+        }
+    },
+    {
+        "name": "secure-server", 
+        "transport": "websocket",
+        "url": "wss://api.company.com/mcp",
+        "ping_interval": 30.0,
+        "ping_timeout": 10.0
+    }
+]
+
+# Direct WebSocket client for advanced usage
+from kailash.mcp_server import MCPClient
+
+client = MCPClient(
+    connection_pool_config={
+        "max_connections": 20,
+        "connection_timeout": 30.0
+    },
+    enable_metrics=True
+)
+
+async with client:
+    # Connection pooling automatically used
+    result1 = await client.call_tool("ws://api.example.com/mcp", "search", {"query": "AI"})
+    result2 = await client.call_tool("ws://api.example.com/mcp", "analyze", {"data": result1})
+    
+    # Check pool efficiency  
+    metrics = client.get_metrics()
+    print(f"Pool efficiency: {metrics.get('websocket_pool_hits', 0)} hits")
 ```
 
 ## Tool Discovery
