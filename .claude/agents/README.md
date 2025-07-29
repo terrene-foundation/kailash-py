@@ -17,7 +17,13 @@ The subagents are designed around the core workflow phases identified in `CLAUDE
 | **gold-standards-validator** | Compliance checking against gold standards | Code validation, catching violations early |
 | **testing-specialist** | 3-tier testing strategy with real infrastructure | Understanding testing requirements and strategy |
 | **tdd-implementer** | Test-first development methodology | Implementing features with write-test-then-code |
-| **documentation-validator** | Docu| **ultrathink-analyst** | Deep analysis and failure point identification | Complex features, systemic issues, risk analysis |
+| **documentation-validator** | Documentation validation and testing | Testing code examples, ensuring doc accuracy |
+| **ultrathink-analyst** | Deep analysis and failure point identification | Complex features, systemic issues, risk analysis |
+| **requirements-analyst** | Requirements breakdown and ADR creation | Systematic analysis, architecture decisions |
+| **intermediate-reviewer** | Checkpoint reviews and progress critique | Reviewing todos and implementation milestones |
+| **todo-manager** | Task management and project tracking | Creating and managing development task lists |
+| **mcp-specialist** | MCP server implementation and integration | Model Context Protocol patterns and debugging |
+| **git-release-specialist** | Git workflows, CI validation, and releases | Pre-commit checks, PR creation, version releases |
 
 ### Design Principles
 
@@ -38,7 +44,8 @@ Follow this sequence for efficient feature development:
 | **2. Planning** | todo-manager → intermediate-reviewer | Task breakdown and validation |
 | **3. Implementation** | tdd-implementer → pattern-expert → intermediate-reviewer → gold-standards-validator | Test-first, implement, review, validate (repeat per component) |
 | **4. Testing** | testing-specialist → documentation-validator | Full test coverage, doc accuracy |
-| **5. Final** | intermediate-reviewer | Final critique |
+| **5. Release** | git-release-specialist | Pre-commit validation, PR creation, version management |
+| **6. Final** | intermediate-reviewer | Final critique |
 
 ### Phase 1: Analysis & Planning (Sequential)
 ```
@@ -85,7 +92,17 @@ OR chain Phase 4:
 > Use the testing-specialist, documentation-validator, and todo-manager subagents to ensure complete test coverage and documentation accuracy
 ```
 
-### Phase 5: Final Review
+### Phase 5: Release & Git Management
+```
+1. > Use the git-release-specialist subagent to run pre-commit validation (black, isort, ruff)
+2. > Use the git-release-specialist subagent to create feature branch and PR workflow
+3. > Use the git-release-specialist subagent to handle version management and release procedures (if applicable)
+
+OR chain Phase 5:
+> Use the git-release-specialist subagent to validate code quality, create PR, and manage release workflow
+```
+
+### Phase 6: Final Review
 ```
 > Use the intermediate-reviewer subagent to perform final critique of complete implementation
 ```
