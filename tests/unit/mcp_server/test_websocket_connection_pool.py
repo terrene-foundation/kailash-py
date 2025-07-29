@@ -35,7 +35,9 @@ class TestWebSocketConnectionPoolUnit:
         assert client.connection_pool_config is not None
         assert client.connection_pool_config["max_connections"] == 5
         assert client.connection_pool_config["max_idle_time"] == 60
-        assert client.connection_pool_config["health_check_interval"] == 0  # Disabled for testing
+        assert (
+            client.connection_pool_config["health_check_interval"] == 0
+        )  # Disabled for testing
         assert client.connection_pool_config["enable_connection_reuse"] is True
 
         # Should have internal pool structure
@@ -83,7 +85,9 @@ class TestWebSocketConnectionPoolUnit:
                 assert connection_count == 1  # Should still be 1
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Mock async context managers don't work properly with AsyncExitStack - see integration tests for real validation")
+    @pytest.mark.skip(
+        reason="Mock async context managers don't work properly with AsyncExitStack - see integration tests for real validation"
+    )
     async def test_connection_pool_max_connections(self, client):
         """Test that pool respects max_connections limit."""
         # Create URLs up to and beyond the max_connections limit (5)
@@ -124,20 +128,22 @@ class TestWebSocketConnectionPoolUnit:
                 for i, url in enumerate(urls[:5]):
                     await client.discover_tools(url)
                     assert len(client._get_active_connections()) == i + 1
-                
+
                 # Should have 5 active connections at this point
                 assert len(client._get_active_connections()) == 5
                 assert len(connection_tracking) == 5
-                
+
                 # Test the exact problematic case: 6th connection that triggers eviction
                 # This is where the issue likely occurs
                 problematic_url = urls[5]  # 6th URL
                 await client.discover_tools(problematic_url)
-                
+
                 # Should still respect the limit
                 assert len(client._get_active_connections()) <= 5
-                assert len(connection_tracking) == 6  # But should have created 6th connection
-                
+                assert (
+                    len(connection_tracking) == 6
+                )  # But should have created 6th connection
+
                 # Explicitly clean up all connections to avoid lingering tasks
                 active_urls = list(client._get_active_connections())  # Copy the list
                 for url in active_urls:
