@@ -493,7 +493,10 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 and "RETURNING" not in query_upper
                 and fetch_mode == FetchMode.ALL
             ):
-                result = await conn.execute(query, *params)
+                if isinstance(params, dict):
+                    result = await conn.execute(query, params)
+                else:
+                    result = await conn.execute(query, *params)
                 # asyncpg returns a string like "UPDATE 1", extract the count
                 if isinstance(result, str):
                     parts = result.split()
@@ -505,15 +508,24 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 return []
 
             if fetch_mode == FetchMode.ONE:
-                row = await conn.fetchrow(query, *params)
+                if isinstance(params, dict):
+                    row = await conn.fetchrow(query, params)
+                else:
+                    row = await conn.fetchrow(query, *params)
                 return self._convert_row(dict(row)) if row else None
             elif fetch_mode == FetchMode.ALL:
-                rows = await conn.fetch(query, *params)
+                if isinstance(params, dict):
+                    rows = await conn.fetch(query, params)
+                else:
+                    rows = await conn.fetch(query, *params)
                 return [self._convert_row(dict(row)) for row in rows]
             elif fetch_mode == FetchMode.MANY:
                 if not fetch_size:
                     raise ValueError("fetch_size required for MANY mode")
-                rows = await conn.fetch(query, *params)
+                if isinstance(params, dict):
+                    rows = await conn.fetch(query, params)
+                else:
+                    rows = await conn.fetch(query, *params)
                 return [self._convert_row(dict(row)) for row in rows[:fetch_size]]
             elif fetch_mode == FetchMode.ITERATOR:
                 raise NotImplementedError("Iterator mode not yet implemented")
@@ -532,7 +544,10 @@ class PostgreSQLAdapter(DatabaseAdapter):
                     and "RETURNING" not in query_upper
                     and fetch_mode == FetchMode.ALL
                 ):
-                    result = await conn.execute(query, *params)
+                    if isinstance(params, dict):
+                        result = await conn.execute(query, params)
+                    else:
+                        result = await conn.execute(query, *params)
                     # asyncpg returns a string like "UPDATE 1", extract the count
                     if isinstance(result, str):
                         parts = result.split()
@@ -544,15 +559,24 @@ class PostgreSQLAdapter(DatabaseAdapter):
                     return []
 
                 if fetch_mode == FetchMode.ONE:
-                    row = await conn.fetchrow(query, *params)
+                    if isinstance(params, dict):
+                        row = await conn.fetchrow(query, params)
+                    else:
+                        row = await conn.fetchrow(query, *params)
                     return self._convert_row(dict(row)) if row else None
                 elif fetch_mode == FetchMode.ALL:
-                    rows = await conn.fetch(query, *params)
+                    if isinstance(params, dict):
+                        rows = await conn.fetch(query, params)
+                    else:
+                        rows = await conn.fetch(query, *params)
                     return [self._convert_row(dict(row)) for row in rows]
                 elif fetch_mode == FetchMode.MANY:
                     if not fetch_size:
                         raise ValueError("fetch_size required for MANY mode")
-                    rows = await conn.fetch(query, *params)
+                    if isinstance(params, dict):
+                        rows = await conn.fetch(query, params)
+                    else:
+                        rows = await conn.fetch(query, *params)
                     return [self._convert_row(dict(row)) for row in rows[:fetch_size]]
                 elif fetch_mode == FetchMode.ITERATOR:
                     raise NotImplementedError("Iterator mode not yet implemented")
@@ -2431,6 +2455,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
             set_parts.append(f"{self._version_field} = {self._version_field} + 1")
 
         return f"UPDATE {table_name} SET {', '.join(set_parts)} WHERE {where_clause}"
+
 
     def _convert_to_named_parameters(
         self, query: str, parameters: list
