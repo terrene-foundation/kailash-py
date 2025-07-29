@@ -18,13 +18,13 @@ from typing import Any, Dict
 
 import pytest
 import pytest_asyncio
-from tests.utils.docker_config import DATABASE_CONFIG, skip_if_no_postgres
 
 from kailash import Workflow
 from kailash.nodes.code import AsyncPythonCodeNode, PythonCodeNode
 from kailash.nodes.data import AsyncSQLDatabaseNode, SQLDatabaseNode
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.workflow import AsyncWorkflowBuilder
+from tests.utils.docker_config import DATABASE_CONFIG, skip_if_no_postgres
 
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio, skip_if_no_postgres()]
 

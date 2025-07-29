@@ -93,3 +93,4 @@ examples/output/
 docs/build_output.txt
 
 # Prevent root-level data files (already covered above)
+test-release/
