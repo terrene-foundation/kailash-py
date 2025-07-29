@@ -914,13 +914,13 @@ class MCPClient:
         self, url: str, timeout: Optional[float]
     ) -> Any:
         """Create a new WebSocket connection and session."""
-        from mcp import ClientSession
-        from mcp.client.websocket import websocket_client
-
         # Create connection using AsyncExitStack for proper lifecycle management
         # This fixes the manual __aenter__/__aexit__ issue
         from contextlib import AsyncExitStack
-        
+
+        from mcp import ClientSession
+        from mcp.client.websocket import websocket_client
+
         class WebSocketConnection:
             def __init__(self):
                 self.exit_stack = None
@@ -929,18 +929,20 @@ class MCPClient:
             async def connect(self, url):
                 # Use AsyncExitStack to properly manage async context managers
                 self.exit_stack = AsyncExitStack()
-                
+
                 try:
                     # Enter the websocket context using AsyncExitStack
                     websocket_context = websocket_client(url=url)
-                    streams = await self.exit_stack.enter_async_context(websocket_context)
+                    streams = await self.exit_stack.enter_async_context(
+                        websocket_context
+                    )
                     self.read_stream, self.write_stream = streams
 
                     # Create and initialize session using AsyncExitStack
                     session = ClientSession(self.read_stream, self.write_stream)
                     session_ref = await self.exit_stack.enter_async_context(session)
                     await session_ref.initialize()
-                    
+
                     self.session = session_ref
                     return session_ref
 
@@ -955,18 +957,21 @@ class MCPClient:
                     exit_stack = self.exit_stack
                     self.exit_stack = None
                     self.session = None
-                    
+
                     # Schedule cleanup for later to avoid cross-task issues
                     # This prevents the "different task" async generator problems
                     try:
                         # Use create_task to run cleanup independently
                         cleanup_task = asyncio.create_task(exit_stack.aclose())
+
                         # Don't await - let it run in background to avoid blocking
                         # But add a callback to log any errors
                         def log_cleanup_error(task):
                             if task.exception():
-                                logger.warning(f"Background cleanup error: {task.exception()}")
-                        
+                                logger.warning(
+                                    f"Background cleanup error: {task.exception()}"
+                                )
+
                         cleanup_task.add_done_callback(log_cleanup_error)
                     except Exception as e:
                         logger.warning(f"Error scheduling connection cleanup: {e}")
