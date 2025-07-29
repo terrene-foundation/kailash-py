@@ -18,11 +18,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pytest
 import pytest_asyncio
-from tests.utils.docker_config import (
-    OLLAMA_CONFIG,
-    ensure_docker_services,
-    get_postgres_connection_string,
-)
 
 from kailash import LocalRuntime, Workflow, WorkflowBuilder
 from kailash.nodes import PythonCodeNode
@@ -35,6 +30,11 @@ from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.data import SQLDatabaseNode
 from kailash.nodes.transform import DataTransformer
 from kailash.sdk_exceptions import NodeExecutionError
+from tests.utils.docker_config import (
+    OLLAMA_CONFIG,
+    ensure_docker_services,
+    get_postgres_connection_string,
+)
 
 pytestmark = [pytest.mark.docker, pytest.mark.e2e, pytest.mark.ai]
 

@@ -23,8 +23,6 @@ try:
 except ImportError:
     redis = None
 
-from tests.utils.docker_config import DATABASE_CONFIG, OLLAMA_CONFIG, REDIS_CONFIG
-
 from kailash.resources.factory import (
     CacheFactory,
     DatabasePoolFactory,
@@ -33,6 +31,7 @@ from kailash.resources.factory import (
 from kailash.resources.registry import ResourceRegistry
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.workflow import AsyncPatterns, AsyncWorkflowBuilder
+from tests.utils.docker_config import DATABASE_CONFIG, OLLAMA_CONFIG, REDIS_CONFIG
 
 
 @pytest.mark.integration

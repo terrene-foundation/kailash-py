@@ -2456,7 +2456,6 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
         return f"UPDATE {table_name} SET {', '.join(set_parts)} WHERE {where_clause}"
 
-
     def _convert_to_named_parameters(
         self, query: str, parameters: list
     ) -> tuple[str, dict]:

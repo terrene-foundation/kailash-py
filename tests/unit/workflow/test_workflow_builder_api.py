@@ -3,11 +3,11 @@
 from unittest.mock import Mock
 
 import pytest
-from tests.conftest import MockNode
 
 from kailash.nodes.base import Node, NodeParameter, NodeRegistry
 from kailash.sdk_exceptions import NodeValidationError, WorkflowValidationError
 from kailash.workflow.builder import WorkflowBuilder
+from tests.conftest import MockNode
 
 
 def _ensure_mock_node_registered():
