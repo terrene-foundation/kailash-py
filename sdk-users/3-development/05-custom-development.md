@@ -26,7 +26,7 @@ workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 ```python
 # ✅ Custom nodes use class references
 from myapp.nodes import CustomProcessorNode
-workflow.add_node(CustomProcessorNode, "processor", {"threshold": 0.8})
+workflow.add_node("CustomProcessorNode", "processor", {"threshold": 0.8})
 ```
 
 #### **Common Mistake**
@@ -68,7 +68,7 @@ class CustomProcessorNode(Node):
         # ⚠️ CRITICAL: Set attributes BEFORE calling super().__init__()
         self.processing_mode = kwargs.get("processing_mode", "standard")
         self.threshold = kwargs.get("threshold", 0.75)
-        
+
         # NOW call parent init
         super().__init__(**kwargs)
 
@@ -103,10 +103,10 @@ class CustomProcessorNode(Node):
         input_data = kwargs.get("input_data", [])
         threshold = kwargs.get("threshold", self.threshold)
         mode = kwargs.get("processing_mode", self.processing_mode)
-        
+
         # Process data
         result = self._process_data(input_data, threshold, mode)
-        
+
         return {"result": result}
 
     def _process_data(self, data, threshold, mode):
@@ -125,14 +125,14 @@ The SDK **ONLY** injects parameters declared in `get_parameters()`:
 class BrokenNode(Node):
     def get_parameters(self):
         return {}  # ❌ Empty! No parameters declared
-    
+
     def run(self, **kwargs):
         # kwargs will be EMPTY even if workflow provides parameters!
         data = kwargs.get("data")  # Always None!
         return {"result": data}
 
 # In workflow:
-workflow.add_node(BrokenNode, "broken", {"data": [1,2,3]})
+workflow.add_node("BrokenNode", "broken", {"data": [1,2,3]})
 # The "data" parameter is SILENTLY DROPPED!
 ```
 
@@ -149,7 +149,7 @@ class WorkingNode(Node):
                 description="Input data to process"
             )
         }
-    
+
     def run(self, **kwargs):
         data = kwargs["data"]  # ✅ Now available!
         return {"result": data}
@@ -183,7 +183,7 @@ from kailash.nodes.governance import SecureGovernedNode
 
 class EnterpriseProcessorNode(SecureGovernedNode):
     """Enterprise-grade processor with security and governance."""
-    
+
     def get_parameters(self):
         return {
             "sensitive_data": NodeParameter(
@@ -199,16 +199,16 @@ class EnterpriseProcessorNode(SecureGovernedNode):
                 description="User authentication context"
             )
         }
-    
+
     def run_governed(self, **kwargs):
         """Implement governed logic (called after validation)."""
         # All inputs are pre-validated and sanitized
         sensitive_data = kwargs["sensitive_data"]
         user_context = kwargs["user_context"]
-        
+
         # Your secure processing logic
         result = self._process_with_audit(sensitive_data, user_context)
-        
+
         return {"secure_result": result}
 ```
 
@@ -255,13 +255,14 @@ python -m kailash.cli.validate_imports src/myapp/nodes --fix
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from src.myapp.nodes.custom import CustomProcessorNode
 
 # Create workflow
 workflow = WorkflowBuilder()
 
 # ✅ CORRECT: Use class reference for custom nodes
-workflow.add_node(CustomProcessorNode, "processor", {
+workflow.add_node("CustomProcessorNode", "processor", {
     "threshold": 0.8,
     "mode": "advanced"
 })
@@ -288,31 +289,31 @@ class TestCustomProcessorNode:
         """Test that all parameters are properly declared."""
         node = CustomProcessorNode()
         params = node.get_parameters()
-        
+
         # Verify required parameters
         assert "input_data" in params
         assert params["input_data"].required is True
         assert params["input_data"].type == list
-        
+
     def test_execution_with_valid_data(self):
         """Test node execution with valid inputs."""
         node = CustomProcessorNode()
-        
+
         # Use execute() for tests, not run()
         result = node.execute(
             input_data=[1, 2, 3, 4, 5],
             threshold=3
         )
-        
+
         assert result["result"] == [4, 5]
-    
+
     def test_missing_required_parameter(self):
         """Test that missing required parameters raise errors."""
         node = CustomProcessorNode()
-        
+
         with pytest.raises(ValueError) as exc_info:
             node.execute(threshold=3)  # Missing input_data
-            
+
         assert "Missing required parameter" in str(exc_info.value)
 ```
 
@@ -322,19 +323,19 @@ class TestCustomProcessorNode:
 def test_custom_node_in_workflow():
     """Test custom node integration in workflow."""
     workflow = WorkflowBuilder()
-    
+
     # Add custom node
-    workflow.add_node(CustomProcessorNode, "processor", {
+    workflow.add_node("CustomProcessorNode", "processor", {
         "threshold": 0.5
     })
-    
+
     # Build should validate parameters
     built_workflow = workflow.build()
-    
+
     # Execute with runtime
     runtime = LocalRuntime()
     results, run_id = runtime.execute(built_workflow)
-    
+
     assert results["processor"]["result"] is not None
 ```
 
@@ -370,7 +371,7 @@ def run(self, **kwargs):  # Implement run() instead
 workflow.add_node("MyCustomNode", "node1", {})  # Not registered!
 
 # ✅ CORRECT
-workflow.add_node(MyCustomNode, "node1", {})  # Use class
+workflow.add_node("MyCustomNode", "node1", {})  # Use class
 ```
 
 ### **4. Relative Imports**
@@ -389,11 +390,12 @@ from src.myapp.nodes.utils import helper  # Absolute import
 For async operations, inherit from `AsyncNode`:
 
 ```python
-from kailash.nodes.base import AsyncNode, NodeParameter
+from kailash.nodes.base_async import AsyncNode
+from kailash.nodes.base import NodeParameter
 
 class AsyncDataFetcher(AsyncNode):
     """Async node for external data fetching."""
-    
+
     def get_parameters(self):
         return {
             "url": NodeParameter(
@@ -403,15 +405,15 @@ class AsyncDataFetcher(AsyncNode):
                 description="URL to fetch data from"
             )
         }
-    
+
     async def async_run(self, **kwargs):
         """Implement async logic here."""
         url = kwargs["url"]
-        
+
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 data = await response.json()
-                
+
         return {"fetched_data": data}
 ```
 
@@ -422,11 +424,11 @@ For nodes with dynamic parameters based on configuration:
 ```python
 class DynamicProcessorNode(Node):
     """Node with dynamic parameter requirements."""
-    
+
     def __init__(self, field_config=None, **kwargs):
         self.field_config = field_config or {}
         super().__init__(**kwargs)
-    
+
     def get_parameters(self):
         params = {
             "base_data": NodeParameter(
@@ -435,7 +437,7 @@ class DynamicProcessorNode(Node):
                 required=True
             )
         }
-        
+
         # Add dynamic parameters based on config
         for field_name, field_type in self.field_config.items():
             params[field_name] = NodeParameter(
@@ -444,7 +446,7 @@ class DynamicProcessorNode(Node):
                 required=False,
                 description=f"Dynamic field: {field_name}"
             )
-            
+
         return params
 ```
 

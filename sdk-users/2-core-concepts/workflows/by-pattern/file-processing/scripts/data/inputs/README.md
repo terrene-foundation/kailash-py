@@ -1,7 +1,6 @@
 # Document Processing Sample Files
 
-This directory contains sample files for the document processing workflow.
-
+This directory contains sample files for the document processing # Workflow setup goes here
 ## File Types
 
 - **CSV Files**: Customer data exports

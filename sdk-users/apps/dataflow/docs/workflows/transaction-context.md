@@ -149,9 +149,9 @@ workflow.add_node("UserUpdateNode", "update_user", {
 workflow.add_node("TransactionCommitNode", "commit_tx", {})
 
 # Connect nodes
-workflow.add_connection("begin_tx", "create_user")
-workflow.add_connection("create_user", "update_user")
-workflow.add_connection("update_user", "commit_tx")
+workflow.add_connection("begin_tx", "result", "create_user", "input")
+workflow.add_connection("create_user", "result", "update_user", "input")
+workflow.add_connection("update_user", "result", "commit_tx", "input")
 
 # Execute workflow
 runtime = LocalRuntime()
@@ -197,10 +197,10 @@ workflow.add_node("TransactionRollbackNode", "rollback_tx", {
 workflow.add_node("TransactionCommitNode", "commit_tx", {})
 
 # Connect with error handling
-workflow.add_connection("begin_tx", "create_user")
-workflow.add_connection("create_user", "validate_user")
-workflow.add_connection("validate_user", "commit_tx")
-workflow.add_connection("validate_user", "rollback_tx", on_error=True)
+workflow.add_connection("begin_tx", "result", "create_user", "input")
+workflow.add_connection("create_user", "result", "validate_user", "input")
+workflow.add_connection("validate_user", "result", "commit_tx", "input")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex pattern
 ```
 
 ### Savepoints for Nested Operations
@@ -250,13 +250,13 @@ workflow.add_node("TransactionRollbackToSavepointNode", "rollback_sp", {
 workflow.add_node("TransactionCommitNode", "commit_tx", {})
 
 # Connect with error handling
-workflow.add_connection("main_tx", "create_user")
-workflow.add_connection("create_user", "savepoint")
-workflow.add_connection("savepoint", "risky_update")
-workflow.add_connection("risky_update", "update_user")
+workflow.add_connection("main_tx", "result", "create_user", "input")
+workflow.add_connection("create_user", "result", "savepoint", "input")
+workflow.add_connection("savepoint", "result", "risky_update", "input")
+workflow.add_connection("risky_update", "result", "update_user", "input")
 workflow.add_connection("risky_update", "rollback_sp", on_error=True)
-workflow.add_connection("update_user", "commit_tx")
-workflow.add_connection("rollback_sp", "commit_tx")
+workflow.add_connection("update_user", "result", "commit_tx", "input")
+workflow.add_connection("rollback_sp", "result", "commit_tx", "input")
 ```
 
 ### E-commerce Order Processing
@@ -351,7 +351,7 @@ connections = [
 ]
 
 for source, target in connections:
-    workflow.add_connection(source, target)
+    workflow.add_connection(source, "result", target, "input")
 ```
 
 ## Multi-Workflow Transaction Isolation
@@ -361,7 +361,7 @@ DataFlow's transaction architecture ensures proper isolation between concurrent 
 ### Isolation Guarantees
 
 1. **Per-Workflow Context**: Each workflow execution gets its own transaction context
-2. **Connection Isolation**: Transactions are isolated at the database connection level  
+2. **Connection Isolation**: Transactions are isolated at the database connection level
 3. **MVCC Support**: Leverages PostgreSQL's Multi-Version Concurrency Control
 4. **Lock Management**: Proper lock acquisition and release per transaction
 
@@ -376,7 +376,7 @@ workflow_a.add_node("TransactionScopeNode", "tx_a", {
 # ... order processing logic ...
 workflow_a.add_node("TransactionCommitNode", "commit_a", {})
 
-# Workflow B - Processing order for Customer 2  
+# Workflow B - Processing order for Customer 2
 workflow_b = WorkflowBuilder()
 workflow_b.add_node("TransactionScopeNode", "tx_b", {
     "isolation_level": "REPEATABLE_READ"
@@ -399,7 +399,7 @@ thread_a = threading.Thread(
     args=(workflow_a, {"dataflow_instance": db, "customer": "A"})
 )
 thread_b = threading.Thread(
-    target=execute_workflow, 
+    target=execute_workflow,
     args=(workflow_b, {"dataflow_instance": db, "customer": "B"})
 )
 
@@ -435,7 +435,7 @@ workflow.add_node("TransactionScopeNode", "read_tx", {
 
 ```python
 # Always include error paths
-workflow.add_connection("risky_operation", "commit_tx")
+workflow.add_connection("risky_operation", "result", "commit_tx", "input")
 workflow.add_connection("risky_operation", "rollback_tx", on_error=True)
 
 # Use savepoints for partial rollbacks
@@ -497,7 +497,7 @@ DataFlow-generated nodes automatically check for transaction context:
 def run(self, **kwargs):
     # Check for active transaction
     connection = self.get_workflow_context("transaction_connection")
-    
+
     if connection:
         # Use shared transaction connection
         result = await connection.execute(query, params)
@@ -506,7 +506,7 @@ def run(self, **kwargs):
         connection = await create_connection()
         result = await connection.execute(query, params)
         await connection.close()
-    
+
     return result
 ```
 
@@ -535,7 +535,7 @@ Transaction workflows automatically include performance metrics:
 results, run_id = runtime.execute(workflow.build())
 
 # Access transaction timing
-transaction_start = results["begin_tx"]["timestamp"]  
+transaction_start = results["begin_tx"]["timestamp"]
 transaction_end = results["commit_tx"]["timestamp"]
 transaction_duration = transaction_end - transaction_start
 ```
@@ -545,7 +545,7 @@ transaction_duration = transaction_end - transaction_start
 ### Common Issues
 
 1. **Connection Not Found**: Ensure `dataflow_instance` is passed in workflow context
-2. **Transaction Timeout**: Increase timeout or optimize workflow performance  
+2. **Transaction Timeout**: Increase timeout or optimize workflow performance
 3. **Deadlocks**: Use consistent ordering of operations and appropriate isolation levels
 4. **Rollback Failures**: Check that transaction is still active and not already committed
 
@@ -577,13 +577,13 @@ result = user_node.execute(name="Alice", email="alice@example.com")
 workflow = WorkflowBuilder()
 workflow.add_node("TransactionScopeNode", "tx", {})
 workflow.add_node("UserCreateNode", "create", {
-    "name": "Alice", 
+    "name": "Alice",
     "email": "alice@example.com"
 })
 workflow.add_node("TransactionCommitNode", "commit", {})
 
-workflow.add_connection("tx", "create")
-workflow.add_connection("create", "commit")
+workflow.add_connection("tx", "result", "create", "input")
+workflow.add_connection("create", "result", "commit", "input")
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build(), parameters={
@@ -601,7 +601,7 @@ async with db.get_connection() as conn:
         await conn.execute("INSERT INTO users ...")
         await conn.execute("UPDATE accounts ...")
 
-# NEW: Workflow-based transaction management  
+# NEW: Workflow-based transaction management
 workflow = WorkflowBuilder()
 workflow.add_node("TransactionScopeNode", "tx", {})
 workflow.add_node("UserCreateNode", "create_user", {...})
@@ -621,11 +621,11 @@ workflow.add_node("TransactionCommitNode", "commit", {})
 
 Transaction context propagation in DataFlow provides:
 
-✅ **ACID Guarantees**: Full transaction support across workflow nodes  
-✅ **Performance**: Shared connections reduce overhead  
-✅ **Flexibility**: Multiple isolation levels and savepoint support  
-✅ **Reliability**: Automatic error handling and rollback capabilities  
-✅ **Scalability**: Proper isolation between concurrent workflows  
-✅ **Ease of Use**: Simple node-based transaction management  
+✅ **ACID Guarantees**: Full transaction support across workflow nodes
+✅ **Performance**: Shared connections reduce overhead
+✅ **Flexibility**: Multiple isolation levels and savepoint support
+✅ **Reliability**: Automatic error handling and rollback capabilities
+✅ **Scalability**: Proper isolation between concurrent workflows
+✅ **Ease of Use**: Simple node-based transaction management
 
 This feature enables DataFlow applications to handle complex, multi-step operations with full database consistency guarantees while maintaining the simplicity of the workflow paradigm.

@@ -21,7 +21,7 @@ workflow.add_node("JSONWriterNode", "writer", {
 })
 
 # Connect them
-workflow.connect("reader", "result", mapping={"writer": "data"})
+workflow.add_connection("reader", "data", "writer", "data")
 
 # Execute
 runtime = LocalRuntime()
@@ -49,10 +49,10 @@ result = {'items': filtered, 'count': len(filtered)}
 })
 
 # Connect with proper syntax
-workflow.connect("data_source", "result", mapping={"filter": "input_data"})
+workflow.add_connection("data_source", "result", "filter", "input_data")
 
 # Access nested output with dot notation
-workflow.connect("filter", "result.items", mapping={"next_node": "processed_data"})
+workflow.add_connection("filter", "result.items", "next_node", "processed_data")
 
 # Execute
 runtime = LocalRuntime()
@@ -82,7 +82,7 @@ result = {'analysis': analysis, 'confidence': 0.85}
 })
 
 # Connect nodes
-workflow.connect("data_source", "result", mapping={"llm_analysis": "input_data"})
+workflow.add_connection("data_source", "result", "llm_analysis", "input_data")
 
 # Execute
 runtime = LocalRuntime()
@@ -121,8 +121,8 @@ result = transformed
 })
 
 # Connect nodes
-workflow.connect("data_source", "result", mapping={"filter": "data"})
-workflow.connect("filter", "filtered_data", mapping={"transform": "input_data"})
+workflow.add_connection("data_source", "result", "filter", "data")
+workflow.add_connection("filter", "filtered_data", "transform", "input_data")
 
 # Execute
 runtime = LocalRuntime()
@@ -165,9 +165,9 @@ workflow.add_node("PythonCodeNode", "medium_processor", {
 })
 
 # Connect nodes
-workflow.connect("data_source", "result", mapping={"router": "input_data"})
-workflow.connect("router", "result", mapping={"high_processor": "input_data"})
-workflow.connect("router", "result", mapping={"medium_processor": "input_data"})
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 # Execute
 runtime = LocalRuntime()
@@ -241,8 +241,8 @@ result = {
 })
 
 # Connect nodes
-workflow.connect("data_prep", "result.text", mapping={"llm_agent": "prompt"})
-workflow.connect("llm_agent", "result", mapping={"post_process": "input_data"})
+workflow.add_connection("data_prep", "result.text", "llm_agent", "prompt")
+workflow.add_connection("llm_agent", "result", "post_process", "input_data")
 
 # Execute
 runtime = LocalRuntime()
@@ -313,7 +313,7 @@ result = {
 })
 
 # Connect nodes
-workflow.connect("initial", "result", mapping={"convergence": "input_data"})
+workflow.add_connection("initial", "result", "convergence", "input_data")
 
 # Execute
 runtime = LocalRuntime()

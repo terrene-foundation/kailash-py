@@ -86,7 +86,7 @@ Role.execute(
 
 ```python
 from fastapi import FastAPI
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 
 app = create_gateway(title="My App")
 User = UserManagementNode()

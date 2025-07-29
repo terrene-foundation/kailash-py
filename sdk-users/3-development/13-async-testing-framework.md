@@ -464,7 +464,7 @@ mock.async_method = AsyncMock(return_value="result")
 ```python
 # ❌ Wrong - Resource not registered
 db = MockDatabase()
-result = await workflow.execute()  # Can't find "database"
+result = await runtime.execute(workflow.build(), )  # Can't find "database"
 
 # ✅ Correct - Register resource
 db = await self.create_test_resource("database", MockDatabase, mock=True)

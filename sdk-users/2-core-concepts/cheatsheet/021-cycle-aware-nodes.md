@@ -5,36 +5,60 @@
 ## 🚀 Quick Setup
 
 ```python
-from kailash.nodes.base import CycleAwareNode, NodeParameter
-from typing import Any, Dict
+# Cycle-aware functionality using PythonCodeNode with persistent state
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-class OptimizerNode(CycleAwareNode):
-    def get_parameters(self) -> Dict[str, NodeParameter]:
-        return {
-            "data": NodeParameter(name="data", type=list, required=False, default=[]),
-            "quality": NodeParameter(name="quality", type=float, required=False, default=0.0),
-            "target": NodeParameter(name="target", type=float, required=False, default=0.8)
-        }
+# Create optimizer using PythonCodeNode with cycle-aware patterns
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "optimizer", {
+    "code": """
+# Cycle-aware state management using class variables
+class CycleState:
+    _instance = None
 
-    def run(self, **kwargs) -> Dict[str, Any]:
-        # Get cycle info
-        iteration = self.get_iteration()
-        prev_state = self.get_previous_state()
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.iteration = 0
+            cls._instance.state = {}
+        return cls._instance
 
-        # Get parameters with state fallback
-        quality = kwargs.get("quality", 0.0)
-        target = kwargs.get("target", prev_state.get("target", 0.8))
+    def get_iteration(self):
+        return self.iteration
 
-        # Process one iteration
-        new_quality = min(1.0, quality + 0.1)
-        converged = new_quality >= target
+    def increment_iteration(self):
+        self.iteration += 1
 
-        return {
-            "quality": new_quality,
-            "converged": converged,
-            "iteration": iteration,
-            **self.set_cycle_state({"target": target})
-        }
+    def get_previous_state(self):
+        return self.state.copy()
+
+    def set_cycle_state(self, data):
+        self.state.update(data)
+        return data
+
+# Initialize cycle state
+cycle_state = CycleState()
+
+# Get parameters with state fallback
+quality = input_data.get("quality", 0.0)
+target = input_data.get("target", cycle_state.get_previous_state().get("target", 0.8))
+
+# Process one iteration
+new_quality = min(1.0, quality + 0.1)
+converged = new_quality >= target
+
+# Update state and increment iteration
+cycle_state.set_cycle_state({"target": target})
+cycle_state.increment_iteration()
+
+result = {
+    "quality": new_quality,
+    "converged": converged,
+    "iteration": cycle_state.get_iteration()
+}
+"""
+})
 
 ```
 
@@ -103,7 +127,7 @@ def run(self, **kwargs):
 
 ### Self-Contained Convergence
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.base import CycleAwareNode
 
@@ -125,11 +149,9 @@ class SelfConvergingNode(CycleAwareNode):
         }
 
 # Usage
-workflow = Workflow("self-converging-example")
-workflow.add_node("improver", SelfConvergingNode())
-workflow.connect("improver", "improver",
-    cycle=True, max_iterations=20,
-    convergence_check="converged == True")
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "self_converging", {"code": "result = {"quality": min(1.0, input_data.get("quality", 0.0) + 0.1), "converged": True}"})
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 ```
 
@@ -138,7 +160,7 @@ workflow.connect("improver", "improver",
 from kailash.nodes.logic import ConvergenceCheckerNode
 
 # Add to workflow
-workflow.add_node("convergence", ConvergenceCheckerNode())
+workflow.add_node("PythonCodeNode", "convergence", {"code": "result = {"converged": input_data.get("value", 0.0) >= input_data.get("threshold", 0.85)}"})
 
 # Runtime parameters (not initialization)
 runtime.execute(workflow, parameters={
@@ -196,18 +218,15 @@ def run(self, **kwargs):
 ## 🔄 Simple Cycle Setup
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # Create cycle-aware node (assuming OptimizerNode is defined above)
-workflow = Workflow("simple-cycle-example")
-workflow.add_node("optimizer", OptimizerNode())
+workflow = WorkflowBuilder()
+workflow.add_node("OptimizerNode", "optimizer", {}))
 
 # Connect to itself
-workflow.connect("optimizer", "optimizer",
-    cycle=True,
-    max_iterations=15,
-    convergence_check="converged == True")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Execute
 runtime = LocalRuntime()

@@ -375,6 +375,7 @@ perm_node = PermissionCheckNode(
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
 # Build user onboarding workflow
 builder = WorkflowBuilder()
@@ -394,7 +395,7 @@ builder.add_connection("create_user", "result.user.email", "send_welcome", "to_e
 
 # Build and run
 workflow = builder.build()
-result = workflow.execute({
+result = runtime.execute(workflow.build(), {
     "operation": "create_user",
     "user_data": {
         "email": "newuser@example.com",
@@ -411,7 +412,7 @@ result = workflow.execute({
 ### Middleware Integration
 
 ```python
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 
 # Create gateway with admin endpoints
 app = create_gateway(

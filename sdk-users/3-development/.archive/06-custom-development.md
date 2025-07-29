@@ -90,7 +90,7 @@ class CustomProcessorNode(Node):
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -100,8 +100,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ WRONG - Attributes set after super().__init__()
 class BadNode(Node):
@@ -133,7 +134,7 @@ def get_parameters(self):
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -143,8 +144,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def get_parameters(self) -> Dict[str, NodeParameter]:
     """Define comprehensive parameter schema."""
@@ -426,7 +428,7 @@ class AsyncProcessorNode(Node):
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -436,8 +438,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class AsyncDatabaseNode(Node):
     """Async database operations node."""
@@ -511,7 +514,7 @@ workflow. kwargs.get("parameters", {})
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -521,8 +524,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class ConfigurableNode(Node):
     """Node with advanced configuration management."""
@@ -644,7 +648,7 @@ class ConfigurableNode(Node):
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -654,8 +658,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class MLModelNode(Node):
     """Custom node for machine learning model inference."""
@@ -908,8 +913,8 @@ from kailash.nodes import register_node
 register_node("CustomProcessorNode", CustomProcessorNode)
 
 # Now use it in workflows
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("processor", CustomProcessorNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("CustomProcessorNode", "processor", {}),
     processing_mode="advanced",
     threshold=0.8
 )
@@ -925,27 +930,20 @@ workflow.add_node("processor", "CustomProcessorNode",
 ### **Integration Example**
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # Create workflow with custom nodes
-workflow = Workflow("ml_pipeline", name="ML Processing Pipeline")
+workflow = WorkflowBuilder()
 
 # Add custom ML node
-workflow.add_node("model", MLModelNode(
-    name="classifier",
-    model_path="models/classifier.pkl",
-    model_type="sklearn"
-))
+workflow.add_node("MLModelNode", "model", {}))
 
 # Add custom async processor
-workflow.add_node("processor", AsyncProcessorNode(
-    name="async_processor",
-    concurrency=10
-))
+workflow.add_node("AsyncProcessorNode", "processor", {}))
 
 # Connect nodes
-workflow.connect("processor", "model", mapping={"result": "features"})
+workflow.add_connection("processor", "model", "result", "features")
 
 # Execute
 runtime = LocalRuntime(enable_async=True)

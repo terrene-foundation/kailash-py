@@ -13,6 +13,7 @@ Parameter passing has been the #1 source of confusion in Kailash SDK. This guide
 **After v0.5.1**: Initial parameters are now available throughout ALL cycle iterations
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # ✅ This now works correctly in ALL iterations
 runtime.execute(workflow, parameters={
     "optimizer": {
@@ -49,7 +50,7 @@ runtime.execute(workflow, parameters={
 node = MyNode(config_param="default")
 
 # 3. Connection inputs (highest priority)
-workflow.connect("source", "target", mapping={"output": "input"})
+workflow.add_connection("source", "target", "output", "input")
 ```
 
 **Priority Order**: Connection inputs > Initial parameters > Node config
@@ -110,23 +111,16 @@ class DataProcessorNode(Node):
 
 ```python
 # 1. Auto-mapping (matching names)
-workflow.connect("reader", "processor")  # data → data
+workflow.add_connection("reader", "result", "processor", "input")  # data → data
 
 # 2. Explicit mapping
-workflow.connect("source", "target", mapping={"result": "data"})
+workflow.add_connection("source", "target", "result", "data")
 
 # 3. Dot notation for nested data
-workflow.connect("analyzer", "reporter", mapping={
-    "result.summary": "summary_data",
-    "result.metrics.accuracy": "accuracy"
-})
+workflow.add_connection("analyzer", "result", "reporter", "input")
 
 # 4. Multiple mappings
-workflow.connect("processor", "writer", mapping={
-    "processed_data": "data",
-    "metadata": "headers",
-    "stats.total": "record_count"
-})
+workflow.add_connection("processor", "result", "writer", "input")
 ```
 
 ### PythonCodeNode Patterns
@@ -139,10 +133,7 @@ stats = {"count": len(processed), "sum": sum(processed)}
 result = {"data": processed, "statistics": stats}
 '''
 
-workflow.connect("processor", "consumer", mapping={
-    "result.data": "input_data",
-    "result.statistics": "metrics"
-})
+workflow.add_connection("processor", "result", "consumer", "input")
 ```
 
 ## Cycle Parameters
@@ -151,13 +142,9 @@ workflow.connect("processor", "consumer", mapping={
 
 ```python
 # Initial parameters are now preserved throughout all iterations
-workflow = Workflow("optimization")
-workflow.add_node("optimizer", OptimizerNode())
-workflow.connect("optimizer", "optimizer",
-    cycle=True,
-    max_iterations=20,
-    convergence_check="converged == True"
-)
+workflow = WorkflowBuilder()
+workflow.add_node("OptimizerNode", "optimizer", {}))
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # These parameters will be available in ALL iterations
 runtime.execute(workflow, parameters={
@@ -210,16 +197,12 @@ class IterativeProcessor(CycleAwareNode):
 # Iteration 0: A gets initial params → B gets A's output → A gets B's output
 # Iteration 1+: A gets B's output + initial params → B gets A's output → ...
 
-workflow = Workflow("two-node-cycle")
-workflow.add_node("processor", ProcessorNode())
-workflow.add_node("validator", ValidatorNode())
+workflow = WorkflowBuilder()
+workflow.add_node("ProcessorNode", "processor", {}))
+workflow.add_node("ValidatorNode", "validator", {}))
 
-workflow.connect("processor", "validator", mapping={"result": "data"})
-workflow.connect("validator", "processor",
-    mapping={"validated_data": "input_data"},
-    cycle=True,
-    max_iterations=10
-)
+workflow.add_connection("processor", "validator", "result", "data")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Initial parameters available throughout
 runtime.execute(workflow, parameters={
@@ -260,10 +243,10 @@ class MyNode(Node):
 
 ```python
 # ❌ WRONG - Old syntax
-workflow.connect("a", "b", parameter_mapping={"out": "in"})
+# workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
 
 # ✅ CORRECT - Current syntax
-workflow.connect("a", "b", mapping={"out": "in"})
+workflow.add_connection("a", "b", "out", "in")
 ```
 
 ### 4. Not Using Context Parameter
@@ -362,16 +345,16 @@ def get_parameters(self):
 ### 3. Document Parameter Flow
 
 ```python
-workflow = Workflow("data-pipeline")
+workflow = WorkflowBuilder()
 
 # Document the flow
-workflow.add_node("reader", CSVReaderNode())      # Output: {data: [...]}
-workflow.add_node("filter", FilterNode())          # Input: data, Output: {filtered: [...]}
-workflow.add_node("analyzer", AnalyzerNode())      # Input: records, Output: {stats: {...}}
+workflow.add_node("CSVReaderNode", "reader", {}))      # Output: {data: [...]}
+workflow.add_node("FilterNode", "filter", {}))          # Input: data, Output: {filtered: [...]}
+workflow.add_node("AnalyzerNode", "analyzer", {}))      # Input: records, Output: {stats: {...}}
 
 # Clear mappings
-workflow.connect("reader", "filter")               # data → data (auto)
-workflow.connect("filter", "analyzer", mapping={"filtered": "records"})
+workflow.add_connection("reader", "result", "filter", "input")               # data → data (auto)
+workflow.add_connection("filter", "analyzer", "filtered", "records")
 ```
 
 ### 4. Test Parameter Scenarios
@@ -386,8 +369,8 @@ def test_parameter_flow():
     })
 
     # Test 2: Override with connection
-    workflow.connect("source", "processor", mapping={"size": "batch_size"})
-    result2 = runtime.execute(workflow)
+    workflow.add_connection("source", "processor", "size", "batch_size")
+    result2 = runtime.execute(workflow.build())
 
     # Test 3: Cycle parameters
     result3 = runtime.execute(cycle_workflow, parameters={
@@ -405,15 +388,15 @@ def test_parameter_flow():
 
 ```python
 # ❌ OLD - Pre-v0.5.1
-runtime.execute(workflow, inputs={"node": {"param": "value"}})
-workflow.connect("a", "b", parameter_mapping={"out": "in"})
+runtime.execute(workflow, parameters={"node": {"param": "value"}})
+# workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
 converge_when="done == True"
 get_cycle_iteration()
 get_cycle_state()
 
 # ✅ NEW - v0.5.1+
 runtime.execute(workflow, parameters={"node": {"param": "value"}})
-workflow.connect("a", "b", mapping={"out": "in"})
+workflow.add_connection("a", "b", "out", "in")
 convergence_check="done == True"
 get_iteration(context)
 get_previous_state(context)

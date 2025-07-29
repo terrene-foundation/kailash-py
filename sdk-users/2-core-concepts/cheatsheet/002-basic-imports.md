@@ -37,7 +37,7 @@ from kailash.access_control import UserContext, PermissionRule
 
 # API & Integration
 from kailash.nodes.api import HTTPRequestNode, RESTClientNode
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 
 # AI Agent Distribution
 from kailash.nodes.ai.a2a import A2AAgentNode, A2ACoordinatorNode
@@ -64,7 +64,7 @@ workflow.add_node("PythonCodeNode", "processor", {
 })
 
 # Connect with correct syntax
-workflow.connect("data_source", "result", mapping={"processor": "input_data"})
+workflow.add_connection("data_source", "result", "processor", "input_data")
 
 # Execute
 runtime = LocalRuntime()

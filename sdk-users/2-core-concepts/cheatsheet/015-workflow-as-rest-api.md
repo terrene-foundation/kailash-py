@@ -5,20 +5,22 @@
 For simple single-workflow APIs, use `WorkflowAPI`:
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.api.workflow_api import WorkflowAPI
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.transform import DataTransformerNode
 
-# Create workflow
-workflow = Workflow("example", name="Example")
-workflow.add_node("reader", CSVReaderNode())
-workflow.add_node("transformer", DataTransformerNode())
-workflow.connect("reader", "transformer")
+# Create workflow using WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
+
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("DataTransformerNode", "transformer", {})
+workflow.add_connection("reader", "data", "transformer", "input")
 
 # Expose as REST API
-api = WorkflowAPI(workflow)
+api = WorkflowAPI(workflow.build())
 api.run(port=8000)
 
 # Endpoints created:
@@ -34,21 +36,14 @@ api.run(port=8000)
 ### Custom Routes
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
 
 api = WorkflowAPI(
-    workflow,
+    workflow.build(),
     prefix="/api/v1",
     title="Data Processing Service",
     version="1.0.0"
@@ -72,24 +67,17 @@ async def process_batch(files: list):
 ### Authentication
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
 
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 security = HTTPBearer()
 
-api = WorkflowAPI(workflow, dependencies=[Depends(security)])
+api = WorkflowAPI(workflow.build(), dependencies=[Depends(security)])
 
 # All endpoints now require Bearer token
 
@@ -111,7 +99,7 @@ class ExecuteRequest(BaseModel):
             }
         }
 
-api = WorkflowAPI(workflow, request_model=ExecuteRequest)
+api = WorkflowAPI(workflow.build(), request_model=ExecuteRequest)
 
 ```
 
@@ -121,7 +109,7 @@ api = WorkflowAPI(workflow, request_model=ExecuteRequest)
 ```python
 # Enable async with background tasks
 api = WorkflowAPI(
-    workflow,
+    workflow.build(),
     async_mode=True,
     max_workers=10
 )
@@ -138,7 +126,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 limiter = Limiter(key_func=get_remote_address)
-api = WorkflowAPI(workflow)
+api = WorkflowAPI(workflow.build())
 
 @api.post("/execute")
 @limiter.limit("10/minute")
@@ -150,18 +138,11 @@ async def execute_limited(request: ExecuteRequest):
 ### Error Handling
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
 
 from fastapi import HTTPException
 
@@ -223,7 +204,7 @@ spec:
 ```python
 from mangum import Mangum
 
-api = WorkflowAPI(workflow)
+api = WorkflowAPI(workflow.build())
 handler = Mangum(api.app)  # AWS Lambda handler
 
 ```
@@ -256,27 +237,18 @@ async def add_metrics(request, call_next):
 ### Health Checks
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
 
 @api.get("/health/detailed")
 async def detailed_health():
     return {
         "status": "healthy",
-workflow = Workflow("example", name="Example")
-workflow.id,
-workflow = Workflow("example", name="Example")
-workflow.nodes),
+        "workflow_id": "example",
+        "node_count": 2,
         "uptime": get_uptime(),
         "memory_usage": get_memory_usage()
     }
@@ -286,18 +258,11 @@ workflow.nodes),
 ### Webhook Integration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
 
 @api.post("/webhook/{source}")
 async def webhook_handler(source: str, payload: dict):
@@ -325,7 +290,7 @@ async def webhook_handler(source: str, payload: dict):
 For production applications with multiple workflows, real-time updates, and enterprise features, use the middleware gateway:
 
 ```python
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 
 # Create full-featured gateway
 gateway = create_gateway(

@@ -65,17 +65,14 @@ Kailash provides 5 specialized admin nodes that work together to create a compre
 **Enterprise user management with async operations and multi-tenancy:**
 
 ```python
-from kailash.nodes.admin import UserManagementNode
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Create user with ABAC attributes
-user_node = UserManagementNode(
-    name="user_manager",
-    operation="create",
-    tenant_id="enterprise_corp"
-)
-
-# Rich user attributes for ABAC
-result = await user_node.execute_async({
+# Create workflow with user management
+workflow = WorkflowBuilder()
+workflow.add_node("UserManagementNode", "user_manager", {
+    "operation": "create",
+    "tenant_id": "enterprise_corp",
     "user_data": {
         "email": "john.doe@company.com",
         "username": "johndoe",
@@ -90,6 +87,10 @@ result = await user_node.execute_async({
         }
     }
 })
+
+# Execute workflow
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -113,15 +114,13 @@ result = await user_node.execute_async({
 ### 2. RoleManagementNode
 **Hierarchical role management with inheritance (not available in Django):**
 ```python
-from kailash.nodes.admin import RoleManagementNode
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-role_node = RoleManagementNode(
-    name="role_manager",
-    operation="create_role"
-)
-
-# Create hierarchical role with constraints
-result = await role_node.execute_async({
+# Create workflow with role management
+workflow = WorkflowBuilder()
+workflow.add_node("RoleManagementNode", "role_manager", {
+    "operation": "create_role",
     "role_data": {
         "role_id": "senior_analyst",
         "display_name": "Senior Financial Analyst",
@@ -160,28 +159,32 @@ result = await role_node.execute_async({
 ### 3. PermissionCheckNode
 **ABAC-based permissions with 16 operators (Django has only basic RBAC):**
 ```python
-from kailash.nodes.admin import PermissionCheckNode
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Advanced ABAC permission check with explanation
-permission_node = PermissionCheckNode(
-    name="permission_checker",
-    explain_mode=True,  # Shows decision reasoning
-    cache_ttl=300      # 5-minute permission cache
-)
+# Create workflow with permission checking
+workflow = WorkflowBuilder()
+workflow.add_node("PermissionCheckNode", "permission_checker", {
+    "explain_mode": True,  # Shows decision reasoning
+    "cache_ttl": 300      # 5-minute permission cache
+})
 
-result = await permission_node.execute_async({
-    "user_id": "analyst123",
-    "resource": "financial_report_q4_2024",
-    "action": "export",
-    "conditions": {
-        "user.clearance": {"operator": "security_level_meets", "value": "secret"},
-        "user.department": {"operator": "hierarchical_match", "value": "finance.*"},
-        "user.location": {"operator": "in", "value": ["US-NY", "US-CA", "UK-LON"]},
-        "resource.classification": {"operator": "not_equals", "value": "top_secret"},
-        "resource.region": {"operator": "matches_data_region", "value": "user.allowed_regions"},
-        "resource.size_mb": {"operator": "less_than", "value": 100},
-        "time.current": {"operator": "between", "value": ["08:00", "18:00"]},
-        "user.training": {"operator": "contains_all", "value": ["security", "compliance"]}
+runtime = LocalRuntime()
+result, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "permission_checker": {
+        "user_id": "analyst123",
+        "resource": "financial_report_q4_2024",
+        "action": "export",
+        "conditions": {
+            "user.clearance": {"operator": "security_level_meets", "value": "secret"},
+            "user.department": {"operator": "hierarchical_match", "value": "finance.*"},
+            "user.location": {"operator": "in", "value": ["US-NY", "US-CA", "UK-LON"]},
+            "resource.classification": {"operator": "not_equals", "value": "top_secret"},
+            "resource.region": {"operator": "matches_data_region", "value": "user.allowed_regions"},
+            "resource.size_mb": {"operator": "less_than", "value": 100},
+            "time.current": {"operator": "between", "value": ["08:00", "18:00"]},
+            "user.training": {"operator": "contains_all", "value": ["security", "compliance"]}
+        }
     }
 })
 
@@ -206,39 +209,44 @@ result = await permission_node.execute_async({
 ### 4. AuditLogNode
 **Enterprise audit logging with 25+ event types (Django has only 3):**
 ```python
-from kailash.nodes.admin import AuditLogNode
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-audit_node = AuditLogNode(
-    name="audit_logger",
-    operation="log_event",
-    retention_days=2555,  # 7-year retention
-    compliance_tags=["SOC2", "HIPAA", "GDPR"]
-)
+# Create workflow with audit logging
+workflow = WorkflowBuilder()
+workflow.add_node("AuditLogNode", "audit_logger", {
+    "operation": "log_event",
+    "retention_days": 2555,  # 7-year retention
+    "compliance_tags": ["SOC2", "HIPAA", "GDPR"]
+})
 
+runtime = LocalRuntime()
 # Comprehensive audit event (Django only has add/change/delete)
-result = await audit_node.execute_async({
-    "event_data": {
-        "event_type": "data_export",  # One of 25+ types
-        "severity": "high",
-        "user_id": "analyst123",
-        "resource_id": "financial_data_2024",
-        "action": "export_to_csv",
-        "description": "Exported Q4 financial data with PII masking",
-        "metadata": {
-            "file_size": "45MB",
-            "row_count": 150000,
-            "export_format": "csv",
-            "filters_applied": {"year": 2024, "quarter": 4},
-            "pii_fields_masked": ["ssn", "dob", "address"],
-            "export_duration_ms": 3400,
-            "compression": "gzip"
-        },
-        "compliance_tags": ["SOC2", "GDPR", "data_export"],
-        "ip_address": "192.168.1.100",
-        "user_agent": "Mozilla/5.0...",
-        "session_id": "sess_abc123",
-        "correlation_id": "req_xyz789",
-        "geo_location": {"country": "US", "state": "NY", "city": "New York"}
+result, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "audit_logger": {
+        "event_data": {
+            "event_type": "data_export",  # One of 25+ types
+            "severity": "high",
+            "user_id": "analyst123",
+            "resource_id": "financial_data_2024",
+            "action": "export_to_csv",
+            "description": "Exported Q4 financial data with PII masking",
+            "metadata": {
+                "file_size": "45MB",
+                "row_count": 150000,
+                "export_format": "csv",
+                "filters_applied": {"year": 2024, "quarter": 4},
+                "pii_fields_masked": ["ssn", "dob", "address"],
+                "export_duration_ms": 3400,
+                "compression": "gzip"
+            },
+            "compliance_tags": ["SOC2", "GDPR", "data_export"],
+            "ip_address": "192.168.1.100",
+            "user_agent": "Mozilla/5.0...",
+            "session_id": "sess_abc123",
+            "correlation_id": "req_xyz789",
+            "geo_location": {"country": "US", "state": "NY", "city": "New York"}
+        }
     }
 })
 
@@ -258,49 +266,54 @@ result = await audit_node.execute_async({
 ### 5. SecurityEventNode
 **Real-time security monitoring with automated response (not available in Django):**
 ```python
-from kailash.nodes.admin import SecurityEventNode
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-security_node = SecurityEventNode(
-    name="security_monitor",
-    operation="track_event",
-    alert_channels=["slack", "pagerduty", "email"],
-    auto_response_enabled=True
-)
+# Create workflow with security monitoring
+workflow = WorkflowBuilder()
+workflow.add_node("SecurityEventNode", "security_monitor", {
+    "operation": "track_event",
+    "alert_channels": ["slack", "pagerduty", "email"],
+    "auto_response_enabled": True
+})
 
+runtime = LocalRuntime()
 # ML-based threat detection with automated response
-result = await security_node.execute_async({
-    "event_data": {
-        "event_type": "anomalous_access",
-        "threat_level": "high",
-        "confidence_score": 0.92,
-        "user_id": "user456",
-        "details": "Multiple anomalies detected in user behavior",
-        "indicators": {
-            "access_velocity": "500% above baseline",
-            "time_of_access": "02:30 AM local",
-            "location_anomaly": True,
-            "ip_reputation_score": 0.3,
-            "data_volume": "10GB in 5 minutes",
-            "failed_auth_attempts": 3,
-            "unusual_endpoints": ["/api/v1/export/all", "/api/v1/users/dump"],
-            "ml_risk_score": 8.7
-        },
-        "context": {
-            "user_baseline": {
-                "typical_hours": "09:00-17:00",
-                "typical_volume": "50MB/day",
-                "typical_locations": ["US-NY"]
+result, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "security_monitor": {
+        "event_data": {
+            "event_type": "anomalous_access",
+            "threat_level": "high",
+            "confidence_score": 0.92,
+            "user_id": "user456",
+            "details": "Multiple anomalies detected in user behavior",
+            "indicators": {
+                "access_velocity": "500% above baseline",
+                "time_of_access": "02:30 AM local",
+                "location_anomaly": True,
+                "ip_reputation_score": 0.3,
+                "data_volume": "10GB in 5 minutes",
+                "failed_auth_attempts": 3,
+                "unusual_endpoints": ["/api/v1/export/all", "/api/v1/users/dump"],
+                "ml_risk_score": 8.7
             },
-            "current_location": "RU-MOW",
-            "device_fingerprint": "unknown"
-        },
-        "automated_response": {
-            "action": "suspend_access",
-            "duration": "pending_review",
-            "notify": ["security_team", "user_manager", "ciso"],
-            "create_incident": True,
-            "block_ip": True,
-            "force_mfa_reset": True
+            "context": {
+                "user_baseline": {
+                    "typical_hours": "09:00-17:00",
+                    "typical_volume": "50MB/day",
+                    "typical_locations": ["US-NY"]
+                },
+                "current_location": "RU-MOW",
+                "device_fingerprint": "unknown"
+            },
+            "automated_response": {
+                "action": "suspend_access",
+                "duration": "pending_review",
+                "notify": ["security_team", "user_manager", "ciso"],
+                "create_incident": True,
+                "block_ip": True,
+                "force_mfa_reset": True
+            }
         }
     }
 })
@@ -326,18 +339,17 @@ Kailash's workflow-based architecture allows you to compose complex admin operat
 
 ### Example 1: Enterprise User Onboarding Workflow
 ```python
-from kailash.workflow import Workflow
-from kailash.nodes.admin import *
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
 def create_enterprise_onboarding_workflow():
     """Complete user onboarding with security checks and compliance."""
-    workflow = Workflow(name="enterprise_user_onboarding")
+    workflow = WorkflowBuilder()
 
     # 1. Validate user data and enrich with defaults
-    validate = PythonCodeNode.from_function(
-        name="validate_user",
-        func=lambda user_data: {
+    def validate_user_func(user_data):
+        return {
             "result": {
                 "valid": True,
                 "user_data": user_data,
@@ -349,99 +361,79 @@ def create_enterprise_onboarding_workflow():
                 }
             }
         }
-    )
+
+    workflow.add_node("PythonCodeNode", "validate_user", {
+        "code": PythonCodeNode.from_function(validate_user_func).code
+    })
 
     # 2. Create user with ABAC attributes
-    create_user = UserManagementNode(
-        name="create_user",
-        operation="create",
-        enable_mfa=True,
-        password_policy="enterprise_strong"
-    )
+    workflow.add_node("UserManagementNode", "create_user", {
+        "operation": "create",
+        "enable_mfa": True,
+        "password_policy": "enterprise_strong"
+    })
 
     # 3. Assign role based on department and level
-    assign_role = RoleManagementNode(
-        name="assign_role",
-        operation="assign_role_conditional",
-        role_mapping={
-            "finance.analyst": "financial_analyst",
+    workflow.add_node("RoleManagementNode", "assign_role", {
+        "operation": "assign_role_conditional",
+        "role_mapping": {
+            "finance.junior": "financial_analyst",
             "finance.senior": "senior_financial_analyst",
             "engineering.developer": "software_engineer",
             "engineering.lead": "tech_lead"
         }
-    )
+    })
 
     # 4. Configure fine-grained permissions
-    configure_permissions = PermissionCheckNode(
-        name="configure_permissions",
-        operation="apply_initial_permissions",
-        permission_templates={
+    workflow.add_node("PermissionCheckNode", "configure_permissions", {
+        "operation": "apply_initial_permissions",
+        "permission_templates": {
             "data_access": "department_restricted",
             "export_limits": "role_based",
             "api_rate_limits": "tier_based"
         }
-    )
+    })
 
     # 5. Security clearance verification
-    security_check = SecurityEventNode(
-        name="security_check",
-        operation="background_verification",
-        checks=["identity_verification", "sanctions_screening", "credential_validation"],
-        blocking=True
-    )
+    workflow.add_node("SecurityEventNode", "security_check", {
+        "operation": "background_verification",
+        "checks": ["identity_verification", "sanctions_screening", "credential_validation"],
+        "blocking": True
+    })
 
     # 6. Comprehensive audit trail
-    audit = AuditLogNode(
-        name="audit_onboarding",
-        operation="log_event",
-        event_type="user_onboarding_complete",
-        severity="medium",
-        include_full_context=True
-    )
+    workflow.add_node("AuditLogNode", "audit_onboarding", {
+        "operation": "log_event",
+        "event_type": "user_onboarding_complete",
+        "severity": "medium",
+        "include_full_context": True
+    })
 
     # Connect nodes in sequence with data flow
-    workflow.add_nodes([validate, create_user, assign_role,
-                       configure_permissions, security_check, audit])
-
-    workflow.connect("validate_user", "create_user",
-                    mapping={"result.user_data": "user_data"})
-    workflow.connect("create_user", "assign_role",
-                    mapping={
-                        "result.user.user_id": "user_id",
-                        "result.user.attributes.department": "department",
-                        "result.user.attributes.level": "level"
-                    })
-    workflow.connect("assign_role", "configure_permissions",
-                    mapping={
-                        "result.assigned_roles": "roles",
-                        "result.user_id": "user_id"
-                    })
-    workflow.connect("configure_permissions", "security_check",
-                    mapping={
-                        "result.user_context": "user_context",
-                        "result.permissions_applied": "permissions"
-                    })
-    workflow.connect("security_check", "audit_onboarding",
-                    mapping={
-                        "result": "event_metadata",
-                        "result.verification_status": "security_status"
-                    })
+    workflow.add_connection("validate_user", "result.user_data", "create_user", "user_data")
+    workflow.add_connection("create_user", "result", "assign_role", "input")
+    workflow.add_connection("assign_role", "result", "configure_permissions", "input")
+    workflow.add_connection("configure_permissions", "result", "security_check", "input")
+    workflow.add_connection("security_check", "result", "audit_onboarding", "input")
 
     return workflow
 
 # Usage:
 workflow = create_enterprise_onboarding_workflow()
-result = await workflow.run({
-    "user_data": {
-        "email": "sarah.chen@company.com",
-        "username": "schen",
-        "first_name": "Sarah",
-        "last_name": "Chen",
-        "department": "finance",
-        "title": "Senior Financial Analyst",
-        "manager": "john.doe@company.com",
-        "clearance_level": 3,
-        "start_date": "2024-07-01"
+runtime = LocalRuntime()
+result, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "validate_user": {
+        "user_data": {
+            "email": "sarah.chen@company.com",
+            "username": "schen",
+            "first_name": "Sarah",
+            "last_name": "Chen",
+            "department": "finance",
+            "title": "Senior Financial Analyst",
+            "manager": "john.doe@company.com",
+            "clearance_level": 3,
+            "start_date": "2024-07-01"
+        }
     }
 })
 
@@ -452,19 +444,17 @@ result = await workflow.run({
 ```python
 def create_incident_response_workflow():
     """Automated security incident response with escalation."""
-    workflow = Workflow(name="security_incident_response")
+    workflow = WorkflowBuilder()
 
     # 1. Detect security event
-    detect = SecurityEventNode(
-        name="detect_threat",
-        operation="analyze_event",
-        ml_models=["anomaly_detection", "threat_classification"]
-    )
+    workflow.add_node("SecurityEventNode", "detect_threat", {
+        "operation": "analyze_event",
+        "ml_models": ["anomaly_detection", "threat_classification"]
+    })
 
     # 2. Assess severity and impact
-    assess = PythonCodeNode.from_function(
-        name="assess_impact",
-        func=lambda threat_data: {
+    def assess_impact_func(threat_data):
+        return {
             "result": {
                 "severity_score": threat_data["ml_risk_score"],
                 "affected_users": threat_data.get("affected_users", []),
@@ -476,45 +466,47 @@ def create_incident_response_workflow():
                 ]
             }
         }
-    )
+
+    workflow.add_node("PythonCodeNode", "assess_impact", {
+        "code": PythonCodeNode.from_function(assess_impact_func).code
+    })
 
     # 3. Execute immediate containment
-    contain = SecurityEventNode(
-        name="contain_threat",
-        operation="execute_response",
-        auto_containment=True
-    )
+    workflow.add_node("SecurityEventNode", "contain_threat", {
+        "operation": "execute_response",
+        "auto_containment": True
+    })
 
     # 4. Revoke permissions if needed
-    revoke = PermissionCheckNode(
-        name="revoke_access",
-        operation="emergency_revoke",
-        cascade=True
-    )
+    workflow.add_node("PermissionCheckNode", "revoke_access", {
+        "operation": "emergency_revoke",
+        "cascade": True
+    })
 
     # 5. Create detailed audit trail
-    audit = AuditLogNode(
-        name="audit_incident",
-        operation="log_event",
-        event_type="security_incident",
-        severity="critical",
-        compliance_tags=["incident_response", "security_breach"]
-    )
+    workflow.add_node("AuditLogNode", "audit_incident", {
+        "operation": "log_event",
+        "event_type": "security_incident",
+        "severity": "critical",
+        "compliance_tags": ["incident_response", "security_breach"]
+    })
 
     # 6. Notify stakeholders
-    notify = NotificationNode(
-        name="alert_teams",
-        channels=["security_team", "management", "affected_users"],
-        escalation_rules={
+    workflow.add_node("NotificationNode", "alert_teams", {
+        "channels": ["security_team", "management", "affected_users"],
+        "escalation_rules": {
             "critical": ["ciso", "cto"],
             "high": ["security_lead"],
             "medium": ["security_team"]
         }
-    )
+    })
 
-    # Connect workflow
-    workflow.add_nodes([detect, assess, contain, revoke, audit, notify])
-    workflow.connect_sequence()
+    # Connect workflow in sequence
+    workflow.add_connection("detect_threat", "result", "assess_impact", "threat_data")
+    workflow.add_connection("assess_impact", "result", "contain_threat", "input")
+    workflow.add_connection("contain_threat", "result", "revoke_access", "input")
+    workflow.add_connection("revoke_access", "result", "audit_incident", "input")
+    workflow.add_connection("audit_incident", "result", "alert_teams", "input")
 
     return workflow
 
@@ -525,49 +517,47 @@ def create_incident_response_workflow():
 ```python
 def create_compliance_audit_workflow():
     """Automated compliance reporting for GDPR, SOC2, HIPAA."""
-    workflow = Workflow(name="compliance_audit")
+    workflow = WorkflowBuilder()
 
     # 1. Gather user activity logs
-    gather_logs = AuditLogNode(
-        name="gather_activity",
-        operation="query_logs",
-        query_filters={
+    workflow.add_node("AuditLogNode", "gather_activity", {
+        "operation": "query_logs",
+        "query_filters": {
             "event_types": ["data_accessed", "data_modified", "data_exported"],
             "date_range": {"days": 90}
         }
-    )
+    })
 
     # 2. Analyze access patterns
-    analyze = PythonCodeNode.from_function(
-        name="analyze_patterns",
-        func=analyze_compliance_patterns  # Complex analysis function
-    )
+    workflow.add_node("PythonCodeNode", "analyze_patterns", {
+        "code": "# Complex compliance analysis\nresult = analyze_compliance_patterns(input_data)"
+    })
 
     # 3. Check permission compliance
-    check_permissions = PermissionCheckNode(
-        name="verify_permissions",
-        operation="audit_all_permissions",
-        include_inherited=True
-    )
+    workflow.add_node("PermissionCheckNode", "verify_permissions", {
+        "operation": "audit_all_permissions",
+        "include_inherited": True
+    })
 
     # 4. Generate compliance report
-    report = AuditLogNode(
-        name="generate_report",
-        operation="generate_report",
-        export_format="pdf",
-        compliance_frameworks=["GDPR", "SOC2", "HIPAA"]
-    )
+    workflow.add_node("AuditLogNode", "generate_report", {
+        "operation": "generate_report",
+        "export_format": "pdf",
+        "compliance_frameworks": ["GDPR", "SOC2", "HIPAA"]
+    })
 
     # 5. Archive for retention
-    archive = AuditLogNode(
-        name="archive_report",
-        operation="archive_logs",
-        retention_years=7,
-        encryption="AES-256"
-    )
+    workflow.add_node("AuditLogNode", "archive_report", {
+        "operation": "archive_logs",
+        "retention_years": 7,
+        "encryption": "AES-256"
+    })
 
-    workflow.add_nodes([gather_logs, analyze, check_permissions, report, archive])
-    workflow.connect_sequence()
+    # Connect workflow in sequence
+    workflow.add_connection("gather_activity", "result", "analyze_patterns", "input_data")
+    workflow.add_connection("analyze_patterns", "result", "verify_permissions", "input")
+    workflow.add_connection("verify_permissions", "result", "generate_report", "input")
+    workflow.add_connection("generate_report", "result", "archive_report", "input")
 
     return workflow
 
@@ -736,23 +726,23 @@ Here's how to deploy a production-ready admin system:
 
 ```python
 ```python
-from kailash.workflow import Workflow
-from kailash.nodes.admin import *
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash.access_control_abac import EnhancedAccessControlManager
 from kailash.api import WorkflowAPI
 from kailash.api.gateway import APIGateway
+import os
 
 # 1. Configure enterprise ABAC with policies
 access_manager = EnhancedAccessControlManager()
 access_manager.load_policies("config/enterprise_admin_policies.json")
 
 # 2. Create comprehensive admin workflow
-admin_workflow = Workflow(name="enterprise_admin_system")
+admin_workflow = WorkflowBuilder()
 
 # 3. Configure admin nodes with enterprise settings
-user_mgmt = UserManagementNode(
-    name="user_management",
-    database_config={
+admin_workflow.add_node("UserManagementNode", "user_management", {
+    "database_config": {
         "host": os.getenv("DB_HOST", "localhost"),
         "port": 5432,
         "database": "kailash_admin",
@@ -761,52 +751,39 @@ user_mgmt = UserManagementNode(
         "pool_timeout": 30,
         "pool_recycle": 3600
     },
-    cache_config={
+    "cache_config": {
         "backend": "redis",
         "ttl": 300,
         "prefix": "user:"
     }
-)
+})
 
-role_mgmt = RoleManagementNode(
-    name="role_management",
-    hierarchy_depth=5,
-    max_roles_per_user=10,
-    role_inheritance=True
-)
+admin_workflow.add_node("RoleManagementNode", "role_management", {
+    "hierarchy_depth": 5,
+    "max_roles_per_user": 10,
+    "role_inheritance": True
+})
 
-permission_check = PermissionCheckNode(
-    name="permission_checker",
-    cache_ttl=300,
-    explain_mode=True,
-    fail_open=False,  # Secure by default
-    abac_manager=access_manager
-)
+admin_workflow.add_node("PermissionCheckNode", "permission_checker", {
+    "cache_ttl": 300,
+    "explain_mode": True,
+    "fail_open": False,  # Secure by default
+    "abac_manager": access_manager
+})
 
-audit_log = AuditLogNode(
-    name="audit_logger",
-    retention_days=2555,  # 7-year retention
-    compliance_tags=["SOC2", "HIPAA", "GDPR", "ISO27001"],
-    real_time_streaming=True,
-    stream_endpoints=["kafka://audit-stream", "siem://splunk"]
-)
+admin_workflow.add_node("AuditLogNode", "audit_logger", {
+    "retention_days": 2555,  # 7-year retention
+    "compliance_tags": ["SOC2", "HIPAA", "GDPR", "ISO27001"],
+    "real_time_streaming": True,
+    "stream_endpoints": ["kafka://audit-stream", "siem://splunk"]
+})
 
-security_monitor = SecurityEventNode(
-    name="security_monitor",
-    alert_channels=["slack", "pagerduty", "email", "sms"],
-    auto_response_enabled=True,
-    ml_models=["anomaly_v2", "threat_classifier_v3"],
-    threat_intelligence_feeds=["crowdstrike", "anomali"]
-)
-
-# 4. Build the admin workflow
-admin_workflow.add_nodes([
-    user_mgmt,
-    role_mgmt,
-    permission_check,
-    audit_log,
-    security_monitor
-])
+admin_workflow.add_node("SecurityEventNode", "security_monitor", {
+    "alert_channels": ["slack", "pagerduty", "email", "sms"],
+    "auto_response_enabled": True,
+    "ml_models": ["anomaly_v2", "threat_classifier_v3"],
+    "threat_intelligence_feeds": ["crowdstrike", "anomali"]
+})
 
 # 5. Set up API Gateway with security
 gateway = APIGateway(
@@ -829,10 +806,10 @@ gateway = APIGateway(
 api = WorkflowAPI(gateway=gateway)
 
 # Admin operations
-api.register_workflow("admin/users", admin_workflow)
-api.register_workflow("admin/roles", role_mgmt)
-api.register_workflow("admin/audit", audit_log)
-api.register_workflow("admin/security", security_monitor)
+api.register_workflow("admin/users", admin_workflow.build())
+api.register_workflow("admin/roles", admin_workflow.build())  # Subset for role operations
+api.register_workflow("admin/audit", admin_workflow.build())   # Subset for audit operations
+api.register_workflow("admin/security", admin_workflow.build()) # Subset for security operations
 
 # 7. Configure monitoring and observability
 api.configure_monitoring({
@@ -921,7 +898,7 @@ user_data = {
 ### Step 2: Permission Migration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -931,26 +908,30 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Django
 user.groups.add(finance_group)
 user.user_permissions.add(can_export)
 
 # Kailash
-await RoleManagementNode(
-    operation="assign_user",
-    user_id=user_id,
-    role_id="financial_analyst"
-).execute_async()
+workflow = WorkflowBuilder()
+workflow.add_node("RoleManagementNode", "role_mgmt", {
+    "operation": "assign_user",
+    "user_id": user_id,
+    "role_id": "financial_analyst"
+})
+runtime = LocalRuntime()
+await runtime.execute_async(workflow.build())
 
 ```
 
 ### Step 3: Admin Action Migration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -960,8 +941,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Django
 @admin.action(description='Bulk approve')
@@ -969,14 +951,16 @@ def bulk_approve(modeladmin, request, queryset):
     queryset.update(status='approved')
 
 # Kailash
-workflow = Workflow("example", name="Example")
-workflow.workflow = Workflow("example", name="Example")
-  # Method signature,
-    AuditLogNode(
-        operation="log_event",
-        event_type="bulk_approval"
-    )
-])
+workflow = WorkflowBuilder()
+workflow.add_node("UserManagementNode", "bulk_update", {
+    "operation": "bulk_update",
+    "update_data": {"status": "approved"}
+})
+workflow.add_node("AuditLogNode", "audit", {
+    "operation": "log_event",
+    "event_type": "bulk_approval"
+})
+workflow.add_connection("bulk_update", "result", "audit", "input")
 
 ```
 

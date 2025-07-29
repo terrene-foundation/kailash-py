@@ -26,8 +26,11 @@ The Kailash SDK provides comprehensive edge computing capabilities that enable g
 
 ### 1. Edge Infrastructure (Automatic)
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # WorkflowBuilder automatically manages edge infrastructure
-workflow = WorkflowBuilder(edge_config={
+workflow = WorkflowBuilder()
+# Edge configuration set via runtime parameters
+edge_config = {
     "discovery": {
         "locations": ["us-east-1", "eu-west-1", "ap-south-1"],
         "refresh_interval": 300
@@ -36,11 +39,12 @@ workflow = WorkflowBuilder(edge_config={
         "strict_mode": True,
         "default_classification": "pii"
     }
-})
+}
 ```
 
 ### 2. Edge Data Node
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Distributed data operations with automatic routing
 workflow.add_node("EdgeDataNode", "edge_data", {
     "location_id": "us-east-1",
@@ -52,6 +56,7 @@ workflow.add_node("EdgeDataNode", "edge_data", {
 
 ### 3. Edge State Machine
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Globally unique state instances
 workflow.add_node("EdgeStateMachine", "session_state", {
     "location_id": "eu-west-1",
@@ -63,6 +68,7 @@ workflow.add_node("EdgeStateMachine", "session_state", {
 
 ### 4. Edge Coordination (v0.6.7+)
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Distributed consensus and leader election
 workflow.add_node("EdgeCoordinationNode", "coordinator", {
     "operation": "elect_leader",
@@ -72,6 +78,7 @@ workflow.add_node("EdgeCoordinationNode", "coordinator", {
 
 ### 5. Edge Migration (v0.6.7+)
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Zero-downtime workload migration
 workflow.add_node("EdgeMigrationNode", "migrator", {
     "operation": "plan_migration",
@@ -84,6 +91,7 @@ workflow.add_node("EdgeMigrationNode", "migrator", {
 
 ### 6. Edge Monitoring (v0.6.7+)
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Comprehensive edge observability
 workflow.add_node("EdgeMonitoringNode", "monitor", {
     "operation": "record_metric",
@@ -97,10 +105,11 @@ workflow.add_node("EdgeMonitoringNode", "monitor", {
 
 ### Pattern 1: Global User Profiles
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Store user data in their region for compliance
-workflow = WorkflowBuilder(edge_config={
-    "compliance": {"strict_mode": True}
-})
+workflow = WorkflowBuilder()
+# Edge configuration for compliance
+edge_config = {"compliance": {"strict_mode": True}}
 
 workflow.add_node("UserLocationNode", "locate_user", {})
 workflow.add_node("EdgeDataNode", "store_profile", {
@@ -116,6 +125,7 @@ workflow.add_connection("locate_user", "user_data", "store_profile", "value")
 
 ### Pattern 2: Edge Caching
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Cache frequently accessed data at edge
 workflow.add_node("EdgeDataNode", "edge_cache", {
     "action": "read",
@@ -128,6 +138,7 @@ workflow.add_node("EdgeDataNode", "edge_cache", {
 
 ### Pattern 3: Distributed Session Management
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Global sessions with local state
 workflow.add_node("EdgeStateMachine", "session", {
     "state_id": "session_123",
@@ -145,8 +156,11 @@ workflow.add_node("EdgeCoordinationNode", "session_coordinator", {
 
 ### Pattern 4: Compliance-Aware Processing
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Process data according to regional regulations
-workflow = WorkflowBuilder(edge_config={
+workflow = WorkflowBuilder()
+# Edge configuration for compliance
+edge_config = {
     "compliance": {
         "classifications": {
             "pii": {"allowed_regions": ["us", "eu"]},
@@ -154,7 +168,7 @@ workflow = WorkflowBuilder(edge_config={
             "health": {"allowed_regions": ["us"], "requires_encryption": True}
         }
     }
-})
+}
 
 workflow.add_node("DataClassifierNode", "classifier", {})
 workflow.add_node("EdgeDataNode", "compliant_storage", {
@@ -167,6 +181,7 @@ workflow.add_node("EdgeDataNode", "compliant_storage", {
 
 ### 1. Strong Consistency
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # All edges see updates immediately
 workflow.add_node("EdgeDataNode", "strong_data", {
     "consistency": "strong",
@@ -177,6 +192,7 @@ workflow.add_node("EdgeDataNode", "strong_data", {
 
 ### 2. Eventual Consistency
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Updates propagate asynchronously
 workflow.add_node("EdgeDataNode", "eventual_data", {
     "consistency": "eventual",
@@ -187,6 +203,7 @@ workflow.add_node("EdgeDataNode", "eventual_data", {
 
 ### 3. Causal Consistency
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Preserves cause-effect relationships
 workflow.add_node("EdgeDataNode", "causal_data", {
     "consistency": "causal",
@@ -198,6 +215,7 @@ workflow.add_node("EdgeDataNode", "causal_data", {
 
 ### 4. Bounded Staleness
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Maximum staleness guarantee
 workflow.add_node("EdgeDataNode", "bounded_data", {
     "consistency": "bounded",
@@ -211,6 +229,7 @@ workflow.add_node("EdgeDataNode", "bounded_data", {
 
 ### Automatic Edge Distribution
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from dataflow import DataFlow
 
 db = DataFlow(edge_config={
@@ -231,6 +250,7 @@ workflow = db.create_workflow("user_management")
 
 ### Edge-Aware Queries
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Query respects data locality
 @db.operation
 async def get_regional_users(region: str):
@@ -244,6 +264,7 @@ eu_users = await get_regional_users("eu-west-1")
 
 ### Scenario 1: Planned Maintenance
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Migrate workloads before maintenance window
 migration_workflow = WorkflowBuilder()
 migration_workflow.add_node("EdgeMigrationNode", "migrate", {
@@ -269,6 +290,7 @@ plan_result = runtime.execute(migration_workflow.build(), {
 
 ### Scenario 2: Disaster Recovery
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Emergency migration during outage
 emergency_result = runtime.execute(migration_workflow.build(), {
     "migrate": {
@@ -284,6 +306,7 @@ emergency_result = runtime.execute(migration_workflow.build(), {
 
 ### 1. Set Up Health Monitoring
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 monitor_workflow = WorkflowBuilder()
 monitor_workflow.add_node("EdgeMonitoringNode", "health_monitor", {
     "health_check_interval": 30,
@@ -301,6 +324,7 @@ health_check = runtime.execute(monitor_workflow.build(), {
 
 ### 2. Configure Alerts
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Set performance thresholds
 alert_config = runtime.execute(monitor_workflow.build(), {
     "health_monitor": {
@@ -314,6 +338,7 @@ alert_config = runtime.execute(monitor_workflow.build(), {
 
 ### 3. Analyze Trends
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Get historical analytics
 analytics = runtime.execute(monitor_workflow.build(), {
     "health_monitor": {
@@ -327,6 +352,7 @@ analytics = runtime.execute(monitor_workflow.build(), {
 
 ### 1. Connection Pooling
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 edge_config = {
     "performance": {
         "connection_pool_size": 10,
@@ -338,6 +364,7 @@ edge_config = {
 
 ### 2. Batch Operations
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Batch multiple operations
 workflow.add_node("EdgeDataNode", "batch_write", {
     "action": "batch_write",
@@ -350,6 +377,7 @@ workflow.add_node("EdgeDataNode", "batch_write", {
 
 ### 3. Caching Strategy
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Multi-tier caching
 workflow.add_node("EdgeDataNode", "l1_cache", {
     "action": "read",
@@ -358,7 +386,7 @@ workflow.add_node("EdgeDataNode", "l1_cache", {
 })
 
 workflow.add_node("EdgeDataNode", "l2_cache", {
-    "action": "read", 
+    "action": "read",
     "cache_ttl": 3600,  # 1 hour L2
     "fallback": "origin"
 })
@@ -368,6 +396,7 @@ workflow.add_node("EdgeDataNode", "l2_cache", {
 
 ### 1. Encryption in Transit
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 edge_config = {
     "security": {
         "tls_version": "1.3",
@@ -379,6 +408,7 @@ edge_config = {
 
 ### 2. Access Control
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 workflow.add_node("EdgeDataNode", "secure_data", {
     "action": "write",
     "acl": {

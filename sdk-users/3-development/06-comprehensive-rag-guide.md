@@ -208,10 +208,10 @@ Answer:
 })
 
 # Connect the pipeline
-workflow.connect("doc_processor", "result.chunks", mapping={"embedder": "texts"})
-workflow.connect("embedder", "result.embeddings", mapping={"vector_store": "vectors"})
-workflow.connect("query_processor", "result.processed_query", mapping={"retriever": "query"})
-workflow.connect("retriever", "result.matches", mapping={"generator": "context"})
+workflow.add_connection("doc_processor", "result.chunks", "embedder", "texts")
+workflow.add_connection("embedder", "result.embeddings", "vector_store", "vectors")
+workflow.add_connection("query_processor", "result.processed_query", "retriever", "query")
+workflow.add_connection("retriever", "result.matches", "generator", "context")
 ```
 
 ### Advanced RAG with Reranking
@@ -257,8 +257,8 @@ result = {
 })
 
 # Insert reranker between retriever and generator
-workflow.connect("retriever", "result.matches", mapping={"reranker": "retrieved_chunks"})
-workflow.connect("reranker", "result.reranked_chunks", mapping={"generator": "context"})
+workflow.add_connection("retriever", "result.matches", "reranker", "retrieved_chunks")
+workflow.add_connection("reranker", "result.reranked_chunks", "generator", "context")
 ```
 
 ## Query Processing Techniques
@@ -547,16 +547,16 @@ result = {'final_response': final_response}
     })
 
     # Connect the workflow
-    workflow.connect("doc_chunker", "result.chunks", mapping={"embedder": "texts"})
-    workflow.connect("query_enhancer", "result.enhanced_query", mapping={"retriever": "query_data"})
-    workflow.connect("embedder", "result", mapping={"retriever": "indexed_chunks"})
-    workflow.connect("retriever", "result.matches", mapping={"reranker": "retrieved_chunks"})
-    workflow.connect("query_enhancer", "result.enhanced_query", mapping={"reranker": "query_data"})
-    workflow.connect("reranker", "result.reranked_chunks", mapping={"response_generator": "context"})
-    workflow.connect("query_enhancer", "result.enhanced_query.original", mapping={"response_generator": "query"})
-    workflow.connect("response_generator", "result", mapping={"response_validator": "response"})
-    workflow.connect("reranker", "result.reranked_chunks", mapping={"response_validator": "context_chunks"})
-    workflow.connect("query_enhancer", "result.enhanced_query.original", mapping={"response_validator": "query"})
+    workflow.add_connection("doc_chunker", "result.chunks", "embedder", "texts")
+    workflow.add_connection("query_enhancer", "result.enhanced_query", "retriever", "query_data")
+    workflow.add_connection("embedder", "result", "retriever", "indexed_chunks")
+    workflow.add_connection("retriever", "result.matches", "reranker", "retrieved_chunks")
+    workflow.add_connection("query_enhancer", "result.enhanced_query", "reranker", "query_data")
+    workflow.add_connection("reranker", "result.reranked_chunks", "response_generator", "context")
+    workflow.add_connection("query_enhancer", "result.enhanced_query.original", "response_generator", "query")
+    workflow.add_connection("response_generator", "result", "response_validator", "response")
+    workflow.add_connection("reranker", "result.reranked_chunks", "response_validator", "context_chunks")
+    workflow.add_connection("query_enhancer", "result.enhanced_query.original", "response_validator", "query")
 
     return workflow
 

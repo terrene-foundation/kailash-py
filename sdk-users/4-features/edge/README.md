@@ -38,17 +38,16 @@ The Kailash SDK provides a complete edge computing solution with:
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-import asyncio
 
 async def basic_edge_setup():
     workflow = WorkflowBuilder()
-    
+
     # Initialize edge coordination
     workflow.add_node("EdgeCoordinationNode", "coordinator", {
         "operation": "elect_leader",
         "coordination_group": "edge_cluster"
     })
-    
+
     # Execute
     runtime = LocalRuntime()
     results, run_id = await runtime.execute_async(workflow.build())
@@ -66,7 +65,7 @@ async def enable_monitoring():
         "operation": "start_monitor",
         "anomaly_detection": True
     })
-    
+
     runtime = LocalRuntime()
     results, run_id = await runtime.execute_async(workflow.build())
     return results
@@ -75,14 +74,14 @@ asyncio.run(enable_monitoring())
 ```
 
 3. **Set Up Predictive Warming**:
-```python  
+```python
 async def setup_warming():
     workflow = WorkflowBuilder()
     workflow.add_node("EdgeWarmingNode", "warmer", {
         "operation": "start_auto",
         "confidence_threshold": 0.7
     })
-    
+
     runtime = LocalRuntime()
     results, run_id = await runtime.execute_async(workflow.build())
     return results
@@ -114,7 +113,7 @@ asyncio.run(setup_warming())
 class EdgeData:
     key: str
     value: Any
-    
+
     class Config:
         edge_enabled = True
         edge_strategy = "geographic"

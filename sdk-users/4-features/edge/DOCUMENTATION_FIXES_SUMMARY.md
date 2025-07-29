@@ -17,11 +17,7 @@ The WorkflowBuilder's `add_connection` method uses a 4-parameter syntax and does
 
 **Before (incorrect):**
 ```python
-workflow.add_connection(
-    "plan", "plan",
-    "execute", "parameters",
-    mapping={"migration_id": "migration_id"}
-)
+workflow.add_connection("plan", "result", "plan", "input")
 ```
 
 **After (correct):**
@@ -35,16 +31,18 @@ Conditions are not supported directly in `add_connection`. Use `SwitchNode` for 
 
 **Before (incorrect):**
 ```python
-workflow.add_connection("decision", "warmer", condition="should_warm == True")
+workflow.add_connection("decision", "result", "warmer", "input")
 ```
 
 **After (correct):**
 ```python
 workflow.add_node("SwitchNode", "warm_check", {
-    "condition": "input.should_warm == True"
+    "condition_field": "should_warm",
+    "operator": "==",
+    "value": True
 })
-workflow.add_connection("decision", "output", "warm_check", "input")
-workflow.add_connection("warm_check", "true", "warmer", "parameters")
+workflow.add_connection("decision", "output", "warm_check", "input_data")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 ```
 
 ### 5. Complex Data Extraction
@@ -52,8 +50,7 @@ For extracting nested data, use intermediate nodes:
 
 **Before (incorrect):**
 ```python
-workflow.add_connection("simulator", "recorder", 
-    mapping={"metrics[0].latency": "value"})
+workflow.add_connection("simulator", "result", "recorder", "input")
 ```
 
 **After (correct):**
@@ -68,23 +65,7 @@ workflow.add_connection("extract_latency", "result", "recorder", "value")
 ## Files Updated
 
 1. **edge-migration-guide.md**
-   - Fixed all `mapping=` parameters in connections
-   - Simplified connection syntax for migration_id passing
-
-2. **edge-monitoring-guide.md**
-   - Fixed mapping parameters
-   - Added intermediate nodes for data extraction
-   - Fixed conditional execution patterns
-
-3. **EDGE_COMPUTING_SUMMARY.md**
-   - Fixed EdgeStateMachineNode → EdgeStateMachine
-
-4. **README.md**
-   - Fixed EdgeStateMachineNode → EdgeStateMachine in examples and tables
-
-## Node Implementation Note
-
-The edge nodes currently use `input_parameters` and `output_parameters` as properties, while the base class may expect `get_parameters()` method. This is a known discrepancy that should be addressed in a future update, but the nodes are functional as implemented.
+   - Fixed all `# mapping removed, while the base class may expect `get_parameters()` method. This is a known discrepancy that should be addressed in a future update, but the nodes are functional as implemented.
 
 ## Testing
 

@@ -12,10 +12,10 @@ Parameter passing in cyclic workflows is one of the most common sources of error
 
 ```python
 # ✅ CORRECT - Use dot notation for PythonCodeNode outputs
-workflow.connect("counter", "counter", {"result.count": "count"})
+workflow.add_connection("counter", "result", "counter", "input")
 
 # ❌ WRONG - Direct mapping doesn't work
-workflow.connect("counter", "counter", {"count": "count"})
+workflow.add_connection("counter", "result", "counter", "input")
 ```
 
 ### 2. Initial Parameters for Cycles
@@ -29,7 +29,7 @@ runtime.execute(workflow, parameters={
 })
 
 # ❌ WRONG - No initial parameters causes "parameter not provided" error
-runtime.execute(workflow)
+runtime.execute(workflow.build())
 ```
 
 ### 3. Convergence Check Syntax
@@ -49,12 +49,12 @@ runtime.execute(workflow)
 ### Example 1: Simple Self-Cycle
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 
 # Create workflow
-workflow = Workflow("counter_cycle", "Counter example")
+workflow = WorkflowBuilder()
 
 # Define counter function
 def counter_func(count=0):
@@ -110,14 +110,8 @@ workflow.add_node("a", node_a)
 workflow.add_node("b", node_b)
 
 # Connect with proper dot notation
-workflow.connect("a", "b", {"result.value": "value"})
-workflow.connect(
-    "b", "a",
-    {"result.increment": "increment", "result.final_value": "value"},
-    cycle=True,
-    max_iterations=10,
-    convergence_check="converged == True"
-)
+workflow.add_connection("a", "result", "b", "input")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Execute with initial parameters for node a
 result, _ = runtime.execute(workflow, parameters={
@@ -159,12 +153,7 @@ class AccumulatorNode(CycleAwareNode):
         }
 
 # For CycleAwareNode, mapping uses direct field names
-workflow.connect(
-    "acc", "acc",
-    mapping={"value": "value"},  # No 'result.' prefix
-    cycle=True,
-    convergence_check="converged == True"
-)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 ```
 
 ## Common Errors and Solutions
@@ -239,7 +228,7 @@ workflow.create_cycle("cycle_name") \
 
 ### Pattern 2: Two-Node Cycle
 ```python
-workflow.connect("node_a", "node_b", {"result.data": "input"})
+workflow.add_connection("node_a", "result", "node_b", "input")
 workflow.create_cycle("ab_cycle") \
     .connect("node_b", "node_a", {"result.value": "data"}) \
     .max_iterations(20) \

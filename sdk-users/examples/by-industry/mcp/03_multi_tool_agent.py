@@ -4,24 +4,24 @@ Description: Agent using multiple MCP servers for different capabilities
 Requirements: None (uses mock servers for demonstration)
 """
 
-from kailash import Workflow
 from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 def main():
     # Create workflow
-    workflow = Workflow("multi-tool-agent", "Multi-Tool Agent")
+    workflow = WorkflowBuilder()
 
     # Add multi-capable agent
-    workflow.add_node("multi_agent", LLMAgentNode())
+    workflow.add_node("LLMAgentNode", "multi_agent", {})
 
     # Create runtime
     runtime = LocalRuntime()
 
     # Execute with multiple MCP servers
     results, run_id = runtime.execute(
-        workflow,
+        workflow.build(),
         parameters={
             "multi_agent": {
                 # LLM configuration
@@ -126,7 +126,7 @@ def main():
     print("-" * 70)
 
     mock_results, _ = runtime.execute(
-        workflow,
+        workflow.build(),
         parameters={
             "multi_agent": {
                 "provider": "mock",
@@ -181,13 +181,13 @@ def show_advanced_example():
     print(
         """
 # Advanced multi-tool workflow with dependencies
-workflow = Workflow("advanced-multi-tool", "Advanced Multi-Tool")
+workflow = WorkflowBuilder()
 
 # Data collector agent
-workflow.add_node("collector", LLMAgentNode())
+workflow.add_node("LLMAgentNode", "collector", {})
 
 # Data processor agent
-workflow.add_node("processor", LLMAgentNode())
+workflow.add_node("LLMAgentNode", "processor", {})
 
 # Connect agents
 workflow.add_connection("collector", "data", "processor", "input_data")

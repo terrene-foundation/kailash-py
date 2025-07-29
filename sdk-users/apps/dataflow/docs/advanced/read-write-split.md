@@ -11,6 +11,8 @@ Read/write splitting directs read queries to replica databases and write queries
 ### Simple Read/Write Split
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash_dataflow import DataFlow, DataFlowConfig
 
 # Primary (write) database

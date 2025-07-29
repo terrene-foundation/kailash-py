@@ -17,6 +17,7 @@ The QueryBuilder provides an intuitive MongoDB-style interface for building comp
 ## Basic Usage
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from dataflow import DataFlow
 
 db = DataFlow()

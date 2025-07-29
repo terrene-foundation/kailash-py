@@ -231,9 +231,9 @@ def handle_error(data):
 })
 
 # Connect with conditional logic
-workflow.add_connection("api_call", "validate", "response", "input")
-workflow.add_connection("validate", "process_success", "true", "input")
-workflow.add_connection("validate", "handle_error", "false", "input")
+workflow.add_connection("api_call", "response", "validate", "input_data")
+workflow.add_connection("validate", "true_output", "process_success", "input")
+workflow.add_connection("validate", "false_output", "handle_error", "input")
 
 app.register("resilient-workflow", workflow)
 app.start()

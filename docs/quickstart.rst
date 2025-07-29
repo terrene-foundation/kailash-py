@@ -387,10 +387,11 @@ The new CycleBuilder API makes it easy to create powerful iterative workflows:
    # Use in workflow
    workflow = Workflow("convergence_demo")
    workflow.add_node("converge", ConvergenceNode())
-   workflow.connect("converge", "converge",
-                    cycle=True,
-                    max_iterations=50,
-                    convergence_check="converged == True")
+   workflow.create_cycle("convergence_cycle") \
+           .connect("converge", "converge") \
+           .max_iterations(50) \
+           .converge_when("converged == True") \
+           .build()
 
    results = workflow.run(parameters={"converge": {"target": 10.0}})
    print(f"Converged to {results['converge']['value']:.4f} in {results['converge']['iterations']} iterations")

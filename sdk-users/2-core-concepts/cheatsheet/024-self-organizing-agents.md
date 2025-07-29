@@ -2,7 +2,7 @@
 
 ## Complete Self-Organizing System
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai.self_organizing import (
     AgentPoolManagerNode, ProblemAnalyzerNode,
     TeamFormationNode, SelfOrganizingAgentNode
@@ -14,57 +14,43 @@ from kailash.nodes.ai.a2a import SharedMemoryPoolNode
 from kailash.runtime.local import LocalRuntime
 
 # Build self-organizing workflow
-workflow = Workflow("self-org", name="Self-Organizing System")
+workflow = WorkflowBuilder()
 
 # Core components
-workflow.add_node("memory", SharedMemoryPoolNode(
-    memory_size_limit=1000,
-    attention_window=50
-))
-workflow.add_node("cache", IntelligentCacheNode(
-    ttl=3600,
-    similarity_threshold=0.8
-))
+workflow.add_node("SharedMemoryPoolNode", "memory", {}))
+workflow.add_node("IntelligentCacheNode", "cache", {}))
 
 # Analysis and team formation
-workflow.add_node("analyzer", ProblemAnalyzerNode())
-workflow.add_node("team_former", TeamFormationNode(
-    formation_strategy="capability_matching"
-))
+workflow.add_node("ProblemAnalyzerNode", "analyzer", {}))
+workflow.add_node("TeamFormationNode", "team_former", {}))
 
 # Agent pool
-workflow.add_node("pool", AgentPoolManagerNode(
-    max_active_agents=20,
-    agent_timeout=120
-))
+workflow.add_node("AgentPoolManagerNode", "pool", {}))
 
 # Orchestration
-workflow.add_node("orchestrator", OrchestrationManagerNode(
-    max_iterations=10,
-    quality_threshold=0.85
-))
+workflow.add_node("OrchestrationManagerNode", "orchestrator", {}))
 
 # Connect components
-workflow.connect("orchestrator", "analyzer")
-workflow.connect("analyzer", "team_former")
-workflow.connect("team_former", "pool")
+workflow.add_connection("orchestrator", "result", "analyzer", "input")
+workflow.add_connection("analyzer", "result", "team_former", "input")
+workflow.add_connection("team_former", "result", "pool", "input")
 
 # Execute
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
 ## Problem Analysis
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai.intelligent_agent_orchestrator import OrchestrationManagerNode
 from kailash.nodes.ai.self_organizing import ProblemAnalyzerNode
 
-workflow = Workflow("problem-analysis")
-workflow.add_node("orchestrator", OrchestrationManagerNode())
-workflow.add_node("analyzer", ProblemAnalyzerNode())
+workflow = WorkflowBuilder()
+workflow.add_node("OrchestrationManagerNode", "orchestrator", {}))
+workflow.add_node("ProblemAnalyzerNode", "analyzer", {}))
 runtime = LocalRuntime()
 
 # Complex problem decomposition
@@ -87,12 +73,12 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ## Team Formation
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai.self_organizing import TeamFormationNode
 
-workflow = Workflow("team-formation")
-workflow.add_node("team_former", TeamFormationNode())
+workflow = WorkflowBuilder()
+workflow.add_node("TeamFormationNode", "team_former", {}))
 runtime = LocalRuntime()
 
 # Form capability-based teams
@@ -130,12 +116,12 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ## Agent Pool Management
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai.self_organizing import AgentPoolManagerNode
 
-workflow = Workflow("agent-pool")
-workflow.add_node("pool", AgentPoolManagerNode())
+workflow = WorkflowBuilder()
+workflow.add_node("AgentPoolManagerNode", "pool", {}))
 runtime = LocalRuntime()
 
 # Intelligent agent allocation
@@ -167,12 +153,12 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ## Orchestration Patterns
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai.intelligent_agent_orchestrator import OrchestrationManagerNode
 
-workflow = Workflow("orchestration")
-workflow.add_node("orchestrator", OrchestrationManagerNode())
+workflow = WorkflowBuilder()
+workflow.add_node("OrchestrationManagerNode", "orchestrator", {}))
 runtime = LocalRuntime()
 
 # Multi-phase orchestration
@@ -201,12 +187,12 @@ results, run_id = runtime.execute(workflow, parameters={
 
 ## Intelligent Caching
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai.intelligent_agent_orchestrator import IntelligentCacheNode
 
-workflow = Workflow("intelligent-cache")
-workflow.add_node("cache", IntelligentCacheNode())
+workflow = WorkflowBuilder()
+workflow.add_node("IntelligentCacheNode", "cache", {}))
 runtime = LocalRuntime()
 
 # Store solutions for reuse
@@ -283,25 +269,21 @@ except Exception as e:
 
 ### Research Team Formation
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai.self_organizing import SelfOrganizingAgentNode
 
 # Form research team for complex investigation
-workflow = Workflow("research-team")
-workflow.add_node("research_team", SelfOrganizingAgentNode(
-    specialization="research",
-    autonomy_level="high",
-    collaboration_preference="peer_to_peer"
-))
+workflow = WorkflowBuilder()
+workflow.add_node("SelfOrganizingAgentNode", "research_team", {}))
 
 ```
 
 ### Analysis Swarm
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai.self_organizing import SelfOrganizingAgentNode
 
-workflow = Workflow("analysis-swarm")
+workflow = WorkflowBuilder()
 
 # Multiple analysts working in parallel
 for i in range(5):
@@ -314,15 +296,12 @@ for i in range(5):
 
 ### Synthesis Collective
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai.self_organizing import SelfOrganizingAgentNode
 
 # Collective intelligence for synthesis
-workflow = Workflow("synthesis-collective")
-workflow.add_node("synthesis", SelfOrganizingAgentNode(
-    specialization="synthesis",
-    collaboration_preference="consensus_driven"
-))
+workflow = WorkflowBuilder()
+workflow.add_node("SelfOrganizingAgentNode", "synthesis", {}))
 
 ```
 

@@ -186,7 +186,7 @@ class EnterpriseUserManager:
         })
 
         # Connect workflow
-        workflow.add_connection("check_create_permission", "create_user")
+        workflow.add_connection("check_create_permission", "result", "create_user", "input")
         workflow.add_connection("create_user", "assign_permissions", "id", "user_id")
         workflow.add_connection("create_user", "log_user_creation", "id", "user_id")
 
@@ -247,11 +247,11 @@ class EnterpriseUserManager:
         })
 
         # Connect workflow
-        workflow.add_connection("check_update_permission", "get_current_user")
-        workflow.add_connection("get_current_user", "update_role")
+        workflow.add_connection("check_update_permission", "result", "get_current_user", "input")
+        workflow.add_connection("get_current_user", "result", "update_role", "input")
         workflow.add_connection("get_current_user", "log_role_change", "role", "old_role")
-        workflow.add_connection("update_role", "update_permissions")
-        workflow.add_connection("update_permissions", "log_role_change")
+        workflow.add_connection("update_role", "result", "update_permissions", "input")
+        workflow.add_connection("update_permissions", "result", "log_role_change", "input")
 
         results, run_id = self.runtime.execute(workflow.build())
 
@@ -312,9 +312,9 @@ class EnterpriseUserManager:
         })
 
         # Connect workflow
-        workflow.add_connection("check_deactivate_permission", "deactivate_user")
-        workflow.add_connection("deactivate_user", "revoke_sessions")
-        workflow.add_connection("deactivate_user", "cleanup_projects")
+        workflow.add_connection("check_deactivate_permission", "result", "deactivate_user", "input")
+        workflow.add_connection("deactivate_user", "result", "revoke_sessions", "input")
+        workflow.add_connection("deactivate_user", "result", "cleanup_projects", "input")
         workflow.add_connection("revoke_sessions", "log_deactivation", "count", "sessions_count")
         workflow.add_connection("cleanup_projects", "log_deactivation", "count", "projects_count")
 
@@ -394,7 +394,7 @@ class EnterpriseProjectManager:
         })
 
         # Connect workflow
-        workflow.add_connection("check_create_permission", "create_project")
+        workflow.add_connection("check_create_permission", "result", "create_project", "input")
         workflow.add_connection("create_project", "assign_team_permissions", "id", "project_id")
         workflow.add_connection("create_project", "create_workspace", "id", "project_id")
         workflow.add_connection("create_project", "log_project_creation", "id", "project_id")
@@ -470,11 +470,11 @@ class EnterpriseProjectManager:
         })
 
         # Connect workflow
-        workflow.add_connection("check_add_member_permission", "verify_user")
-        workflow.add_connection("verify_user", "add_team_member")
-        workflow.add_connection("add_team_member", "assign_member_permissions")
-        workflow.add_connection("assign_member_permissions", "notify_user")
-        workflow.add_connection("notify_user", "log_member_addition")
+        workflow.add_connection("check_add_member_permission", "result", "verify_user", "input")
+        workflow.add_connection("verify_user", "result", "add_team_member", "input")
+        workflow.add_connection("add_team_member", "result", "assign_member_permissions", "input")
+        workflow.add_connection("assign_member_permissions", "result", "notify_user", "input")
+        workflow.add_connection("notify_user", "result", "log_member_addition", "input")
 
         results, run_id = self.runtime.execute(workflow.build())
 
@@ -638,9 +638,9 @@ result = {"compliance_summary": compliance}
         })
 
         # Connect workflow
-        workflow.add_connection("check_audit_permission", "get_audit_logs")
-        workflow.add_connection("get_audit_logs", "generate_statistics")
-        workflow.add_connection("generate_statistics", "compliance_summary")
+        workflow.add_connection("check_audit_permission", "result", "get_audit_logs", "input")
+        workflow.add_connection("get_audit_logs", "result", "generate_statistics", "input")
+        workflow.add_connection("generate_statistics", "result", "compliance_summary", "input")
         workflow.add_connection("generate_statistics", "log_report_generation", "statistics.total_events", "total_events")
 
         results, run_id = self.runtime.execute(workflow.build())
@@ -700,7 +700,7 @@ result = {"compliance_summary": compliance}
         })
 
         # Connect workflow
-        workflow.add_connection("check_export_permission", "export_data")
+        workflow.add_connection("check_export_permission", "result", "export_data", "input")
         workflow.add_connection("export_data", "create_download_link", "file_path", "export_file_path")
         workflow.add_connection("export_data", "log_export", "file_size", "file_size")
         workflow.add_connection("export_data", "log_export", "record_count", "record_count")

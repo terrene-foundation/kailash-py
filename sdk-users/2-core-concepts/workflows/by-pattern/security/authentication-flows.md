@@ -15,26 +15,16 @@ Security workflows provide:
 
 ### 30-Second JWT Authentication
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.api import RestClientNode
 from kailash.runtime.local import LocalRuntime
 
 # JWT authentication workflow
-workflow = Workflow("jwt_auth")
+workflow = WorkflowBuilder()
 
 # Token validator
-workflow.add_node("token_validator", PythonCodeNode(
-    name="token_validator",
-    code='''
-import jwt
-import datetime
-from cryptography.hazmat.primitives import serialization
-
-class JWTTokenValidator:
-    """Production-ready JWT token validation."""
-
-    def __init__(self, secret_key, algorithm='HS256'):
+workflow.add_node("PythonCodeNode", "token_validator", {}):
         self.secret_key = secret_key
         self.algorithm = algorithm
         self.validation_errors = []
@@ -148,7 +138,7 @@ result = validation_result
 '''
 ))
 
-workflow.connect("token_validator", "user_authorizer", mapping={"result": "auth_data"})
+workflow.add_connection("token_validator", "user_authorizer", "result", "auth_data")
 
 # Execute with token
 runtime = LocalRuntime()
@@ -165,7 +155,7 @@ results, run_id = runtime.execute(workflow, parameters={
 ### Multi-Factor Authentication (MFA) Workflow
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -175,14 +165,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("mfa_authentication")
+workflow = WorkflowBuilder()
 
 # MFA orchestrator
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature:
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature:
         self.mfa_methods = {
             'totp': self.validate_totp,
             'sms': self.validate_sms,
@@ -530,7 +521,7 @@ result = mfa_result
 ### GDPR/HIPAA Compliance Workflow
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -540,14 +531,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("privacy_compliance")
+workflow = WorkflowBuilder()
 
 # Data privacy processor
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature:
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature:
         self.encryption_key = encryption_key or Fernet.generate_key()
         self.cipher_suite = Fernet(self.encryption_key)
 
@@ -921,7 +913,7 @@ result = privacy_result
 ### Role-Based Access Control (RBAC)
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -931,14 +923,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("rbac_authorization")
+workflow = WorkflowBuilder()
 
 # RBAC engine
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature:
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature:
         self.roles_hierarchy = {
             'admin': ['manager', 'user', 'viewer'],
             'manager': ['user', 'viewer'],
@@ -1329,7 +1322,7 @@ result = authorization_result
 ### Comprehensive Audit Trail System
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1339,14 +1332,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("security_audit")
+workflow = WorkflowBuilder()
 
 # Audit system
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature:
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature:
         self.audit_categories = {
             'authentication': 'User authentication events',
             'authorization': 'Access control decisions',

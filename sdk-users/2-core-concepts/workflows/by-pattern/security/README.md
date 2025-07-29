@@ -122,7 +122,7 @@ ssl_security_check = HTTPRequestNode(
 ### Vulnerability Analysis
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -132,8 +132,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Analyze security scan results
 vulnerability_analyzer = PythonCodeNode.from_function(
@@ -383,7 +384,7 @@ def prioritize_vulnerabilities(vulnerabilities):
 ### Multi-Layer Security Assessment
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -393,19 +394,20 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Scan multiple layers simultaneously
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("network_scan", ["database_scan", "web_scan", "os_scan"])
+workflow = WorkflowBuilder()
+workflow.add_connection("network_scan", ["database_scan", "web_scan", "os_scan"])
 
 ```
 
 ### Continuous Security Monitoring
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -415,8 +417,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Schedule regular security scans
 security_scheduler = CronNode(
@@ -432,8 +435,7 @@ security_scheduler = CronNode(
 # Trigger automated fixes for specific vulnerability types
 auto_remediation = SwitchNode(
     name="auto_remediation",
-    condition_mapping={
-        "auto_fix": "severity == 'LOW' and auto_fixable == True",
+    condition_# mapping removed,
         "manual_review": "severity in ['MEDIUM', 'HIGH', 'CRITICAL']"
     }
 )

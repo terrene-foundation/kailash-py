@@ -11,6 +11,7 @@ Multi-tenancy in DataFlow ensures complete data isolation between tenants while 
 Enable multi-tenancy on any model:
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from dataflow import DataFlow
 
 db = DataFlow()

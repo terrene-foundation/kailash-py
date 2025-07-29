@@ -13,13 +13,13 @@ Model Context Protocol (MCP) is a standardized protocol that enables AI models t
 ## Quick Example - Your First MCP-Enabled Agent
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
 
 # Create a simple workflow with MCP
-workflow = Workflow("my-first-mcp", "My First MCP Workflow")
-workflow.add_node("agent", LLMAgentNode())
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "agent", {}))
 
 # Execute with MCP server
 runtime = LocalRuntime()
@@ -58,16 +58,16 @@ npm install -g @modelcontextprotocol/server-filesystem
 ### 2. Create Your First MCP Workflow
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
 
 # Initialize
-workflow = Workflow("mcp-demo", "MCP Demo Workflow")
+workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Add an LLM agent with MCP
-workflow.add_node("assistant", LLMAgentNode())
+workflow.add_node("LLMAgentNode", "assistant", {}))
 
 # Configure and run
 results, run_id = runtime.execute(workflow, parameters={
@@ -391,12 +391,12 @@ Now that you've learned the basics of MCP:
 
 ```python
 # Minimal MCP setup
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
 
-workflow = Workflow("mcp", "MCP Workflow")
-workflow.add_node("agent", LLMAgentNode())
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "agent", {}))
 runtime = LocalRuntime()
 
 results, run_id = runtime.execute(workflow, parameters={

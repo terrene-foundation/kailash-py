@@ -21,46 +21,46 @@ A comprehensive guide to testing Model Context Protocol (MCP) implementations in
 ```python
 import pytest
 from unittest.mock import MagicMock, patch
-from kailash.nodes.ai import LLMAgentNode
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
 class TestMCPUnit:
     """Unit tests for MCP functionality."""
 
     def test_tool_discovery_mock(self):
         """Test tool discovery with mocked MCP server."""
-        node = LLMAgentNode()
-
-        # Use mock provider for speed
-        result = node.run(
-            provider="mock",
-            model="gpt-4",
-            mcp_servers=[{
+        workflow = WorkflowBuilder()
+        workflow.add_node("LLMAgentNode", "agent", {
+            "provider": "mock",
+            "model": "gpt-4",
+            "mcp_servers": [{
                 "name": "test",
                 "transport": "stdio",
                 "command": "echo"
             }],
-            auto_discover_tools=True
-        )
+            "auto_discover_tools": True
+        })
 
-        assert result["success"] is True
-        assert "tools_available" in result["context"]
+        runtime = LocalRuntime()
+        results, run_id = runtime.execute(workflow.build())
+
+        assert results["agent"]["success"] is True
+        assert "tools_available" in results["agent"]["context"]
 
     def test_tool_execution_mock(self):
         """Test tool execution flow."""
-        node = LLMAgentNode()
+        workflow = WorkflowBuilder()
+        workflow.add_node("LLMAgentNode", "agent", {
+            "provider": "mock",
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "Execute tool"}],
+            "auto_execute_tools": True
+        })
 
-        # Mock tool call response
-        with patch.object(node, '_execute_mcp_tool') as mock_exec:
-            mock_exec.return_value = {"result": "success"}
+        runtime = LocalRuntime()
+        results, run_id = runtime.execute(workflow.build())
 
-            result = node.run(
-                provider="mock",
-                model="gpt-4",
-                messages=[{"role": "user", "content": "Execute tool"}],
-                auto_execute_tools=True
-            )
-
-            assert result["success"] is True
+        assert results["agent"]["success"] is True
 ```
 
 **Key Patterns**:
@@ -87,39 +87,42 @@ class TestMCPIntegration:
 
     def test_stdio_transport(self, real_mcp_server):
         """Test STDIO transport with real server."""
-        node = LLMAgentNode()
+        workflow = WorkflowBuilder()
+        workflow.add_node("LLMAgentNode", "agent", {
+            "provider": "ollama",  # Use real provider
+            "model": "llama3.2",
+            "mcp_servers": [real_mcp_server],
+            "auto_discover_tools": True,
+            "messages": [{"role": "user", "content": "List tools"}]
+        })
 
-        result = node.run(
-            provider="ollama",  # Use real provider
-            model="llama3.2",
-            mcp_servers=[real_mcp_server],
-            auto_discover_tools=True,
-            messages=[{"role": "user", "content": "List tools"}]
-        )
+        runtime = LocalRuntime()
+        results, run_id = runtime.execute(workflow.build())
 
         # Verify real tool discovery
-        assert result["success"] is True
-        assert len(result["context"]["tools_available"]) > 0
+        assert results["agent"]["success"] is True
+        assert len(results["agent"]["context"]["tools_available"]) > 0
 
     def test_error_recovery(self, real_mcp_server):
         """Test connection failure recovery."""
-        node = LLMAgentNode()
-
-        # Invalid server config
-        result = node.run(
-            provider="ollama",
-            model="llama3.2",
-            mcp_servers=[{
+        workflow = WorkflowBuilder()
+        workflow.add_node("LLMAgentNode", "agent", {
+            "provider": "ollama",
+            "model": "llama3.2",
+            "mcp_servers": [{
                 "name": "invalid",
                 "transport": "stdio",
                 "command": "nonexistent-command"
             }],
-            auto_discover_tools=True
-        )
+            "auto_discover_tools": True
+        })
+
+        runtime = LocalRuntime()
+        results, run_id = runtime.execute(workflow.build())
 
         # Should gracefully handle failure
-        assert result["success"] is True
-        assert result["context"]["tools_available"] == []
+        assert results["agent"]["success"] is True
+        assert results["agent"]["context"]["tools_available"] == []
 ```
 
 **Key Patterns**:
@@ -140,16 +143,16 @@ class TestMCPEndToEnd:
 
     def test_multi_round_tool_execution(self):
         """Test complex multi-round tool execution."""
-        from kailash import Workflow
+        from kailash.workflow.builder import WorkflowBuilder
         from kailash.runtime.local import LocalRuntime
 
         # Build workflow
-        workflow = Workflow("mcp-e2e")
-        workflow.add_node("agent", LLMAgentNode())
+        workflow = WorkflowBuilder()
+        workflow.add_node("LLMAgentNode", "agent", {})
 
         # Execute with real MCP server
         runtime = LocalRuntime()
-        results, run_id = runtime.execute(workflow, parameters={
+        results, run_id = runtime.execute(workflow.build(), parameters={
             "agent": {
                 "provider": "ollama",
                 "model": "llama3.2:1b",
@@ -204,7 +207,7 @@ def test_jupyter_environment():
 
     try:
         # MCP should work despite active loop
-        node = LLMAgentNode()
+        node = "LLMAgentNode"
         result = node.run(
             provider="mock",
             model="gpt-4",
@@ -224,7 +227,7 @@ def test_jupyter_environment():
 ```python
 def test_mcp_timeout_handling():
     """Test timeout protection."""
-    node = LLMAgentNode()
+    node = "LLMAgentNode"
 
     result = node.run(
         provider="mock",
@@ -249,7 +252,7 @@ def test_mcp_timeout_handling():
 ```python
 def test_connection_failure_recovery():
     """Test connection failure handling."""
-    node = LLMAgentNode()
+    node = "LLMAgentNode"
 
     # Multiple servers, one failing
     result = node.run(
@@ -275,7 +278,7 @@ def test_mcp_performance():
     """Test MCP performance characteristics."""
     import time
 
-    node = LLMAgentNode()
+    node = "LLMAgentNode"
 
     # Measure tool discovery time
     start = time.time()

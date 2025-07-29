@@ -59,8 +59,8 @@ workflow.add_node("LLMAgentNode", "analyzer", {
 1. **Wrong API**: Use string-based node creation, not instances
    ```python
    # ❌ DON'T
-   workflow.add_node("reader", CSVReaderNode())
-   
+   workflow.add_node("CSVReaderNode", "reader", {}))
+
    # ✅ DO
    workflow.add_node("CSVReaderNode", "reader", {})
    ```
@@ -68,8 +68,8 @@ workflow.add_node("LLMAgentNode", "analyzer", {
 2. **Wrong Connections**: Use 4-parameter syntax
    ```python
    # ❌ DON'T
-   workflow.connect("source", "target")
-   
+   workflow.add_connection("source", "result", "target", "input")
+
    # ✅ DO
    workflow.add_connection("source", "output", "target", "input")
    ```
@@ -77,8 +77,8 @@ workflow.add_node("LLMAgentNode", "analyzer", {
 3. **Missing Build**: Always build before execution
    ```python
    # ❌ DON'T
-   runtime.execute(workflow)
-   
+   runtime.execute(workflow.build())
+
    # ✅ DO
    runtime.execute(workflow.build())
    ```

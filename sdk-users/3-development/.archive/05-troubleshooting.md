@@ -22,8 +22,8 @@
 #### **Error**: `Required parameter 'count' not provided`
 ```python
 # ❌ WRONG - No initial parameters for cycle
-workflow.connect("counter", "counter", {"result.count": "count"}, cycle=True)
-runtime.execute(workflow)  # ERROR: count not provided
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+runtime.execute(workflow.build())  # ERROR: count not provided
 
 # ✅ CORRECT - Provide initial parameters
 runtime.execute(workflow, parameters={
@@ -43,10 +43,10 @@ runtime.execute(workflow, parameters={
 #### **Error**: Output not propagating through cycle
 ```python
 # ❌ WRONG - Missing result prefix for PythonCodeNode
-workflow.connect("node_a", "node_b", {"value": "input"})
+workflow.add_connection("node_a", "result", "node_b", "input")
 
 # ✅ CORRECT - Use dot notation for PythonCodeNode outputs
-workflow.connect("node_a", "node_b", {"result.value": "input"})
+workflow.add_connection("node_a", "result", "node_b", "input")
 ```
 
 **See**: [Cycle Parameter Passing Guide](10-cycle-parameter-passing-guide.md) for complete patterns.
@@ -717,7 +717,7 @@ self._db_node.run(
 #### **Error**: `'int' object has no attribute 'required'`
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -727,8 +727,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ WRONG - Returns raw values
 def get_parameters(self) -> Dict[str, Any]:
@@ -763,7 +764,7 @@ def get_parameters(self) -> Dict[str, NodeParameter]:
 #### **Error**: `Required output 'result' not provided`
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -773,12 +774,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ Problem: Variable was an input, excluded from outputs
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 # In node2:
 code = """
 data = result.get("data")
@@ -786,8 +788,8 @@ result = {"processed": data}  # Won't be in output!
 """
 
 # ✅ Solution: Map to different variable name
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 code = """
 data = input_data.get("data")
 result = {"processed": data}  # Will be in output!
@@ -818,7 +820,7 @@ This error occurs when LLMAgentNode attempts to connect to MCP servers but encou
 import os
 os.environ["KAILASH_USE_REAL_MCP"] = "true"
 
-agent = LLMAgentNode()
+agent = "LLMAgentNode"
 result = agent.run(
     provider="openai",
     model="gpt-4",
@@ -875,7 +877,7 @@ curl -X POST http://localhost:8891/mcp/ \
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -885,8 +887,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ Now OK: Create node without required params
 node = CSVReaderNode(name="reader")  # Missing file_path - OK!
@@ -933,7 +936,7 @@ node1 = PythonCodeNode.from_function(func=returns_dict)
 node2 = PythonCodeNode.from_function(func=returns_simple)
 
 # ✅ Always connect using "result" key
-workflow.connect("node1", "node2", {"result": "input_data"})
+workflow.add_connection("node1", "result", "node2", "input")
 
 ```
 
@@ -943,7 +946,7 @@ workflow.connect("node1", "node2", {"result": "input_data"})
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -953,8 +956,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ BEST: Full IDE support
 def process_data(input_data) -> dict:
@@ -1331,7 +1335,7 @@ def optimize_ollama_request(prompt, model="llama3.2:1b"):
 #### **Cause 1: Using Generic Types**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1341,8 +1345,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ This causes the error
 from typing import List
@@ -1362,7 +1367,7 @@ def get_parameters(self):
 #### **Cause 2: Wrong Return Type**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1372,8 +1377,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ Wrong return type
 def get_parameters(self):
@@ -1388,7 +1394,7 @@ def get_parameters(self) -> Dict[str, NodeParameter]:
 #### **Cause 3: Missing Method Implementation**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1398,8 +1404,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ Missing run method
 class MyNode(Node):
@@ -1460,7 +1467,7 @@ result = {"array": arr.tolist()}
 #### **Error**: `'>' not supported between instances of 'str' and 'int'`
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1470,8 +1477,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ WRONG: CSV data is always strings
 if transaction['amount'] > 5000:  # Will fail!
@@ -1499,7 +1507,7 @@ amount = safe_float(transaction.get('amount'))
 #### **Error**: `SyntaxError: '{' was never closed` with eval()
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1509,8 +1517,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # CSV files often contain JSON strings in columns
 # Example: location,"{""city"":""New York"",""state"":""NY""}"
@@ -1543,7 +1552,7 @@ location = parse_json_field(location_str)
 #### **Error**: `Required parameter 'input_data' not provided`
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1553,13 +1562,14 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ WRONG: SwitchNode expects single item, not list
 risk_assessments = [{'decision': 'approved'}, {'decision': 'declined'}]
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 # SwitchNode can't route a list!
 
 # ✅ SOLUTION: Process all items in one node
@@ -1571,8 +1581,8 @@ def workflow.()  # Type signature example -> dict:
         'declined': {'count': len(declined), 'items': declined}
     }
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("decision_processor", PythonCodeNode.from_function(
+workflow = WorkflowBuilder()
+workflow.add_node("decision_processor", PythonCodeNode.from_function(
     func=process_all_decisions,
     name="decision_processor"
 ))
@@ -1584,7 +1594,7 @@ workflow.workflow.add_node("decision_processor", PythonCodeNode.from_function(
 #### **Error**: `NameError: name 'data' is not defined`
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1594,16 +1604,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ TextReaderNode outputs 'text', not 'data'
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # ✅ Use correct output name
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -1665,7 +1676,7 @@ workflow.add_node("MyNode", "node1")  # Error: Unknown node type
 
 # Solution 1: Use node instance directly
 from my_module import MyCustomNode
-workflow.add_node("node1", MyCustomNode())
+workflow.add_node("MyCustomNode", "node1", {}))
 
 # Solution 2: Register the node
 from kailash.nodes import register_node
@@ -1681,7 +1692,7 @@ workflow.add_node("MyNode", "node1")
 #### **Error**: `Parameter 'X' is required`
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1691,23 +1702,24 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Problem: Required parameter not provided
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("node", MyNode())  # Missing required param
+workflow = WorkflowBuilder()
+workflow.add_node("MyNode", "node", {}))  # Missing required param
 
 # Solution: Provide required parameters
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("node", MyNode(), required_param="value")
+workflow = WorkflowBuilder()
+workflow.add_node("MyNode", "node", {}), required_param="value")
 
 ```
 
 #### **Error**: `Invalid type for parameter`
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1717,16 +1729,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Problem: Wrong type provided
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("node", MyNode(), count="five")  # String for int
+workflow = WorkflowBuilder()
+workflow.add_node("MyNode", "node", {}), count="five")  # String for int
 
 # Solution: Provide correct type
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("node", MyNode(), count=5)
+workflow = WorkflowBuilder()
+workflow.add_node("MyNode", "node", {}), count=5)
 
 ```
 
@@ -1751,7 +1764,7 @@ workflow.process(item)
 ### **1. Test Node in Isolation**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1761,8 +1774,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Test your node directly
 node = MyCustomNode(name="test")
@@ -1789,7 +1803,7 @@ logging.basicConfig(level=logging.DEBUG)
 ### **3. Check Parameter Schema**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1799,8 +1813,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Verify parameter definitions
 node = MyCustomNode(name="test")
@@ -1837,7 +1852,7 @@ def run(self, **kwargs):
 ### **6. Workflow Connection Debugging**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1847,20 +1862,21 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Validate workflow structure
-workflow = Workflow("example", name="Example")
-workflow.workflow.validate()
+workflow = WorkflowBuilder()
+workflow.validate()
 
 # Print workflow details
-workflow = Workflow("example", name="Example")
-workflow.workflow.get_nodes().items():
+workflow = WorkflowBuilder()
+workflow.get_nodes().items():
     print(f"Node {node_id}: {type(node).__name__}")
 
-workflow = Workflow("example", name="Example")
-workflow.workflow.get_connections():
+workflow = WorkflowBuilder()
+workflow.get_connections():
     print(f"Connection: {connection}")
 
 ```
@@ -2091,7 +2107,7 @@ async with httpx.AsyncClient() as client:
     response = await client.post(...)  # Fails in TaskGroup
 
 # ✅ CORRECT - v0.6.2+ uses aiohttp internally
-node = LLMAgentNode()
+node = "LLMAgentNode"
 result = await node.execute(
     provider="ollama",
     model="llama3.2:3b",

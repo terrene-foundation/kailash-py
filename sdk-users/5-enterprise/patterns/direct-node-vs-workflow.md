@@ -34,14 +34,16 @@ graph TD
 
 **Benefits**:
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # ✅ RECOMMENDED: Workflow approach
-workflow = Workflow("user_registration", "User registration process")
-workflow.add_node("validator", ValidationNode())
-workflow.add_node("creator", UserManagementNode())
-workflow.connect("validator", "creator", {"result": "input"})
+workflow = WorkflowBuilder()
+workflow.add_node("ValidationNode", "validator", {})
+workflow.add_node("UserManagementNode", "creator", {})
+workflow.add_connection("validator", "result", "creator", "input")
 
 # With new parameter injection (v0.6.2+)
-results = runtime.execute(workflow, parameters={
+runtime = LocalRuntime()
+results = runtime.execute(workflow.build(), parameters={
     "email": "user@example.com",
     "password": "secure123"
 })
@@ -68,12 +70,15 @@ results = runtime.execute(workflow, parameters={
 **Example**:
 ```python
 # ⚠️ ONLY when justified by requirements
-node = UserManagementNode(
+from kailash.nodes.auth import UserManagementNode
+node = UserManagementNode()
+result = node.execute(
     operation="verify_password",
     tenant_id="default",
-    database_config=db_config
+    database_config=db_config,
+    identifier=email,
+    password=password
 )
-result = node.execute(identifier=email, password=password)
 ```
 
 **Limitations**:
@@ -89,6 +94,8 @@ result = node.execute(identifier=email, password=password)
 ### Scenario 1: User Registration
 ```python
 # ❌ AVOID: Direct node chain
+from kailash.nodes.validation import ValidationNode
+from kailash.nodes.auth import UserManagementNode
 validator = ValidationNode()
 valid_result = validator.execute(data=user_data)
 if valid_result["valid"]:
@@ -102,6 +109,7 @@ results = runtime.execute(workflow, parameters=user_data)
 
 ### Scenario 2: Single Query
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # ✅ ACCEPTABLE: True single operation
 def get_user_by_id(user_id: str):
     node = UserManagementNode(operation="get_user")
@@ -109,13 +117,14 @@ def get_user_by_id(user_id: str):
 
 # ✅ BETTER: Still use workflow for consistency
 def get_user_by_id(user_id: str):
-    workflow = Workflow("get_user", "Fetch user")
-    workflow.add_node("fetcher", UserManagementNode(operation="get_user"))
+    workflow = WorkflowBuilder()
+    workflow.add_node("UserManagementNode", "fetcher", {}))
     return runtime.execute(workflow, parameters={"identifier": user_id})
 ```
 
 ### Scenario 3: Performance Critical
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # ⚠️ ONLY if measured and proven necessary
 class HighFrequencyHandler:
     def __init__(self):
@@ -127,8 +136,8 @@ class HighFrequencyHandler:
         return self.auth_node.execute(token=token)
 
 # ✅ FIRST TRY: Optimized workflow
-workflow = Workflow("fast_auth", "Fast authentication")
-workflow.add_node("auth", AuthNode(config=fast_config))
+workflow = WorkflowBuilder()
+workflow.add_node("AuthNode", "auth", {}))
 # Enable performance optimizations
 workflow.metadata["performance_mode"] = "ultra"
 ```
@@ -139,6 +148,7 @@ workflow.metadata["performance_mode"] = "ultra"
 
 1. **Identify Direct Node Usage**
    ```python
+from kailash.workflow.builder import WorkflowBuilder
    # Before
    result1 = node1.execute(data)
    result2 = node2.execute(result1["output"])
@@ -146,15 +156,17 @@ workflow.metadata["performance_mode"] = "ultra"
 
 2. **Convert to Workflow**
    ```python
+from kailash.workflow.builder import WorkflowBuilder
    # After
-   workflow = Workflow("process", "Data processing")
+   workflow = WorkflowBuilder()
    workflow.add_node("step1", node1)
    workflow.add_node("step2", node2)
-   workflow.connect("step1", "step2", {"output": "data"})
+   workflow.add_connection("step1", "result", "step2", "input")
    ```
 
 3. **Use Parameter Injection**
    ```python
+from kailash.workflow.builder import WorkflowBuilder
    # Simplified execution
    results = runtime.execute(workflow, parameters={"data": input_data})
    ```
@@ -203,6 +215,7 @@ If any checkbox is unchecked, **use a workflow**.
 ## Example: Proper Test Structure
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # ✅ GOOD: Test uses workflow even for simple operations
 async def test_user_creation(self):
     workflow = build_user_workflow()

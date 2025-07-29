@@ -188,11 +188,11 @@ CycleBuilder API (New in v0.2.0)
    workflow.add_node("processor", MyProcessorNode())
 
    # Connect node to itself to create a cycle
-   workflow.connect("processor", "processor",
-                    mapping={"output": "input"},
-                    cycle=True,
-                    max_iterations=100,
-                    convergence_check="done == True")
+   workflow.create_cycle("processing_cycle") \
+           .connect("processor", "processor", mapping={"output": "input"}) \
+           .max_iterations(100) \
+           .converge_when("done == True") \
+           .build()
 
 CycleAnalyzer (New in v0.2.0)
 ------------------------------
@@ -292,17 +292,19 @@ CycleProfiler (New in v0.2.0)
    for suggestion in suggestions:
        print(f"- {suggestion}")
 
-**Cycle Parameters:**
+**CycleBuilder API (v0.2.0+):**
 
-- ``cycle=True``: Marks the connection as a cyclic edge
-- ``max_iterations``: Maximum iterations before forced stop (default: 100)
-- ``convergence_check``: Python expression evaluated against node outputs
-- ``mapping``: Maps outputs from one iteration to inputs of the next
-- ``early_termination``: Additional conditions for early stopping
+- ``create_cycle(name)``: Creates a new cycle with a unique name
+- ``connect(source, target, mapping=None)``: Connects nodes within the cycle
+- ``max_iterations(n)``: Maximum iterations before forced stop (default: 100)
+- ``converge_when(condition)``: Python expression evaluated against node outputs
+- ``timeout(seconds)``: Maximum time limit for cycle execution
+- ``build()``: Finalizes the cycle configuration
 
 **Important Notes:**
 
-- Only one edge per cycle should be marked with ``cycle=True``
+- Use ``workflow.create_cycle("name").connect(...).build()`` for modern cycles
+- The deprecated ``cycle=True`` parameter is superseded by CycleBuilder API
 - Workflows with cycles use the ``CyclicRunner`` automatically
 - Use ``CycleAwareNode`` base class for built-in cycle features
 - State is managed automatically between iterations
@@ -688,10 +690,13 @@ Cycle Configuration (New in v0.2.0)
        checkpoint_interval=100
    )
 
-   # Use in workflow
-   workflow.connect("node1", "node2",
-                    cycle=True,
-                    **config.to_dict())
+   # Use in workflow with CycleBuilder API
+   workflow.create_cycle("optimization_cycle") \
+           .connect("node1", "node2") \
+           .max_iterations(config.max_iterations) \
+           .converge_when(config.convergence_check) \
+           .timeout(config.timeout) \
+           .build()
 
 Migration Tools (New in v0.2.0)
 ================================

@@ -15,37 +15,28 @@ REST API workflows enable:
 
 ### 30-Second API Integration
 ```python
-from kailash import Workflow
-from kailash.nodes.api import RateLimitedAPINode, HTTPRequestNode
-from kailash.nodes.transform import DataTransformer
-from kailash.nodes.data import JSONWriterNode
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 # API integration workflow using proper Kailash nodes
-workflow = Workflow(
-    workflow_id="api_001",
-    name="api_integration",
-    description="REST API workflow with rate limiting"
-)
+workflow = WorkflowBuilder()
 
 # Rate-limited API client
-api_client = RateLimitedAPINode(
-    id="api_client",
-    base_url="https://api.example.com",
-    requests_per_minute=60,
-    max_retries=3,
-    timeout=30
-)
-workflow.add_node("api_client", api_client)
+workflow.add_node("HTTPRequestNode", "api_client", {
+    "url": "https://api.example.com/v1/products",
+    "method": "GET",
+    "headers": {"Authorization": "Bearer YOUR_TOKEN"},
+    "retry_attempts": 3,
+    "timeout": 30
+})
 
 # Process API response
-response_processor = DataTransformer(
-    id="processor",
-    transformations=[
-        """
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": """
 # Simple response processing
-if isinstance(data, dict) and data.get("status") == "success":
-    products = data.get("data", {}).get("products", [])
+response_data = parameters.get('response_data', {})
+if isinstance(response_data, dict) and response_data.get("status") == "success":
+    products = response_data.get("data", {}).get("products", [])
     result = {
         "products": products,
         "total_count": len(products),
@@ -54,78 +45,56 @@ if isinstance(data, dict) and data.get("status") == "success":
 else:
     result = {"products": [], "total_count": 0, "error": "API call failed"}
 """
-    ]
-)
-workflow.add_node("processor", response_processor)
-workflow.connect("api_client", "processor", mapping={"response": "data"})
+})
+workflow.add_connection("api_client", "result", "processor", "response_data")
 
 # Save results
-writer = JSONWriterNode(
-    id="writer",
-    file_path="api_results.json"
-)
-workflow.add_node("writer", writer)
-workflow.connect("processor", "writer", mapping={"result": "data"})
+workflow.add_node("JSONWriterNode", "writer", {
+    "file_path": "api_results.json"
+})
+workflow.add_connection("processor", "result", "writer", "data")
 
 # Execute the workflow
 runtime = LocalRuntime()
-result, run_id = runtime.execute(workflow, parameters={
-    "api_client": {
-        "endpoint": "/v1/products",
-        "method": "GET",
-        "headers": {"Authorization": "Bearer YOUR_TOKEN"}
-    }
-})
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
 ### Enterprise API Integration with Full Error Handling
 ```python
-from kailash.nodes.logic import SwitchNode, MergeNode, LoopNode
-from kailash.nodes.data import DatabaseWriterNode, CSVWriterNode
-from kailash.nodes.api import CircuitBreakerNode, RetryNode
+# All nodes are accessed via string-based API - no direct imports needed
 
 # Enterprise-grade API workflow
-workflow = Workflow(
-    workflow_id="enterprise_api_001",
-    name="enterprise_api_integration",
-    description="Production-ready API integration with comprehensive error handling"
-)
+workflow = WorkflowBuilder()
 
 # Circuit breaker for API reliability
-circuit_breaker = CircuitBreakerNode(
-    id="circuit_breaker",
-    failure_threshold=5,
-    recovery_timeout=60,
-    half_open_max_calls=3
-)
-workflow.add_node("circuit_breaker", circuit_breaker)
+workflow.add_node("CircuitBreakerNode", "circuit_breaker", {
+    "failure_threshold": 5,
+    "recovery_timeout": 60,
+    "half_open_max_calls": 3
+})
 
 # Primary API with rate limiting
-primary_api = RateLimitedAPINode(
-    id="primary_api",
-    base_url="https://api.primary.com",
-    requests_per_minute=100,
+workflow.add_node("HTTPRequestNode", "primary_api", {
+    "url": "https://api.primary.com/endpoint",
+    "method": "GET",
+    "retry_attempts": 3,
     max_retries=3,
     timeout=30,
     backoff_factor=2.0
 )
-workflow.add_node("primary_api", primary_api)
 
 # Fallback API for resilience
-fallback_api = RateLimitedAPINode(
-    id="fallback_api",
-    base_url="https://api.backup.com",
-    requests_per_minute=50,
-    max_retries=2,
-    timeout=15
-)
-workflow.add_node("fallback_api", fallback_api)
+workflow.add_node("HTTPRequestNode", "fallback_api", {
+    "url": "https://api.backup.com/endpoint",
+    "method": "GET",
+    "retry_attempts": 2,
+    "timeout": 15
+})
 
 # Response validation and routing
-validator = DataTransformer(
-    id="validator",
-    transformations=[
+workflow.add_node("PythonCodeNode", "validator", {
+    "code":
         """
 # Comprehensive response validation
 import json
@@ -189,21 +158,16 @@ else:
 
 result = validation_result
 """
-    ]
-)
-workflow.add_node("validator", validator)
+})
 
 # Route based on validation results
-router = SwitchNode(
-    id="router",
-    condition="valid == True"
-)
-workflow.add_node("router", router)
+workflow.add_node("SwitchNode", "router", {
+    "condition": "result.valid == True"
+})
 
 # Success path: Process valid data
-success_processor = DataTransformer(
-    id="success_processor",
-    transformations=[
+workflow.add_node("PythonCodeNode", "success_processor", {
+    "code":
         """
 # Process validated data
 items = data.get("data", {}).get("items", [])
@@ -241,12 +205,10 @@ result = {
 """
     ]
 )
-workflow.add_node("success_processor", success_processor)
 
 # Error path: Handle failures and retry logic
-error_handler = DataTransformer(
-    id="error_handler",
-    transformations=[
+workflow.add_node("PythonCodeNode", "error_handler", {
+    "code":
         """
 # Handle validation errors and prepare for fallback
 errors = data.get("errors", [])
@@ -278,49 +240,38 @@ result = {
     "original_data": data
 }
 """
-    ]
-)
-workflow.add_node("error_handler", error_handler)
+})
 
 # Connect the workflow
-workflow.connect("circuit_breaker", "primary_api")
-workflow.connect("primary_api", "validator", mapping={"response": "data"})
-workflow.connect("validator", "router", mapping={"result": "data"})
+workflow.add_connection("circuit_breaker", "result", "primary_api", "input")
+workflow.add_connection("primary_api", "validator", "response", "data")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 # Success path
-workflow.connect("router", "success_processor",
-               output_key="true_output",
-               mapping={"data": "data"})
+workflow.add_connection("source", "result", "target", "input")  # Fixed output mapping
 
 # Error path
-workflow.connect("router", "error_handler",
-               output_key="false_output",
-               mapping={"data": "data"})
+workflow.add_connection("source", "result", "target", "input")  # Fixed output mapping
 
 # Database storage for successful results
-db_writer = DatabaseWriterNode(
-    id="db_writer",
-    connection_string="${DATABASE_URL}",
-    table_name="api_results",
-    batch_size=100
-)
-workflow.add_node("db_writer", db_writer)
-workflow.connect("success_processor", "db_writer", mapping={"result": "records"})
+workflow.add_node("DatabaseWriterNode", "db_writer", {
+    "connection_string": "${DATABASE_URL}",
+    "table_name": "api_results",
+    "batch_size": 100
+})
+workflow.add_connection("success_processor", "result", "db_writer", "records")
 
 # CSV backup for all results
-csv_writer = CSVWriterNode(
-    id="csv_backup",
-    file_path="data/api_backup.csv",
-    include_headers=True
-)
-workflow.add_node("csv_backup", csv_writer)
+workflow.add_node("CSVWriterNode", "csv_backup", {
+    "file_path": "data/api_backup.csv",
+    "include_headers": True
+})
 
 # Merge successful and error results for backup
-result_merger = MergeNode(id="result_merger")
-workflow.add_node("result_merger", result_merger)
-workflow.connect("success_processor", "result_merger", mapping={"result": "data1"})
-workflow.connect("error_handler", "result_merger", mapping={"result": "data2"})
-workflow.connect("result_merger", "csv_backup", mapping={"merged_data": "data"})
+workflow.add_node("MergeNode", "result_merger", {})
+workflow.add_connection("success_processor", "result_merger", "result", "data1")
+workflow.add_connection("error_handler", "result_merger", "result", "data2")
+workflow.add_connection("result_merger", "csv_backup", "merged_data", "data")
 
 ```
 
@@ -330,10 +281,7 @@ workflow.connect("result_merger", "csv_backup", mapping={"merged_data": "data"})
 ```python
 from kailash.nodes.api import OAuth2Node
 
-workflow = Workflow(
-    workflow_id="oauth_001",
-    name="oauth_integration"
-)
+workflow = WorkflowBuilder()
 
 # OAuth2 authentication
 auth = OAuth2Node(
@@ -345,13 +293,11 @@ auth = OAuth2Node(
 workflow.add_node("oauth", auth)
 
 # Authenticated API request
-api_request = HTTPRequestNode(
-    id="api_request",
-    method="GET",
-    url="https://api.example.com/protected-data"
-)
-workflow.add_node("api_request", api_request)
-workflow.connect("oauth", "api_request", mapping={"access_token": "auth_token"})
+workflow.add_node("HTTPRequestNode", "api_request", {
+    "method": "GET",
+    "url": "https://api.example.com/protected-data"
+})
+workflow.add_connection("oauth", "access_token", "api_request", "auth_token")
 
 ```
 
@@ -360,21 +306,17 @@ workflow.connect("oauth", "api_request", mapping={"access_token": "auth_token"})
 from kailash.nodes.api import APIKeyNode
 
 # API key authentication
-auth = APIKeyNode(
-    id="api_key",
-    api_key="${API_KEY}",
-    header_name="X-API-Key"
-)
-workflow.add_node("api_key", auth)
+workflow.add_node("APIKeyNode", "api_key", {
+    "api_key": "${API_KEY}",
+    "header_name": "X-API-Key"
+})
 
 # Use with HTTP request
-http_request = HTTPRequestNode(
-    id="request",
-    method="GET",
-    url="https://api.example.com/data"
-)
-workflow.add_node("request", http_request)
-workflow.connect("api_key", "request", mapping={"headers": "auth_headers"})
+workflow.add_node("HTTPRequestNode", "request", {
+    "method": "GET",
+    "url": "https://api.example.com/data"
+})
+workflow.add_connection("api_key", "headers", "request", "auth_headers")
 
 ```
 
@@ -608,25 +550,19 @@ result = {
 from kailash.nodes.data import StreamingDataNode, QueueNode
 
 # Streaming API integration for real-time data
-streaming_workflow = Workflow(
-    workflow_id="streaming_api_001",
-    name="real_time_api_streaming"
-)
+streaming_workflow = WorkflowBuilder()
 
 # Streaming data source
-stream_source = StreamingDataNode(
-    id="stream_source",
-    stream_type="websocket",
-    connection_url="wss://api.example.com/stream",
-    buffer_size=1000,
-    flush_interval=5  # seconds
-)
-streaming_workflow.add_node("stream_source", stream_source)
+streaming_workflow.add_node("StreamingDataNode", "stream_source", {
+    "stream_type": "websocket",
+    "connection_url": "wss://api.example.com/stream",
+    "buffer_size": 1000,
+    "flush_interval": 5  # seconds
+})
 
 # Real-time data processor
-stream_processor = DataTransformer(
-    id="stream_processor",
-    transformations=[
+streaming_workflow.add_node("DataTransformer", "stream_processor", {
+    "transformations": [
         """
 # Process streaming data in real-time
 import json
@@ -689,21 +625,18 @@ result = {
 }
 """
     ]
-)
-streaming_workflow.add_node("stream_processor", stream_processor)
+})
 
 # Queue for buffering high-volume streams
-event_queue = QueueNode(
-    id="event_queue",
-    queue_type="redis",
-    max_size=10000,
-    batch_size=100
-)
-streaming_workflow.add_node("event_queue", event_queue)
+streaming_workflow.add_node("QueueNode", "event_queue", {
+    "queue_type": "redis",
+    "max_size": 10000,
+    "batch_size": 100
+})
 
 # Connect streaming pipeline
-streaming_workflow.connect("stream_source", "stream_processor", mapping={"stream_data": "data"})
-streaming_workflow.connect("stream_processor", "event_queue", mapping={"result": "items"})
+streaming_workflow.add_connection("stream_source", "stream_processor", "stream_data", "data")
+streaming_workflow.add_connection("stream_processor", "event_queue", "result", "items")
 
 ```
 
@@ -714,14 +647,12 @@ streaming_workflow.connect("stream_processor", "event_queue", mapping={"result":
 from kailash.nodes.api import GraphQLClientNode
 
 # GraphQL client
-graphql = GraphQLClientNode(
-    id="graphql",
-    endpoint="https://api.example.com/graphql"
-)
-workflow.add_node("graphql", graphql)
+workflow.add_node("GraphQLClientNode", "graphql", {
+    "endpoint": "https://api.example.com/graphql"
+})
 
 # Execute with parameters
-runtime.execute(workflow, parameters={
+runtime.execute(workflow.build(), parameters={
     "graphql": {
         "query": """
             query GetUser($id: ID!) {
@@ -750,17 +681,14 @@ runtime.execute(workflow, parameters={
 from kailash.nodes.api import WebhookReceiverNode
 
 # Webhook receiver
-webhook = WebhookReceiverNode(
-    id="webhook",
-    port=8080,
-    path="/webhook"
-)
-workflow.add_node("webhook", webhook)
+workflow.add_node("WebhookReceiverNode", "webhook", {
+    "port": 8080,
+    "path": "/webhook"
+})
 
 # Process webhook payload
-processor = DataTransformer(
-    id="webhook_processor",
-    transformations=[
+workflow.add_node("DataTransformer", "webhook_processor", {
+    "transformations": [
         """
 # Process incoming webhook
 payload = data.get("payload", {})
@@ -778,15 +706,15 @@ result = {
 }
 """
     ]
-)
-workflow.connect("webhook", "processor", mapping={"request": "data"})
+})
+workflow.add_connection("webhook", "request", "webhook_processor", "data")
 
 ```
 
 ### Batch API Processing
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -796,13 +724,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Process multiple API calls
-batch_processor = DataTransformer(
-    id="batch_processor",
-    transformations=[
+workflow.add_node("DataTransformer", "batch_processor", {
+    "transformations": [
         """
 # Prepare batch API requests
 batch_requests = []
@@ -818,14 +746,13 @@ for item in items:
 result = {"requests": batch_requests, "total": len(batch_requests)}
 """
     ]
-)
+})
 
 # Execute batch with rate limiting
-batch_api = RateLimitedAPINode(
-    id="batch_api",
-    requests_per_minute=120,  # Higher limit for batch processing
-    max_retries=2
-)
+workflow.add_node("RateLimitedAPINode", "batch_api", {
+    "requests_per_minute": 120,  # Higher limit for batch processing
+    "max_retries": 2
+})
 
 ```
 
@@ -834,18 +761,17 @@ batch_api = RateLimitedAPINode(
 ### Connection Pooling
 ```python
 # Use connection pooling for high-throughput APIs
-pooled_client = HTTPRequestNode(
-    id="pooled_client",
-    connection_pool_size=10,
-    keep_alive=True
-)
+workflow.add_node("HTTPRequestNode", "pooled_client", {
+    "connection_pool_size": 10,
+    "keep_alive": True
+})
 
 ```
 
 ### Response Caching
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -855,15 +781,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Cache API responses
-cached_api = RateLimitedAPINode(
-    id="cached_api",
-    cache_responses=True,
-    cache_ttl=300  # 5 minutes
-)
+workflow.add_node("RateLimitedAPINode", "cached_api", {
+    "cache_responses": True,
+    "cache_ttl": 300  # 5 minutes
+})
 
 ```
 
@@ -892,22 +818,20 @@ cached_api = RateLimitedAPINode(
 ### Don't Use PythonCodeNode for HTTP Calls
 ```python
 # WRONG: Manual HTTP implementation
-api_node = PythonCodeNode(
-    code="response = requests.get('https://api.example.com'); result = response"
-)
+# api_node = PythonCodeNode(code="response = requests.get('https://api.example.com')")  # DON'T DO THIS
 
 # CORRECT: Use HTTPRequestNode or RateLimitedAPINode
-api_node = HTTPRequestNode(
-    method="GET",
-    url="https://api.example.com"
-)
+workflow.add_node("HTTPRequestNode", "api_node", {
+    "method": "GET",
+    "url": "https://api.example.com"
+})
 
 ```
 
 ### Don't Implement Rate Limiting Manually
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -917,32 +841,29 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # WRONG: Manual rate limiting
-rate_limiter = PythonCodeNode(
-    code="time.sleep(1); requests.get(url)"
-)
+# rate_limiter = PythonCodeNode(code="time.sleep(1); requests.get(url)")  # DON'T DO THIS
 
 # CORRECT: Use RateLimitedAPINode
-rate_limiter = RateLimitedAPINode(
-    requests_per_minute=60
-)
+workflow.add_node("RateLimitedAPINode", "rate_limiter", {
+    "requests_per_minute": 60
+})
 
 ```
 
 ### Don't Hardcode API Keys
 ```python
 # WRONG: Hardcoded credentials
-api_call = HTTPRequestNode(
-    headers={"Authorization": "Bearer sk-123456"}
-)
+# api_call = HTTPRequestNode(headers={"Authorization": "Bearer sk-123456"})  # DON'T DO THIS
 
 # CORRECT: Use environment variables
-api_call = HTTPRequestNode(
-    headers={"Authorization": "Bearer ${API_TOKEN}"}
-)
+workflow.add_node("HTTPRequestNode", "api_call", {
+    "headers": {"Authorization": "Bearer ${API_TOKEN}"}
+})
 
 ```
 

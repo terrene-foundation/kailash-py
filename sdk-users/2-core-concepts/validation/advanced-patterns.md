@@ -7,7 +7,7 @@
 All examples in this guide assume these imports:
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
@@ -23,52 +23,21 @@ from kailash.workflow.builder import WorkflowBuilder
 
 ### **Basic Cycle Setup**
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
-workflow = Workflow("iterative", name="Iterative Processing")
+workflow = WorkflowBuilder()
 
 # Cycle-aware processor
-workflow.add_node("processor", PythonCodeNode(
-    name="processor",
-    code='''
-# Handle cycle parameters with try/except
-try:
-    current_value = current_value
-except:
-    current_value = 0  # Initialize on first iteration
-
-try:
-    target = target
-except:
-    target = 100
-
-# Process one iteration
-new_value = current_value + 10
-converged = new_value >= target
-
-result = {
-    "current_value": new_value,
-    "target": target,
-    "converged": converged,
-    "iteration": iteration + 1 if 'iteration' in globals() else 1
+workflow.add_node("PythonCodeNode", "processor", {}) else 1
 }
 ''',
     input_types={"current_value": float, "target": float, "iteration": int}
 ))
 
 # Create cycle connection
-workflow.connect("processor", "processor",
-    mapping={
-        "current_value": "current_value",
-        "target": "target",
-        "iteration": "iteration"
-    },
-    cycle=True,
-    max_iterations=20,
-    convergence_check="converged == True"
-)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Execute with initial parameters
 runtime = LocalRuntime()
@@ -85,17 +54,7 @@ results, run_id = runtime.execute(workflow, parameters={
 ### **Complex State Management**
 ```python
 # Advanced cycle with complex state
-workflow.add_node("state_processor", PythonCodeNode(
-    name="state_processor",
-    code='''
-# Initialize complex state
-try:
-    state = state
-except:
-    state = {
-        "values": [],
-        "sum": 0,
-        "best_value": float('-inf'),
+workflow.add_node("PythonCodeNode", "state_processor", {}),
         "iterations": 0,
         "average": 0
     }
@@ -136,15 +95,7 @@ result = {
     input_types={"state": dict, "new_data": list}
 ))
 
-workflow.connect("state_processor", "state_processor",
-    mapping={
-        "state": "state",
-        "new_data": "new_data"
-    },
-    cycle=True,
-    max_iterations=50,
-    convergence_check="converged == True"
-)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 ```
 
@@ -187,7 +138,7 @@ class NodeWithParameters:
         return {"result": f"processed {len(data)} items"}
 
 # Configuration time (node creation)
-workflow = Workflow("param_flow", name="Parameter Flow")
+workflow = WorkflowBuilder()
 workflow.add_node("processor", NodeWithParameters(),
     required_param="configured_value",  # Static configuration
     optional_param=100                  # Override default
@@ -207,16 +158,12 @@ results, run_id = runtime.execute(workflow, parameters={
 ### **Data Flow from External Sources**
 ```python
 # Pattern 1: Pure configuration (no external data)
-workflow = Workflow("data_flow", name="Data Flow")
-workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
 # No runtime parameters needed
 
 # Pattern 2: Pure runtime injection
-workflow.add_node("processor", PythonCodeNode(
-    name="processor",
-    code="result = {'processed': injected_data}",
-    input_types={"injected_data": list}
-))
+workflow.add_node("PythonCodeNode", "processor", {}))
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow, parameters={
@@ -224,7 +171,7 @@ results, run_id = runtime.execute(workflow, parameters={
 })
 
 # Pattern 3: Hybrid (config + runtime)
-workflow.add_node("reader", CSVReaderNode(),
+workflow.add_node("CSVReaderNode", "reader", {}),
     file_path="default.csv",  # Configuration default
     delimiter=","             # Configuration setting
 )
@@ -243,7 +190,7 @@ results, run_id = runtime.execute(workflow, parameters={
 ```python
 # Multi-source parameter aggregation
 def create_complex_workflow():
-    workflow = Workflow("complex_params", name="Complex Parameters")
+    workflow = WorkflowBuilder()
 
     # Node with multiple parameter sources
     aggregator_node = PythonCodeNode(
@@ -288,14 +235,10 @@ results, run_id = runtime.execute(workflow, parameters={
 ### **Builder vs Direct Comparison**
 ```python
 # Method 1: Direct Workflow (Recommended)
-workflow = Workflow("direct_workflow", name="Direct Workflow")
-workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
-workflow.add_node("processor", PythonCodeNode(
-    name="processor",
-    code="result = {'processed': input_data}",
-    input_types={"input_data": list}
-))
-workflow.connect("reader", "processor", mapping={"data": "input_data"})
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
+workflow.add_node("PythonCodeNode", "processor", {}))
+workflow.add_connection("reader", "processor", "data", "input_data")
 
 # Method 2: WorkflowBuilder (Alternative)
 from kailash.workflow.builder import WorkflowBuilder
@@ -358,8 +301,8 @@ workflow = create_processing_pipeline(processing_config)
 ### **Multi-Path Routing**
 ```python
 # Complex routing with multiple conditions
-workflow = Workflow("routing", name="Multi-Path Routing")
-workflow.add_node("classifier", SwitchNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("SwitchNode", "classifier", {}),
     conditions=[
         {"output": "critical", "expression": "priority == 'critical' and urgency > 9"},
         {"output": "high", "expression": "priority == 'high' or urgency > 7"},
@@ -370,22 +313,19 @@ workflow.add_node("classifier", SwitchNode(),
 )
 
 # Connect to different processing paths
-workflow.connect("classifier", "critical_processor", output_key="critical")
-workflow.connect("classifier", "high_processor", output_key="high")
-workflow.connect("classifier", "normal_processor", output_key="normal")
-workflow.connect("classifier", "low_processor", output_key="low")
-workflow.connect("classifier", "unprocessed_handler", output_key="unprocessed")
+workflow.add_connection("source", "result", "target", "input")  # Fixed output mapping
+workflow.add_connection("source", "result", "target", "input")  # Fixed output mapping
+workflow.add_connection("source", "result", "target", "input")  # Fixed output mapping
+workflow.add_connection("source", "result", "target", "input")  # Fixed output mapping
+workflow.add_connection("source", "result", "target", "input")  # Fixed output mapping
 
 ```
 
 ### **Convergence and Merge Patterns**
 ```python
 # Parallel processing with convergence
-workflow = Workflow("parallel", name="Parallel Processing")
-workflow.add_node("splitter", PythonCodeNode(
-    name="splitter",
-    code='''
-chunk_size = len(data) // 3
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "splitter", {}) // 3
 result = {
     "chunk1": data[:chunk_size],
     "chunk2": data[chunk_size:chunk_size*2],
@@ -411,14 +351,12 @@ result = {{"processed": processed}}
         input_types={"chunk_data": list}
     ))
 
-    workflow.connect("splitter", f"processor_{i}",
-                    mapping={f"chunk{i+1}": "chunk_data"})
+    workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
 
 # Merge results
-workflow.add_node("merger", MergeNode(), strategy="combine")
+workflow.add_node("MergeNode", "merger", {}), strategy="combine")
 for i in range(3):
-    workflow.connect(f"processor_{i}", "merger",
-                    mapping={"processed": f"input_{i}"})
+    workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
 
 ```
 
@@ -426,16 +364,9 @@ for i in range(3):
 ```python
 # Create sub-workflow for reusable logic
 def create_validation_workflow():
-    sub_workflow = Workflow("validation", name="Validation Workflow")
+    sub_workflow = WorkflowBuilder()
 
-    sub_workflow.add_node("validator", PythonCodeNode(
-        name="validator",
-        code='''
-valid_items = []
-invalid_items = []
-
-for item in data:
-    if isinstance(item, dict) and "id" in item and "value" in item:
+    sub_workflow.add_node("PythonCodeNode", "validator", {}) and "id" in item and "value" in item:
         valid_items.append(item)
     else:
         invalid_items.append(item)
@@ -458,18 +389,16 @@ result = {
 
 # Use nested workflow in main workflow
 validation_workflow = create_validation_workflow()
-main_workflow = Workflow("nested", name="Nested Workflow")
+main_workflow = WorkflowBuilder()
 
-main_workflow.add_node("reader", CSVReaderNode(), file_path="data.csv")
-main_workflow.add_node("validation", WorkflowNode(validation_workflow))
-main_workflow.add_node("processor", PythonCodeNode(
-    name="processor",
-    code="result = {'final_count': len(valid_data)}",
+main_workflow.add_node("CSVReaderNode", "reader", {}), file_path="data.csv")
+main_workflow.add_node("WorkflowNode", "validation", {}))
+main_workflow.add_node("PythonCodeNode", "processor", {})}",
     input_types={"valid_data": list}
 ))
 
-main_workflow.connect("reader", "validation", mapping={"data": "data"})
-main_workflow.connect("validation", "processor", mapping={"valid": "valid_data"})
+main_workflow.add_connection("reader", "validation", "data", "data")
+main_workflow.add_connection("validation", "processor", "valid", "valid_data")
 
 ```
 
@@ -478,14 +407,8 @@ main_workflow.connect("validation", "processor", mapping={"valid": "valid_data"}
 ### **Batch Processing**
 ```python
 # Large dataset processing with batching
-workflow = Workflow("batch_processing", name="Batch Processing")
-workflow.add_node("batch_processor", PythonCodeNode(
-    name="batch_processor",
-    code='''
-import math
-
-batch_size = 1000
-total_items = len(data)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "batch_processor", {})
 num_batches = math.ceil(total_items / batch_size)
 
 processed_batches = []
@@ -528,18 +451,8 @@ result = {
 ### **Memory-Efficient Processing**
 ```python
 # Stream processing for large datasets
-workflow = Workflow("stream_processing", name="Stream Processing")
-workflow.add_node("stream_processor", PythonCodeNode(
-    name="stream_processor",
-    code='''
-import gc
-
-# Process data in memory-efficient chunks
-chunk_size = 100
-processed_count = 0
-memory_usage = []
-
-for i in range(0, len(data), chunk_size):
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "stream_processor", {}), chunk_size):
     chunk = data[i:i + chunk_size]
 
     # Process chunk

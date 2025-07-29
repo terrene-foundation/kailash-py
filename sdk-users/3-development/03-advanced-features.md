@@ -163,8 +163,8 @@ else:
 })
 
 # Connect with conditional routing
-workflow.connect("primary_llm", "result", mapping={"check_primary": "primary_result"})
-workflow.connect("check_primary", "result.use_fallback", mapping={"fallback_llm": "should_run"})
+workflow.add_connection("primary_llm", "result", "check_primary", "primary_result")
+workflow.add_connection("check_primary", "result.use_fallback", "fallback_llm", "should_run")
 ```
 
 ## Business Workflow Templates
@@ -222,7 +222,7 @@ result = {"transformed": transformed}
 })
 
 # Connect stages
-workflow.connect("validator", "result.data", mapping={"transformer": "validated_data"})
+workflow.add_connection("validator", "result.data", "transformer", "validated_data")
 ```
 
 ## Data Lineage & Compliance
@@ -513,11 +513,11 @@ result = {"summary": summary}
 })
 
 # Connect workflow with conditional execution
-workflow.connect("access_check", "result.allowed", mapping={"batch_processor": "should_run"})
-workflow.connect("batch_processor", "result", mapping={"lineage_tracker": "processing_info"})
-workflow.connect("batch_processor", "result", mapping={"aggregate_results": "batch_results"})
-workflow.connect("lineage_tracker", "result", mapping={"aggregate_results": "lineage_results"})
-workflow.connect("credential_rotation", "result", mapping={"aggregate_results": "credential_results"})
+workflow.add_connection("access_check", "result.allowed", "batch_processor", "should_run")
+workflow.add_connection("batch_processor", "result", "lineage_tracker", "processing_info")
+workflow.add_connection("batch_processor", "result", "aggregate_results", "batch_results")
+workflow.add_connection("lineage_tracker", "result", "aggregate_results", "lineage_results")
+workflow.add_connection("credential_rotation", "result", "aggregate_results", "credential_results")
 
 # Execute with monitoring
 runtime = LocalRuntime(

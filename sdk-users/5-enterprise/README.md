@@ -34,7 +34,7 @@ This directory contains enterprise-specific patterns, architectures, and best pr
 
 ### Basic Enterprise Setup
 ```python
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 from kailash.runtime.access_controlled import AccessControlledRuntime
 from kailash.security import SecurityConfig
 
@@ -64,7 +64,7 @@ gateway.run(host="0.0.0.0", port=8000)
 ### Multi-Tenant Architecture
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -74,8 +74,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Tenant-isolated middleware
 gateway = create_gateway(
@@ -85,7 +86,7 @@ gateway = create_gateway(
 )
 
 # Tenant-aware session management
-async def workflow.()  # Type signature example:
+async def create_tenant_session(gateway, tenant_id, user_id):
     return await gateway.agent_ui.create_session(
         user_id=f"{tenant_id}:{user_id}",
         metadata={
@@ -106,21 +107,15 @@ from kailash.nodes.ai.a2a import A2ACoordinatorNode
 from kailash.nodes.ai.self_organizing import AgentPoolManagerNode
 
 # Enterprise agent pool
-workflow.add_node("agent_pool", AgentPoolManagerNode(
-    max_active_agents=100,        # Scale for enterprise load
-    allocation_strategy="intelligent",
-    load_balancing=True,
-    health_monitoring=True,
-    auto_scaling=True
-))
+workflow.add_node("AgentPoolManagerNode", "agent_pool", {})
 
 # High-throughput coordinator
-workflow.add_node("coordinator", A2ACoordinatorNode(
-    max_concurrent_tasks=200,     # Enterprise throughput
-    task_queue_limit=10000,
-    coordination_strategy="weighted_round_robin",
-    performance_monitoring=True
-))
+workflow.add_node("A2ACoordinatorNode", "coordinator", {
+    "max_concurrent_tasks": 200,     # Enterprise throughput
+    "task_queue_limit": 10000,
+    "coordination_strategy": "weighted_round_robin",
+    "performance_monitoring": True
+})
 
 ```
 
@@ -129,30 +124,32 @@ workflow.add_node("coordinator", A2ACoordinatorNode(
 from kailash.nodes.transaction import DistributedTransactionManagerNode
 
 # Automatic pattern selection for enterprise transactions
-dtm = DistributedTransactionManagerNode(
-    transaction_name="enterprise_order_processing",
-    state_storage="database",
-    storage_config={
-        "db_pool": enterprise_db_pool,
+workflow.add_node("DistributedTransactionManagerNode", "dtm", {
+    "transaction_name": "enterprise_order_processing",
+    "state_storage": "database",
+    "storage_config": {
+        "connection_string": "postgresql://localhost:5432/enterprise_db",
         "table_name": "enterprise_transaction_states"
     }
-)
+})
 
-# Create transaction with enterprise requirements
-await dtm.async_run(
-    operation="create_transaction",
-    requirements={
-        "consistency": "strong",        # Enterprise data consistency
-        "availability": "high",         # 99.9% uptime requirement
-        "timeout": 300,                # 5-minute timeout
-        "isolation_level": "serializable"
-    },
-    context={
-        "enterprise_id": "ENT001",
-        "compliance_required": True,
-        "audit_trail": True
+# Execute workflow with enterprise requirements
+results, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "dtm": {
+        "operation": "create_transaction",
+        "requirements": {
+            "consistency": "strong",        # Enterprise data consistency
+            "availability": "high",         # 99.9% uptime requirement
+            "timeout": 300,                # 5-minute timeout
+            "isolation_level": "serializable"
+        },
+        "context": {
+            "enterprise_id": "ENT001",
+            "compliance_required": True,
+            "audit_trail": True
+        }
     }
-)
+})
 
 # Add enterprise service participants
 enterprise_services = [
@@ -162,20 +159,11 @@ enterprise_services = [
     {"id": "audit_service", "2pc": True, "saga": True}
 ]
 
-for service in enterprise_services:
-    await dtm.async_run(
-        operation="add_participant",
-        participant_id=service["id"],
-        endpoint=f"https://internal.{service['id']}.company.com/api/v1/transactions",
-        supports_2pc=service["2pc"],
-        supports_saga=service["saga"],
-        timeout=60,
-        retry_count=3
-    )
+# In a real implementation, you would add participants as part of the workflow configuration
+# or via additional workflow nodes. The DTM node handles participant management internally.
 
-# Execute with automatic pattern selection
-result = await dtm.async_run(operation="execute_transaction")
-print(f"Selected pattern: {result['selected_pattern']}")
+print(f"Transaction ID: {results['dtm']['transaction_id']}")
+print(f"Selected pattern: {results['dtm']['selected_pattern']}")
 ```
 
 ## 🛡️ Security Patterns
@@ -195,11 +183,7 @@ jwt_auth = KailashJWTAuth(
 )
 
 # Multi-factor authentication
-workflow.add_node("mfa", MultiFactorAuthNode(
-    methods=["totp", "sms", "email"],
-    require_multiple=True,
-    backup_codes=True
-))
+workflow.add_node("MultiFactorAuthNode", "mfa", {})
 
 ```
 
@@ -208,16 +192,13 @@ workflow.add_node("mfa", MultiFactorAuthNode(
 from kailash.access_control import AccessControlManager
 
 # Enterprise access control
-access_manager = AccessControlManager(
-    strategy="hybrid",             # RBAC + ABAC
+from kailash.runtime.access_controlled import AccessControlledRuntime
+
+runtime = AccessControlledRuntime(
+    access_control_strategy="hybrid",  # RBAC + ABAC
     policies_file="/config/policies.yaml",
     dynamic_policies=True,
-    audit_enabled=True
-)
-
-# Role-based workflow access
-runtime = AccessControlledRuntime(
-    access_control_manager=access_manager,
+    audit_enabled=True,
     require_authorization=True,
     log_all_access=True
 )
@@ -271,7 +252,7 @@ logger = EnterpriseLogger(
 ### High-Throughput Configuration
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -281,8 +262,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # High-performance gateway
 gateway = create_gateway(
@@ -310,14 +292,7 @@ runtime = AsyncLocalRuntime(
 from kailash.nodes.data import AsyncSQLDatabaseNode
 
 # Enterprise database configuration
-workflow.add_node("enterprise_db", AsyncSQLDatabaseNode(
-    connection_string="postgresql://user:pass@db-cluster/enterprise",
-    pool_size=20,                  # Connection pool for scale
-    max_overflow=50,
-    pool_recycle=3600,             # Prevent stale connections
-    echo=False,                    # Disable query logging in production
-    isolation_level="READ_COMMITTED"
-))
+workflow.add_node("AsyncSQLDatabaseNode", "enterprise_db", {}))
 
 ```
 
@@ -387,20 +362,10 @@ jobs:
 from kailash.nodes.security import GDPRComplianceNode
 
 # GDPR compliance
-workflow.add_node("gdpr_compliance", GDPRComplianceNode(
-    data_retention_days=730,
-    anonymization_enabled=True,
-    consent_tracking=True,
-    data_export_format="json"
-))
+workflow.add_node("GDPRComplianceNode", "gdpr_compliance", {}))
 
 # SOC2 compliance monitoring
-workflow.add_node("soc2_monitor", ComplianceMonitorNode(
-    compliance_framework="SOC2",
-    audit_trail=True,
-    access_logging=True,
-    data_encryption=True
-))
+workflow.add_node("ComplianceMonitorNode", "soc2_monitor", {}))
 
 ```
 

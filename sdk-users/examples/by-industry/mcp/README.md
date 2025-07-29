@@ -43,7 +43,7 @@ Requirements: [Any special setup needed]
 """
 
 # Imports
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
 

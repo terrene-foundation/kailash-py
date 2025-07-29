@@ -27,7 +27,7 @@ This document covers all AI and machine learning nodes, including LLM agents, em
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -37,17 +37,20 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  node = LLMAgentNode()
-  result = node.execute(
-      provider="openai",
-      model="gpt-4",
-      prompt="Explain quantum computing",
-      temperature=0.7,
-      max_tokens=1000
-  )
+  workflow.add_node("LLMAgentNode", "agent", {
+      "provider": "openai",
+      "model": "gpt-4",
+      "prompt": "Explain quantum computing",
+      "temperature": 0.7,
+      "max_tokens": 1000
+  })
+
+  results, run_id = runtime.execute(workflow.build())
+  result = results["agent"]
 
   ```
 
@@ -64,7 +67,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -74,16 +77,19 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  node = EmbeddingGeneratorNode()
-  result = node.execute(
-      provider="openai",
-      model="text-embedding-3-large",
-      input_text="This is a sample document",
-      operation="embed_text"
-  )
+  workflow.add_node("EmbeddingGeneratorNode", "embedder", {
+      "provider": "openai",
+      "model": "text-embedding-3-large",
+      "input_text": "This is a sample document",
+      "operation": "embed_text"
+  })
+
+  results, run_id = runtime.execute(workflow.build())
+  result = results["embedder"]
 
   ```
 
@@ -110,7 +116,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -120,39 +126,46 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   # Basic iterative refinement
-  node = IterativeLLMAgentNode()
-  result = node.execute(
-      provider="openai",
-      model="gpt-4",
-      messages=[{"role": "user", "content": "Analyze the sales data and create a comprehensive report"}],
-      max_iterations=5,
-      discovery_mode="progressive",
-      convergence_criteria={
+  workflow.add_node("IterativeLLMAgentNode", "iterative_agent", {
+      "provider": "openai",
+      "model": "gpt-4",
+      "messages": [{"role": "user", "content": "Analyze the sales data and create a comprehensive report"}],
+      "max_iterations": 5,
+      "discovery_mode": "progressive",
+      "convergence_criteria": {
           "goal_satisfaction": {"threshold": 0.9},
           "quality_threshold": 0.8
       }
-  )
+  })
+
+  results, run_id = runtime.execute(workflow.build())
+  result = results["iterative_agent"]
 
   # With real MCP tool execution
-  result = node.execute(
-      provider="openai",
-      model="gpt-4",
-      messages=[{"role": "user", "content": "Get weather data and analyze trends"}],
-      mcp_servers=[{
+  mcp_workflow = WorkflowBuilder()
+  mcp_workflow.add_node("IterativeLLMAgentNode", "mcp_agent", {
+      "provider": "openai",
+      "model": "gpt-4",
+      "messages": [{"role": "user", "content": "Get weather data and analyze trends"}],
+      "mcp_servers": [{
           "name": "weather-server",
           "transport": "stdio",
           "command": "python",
           "args": ["-m", "weather_mcp_server"]
       }],
-      use_real_mcp=True,  # Enable real tool execution
-      auto_discover_tools=True,
-      auto_execute_tools=True,
-      max_iterations=3
-  )
+      "use_real_mcp": True,  # Enable real tool execution
+      "auto_discover_tools": True,
+      "auto_execute_tools": True,
+      "max_iterations": 3
+  })
+
+  mcp_results, mcp_run_id = runtime.execute(mcp_workflow.build())
+  result = mcp_results["mcp_agent"]
 
   # Output includes detailed iteration history
   print(f"Completed in {len(result['iterations'])} iterations")
@@ -173,37 +186,46 @@ Ollama provides excellent local LLM capabilities. Starting from v0.6.2, the LLMA
 
 ```python
 # Basic usage with improved async support
-node = LLMAgentNode()
-result = await node.execute(
-    provider="ollama",
-    model="llama3.2:3b",
-    prompt="Explain quantum computing",
-    generation_config={
+ollama_workflow = WorkflowBuilder()
+ollama_workflow.add_node("LLMAgentNode", "ollama_agent", {
+    "provider": "ollama",
+    "model": "llama3.2:3b",
+    "prompt": "Explain quantum computing",
+    "generation_config": {
         "temperature": 0.7,
         "max_tokens": 500
     }
-)
+})
+
+results, run_id = await runtime.execute_async(ollama_workflow.build())
+result = results["ollama_agent"]
 
 # Custom backend configuration for remote Ollama instances
-result = await node.execute(
-    provider="ollama",
-    model="llama3.2:3b",
-    prompt="Write a haiku",
-    backend_config={
+remote_workflow = WorkflowBuilder()
+remote_workflow.add_node("LLMAgentNode", "remote_agent", {
+    "provider": "ollama",
+    "model": "llama3.2:3b",
+    "prompt": "Write a haiku",
+    "backend_config": {
         "host": "gpu-server.local",
         "port": 11434
     }
-)
+})
+
+remote_results, remote_run_id = await runtime.execute_async(remote_workflow.build())
+result = remote_results["remote_agent"]
 
 # Or use base_url directly
-result = await node.execute(
-    provider="ollama",
-    model="llama3.2:3b",
-    prompt="Analyze this data",
-    backend_config={
+workflow.add_node("LLMAgentNode", "node", {
+    "provider": "ollama",
+    "model": "llama3.2:3b",
+    "prompt": "Analyze this data",
+    "backend_config": {
         "base_url": "http://ollama.company.com:11434"
     }
-)
+})
+results, run_id = await runtime.execute_async(workflow.build())
+result = results["node"]
 ```
 
 #### Alternative: Direct API Calls with PythonCodeNode
@@ -211,7 +233,7 @@ result = await node.execute(
 For specific use cases or when you need more control, you can also use **direct API calls wrapped in PythonCodeNode**:
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
@@ -255,14 +277,14 @@ def ollama_generate(prompt="Hello world", model="llama3.2:1b"):
         }
 
 # Create workflow with Ollama generation
-workflow = Workflow("ollama_workflow", "Local LLM processing")
-llm_node = PythonCodeNode.from_function(ollama_generate, name="ollama_llm")
-workflow.add_node("llm", llm_node)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "llm", PythonCodeNode.from_function(ollama_generate).config)
 
 runtime = LocalRuntime()
-result, _ = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(workflow.build(), parameters={
     "llm": {"prompt": "Write a haiku about programming", "model": "llama3.2:1b"}
 })
+result = results
 
 # Access result
 if result["llm"]["result"]["success"]:
@@ -312,12 +334,12 @@ def ollama_embeddings(texts=None):
     }
 
 # Usage in workflow
-embed_node = PythonCodeNode.from_function(ollama_embeddings, name="embedder")
-workflow.add_node("embed", embed_node)
+workflow.add_node("PythonCodeNode", "embed", PythonCodeNode.from_function(ollama_embeddings).config)
 
-result, _ = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(workflow.build(), parameters={
     "embed": {"texts": ["Python is great", "AI is fascinating"]}
 })
+result = results
 
 # Extract embeddings
 if result["embed"]["result"]["success"]:
@@ -402,28 +424,25 @@ JSON:"""
     }
 
 # Complete pipeline
-workflow = Workflow("sentiment_pipeline", "Ollama sentiment analysis")
+workflow = WorkflowBuilder()
 
 # Data generator
-data_gen = PythonCodeNode.from_function(
-    lambda: {
+def generate_reviews():
+    return {
         "reviews": [
             {"id": 1, "text": "This product is amazing!"},
             {"id": 2, "text": "Terrible quality, very disappointed."},
             {"id": 3, "text": "It's okay, nothing special."}
         ]
-    },
-    name="data_generator"
-)
+    }
 
-# Sentiment analyzer
-analyzer = PythonCodeNode.from_function(analyze_sentiment_ollama, name="analyzer")
+# Sentiment analyzer - use the function in workflow
 
-workflow.add_node("data", data_gen)
-workflow.add_node("analyze", analyzer)
-workflow.connect("data", "analyze", {"result.reviews": "reviews"})
+workflow.add_node("PythonCodeNode", "data", PythonCodeNode.from_function(generate_reviews).config)
+workflow.add_node("PythonCodeNode", "analyze", PythonCodeNode.from_function(analyze_sentiment_ollama).config)
+workflow.add_connection("data", "result", "analyze", "reviews")
 
-result, _ = runtime.execute(workflow)
+result, _ = runtime.execute(workflow.build())
 print(f"Analyzed {len(result['analyze']['result']['analyzed_reviews'])} reviews")
 ```
 
@@ -485,24 +504,21 @@ def iterative_text_improver(text="", iteration=0, target_length=50):
         }
 
 # Cyclic workflow
-workflow = Workflow("ollama_cycles", "Iterative text improvement")
-writer = PythonCodeNode.from_function(iterative_text_improver, name="writer")
-workflow.add_node("write", writer)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "write", PythonCodeNode.from_function(iterative_text_improver).config)
 
 # Create improvement cycle
-workflow.create_cycle("writing_cycle") \
-    .connect("write", "write", {
-        "result.text": "text",
-        "result.iteration": "iteration",
-        "result.target_length": "target_length"
-    }) \
-    .max_iterations(5) \
-    .converge_when("converged == True") \
-    .build()
+cycle_builder = workflow.create_cycle("writing_cycle")
+cycle_builder.connect("write", "write", mapping={
+    "text": "text",
+    "iteration": "iteration",
+    "target_length": "target_length"
+}).max_iterations(5).converge_when("converged == True").build()
 
-result, _ = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(workflow.build(), parameters={
     "write": {"text": "", "iteration": 0, "target_length": 50}
 })
+result = results
 
 print(f"Generated story in {result['write']['result']['iteration']} iterations")
 print(f"Final word count: {result['write']['result']['word_count']}")
@@ -551,7 +567,7 @@ def test_ollama():
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -561,17 +577,22 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  memory_pool = SharedMemoryPoolNode()
-  result = memory_pool.run(
-      action="write",
-      agent_id="researcher_001",
-      content="Key finding about correlation",
-      tags=["research", "correlation"],
-      importance=0.8
-  )
+  workflow.add_node("SharedMemoryPoolNode", "memory_pool", {})
+  runtime = LocalRuntime()
+  results, run_id = runtime.execute(workflow.build(), parameters={
+      "memory_pool": {
+          "action": "write",
+          "agent_id": "researcher_001",
+          "content": "Key finding about correlation",
+          "tags": ["research", "correlation"],
+          "importance": 0.8
+      }
+  })
+  result = results["memory_pool"]
 
   ```
 
@@ -586,7 +607,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -596,18 +617,23 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  agent = A2AAgentNode()
-  result = agent.run(
-      agent_id="researcher_001",
-      provider="openai",
-      model="gpt-4",
-      messages=[{"role": "user", "content": "Analyze data"}],
-      memory_pool=memory_pool,
-      attention_filter={"tags": ["data", "analysis"]}
-  )
+  workflow.add_node("A2AAgentNode", "agent", {})
+  runtime = LocalRuntime()
+  results, run_id = runtime.execute(workflow.build(), parameters={
+      "agent": {
+          "agent_id": "researcher_001",
+          "provider": "openai",
+          "model": "gpt-4",
+          "messages": [{"role": "user", "content": "Analyze data"}],
+          "memory_pool": "memory_pool_ref",
+          "attention_filter": {"tags": ["data", "analysis"]}
+      }
+  })
+  result = results["agent"]
 
   ```
 
@@ -622,7 +648,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -632,16 +658,21 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  coordinator = A2ACoordinatorNode()
-  result = coordinator.run(
-      action="delegate",
-      task={"type": "research", "description": "Analyze trends"},
-      available_agents=[{"id": "agent1", "skills": ["research"]}],
-      coordination_strategy="best_match"
-  )
+  workflow.add_node("A2ACoordinatorNode", "coordinator", {})
+  runtime = LocalRuntime()
+  results, run_id = runtime.execute(workflow.build(), parameters={
+      "coordinator": {
+          "action": "delegate",
+          "task": {"type": "research", "description": "Analyze trends"},
+          "available_agents": [{"id": "agent1", "skills": ["research"]}],
+          "coordination_strategy": "best_match"
+      }
+  })
+  result = results["coordinator"]
 
   ```
 
@@ -663,7 +694,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -673,16 +704,21 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  pool_manager = AgentPoolManagerNode()
-  result = pool_manager.run(
-      action="register",
-      agent_id="research_agent_001",
-      capabilities=["data_analysis", "research"],
-      metadata={"experience_level": "senior"}
-  )
+  workflow.add_node("AgentPoolManagerNode", "pool_manager", {})
+  runtime = LocalRuntime()
+  results, run_id = runtime.execute(workflow.build(), parameters={
+      "pool_manager": {
+          "action": "register",
+          "agent_id": "research_agent_001",
+          "capabilities": ["data_analysis", "research"],
+          "metadata": {"experience_level": "senior"}
+      }
+  })
+  result = results["pool_manager"]
 
   ```
 
@@ -701,7 +737,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -711,14 +747,19 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  analyzer = ProblemAnalyzerNode()
-  result = analyzer.run(
-      problem_description="Predict customer churn",
-      context={"domain": "business", "urgency": "high"}
-  )
+  workflow.add_node("ProblemAnalyzerNode", "analyzer", {})
+  runtime = LocalRuntime()
+  results, run_id = runtime.execute(workflow.build(), parameters={
+      "analyzer": {
+          "problem_description": "Predict customer churn",
+          "context": {"domain": "business", "urgency": "high"}
+      }
+  })
+  result = results["analyzer"]
 
   ```
 
@@ -738,7 +779,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -748,15 +789,20 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  formation_engine = TeamFormationNode()
-  result = formation_engine.run(
-      problem_analysis=analysis,
-      available_agents=agents,
-      formation_strategy="capability_matching"
-  )
+  workflow.add_node("TeamFormationNode", "formation_engine", {})
+  runtime = LocalRuntime()
+  results, run_id = runtime.execute(workflow.build(), parameters={
+      "formation_engine": {
+          "problem_analysis": "analysis_ref",
+          "available_agents": "agents_ref",
+          "formation_strategy": "capability_matching"
+      }
+  })
+  result = results["formation_engine"]
 
   ```
 
@@ -776,7 +822,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -786,16 +832,21 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  agent = SelfOrganizingAgentNode()
-  result = agent.run(
-      agent_id="adaptive_agent_001",
-      capabilities=["data_analysis", "machine_learning"],
-      team_context={"team_id": "research_team_1"},
-      task="Perform clustering analysis"
-  )
+  workflow.add_node("SelfOrganizingAgentNode", "agent", {})
+  runtime = LocalRuntime()
+  results, run_id = runtime.execute(workflow.build(), parameters={
+      "agent": {
+          "agent_id": "adaptive_agent_001",
+          "capabilities": ["data_analysis", "machine_learning"],
+          "team_context": {"team_id": "research_team_1"},
+          "task": "Perform clustering analysis"
+      }
+  })
+  result = results["agent"]
 
   ```
 
@@ -815,7 +866,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -825,15 +876,20 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  evaluator = SolutionEvaluatorNode()
-  result = evaluator.run(
-      solution={"approach": "ML model", "confidence": 0.85},
-      problem_requirements={"quality_threshold": 0.8},
-      team_performance={"collaboration_score": 0.9}
-  )
+  workflow.add_node("SolutionEvaluatorNode", "evaluator", {})
+  runtime = LocalRuntime()
+  results, run_id = runtime.execute(workflow.build(), parameters={
+      "evaluator": {
+          "solution": {"approach": "ML model", "confidence": 0.85},
+          "problem_requirements": {"quality_threshold": 0.8},
+          "team_performance": {"collaboration_score": 0.9}
+      }
+  })
+  result = results["evaluator"]
 
   ```
 
@@ -857,7 +913,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -867,21 +923,26 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  cache = IntelligentCacheNode()
-  result = cache.run(
-      action="cache",
-      cache_key="weather_api_nyc",
-      data={"temperature": 72, "humidity": 65},
-      metadata={
-          "source": "weather_mcp_server",
-          "cost": 0.05,
-          "semantic_tags": ["weather", "temperature", "nyc"]
-      },
-      ttl=3600
-  )
+  workflow.add_node("IntelligentCacheNode", "cache", {})
+  runtime = LocalRuntime()
+  results, run_id = runtime.execute(workflow.build(), parameters={
+      "cache": {
+          "action": "cache",
+          "cache_key": "weather_api_nyc",
+          "data": {"temperature": 72, "humidity": 65},
+          "metadata": {
+              "source": "weather_mcp_server",
+              "cost": 0.05,
+              "semantic_tags": ["weather", "temperature", "nyc"]
+          },
+          "ttl": 3600
+      }
+  })
+  result = results["cache"]
 
   ```
 
@@ -901,7 +962,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -911,20 +972,25 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  agent = MCPAgentNode()
-  result = agent.run(
-      agent_id="mcp_agent_001",
-      capabilities=["data_analysis", "api_integration"],
-      mcp_servers=[{
-          "name": "weather_server",
-          "command": "python",
-          "args": ["-m", "weather_mcp"]
-      }],
-      task="Get weather for NYC and analyze trends"
-  )
+  workflow.add_node("MCPAgentNode", "agent", {})
+  runtime = LocalRuntime()
+  results, run_id = runtime.execute(workflow.build(), parameters={
+      "agent": {
+          "agent_id": "mcp_agent_001",
+          "capabilities": ["data_analysis", "api_integration"],
+          "mcp_servers": [{
+              "name": "weather_server",
+              "command": "python",
+              "args": ["-m", "weather_mcp"]
+          }],
+          "task": "Get weather for NYC and analyze trends"
+      }
+  })
+  result = results["agent"]
 
   ```
 
@@ -944,7 +1010,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -954,15 +1020,20 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  analyzer = QueryAnalysisNode()
-  result = analyzer.run(
-      query="Research renewable energy trends and create strategic plan",
-      context={"domain": "strategic_planning", "urgency": "high"},
-      mcp_servers=[{"name": "research_server", "type": "web_research"}]
-  )
+  workflow.add_node("QueryAnalysisNode", "analyzer", {})
+  runtime = LocalRuntime()
+  results, run_id = runtime.execute(workflow.build(), parameters={
+      "analyzer": {
+          "query": "Research renewable energy trends and create strategic plan",
+          "context": {"domain": "strategic_planning", "urgency": "high"},
+          "mcp_servers": [{"name": "research_server", "type": "web_research"}]
+      }
+  })
+  result = results["analyzer"]
 
   ```
 
@@ -986,7 +1057,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -996,17 +1067,22 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  orchestrator = OrchestrationManagerNode()
-  result = orchestrator.run(
-      query="Analyze market trends and develop strategy",
-      agent_pool_size=15,
-      mcp_servers=[{"name": "market_server", "type": "market_data"}],
-      max_iterations=3,
-      quality_threshold=0.85
-  )
+  workflow.add_node("OrchestrationManagerNode", "orchestrator", {})
+  runtime = LocalRuntime()
+  results, run_id = runtime.execute(workflow.build(), parameters={
+      "orchestrator": {
+          "query": "Analyze market trends and develop strategy",
+          "agent_pool_size": 15,
+          "mcp_servers": [{"name": "market_server", "type": "market_data"}],
+          "max_iterations": 3,
+          "quality_threshold": 0.85
+      }
+  })
+  result = results["orchestrator"]
 
   ```
 
@@ -1028,7 +1104,7 @@ workflow.runtime = LocalRuntime()
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1038,16 +1114,21 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  detector = ConvergenceDetectorNode()
-  result = detector.run(
-      solution_history=solution_iterations,
-      quality_threshold=0.8,
-      improvement_threshold=0.02,
-      current_iteration=3
-  )
+  workflow.add_node("ConvergenceDetectorNode", "detector", {})
+  runtime = LocalRuntime()
+  results, run_id = runtime.execute(workflow.build(), parameters={
+      "detector": {
+          "solution_history": "solution_iterations_ref",
+          "quality_threshold": 0.8,
+          "improvement_threshold": 0.02,
+          "current_iteration": 3
+      }
+  })
+  result = results["detector"]
 
   ```
 

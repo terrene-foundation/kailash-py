@@ -33,7 +33,7 @@ result = {'processed_items': processed, 'count': len(processed)}
 })
 
 # Connect nodes with 4-parameter syntax
-workflow.connect("data_reader", "result", mapping={"processor": "input_data"})
+workflow.add_connection("data_reader", "result", "processor", "input_data")
 
 # Execute
 runtime = LocalRuntime()
@@ -112,9 +112,9 @@ result = {
     })
 
     # Connect pipeline
-    workflow.connect("customer_reader", "result", mapping={"validator": "input_data"})
-    workflow.connect("validator", "result", mapping={"enricher": "input_data"})
-    workflow.connect("enricher", "result", mapping={"output_writer": "data"})
+    workflow.add_connection("customer_reader", "result", "validator", "input_data")
+    workflow.add_connection("validator", "result", "enricher", "input_data")
+    workflow.add_connection("enricher", "result", "output_writer", "data")
 
     return workflow
 
@@ -154,8 +154,8 @@ class WorkflowFactory:
         })
 
         # Connections
-        workflow.connect("extractor", "result", mapping={"transformer": "input_data"})
-        workflow.connect("transformer", "result", mapping={"loader": "data"})
+        workflow.add_connection("extractor", "result", "transformer", "input_data")
+        workflow.add_connection("transformer", "result", "loader", "data")
 
         return workflow
 
@@ -196,7 +196,7 @@ result = {{
 '''
         })
 
-        workflow.connect("data_source", "result", mapping={"validator": "input_data"})
+        workflow.add_connection("data_source", "result", "validator", "input_data")
         return workflow
 
 # Usage examples
@@ -242,7 +242,7 @@ result = {'combined': combined_data, 'total_count': len(combined_data)}
 
     # Connect all sources to combiner
     for i in range(len(data_sources)):
-        workflow.connect(f"source_{i}", "result", "combiner", f"source_{i}")
+        workflow.add_connection("source", "result", "target", "input")  # Fixed f-string pattern
 
     return workflow
 

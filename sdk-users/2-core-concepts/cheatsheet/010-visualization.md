@@ -2,7 +2,7 @@
 
 ## Basic Workflow Visualization
 ```python
-from kailash import WorkflowVisualizer
+from kailash.workflow.builder import WorkflowBuilderVisualizer
 from kailash.workflow.mermaid_visualizer import MermaidVisualizer
 
 # Create visualizer
@@ -30,7 +30,7 @@ visualizer.visualize(workflow,
 ## Mermaid Diagrams (GitHub/Markdown Compatible)
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -40,15 +40,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Generate Mermaid code for documentation
 mermaid_code = MermaidVisualizer.generate(workflow,
     direction="TD",         # Top-Down (or LR for Left-Right)
     include_node_types=True,
-# Parameters setup
-workflow.False,
+    include_parameters=False,
     style="minimal"         # minimal, detailed, or full
 )
 
@@ -66,7 +66,7 @@ print(mermaid_code)
 ## Runtime Visualization
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -76,12 +76,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Visualize workflow with execution results
 runtime = LocalRuntime()
-workflow.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 # Show execution flow with timing
 execution_visualizer = WorkflowVisualizer(include_execution_data=True)
@@ -98,7 +99,7 @@ execution_visualizer.visualize(workflow,
 ## Advanced Visualization Options
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -108,18 +109,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Detailed visualization with all information
 visualizer.visualize(workflow,
-workflow = Workflow("example", name="Example")
-workflow.svg",
+    output_path="detailed_workflow.svg",
     format="svg",
 
     # Node information
-# Parameters setup
-workflow.True,
+    include_parameters=True,
     include_node_types=True,
     include_descriptions=True,
 
@@ -146,7 +146,7 @@ workflow.True,
 ## Debugging Workflows Visually
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -156,21 +156,20 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Debug mode visualization
 debug_visualizer = WorkflowVisualizer(debug_mode=True)
 
 # Show potential issues
 debug_visualizer.visualize(workflow,
-workflow = Workflow("example", name="Example")
-workflow.png",
+    output_path="debug_workflow.png",
 
     # Highlight problems
     highlight_unconnected_nodes=True,
-# Parameters setup
-workflow.True,
+    highlight_missing_parameters=True,
     highlight_type_mismatches=True,
 
     # Show validation info
@@ -189,7 +188,7 @@ for issue in debug_report["issues"]:
 ## Export Options
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -199,19 +198,18 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Multiple format export
 formats = ["png", "svg", "pdf", "html", "mermaid"]
 
 for fmt in formats:
     visualizer.visualize(workflow,
-workflow = Workflow("example", name="Example")
-workflow.{fmt}",
+        output_path=f"workflow.{fmt}",
         format=fmt,
-# Parameters setup
-workflow.True
+        include_parameters=True
     )
 
 # Programmatic access to graph data
@@ -251,7 +249,7 @@ kailash visualize my_workflow.py --output README.md --format mermaid
 ## Quick Debugging Commands
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -261,19 +259,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # One-liner for quick debugging
-workflow = Workflow("example", name="Example")
 workflow.visualize()  # Opens default viewer
 
 # Quick validation check
-workflow = Workflow("example", name="Example")
 workflow.validate_and_visualize()  # Shows issues visually
 
 # Performance analysis
-workflow = Workflow("example", name="Example")
 workflow.analyze_performance()  # Shows bottlenecks
 
 ```
@@ -281,7 +277,7 @@ workflow.analyze_performance()  # Shows bottlenecks
 ## Visualization Best Practices
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -291,15 +287,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # For documentation - use Mermaid
 mermaid_code = MermaidVisualizer.generate(workflow, style="minimal")
 
 # For debugging - use detailed PNG/SVG
-# Parameters setup
-workflow.True)
+visualizer.visualize(workflow, "debug.png", include_parameters=True)
 
 # For presentations - use clean HTML
 visualizer.visualize(workflow, "presentation.html",
@@ -314,7 +310,7 @@ visualizer.visualize(workflow, "dev.html",
 ## Custom Visualization Themes
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -324,8 +320,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Define custom theme
 custom_theme = {
@@ -343,8 +340,7 @@ custom_theme = {
 
 # Apply theme
 visualizer.visualize(workflow,
-workflow = Workflow("example", name="Example")
-workflow.png",
+    output_path="themed_workflow.png",
     theme=custom_theme
 )
 

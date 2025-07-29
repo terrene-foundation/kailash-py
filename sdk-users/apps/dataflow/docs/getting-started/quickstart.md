@@ -76,7 +76,7 @@ workflow.add_node("UserListNode", "list_active", {
 })
 
 # Connect the nodes
-workflow.add_connection("create_alice", "list_active")
+workflow.add_connection("create_alice", "result", "list_active", "input")
 
 # Execute the workflow
 runtime = LocalRuntime()
@@ -119,7 +119,7 @@ workflow.add_node("UserListNode", "list_users", {
     "filter": {"active": True}
 })
 
-workflow.add_connection("create_user", "list_users")
+workflow.add_connection("create_user", "result", "list_users", "input")
 
 # Execute
 runtime = LocalRuntime()

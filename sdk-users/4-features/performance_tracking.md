@@ -37,21 +37,24 @@ The performance tracking system provides comprehensive metrics collection during
 ### Basic Workflow Execution with Metrics
 
 ```python
-from kailash.workflow import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking import TaskManager
 
 # Create workflow
-workflow = Workflow("example", name="Example")
-workflow.# ... add nodes and connections ...
+workflow = WorkflowBuilder()
+# Add nodes and connections
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'data': [1, 2, 3]}"
+})
 
 # Execute with tracking
 task_manager = TaskManager()
 runtime = LocalRuntime()
 
-run_id = task_manager.create_run(workflow_name=workflow.name)
+run_id = task_manager.create_run(workflow_name="my_workflow")
 results, _ = runtime.execute(
-    workflow=workflow,
+    workflow=workflow.build(),
     task_manager=task_manager
 )
 
@@ -86,7 +89,13 @@ outputs = perf_viz.create_run_performance_summary(run_id)
 from kailash.workflow.visualization import WorkflowVisualizer
 
 # Create integrated dashboard
-workflow_viz = WorkflowVisualizer(workflow)
+workflow = WorkflowBuilder()
+# Add your nodes here
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'data': [1, 2, 3]}"
+})
+
+workflow_viz = WorkflowVisualizer(workflow.build())
 dashboard = workflow_viz.create_performance_dashboard(
     run_id=run_id,
     task_manager=task_manager
@@ -99,27 +108,20 @@ dashboard = workflow_viz.create_performance_dashboard(
 ### Comparing Multiple Runs
 
 ```python
-# SDK Setup for example
-from kailash import Workflow
-from kailash.runtime.local import LocalRuntime
-from kailash.nodes.data import CSVReaderNode
-from kailash.nodes.ai import LLMAgentNode
-from kailash.nodes.api import HTTPRequestNode
-from kailash.nodes.logic import SwitchNode, MergeNode
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.base import Node, NodeParameter
-
-# Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
-
 # Execute workflow multiple times
 run_ids = []
 for i in range(3):
-workflow = Workflow("example", name="Example")
-workflow.workflow.name)
-runtime = LocalRuntime()
-workflow.execute(workflow, task_manager)
+    workflow = WorkflowBuilder()
+    workflow.add_node("PythonCodeNode", "processor", {
+        "code": "result = {'data': [1, 2, 3]}"
+    })
+
+    run_id = task_manager.create_run(workflow_name=f"test_run_{i}")
+    runtime = LocalRuntime()
+    results, _ = runtime.execute(
+        workflow=workflow.build(),
+        task_manager=task_manager
+    )
     run_ids.append(run_id)
 
 # Compare performance
@@ -147,20 +149,35 @@ comparison = perf_viz.compare_runs(run_ids)
 Nodes can report custom metrics through the context:
 
 ```python
-def workflow.()  # Type signature example -> Dict[str, Any]:
-    # Process data
-    processed_count = len(data)
-    error_count = sum(1 for item in data if item.get("error"))
+from kailash.nodes.base import Node, NodeParameter
 
-    # Return custom metrics
-    return {
-        "data": processed_data,
-        "_metrics": {
-            "processed_count": processed_count,
-            "error_count": error_count,
-            "success_rate": (processed_count - error_count) / processed_count
+class MetricsAwareNode(Node):
+    def get_parameters(self):
+        return {
+            "data": NodeParameter(name="data", type=list, required=True)
         }
-    }
+
+    def run(self, **kwargs):
+        data = kwargs.get("data", [])
+
+        # Process data
+        processed_data = [item for item in data if not item.get("error")]
+        processed_count = len(data)
+        error_count = sum(1 for item in data if item.get("error"))
+
+        # Return custom metrics
+        return {
+            "data": processed_data,
+            "_metrics": {
+                "processed_count": processed_count,
+                "error_count": error_count,
+                "success_rate": (processed_count - error_count) / processed_count if processed_count > 0 else 0
+            }
+        }
+
+# Use in workflow
+workflow = WorkflowBuilder()
+workflow.add_node("MetricsAwareNode", "processor", {})
 
 ```
 

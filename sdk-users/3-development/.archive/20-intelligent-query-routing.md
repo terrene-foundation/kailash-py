@@ -356,7 +356,7 @@ app_router = QueryRouterNode(
 ### Using with WorkflowBuilder
 
 ```python
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 
 # Create workflow with intelligent routing
 workflow = WorkflowBuilder(name="smart_data_pipeline")
@@ -397,8 +397,8 @@ return {"events": result["data"]}
 """
 )
 
-workflow.add_connection("db_pool", "output", "router", "input")
-workflow.add_connection("router", "output", "fetch_data", "input")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 ```
 
 ### With AsyncWorkflowBuilder

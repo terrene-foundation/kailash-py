@@ -18,25 +18,15 @@ pip install kailash-nexus     # Multi-channel platform
 
 ### Cyclic Workflows
 ```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
+# WorkflowBuilder: Build first, then cycle
+built_workflow = workflow.build()
+built_workflow.create_cycle("name").connect(...).build()
 
-workflow = WorkflowBuilder()
-workflow.add_node("DataProcessorNode", "processor", {"threshold": 0.9})
-workflow.add_node("QualityEvaluatorNode", "evaluator", {"target_quality": 0.95})
-
-# Create cycle using CycleBuilder API (NOT deprecated cycle=True)
-cycle_builder = workflow.create_cycle("quality_improvement")
-cycle_builder.connect("processor", "evaluator", mapping={"result": "input_data"}) \
-             .connect("evaluator", "processor", mapping={"feedback": "adjustment"}) \
-             .max_iterations(50) \
-             .converge_when("quality > 0.95") \
-             .timeout(300) \
-             .build()
-
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())  # Real cyclic execution
+# Workflow: Direct chaining
+workflow.create_cycle("name").connect(...).build()
 ```
+
+**📖 Detailed patterns**: [sdk-users/](sdk-users/) → Cyclic Workflows section
 
 ### Basic Workflow
 ```python
@@ -94,15 +84,22 @@ app.register("process_data", workflow.build())
 app.start()  # Available as API, CLI, and MCP
 ```
 
-### ❌ NEVER
+### ❌ NEVER & ✅ ALWAYS
+
+#### ❌ DEPRECATED PATTERNS
 - `workflow.execute(runtime)` → Use `runtime.execute(workflow)`
 - `workflow.addNode()` → Use `workflow.add_node()`
 - `inputs={}` → Use `parameters={}`
 - String code in PythonCodeNode → Use `.from_function()`
 - `workflow.connect(..., cycle=True)` → Use `workflow.create_cycle("name").connect(...).build()`
 - Override `execute()` in nodes → Implement `run()` instead
-- Parameter naming → Follow node-specific requirements (`operation` for EdgeCoordinationNode, `action` for others)
 - **Missing required parameters** → See [Parameter Guide](sdk-users/3-development/parameter-passing-guide.md) & [Error Solutions](sdk-users/2-core-concepts/validation/common-mistakes.md)
+
+#### ✅ CRITICAL WORKFLOW PATTERNS
+- **WorkflowBuilder**: `built_workflow = workflow.build(); cycle = built_workflow.create_cycle(...)`
+- **Workflow**: `workflow.create_cycle(...).connect(...).build()` (direct chaining)
+- **SwitchNode + Cycles**: Set forward connections FIRST, then create cycle connections
+- **📖 Detailed patterns**: [sdk-users/](sdk-users/) → Cyclic Workflows section
 
 ## 🚨 **Debugging Workflow Errors**
 **"Node 'X' missing required inputs"** → [Parameter Solution Guide](sdk-users/2-core-concepts/validation/common-mistakes.md#mistake--1-missing-required-parameters-new-in-v070)
@@ -110,7 +107,7 @@ app.start()  # Available as API, CLI, and MCP
 ### 🚨 PARAMETER PASSING
 **Required parameters MUST be provided via one of three methods:**
 1. **Node config**: `workflow.add_node("Node", "id", {"param": "value"})`
-2. **Connections**: `workflow.add_connection("source", "output", "target", "param")`  
+2. **Connections**: `workflow.add_connection("source", "output", "target", "param")`
 3. **Runtime**: `runtime.execute(workflow.build(), parameters={"node_id": {"param": "value"}})`
 
 **See**: [Parameter Passing Guide](sdk-users/3-development/parameter-passing-guide.md)
@@ -211,7 +208,10 @@ The **App Framework** provides complete domain-specific applications built on th
    - **Nodes implement**: `def run(self, **kwargs)` - Protected method with actual logic
    - **Never override**: `execute()` in custom nodes - breaks validation chain
 4. **Ollama Embeddings**: Extract with `[emb["embedding"] for emb in result["embeddings"]]`
-5. **Cyclic Workflows**: Use CycleBuilder API `workflow.create_cycle("name").connect(...).max_iterations(N).build()`
+5. **Cyclic Workflows - Class-Specific Patterns**:
+   - **WorkflowBuilder**: `built = workflow.build(); built.create_cycle("name").connect(...).build()`
+   - **Workflow**: `workflow.create_cycle("name").connect(...).build()` (direct chaining)
+   - **SwitchNode Cycles**: Forward connections first, then cycle: `workflow.connect(); workflow.create_cycle()`
 6. **WorkflowBuilder**: String-based `add_node("CSVReaderNode", ...)`, 4-param `add_connection()`
 7. **MCP Integration**: 100% validated, comprehensive testing (407 tests, 100% pass rate) - see [MCP Guide](sdk-users/2-core-concepts/cheatsheet/025-mcp-integration.md)
 8. **MCP Real Execution**: All AI agents use `use_real_mcp=True` by default (v0.6.6+) - BREAKING CHANGE from mock execution
@@ -263,6 +263,7 @@ The **App Framework** provides complete domain-specific applications built on th
 | **I need to...** | **Core SDK** | **App Framework** | **Contributors** |
 |-----------------|--------------|---------------------|-----------|
 | **Build a workflow** | [sdk-users/2-core-concepts/workflows/](sdk-users/2-core-concepts/workflows/) | - | - |
+| **Cyclic workflows** | [sdk-users/2-core-concepts/workflows/by-pattern/cyclic/](sdk-users/2-core-concepts/workflows/by-pattern/cyclic/) - Working examples | - | - |
 | **Build an app** | [sdk-users/decision-matrix.md](sdk-users/decision-matrix.md) | [apps/DOCUMENTATION_STANDARDS.md](apps/DOCUMENTATION_STANDARDS.md) | - |
 | **Database operations** | [sdk-users/2-core-concepts/cheatsheet/047-asyncsql-enterprise-patterns.md](sdk-users/2-core-concepts/cheatsheet/047-asyncsql-enterprise-patterns.md) | [apps/kailash-dataflow/](apps/kailash-dataflow/) - Zero-config | - |
 | **Multi-channel platform** | [sdk-users/5-enterprise/nexus-patterns.md](sdk-users/5-enterprise/nexus-patterns.md) | [apps/kailash-nexus/](apps/kailash-nexus/) - Production-ready | - |

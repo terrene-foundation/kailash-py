@@ -133,7 +133,7 @@ from kailash_workflows.investment import create_deal_sourcing_workflow
 
 workflow = create_deal_sourcing_workflow()
 
-results = await workflow.execute({
+results = await runtime.execute(workflow.build(), {
     "deal_documents": ["pitch_deck.pdf", "financials.xlsx"],
     "deal_metadata": {
         "company": "TechStartup Inc",

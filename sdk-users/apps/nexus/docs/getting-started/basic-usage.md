@@ -281,7 +281,7 @@ Test workflows before deployment:
 import requests
 import time
 
-def test_workflow(workflow_name, inputs=None, port=8000):
+def test_workflow(workflow_name, parameters=None, port=8000):
     """Test a registered workflow"""
 
     # Wait for server startup

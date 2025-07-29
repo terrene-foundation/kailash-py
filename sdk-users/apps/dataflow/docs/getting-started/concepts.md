@@ -33,6 +33,8 @@ DataFlow is built on three core principles:
 Models define your database schema using Python type hints:
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 @db.model
 class User:
     name: str              # Required field
@@ -76,8 +78,8 @@ workflow.add_node("PostBulkCreateNode", "create_posts", {...})
 workflow.add_node("UserUpdateNode", "activate", {...})
 
 # Connect in sequence
-workflow.add_connection("create", "create_posts")
-workflow.add_connection("create_posts", "activate")
+workflow.add_connection("create", "result", "create_posts", "input")
+workflow.add_connection("create_posts", "result", "activate", "input")
 
 # Execute as one transaction
 runtime = LocalRuntime()
@@ -332,7 +334,7 @@ Chain related operations:
 ```python
 workflow.add_node("CustomerCreateNode", "customer", {...})
 workflow.add_node("WelcomeEmailNode", "email", {...})
-workflow.add_connection("customer", "email")
+workflow.add_connection("customer", "result", "email", "input")
 ```
 
 ### 4. Progressive Enhancement
