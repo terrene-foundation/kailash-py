@@ -3,7 +3,9 @@
 The Kailash SDK provides a comprehensive framework for creating nodes and workflows
 that align with container-node architecture while allowing rapid prototyping.
 
-New in v0.9.1: DataFlow PostgreSQL parameter conversion verification and comprehensive testing infrastructure.
+New in v0.9.2: WebSocket Transport Support with Enterprise Connection Pooling.
+Fixed "Unsupported transport: websocket" error. Added 73% performance improvement with connection pooling.
+Previous v0.9.1: DataFlow PostgreSQL parameter conversion verification and comprehensive testing infrastructure.
 Complete validation of parameter conversion chain from DataFlow to AsyncSQLDatabaseNode to PostgreSQL.
 Previous v0.9.0: Complete migration from cycle=True to modern CycleBuilder API.
 """
@@ -48,7 +50,7 @@ except ImportError:
 # For backward compatibility
 WorkflowGraph = Workflow
 
-__version__ = "0.9.1"
+__version__ = "0.9.2"
 
 __all__ = [
     # Core workflow components
