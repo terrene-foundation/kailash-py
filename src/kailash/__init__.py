@@ -3,10 +3,9 @@
 The Kailash SDK provides a comprehensive framework for creating nodes and workflows
 that align with container-node architecture while allowing rapid prototyping.
 
-New in v0.8.7: MCP Parameter Validation Tool, 100% MCP Protocol compliance with missing
-handlers, Phase 2 MCP subscriptions with GraphQL optimization, WebSocket compression, and
-Redis-backed distributed coordination.
-Previous v0.8.6: Enhanced parameter validation system with debugging tools.
+New in v0.8.8: DataFlow PostgreSQL parameter conversion verification and comprehensive testing infrastructure.
+Complete validation of parameter conversion chain from DataFlow to AsyncSQLDatabaseNode to PostgreSQL.
+Previous v0.8.7: MCP Parameter Validation Tool, 100% MCP Protocol compliance with missing handlers.
 """
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
@@ -49,7 +48,7 @@ except ImportError:
 # For backward compatibility
 WorkflowGraph = Workflow
 
-__version__ = "0.8.6"
+__version__ = "0.8.8"
 
 __all__ = [
     # Core workflow components
