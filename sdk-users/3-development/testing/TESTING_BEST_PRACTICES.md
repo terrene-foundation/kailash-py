@@ -69,9 +69,15 @@ class TestWithRealServices:
     def test_postgres_operations(self):
         # Real PostgreSQL connection
         conn_string = get_postgres_connection_string()
-        node = SQLDatabaseNode(connection_string=conn_string)
-        result = node.execute(query="SELECT 1", operation="select")
-        assert result['success']
+        workflow = WorkflowBuilder()
+        workflow.add_node("SQLDatabaseNode", "db_node", {
+            "connection_string": conn_string,
+            "query": "SELECT 1",
+            "operation": "select"
+        })
+        runtime = LocalRuntime()
+        results, run_id = runtime.execute(workflow.build())
+        assert results['db_node']['success']
 
     def test_redis_caching(self):
         # Real Redis connection
@@ -102,23 +108,21 @@ def test_requires_postgres():
     # Test continues only if connection succeeds
 ```
 
-### 2. Using AsyncWorkflowBuilder Correctly
+### 2. Using WorkflowBuilder Correctly
 ```python
 # ✅ Correct usage
-workflow = AsyncWorkflowBuilder("my_workflow", description="My async workflow")
+workflow = WorkflowBuilder()
+workflow.add_node("NodeType", "node_id", {})
 
 # ❌ Old deprecated way
-workflow = AsyncWorkflowBuilder("my_workflow").with_description("My async workflow")
+# AsyncWorkflowBuilder is deprecated - use WorkflowBuilder with LocalRuntime
 ```
 
 ### 3. Using CycleBuilder API
 ```python
-# ❌ Deprecated
-workflow.connect("node1", "node2", cycle=True, max_iterations=5)
-
 # ✅ New CycleBuilder API
-workflow.create_cycle("my_cycle")
-    .connect("node1", "node2")
+cycle_builder = workflow.create_cycle("my_cycle")
+cycle_builder.connect("node1", "output", "node2", "input")
     .max_iterations(5)
     .converge_when("condition == True")
     .build()
@@ -126,14 +130,13 @@ workflow.create_cycle("my_cycle")
 
 ### 4. Proper Node Initialization
 ```python
-# ✅ Correct
-builder.add_node(
-    PythonCodeNode(name="processor", code=code),
-    "processor"
-)
+# ✅ Correct - String-based API
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": code
+})
 
-# ❌ Wrong parameter order
-builder.add_node("processor", PythonCodeNode(code=code))
+# ❌ Wrong - Instance-based API
+# Never create node instances directly
 ```
 
 ## Test Environment Setup
@@ -178,7 +181,7 @@ ModuleNotFoundError: No module named 'aioredis'
 
 ### 3. Deprecated API Usage
 ```
-DeprecationWarning: Using workflow.connect() with cycle=True is deprecated
+DeprecationWarning: Using workflow.add_connection("source", "result", "target", "input")with # Use CycleBuilder API instead is deprecated
 ```
 **Solution**: Update to new CycleBuilder API
 

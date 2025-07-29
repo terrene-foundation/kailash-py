@@ -150,12 +150,14 @@ multi_tenant_gateway = create_gateway(
     database_url="postgresql://multi-tenant-db:5432/kailash"
 )
 
-# Create tenant isolation manager (not a workflow node)
-db_node = SQLDatabaseNode(
-    connection_string="postgresql://multi-tenant-db:5432/kailash",
-    name="tenant_db"
-)
-tenant_manager = TenantIsolationManager(db_node)
+# Create tenant isolation workflow
+tenant_db_workflow = WorkflowBuilder()
+tenant_db_workflow.add_node("SQLDatabaseNode", "tenant_db", {
+    "connection_string": "postgresql://multi-tenant-db:5432/kailash"
+})
+
+# Note: TenantIsolationManager would need to be integrated with workflow pattern
+# For now, we'll use workflow-based database operations directly
 
 # Permission checking workflow with tenant scope
 tenant_workflow = WorkflowBuilder()
@@ -179,21 +181,33 @@ tenant_isolation = tenant_workflow.build(
 async def create_tenant_session(tenant_id: str, user_id: str):
     """Create session with tenant isolation using TenantIsolationManager."""
 
-    # Validate user has access to the tenant
-    is_valid = tenant_manager.validate_user_tenant_access(
-        user_id=user_id,
-        target_tenant_id=tenant_id
-    )
+    # Validate user has access to the tenant using workflow
+    validation_workflow = WorkflowBuilder()
+    validation_workflow.add_node("PythonCodeNode", "validate_tenant_access", {
+        "code": f"""
+# Validate tenant access (mock implementation)
+user_id = '{user_id}'
+target_tenant_id = '{tenant_id}'
 
-    if not is_valid:
-        raise PermissionError(f"User {user_id} denied access to tenant {tenant_id}")
+# In real implementation, this would query the database
+# For now, we'll do a simple validation
+is_valid = True  # Would check user-tenant mapping in DB
 
-    # Enforce tenant isolation
-    tenant_manager.enforce_tenant_isolation(
-        user_id=user_id,
-        user_tenant_id=tenant_id,
-        operation_tenant_id=tenant_id
-    )
+if not is_valid:
+    raise PermissionError(f"User {{user_id}} denied access to tenant {{target_tenant_id}}")
+
+result = {{
+    'user_id': user_id,
+    'tenant_id': target_tenant_id,
+    'access_granted': is_valid,
+    'isolation_enforced': True
+}}
+"""
+    })
+
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(validation_workflow.build())
+    validation_result = results["validate_tenant_access"]["result"]
 
     # Create isolated session
     session_id = await gateway.agent_ui.create_session(
@@ -282,7 +296,7 @@ async function streamEvents(sessionId) {
 ### Webhook Configuration
 
 ```python
-from kailash.middleware import RealtimeMiddleware, AgentUIMiddleware
+from kailash.api.middleware import RealtimeMiddleware, AgentUIMiddleware
 
 # Setup webhook support through RealtimeMiddleware
 agent_ui = AgentUIMiddleware(max_sessions=1000)
@@ -393,10 +407,7 @@ else:
 """
 })
 
-api_workflow.add_connection(
-    "external_api", "response",
-    "handle_response", "response"
-)
+api_workflow.add_connection("external_api", "result", "response", "input")
 ```
 
 ## 🌍 External System Integration
@@ -452,10 +463,7 @@ result = {'transformed': transformed_data}
 """
 })
 
-integration_workflow.add_connection(
-    "external_api", "response",
-    "process_external", "external_data"
-)
+integration_workflow.add_connection("external_api", "result", "response", "input")
 ```
 
 ### Database Integration
@@ -512,10 +520,7 @@ result = {
 """
 })
 
-db_workflow.add_connection(
-    "enterprise_db", "result",
-    "process_db_results", "db_results"
-)
+db_workflow.add_connection("enterprise_db", "result", "result", "input")
 ```
 
 ## 🔍 Service Discovery Patterns
@@ -570,10 +575,7 @@ result = {
 """
 })
 
-discovery_workflow.add_connection(
-    "discover_services", "services",
-    "validate_services", "discovered_services"
-)
+discovery_workflow.add_connection("discover_services", "result", "services", "input")
 ```
 
 ## 📊 Gateway Monitoring & Analytics

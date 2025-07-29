@@ -489,7 +489,7 @@ async def validated_tool(data: dict) -> dict:
 ### Workflow Integration
 
 ```python
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 
 # MCP server as workflow component
 workflow = WorkflowBuilder()

@@ -13,7 +13,7 @@ reader_id = workflow.add_node("CSVReaderNode", {"file_path": "data.csv"})
 processor_id = workflow.add_node("PythonCodeNode", {"code": "result = len(input_data)"})
 
 # Use returned IDs for connections
-workflow.connect(reader_id, "result", mapping={processor_id: "input_data"})
+workflow.add_connection(reader_id, "result", processor_id, "input_data")
 ```
 
 ### Flexible API Patterns
@@ -55,8 +55,8 @@ workflow.add_node("PythonCodeNode", "output", {
 })
 
 # 3. Connect nodes
-workflow.connect("data_source", "result", mapping={"processor": "input_data"})
-workflow.connect("processor", "result", mapping={"output": "input_data"})
+workflow.add_connection("data_source", "result", "processor", "input_data")
+workflow.add_connection("processor", "result", "output", "input_data")
 
 # 4. Execute with runtime
 runtime = LocalRuntime()
@@ -95,8 +95,8 @@ workflow.add_node("PythonCodeNode", "load", {
 })
 
 # Connect nodes
-workflow.connect("extract", "result", mapping={"transform": "input_data"})
-workflow.connect("transform", "result", mapping={"load": "input_data"})
+workflow.add_connection("extract", "result", "transform", "input_data")
+workflow.add_connection("transform", "result", "load", "input_data")
 
 # Execute
 runtime = LocalRuntime()
@@ -134,8 +134,8 @@ workflow.add_node("PythonCodeNode", "save", {
 })
 
 # Connect nodes
-workflow.connect("reader", "result", mapping={"analyze": "input_data"})
-workflow.connect("analyze", "result", mapping={"save": "input_data"})
+workflow.add_connection("reader", "result", "analyze", "input_data")
+workflow.add_connection("analyze", "result", "save", "input_data")
 
 # Execute
 runtime = LocalRuntime()

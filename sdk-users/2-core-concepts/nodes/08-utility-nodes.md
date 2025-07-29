@@ -44,8 +44,8 @@ workflow = WorkflowBuilder()
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 workflow.add_node("FilterNode", "filter", {"condition": "value > 100"})
 workflow.add_node("JSONWriterNode", "writer", {"file_path": "output.json"})
-workflow.connect("reader", "filter", mapping={"data": "input_data"})
-workflow.connect("filter", "writer", mapping={"filtered_data": "data"})
+workflow.add_connection("reader", "filter", "data", "input_data")
+workflow.add_connection("filter", "writer", "filtered_data", "data")
 
 # Generate visualization
 result = await visualizer.run(
@@ -352,12 +352,12 @@ monitoring_workflow.add_node("SecureFileNode", "secure_storage", {
 })
 
 # Connect monitoring pipeline
-monitoring_workflow.connect("metrics", "dashboard", mapping={"metrics_data": "live_metrics"})
-monitoring_workflow.connect("metrics", "reporter", mapping={"metrics_data": "performance_data"})
-monitoring_workflow.connect("reporter", "secure_storage", mapping={"report_path": "file_path"})
+monitoring_workflow.add_connection("metrics", "dashboard", "metrics_data", "live_metrics")
+monitoring_workflow.add_connection("metrics", "reporter", "metrics_data", "performance_data")
+monitoring_workflow.add_connection("reporter", "secure_storage", "report_path", "file_path")
 
 # Execute monitoring
-result = await monitoring_workflow.execute({
+result = await monitoring_runtime.execute(workflow.build(), {
     "metrics": {"start_collection": True},
     "dashboard": {"start_server": True},
     "reporter": {"generate_report": True}

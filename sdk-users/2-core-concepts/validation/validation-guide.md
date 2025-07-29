@@ -1,414 +1,321 @@
 # Validation Guide
 
-*Complete validation framework for Kailash SDK workflows and patterns*
-
-Version: 0.6.6 | Last Updated: 2025-07-08
-
-## 🚨 **NEW**: Comprehensive Validation Framework
-
-**⚡ The Kailash SDK now includes a complete validation framework with specialized nodes:**
-
-- **[CodeValidationNode](developer/13-validation-framework-guide.md#codevalidationnode-deep-dive)** - Multi-level code validation with sandbox execution
-- **[WorkflowValidationNode](developer/13-validation-framework-guide.md#workflowvalidationnode-deep-dive)** - Complete workflow definition validation
-- **[TestSuiteExecutorNode](developer/13-validation-framework-guide.md#testsuiteexecutornode-deep-dive)** - Comprehensive test suite execution
-- **[Enhanced IterativeLLMAgentNode](developer/13-validation-framework-guide.md#enhanced-iterativellmagentnode)** - Test-driven convergence
-
-**📚 Complete Documentation:**
-- **[Validation Framework Guide](developer/13-validation-framework-guide.md)** - Comprehensive technical guide
-- **[Validation Patterns Cheatsheet](cheatsheet/050-validation-testing-patterns.md)** - Quick reference patterns
+*Built-in validation framework for Kailash SDK workflows*
 
 ## 🎯 Overview
 
-This guide provides comprehensive validation strategies for Kailash SDK workflows, ensuring reliability, correctness, and performance across all implementation patterns.
+The Kailash SDK includes built-in validation for workflows, ensuring reliability, correctness, and performance. All validation is integrated directly into the WorkflowBuilder and Runtime systems.
 
 ## 📋 Quick Reference
 
-| Validation Type | Purpose | New Framework Documentation |
-|----------------|---------|----------------------------|
-| **Code Validation** | Validate generated code | [CodeValidationNode Guide](developer/13-validation-framework-guide.md#codevalidationnode-deep-dive) |
-| **Workflow Validation** | Ensure workflow correctness | [WorkflowValidationNode Guide](developer/13-validation-framework-guide.md#workflowvalidationnode-deep-dive) |
-| **Test Execution** | Run comprehensive test suites | [TestSuiteExecutorNode Guide](developer/13-validation-framework-guide.md#testsuiteexecutornode-deep-dive) |
-| **Test-Driven Development** | TDD with validation framework | [TDD Patterns](cheatsheet/050-validation-testing-patterns.md#test-driven-development) |
-| **Node Parameter Validation** | Validate node inputs/outputs | [Parameter Validation](#parameter-validation) |
-| **Connection Validation** | Verify node connections | [Connection Validation](#connection-validation) |
-| **Runtime Validation** | Validate execution environment | [Runtime Validation](#runtime-validation) |
-| **Performance Validation** | Ensure performance requirements | [Performance Validation](#performance-validation) |
-| **Security Validation** | Validate security configurations | [Security Validation](#security-validation) |
+| Validation Type | Method | Purpose |
+|----------------|---------|---------|
+| **Workflow Structure** | `workflow.build().validate()` | Validate workflow structure and connections |
+| **Parameter Validation** | `workflow.validate_parameter_declarations()` | Check required parameters are provided |
+| **Contract Validation** | `workflow.validate_all_contracts()` | Validate typed connections and contracts |
+| **Runtime Validation** | `runtime.execute()` | Comprehensive validation during execution |
 
-## 🔧 Workflow Validation
+## 🔧 Built-in Workflow Validation
 
 ### Basic Workflow Validation
 ```python
-from kailash.workflow import Workflow
-from kailash.validation import WorkflowValidator
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Create validator
-validator = WorkflowValidator()
+# Create workflow
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "test", {"code": "result = {'value': 42}"})
 
 # Validate workflow structure
-workflow = Workflow("data_pipeline")
-validation_result = validator.validate_structure(workflow)
+built_workflow = workflow.build()
+validation_result = built_workflow.validate()
 
-if not validation_result.is_valid:
-    print(f"Validation errors: {validation_result.errors}")
-```
-
-### Advanced Workflow Validation
-```python
-from kailash.validation import ValidationConfig, WorkflowValidator
-
-# Configure validation rules
-config = ValidationConfig(
-    check_connections=True,
-    check_parameters=True,
-    check_cycles=True,
-    check_performance=True
-)
-
-validator = WorkflowValidator(config=config)
-result = validator.validate_comprehensive(workflow)
-
-# Check specific validation aspects
-if result.has_connection_errors:
-    print(f"Connection errors: {result.connection_errors}")
-if result.has_parameter_errors:
-    print(f"Parameter errors: {result.parameter_errors}")
-```
-
-## 🔗 Parameter Validation
-
-### Node Parameter Validation
-```python
-from kailash.nodes import CSVReaderNode
-from kailash.validation import ParameterValidator
-
-# Create node with parameters
-node = CSVReaderNode(
-    name="csv_reader",
-    file_path="data.csv",
-    delimiter=","
-)
+# Validate contracts
+contracts_valid, contract_errors = workflow.validate_all_contracts()
+if not contracts_valid:
+    print(f"Contract errors: {contract_errors}")
 
 # Validate parameters
-validator = ParameterValidator()
-result = validator.validate_node_parameters(node)
-
-if not result.is_valid:
-    for error in result.errors:
+param_errors = workflow.validate_parameter_declarations()
+if param_errors:
+    for error in param_errors:
         print(f"Parameter error: {error}")
+
+# Runtime validation (execute)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(built_workflow)
 ```
 
-### Custom Parameter Validation
+### Parameter Validation with Error Handling
 ```python
-from kailash.validation import ValidationRule, ParameterValidator
+from kailash.workflow.builder import WorkflowBuilder
 
-# Define custom validation rules
-class FileExistsRule(ValidationRule):
-    def validate(self, value):
-        import os
-        if not os.path.exists(value):
-            return False, f"File does not exist: {value}"
-        return True, None
+# Create workflow with validation
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 
-# Apply custom validation
-validator = ParameterValidator()
-validator.add_rule("file_path", FileExistsRule())
-result = validator.validate_node_parameters(node)
+# Check for parameter errors
+param_errors = workflow.validate_parameter_declarations()
+if param_errors:
+    for error in param_errors:
+        print(f"Parameter error: {error}")
+        print(f"  Suggestion: {error.suggestion}")
+        print(f"  Severity: {error.severity}")
 ```
 
 ## 🔗 Connection Validation
 
 ### Basic Connection Validation
 ```python
-from kailash.validation import ConnectionValidator
+from kailash.workflow.builder import WorkflowBuilder
 
-# Validate node connections
-validator = ConnectionValidator()
-result = validator.validate_connections(workflow)
+# Create workflow with connections
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "node1", {"code": "result = {'value': 1}"})
+workflow.add_node("PythonCodeNode", "node2", {"code": "result = input_data"})
+workflow.add_connection("node1", "result", "node2", "input_data")
 
-if not result.is_valid:
-    for error in result.errors:
-        print(f"Connection error: {error}")
+# Validate workflow
+built_workflow = workflow.build()
+validation_result = built_workflow.validate()  # Validates connections
 ```
 
-### Advanced Connection Validation
+### Advanced Connection Validation with Type Safety
 ```python
-from kailash.validation import ConnectionValidator, ConnectionConfig
+from kailash.workflow.builder import WorkflowBuilder
 
-# Configure connection validation
-config = ConnectionConfig(
-    check_type_compatibility=True,
-    check_data_flow=True,
-    check_circular_dependencies=True
-)
+# Create workflow with typed connections
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = len(data)"})
 
-validator = ConnectionValidator(config=config)
-result = validator.validate_comprehensive(workflow)
+# Add connection with validation
+workflow.add_connection("reader", "data", "processor", "data")
 
-# Check specific connection issues
-if result.has_type_mismatches:
-    print(f"Type mismatches: {result.type_mismatches}")
-if result.has_circular_dependencies:
-    print(f"Circular dependencies: {result.circular_dependencies}")
+# Validate all contracts (includes type checking)
+contracts_valid, contract_errors = workflow.validate_all_contracts()
+if not contracts_valid:
+    for error in contract_errors:
+        print(f"Contract error: {error}")
 ```
 
 ## ⚡ Runtime Validation
 
-### Environment Validation
+### Comprehensive Runtime Validation
 ```python
-from kailash.validation import RuntimeValidator
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Validate runtime environment
-validator = RuntimeValidator()
-result = validator.validate_environment()
+def validate_and_execute(workflow):
+    """Validate workflow before execution"""
 
-if not result.is_valid:
-    print(f"Environment issues: {result.errors}")
+    # Pre-execution validation
+    param_errors = workflow.validate_parameter_declarations()
+    if param_errors:
+        print("Parameter validation failed:")
+        for error in param_errors:
+            print(f"  - {error.message}")
+        return None
 
-# Check specific requirements
-if not result.has_required_packages:
-    print(f"Missing packages: {result.missing_packages}")
+    # Contract validation
+    contracts_valid, contract_errors = workflow.validate_all_contracts()
+    if not contracts_valid:
+        print("Contract validation failed:")
+        for error in contract_errors:
+            print(f"  - {error}")
+        return None
+
+    # Build and validate structure
+    built_workflow = workflow.build()
+    structural_result = built_workflow.validate()
+
+    # Execute with runtime validation
+    try:
+        runtime = LocalRuntime()
+        results, run_id = runtime.execute(built_workflow)
+        print("✅ Workflow executed successfully with validation")
+        return results
+    except Exception as e:
+        print(f"❌ Runtime validation failed: {e}")
+        return None
+
+# Example usage
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "process", {"code": "result = {'status': 'complete'}"})
+results = validate_and_execute(workflow)
 ```
 
-### Resource Validation
+### Error Handling and Recovery
 ```python
-from kailash.validation import ResourceValidator
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Validate resource availability
-validator = ResourceValidator()
-result = validator.validate_resources(workflow)
+def robust_workflow_execution(workflow, parameters=None):
+    """Execute workflow with comprehensive validation and error handling"""
 
-if not result.is_valid:
-    print(f"Resource issues: {result.errors}")
+    try:
+        # Parameter validation
+        param_errors = workflow.validate_parameter_declarations()
+        if param_errors:
+            warnings = [err for err in param_errors if err.severity.value == 'warning']
+            errors = [err for err in param_errors if err.severity.value == 'error']
 
-# Check specific resources
-if not result.has_database_access:
-    print("Database access issues")
-if not result.has_sufficient_memory:
-    print("Insufficient memory")
+            if errors:
+                print("❌ Critical parameter errors:")
+                for error in errors:
+                    print(f"  - {error.message}")
+                return None, "Parameter validation failed"
+
+            if warnings:
+                print("⚠️  Parameter warnings:")
+                for warning in warnings:
+                    print(f"  - {warning.message}")
+
+        # Build and execute
+        built_workflow = workflow.build()
+        runtime = LocalRuntime()
+        results, run_id = runtime.execute(built_workflow, parameters=parameters)
+
+        return results, "Success"
+
+    except Exception as e:
+        error_msg = str(e)
+        if "missing required inputs" in error_msg:
+            return None, f"Missing required parameters: {error_msg}"
+        elif "connection" in error_msg.lower():
+            return None, f"Connection error: {error_msg}"
+        else:
+            return None, f"Execution error: {error_msg}"
+
+# Example usage with error handling
+workflow = WorkflowBuilder()
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = len(data)"})
+workflow.add_connection("reader", "data", "processor", "data")
+
+results, status = robust_workflow_execution(workflow)
+print(f"Execution status: {status}")
 ```
 
 ## 📊 Performance Validation
 
-### Basic Performance Validation
+### Basic Performance Monitoring
 ```python
-from kailash.validation import PerformanceValidator
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+import time
 
-# Validate performance requirements
-validator = PerformanceValidator()
-result = validator.validate_performance(workflow)
+def validate_performance(workflow, max_duration=30.0):
+    """Validate workflow performance requirements"""
 
-if not result.meets_requirements:
-    print(f"Performance issues: {result.issues}")
-```
+    runtime = LocalRuntime()
 
-### Advanced Performance Validation
-```python
-from kailash.validation import PerformanceConfig, PerformanceValidator
+    # Measure execution time
+    start_time = time.time()
+    try:
+        results, run_id = runtime.execute(workflow.build())
+        execution_time = time.time() - start_time
 
-# Configure performance requirements
-config = PerformanceConfig(
-    max_execution_time=30.0,  # seconds
-    max_memory_usage=1024,    # MB
-    min_throughput=100        # operations/second
-)
+        if execution_time > max_duration:
+            print(f"❌ Performance validation failed: {execution_time:.2f}s > {max_duration}s")
+            return False, execution_time
+        else:
+            print(f"✅ Performance validation passed: {execution_time:.2f}s")
+            return True, execution_time
 
-validator = PerformanceValidator(config=config)
-result = validator.validate_comprehensive(workflow)
+    except Exception as e:
+        execution_time = time.time() - start_time
+        print(f"❌ Execution failed after {execution_time:.2f}s: {e}")
+        return False, execution_time
 
-# Check specific metrics
-if result.execution_time > config.max_execution_time:
-    print(f"Execution too slow: {result.execution_time}s")
-if result.memory_usage > config.max_memory_usage:
-    print(f"Memory usage too high: {result.memory_usage}MB")
+# Example usage
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "fast_task", {"code": "result = {'processed': True}"})
+
+performance_ok, duration = validate_performance(workflow.build(), max_duration=5.0)
 ```
 
 ## 🔐 Security Validation
 
-### Basic Security Validation
+### Input Security Validation
 ```python
-from kailash.validation import SecurityValidator
+from kailash.workflow.builder import WorkflowBuilder
 
-# Validate security configuration
-validator = SecurityValidator()
-result = validator.validate_security(workflow)
+def validate_secure_inputs(workflow_config):
+    """Validate workflow configuration for security issues"""
 
-if not result.is_secure:
-    print(f"Security issues: {result.vulnerabilities}")
+    security_issues = []
+
+    # Check for sensitive data in configuration
+    sensitive_keywords = ['password', 'secret', 'key', 'token']
+
+    for node_id, config in workflow_config.items():
+        for param, value in config.items():
+            if any(keyword in param.lower() for keyword in sensitive_keywords):
+                if isinstance(value, str) and len(value) > 0:
+                    security_issues.append(f"Potential sensitive data in {node_id}.{param}")
+
+    return security_issues
+
+# Example usage
+config = {
+    "database": {"host": "localhost", "password": "secret123"},  # Security issue
+    "processor": {"code": "result = data"}  # Safe
+}
+
+issues = validate_secure_inputs(config)
+if issues:
+    print("🔐 Security validation issues:")
+    for issue in issues:
+        print(f"  - {issue}")
 ```
 
-### Advanced Security Validation
+## 📋 Best Practices
+
+1. **Always Validate Before Execution**
+   - Use `validate_parameter_declarations()` to catch missing parameters
+   - Use `validate_all_contracts()` for type safety
+   - Use `workflow.build().validate()` for structure validation
+
+2. **Handle Validation Errors Gracefully**
+   - Check error severity (warning vs error)
+   - Provide clear error messages to users
+   - Implement recovery strategies for warnings
+
+3. **Use Runtime Validation**
+   - LocalRuntime performs comprehensive validation during execution
+   - Catch and handle specific error types
+   - Monitor execution time and resource usage
+
+## 🚀 Quick Reference
+
+### Essential Validation Pattern
 ```python
-from kailash.validation import SecurityConfig, SecurityValidator
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Configure security requirements
-config = SecurityConfig(
-    require_authentication=True,
-    require_authorization=True,
-    require_encryption=True,
-    check_vulnerabilities=True
-)
+# Build workflow
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "task", {"code": "result = {'done': True}"})
 
-validator = SecurityValidator(config=config)
-result = validator.validate_comprehensive(workflow)
+# Validate before execution
+param_errors = workflow.validate_parameter_declarations()
+contracts_valid, contract_errors = workflow.validate_all_contracts()
 
-# Check specific security aspects
-if not result.has_authentication:
-    print("Authentication required")
-if not result.has_authorization:
-    print("Authorization required")
-if result.has_vulnerabilities:
-    print(f"Vulnerabilities: {result.vulnerabilities}")
+if param_errors or not contracts_valid:
+    print("❌ Validation failed")
+else:
+    # Execute with runtime validation
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(workflow.build())
+    print("✅ Execution successful")
 ```
-
-## 🧪 Testing Integration
-
-### Unit Test Validation
-```python
-import pytest
-from kailash.validation import WorkflowValidator
-
-class TestWorkflowValidation:
-    def test_workflow_structure(self):
-        """Test workflow structure validation."""
-        validator = WorkflowValidator()
-        result = validator.validate_structure(self.workflow)
-        assert result.is_valid, f"Validation errors: {result.errors}"
-
-    def test_parameter_validation(self):
-        """Test parameter validation."""
-        validator = ParameterValidator()
-        result = validator.validate_node_parameters(self.node)
-        assert result.is_valid, f"Parameter errors: {result.errors}"
-```
-
-### Integration Test Validation
-```python
-@pytest.mark.integration
-class TestIntegrationValidation:
-    def test_end_to_end_validation(self):
-        """Test complete workflow validation."""
-        validator = WorkflowValidator()
-        result = validator.validate_comprehensive(self.workflow)
-
-        assert result.is_valid, f"Validation failed: {result.errors}"
-        assert result.performance_score > 0.8, "Performance requirements not met"
-        assert result.security_score > 0.9, "Security requirements not met"
-```
-
-## 📋 Validation Checklists
-
-### Pre-Deployment Checklist
-- [ ] Workflow structure validated
-- [ ] All node parameters validated
-- [ ] Connections verified
-- [ ] Performance requirements met
-- [ ] Security configurations validated
-- [ ] Runtime environment validated
-- [ ] Resource availability confirmed
-
-### Production Checklist
-- [ ] Load testing completed
-- [ ] Security audit passed
-- [ ] Monitoring configured
-- [ ] Error handling validated
-- [ ] Backup and recovery tested
-- [ ] Documentation updated
-
-## 🔍 Common Validation Patterns
-
-### Pattern 1: Comprehensive Validation
-```python
-from kailash.validation import ComprehensiveValidator
-
-# Single validator for all aspects
-validator = ComprehensiveValidator()
-result = validator.validate_all(workflow)
-
-if not result.is_valid:
-    print(f"Validation summary: {result.summary}")
-    for category, errors in result.errors_by_category.items():
-        print(f"{category}: {errors}")
-```
-
-### Pattern 2: Staged Validation
-```python
-from kailash.validation import ValidationPipeline
-
-# Create validation pipeline
-pipeline = ValidationPipeline()
-pipeline.add_stage("structure", WorkflowValidator())
-pipeline.add_stage("parameters", ParameterValidator())
-pipeline.add_stage("connections", ConnectionValidator())
-pipeline.add_stage("performance", PerformanceValidator())
-
-# Run staged validation
-result = pipeline.validate(workflow)
-if not result.is_valid:
-    print(f"Failed at stage: {result.failed_stage}")
-```
-
-### Pattern 3: Continuous Validation
-```python
-from kailash.validation import ContinuousValidator
-
-# Set up continuous validation
-validator = ContinuousValidator()
-validator.watch_workflow(workflow)
-
-# Validation runs automatically on changes
-validator.on_validation_failure(lambda result: print(f"Validation failed: {result.errors}"))
-```
-
-## 🚨 Troubleshooting
 
 ### Common Validation Errors
-
-**Connection Errors**
-```
-Error: "Output 'data' from node 'csv_reader' not compatible with input 'input_data' of node 'transformer'"
-Solution: Check node output schemas and ensure type compatibility
-```
-
-**Parameter Errors**
-```
-Error: "Required parameter 'file_path' not provided for node 'csv_reader'"
-Solution: Ensure all required parameters are provided when creating nodes
-```
-
-**Performance Errors**
-```
-Error: "Workflow execution time 45.2s exceeds maximum 30.0s"
-Solution: Optimize workflow or increase performance limits
-```
-
-### Debugging Validation Issues
-```python
-from kailash.validation import ValidationDebugger
-
-# Debug validation failures
-debugger = ValidationDebugger()
-debug_info = debugger.analyze_failure(validation_result)
-
-print(f"Root cause: {debug_info.root_cause}")
-print(f"Suggested fixes: {debug_info.suggestions}")
-```
-
-## 📚 Related Documentation
-
-- [Testing Guide](testing/README.md) - Testing strategies and frameworks
-- [Troubleshooting](developer/05-troubleshooting.md) - Common issues and solutions
-- [Performance Guide](monitoring/README.md) - Performance optimization
-- [Security Guide](enterprise/README.md) - Security best practices
-
-## 🎯 Best Practices
-
-1. **Validate Early**: Run validation during development, not just deployment
-2. **Use Staged Validation**: Break validation into logical stages
-3. **Automate Validation**: Integrate validation into CI/CD pipelines
-4. **Monitor Continuously**: Use continuous validation for production workflows
-5. **Document Failures**: Keep records of validation failures and resolutions
+- **Missing Parameters**: Use `validate_parameter_declarations()`
+- **Type Mismatches**: Use `validate_all_contracts()`
+- **Connection Issues**: Runtime validation will catch these
+- **Missing Files**: Runtime validation during node execution
 
 ---
-
-*This guide provides comprehensive validation strategies for all Kailash SDK workflows. For specific validation needs, refer to the appropriate specialized guides in the documentation.*
+*Related: [Parameter Passing Guide](../3-development/parameter-passing-guide.md), [Common Mistakes](common-mistakes.md)*

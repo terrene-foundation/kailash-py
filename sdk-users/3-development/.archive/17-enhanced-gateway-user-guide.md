@@ -7,7 +7,7 @@ The Enhanced Gateway makes it easy to build production workflows that use databa
 ### 1. Basic Setup
 
 ```python
-from kailash.gateway import EnhancedDurableAPIGateway, WorkflowRequest
+from kailash.api.gateway import EnhancedDurableAPIGateway, WorkflowRequest
 from kailash.workflow import AsyncWorkflowBuilder
 
 # Create gateway
@@ -56,7 +56,7 @@ async with KailashClient("http://localhost:8000") as client:
     # Execute workflow with resource helpers
     result = await client.execute_workflow(
         "hello_db",
-        inputs={},
+        parameters={},
         resources={
             "mydb": client.database(
                 host="localhost",
@@ -315,7 +315,7 @@ result = {
 async def process_event_stream(gateway, event_source):
     async for batch in event_source:
         request = WorkflowRequest(
-            inputs={"events": batch},
+            parameters={"events": batch},
             resources={
                 "db": {"type": "database", "config": {...}},
                 "cache": {"type": "cache", "config": {...}}

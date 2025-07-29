@@ -11,6 +11,8 @@ DataFlow provides sophisticated connection pooling to maximize database performa
 ### Basic Pool Settings
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 from kailash_dataflow import DataFlow, DataFlowConfig
 
 # Default configuration

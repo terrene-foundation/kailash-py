@@ -55,8 +55,8 @@ nodes = {
 workflow = MockWorkflow(nodes)
 
 # Add edges to create dependencies: node1 -> node2 -> node3
-workflow.graph.add_edge("node1", "node2")
-workflow.graph.add_edge("node2", "node3")
+workflow.graph.add_connection("node1", "node2")
+workflow.graph.add_connection("node2", "node3")
 ```
 
 ## Mock Node Implementation

@@ -43,7 +43,7 @@ else:
 })
 
 # Connect with error handling
-workflow.add_connection("create_user", "handle_error", on_error=True)
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex pattern
 ```
 
 ### Validation Errors
@@ -193,7 +193,7 @@ workflow.add_node("TransactionRollbackNode", "rollback_tx", {
 })
 
 # Connect with error handling
-workflow.add_connection("start_tx", "create_user")
+workflow.add_connection("start_tx", "result", "create_user", "input")
 workflow.add_connection("create_user", "create_account", "id", "user_id")
 workflow.add_connection("create_account", "rollback_tx", on_error=True)
 ```

@@ -102,7 +102,7 @@ workflow.add_node("HTTPRequestNode", "fetch", {
 })
 
 # Register workflow
-app.register("get-user", workflow)
+app.register("get-user", workflow.build())
 
 # Start platform
 app.start()
@@ -127,7 +127,7 @@ etl_workflow.add_node("CSVReaderNode", "extract", {"file_path": "data.csv"})
 etl_workflow.add_node("PythonCodeNode", "transform", {"code": "return {'processed': data}"})
 etl_workflow.add_node("JSONWriterNode", "load", {"output_path": "result.json"})
 
-app.register("etl-pipeline", etl_workflow)
+app.register("etl-pipeline", etl_workflow.build())
 app.start()
 
 # Zero setup, immediately production-ready!
@@ -149,7 +149,7 @@ ai_workflow.add_node("LLMAgentNode", "chat", {
     "use_real_mcp": True
 })
 
-app.register("ai-assistant", ai_workflow)
+app.register("ai-assistant", ai_workflow.build())
 app.start()
 
 # AI agents can immediately connect via MCP on port 3001

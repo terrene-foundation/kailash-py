@@ -306,17 +306,6 @@ def create_working_complex_workflow() -> Workflow:
 
     workflow.connect("packager", "switch", {"result.switch_input": "input_data"})
 
-    # Cycle back when not converged
-    workflow.connect(
-        "switch",
-        "optimizer",
-        condition="false_output",
-        mapping={"false_output.metrics": "metrics"},
-        cycle=True,
-        max_iterations=25,
-        convergence_check="score >= 0.95",
-    )
-
     # Exit when converged
     workflow.connect(
         "switch", "aggregator", condition="true_output", mapping={"true_output": "data"}
@@ -324,7 +313,20 @@ def create_working_complex_workflow() -> Workflow:
 
     workflow.connect("aggregator", "writer", {"result": "data"})
 
-    return workflow
+    # Build workflow first, then create cycle
+    built_workflow = workflow.build()
+    cycle_builder = built_workflow.create_cycle("optimization_cycle")
+    cycle_builder.connect(
+        "switch",
+        "optimizer",
+        condition="false_output",
+        mapping={"false_output.metrics": "metrics"},
+    )
+    cycle_builder.max_iterations(25)
+    cycle_builder.converge_when("score >= 0.95")
+    cycle_builder.build()
+
+    return built_workflow
 
 
 def run_working_example():

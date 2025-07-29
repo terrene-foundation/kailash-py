@@ -17,7 +17,7 @@ workflow = WorkflowBuilder()
 
 # Add nodes with proper syntax
 workflow.add_node("PythonCodeNode", "data_processor", {
-    "code": "result = {'processed': input_data.get('value', 0) * 2}"
+    "code": "result = {'processed': parameters.get('value', 0) * 2}"
 })
 
 workflow.add_node("PythonCodeNode", "validator", {
@@ -25,7 +25,7 @@ workflow.add_node("PythonCodeNode", "validator", {
 })
 
 # Connect nodes
-workflow.connect("data_processor", "result", mapping={"validator": "input_data"})
+workflow.add_connection("data_processor", "result", "validator", "input_data")
 
 # Build and execute
 built_workflow = workflow.build()
@@ -34,7 +34,7 @@ results, run_id = runtime.execute(built_workflow, parameters={
     "data_processor": {"value": 10}
 })
 
-print(results["validator"]["valid"])  # True
+print(results["validator"]["result"]["valid"])  # True
 ```
 
 ### Dot Notation for Nested Data
@@ -58,7 +58,7 @@ workflow.add_node("PythonCodeNode", "consumer", {
 })
 
 # Connect using dot notation to access nested fields
-workflow.connect("producer", "result.data", mapping={"consumer": "input_data"})
+workflow.add_connection("producer", "result.data", "consumer", "input_data")
 ```
 
 ### Node Type Patterns
@@ -76,16 +76,16 @@ workflow.add_node("JSONWriterNode", "writer", {"file_path": "output.json"})
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 
-# Use class references
-workflow.add_node(CSVReaderNode, "reader", {"file_path": "data.csv"})
-workflow.add_node(LLMAgentNode, "analyzer", {"model": "gpt-4"})
+# Use string references (recommended pattern)
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("LLMAgentNode", "analyzer", {"model": "gpt-4"})
 ```
 
 #### 3. Instance-based Node Types
 ```python
-# Pre-configured node instances
-reader_node = CSVReaderNode("reader", file_path="data.csv")
-workflow.add_node(reader_node)  # config parameter ignored for instances
+# Use string-based approach instead (recommended)
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+# Note: Instance-based patterns are being deprecated in favor of string-based API
 ```
 
 ### Connection Patterns
@@ -93,19 +93,16 @@ workflow.add_node(reader_node)  # config parameter ignored for instances
 #### Basic Connections
 ```python
 # Simple field mapping
-workflow.connect("source_node", "output_field", mapping={"target_node": "input_field"})
+workflow.add_connection("source_node", "output_field", "target_node", "input_field")
 
 # Default connections (uses 'result' and 'input_data')
-workflow.connect("source_node", "target_node")
+workflow.add_connection("source_node", "result", "target_node", "input_data")
 ```
 
 #### Advanced Connection Mapping
 ```python
 # Multiple field mapping with dict
-workflow.connect("source_node", "target_node", {
-    "result.customer_data": "customer_info",
-    "result.transaction_data": "transaction_info"
-})
+workflow.add_connection("source_node", "result", "target_node", "input")
 ```
 
 ### Runtime Patterns
@@ -115,17 +112,27 @@ workflow.connect("source_node", "target_node", {
 from kailash.runtime.local import LocalRuntime
 
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(workflow.build(), parameters={
     "node_name": {"param": "value"}
 })
 ```
 
-#### Async Runtime (High Performance)
+#### Async Runtime Execution
 ```python
 from kailash.runtime.local import LocalRuntime
 
 runtime = LocalRuntime()
-results, run_id = await runtime.execute_async(workflow, parameters={
+results, run_id = await runtime.execute_async(workflow.build(), parameters={
+    "node_name": {"param": "value"}
+})
+```
+
+#### Sync Runtime Execution
+```python
+from kailash.runtime.local import LocalRuntime
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build(), parameters={
     "node_name": {"param": "value"}
 })
 ```
@@ -135,7 +142,7 @@ results, run_id = await runtime.execute_async(workflow, parameters={
 #### Runtime Parameters
 ```python
 # Pass parameters at execution time
-results, run_id = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(workflow.build(), parameters={
     "csv_reader": {
         "file_path": "dynamic_file.csv",
         "delimiter": ","
@@ -183,7 +190,7 @@ except Exception as e:
 ```python
 # This will raise WorkflowValidationError if nodes don't exist
 try:
-    workflow.connect("nonexistent_node", "existing_node")
+    workflow.add_connection("nonexistent_node", "result", "existing_node", "input")
 except WorkflowValidationError as e:
     print(f"Invalid connection: {e}")
 ```
@@ -206,8 +213,8 @@ workflow.add_node("PythonCodeNode", "processor", {
 workflow.add_node("JSONWriterNode", "writer", {"file_path": "output.json"})
 
 # Connect in sequence
-workflow.connect("reader", "processor")
-workflow.connect("processor", "writer")
+workflow.add_connection("reader", "result", "processor", "input_data")
+workflow.add_connection("processor", "result", "writer", "data")
 ```
 
 #### Parallel Processing
@@ -229,10 +236,10 @@ workflow.add_node("PythonCodeNode", "analyzer2", {
 workflow.add_node("MergeNode", "merger", {})
 
 # Connect parallel paths
-workflow.connect("reader", "analyzer1")
-workflow.connect("reader", "analyzer2")
-workflow.connect("analyzer1", "merger")
-workflow.connect("analyzer2", "merger")
+workflow.add_connection("reader", "result", "analyzer1", "input_data")
+workflow.add_connection("reader", "result", "analyzer2", "input_data")
+workflow.add_connection("analyzer1", "result", "merger", "input1")
+workflow.add_connection("analyzer2", "result", "merger", "input2")
 ```
 
 #### Conditional Routing
@@ -265,9 +272,9 @@ workflow.add_node("PythonCodeNode", "standard_processor", {
     "code": "result = {'processed': 'standard_logic'}"
 })
 
-workflow.connect("classifier", "router")
-workflow.connect("router", "high_value_processor")
-workflow.connect("router", "standard_processor")
+workflow.add_connection("classifier", "result", "router", "input")
+workflow.add_connection("router", "high_value", "high_value_processor", "input")
+workflow.add_connection("router", "standard", "standard_processor", "input")
 ```
 
 ## 🎯 Best Practices
@@ -330,7 +337,7 @@ print(results)
 ```python
 # Test data flow with simple data
 test_data = {"sample": "value"}
-results, run_id = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(workflow.build(), parameters={
     "first_node": test_data
 })
 

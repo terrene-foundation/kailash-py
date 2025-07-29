@@ -7,6 +7,7 @@ The PythonCodeNode **injects input parameters directly into the execution namesp
 ### ✅ CORRECT Pattern - Direct Variable Access
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # When you pass inputs: {"query": "hello", "threshold": 5}
 code = """
 # Variables are directly available - no 'inputs' dict!
@@ -464,10 +465,10 @@ result = {
 def build_complete_workflow():
     """Build a complete workflow using all node types."""
 
-    workflow = Workflow("python_code_demo", description="PythonCodeNode demonstration")
+    workflow = WorkflowBuilder()
 
     # Add data source
-    workflow.add_node("csv_reader", CSVReaderNode())
+    workflow.add_node("CSVReaderNode", "csv_reader", {}))
 
     # Add function-based node
     metrics_node = create_function_based_node()
@@ -482,10 +483,7 @@ def build_complete_workflow():
     workflow.add_node("filter", filter_node)
 
     # Add aggregation node using inline code
-    workflow.add_node("aggregator", PythonCodeNode(
-        code="""
-# Aggregate results from previous nodes
-outlier_count = sum(1 for item in outlier_data if item.get('is_outlier', False))
+    workflow.add_node("PythonCodeNode", "aggregator", {}))
 high_value_count = summary.get('statistics', {}).get('count', 0)
 
 # Create final summary
@@ -501,16 +499,16 @@ result = {
     ))
 
     # Add output node
-    workflow.add_node("csv_writer", CSVWriterNode())
+    workflow.add_node("CSVWriterNode", "csv_writer", {}))
 
     # Connect the workflow
-    workflow.connect("csv_reader", "metrics", mapping={"result": "data"})
-    workflow.connect("metrics", "outliers", mapping={"result": "data"})
-    workflow.connect("outliers", "filter", mapping={"result": "data"})
-    workflow.connect("outliers", "aggregator", mapping={"result": "outlier_data"})
-    workflow.connect("metrics", "aggregator", mapping={"result": "metrics_data"})
-    workflow.connect("filter", "aggregator", mapping={"result": "summary"})
-    workflow.connect("aggregator", "csv_writer", mapping={"result": "data"})
+    workflow.add_connection("csv_reader", "metrics", "result", "data")
+    workflow.add_connection("metrics", "outliers", "result", "data")
+    workflow.add_connection("outliers", "filter", "result", "data")
+    workflow.add_connection("outliers", "aggregator", "result", "outlier_data")
+    workflow.add_connection("metrics", "aggregator", "result", "metrics_data")
+    workflow.add_connection("filter", "aggregator", "result", "summary")
+    workflow.add_connection("aggregator", "csv_writer", "result", "data")
 
     return workflow
 

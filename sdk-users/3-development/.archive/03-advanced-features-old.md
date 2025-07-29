@@ -140,17 +140,10 @@ from kailash.runtime.async_local import AsyncLocalRuntime
 
 async def create_portfolio_analysis():
     """Create comprehensive async portfolio analysis workflow."""
-    workflow = Workflow("portfolio_analysis", name="Portfolio Analysis Pipeline")
+    workflow = WorkflowBuilder()
 
     # 1. Fetch portfolio data
-    workflow.add_node("fetch_portfolios", AsyncSQLDatabaseNode(
-        name="fetch_portfolios",
-        database_type="postgresql",
-        host="localhost",
-        database="investment_db",
-        query="""
-        WITH latest_prices AS (
-            SELECT DISTINCT ON (symbol) symbol, close_price
+    workflow.add_node("AsyncSQLDatabaseNode", "fetch_portfolios", {}) symbol, close_price
             FROM market_prices
             ORDER BY symbol, price_date DESC
         )
@@ -187,7 +180,7 @@ async def create_portfolio_analysis():
     ))
 
     # Connect nodes
-    workflow.connect("fetch_portfolios", "calculate_metrics", {"result": "portfolio_data"})
+    workflow.add_connection("fetch_portfolios", "result", "calculate_metrics", "input")
 
     return workflow
 
@@ -196,7 +189,7 @@ async def main():
     workflow = await create_portfolio_analysis()
     runtime = AsyncLocalRuntime()
 
-    result, run_id = await runtime.execute(workflow)
+    result, run_id = await runtime.execute(workflow.build())
     metrics = result["calculate_metrics"]["result"]
 
     print(f"Total AUM: ${metrics['total_aum']:,.2f}")
@@ -287,10 +280,10 @@ print(masked_data)  # {"ssn": "12*****89", "account_balance": "$1M-$10M"}
 ```python
 from kailash.workflow import Workflow, RetryStrategy
 
-workflow = Workflow("resilient_pipeline", name="Resilient Data Pipeline")
+workflow = WorkflowBuilder()
 
 # Add a node that might fail
-workflow.add_node("fetch_data", HTTPRequestNode(), url="https://api.example.com/data")
+workflow.add_node("HTTPRequestNode", "fetch_data", {}), url="https://api.example.com/data")
 
 # Configure retry policy
 workflow.configure_retry(
@@ -315,7 +308,7 @@ workflow.configure_circuit_breaker(
 ### **Fallback Nodes & Graceful Degradation**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -325,22 +318,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Primary service
-workflow.add_node("primary_llm", LLMAgentNode(
-    name="primary_llm",
-    model="gpt-4",
-    prompt="Analyze: {data}"
-))
+workflow.add_node("LLMAgentNode", "primary_llm", {}))
 
 # Fallback service
-workflow.add_node("fallback_llm", LLMAgentNode(
-    name="fallback_llm",
-    model="claude-3-sonnet",
-    prompt="Analyze: {data}"
-))
+workflow.add_node("LLMAgentNode", "fallback_llm", {}))
 
 # Minimal fallback
 workflow.add_node("minimal_analysis", PythonCodeNode.from_function(
@@ -354,7 +340,7 @@ workflow.add_fallback("fallback_llm", "minimal_analysis")
 
 # Execute with monitoring
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 # Get resilience metrics
 metrics = workflow.get_resilience_metrics()
@@ -366,7 +352,7 @@ print(f"Dead letter queue size: {metrics['dead_letter_queue_size']}")
 ### **Dead Letter Queue & Error Tracking**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -376,8 +362,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Execute workflow with error tracking
 try:
@@ -418,7 +405,7 @@ result = await sp_node.execute(
 ### **Managed Identity & Multi-Tenant Support**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -428,8 +415,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # System-assigned managed identity
 sp_node = SharePointGraphReaderEnhanced()
@@ -473,7 +461,7 @@ for tenant in tenants:
 ```python
 from kailash.workflow.templates import BusinessWorkflowTemplates
 
-workflow = Workflow("enterprise_pipeline", "Enterprise Data Pipeline")
+workflow = WorkflowBuilder()
 
 # 1. Investment Data Pipeline
 BusinessWorkflowTemplates.investment_data_pipeline(
@@ -505,7 +493,7 @@ BusinessWorkflowTemplates.api_integration_template(
 ### **Template Customization**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -515,8 +503,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Get the template node ID for further customization
 template_node_id = BusinessWorkflowTemplates.investment_data_pipeline(
@@ -527,10 +516,8 @@ template_node_id = BusinessWorkflowTemplates.investment_data_pipeline(
 )
 
 # Add additional processing after the template
-workflow.add_node("custom_analysis", CustomAnalysisNode(
-    name="custom_analysis"
-))
-workflow.connect(template_node_id, "custom_analysis")
+workflow.add_node("CustomAnalysisNode", "custom_analysis", {}))
+workflow.add_connection(template_node_id, "custom_analysis")
 
 ```
 
@@ -563,7 +550,7 @@ workflow.add_node("lineage_tracker", lineage_node)
 ### **Compliance-Aware Lineage**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -573,8 +560,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Track with compliance frameworks
 compliance_lineage = DataLineageNode(
@@ -632,7 +620,7 @@ workflow.add_node("batch_processor", batch_processor)
 ### **Advanced Batch Configuration**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -642,8 +630,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Advanced batch processing with rate limiting
 advanced_processor = BatchProcessorNode(
@@ -677,7 +666,7 @@ advanced_processor = BatchProcessorNode(
 ### **Batch Processing Strategies**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -687,8 +676,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Different processing strategies
 strategies = [
@@ -733,7 +723,7 @@ workflow.add_node("credential_rotator", credential_rotator)
 ### **Enterprise Credential Rotation**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -743,8 +733,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Enterprise-grade rotation with notifications
 enterprise_rotator = RotatingCredentialNode(
@@ -782,7 +773,7 @@ enterprise_rotator = RotatingCredentialNode(
 ### **Credential Rotation Operations**
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -792,8 +783,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Check rotation status
 status_checker = RotatingCredentialNode(
@@ -835,19 +827,10 @@ from kailash.nodes.enterprise.batch_processor import BatchProcessorNode
 from kailash.nodes.security.rotating_credentials import RotatingCredentialNode
 
 # Create enterprise workflow
-workflow = Workflow("enterprise_data_platform", "Enterprise Data Platform")
+workflow = WorkflowBuilder()
 
 # 1. Set up credential rotation
-workflow.add_node("credential_rotation", RotatingCredentialNode(
-    name="credential_rotation",
-    operation="start_rotation",
-    credential_name="platform_credentials",
-    check_interval=3600,
-    expiration_threshold=86400,
-    refresh_sources=["vault", "aws_secrets"],
-    zero_downtime=True,
-    notification_webhooks=["https://alerts.company.com/webhook"]
-))
+workflow.add_node("RotatingCredentialNode", "credential_rotation", {}))
 
 # 2. Apply business workflow template
 template_node = BusinessWorkflowTemplates.data_processing_pipeline(
@@ -858,29 +841,14 @@ template_node = BusinessWorkflowTemplates.data_processing_pipeline(
 )
 
 # 3. Add data lineage tracking
-workflow.add_node("lineage_tracker", DataLineageNode(
-    name="lineage_tracker",
-    operation="track_transformation",
-    source_info={"system": "Source", "table": "raw_data"},
-    transformation_type="enrichment",
-    compliance_frameworks=["GDPR", "SOX"],
-    audit_trail_enabled=True
-))
+workflow.add_node("DataLineageNode", "lineage_tracker", {}))
 
 # 4. Add batch processing optimization
-workflow.add_node("batch_processor", BatchProcessorNode(
-    name="batch_processor",
-    operation="process_data_batches",
-    batch_size=1000,
-    processing_strategy="adaptive_parallel",
-    max_concurrent_batches=10,
-    rate_limit_per_second=50,
-    enable_performance_monitoring=True
-))
+workflow.add_node("BatchProcessorNode", "batch_processor", {}))
 
 # Connect the workflow
-workflow.connect(template_node, "lineage_tracker")
-workflow.connect("lineage_tracker", "batch_processor")
+workflow.add_connection(template_node, "lineage_tracker")
+workflow.add_connection("lineage_tracker", "result", "batch_processor", "input")
 
 # Execute with comprehensive monitoring
 runtime = LocalRuntime(

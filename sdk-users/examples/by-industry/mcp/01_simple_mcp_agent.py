@@ -4,24 +4,23 @@ Description: Basic example of an LLM agent using MCP tools
 Requirements: None (uses mock MCP server)
 """
 
-from kailash import Workflow
-from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 def main():
     # Create workflow
-    workflow = Workflow("simple-mcp-agent", "Simple MCP Agent")
+    workflow = WorkflowBuilder()
 
     # Add LLM agent node
-    workflow.add_node("assistant", LLMAgentNode())
+    workflow.add_node("LLMAgentNode", "assistant", {})
 
     # Create runtime
     runtime = LocalRuntime()
 
     # Execute with MCP configuration
     results, run_id = runtime.execute(
-        workflow,
+        workflow.build(),
         parameters={
             "assistant": {
                 # Use mock provider for testing (no API key needed)

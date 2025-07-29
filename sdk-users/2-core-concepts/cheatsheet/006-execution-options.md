@@ -3,7 +3,7 @@
 ## Standard Execution Pattern
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -13,15 +13,16 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Always use runtime for workflow execution
 runtime = LocalRuntime()
 
 # Basic execution (no parameter overrides)
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 # Execution with parameter overrides
 runtime = LocalRuntime()
@@ -56,17 +57,17 @@ from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.transform import DataTransformerNode
 
 # Option 1: Source nodes (self-contained)
-workflow.add_node("reader", CSVReaderNode(file_path="data.csv"))
+workflow.add_node("CSVReaderNode", "reader", {}))
 # No external input needed
 
 # Option 2: External data injection (flexible)
-workflow.add_node("processor", DataTransformerNode())
+workflow.add_node("DataTransformerNode", "processor", {}))
 runtime.execute(workflow, parameters={
     "processor": {"data": [1, 2, 3], "config": {...}}
 })
 
 # Option 3: Hybrid (source + override)
-workflow.add_node("reader", CSVReaderNode(), file_path="default.csv")
+workflow.add_node("CSVReaderNode", "reader", {}), file_path="default.csv")
 runtime.execute(workflow, parameters={
     "reader": {"file_path": "custom.csv"}  # Override at runtime
 })
@@ -76,14 +77,14 @@ runtime.execute(workflow, parameters={
 ## Common Execution Mistakes
 ```python
 # ❌ WRONG - Using wrong parameter name
-runtime.execute(workflow, inputs={"data": [1, 2, 3]})  # Should be 'parameters', not 'inputs'
+runtime.execute(workflow, parameters={"data": [1, 2, 3]})  # Should be 'parameters', not 'inputs'
 
 # ❌ WRONG - Passing as positional argument
 runtime.execute(workflow, {"node": {"param": "value"}})  # Must use parameters=...
 
 # ❌ WRONG - Wrong return value handling
-results = runtime.execute(workflow)  # Returns tuple (results, run_id)
-results, run_id = workflow.execute(inputs={})  # Returns only results
+results = runtime.execute(workflow.build())  # Returns tuple (results, run_id)
+results, run_id = runtime.execute(workflow.build(), parameters={})  # Returns only results
 
 ```
 

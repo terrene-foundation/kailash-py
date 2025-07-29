@@ -70,7 +70,7 @@ result = {'processed_items': limited, 'total_processed': len(limited)}
 })
 
 # ✅ GOOD: Runtime data through connections
-workflow.connect("data_source", "result", mapping={"data_processor": "input_data"})
+workflow.add_connection("data_source", "result", "data_processor", "input_data")
 ```
 
 ### Environment-Specific Settings
@@ -247,8 +247,8 @@ def create_data_ingestion_workflow():
     workflow.add_node("PythonCodeNode", "summary_reporter", {...})
 
     # Connect phases logically
-    workflow.connect("raw_data_reader", "result", mapping={"data_validator": "input_data"})
-    workflow.connect("data_validator", "result", mapping={"data_cleaner": "input_data"})
+    workflow.add_connection("raw_data_reader", "result", "data_validator", "input_data")
+    workflow.add_connection("data_validator", "result", "data_cleaner", "input_data")
     # ... more connections
 
     return workflow

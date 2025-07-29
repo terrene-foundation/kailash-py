@@ -982,17 +982,6 @@ def create_cyclic_workflow_with_packager() -> Workflow:
     # Packager to switch
     workflow.connect("packager", "switch", {"result.switch_data": "input_data"})
 
-    # Cycle back when not converged
-    workflow.connect(
-        "switch",
-        "optimizer",
-        condition="false_output",
-        mapping={"false_output.process_metrics": "process_metrics"},
-        cycle=True,
-        max_iterations=30,
-        convergence_check="optimization_score >= 0.95",
-    )
-
     # Exit path when converged
     workflow.connect(
         "switch",
@@ -1004,7 +993,20 @@ def create_cyclic_workflow_with_packager() -> Workflow:
     # Final output
     workflow.connect("aggregator", "writer", {"result": "data"})
 
-    return workflow
+    # Build workflow first, then create cycle
+    built_workflow = workflow.build()
+    cycle_builder = built_workflow.create_cycle("packager_optimization_cycle")
+    cycle_builder.connect(
+        "switch",
+        "optimizer",
+        condition="false_output",
+        mapping={"false_output.process_metrics": "process_metrics"},
+    )
+    cycle_builder.max_iterations(30)
+    cycle_builder.converge_when("optimization_score >= 0.95")
+    cycle_builder.build()
+
+    return built_workflow
 
 
 def create_enterprise_cycle_aware_workflow() -> Workflow:
@@ -1235,17 +1237,6 @@ def create_enterprise_cycle_aware_workflow() -> Workflow:
         },
     )
 
-    # Cycle back when not converged
-    workflow.connect(
-        "cycle_switch",
-        "process_optimizer",
-        condition="false_output",
-        mapping={"false_output.metrics": "process_metrics"},
-        cycle=True,
-        max_iterations=50,
-        convergence_check="converged == True",
-    )
-
     # Exit path when converged
     workflow.connect(
         "cycle_switch",
@@ -1274,7 +1265,20 @@ def create_enterprise_cycle_aware_workflow() -> Workflow:
 
     workflow.connect("result_aggregator", "detailed_writer", {"result": "data"})
 
-    return workflow
+    # Build workflow first, then create cycle
+    built_workflow = workflow.build()
+    cycle_builder = built_workflow.create_cycle("enterprise_cycle_aware_cycle")
+    cycle_builder.connect(
+        "cycle_switch",
+        "process_optimizer",
+        condition="false_output",
+        mapping={"false_output.metrics": "process_metrics"},
+    )
+    cycle_builder.max_iterations(50)
+    cycle_builder.converge_when("converged == True")
+    cycle_builder.build()
+
+    return built_workflow
 
 
 def run_enterprise_example():

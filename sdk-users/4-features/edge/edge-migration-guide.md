@@ -20,40 +20,39 @@ The Edge Migration system provides:
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
-import asyncio
 
-async def basic_migration():
+def basic_migration():
     workflow = WorkflowBuilder()
-    
+
     # Plan a migration - shared state automatically available to other nodes
     workflow.add_node("EdgeMigrationNode", "plan", {
         "operation": "plan_migration",
         "source_edge": "edge-west-1",
-        "target_edge": "edge-east-1", 
+        "target_edge": "edge-east-1",
         "workloads": ["api-service", "cache-layer"],
         "strategy": "live"
     })
-    
+
     # Check migration status (demonstrates shared state access)
     workflow.add_node("EdgeMigrationNode", "status", {
         "operation": "get_active_migrations"
     })
-    
+
     # Connect for sequential execution
     workflow.add_connection("plan", "status", "status", "input")
-    
+
     # Execute
     runtime = LocalRuntime()
-    results, run_id = await runtime.execute_async(workflow.build())
-    
+    results, run_id = runtime.execute(workflow.build())
+
     # Migration plan is now accessible across all EdgeMigrationNode instances
     migration_id = results["plan"]["plan"]["migration_id"]
     print(f"Migration {migration_id} planned and visible system-wide")
-    
+
     return results
 
 # Run the migration
-asyncio.run(basic_migration())
+basic_migration()
 ```
 
 ## Migration Strategies
@@ -177,7 +176,7 @@ workflow.add_node("EdgeMigrationNode", "metrics", {
 # Connect for continuous monitoring
 # Pass migration_id from migrate result to progress
 workflow.add_connection("migrate", "result", "progress", "migration_id")
-workflow.add_connection("progress", "progress", "metrics", "parameters")
+workflow.add_connection("progress", "result", "metrics", "input")
 ```
 
 ## Pause and Resume
@@ -185,11 +184,10 @@ workflow.add_connection("progress", "progress", "metrics", "parameters")
 For long-running migrations using shared state coordination:
 
 ```python
-import asyncio
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
-async def pause_resume_migration():
+def pause_resume_migration():
     # Create migration plan in first workflow
     plan_workflow = WorkflowBuilder()
     plan_workflow.add_node("EdgeMigrationNode", "plan", {
@@ -199,32 +197,32 @@ async def pause_resume_migration():
         "workloads": ["long-running-service"],
         "strategy": "incremental"
     })
-    
+
     runtime = LocalRuntime()
-    plan_results, _ = await runtime.execute_async(plan_workflow.build())
+    plan_results, _ = runtime.execute(plan_workflow.build())
     migration_id = plan_results["plan"]["plan"]["migration_id"]
-    
+
     # Pause migration in separate workflow (shared state coordination)
     pause_workflow = WorkflowBuilder()
     pause_workflow.add_node("EdgeMigrationNode", "pause", {
-        "operation": "pause_migration", 
+        "operation": "pause_migration",
         "migration_id": migration_id
     })
-    
-    await runtime.execute_async(pause_workflow.build())
-    
+
+    runtime.execute(pause_workflow.build())
+
     # Resume migration later (again using shared state)
     resume_workflow = WorkflowBuilder()
     resume_workflow.add_node("EdgeMigrationNode", "resume", {
         "operation": "resume_migration",
         "migration_id": migration_id
     })
-    
-    resume_results, _ = await runtime.execute_async(resume_workflow.build())
+
+    resume_results, _ = runtime.execute(resume_workflow.build())
     return resume_results
 
 # Run pause/resume example
-asyncio.run(pause_resume_migration())
+pause_resume_migration()
 ```
 
 ## Rollback Capabilities
@@ -291,8 +289,8 @@ workflow.add_node("EdgeMonitoringNode", "analytics", {
 })
 
 # Connect for integrated monitoring
-workflow.add_connection("monitor", "status", "migrate", "parameters")
-workflow.add_connection("migrate", "plan", "analytics", "parameters")
+workflow.add_connection("monitor", "status", "migrate", "input")
+workflow.add_connection("migrate", "plan", "analytics", "migration_info")
 ```
 
 ## Shared State Architecture
@@ -302,64 +300,63 @@ The EdgeMigrationNode uses a singleton EdgeMigrationService for shared state coo
 ### Cross-Workflow Coordination
 
 ```python
-import asyncio
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
-async def cross_workflow_coordination():
+def cross_workflow_coordination():
     """Demonstrates migration coordination across separate workflows."""
     runtime = LocalRuntime()
-    
+
     # Workflow 1: Planning team creates migration plan
     planning_workflow = WorkflowBuilder()
     planning_workflow.add_node("EdgeMigrationNode", "plan", {
         "operation": "plan_migration",
         "source_edge": "datacenter-east",
-        "target_edge": "datacenter-west", 
+        "target_edge": "datacenter-west",
         "workloads": ["user-service", "auth-service"],
         "strategy": "staged",
         "priority": 8
     })
-    
+
     plan_results, _ = await runtime.execute_async(planning_workflow.build())
     migration_id = plan_results["plan"]["plan"]["migration_id"]
     print(f"Planning team created migration: {migration_id}")
-    
+
     # Workflow 2: Operations team monitors (different workflow, same state)
     monitoring_workflow = WorkflowBuilder()
     monitoring_workflow.add_node("EdgeMigrationNode", "check_active", {
         "operation": "get_active_migrations"
     })
-    
-    monitor_results, _ = await runtime.execute_async(monitoring_workflow.build())
+
+    monitor_results, _ = runtime.execute(monitoring_workflow.build())
     active_migrations = monitor_results["check_active"]["migrations"]
     active_ids = [m["migration_id"] for m in active_migrations]
-    
+
     # Migration created by planning team should be visible to operations team
     assert migration_id in active_ids, "Shared state coordination working"
     print(f"Operations team sees migration: {migration_id}")
-    
+
     # Workflow 3: Execution team pauses migration (shared state access)
-    execution_workflow = WorkflowBuilder() 
+    execution_workflow = WorkflowBuilder()
     execution_workflow.add_node("EdgeMigrationNode", "pause", {
         "operation": "pause_migration",
         "migration_id": migration_id
     })
-    
-    await runtime.execute_async(execution_workflow.build())
+
+    runtime.execute(execution_workflow.build())
     print(f"Execution team paused migration: {migration_id}")
-    
+
     return {"migration_id": migration_id, "workflows_coordinated": 3}
 
 # Run cross-workflow example
-asyncio.run(cross_workflow_coordination())
+cross_workflow_coordination()
 ```
 
 ### Thread-Safe Operations
 
 All EdgeMigrationNode instances automatically share state through thread-safe operations:
 - Migration plans created by any node are visible to all other nodes
-- Progress updates are synchronized across all instances  
+- Progress updates are synchronized across all instances
 - Concurrent operations are safely coordinated with locks
 - No manual state synchronization required
 
@@ -418,11 +415,7 @@ workflow.add_node("EdgeMigrationNode", "migrate", {
 })
 
 # Only migrate if resources available
-workflow.add_connection(
-    "check_resources", "health",
-    "migrate", "parameters",
-    condition="health.target-edge.cpu_usage < 70"
-)
+workflow.add_connection("check_resources", "result", "health", "input")
 ```
 
 ### 4. Testing and Validation
@@ -444,25 +437,25 @@ workflow.add_node("EdgeMigrationNode", "validate", {
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
-async def migrate_application_stack():
+def migrate_application_stack():
     """Migrate complete application stack between regions."""
-    
+
     workflow = WorkflowBuilder()
-    
+
     # 1. Start migration service
     workflow.add_node("EdgeMigrationNode", "start_service", {
         "operation": "start_migrator",
         "checkpoint_interval": 30,
         "bandwidth_limit_mbps": 500
     })
-    
+
     # 2. Enable monitoring
     workflow.add_node("EdgeMonitoringNode", "monitor", {
         "operation": "start_monitor",
         "edge_nodes": ["us-west", "us-east"],
         "anomaly_detection": True
     })
-    
+
     # 3. Migrate database first (incremental)
     workflow.add_node("EdgeMigrationNode", "migrate_db", {
         "operation": "plan_migration",
@@ -472,12 +465,12 @@ async def migrate_application_stack():
         "strategy": "incremental",
         "priority": 9
     })
-    
+
     # 4. Execute database migration
     workflow.add_node("EdgeMigrationNode", "exec_db", {
         "operation": "execute_migration"
     })
-    
+
     # 5. Migrate application tier (staged)
     workflow.add_node("EdgeMigrationNode", "migrate_app", {
         "operation": "plan_migration",
@@ -487,12 +480,12 @@ async def migrate_application_stack():
         "strategy": "staged",
         "priority": 8
     })
-    
+
     # 6. Execute application migration
     workflow.add_node("EdgeMigrationNode", "exec_app", {
         "operation": "execute_migration"
     })
-    
+
     # 7. Migrate cache layer (live)
     workflow.add_node("EdgeMigrationNode", "migrate_cache", {
         "operation": "plan_migration",
@@ -502,48 +495,47 @@ async def migrate_application_stack():
         "strategy": "live",
         "priority": 7
     })
-    
+
     # 8. Execute cache migration
     workflow.add_node("EdgeMigrationNode", "exec_cache", {
         "operation": "execute_migration"
     })
-    
+
     # 9. Final validation
     workflow.add_node("EdgeMonitoringNode", "validate", {
         "operation": "get_analytics",
         "edge_nodes": ["us-east"],
         "metrics": ["latency", "error_rate", "throughput"]
     })
-    
+
     # 10. Get migration report
     workflow.add_node("EdgeMigrationNode", "report", {
         "operation": "get_metrics"
     })
-    
+
     # Connect workflow
     workflow.add_connection("start_service", "status", "monitor", "input")
     workflow.add_connection("monitor", "status", "migrate_db", "input")
     # With shared state, migration_id is automatically accessible across nodes
-    workflow.add_connection("migrate_db", "status", "exec_db", "input") 
+    workflow.add_connection("migrate_db", "status", "exec_db", "input")
     workflow.add_connection("exec_db", "status", "migrate_app", "input")
     workflow.add_connection("migrate_app", "status", "exec_app", "input")
     workflow.add_connection("exec_app", "status", "migrate_cache", "input")
     workflow.add_connection("migrate_cache", "status", "exec_cache", "input")
     workflow.add_connection("exec_cache", "status", "validate", "input")
     workflow.add_connection("validate", "analytics", "report", "input")
-    
+
     # Execute migration
     runtime = LocalRuntime()
-    results, run_id = await runtime.execute_async(workflow.build())
-    
+    results, run_id = runtime.execute(workflow.build())
+
     # Check results
     print(f"Migration completed: {results['report']['metrics']}")
     return results
 
 # Run the migration
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(migrate_application_stack())
+    migrate_application_stack()
 ```
 
 ## Troubleshooting

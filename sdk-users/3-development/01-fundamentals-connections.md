@@ -26,7 +26,7 @@ result = {'doubled_items': doubled}
 })
 
 # Simple connection (passes entire result)
-workflow.connect("source", "result", mapping={"processor": "input_data"})
+workflow.add_connection("source", "result", "processor", "input_data")
 ```
 
 ### Nested Data Access
@@ -59,8 +59,8 @@ result = {'averages': avg_scores}
 })
 
 # Connect with dot notation
-workflow.connect("complex_source", "result.users", mapping={"score_analyzer": "users"})
-workflow.connect("complex_source", "result.metadata.total_users", mapping={"score_analyzer": "input_data"})
+workflow.add_connection("complex_source", "result.users", "score_analyzer", "users")
+workflow.add_connection("complex_source", "result.metadata.total_users", "score_analyzer", "input_data")
 ```
 
 ## 🔀 Advanced Routing Patterns
@@ -96,8 +96,8 @@ result = {'combined_data': combined}
 })
 
 # Multiple connections to same node
-workflow.connect("user_source", "result", mapping={"combiner": "users"})
-workflow.connect("score_source", "result", mapping={"combiner": "scores"})
+workflow.add_connection("user_source", "result", "combiner", "users")
+workflow.add_connection("score_source", "result", "combiner", "scores")
 ```
 
 ### Conditional Routing
@@ -125,8 +125,8 @@ result = {'regular_performers': regular_scorers, 'category': 'good'}
 })
 
 # Same source to multiple processors
-workflow.connect("scored_data", "result", mapping={"high_score_processor": "input_data"})
-workflow.connect("scored_data", "result", mapping={"regular_processor": "input_data"})
+workflow.add_connection("scored_data", "result", "high_score_processor", "input_data")
+workflow.add_connection("scored_data", "result", "regular_processor", "input_data")
 ```
 
 ## 🔄 Data Transformation Patterns
@@ -166,9 +166,9 @@ result = {'total': total, 'average': average, 'count': len(input_data)}
 })
 
 # Chain connections
-workflow.connect("raw_data", "result", mapping={"filter_step": "input_data"})
-workflow.connect("filter_step", "result", mapping={"transform_step": "input_data"})
-workflow.connect("transform_step", "result", mapping={"aggregate_step": "input_data"})
+workflow.add_connection("raw_data", "result", "filter_step", "input_data")
+workflow.add_connection("filter_step", "result", "transform_step", "input_data")
+workflow.add_connection("transform_step", "result", "aggregate_step", "input_data")
 ```
 
 ## ✅ Connection Best Practices
@@ -176,12 +176,12 @@ workflow.connect("transform_step", "result", mapping={"aggregate_step": "input_d
 ### Clear Data Flow
 ```python
 # ✅ GOOD: Clear, descriptive connections
-workflow.connect("user_reader", "result", mapping={"validator": "users"})
-workflow.connect("validator", "validated_users", mapping={"processor": "input_data"})
+workflow.add_connection("user_reader", "result", "validator", "users")
+workflow.add_connection("validator", "validated_users", "processor", "input_data")
 
 # ❌ AVOID: Unclear data flow
-# workflow.connect("node1", "result", mapping={"node2": "input_data"})
-# workflow.connect("node2", "result", mapping={"node3": "input_data"})
+# workflow.add_connection("node1", "result", "node2", "input_data")
+# workflow.add_connection("node2", "result", "node3", "input_data")
 ```
 
 ### Error Handling

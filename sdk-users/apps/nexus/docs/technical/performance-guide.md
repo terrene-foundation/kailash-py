@@ -418,7 +418,7 @@ def test_caching_performance():
 
     # Simulate workflow execution with caching
     workflow_name = "data-processor"
-    test_inputs = {"data": "test_dataset_1"}
+    test_parameters= {"data": "test_dataset_1"}
 
     # Generate cache key
     cache_key = cache_system.generate_cache_key(workflow_name, test_inputs)

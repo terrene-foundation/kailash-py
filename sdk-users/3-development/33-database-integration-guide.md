@@ -19,74 +19,85 @@ The Kailash SDK provides robust database integration capabilities supporting SQL
 Production-ready SQL database integration with connection pooling.
 
 ```python
-from kailash.nodes.data.sql import SQLDatabaseNode
-from kailash.nodes.data.async_connection import AsyncConnectionManager
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Initialize SQL database node
-sql_node = SQLDatabaseNode(
-    name="main_database",
-
+# Create workflow with SQL database node
+workflow = WorkflowBuilder()
+workflow.add_node("SQLDatabaseNode", "main_database", {
     # Database configuration
-    connection_string="postgresql://user:password@localhost:5432/production_db",
+    "connection_string": "postgresql://user:password@localhost:5432/production_db",
 
     # Connection pool settings
-    pool_size=20,
-    max_overflow=30,
-    pool_timeout=30,
-    pool_recycle=3600,  # Recycle connections every hour
+    "pool_size": 20,
+    "max_overflow": 30,
+    "pool_timeout": 30,
+    "pool_recycle": 3600,  # Recycle connections every hour
 
     # Query configuration
-    query_timeout=30,
-    enable_query_logging=True,
+    "query_timeout": 30,
+    "enable_query_logging": True,
 
     # Security settings
-    enable_access_control=True,
-    enable_data_masking=True,
+    "enable_access_control": True,
+    "enable_data_masking": True,
 
     # Performance settings
-    enable_query_cache=True,
-    cache_ttl=300,
+    "enable_query_cache": True,
+    "cache_ttl": 300,
 
     # Connection health
-    health_check_query="SELECT 1",
-    health_check_interval=60
-)
+    "health_check_query": "SELECT 1",
+    "health_check_interval": 60
+})
 
 # Basic database operations
 async def basic_database_operations():
     """Demonstrate basic database operations."""
 
-    # Simple query
-    users = await sql_node.run(
-        query="SELECT id, name, email FROM users WHERE active = %(active)s",
-        parameters={"active": True},
-        result_format="dict"
-    )
+    runtime = LocalRuntime()
 
+    # Simple query
+    query_workflow = WorkflowBuilder()
+    query_workflow.add_node("SQLDatabaseNode", "query_users", {
+        "connection_string": "postgresql://user:password@localhost:5432/production_db",
+        "query": "SELECT id, name, email FROM users WHERE active = :active",
+        "parameters": {"active": True},
+        "result_format": "dict"
+    })
+
+    results, _ = await runtime.execute_async(query_workflow.build())
+    users = results["query_users"]["result"]
     print(f"Found {len(users['data'])} active users")
 
     # Insert operation with transaction
-    new_user_result = await sql_node.run(
-        query="""
+    insert_workflow = WorkflowBuilder()
+    insert_workflow.add_node("SQLDatabaseNode", "insert_user", {
+        "connection_string": "postgresql://user:password@localhost:5432/production_db",
+        "query": """
         INSERT INTO users (name, email, department, created_at)
-        VALUES (%(name)s, %(email)s, %(department)s, NOW())
+        VALUES (:name, :email, :department, NOW())
         RETURNING id, created_at
         """,
-        parameters={
+        "parameters": {
             "name": "John Doe",
             "email": "john.doe@company.com",
             "department": "Engineering"
         },
-        result_format="dict",
-        use_transaction=True
-    )
+        "result_format": "dict",
+        "use_transaction": True
+    })
 
+    results, _ = await runtime.execute_async(insert_workflow.build())
+    new_user_result = results["insert_user"]["result"]
     user_id = new_user_result['data'][0]['id']
     print(f"Created user with ID: {user_id}")
 
     # Complex analytical query
-    analytics = await sql_node.run(
-        query="""
+    analytics_workflow = WorkflowBuilder()
+    analytics_workflow.add_node("SQLDatabaseNode", "analytics_query", {
+        "connection_string": "postgresql://user:password@localhost:5432/production_db",
+        "query": """
         SELECT
             department,
             COUNT(*) as employee_count,
@@ -119,9 +130,9 @@ High-performance async database operations for concurrent workloads.
 ```python
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-# Initialize async SQL node
-async_sql_node = AsyncSQLDatabaseNode(
-    name="async_database",
+# Create workflow with async SQL node
+async_workflow = WorkflowBuilder()
+async_workflow.add_node("AsyncSQLDatabaseNode", "async_database", {
 
     # Database configuration
     database_type="postgresql",
@@ -163,25 +174,31 @@ async def advanced_async_operations():
         {"name": "Carol Davis", "email": "carol@company.com", "department": "Engineering"}
     ]
 
-    batch_insert_result = await async_sql_node.run(
-        query="""
+    batch_workflow = WorkflowBuilder()
+    batch_workflow.add_node("AsyncSQLDatabaseNode", "batch_insert", {
+        "connection_string": "postgresql://user:password@localhost:5432/production_db",
+        "query": """
         INSERT INTO users (name, email, department, created_at)
-        VALUES (%(name)s, %(email)s, %(department)s, NOW())
+        VALUES (:name, :email, :department, NOW())
         RETURNING id, name
         """,
-        parameters=user_data,  # Batch parameters
-        fetch_mode="all",
-        use_transaction=True,
-        isolation_level="READ_COMMITTED"
-    )
+        "parameters": user_data,  # Batch parameters
+        "fetch_mode": "all",
+        "use_transaction": True,
+        "isolation_level": "READ_COMMITTED"
+    })
+
+    runtime = LocalRuntime()
+    batch_results, _ = await runtime.execute_async(batch_workflow.build())
+    batch_insert_result = batch_results["batch_insert"]["result"]
 
     print(f"Batch inserted {len(batch_insert_result['data'])} users")
 
     # Streaming large result set
-    large_dataset_results = []
-
-    async for batch in async_sql_node.stream_query(
-        query="""
+    stream_workflow = WorkflowBuilder()
+    stream_workflow.add_node("AsyncSQLDatabaseNode", "stream_query", {
+        "connection_string": "postgresql://user:password@localhost:5432/production_db",
+        "query": """
         SELECT u.id, u.name, u.email, u.department, u.created_at,
                p.project_name, p.status, p.deadline
         FROM users u
@@ -190,35 +207,53 @@ async def advanced_async_operations():
         WHERE u.active = true
         ORDER BY u.created_at DESC
         """,
-        batch_size=500,
-        stream_timeout=30
-    ):
-        large_dataset_results.extend(batch)
-        print(f"Processed batch of {len(batch)} records")
+        "operation": "stream",
+        "batch_size": 500,
+        "stream_timeout": 30
+    })
+
+    runtime = LocalRuntime()
+    stream_results, _ = await runtime.execute_async(stream_workflow.build())
+    large_dataset_results = stream_results["stream_query"]["result"]["data"]
+    print(f"Streamed total of {len(large_dataset_results)} records")
 
     print(f"Streamed total of {len(large_dataset_results)} records")
 
     # Complex transaction with multiple operations
-    async with async_sql_node.transaction() as tx:
-        # Update user status
-        await tx.execute(
-            "UPDATE users SET last_login = NOW() WHERE id = %(user_id)s",
-            {"user_id": 123}
-        )
+    transaction_workflow = WorkflowBuilder()
 
-        # Log activity
-        await tx.execute(
-            "INSERT INTO user_activity (user_id, activity_type, timestamp) VALUES (%(user_id)s, %(activity)s, NOW())",
-            {"user_id": 123, "activity": "login"}
-        )
+    # Update user status
+    transaction_workflow.add_node("AsyncSQLDatabaseNode", "update_status", {
+        "connection_string": "postgresql://user:password@localhost:5432/production_db",
+        "query": "UPDATE users SET last_login = NOW() WHERE id = :user_id",
+        "parameters": {"user_id": 123},
+        "use_transaction": True
+    })
 
-        # Update session
-        session_result = await tx.fetch_one(
-            "INSERT INTO user_sessions (user_id, session_token, expires_at) VALUES (%(user_id)s, %(token)s, %(expires)s) RETURNING session_id",
-            {"user_id": 123, "token": "abc123", "expires": "2024-12-31 23:59:59"}
-        )
+    # Log activity
+    transaction_workflow.add_node("AsyncSQLDatabaseNode", "log_activity", {
+        "connection_string": "postgresql://user:password@localhost:5432/production_db",
+        "query": "INSERT INTO user_activity (user_id, activity_type, timestamp) VALUES (:user_id, :activity, NOW())",
+        "parameters": {"user_id": 123, "activity": "login"},
+        "use_transaction": True
+    })
 
-        session_id = session_result['session_id']
+    # Update session
+    transaction_workflow.add_node("AsyncSQLDatabaseNode", "update_session", {
+        "connection_string": "postgresql://user:password@localhost:5432/production_db",
+        "query": "INSERT INTO user_sessions (user_id, session_token, expires_at) VALUES (:user_id, :token, :expires) RETURNING session_id",
+        "parameters": {"user_id": 123, "token": "abc123", "expires": "2024-12-31 23:59:59"},
+        "use_transaction": True,
+        "fetch_mode": "one"
+    })
+
+    # Connect in sequence for transaction ordering
+    transaction_workflow.add_connection("update_status", "result", "log_activity", "previous_result")
+    transaction_workflow.add_connection("log_activity", "result", "update_session", "previous_result")
+
+    runtime = LocalRuntime()
+    tx_results, _ = await runtime.execute_async(transaction_workflow.build())
+    session_id = tx_results["update_session"]["result"]["data"]["session_id"]
 
     return {
         "batch_inserted": len(batch_insert_result['data']),
@@ -240,31 +275,30 @@ Advanced vector search capabilities for AI and ML applications.
 from kailash.nodes.data.async_vector import AsyncPostgreSQLVectorNode
 import numpy as np
 
-# Initialize vector database node
-vector_node = AsyncPostgreSQLVectorNode(
-    name="vector_database",
-
+# Initialize vector database workflow
+vector_workflow = WorkflowBuilder()
+vector_workflow.add_node("AsyncPostgreSQLVectorNode", "vector_database", {
     # PostgreSQL connection
-    connection_string="postgresql://user:password@localhost:5432/vector_db",
+    "connection_string": "postgresql://user:password@localhost:5432/vector_db",
 
     # Vector configuration
-    vector_dimension=1536,  # OpenAI embedding dimension
-    distance_metric="cosine",  # "l2", "cosine", "inner_product"
-    index_type="hnsw",  # "hnsw", "ivfflat"
+    "vector_dimension": 1536,  # OpenAI embedding dimension
+    "distance_metric": "cosine",  # "l2", "cosine", "inner_product"
+    "index_type": "hnsw",  # "hnsw", "ivfflat"
 
     # Index parameters
-    hnsw_m=16,           # Number of bi-directional links
-    hnsw_ef_construction=64,  # Size of dynamic candidate list
+    "hnsw_m": 16,           # Number of bi-directional links
+    "hnsw_ef_construction": 64,  # Size of dynamic candidate list
 
     # Performance settings
-    batch_size=1000,
-    enable_parallel_indexing=True,
+    "batch_size": 1000,
+    "enable_parallel_indexing": True,
 
     # Schema configuration
-    table_name="document_embeddings",
-    vector_column="embedding",
-    metadata_columns=["document_id", "title", "content", "tags", "created_at"]
-)
+    "table_name": "document_embeddings",
+    "vector_column": "embedding",
+    "metadata_columns": ["document_id", "title", "content", "tags", "created_at"]
+})
 
 # Vector operations
 async def vector_database_operations():
@@ -302,61 +336,85 @@ async def vector_database_operations():
     ]
 
     # Batch insert embeddings
-    insert_result = await vector_node.run(
-        operation="insert_batch",
-        data=documents,
-        on_conflict="update"  # Update if document_id already exists
-    )
+    insert_workflow = WorkflowBuilder()
+    insert_workflow.add_node("AsyncPostgreSQLVectorNode", "insert_vectors", {
+        "connection_string": "postgresql://user:password@localhost:5432/vector_db",
+        "operation": "insert_batch",
+        "data": documents,
+        "on_conflict": "update"  # Update if document_id already exists
+    })
+
+    runtime = LocalRuntime()
+    insert_results, _ = await runtime.execute_async(insert_workflow.build())
+    insert_result = insert_results["insert_vectors"]["result"]
 
     print(f"Inserted {insert_result['inserted_count']} embeddings")
 
     # Vector similarity search
     query_embedding = generate_embedding("machine learning algorithms")
 
-    search_results = await vector_node.run(
-        operation="similarity_search",
-        query_vector=query_embedding,
-        limit=5,
-        distance_threshold=0.8,
+    search_workflow = WorkflowBuilder()
+    search_workflow.add_node("AsyncPostgreSQLVectorNode", "similarity_search", {
+        "connection_string": "postgresql://user:password@localhost:5432/vector_db",
+        "operation": "similarity_search",
+        "query_vector": query_embedding,
+        "limit": 5,
+        "distance_threshold": 0.8,
 
         # Metadata filtering
-        filters={
+        "filters": {
             "tags": {"contains": "ml"},
             "created_at": {"gte": "2024-01-01"}
         },
 
         # Return metadata
-        include_metadata=True,
-        include_distances=True
-    )
+        "include_metadata": True,
+        "include_distances": True
+    })
+
+    runtime = LocalRuntime()
+    search_results_data, _ = await runtime.execute_async(search_workflow.build())
+    search_results = search_results_data["similarity_search"]["result"]
 
     print(f"Found {len(search_results['results'])} similar documents")
 
     # Hybrid search (vector + text)
-    hybrid_results = await vector_node.run(
-        operation="hybrid_search",
-        query_vector=query_embedding,
-        text_query="neural networks",
-        vector_weight=0.7,  # 70% vector similarity, 30% text match
-        text_weight=0.3,
-        limit=10,
+    hybrid_workflow = WorkflowBuilder()
+    hybrid_workflow.add_node("AsyncPostgreSQLVectorNode", "hybrid_search", {
+        "connection_string": "postgresql://user:password@localhost:5432/vector_db",
+        "operation": "hybrid_search",
+        "query_vector": query_embedding,
+        "text_query": "neural networks",
+        "vector_weight": 0.7,  # 70% vector similarity, 30% text match
+        "text_weight": 0.3,
+        "limit": 10,
 
         # Advanced filtering
-        filters={
+        "filters": {
             "tags": {"intersects": ["ml", "dl", "algorithms"]},
             "title": {"ilike": "%learning%"}
         }
-    )
+    })
+
+    runtime = LocalRuntime()
+    hybrid_results_data, _ = await runtime.execute_async(hybrid_workflow.build())
+    hybrid_results = hybrid_results_data["hybrid_search"]["result"]
 
     print(f"Hybrid search found {len(hybrid_results['results'])} documents")
 
     # Vector clustering analysis
-    cluster_analysis = await vector_node.run(
-        operation="cluster_analysis",
-        num_clusters=3,
-        clustering_method="kmeans",
-        include_cluster_stats=True
-    )
+    cluster_workflow = WorkflowBuilder()
+    cluster_workflow.add_node("AsyncPostgreSQLVectorNode", "cluster_analysis", {
+        "connection_string": "postgresql://user:password@localhost:5432/vector_db",
+        "operation": "cluster_analysis",
+        "num_clusters": 3,
+        "clustering_method": "kmeans",
+        "include_cluster_stats": True
+    })
+
+    runtime = LocalRuntime()
+    cluster_results, _ = await runtime.execute_async(cluster_workflow.build())
+    cluster_analysis = cluster_results["cluster_analysis"]["result"]
 
     return {
         "inserted_documents": insert_result['inserted_count'],
@@ -375,9 +433,9 @@ vector_result = await vector_database_operations()
 from kailash.nodes.data.vector_db import VectorDatabaseNode
 
 # Pinecone configuration
-pinecone_node = VectorDatabaseNode(
-    name="pinecone_vectors",
-    provider="pinecone",
+vector_workflow = WorkflowBuilder()
+vector_workflow.add_node("VectorDatabaseNode", "pinecone_vectors", {
+    "provider": "pinecone",
 
     # Pinecone configuration
     api_key="your-pinecone-api-key",
@@ -397,9 +455,9 @@ pinecone_node = VectorDatabaseNode(
 )
 
 # Weaviate configuration
-weaviate_node = VectorDatabaseNode(
-    name="weaviate_vectors",
-    provider="weaviate",
+weaviate_workflow = WorkflowBuilder()
+weaviate_workflow.add_node("VectorDatabaseNode", "weaviate_vectors", {
+    "provider": "weaviate",
 
     # Weaviate configuration
     url="http://localhost:8080",
@@ -424,9 +482,11 @@ async def multi_provider_vector_operations():
     """Demonstrate operations across multiple vector database providers."""
 
     # Insert to Pinecone
-    pinecone_result = await pinecone_node.run(
-        operation="upsert",
-        vectors=[
+    pinecone_insert_workflow = WorkflowBuilder()
+    pinecone_insert_workflow.add_node("VectorDatabaseNode", "pinecone_insert", {
+        "provider": "pinecone",
+        "operation": "upsert",
+        "vectors": [
             {
                 "id": "doc_001",
                 "values": generate_embedding("AI and Machine Learning"),
@@ -437,47 +497,69 @@ async def multi_provider_vector_operations():
                 }
             }
         ],
-        namespace="documents"
-    )
+        "namespace": "documents"
+    })
+
+    runtime = LocalRuntime()
+    pinecone_results, _ = await runtime.execute_async(pinecone_insert_workflow.build())
+    pinecone_result = pinecone_results["pinecone_insert"]["result"]
 
     # Insert to Weaviate
-    weaviate_result = await weaviate_node.run(
-        operation="create",
-        data={
+    weaviate_insert_workflow = WorkflowBuilder()
+    weaviate_insert_workflow.add_node("VectorDatabaseNode", "weaviate_insert", {
+        "provider": "weaviate",
+        "operation": "create",
+        "data": {
             "title": "AI and Machine Learning",
             "content": "Comprehensive guide to AI and ML concepts",
             "category": "technology",
             "timestamp": "2024-01-15T10:00:00Z"
         },
-        vector=generate_embedding("AI and Machine Learning"),
-        class_name="Document"
-    )
+        "vector": generate_embedding("AI and Machine Learning"),
+        "class_name": "Document"
+    })
+
+    runtime = LocalRuntime()
+    weaviate_results, _ = await runtime.execute_async(weaviate_insert_workflow.build())
+    weaviate_result = weaviate_results["weaviate_insert"]["result"]
 
     # Cross-provider search comparison
     query_vector = generate_embedding("machine learning algorithms")
 
     # Search Pinecone
-    pinecone_search = await pinecone_node.run(
-        operation="query",
-        vector=query_vector,
-        top_k=5,
-        namespace="documents",
-        filter={"category": {"$eq": "technology"}},
-        include_metadata=True
-    )
+    pinecone_search_workflow = WorkflowBuilder()
+    pinecone_search_workflow.add_node("VectorDatabaseNode", "pinecone_search", {
+        "provider": "pinecone",
+        "operation": "query",
+        "vector": query_vector,
+        "top_k": 5,
+        "namespace": "documents",
+        "filter": {"category": {"$eq": "technology"}},
+        "include_metadata": True
+    })
+
+    runtime = LocalRuntime()
+    pinecone_search_results, _ = await runtime.execute_async(pinecone_search_workflow.build())
+    pinecone_search = pinecone_search_results["pinecone_search"]["result"]
 
     # Search Weaviate
-    weaviate_search = await weaviate_node.run(
-        operation="near_vector",
-        vector=query_vector,
-        limit=5,
-        where={
+    weaviate_search_workflow = WorkflowBuilder()
+    weaviate_search_workflow.add_node("VectorDatabaseNode", "weaviate_search", {
+        "provider": "weaviate",
+        "operation": "near_vector",
+        "vector": query_vector,
+        "limit": 5,
+        "where": {
             "path": ["category"],
             "operator": "Equal",
             "valueText": "technology"
         },
-        class_name="Document"
-    )
+        "class_name": "Document"
+    })
+
+    runtime = LocalRuntime()
+    weaviate_search_results, _ = await runtime.execute_async(weaviate_search_workflow.build())
+    weaviate_search = weaviate_search_results["weaviate_search"]["result"]
 
     return {
         "pinecone_inserted": pinecone_result['upserted_count'],
@@ -495,68 +577,84 @@ async def multi_provider_vector_operations():
 from kailash.nodes.data.async_connection import AsyncConnectionManager
 from kailash.nodes.data.workflow_connection_pool import WorkflowConnectionPool
 
-# Initialize connection manager
-connection_manager = AsyncConnectionManager(
+# Initialize connection manager workflow
+connection_workflow = WorkflowBuilder()
+connection_workflow.add_node("AsyncConnectionManagerNode", "connection_manager", {
     # Multi-tenant configuration
-    enable_multi_tenant=True,
-    tenant_isolation=True,
+    "enable_multi_tenant": True,
+    "tenant_isolation": True,
 
     # Health monitoring
-    health_check_interval=30,
-    health_check_timeout=5,
-    max_health_failures=3,
+    "health_check_interval": 30,
+    "health_check_timeout": 5,
+    "max_health_failures": 3,
 
     # Connection encryption
-    enable_encryption=True,
-    ssl_context="require",
+    "enable_encryption": True,
+    "ssl_context": "require",
 
     # Monitoring
-    enable_metrics=True,
-    metrics_collection_interval=10
-)
+    "enable_metrics": True,
+    "metrics_collection_interval": 10
+})
 
 # Register multiple database connections
-await connection_manager.register_connection(
-    name="primary_postgres",
-    connection_string="postgresql://user:password@db1:5432/app_db",
-    pool_config={
+register_workflow = WorkflowBuilder()
+register_workflow.add_node("AsyncConnectionManagerNode", "register_primary", {
+    "operation": "register_connection",
+    "name": "primary_postgres",
+    "connection_string": "postgresql://user:password@db1:5432/app_db",
+    "pool_config": {
         "min_size": 10,
         "max_size": 50,
         "command_timeout": 30
     }
-)
+})
 
-await connection_manager.register_connection(
-    name="read_replica",
-    connection_string="postgresql://user:password@db2:5432/app_db",
-    pool_config={
+register_workflow.add_node("AsyncConnectionManagerNode", "register_replica", {
+    "operation": "register_connection",
+    "name": "read_replica",
+    "connection_string": "postgresql://user:password@db2:5432/app_db",
+    "pool_config": {
         "min_size": 5,
         "max_size": 25,
         "command_timeout": 30
     },
-    connection_type="read_only"
-)
+    "connection_type": "read_only"
+})
+
+runtime = LocalRuntime()
+await runtime.execute_async(register_workflow.build())
 
 # Use connection manager in workflows
 async def managed_database_workflow():
     """Demonstrate connection management in workflows."""
 
     # Get connection for tenant
-    async with connection_manager.get_connection(
-        name="primary_postgres",
-        tenant_id="tenant_123"
-    ) as conn:
+    conn_workflow = WorkflowBuilder()
+    conn_workflow.add_node("AsyncSQLDatabaseNode", "tenant_query", {
+        "connection_string": "postgresql://user:password@db1:5432/app_db",
+        "query": "SELECT * FROM tenant_data WHERE tenant_id = :tenant_id",
+        "parameters": {"tenant_id": "tenant_123"},
+        "enable_multi_tenant": True,
+        "tenant_id": "tenant_123"
+    })
 
-        # Execute query with managed connection
-        result = await conn.fetch(
-            "SELECT * FROM tenant_data WHERE tenant_id = $1",
-            "tenant_123"
-        )
+    runtime = LocalRuntime()
+    results, _ = await runtime.execute_async(conn_workflow.build())
+    result = results["tenant_query"]["result"]["data"]
 
-        return {"records": len(result)}
+    return {"records": len(result)}
 
 # Monitor connection health
-health_status = await connection_manager.get_health_status()
+health_workflow = WorkflowBuilder()
+health_workflow.add_node("AsyncConnectionManagerNode", "health_check", {
+    "operation": "get_health_status"
+})
+
+runtime = LocalRuntime()
+health_results, _ = await runtime.execute_async(health_workflow.build())
+health_status = health_results["health_check"]["result"]
 print(f"Connection health: {health_status}")
 ```
 
@@ -564,55 +662,66 @@ print(f"Connection health: {health_status}")
 
 ```python
 # Advanced connection pool for workflow-scoped connections
-workflow_pool = WorkflowConnectionPool(
-    name="workflow_connection_pool",
-
+pool_workflow = WorkflowBuilder()
+pool_workflow.add_node("WorkflowConnectionPoolNode", "workflow_connection_pool", {
     # Database configuration
-    database_type="postgresql",
-    host="localhost",
-    port=5432,
-    database="workflow_db",
-    user="workflow_user",
-    password="secure_password",
+    "database_type": "postgresql",
+    "host": "localhost",
+    "port": 5432,
+    "database": "workflow_db",
+    "user": "workflow_user",
+    "password": "secure_password",
 
     # Pool configuration
-    min_connections=5,
-    max_connections=25,
-    health_threshold=75,  # Health score threshold
+    "min_connections": 5,
+    "max_connections": 25,
+    "health_threshold": 75,  # Health score threshold
 
     # Pattern-based pre-warming
-    pre_warm_enabled=True,
-    pre_warm_patterns=[
+    "pre_warm_enabled": True,
+    "pre_warm_patterns": [
         {"hour_range": (8, 18), "target_connections": 15},  # Business hours
         {"hour_range": (18, 8), "target_connections": 8}    # Off hours
     ],
 
     # Adaptive sizing
-    adaptive_sizing_enabled=True,
+    "adaptive_sizing_enabled": True,
 
     # Query routing
-    enable_query_routing=True,
+    "enable_query_routing": True,
 
     # Circuit breaker
-    circuit_breaker_failure_threshold=5,
-    circuit_breaker_recovery_timeout=60,
+    "circuit_breaker_failure_threshold": 5,
+    "circuit_breaker_recovery_timeout": 60,
 
     # Monitoring
-    enable_monitoring=True,
-    metrics_retention_minutes=60
-)
+    "enable_monitoring": True,
+    "metrics_retention_minutes": 60
+})
 
 # Use in workflow
-workflow_pool_result = await workflow_pool.run(
-    operation="execute",
-    query="SELECT COUNT(*) as total_orders, AVG(amount) as avg_amount FROM orders WHERE created_at >= NOW() - INTERVAL '24 hours'",
-    fetch_mode="one"
-)
+pool_query_workflow = WorkflowBuilder()
+pool_query_workflow.add_node("WorkflowConnectionPoolNode", "pool_query", {
+    "operation": "execute",
+    "query": "SELECT COUNT(*) as total_orders, AVG(amount) as avg_amount FROM orders WHERE created_at >= NOW() - INTERVAL '24 hours'",
+    "fetch_mode": "one"
+})
+
+runtime = LocalRuntime()
+pool_results, _ = await runtime.execute_async(pool_query_workflow.build())
+workflow_pool_result = pool_results["pool_query"]["result"]
 
 print(f"Pool query result: {workflow_pool_result}")
 
 # Get pool metrics
-pool_metrics = await workflow_pool.get_metrics()
+metrics_workflow = WorkflowBuilder()
+metrics_workflow.add_node("WorkflowConnectionPoolNode", "get_metrics", {
+    "operation": "get_metrics"
+})
+
+runtime = LocalRuntime()
+metrics_results, _ = await runtime.execute_async(metrics_workflow.build())
+pool_metrics = metrics_results["get_metrics"]["result"]
 print(f"Pool health: {pool_metrics['health']['success_rate']:.2%}")
 ```
 
@@ -623,12 +732,11 @@ print(f"Pool health: {pool_metrics['health']['success_rate']:.2%}")
 ```python
 from kailash.nodes.data.query_router import QueryRouter
 
-# Initialize intelligent query router
-query_router = QueryRouter(
-    name="intelligent_query_router",
-
+# Initialize intelligent query router workflow
+router_workflow = WorkflowBuilder()
+router_workflow.add_node("QueryRouterNode", "intelligent_query_router", {
     # Connection definitions
-    connections={
+    "connections": {
         "primary_write": {
             "connection_string": "postgresql://user:pass@primary:5432/db",
             "capabilities": ["READ_SIMPLE", "READ_COMPLEX", "WRITE_SIMPLE", "WRITE_BULK", "DDL"],
@@ -656,29 +764,35 @@ query_router = QueryRouter(
     },
 
     # Routing configuration
-    enable_load_balancing=True,
-    enable_query_caching=True,
-    cache_ttl=300,
+    "enable_load_balancing": True,
+    "enable_query_caching": True,
+    "cache_ttl": 300,
 
     # Performance monitoring
-    enable_performance_tracking=True,
-    health_check_interval=30
-)
+    "enable_performance_tracking": True,
+    "health_check_interval": 30
+})
 
 # Intelligent query routing
 async def intelligent_query_routing():
     """Demonstrate intelligent query routing."""
 
     # Simple read query -> routed to read replica
-    user_query = await query_router.run(
-        query="SELECT id, name, email FROM users WHERE id = %(user_id)s",
-        parameters={"user_id": 12345},
-        query_type="READ_SIMPLE"  # Auto-detected if not specified
-    )
+    user_query_workflow = WorkflowBuilder()
+    user_query_workflow.add_node("QueryRouterNode", "user_query", {
+        "query": "SELECT id, name, email FROM users WHERE id = :user_id",
+        "parameters": {"user_id": 12345},
+        "query_type": "READ_SIMPLE"  # Auto-detected if not specified
+    })
+
+    runtime = LocalRuntime()
+    user_query_results, _ = await runtime.execute_async(user_query_workflow.build())
+    user_query = user_query_results["user_query"]["result"]
 
     # Complex analytical query -> routed to analytics DB
-    analytics_query = await query_router.run(
-        query="""
+    analytics_query_workflow = WorkflowBuilder()
+    analytics_query_workflow.add_node("QueryRouterNode", "analytics_query", {
+        "query": """
         SELECT
             DATE_TRUNC('month', created_at) as month,
             COUNT(*) as order_count,
@@ -690,15 +804,24 @@ async def intelligent_query_routing():
         GROUP BY month
         ORDER BY month
         """,
-        query_type="READ_COMPLEX"
-    )
+        "query_type": "READ_COMPLEX"
+    })
+
+    runtime = LocalRuntime()
+    analytics_results, _ = await runtime.execute_async(analytics_query_workflow.build())
+    analytics_query = analytics_results["analytics_query"]["result"]
 
     # Write operation -> routed to primary
-    write_query = await query_router.run(
-        query="INSERT INTO user_activities (user_id, activity_type, timestamp) VALUES (%(user_id)s, %(activity)s, NOW())",
-        parameters={"user_id": 12345, "activity": "login"},
-        query_type="WRITE_SIMPLE"
-    )
+    write_query_workflow = WorkflowBuilder()
+    write_query_workflow.add_node("QueryRouterNode", "write_query", {
+        "query": "INSERT INTO user_activities (user_id, activity_type, timestamp) VALUES (:user_id, :activity, NOW())",
+        "parameters": {"user_id": 12345, "activity": "login"},
+        "query_type": "WRITE_SIMPLE"
+    })
+
+    runtime = LocalRuntime()
+    write_results, _ = await runtime.execute_async(write_query_workflow.build())
+    write_query = write_results["write_query"]["result"]
 
     # Bulk write -> routed to primary with optimization
     bulk_data = [
@@ -706,15 +829,27 @@ async def intelligent_query_routing():
         for i in range(1000)
     ]
 
-    bulk_write = await query_router.run(
-        query="INSERT INTO products (product_id, category, price) VALUES (%(product_id)s, %(category)s, %(price)s)",
-        parameters=bulk_data,
-        query_type="WRITE_BULK",
-        batch_size=100
-    )
+    bulk_write_workflow = WorkflowBuilder()
+    bulk_write_workflow.add_node("QueryRouterNode", "bulk_write", {
+        "query": "INSERT INTO products (product_id, category, price) VALUES (:product_id, :category, :price)",
+        "parameters": bulk_data,
+        "query_type": "WRITE_BULK",
+        "batch_size": 100
+    })
+
+    runtime = LocalRuntime()
+    bulk_results, _ = await runtime.execute_async(bulk_write_workflow.build())
+    bulk_write = bulk_results["bulk_write"]["result"]
 
     # Get routing statistics
-    routing_stats = await query_router.get_routing_stats()
+    stats_workflow = WorkflowBuilder()
+    stats_workflow.add_node("QueryRouterNode", "get_stats", {
+        "operation": "get_routing_stats"
+    })
+
+    runtime = LocalRuntime()
+    stats_results, _ = await runtime.execute_async(stats_workflow.build())
+    routing_stats = stats_results["get_stats"]["result"]
 
     return {
         "user_data": user_query['data'],
@@ -735,39 +870,40 @@ routing_result = await intelligent_query_routing()
 ```python
 from kailash.nodes.admin.schema_manager import AdminSchemaManager
 
-# Initialize schema manager
-schema_manager = AdminSchemaManager(
-    name="production_schema_manager",
-
+# Initialize schema manager workflow
+schema_workflow = WorkflowBuilder()
+schema_workflow.add_node("AdminSchemaManagerNode", "production_schema_manager", {
     # Database connection
-    connection_string="postgresql://admin:password@localhost:5432/production_db",
+    "connection_string": "postgresql://admin:password@localhost:5432/production_db",
 
     # Schema configuration
-    schema_version_table="schema_versions",
-    migration_path="/app/migrations",
+    "schema_version_table": "schema_versions",
+    "migration_path": "/app/migrations",
 
     # Validation settings
-    enable_schema_validation=True,
-    validate_foreign_keys=True,
-    validate_indexes=True,
+    "enable_schema_validation": True,
+    "validate_foreign_keys": True,
+    "validate_indexes": True,
 
     # Backup settings
-    enable_schema_backup=True,
-    backup_path="/backups/schema",
+    "enable_schema_backup": True,
+    "backup_path": "/backups/schema",
 
     # Safety settings
-    require_confirmation=True,
-    dry_run_mode=False
-)
+    "require_confirmation": True,
+    "dry_run_mode": False
+})
 
 # Schema operations
 async def schema_management_operations():
     """Demonstrate schema management operations."""
 
     # Create complete schema
-    schema_creation = await schema_manager.run(
-        operation="create_schema",
-        schema_definition={
+    schema_creation_workflow = WorkflowBuilder()
+    schema_creation_workflow.add_node("AdminSchemaManagerNode", "create_schema", {
+        "connection_string": "postgresql://admin:password@localhost:5432/production_db",
+        "operation": "create_schema",
+        "schema_definition": {
             "tables": {
                 "users": {
                     "columns": {
@@ -822,44 +958,66 @@ async def schema_management_operations():
                 }
             }
         },
-        version="1.0.0",
-        backup_existing=True
-    )
+        "version": "1.0.0",
+        "backup_existing": True
+    })
+
+    runtime = LocalRuntime()
+    schema_results, _ = await runtime.execute_async(schema_creation_workflow.build())
+    schema_creation = schema_results["create_schema"]["result"]
 
     # Validate schema health
-    validation_result = await schema_manager.run(
-        operation="validate_schema",
-        validation_checks=[
+    validation_workflow = WorkflowBuilder()
+    validation_workflow.add_node("AdminSchemaManagerNode", "validate_schema", {
+        "connection_string": "postgresql://admin:password@localhost:5432/production_db",
+        "operation": "validate_schema",
+        "validation_checks": [
             "table_structure",
             "foreign_key_constraints",
             "index_integrity",
             "data_consistency"
         ],
-        include_performance_analysis=True
-    )
+        "include_performance_analysis": True
+    })
+
+    runtime = LocalRuntime()
+    validation_results, _ = await runtime.execute_async(validation_workflow.build())
+    validation_result = validation_results["validate_schema"]["result"]
 
     # Migration planning
-    migration_plan = await schema_manager.run(
-        operation="plan_migration",
-        target_schema_version="2.0.0",
-        migration_files=[
+    migration_plan_workflow = WorkflowBuilder()
+    migration_plan_workflow.add_node("AdminSchemaManagerNode", "plan_migration", {
+        "connection_string": "postgresql://admin:password@localhost:5432/production_db",
+        "operation": "plan_migration",
+        "target_schema_version": "2.0.0",
+        "migration_files": [
             "001_add_user_preferences_table.sql",
             "002_add_project_tags_column.sql",
             "003_create_activity_log_table.sql"
         ],
-        analyze_dependencies=True,
-        estimate_downtime=True
-    )
+        "analyze_dependencies": True,
+        "estimate_downtime": True
+    })
+
+    runtime = LocalRuntime()
+    migration_plan_results, _ = await runtime.execute_async(migration_plan_workflow.build())
+    migration_plan = migration_plan_results["plan_migration"]["result"]
 
     # Execute migration (with safety checks)
     if validation_result['health_score'] > 0.95:
-        migration_result = await schema_manager.run(
-            operation="execute_migration",
-            migration_plan=migration_plan,
-            backup_before_migration=True,
-            rollback_on_failure=True,
-            max_downtime_minutes=5
-        )
+        migration_exec_workflow = WorkflowBuilder()
+        migration_exec_workflow.add_node("AdminSchemaManagerNode", "execute_migration", {
+            "connection_string": "postgresql://admin:password@localhost:5432/production_db",
+            "operation": "execute_migration",
+            "migration_plan": migration_plan,
+            "backup_before_migration": True,
+            "rollback_on_failure": True,
+            "max_downtime_minutes": 5
+        })
+
+        runtime = LocalRuntime()
+        migration_exec_results, _ = await runtime.execute_async(migration_exec_workflow.build())
+        migration_result = migration_exec_results["execute_migration"]["result"]
 
         return {
             "schema_created": schema_creation['success'],
@@ -890,61 +1048,70 @@ async def create_production_database_system():
     # Initialize all database components
 
     # 1. Connection management
-    connection_manager = AsyncConnectionManager(
-        enable_multi_tenant=True,
-        health_check_interval=30,
-        enable_encryption=True
-    )
+    conn_mgr_workflow = WorkflowBuilder()
+    conn_mgr_workflow.add_node("AsyncConnectionManagerNode", "connection_manager", {
+        "enable_multi_tenant": True,
+        "health_check_interval": 30,
+        "enable_encryption": True
+    })
 
     # Register connections
-    await connection_manager.register_connection(
-        name="primary_db",
-        connection_string="postgresql://user:pass@primary:5432/prod_db",
-        pool_config={"min_size": 20, "max_size": 100}
-    )
+    register_primary_workflow = WorkflowBuilder()
+    register_primary_workflow.add_node("AsyncConnectionManagerNode", "register_primary", {
+        "operation": "register_connection",
+        "name": "primary_db",
+        "connection_string": "postgresql://user:pass@primary:5432/prod_db",
+        "pool_config": {"min_size": 20, "max_size": 100}
+    })
 
-    await connection_manager.register_connection(
-        name="read_replica",
-        connection_string="postgresql://user:pass@replica:5432/prod_db",
-        pool_config={"min_size": 10, "max_size": 50},
-        connection_type="read_only"
-    )
+    register_replica_workflow = WorkflowBuilder()
+    register_replica_workflow.add_node("AsyncConnectionManagerNode", "register_replica", {
+        "operation": "register_connection",
+        "name": "read_replica",
+        "connection_string": "postgresql://user:pass@replica:5432/prod_db",
+        "pool_config": {"min_size": 10, "max_size": 50},
+        "connection_type": "read_only"
+    })
+
+    runtime = LocalRuntime()
+    await runtime.execute_async(register_primary_workflow.build())
+    await runtime.execute_async(register_replica_workflow.build())
 
     # 2. Query routing
-    query_router = QueryRouter(
-        name="production_router",
-        connections={
+    query_router_workflow = WorkflowBuilder()
+    query_router_workflow.add_node("QueryRouterNode", "production_router", {
+        "connections": {
             "primary": {"capabilities": ["READ_SIMPLE", "READ_COMPLEX", "WRITE_SIMPLE", "WRITE_BULK", "DDL"]},
             "replica": {"capabilities": ["READ_SIMPLE", "READ_COMPLEX"]}
         },
-        enable_load_balancing=True,
-        enable_query_caching=True
-    )
+        "enable_load_balancing": True,
+        "enable_query_caching": True
+    })
 
     # 3. Vector database for AI features
-    vector_db = AsyncPostgreSQLVectorNode(
-        name="ai_vectors",
-        connection_string="postgresql://user:pass@vector:5432/vector_db",
-        vector_dimension=1536,
-        distance_metric="cosine"
-    )
+    vector_db_workflow = WorkflowBuilder()
+    vector_db_workflow.add_node("AsyncPostgreSQLVectorNode", "ai_vectors", {
+        "connection_string": "postgresql://user:pass@vector:5432/vector_db",
+        "vector_dimension": 1536,
+        "distance_metric": "cosine"
+    })
 
     # 4. Schema management
-    schema_manager = AdminSchemaManager(
-        name="schema_manager",
-        connection_string="postgresql://admin:pass@primary:5432/prod_db"
-    )
+    schema_mgr_workflow = WorkflowBuilder()
+    schema_mgr_workflow.add_node("AdminSchemaManagerNode", "schema_manager", {
+        "connection_string": "postgresql://admin:pass@primary:5432/prod_db"
+    })
 
     # 5. Workflow connection pool
-    workflow_pool = WorkflowConnectionPool(
-        name="workflow_pool",
-        database_type="postgresql",
-        host="primary",
-        database="prod_db",
-        min_connections=10,
-        max_connections=50,
-        enable_monitoring=True
-    )
+    pool_workflow = WorkflowBuilder()
+    pool_workflow.add_node("WorkflowConnectionPoolNode", "workflow_pool", {
+        "database_type": "postgresql",
+        "host": "primary",
+        "database": "prod_db",
+        "min_connections": 10,
+        "max_connections": 50,
+        "enable_monitoring": True
+    })
 
     return {
         "connection_manager": connection_manager,
@@ -1011,12 +1178,12 @@ async def production_database_workflow():
     })
 
     # Connect workflow
-    workflow.connect("data_ingester", "data_processor", mapping={"result": "raw_data_result"})
-    workflow.connect("data_processor", "embedding_generator", mapping={"result.processed_records": "data"})
-    workflow.connect("data_processor", "analytics_updater", mapping={"result": "processed_data"})
+    workflow.add_connection("data_ingester", "data_processor", "result", "raw_data_result")
+    workflow.add_connection("data_processor", "embedding_generator", "result.processed_records", "data")
+    workflow.add_connection("data_processor", "analytics_updater", "result", "processed_data")
 
     # Execute workflow
-    workflow_result = await workflow.execute({
+    workflow_result = await runtime.execute(workflow.build(), {
         "data_ingester": {
             "source": "api_endpoint",
             "data": json.dumps({"user_actions": ["login", "view_page", "logout"]})
@@ -1060,30 +1227,58 @@ async def optimized_query_patterns():
     """Demonstrate query optimization patterns."""
 
     # Use prepared statements for repeated queries
-    prepared_query = await sql_node.prepare_statement(
-        "SELECT * FROM users WHERE department = $1 AND active = $2"
-    )
+    prepared_workflow = WorkflowBuilder()
+    prepared_workflow.add_node("SQLDatabaseNode", "prepared_query", {
+        "connection_string": "postgresql://user:password@localhost:5432/production_db",
+        "query": "SELECT * FROM users WHERE department = :department AND active = :active",
+        "prepare_statement": True
+    })
 
     # Batch operations for better performance
-    batch_results = await sql_node.execute_batch(
-        prepared_query,
-        [("Engineering", True), ("Marketing", True), ("Sales", True)]
-    )
+    batch_workflow = WorkflowBuilder()
+    for idx, (dept, active) in enumerate([("Engineering", True), ("Marketing", True), ("Sales", True)]):
+        batch_workflow.add_node("SQLDatabaseNode", f"batch_{idx}", {
+            "connection_string": "postgresql://user:password@localhost:5432/production_db",
+            "query": "SELECT * FROM users WHERE department = :department AND active = :active",
+            "parameters": {"department": dept, "active": active}
+        })
+
+    runtime = LocalRuntime()
+    batch_results, _ = await runtime.execute_async(batch_workflow.build())
 
     # Use appropriate fetch modes
-    large_result = await sql_node.fetch_iterator(
-        "SELECT * FROM large_table ORDER BY created_at",
-        chunk_size=1000
-    )
+    iterator_workflow = WorkflowBuilder()
+    iterator_workflow.add_node("AsyncSQLDatabaseNode", "large_result", {
+        "connection_string": "postgresql://user:password@localhost:5432/production_db",
+        "query": "SELECT * FROM large_table ORDER BY created_at",
+        "fetch_mode": "iterator",
+        "chunk_size": 1000
+    })
+
+    iterator_results, _ = await runtime.execute_async(iterator_workflow.build())
+    large_result = iterator_results["large_result"]["result"]
 
     # Connection-specific optimizations
-    async with sql_node.connection() as conn:
-        # Set session-specific optimizations
-        await conn.execute("SET work_mem = '256MB'")
-        await conn.execute("SET random_page_cost = 1.1")
+    optimization_workflow = WorkflowBuilder()
+    optimization_workflow.add_node("AsyncSQLDatabaseNode", "set_work_mem", {
+        "connection_string": "postgresql://user:password@localhost:5432/production_db",
+        "query": "SET work_mem = '256MB'"
+    })
+    optimization_workflow.add_node("AsyncSQLDatabaseNode", "set_page_cost", {
+        "connection_string": "postgresql://user:password@localhost:5432/production_db",
+        "query": "SET random_page_cost = 1.1"
+    })
+    optimization_workflow.add_node("AsyncSQLDatabaseNode", "complex_query", {
+        "connection_string": "postgresql://user:password@localhost:5432/production_db",
+        "query": "SELECT * FROM complex_analytical_view"
+    })
 
-        # Execute optimization-sensitive query
-        result = await conn.fetch("SELECT * FROM complex_analytical_view")
+    # Execute in sequence to maintain session settings
+    optimization_workflow.add_connection("set_work_mem", "result", "set_page_cost", "previous")
+    optimization_workflow.add_connection("set_page_cost", "result", "complex_query", "previous")
+
+    opt_results, _ = await runtime.execute_async(optimization_workflow.build())
+    result = opt_results["complex_query"]["result"]
 
     return {"optimization": "complete"}
 ```
@@ -1096,25 +1291,25 @@ async def database_security_patterns():
     """Implement database security best practices."""
 
     # Row-level security
-    secured_sql_node = SQLDatabaseNode(
-        name="secured_database",
-        connection_string="postgresql://app_user:password@localhost:5432/secure_db",
+    secured_workflow = WorkflowBuilder()
+    secured_workflow.add_node("SQLDatabaseNode", "secured_database", {
+        "connection_string": "postgresql://app_user:password@localhost:5432/secure_db",
 
         # Enable access control
-        enable_access_control=True,
-        access_control_config={
+        "enable_access_control": True,
+        "access_control_config": {
             "row_level_security": True,
             "column_masking": True,
             "audit_logging": True
         },
 
         # Data masking rules
-        data_masking_rules={
+        "data_masking_rules": {
             "users.email": {"mask_type": "email", "visible_chars": 3},
             "users.phone": {"mask_type": "phone", "visible_chars": 4},
             "financial.account_number": {"mask_type": "full", "replacement": "***"}
         }
-    )
+    })
 
     # Query with user context
     user_context = {
@@ -1124,11 +1319,18 @@ async def database_security_patterns():
         "clearance_level": 3
     }
 
-    secured_result = await secured_sql_node.run(
-        query="SELECT id, name, email, salary FROM users WHERE department = %(dept)s",
-        parameters={"dept": "finance"},
-        user_context=user_context
-    )
+    secured_query_workflow = WorkflowBuilder()
+    secured_query_workflow.add_node("SQLDatabaseNode", "secured_query", {
+        "connection_string": "postgresql://app_user:password@localhost:5432/secure_db",
+        "query": "SELECT id, name, email, salary FROM users WHERE department = :dept",
+        "parameters": {"dept": "finance"},
+        "user_context": user_context,
+        "enable_access_control": True
+    })
+
+    runtime = LocalRuntime()
+    secured_results, _ = await runtime.execute_async(secured_query_workflow.build())
+    secured_result = secured_results["secured_query"]["result"]
 
     return {"security_applied": True, "masked_fields": ["email", "salary"]}
 ```

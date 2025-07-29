@@ -288,7 +288,8 @@ await client.subscribe_resource(
 
 ```python
 from kailash.nodes.ai import LLMAgentNode
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
 # Create agent with MCP access
 workflow = WorkflowBuilder()
@@ -306,7 +307,7 @@ workflow.add_node("PythonCodeNode", "input", {
     "code": 'result = {"messages": [{"role": "user", "content": user_query}]}'
 })
 
-workflow.connect("input", "result", mapping={"assistant": "messages"})
+workflow.add_connection("input", "result", "assistant", "messages")
 
 # Execute
 runtime = LocalRuntime()

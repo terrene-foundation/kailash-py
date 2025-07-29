@@ -37,7 +37,7 @@ The Enhanced Gateway Integration extends Kailash's DurableAPIGateway with advanc
 The main gateway class that extends DurableAPIGateway:
 
 ```python
-from kailash.gateway import EnhancedDurableAPIGateway, SecretManager
+from kailash.api.gateway import EnhancedDurableAPIGateway, SecretManager
 from kailash.resources import ResourceRegistry
 
 # Create gateway
@@ -55,7 +55,7 @@ gateway = EnhancedDurableAPIGateway(
 Resource references allow passing non-serializable objects through JSON:
 
 ```python
-from kailash.gateway import ResourceReference
+from kailash.api.gateway import ResourceReference
 
 # Database resource
 db_ref = ResourceReference(
@@ -165,11 +165,11 @@ gateway.register_workflow(
 ### 1. Basic Workflow Execution
 
 ```python
-from kailash.gateway import WorkflowRequest
+from kailash.api.gateway import WorkflowRequest
 
 # Create request with resources
 request = WorkflowRequest(
-    inputs={"limit": 100},
+    parameters={"limit": 100},
     resources={
         "source_db": ResourceReference(
             type="database",
@@ -296,7 +296,7 @@ async with KailashClient("http://gateway.example.com") as client:
     # Execute workflow
     result = await client.execute_workflow(
         "data_pipeline",
-        inputs={"process_date": "2024-01-15"},
+        parameters={"process_date": "2024-01-15"},
         resources={
             "db": db_resource,
             "cache": cache_resource
@@ -412,7 +412,7 @@ except ValueError as e:
 ### 2. Secret Resolution Errors
 
 ```python
-from kailash.gateway import SecretNotFoundError
+from kailash.api.gateway import SecretNotFoundError
 
 try:
     secret = await secret_manager.get_secret("missing_key")
@@ -517,7 +517,7 @@ async def run_batch(gateway, workflow_id, items):
     tasks = []
     for item in items:
         request = WorkflowRequest(
-            inputs={"item": item},
+            parameters={"item": item},
             resources={"db": "@shared_db"}
         )
         task = gateway.execute_workflow(workflow_id, request)

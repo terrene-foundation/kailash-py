@@ -3,7 +3,7 @@
 *Copy-paste this entire section to Claude Code for feature additions*
 
 ---
- 
+
 You are implementing a feature. Follow these steps exactly and show me complete outputs at each step. Do not summarize or skip any validation steps.
 
 ## 1. CONTEXT LOADING AND ULTRATHINK ACTIVATION
@@ -528,5 +528,6 @@ Then, review this project without any prejudice:
 3. Issue PR, wait for the CI to pass. Correct errors if any, else merge the PR.
 
 **Release versions**
+1. Please follow `# contrib (removed)/development/workflows/release-checklist.md`
 2. Continue with release process.
 3. Release to github and pypi.

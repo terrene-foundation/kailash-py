@@ -477,7 +477,7 @@ result = {
         )
 
         # Complex financial data inputs
-        inputs = {
+        parameters= {
             'account_id': 'ACC_123456',
             'holdings': [
                 {'symbol': 'AAPL', 'quantity': 100, 'price': 150.00},

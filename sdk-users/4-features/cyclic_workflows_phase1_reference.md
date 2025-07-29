@@ -12,7 +12,7 @@ Runtime parameters were not propagating correctly through cycle iterations. This
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -22,12 +22,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Example of the issue:
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 # Iteration 0: quality = 0.3 (from initial input)
 # Iteration 1: quality = 0.0 (reverted to default!)  ❌
@@ -77,7 +78,7 @@ The issue appears to be in how `CyclicWorkflowExecutor` handles parameter passin
 #### Working Example (Simplified)
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -87,8 +88,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class CounterNode(Node):
     def run(self, context, **kwargs):
@@ -96,15 +98,15 @@ class CounterNode(Node):
         return {"count": count + 1}
 
 # Self-loop works because it's simple
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
 #### Failing Example (Parameter Issue)
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -114,8 +116,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 class ProcessorNode(Node):
     def run(self, context, **kwargs):
@@ -124,8 +127,8 @@ class ProcessorNode(Node):
         return {"quality": quality + 0.2}
 
 # Mapping doesn't preserve quality value
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -189,12 +192,9 @@ def test_cycle_parameter_propagation():
             # Should accumulate: 0 → 10 → 20 → 30
             return {"value": value + 10}
 
-    workflow = Workflow("example", name="Example")
-workflow.    workflow.add_node("acc", AccumulatorNode())
-    workflow.connect("acc", "acc",
-                    mapping={"value": "value"},
-                    cycle=True,
-                    max_iterations=3)
+    workflow = WorkflowBuilder()
+workflow.    workflow.add_node("AccumulatorNode", "acc", {}))
+    # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
     executor = CyclicWorkflowExecutor()
     results, _ = executor.execute(workflow,
@@ -211,17 +211,17 @@ Two critical fixes were applied:
 
 1. **Fixed graph.py connect() method**:
    ```python
-   # Before: Multiple add_edge calls overwrote mappings
+   # Before: Multiple add_connection calls overwrote mappings
    for src, dst in mapping.items():
-       self.graph.add_edge(source, target, mapping={src: dst})  # ❌ Overwrites!
+       self.graph.add_connection(source, target, # mapping removed)  # ❌ Overwrites!
 
-   # After: Single add_edge call with complete mapping
+   # After: Single add_connection call with complete mapping
    edge_data = {
        "from_output": list(mapping.keys()),
        "to_input": list(mapping.values()),
        "mapping": mapping,  # Complete mapping dictionary
    }
-   self.graph.add_edge(source_node, target_node, **edge_data)  # ✅ Preserves all!
+   self.graph.add_connection(source_node, target_node, **edge_data)  # ✅ Preserves all!
 
    ```
 

@@ -2,13 +2,13 @@
 
 ## Basic Error Handling Pattern
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.exceptions import WorkflowValidationError, NodeExecutionError
 
 # Always wrap workflow operations in try-catch
 try:
-    workflow = Workflow("example", name="Example")
+    workflow = WorkflowBuilder()
     runtime = LocalRuntime()
 
     # Validate before execution
@@ -42,7 +42,7 @@ except Exception as e:
 ## Robust Workflow Pattern
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -52,7 +52,7 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("error_handling", name="Error Handling Example")
+workflow = WorkflowBuilder()
 runtime = LocalRuntime()
 
 # Error-resistant workflow with fallbacks
@@ -140,7 +140,7 @@ except Exception as e:
 ## Error Validation Checklist
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -150,8 +150,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Pre-execution validation
 def validate_workflow_safely(workflow):
@@ -181,7 +182,7 @@ def validate_workflow_safely(workflow):
 # Usage before execution
 if validate_workflow_safely(workflow):
 runtime = LocalRuntime()
-workflow.execute(workflow)
+runtime.execute(workflow.build(), workflow)
 else:
     print("Fix validation errors before execution")
 

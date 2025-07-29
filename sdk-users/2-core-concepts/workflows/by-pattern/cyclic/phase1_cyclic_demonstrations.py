@@ -806,19 +806,15 @@ def create_cyclic_demonstration_workflow(demo_type: str) -> Workflow:
         )
         workflow.add_node("writer", writer)
 
-        # Create self-loop for iterative enhancement
-        workflow.connect(
+        # Connect final output - pass the business metrics as data
+        workflow.connect("enhancer", "writer", mapping={"business_metrics": "data"})
+
+        # Create cycle using CycleBuilder API (direct chaining for Workflow class)
+        workflow.create_cycle("quality_improvement_cycle").connect(
             "enhancer",
             "enhancer",
             mapping={"data_batch": "data_batch", "quality_score": "quality_score"},
-            cycle=True,
-            max_iterations=10,
-            convergence_check="converged == True",
-            cycle_id="quality_improvement_cycle",
-        )
-
-        # Connect final output - pass the full node output
-        workflow.connect("enhancer", "writer", mapping={"_full_output": "data"})
+        ).max_iterations(10).converge_when("converged == True").build()
 
     elif demo_type == "supply":
         workflow = Workflow(
@@ -840,22 +836,18 @@ def create_cyclic_demonstration_workflow(demo_type: str) -> Workflow:
         )
         workflow.add_node("writer", writer)
 
-        # Create optimization cycle
-        workflow.connect(
+        # Connect output - pass the metrics as data
+        workflow.connect("optimizer", "writer", mapping={"metrics": "data"})
+
+        # Create cycle using CycleBuilder API (direct chaining for Workflow class)
+        workflow.create_cycle("supply_optimization_cycle").connect(
             "optimizer",
             "optimizer",
             mapping={
                 "supply_network": "supply_network",
                 "optimization_score": "optimization_score",
             },
-            cycle=True,
-            max_iterations=15,
-            convergence_check="converged == True",
-            cycle_id="supply_optimization_cycle",
-        )
-
-        # Connect output - pass the full node output
-        workflow.connect("optimizer", "writer", mapping={"_full_output": "data"})
+        ).max_iterations(15).converge_when("converged == True").build()
 
     elif demo_type == "reconciliation":
         workflow = Workflow(
@@ -875,19 +867,15 @@ def create_cyclic_demonstration_workflow(demo_type: str) -> Workflow:
         )
         workflow.add_node("writer", writer)
 
-        # Create reconciliation cycle
-        workflow.connect(
+        # Connect output - pass the metrics as data
+        workflow.connect("reconciler", "writer", mapping={"metrics": "data"})
+
+        # Create cycle using CycleBuilder API (direct chaining for Workflow class)
+        workflow.create_cycle("reconciliation_cycle").connect(
             "reconciler",
             "reconciler",
             mapping={"transactions": "transactions", "match_rate": "match_rate"},
-            cycle=True,
-            max_iterations=10,
-            convergence_check="converged == True",
-            cycle_id="reconciliation_cycle",
-        )
-
-        # Connect output - pass the full node output
-        workflow.connect("reconciler", "writer", mapping={"_full_output": "data"})
+        ).max_iterations(10).converge_when("converged == True").build()
 
     else:
         raise ValueError(f"Unknown demo type: {demo_type}")

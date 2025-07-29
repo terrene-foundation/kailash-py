@@ -181,7 +181,7 @@ from kailash.workflow.builder import WorkflowBuilder
 workflow = WorkflowBuilder()
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 workflow.add_node("FilterNode", "filter", {"condition": "age > 30"})
-workflow.connect("reader", "filter", {"data": "data"})
+workflow.add_connection("reader", "result", "filter", "input")
     ''',
     "validate_execution": True,
     "expected_nodes": ["reader", "filter"],
@@ -281,9 +281,9 @@ workflow.add_node("WorkflowValidationNode", "workflow_check", {
 })
 
 # Connect pipeline
-workflow.connect("generator", "syntax_check", {"code": "code"})
-workflow.connect("syntax_check", "function_test", {"validated_code": "code"})
-workflow.connect("function_test", "workflow_check", {"tested_code": "workflow_code"})
+workflow.add_connection("generator", "result", "syntax_check", "input")
+workflow.add_connection("syntax_check", "result", "function_test", "input")
+workflow.add_connection("function_test", "result", "workflow_check", "input")
 ```
 
 ### Iterative Quality Improvement
@@ -392,8 +392,8 @@ workflow.add_node("CodeValidationNode", "quality_gate", {
     "test_inputs": {"data": [{"id": 1}, {"id": 2}]}
 })
 
-workflow.connect("reader", "processor", {"data": "data"})
-workflow.connect("processor", "quality_gate", {"code": "code"})
+workflow.add_connection("reader", "result", "processor", "input")
+workflow.add_connection("processor", "result", "quality_gate", "input")
 ```
 
 ### Pre-Deployment Validation
@@ -509,9 +509,9 @@ workflow.add_node("TestSuiteExecutorNode", "final_test", {
 })
 
 # Route based on validation results
-workflow.connect("step1", "quality_gate", {"validation_status": "validation_status"})
-workflow.connect("quality_gate", "step2", route="passed")
-workflow.connect("step2", "final_test", {"validated_code": "code"})
+workflow.add_connection("step1", "result", "quality_gate", "input")
+workflow.add_connection("quality_gate", "result", "step2", "input")
+workflow.add_connection("step2", "result", "final_test", "input")
 ```
 
 ### Validation with Retry Logic

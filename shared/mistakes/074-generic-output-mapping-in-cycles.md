@@ -12,12 +12,19 @@ Using generic `mapping={"output": "output"}` in cycle connections fails to prese
 
 ### Generic Output Mapping (Fails)
 ```python
-# This fails - individual fields are not preserved
+# ❌ WRONG #1: Deprecated cycle=True with generic mapping
 workflow.connect("processor", "processor",
     mapping={"output": "output"},  # Generic mapping
-    cycle=True,
+    cycle=True,  # DEPRECATED!
     max_iterations=10,
     convergence_check="converged == True")
+
+# ❌ WRONG #2: Even with CycleBuilder, generic mapping fails
+built_workflow = workflow.build()
+cycle_builder = built_workflow.create_cycle('failed_cycle')
+cycle_builder.connect('processor', 'processor', mapping={'output': 'output'})  # Generic mapping fails!
+cycle_builder.max_iterations(10)
+cycle_builder.build()
 
 # Result: All state variables reset each iteration
 # polling_count = 1, 1, 1, 1... (never increments)
@@ -26,10 +33,10 @@ workflow.connect("processor", "processor",
 
 ### Empty Mapping (Also Fails)
 ```python
-# This also fails - no data transfer at all
+# ❌ WRONG: Empty mapping with deprecated cycle=True
 workflow.connect("processor", "processor",
     mapping={},  # Empty mapping
-    cycle=True)
+    cycle=True)  # DEPRECATED!
 # Result: Nodes receive no input parameters in subsequent iterations
 ```
 
@@ -37,81 +44,122 @@ workflow.connect("processor", "processor",
 
 ### Specific Field Mapping (Works)
 ```python
-# Correct - explicitly map each field that needs to persist
-workflow.connect("processor", "processor",
-    mapping={
-        "polling_count": "polling_count",      # State counter
-        "quality_score": "quality_score",     # Progress metric
-        "processed_data": "processed_data",   # Accumulated results
-        "configuration": "configuration"      # Static config
-    },
-    cycle=True,
-    max_iterations=10,
-    convergence_check="converged == True")
+# ✅ CORRECT - Modern CycleBuilder API with specific field mapping
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": """
+# Access specific fields via parameter names
+try:
+    polling_count = processor_data.get("polling_count", 0)
+    quality_score = processor_data.get("quality_score", 0.0)
+    processed_data = processor_data.get("processed_data", [])
+    configuration = processor_data.get("configuration", {})
+except NameError:
+    # First iteration
+    polling_count = 0
+    quality_score = 0.0
+    processed_data = []
+    configuration = {"threshold": 0.8}
+
+# Increment state values
+new_polling_count = polling_count + 1
+new_quality_score = min(quality_score + 0.15, 1.0)
+new_processed_data = processed_data + [f"item_{new_polling_count}"]
+
+result = {
+    "polling_count": new_polling_count,
+    "quality_score": new_quality_score,
+    "processed_data": new_processed_data,
+    "configuration": configuration,
+    "converged": new_quality_score >= configuration["threshold"]
+}
+"""
+})
+
+# Build workflow and create cycle with correct mapping pattern
+built_workflow = workflow.build()
+cycle_builder = built_workflow.create_cycle('state_persistence_cycle')
+cycle_builder.connect('processor', 'processor', mapping={'result': 'processor_data'})
+cycle_builder.max_iterations(10)
+cycle_builder.converge_when('converged == True')
+cycle_builder.build()
+
+# Execute with runtime
+runtime = LocalRuntime()
+results, run_id = runtime.execute(built_workflow)
 
 # Result: Fields properly increment and accumulate
 # polling_count = 1, 2, 3, 4... (increments correctly)
-# quality_score = 0.2, 0.4, 0.7, 0.9... (improves over time)
+# quality_score = 0.15, 0.30, 0.45, 0.60... (improves over time)
 ```
 
-### Complete Node Pattern with Source
+### Complete Pattern with Source Node
 ```python
-class DataSourceNode(CycleAwareNode):
-    def get_parameters(self) -> Dict[str, NodeParameter]:
-        return {
-            "initial_data": NodeParameter(name="initial_data", type=list, required=False)
-        }
+# ✅ CORRECT - Complete WorkflowBuilder pattern with source node
+workflow = WorkflowBuilder()
 
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        return {"data": kwargs.get("initial_data", [])}
-
-class ProcessorNode(CycleAwareNode):
-    def get_parameters(self) -> Dict[str, NodeParameter]:
-        return {
-            "data": NodeParameter(name="data", type=list, required=False, default=[]),
-            "iteration_count": NodeParameter(name="iteration_count", type=int, required=False, default=0),
-            "quality_score": NodeParameter(name="quality_score", type=float, required=False, default=0.0)
-        }
-
-    def run(self, context: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        data = kwargs.get("data", [])
-        iteration_count = kwargs.get("iteration_count", 0) + 1
-        quality_score = kwargs.get("quality_score", 0.0) + 0.1  # Improve each iteration
-
-        # Process data
-        processed_data = [x * 2 for x in data]
-        converged = quality_score >= 0.8
-
-        return {
-            "data": processed_data,
-            "iteration_count": iteration_count,
-            "quality_score": quality_score,
-            "converged": converged
-        }
-
-# Workflow setup
-workflow.add_node("data_source", DataSourceNode())
-workflow.add_node("processor", ProcessorNode())
-
-# Initial data flow
-workflow.connect("data_source", "processor",
-    mapping={"data": "data"})
-
-# Cycle with specific field mapping
-workflow.connect("processor", "processor",
-    mapping={
-        "data": "data",
-        "iteration_count": "iteration_count",
-        "quality_score": "quality_score"
-    },
-    cycle=True,
-    max_iterations=10,
-    convergence_check="converged == True")
-
-# Execute with node-specific parameters
-runtime.execute(workflow, parameters={
-    "data_source": {"initial_data": [1, 2, 3, 4]}
+# Data source node provides initial data
+workflow.add_node("PythonCodeNode", "data_source", {
+    "code": "result = {'data': [1, 2, 3, 4], 'initial': True}"
 })
+
+# Processor node that maintains state across iterations
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": """
+# Get data from source or previous iteration
+try:
+    data = source_data.get("data", [])
+    iteration_count = source_data.get("iteration_count", 0)
+    quality_score = source_data.get("quality_score", 0.0)
+except NameError:
+    # Access from processor_data for cycle iterations
+    try:
+        data = processor_data.get("data", [])
+        iteration_count = processor_data.get("iteration_count", 0)
+        quality_score = processor_data.get("quality_score", 0.0)
+    except NameError:
+        data = []
+        iteration_count = 0
+        quality_score = 0.0
+
+# Increment state
+new_iteration_count = iteration_count + 1
+new_quality_score = min(quality_score + 0.1, 1.0)
+
+# Process data
+processed_data = [x * 2 for x in data]
+converged = new_quality_score >= 0.8
+
+result = {
+    "data": processed_data,
+    "iteration_count": new_iteration_count,
+    "quality_score": new_quality_score,
+    "converged": converged
+}
+"""
+})
+
+# Initial data flow from source to processor
+workflow.add_connection("data_source", "result", "processor", "source_data")
+
+# Build workflow and create cycle with specific field mapping
+built_workflow = workflow.build()
+cycle_builder = built_workflow.create_cycle('complete_cycle')
+cycle_builder.connect('processor', 'processor', mapping={
+    "data": "data",
+    "iteration_count": "iteration_count",
+    "quality_score": "quality_score"
+})
+cycle_builder.max_iterations(10)
+cycle_builder.converge_when('converged == True')
+cycle_builder.build()
+
+# Execute with runtime
+runtime = LocalRuntime()
+results, run_id = runtime.execute(built_workflow)
 ```
 
 ## Root Cause Analysis

@@ -39,7 +39,7 @@ from kailash.runtime.local import LocalRuntime
 workflow = WorkflowBuilder()
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 workflow.add_node("LLMAgentNode", "analyzer", {"model": "gpt-4"})
-workflow.connect("reader", "result", mapping={"analyzer": "input_data"})
+workflow.add_connection("reader", "result", "analyzer", "input_data")
 
 # Execute
 runtime = LocalRuntime()

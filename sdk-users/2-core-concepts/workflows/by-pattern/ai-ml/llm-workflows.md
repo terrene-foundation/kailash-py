@@ -15,18 +15,14 @@ LLM workflows enable:
 
 ### 30-Second Document Q&A (RAG Pattern)
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
 from kailash.nodes.data import DocumentSourceNode, QuerySourceNode, RelevanceScorerNode
 from kailash.nodes.transform import HierarchicalChunkerNode
 from kailash.runtime.local import LocalRuntime
 
 # Document Q&A workflow using proper Kailash nodes
-workflow = Workflow(
-    workflow_id="qa_001",
-    name="document_qa",
-    description="RAG-based Q&A system"
-)
+workflow = WorkflowBuilder()
 
 # Document and query sources
 doc_source = DocumentSourceNode(id="docs")
@@ -37,7 +33,7 @@ workflow.add_node("query", query_source)
 # Intelligent document chunking
 chunker = HierarchicalChunkerNode(id="chunker")
 workflow.add_node("chunker", chunker)
-workflow.connect("docs", "chunker", mapping={"documents": "documents"})
+workflow.add_connection("docs", "chunker", "documents", "documents")
 
 # Generate embeddings for search
 embedder = EmbeddingGeneratorNode(
@@ -45,13 +41,13 @@ embedder = EmbeddingGeneratorNode(
     model="text-embedding-3-small"
 )
 workflow.add_node("embedder", embedder)
-workflow.connect("chunker", "embedder", mapping={"chunks": "texts"})
+workflow.add_connection("chunker", "embedder", "chunks", "texts")
 
 # Find relevant content
 scorer = RelevanceScorerNode(id="scorer")
 workflow.add_node("scorer", scorer)
-workflow.connect("chunker", "scorer", mapping={"chunks": "chunks"})
-workflow.connect("embedder", "scorer", mapping={"embeddings": "embeddings"})
+workflow.add_connection("chunker", "scorer", "chunks", "chunks")
+workflow.add_connection("embedder", "scorer", "embeddings", "embeddings")
 
 # Generate answers with LLM
 llm = LLMAgentNode(
@@ -60,8 +56,8 @@ llm = LLMAgentNode(
     system_prompt="Answer based on provided context only."
 )
 workflow.add_node("answer_gen", llm)
-workflow.connect("scorer", "answer_gen", mapping={"relevant_chunks": "context"})
-workflow.connect("query", "answer_gen", mapping={"query": "question"})
+workflow.add_connection("scorer", "answer_gen", "relevant_chunks", "context")
+workflow.add_connection("query", "answer_gen", "query", "question")
 
 # Execute the workflow
 runtime = LocalRuntime()
@@ -80,15 +76,12 @@ result, run_id = runtime.execute(workflow, parameters={
 Run powerful LLMs locally with enhanced Ollama support:
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
 
 # Local LLM workflow with Ollama
-workflow = Workflow(
-    workflow_id="local_llm_001",
-    name="ollama_processing"
-)
+workflow = WorkflowBuilder()
 
 # Basic Ollama usage with async support
 ollama_node = LLMAgentNode(
@@ -139,10 +132,7 @@ result, run_id = await runtime.execute_async(workflow, parameters={
 from kailash.nodes.ai import IterativeLLMAgentNode
 
 # Multi-agent reasoning using specialized LLM nodes
-workflow = Workflow(
-    workflow_id="reasoning_001",
-    name="multi_agent_reasoning"
-)
+workflow = WorkflowBuilder()
 
 # Research agent with MCP tool access
 researcher = IterativeLLMAgentNode(
@@ -169,8 +159,8 @@ synthesizer = LLMAgentNode(
 workflow.add_node("synthesizer", synthesizer)
 
 # Chain the reasoning steps
-workflow.connect("researcher", "analyzer", mapping={"final_response": "research_context"})
-workflow.connect("analyzer", "synthesizer", mapping={"response": "analysis_context"})
+workflow.add_connection("researcher", "analyzer", "final_response", "research_context")
+workflow.add_connection("analyzer", "synthesizer", "response", "analysis_context")
 
 # Execute with MCP integration for real tool access
 runtime = LocalRuntime()
@@ -705,16 +695,16 @@ result = validation_result
 enterprise_rag.add_node("answer_validator", answer_validator)
 
 # Connect the enterprise RAG workflow
-enterprise_rag.connect("doc_loader", "doc_preprocessor", mapping={"documents": "data"})
-enterprise_rag.connect("doc_preprocessor", "advanced_chunker", mapping={"result": "documents"})
-enterprise_rag.connect("advanced_chunker", "primary_embedder", mapping={"chunks": "texts"})
-enterprise_rag.connect("advanced_chunker", "secondary_embedder", mapping={"chunks": "texts"})
-enterprise_rag.connect("primary_embedder", "vector_store", mapping={"embeddings": "embeddings"})
+enterprise_rag.connect("doc_loader", "doc_preprocessor", # mapping removed)
+enterprise_rag.connect("doc_preprocessor", "advanced_chunker", # mapping removed)
+enterprise_rag.connect("advanced_chunker", "primary_embedder", # mapping removed)
+enterprise_rag.connect("advanced_chunker", "secondary_embedder", # mapping removed)
+enterprise_rag.connect("primary_embedder", "vector_store", # mapping removed)
 
 # Query processing branch
-enterprise_rag.connect("query_processor", "enhanced_scorer", mapping={"result": "query_info"})
-enterprise_rag.connect("enhanced_scorer", "answer_generator", mapping={"result": "context"})
-enterprise_rag.connect("answer_generator", "answer_validator", mapping={"response": "answer"})
+enterprise_rag.connect("query_processor", "enhanced_scorer", # mapping removed)
+enterprise_rag.connect("enhanced_scorer", "answer_generator", # mapping removed)
+enterprise_rag.connect("answer_generator", "answer_validator", # mapping removed)
 
 ```
 
@@ -747,10 +737,7 @@ result = enhanced_content
 ```python
 from kailash.nodes.data import JSONWriterNode
 
-workflow = Workflow(
-    workflow_id="report_001",
-    name="automated_reporting"
-)
+workflow = WorkflowBuilder()
 
 # Data preparation (use DataTransformer only for data prep)
 data_prep = DataTransformer(
@@ -779,7 +766,7 @@ report_generator = LLMAgentNode(
     system_prompt="Generate comprehensive business reports based on provided data."
 )
 workflow.add_node("report_gen", report_generator)
-workflow.connect("data_prep", "report_gen", mapping={"result": "report_data"})
+workflow.add_connection("data_prep", "report_gen", "result", "report_data")
 
 # Save the generated report
 writer = JSONWriterNode(
@@ -787,7 +774,7 @@ writer = JSONWriterNode(
     file_path="reports/generated_report.json"
 )
 workflow.add_node("writer", writer)
-workflow.connect("report_gen", "writer", mapping={"response": "data"})
+workflow.add_connection("report_gen", "writer", "response", "data")
 
 ```
 
@@ -832,7 +819,7 @@ result = adaptations
     ]
 )
 
-workflow.connect("generator", "adapter", mapping={"response": "data"})
+workflow.add_connection("generator", "adapter", "response", "data")
 
 ```
 
@@ -890,7 +877,7 @@ embed_node = EmbeddingGeneratorNode(
 ### Don't Implement Document Chunking Manually
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -900,8 +887,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # WRONG: Manual text splitting
 chunk_node = PythonCodeNode(

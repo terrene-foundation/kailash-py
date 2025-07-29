@@ -26,7 +26,7 @@ workflow.add_node("UserCreateNode", "create", {
 workflow.add_node("UserListNode", "list", {
     "filter": {"active": True}
 })
-workflow.add_connection("create", "list")
+workflow.add_connection("create", "result", "list", "input")
 
 # 4. Execute
 runtime = LocalRuntime()

@@ -7,7 +7,7 @@
 ### Multi-Source ID Format Fix
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -17,8 +17,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example -> dict:
     """Handle ID format mismatches between data sources.
@@ -53,17 +54,17 @@ def workflow.()  # Type signature example -> dict:
 id_normalizer = PythonCodeNode.from_function(
     name="id_normalizer", func=normalize_customer_ids
 )
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
 ### Generic ID Standardization
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -73,8 +74,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example -> dict:
     """Generic ID standardization.
@@ -105,7 +107,7 @@ customer_normalizer = PythonCodeNode.from_function(
 ### Merge with Validation
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -115,8 +117,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example -> dict:
     """Safely merge datasets with validation."""
@@ -165,7 +168,7 @@ data_merger = PythonCodeNode.from_function(
 ### Multi-Source Aggregation
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -175,8 +178,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example -> dict:
     """Aggregate data from multiple sources."""
@@ -227,12 +231,12 @@ def workflow.()  # Type signature example -> dict:
 aggregator = PythonCodeNode.from_function(
     name="aggregator", func=aggregate_multiple_sources
 )
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -241,7 +245,7 @@ workflow.  # Method signature
 ### Safe DateTime Serialization
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -251,8 +255,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example -> dict:
     """Convert datetime objects for JSON serialization."""
@@ -285,7 +290,7 @@ serializer = PythonCodeNode.from_function(
 ### Date Range Filtering
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -295,8 +300,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example -> dict:
     """Filter records by date range."""
@@ -338,7 +344,7 @@ date_filter = PythonCodeNode.from_function(
 ### Quality Checks
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -348,8 +354,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 def workflow.()  # Type signature example -> dict:
     """Validate data quality before integration."""
@@ -445,7 +452,7 @@ workflow.add_node("QueryCache", "cache_results", {
 })
 
 # Connect for cached query execution
-workflow.add_connection("customer_query", "cache_results")
+workflow.add_connection("customer_query", "result", "cache_results", "input")
 ```
 
 ### Multi-Database Query Integration
@@ -511,8 +518,8 @@ result = result_df.to_dict('records')
 })
 
 # Connect the pipeline
-workflow.add_connection("pg_customers", "join_data")
-workflow.add_connection("mysql_transactions", "join_data")
+workflow.add_connection("pg_customers", "result", "join_data", "input")
+workflow.add_connection("mysql_transactions", "result", "join_data", "input")
 ```
 
 ### Cached Data Pipeline with Invalidation
@@ -565,7 +572,7 @@ result = {"cache_invalidated": True}
 """
 })
 
-workflow.add_connection("data_query", "smart_cache")
+workflow.add_connection("data_query", "result", "smart_cache", "input")
 ```
 
 ## 📋 Best Practices
@@ -600,7 +607,7 @@ workflow.add_connection("data_query", "smart_cache")
        "cache_ttl": 300,
        "invalidation_strategy": "pattern_based"
    })
-   workflow.add_connection("customer_query", "cache_results")
+   workflow.add_connection("customer_query", "result", "cache_results", "input")
    ```
 
 3. **Use MergeNode for Simple Joins**
@@ -634,8 +641,8 @@ workflow.add_connection("data_query", "smart_cache")
        }
    })
 
-   workflow.add_connection("reader", "validate_input")
-   workflow.add_connection("validate_input", "normalizer")
+   workflow.add_connection("reader", "result", "validate_input", "input")
+   workflow.add_connection("validate_input", "result", "normalizer", "input")
    ```
 
 5. **Handle Edge Cases**

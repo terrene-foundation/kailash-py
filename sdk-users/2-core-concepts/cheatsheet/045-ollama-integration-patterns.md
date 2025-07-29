@@ -12,31 +12,38 @@
 ## 🆕 v0.6.2+ LLMAgentNode with Ollama
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
 
 # Basic usage with improved async support
-workflow = Workflow("ollama_v062", "Ollama with LLMAgentNode")
-llm_node = LLMAgentNode(name="ollama_llm")
-workflow.add_node("llm", llm_node)
-
-# Execute with async runtime
-runtime = LocalRuntime()
-result, _ = await runtime.execute_async(workflow, parameters={
-    "llm": {
-        "provider": "ollama",
-        "model": "llama3.2:3b",
-        "prompt": "Write a haiku about programming",
-        "generation_config": {
-            "temperature": 0.7,
-            "max_tokens": 300
-        }
+workflow = WorkflowBuilder()
+workflow.add_node("LLMAgentNode", "llm", {
+    "provider": "ollama",
+    "model": "llama3.2:3b",
+    "prompt": "Write a haiku about programming",
+    "generation_config": {
+        "temperature": 0.7,
+        "max_tokens": 300
     }
 })
 
-# Remote Ollama server
-result, _ = await runtime.execute_async(workflow, parameters={
+# Execute with runtime
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+
+# Remote Ollama server configuration
+workflow2 = WorkflowBuilder()
+workflow2.add_node("LLMAgentNode", "llm", {
+    "provider": "ollama",
+    "model": "llama3.2:3b",
+    "prompt": "Explain quantum computing",
+    "backend_config": {
+        "host": "gpu-server.local",
+        "port": 11434
+    }
+})
+results2, run_id2 = runtime.execute(workflow2.build())
     "llm": {
         "provider": "ollama",
         "model": "llama3.2:3b",
@@ -52,7 +59,7 @@ result, _ = await runtime.execute_async(workflow, parameters={
 ## 🚀 Alternative: Direct API with PythonCodeNode
 
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.code import PythonCodeNode
 
@@ -84,19 +91,23 @@ def ollama_generate(prompt="Hello", model="llama3.2:1b"):
         return {"success": False, "error": str(e)}
 
 # Create workflow
-workflow = Workflow("ollama_basic", "Basic Ollama LLM")
-llm_node = PythonCodeNode.from_function(ollama_generate, name="llm")
-workflow.add_node("generate", llm_node)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "generate", {
+    "code": """
+from ollama_generate import ollama_generate
+result = ollama_generate(prompt, model)
+"""
+})
 
 # Execute
 runtime = LocalRuntime()
-result, _ = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(workflow.build(), parameters={
     "generate": {"prompt": "Write a haiku about coding", "model": "llama3.2:1b"}
 })
 
 # Access result
-if result["generate"]["result"]["success"]:
-    print(result["generate"]["result"]["response"])
+if results["generate"]["result"]["success"]:
+    print(results["generate"]["result"]["response"])
 ```
 
 ## 🔍 Embedding Generation
@@ -130,15 +141,21 @@ def ollama_embeddings(texts=None):
     }
 
 # Usage
-embed_node = PythonCodeNode.from_function(ollama_embeddings, name="embedder")
-workflow.add_node("embed", embed_node)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "embed", {
+    "code": """
+from ollama_embeddings import ollama_embeddings
+result = ollama_embeddings(texts)
+"""
+})
 
-result, _ = runtime.execute(workflow, parameters={
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build(), parameters={
     "embed": {"texts": ["Python is great", "AI is powerful"]}
 })
 
-embeddings = result["embed"]["result"]["embeddings"]
-print(f"Generated {len(embeddings)} embeddings of {result['embed']['result']['dimensions']} dimensions")
+embeddings = results["embed"]["result"]["embeddings"]
+print(f"Generated {len(embeddings)} embeddings of {results['embed']['result']['dimensions']} dimensions")
 ```
 
 ## 🔄 Cyclic Workflow with Ollama
@@ -183,28 +200,33 @@ def iterative_improver(text="", iteration=0, target_length=50):
         return {"text": text, "iteration": iteration, "converged": True, "error": str(e)}
 
 # Cyclic workflow
-workflow = Workflow("ollama_cycles", "Iterative improvement")
-writer = PythonCodeNode.from_function(iterative_improver, name="writer")
-workflow.add_node("improve", writer)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "improve", {
+    "code": """
+from iterative_improver import iterative_improver
+result = iterative_improver(text, iteration, target_length)
+"""
+})
 
 # Create cycle with proper parameter passing
-workflow.create_cycle("improvement_cycle") \
-    .connect("improve", "improve", {
-        "result.text": "text",
-        "result.iteration": "iteration",
-        "result.target_length": "target_length"
-    }) \
-    .max_iterations(5) \
-    .converge_when("converged == True") \
-    .build()
+cycle_builder = workflow.create_cycle("improvement_cycle")
+cycle_builder.connect("improve", "improve", mapping={
+    "result.text": "text",
+    "result.iteration": "iteration",
+    "result.target_length": "target_length"
+}) \
+.max_iterations(5) \
+.converge_when("converged == True") \
+.build()
 
 # Execute with initial parameters
-result, _ = runtime.execute(workflow, parameters={
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build(), parameters={
     "improve": {"text": "", "iteration": 0, "target_length": 30}
 })
 
-print(f"Final story ({result['improve']['result']['word_count']} words):")
-print(result['improve']['result']['text'])
+print(f"Final story ({results['improve']['result']['word_count']} words):")
+print(results['improve']['result']['text'])
 ```
 
 ## 📊 Sentiment Analysis Pipeline
@@ -273,26 +295,31 @@ JSON:"""
     }
 
 # Data pipeline
-data_gen = PythonCodeNode.from_function(
-    lambda: {
-        "reviews": [
-            {"id": 1, "text": "This product is amazing!"},
-            {"id": 2, "text": "Terrible quality, very disappointed."},
-            {"id": 3, "text": "It's okay, nothing special."}
-        ]
-    },
-    name="data_generator"
-)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "data", {
+    "code": """
+result = {
+    "reviews": [
+        {"id": 1, "text": "This product is amazing!"},
+        {"id": 2, "text": "Terrible quality, very disappointed."},
+        {"id": 3, "text": "It's okay, nothing special."}
+    ]
+}
+"""
+})
 
-analyzer = PythonCodeNode.from_function(analyze_sentiment, name="analyzer")
+workflow.add_node("PythonCodeNode", "analyze", {
+    "code": """
+from analyze_sentiment import analyze_sentiment
+result = analyze_sentiment(reviews)
+"""
+})
 
-workflow = Workflow("sentiment_pipeline", "Ollama sentiment analysis")
-workflow.add_node("data", data_gen)
-workflow.add_node("analyze", analyzer)
-workflow.connect("data", "analyze", {"result.reviews": "reviews"})
+workflow.add_connection("data", "reviews", "analyze", "reviews")
 
-result, _ = runtime.execute(workflow)
-analyzed = result["analyze"]["result"]["analyzed_reviews"]
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+analyzed = results["analyze"]["result"]["analyzed_reviews"]
 print(f"Analyzed {len(analyzed)} reviews")
 for review in analyzed:
     print(f"Review {review['id']}: {review['sentiment']} ({review['confidence']:.2f})")

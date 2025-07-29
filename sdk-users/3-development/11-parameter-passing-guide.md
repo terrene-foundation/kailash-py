@@ -23,13 +23,13 @@ The Kailash SDK requires **explicit parameter declaration** as a security featur
 # SDK's WorkflowParameterInjector logic (simplified)
 def inject_parameters(self, node_instance, workflow_params):
     declared_params = node_instance.get_parameters()  # SDK checks this
-    
+
     injected_params = {}
     for param_name, param_value in workflow_params.items():
         if param_name in declared_params:  # Only if explicitly declared
             injected_params[param_name] = param_value
         # else: parameter is ignored (security feature)
-    
+
     return injected_params
 ```
 
@@ -79,7 +79,7 @@ runtime.execute(workflow, parameters={
 })
 
 # Phase 2: Connection mapping (dynamic priority)
-workflow.connect("source", "target", mapping={"output": "input"})
+workflow.add_connection("source", "target", "output", "input")
 
 # Phase 3: Node configuration (lowest priority)
 node = MyNode(config_param="default")
@@ -102,10 +102,10 @@ from typing import Dict, Any
 
 class UserManagementEntryNode(Node):
     """Entry node specifically for user management workflows.
-    
+
     Enterprise Pattern: Explicit parameter contracts for security.
     """
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """Declare ALL parameters with enterprise validation."""
         return {
@@ -147,21 +147,21 @@ class UserManagementEntryNode(Node):
                 description="Audit context for compliance"
             )
         }
-    
+
     def run(self, **kwargs) -> Dict[str, Any]:
         """Process with business logic validation."""
         # All parameters are validated by SDK before reaching here
         operation = kwargs["operation"]  # Required, guaranteed to exist
         tenant_id = kwargs["tenant_id"]  # Required, guaranteed to exist
         requestor_id = kwargs["requestor_id"]  # Required, guaranteed to exist
-        
+
         # Business logic validation
         if operation in ["update", "delete", "get"] and not kwargs.get("user_id"):
             raise ValueError(f"user_id required for {operation} operation")
-        
+
         if operation in ["create", "update"] and not kwargs.get("user_data"):
             raise ValueError(f"user_data required for {operation} operation")
-        
+
         # Prepare output for downstream nodes
         return {
             "result": {
@@ -191,31 +191,31 @@ class UserManagementContract(BaseModel):
     user_id: Optional[str] = None
     tenant_id: str
     requestor_id: str
-    
+
     class Config:
         extra = "forbid"  # Security: reject unknown parameters
 
 class EnterpriseUserNode(SecureGovernedNode):
     """Enterprise-grade user management with security validation."""
-    
+
     @classmethod
     def get_parameter_contract(cls):
         return UserManagementContract
-    
+
     @classmethod
     def get_connection_contract(cls):
         """Define connection parameters for security."""
         return None  # Override if receiving connection parameters
-    
+
     def run_governed(self, **kwargs):
         """Execute with pre-validated parameters."""
         # All parameters are validated against contract
         operation = kwargs["operation"]
         tenant_id = kwargs["tenant_id"]
-        
+
         # Your secure business logic here
         result = self._process_user_operation(operation, kwargs)
-        
+
         return {"result": result}
 ```
 
@@ -304,23 +304,16 @@ from kailash.workflow.builder import WorkflowBuilder
 workflow = WorkflowBuilder()
 
 # 1. Auto-mapping (when parameter names match)
-workflow.connect("reader", "processor")  # data → data
+workflow.add_connection("reader", "result", "processor", "input")  # data → data
 
 # 2. Explicit mapping
-workflow.connect("source", "target", mapping={"result": "data"})
+workflow.add_connection("source", "target", "result", "data")
 
 # 3. Dot notation for nested data
-workflow.connect("analyzer", "reporter", mapping={
-    "result.summary": "summary_data",
-    "result.metrics.accuracy": "accuracy"
-})
+workflow.add_connection("analyzer", "result", "reporter", "input")
 
 # 4. Multiple mappings
-workflow.connect("processor", "writer", mapping={
-    "result.processed_data": "data",
-    "result.metadata": "headers",
-    "result.stats.total": "record_count"
-})
+workflow.add_connection("processor", "result", "writer", "input")
 ```
 
 ### PythonCodeNode Patterns
@@ -343,8 +336,8 @@ result = {
 })
 
 # Connect using dot notation
-workflow.connect("processor", "result.data", mapping={"consumer": "input_data"})
-workflow.connect("processor", "result.statistics", mapping={"analyzer": "stats"})
+workflow.add_connection("processor", "result.data", "consumer", "input_data")
+workflow.add_connection("processor", "result.statistics", "analyzer", "stats")
 ```
 
 ### Complex Mapping Example
@@ -371,9 +364,9 @@ result = {
 })
 
 # Map to multiple consumers
-workflow.connect("data_source", "result.customers", mapping={"processor": "customer_list"})
-workflow.connect("data_source", "result.summary.average_score", mapping={"validator": "baseline_score"})
-workflow.connect("data_source", "result.metadata", mapping={"logger": "meta_info"})
+workflow.add_connection("data_source", "result.customers", "processor", "customer_list")
+workflow.add_connection("data_source", "result.summary.average_score", "validator", "baseline_score")
+workflow.add_connection("data_source", "result.metadata", "logger", "meta_info")
 ```
 
 ## Cycle Parameters
@@ -456,11 +449,7 @@ workflow.add_node("IterativeOptimizerNode", "optimizer", {
 })
 
 # Create self-loop for iteration
-workflow.connect("optimizer", "result", mapping={"optimizer": "data"},
-    cycle=True,
-    max_iterations=50,
-    convergence_check="converged == True"
-)
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Execute with initial parameters
 results, run_id = runtime.execute(workflow.build(), parameters={
@@ -481,12 +470,8 @@ workflow.add_node("DataProcessorNode", "processor")
 workflow.add_node("QualityValidatorNode", "validator")
 
 # Connect in a cycle
-workflow.connect("processor", "result.data", mapping={"validator": "input_data"})
-workflow.connect("validator", "result.validated_data", mapping={"processor": "data"},
-    cycle=True,
-    max_iterations=10,
-    convergence_check="quality_score >= 0.95"
-)
+workflow.add_connection("processor", "result.data", "validator", "input_data")
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # Initial parameters for both nodes
 runtime.execute(workflow.build(), parameters={
@@ -510,7 +495,7 @@ runtime.execute(workflow.build(), parameters={
 class BadEntryNode(Node):
     def get_parameters(self):
         return {}  # SDK will inject nothing!
-    
+
     def run(self, **kwargs):
         # kwargs will always be empty!
         operation = kwargs.get('operation')  # Always None
@@ -574,11 +559,11 @@ workflow.add_node("PythonCodeNode", "business_logic", {
 # ✅ CORRECT - Create a proper custom node
 class BusinessLogicNode(SecureGovernedNode):
     """Properly implemented business logic with security."""
-    
+
     @classmethod
     def get_parameter_contract(cls):
         return BusinessLogicContract
-    
+
     def run_governed(self, **kwargs):
         # Testable, maintainable, secure code
         return self._process_business_logic(kwargs)
@@ -614,12 +599,12 @@ class MyNode(Node):
 
 ```python
 # ❌ WRONG - Using old/incorrect parameter names
-workflow.connect("a", "b", parameter_mapping={"out": "in"})
-workflow.connect("a", "b", output_mapping={"result": "data"})
+# workflow.add_connection("source", "result", "target", "input")  # Fixed mapping pattern
+# workflow.add_connection("source", "result", "target", "input")  # Fixed output mapping
 
 # ✅ CORRECT - Current syntax
-workflow.connect("a", "result", mapping={"b": "data"})
-workflow.connect("a", "b", mapping={"result": "data"})
+workflow.add_connection("a", "result", "b", "data")
+workflow.add_connection("a", "b", "result", "data")
 ```
 
 ### 3. Not Wrapping PythonCodeNode Output
@@ -690,7 +675,7 @@ class ParameterInspectorNode(Node):
 
 # Use in workflow for debugging
 workflow.add_node("ParameterInspectorNode", "inspector")
-workflow.connect("problematic_node", "result", mapping={"inspector": "debug_input"})
+workflow.add_connection("problematic_node", "result", "inspector", "debug_input")
 ```
 
 ### Logging Parameter Flow
@@ -744,21 +729,21 @@ Always validate connection parameters to prevent injection attacks:
 ```python
 class SecureDatabaseNode(SecureGovernedNode):
     """Database node with connection parameter validation."""
-    
+
     @classmethod
     def get_connection_contract(cls):
         """Define connection parameters for security."""
         class DatabaseConnectionContract(BaseModel):
             params: List[Any] = Field(description="SQL parameters")
             query: Optional[str] = Field(default=None)
-            
+
             @field_validator('params')
             @classmethod
             def validate_params_list(cls, v):
                 if not isinstance(v, list):
                     raise ValueError("params must be a list for SQL safety")
                 return v
-        
+
         return DatabaseConnectionContract
 ```
 
@@ -767,7 +752,7 @@ class SecureDatabaseNode(SecureGovernedNode):
 ```python
 class AuditedNode(SecureGovernedNode):
     """Node with comprehensive audit logging."""
-    
+
     def execute(self, **kwargs):
         # Log parameter access for compliance
         self.audit_logger.log_parameter_access(
@@ -776,7 +761,7 @@ class AuditedNode(SecureGovernedNode):
             sensitivity=self._classify_parameters(kwargs),
             user_context=kwargs.get('requestor_id', 'unknown')
         )
-        
+
         return super().execute(**kwargs)
 ```
 
@@ -838,11 +823,7 @@ workflow.add_node("CustomerDataNode", "source")
 workflow.add_node("ProcessorNode", "processor")
 
 # Clear mapping with documentation
-workflow.connect(
-    "source", "result.customers",    # From nested output
-    "processor", "customer_list",     # To expected input
-    # mapping={"result.customers": "customer_list"}  # Alternative syntax
-)
+workflow.add_connection("source", "result", "result.customers", "input")
 ```
 
 ### 4. Validate Parameters Early
@@ -968,18 +949,10 @@ workflow.add_node("DataConsumerNode", "consumer", {
 })
 
 # Connect using dot notation for nested access
-workflow.connect(
-    "producer", "consumer",
-    "result.analytics.metrics",  # Source: nested path
-    "input_metrics"              # Target: parameter name
-)
+workflow.add_connection("producer", "result", "consumer", "input")
 
 # Also works with deeper nesting
-workflow.connect(
-    "producer", "consumer",
-    "result.metadata.quality.score",  # Deep nested access
-    "quality_score"
-)
+workflow.add_connection("producer", "result", "consumer", "input")
 
 # Execute workflow
 result = await runtime.execute(workflow.build(), parameters={
@@ -1024,9 +997,9 @@ class SmartMergerNode(Node):
         }
 
     def run(self, **kwargs):
-        data_inputs = kwargs.get("data_inputs", {})
-        config_inputs = kwargs.get("config_inputs", {})
-        other_inputs = kwargs.get("other_inputs", {})
+        data_parameters= kwargs.get("data_inputs", {})
+        config_parameters= kwargs.get("config_inputs", {})
+        other_parameters= kwargs.get("other_inputs", {})
 
         # Merge all data sources
         merged_data = {}
@@ -1052,9 +1025,9 @@ workflow.add_node("ConfigNode", "db_config", {"host": "localhost"})
 workflow.add_node("SmartMergerNode", "merger")
 
 # Auto-injected based on parameter patterns
-workflow.connect("source1", "merger", mapping={"result": "data_source1"})  # Matches data_*
-workflow.connect("source2", "merger", mapping={"result": "data_source2"})  # Matches data_*
-workflow.connect("db_config", "merger", mapping={"result": "config_db"})   # Matches config_*
+workflow.add_connection("source1", "merger", "result", "data_source1")  # Matches data_*
+workflow.add_connection("source2", "merger", "result", "data_source2")  # Matches data_*
+workflow.add_connection("db_config", "merger", "result", "config_db")   # Matches config_*
 
 result = await runtime.execute(workflow.build())
 ```
@@ -1087,11 +1060,7 @@ class UserProcessorNode(Node):
         }
 
 # 3. Use dot notation for clear data access patterns
-workflow.connect(
-    "analytics", "reporter",
-    "result.user_metrics.engagement",  # Clear path
-    "engagement_data"
-)
+workflow.add_connection("analytics", "result", "reporter", "input")
 
 # 4. Document parameter injection behavior
 class FlexibleNode(Node):

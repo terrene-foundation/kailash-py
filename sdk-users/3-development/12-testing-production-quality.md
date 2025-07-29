@@ -108,7 +108,7 @@ class TestCustomNode:
 ```python
 # Example: Workflow integration test
 import pytest
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 @pytest.mark.integration
@@ -136,7 +136,7 @@ result = {
         })
 
         # Connect nodes
-        workflow.connect("data_source", "result.data", mapping={"processor": "data"})
+        workflow.add_connection("data_source", "result.data", "processor", "data")
 
         # Execute workflow
         runtime = LocalRuntime()
@@ -184,7 +184,7 @@ result = {'filtered_data': processed, 'count': len(processed)}
         })
 
         # Connect and execute
-        workflow.connect("reader", "result", mapping={"processor": "csv_data"})
+        workflow.add_connection("reader", "result", "processor", "csv_data")
 
         runtime = LocalRuntime()
         results, run_id = runtime.execute(workflow.build())
@@ -376,7 +376,7 @@ def sample_workflow():
         "code": "result = {'processed': [x * 2 for x in data]}"
     })
 
-    workflow.connect("source", "result.data", mapping={"processor": "data"})
+    workflow.add_connection("source", "result.data", "processor", "data")
 
     return workflow
 

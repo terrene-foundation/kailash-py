@@ -13,18 +13,14 @@ ETL (Extract, Transform, Load) pipelines are fundamental data processing pattern
 
 ### 30-Second CSV ETL Pipeline
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.nodes.transform import DataTransformer, FilterNode
 from kailash.nodes.logic import MergeNode
 from kailash.runtime.local import LocalRuntime
 
 # Extract-Transform-Load pipeline using proper Kailash nodes (matches basic_etl_pipeline.py)
-workflow = Workflow(
-    workflow_id="etl_pipeline_001",
-    name="basic_etl_pipeline",
-    description="ETL pipeline for customer data processing"
-)
+workflow = WorkflowBuilder()
 
 # Data Sources
 customers_reader = CSVReaderNode(
@@ -42,7 +38,7 @@ workflow.add_node("transactions_reader", transactions_reader)
 # Data Cleansing - Filter invalid records
 valid_customers = FilterNode(id="valid_customers")
 workflow.add_node("valid_customers", valid_customers)
-workflow.connect("customers_reader", "valid_customers", mapping={"data": "data"})
+workflow.add_connection("customers_reader", "valid_customers", "data", "data")
 
 # Transform customer data - Add calculated fields
 enriched_customers = DataTransformer(
@@ -50,18 +46,18 @@ enriched_customers = DataTransformer(
     transformations=[]  # Will be provided at runtime
 )
 workflow.add_node("enriched_customers", enriched_customers)
-workflow.connect("valid_customers", "enriched_customers", mapping={"filtered_data": "data"})
+workflow.add_connection("valid_customers", "enriched_customers", "filtered_data", "data")
 
 # Filter high-value transactions
 high_value_transactions = FilterNode(id="high_value_transactions")
 workflow.add_node("high_value_transactions", high_value_transactions)
-workflow.connect("transactions_reader", "high_value_transactions", mapping={"data": "data"})
+workflow.add_connection("transactions_reader", "high_value_transactions", "data", "data")
 
 # Merge customer and transaction data
 merge_customer_transactions = MergeNode(id="merge_customer_transactions")
 workflow.add_node("merge_customer_transactions", merge_customer_transactions)
-workflow.connect("enriched_customers", "merge_customer_transactions", mapping={"result": "data1"})
-workflow.connect("high_value_transactions", "merge_customer_transactions", mapping={"filtered_data": "data2"})
+workflow.add_connection("enriched_customers", "merge_customer_transactions", "result", "data1")
+workflow.add_connection("high_value_transactions", "merge_customer_transactions", "filtered_data", "data2")
 
 # Write results
 output_writer = CSVWriterNode(
@@ -69,7 +65,7 @@ output_writer = CSVWriterNode(
     file_path="data/outputs/enriched_customers.csv"
 )
 workflow.add_node("output_writer", output_writer)
-workflow.connect("merge_customer_transactions", "output_writer", mapping={"merged_data": "data"})
+workflow.add_connection("merge_customer_transactions", "output_writer", "merged_data", "data")
 
 # Execute the pipeline (matches basic_etl_pipeline.py exactly)
 runtime = LocalRuntime()
@@ -401,12 +397,12 @@ result = {"premium_processed": premium_records}
 enterprise_etl.add_node("premium_processor", premium_processor)
 
 # Connect the enterprise ETL workflow
-enterprise_etl.connect("primary_db", "quality_checker", mapping={"data": "data"})
-enterprise_etl.connect("quality_checker", "data_merger", mapping={"quality_checked_data": "data1"})
-enterprise_etl.connect("secondary_db", "data_merger", mapping={"data": "data2"})
-enterprise_etl.connect("data_merger", "quality_router", mapping={"merged_data": "data"})
+enterprise_etl.connect("primary_db", "quality_checker", # mapping removed)
+enterprise_etl.connect("quality_checker", "data_merger", # mapping removed)
+enterprise_etl.connect("secondary_db", "data_merger", # mapping removed)
+enterprise_etl.connect("data_merger", "quality_router", # mapping removed)
 enterprise_etl.connect("quality_router", "premium_processor",
-                      output_key="true_output", mapping={"data": "data"})
+                      output_key="true_output", # mapping removed)
 
 # Multiple output destinations
 data_warehouse = SQLDatabaseNode(
@@ -417,7 +413,7 @@ data_warehouse = SQLDatabaseNode(
     batch_size=500
 )
 enterprise_etl.add_node("data_warehouse", data_warehouse)
-enterprise_etl.connect("premium_processor", "data_warehouse", mapping={"premium_processed": "data"})
+enterprise_etl.connect("premium_processor", "data_warehouse", # mapping removed)
 
 ```
 
@@ -427,21 +423,13 @@ enterprise_etl.connect("premium_processor", "data_warehouse", mapping={"premium_
 ```python
 from kailash.nodes.data import SQLReaderNode, SQLWriterNode
 
-workflow = Workflow("database_etl")
+workflow = WorkflowBuilder()
 
 # Extract from source database
-workflow.add_node("extract_source", SQLReaderNode())
+workflow.add_node("SQLReaderNode", "extract_source", {}))
 
 # Transform with complex business logic
-workflow.add_node("transform_data", PythonCodeNode(
-    name="transform_data",
-    code='''
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-
-# Create DataFrame from SQL results
-df = pd.DataFrame(data)
+workflow.add_node("PythonCodeNode", "transform_data", {})
 
 # Data Quality Checks
 quality_report = {
@@ -548,11 +536,11 @@ def calculate_quality_score(dataframe):
 ))
 
 # Load to data warehouse
-workflow.add_node("load_warehouse", SQLWriterNode())
+workflow.add_node("SQLWriterNode", "load_warehouse", {}))
 
 # Connect pipeline
-workflow.connect("extract_source", "transform_data", mapping={"data": "data"})
-workflow.connect("transform_data", "load_warehouse", mapping={"transformed_data": "data"})
+workflow.add_connection("extract_source", "transform_data", "data", "data")
+workflow.add_connection("transform_data", "load_warehouse", "transformed_data", "data")
 
 # Execute with database connections
 runtime.execute(workflow, parameters={
@@ -574,25 +562,18 @@ runtime.execute(workflow, parameters={
 from kailash.nodes.logic import MergeNode
 from kailash.nodes.api import RestClientNode
 
-workflow = Workflow("multi_source_etl")
+workflow = WorkflowBuilder()
 
 # Extract from multiple sources
-workflow.add_node("extract_database", SQLReaderNode())
-workflow.add_node("extract_api", RestClientNode())
-workflow.add_node("extract_files", CSVReaderNode())
+workflow.add_node("SQLReaderNode", "extract_database", {}))
+workflow.add_node("RestClientNode", "extract_api", {}))
+workflow.add_node("CSVReaderNode", "extract_files", {}))
 
 # Merge different data sources
-workflow.add_node("merge_sources", MergeNode())
+workflow.add_node("MergeNode", "merge_sources", {}))
 
 # Transform unified data
-workflow.add_node("transform_unified", PythonCodeNode(
-    name="transform_unified",
-    code='''
-import pandas as pd
-from datetime import datetime
-
-# Extract data from different sources
-db_data = database_data if isinstance(database_data, list) else []
+workflow.add_node("PythonCodeNode", "transform_unified", {}) else []
 api_data = api_response.get('data', []) if isinstance(api_response, dict) else []
 file_data = file_data if isinstance(file_data, list) else []
 
@@ -674,14 +655,14 @@ else:
 ))
 
 # Load to unified data store
-workflow.add_node("load_unified", SQLWriterNode())
+workflow.add_node("SQLWriterNode", "load_unified", {}))
 
 # Connect multi-source pipeline
-workflow.connect("extract_database", "merge_sources", mapping={"data": "database_data"})
-workflow.connect("extract_api", "merge_sources", mapping={"response": "api_response"})
-workflow.connect("extract_files", "merge_sources", mapping={"data": "file_data"})
-workflow.connect("merge_sources", "transform_unified", mapping={"merged": "input"})
-workflow.connect("transform_unified", "load_unified", mapping={"unified_records": "data"})
+workflow.add_connection("extract_database", "merge_sources", "data", "database_data")
+workflow.add_connection("extract_api", "merge_sources", "response", "api_response")
+workflow.add_connection("extract_files", "merge_sources", "data", "file_data")
+workflow.add_connection("merge_sources", "transform_unified", "merged", "input")
+workflow.add_connection("transform_unified", "load_unified", "unified_records", "data")
 
 ```
 
@@ -690,7 +671,7 @@ workflow.connect("transform_unified", "load_unified", mapping={"unified_records"
 ### Streaming ETL with Change Detection
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -700,22 +681,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("streaming_etl")
+workflow = WorkflowBuilder()
 
 # Continuous data extraction
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("stream_extractor", PythonCodeNode(
-    name="stream_extractor",
-    code='''
-import time
-import hashlib
-from datetime import datetime
-
-# Simulate streaming data extraction
-def extract_incremental_data(last_processed_timestamp=None):
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "stream_extractor", {}):
     """Extract data that has changed since last processing."""
 
     # In production, this would connect to change data capture (CDC) systems
@@ -750,15 +724,8 @@ result = {
 ))
 
 # Real-time transformation
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("stream_transformer", PythonCodeNode(
-    name="stream_transformer",
-    code='''
-import json
-from datetime import datetime
-
-# Process streaming records
-extracted_records = extraction_data.get('extracted_records', [])
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "stream_transformer", {})
 processing_results = []
 
 for record in extracted_records:
@@ -810,15 +777,8 @@ result = {
 ))
 
 # Incremental loading with conflict resolution
-workflow = Workflow("example", name="Example")
-workflow.workflow.add_node("incremental_loader", PythonCodeNode(
-    name="incremental_loader",
-    code='''
-import sqlite3
-from datetime import datetime
-
-# Incremental loading with upsert logic
-processed_records = stream_data.get('processed_records', [])
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "incremental_loader", {})
 loading_results = []
 
 # Simulate database operations
@@ -864,10 +824,10 @@ result = {
 ))
 
 # Connect streaming pipeline
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -876,7 +836,7 @@ workflow.  # Method signature
 ### Data Lake ETL with Partitioning
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -886,14 +846,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("data_lake_etl")
+workflow = WorkflowBuilder()
 
 # Extract with metadata
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature:
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature:
         self.data_lake_path = data_lake_path
         self.extraction_metadata = {}
 
@@ -971,8 +932,8 @@ result = {
 ))
 
 # Transform with schema evolution
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature:
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature:
         self.schema_versions = {
             'v1.0': ['id', 'event_timestamp', 'data_value'],
             'v2.0': ['id', 'event_timestamp', 'data_value', 'partition_year', 'partition_month'],
@@ -1062,8 +1023,8 @@ result = {
 ))
 
 # Load to data warehouse with partitioning
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature:
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature:
         self.warehouse_path = warehouse_path
         self.partition_strategy = "date_based"
 
@@ -1147,10 +1108,10 @@ result = {
 ))
 
 # Connect data lake pipeline
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -1159,7 +1120,7 @@ workflow.  # Method signature
 ### Error Handling and Data Quality
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -1169,14 +1130,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("production_etl")
+workflow = WorkflowBuilder()
 
 # Data quality validation node
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature:
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature:
         self.quality_rules = {
             'completeness_threshold': 0.95,  # 95% of fields must be complete
             'uniqueness_threshold': 0.98,    # 98% of IDs must be unique
@@ -1315,8 +1277,8 @@ result = quality_results
 ))
 
 # Error handling and recovery
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature:
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature:
         self.error_strategies = {
             'data_quality_failure': 'quarantine_and_alert',
             'transformation_error': 'retry_with_fallback',
@@ -1515,12 +1477,12 @@ else:
 def create_enterprise_etl_workflow():
     """Create production-ready ETL workflow with full integration."""
 
-    workflow = Workflow("enterprise_etl")
+    workflow = WorkflowBuilder()
 
     # 1. Extract from multiple sources
-    workflow.add_node("extract_erp", SQLReaderNode())        # ERP system
-    workflow.add_node("extract_crm", RestClientNode())       # CRM API
-    workflow.add_node("extract_files", CSVReaderNode())      # File uploads
+    workflow.add_node("SQLReaderNode", "extract_erp", {}))        # ERP system
+    workflow.add_node("RestClientNode", "extract_crm", {}))       # CRM API
+    workflow.add_node("CSVReaderNode", "extract_files", {}))      # File uploads
 
     # 2. Data quality validation
     workflow.add_node("validate_quality", data_quality_check_node)
@@ -1532,7 +1494,7 @@ def create_enterprise_etl_workflow():
     workflow.add_node("transform_data", advanced_transformation_node)
 
     # 5. Load to data warehouse
-    workflow.add_node("load_warehouse", SQLWriterNode())
+    workflow.add_node("SQLWriterNode", "load_warehouse", {}))
 
     # 6. Update data catalog
     workflow.add_node("update_catalog", catalog_update_node)

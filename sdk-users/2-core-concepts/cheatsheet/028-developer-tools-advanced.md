@@ -9,17 +9,12 @@
 from kailash.workflow import CycleDebugger
 
 # Create debugger
-debugger = CycleDebugger(
-    debug_level="detailed",
-    enable_profiling=True,
-    output_directory="./debug_output"
-)
+debugger = CycleDebugger()
 
 # Start debugging
 trace = debugger.start_cycle(
     cycle_id="optimization_cycle",
-    workflow_id="my_workflow",
-    max_iterations=100
+    workflow_id="my_workflow"
 )
 
 # Track iterations
@@ -30,30 +25,40 @@ debugger.end_iteration(trace, iteration, output_data)
 
 # Generate report
 report = debugger.generate_report(trace)
-print(f"Efficiency: {report['performance']['efficiency_score']:.3f}")
+print(f"Performance: {report['performance']}")
+print(f"Statistics: {report['statistics']}")
 
 ```
 
 ### CycleProfiler
 ```python
-from kailash.workflow import CycleProfiler
+from kailash.workflow import CycleProfiler, CycleDebugger
 
-# Create profiler
-profiler = CycleProfiler(enable_advanced_metrics=True)
+# Create profiler and debugger
+profiler = CycleProfiler()
+debugger = CycleDebugger()
+
+# Create traces using debugger
+trace1 = debugger.start_cycle("fast_cycle", "test_workflow")
+iter1 = debugger.start_iteration(trace1, {"input": "data1"})
+debugger.end_iteration(trace1, iter1, {"output": "result1"})
+
+trace2 = debugger.start_cycle("slow_cycle", "test_workflow")
+iter2 = debugger.start_iteration(trace2, {"input": "data2"})
+debugger.end_iteration(trace2, iter2, {"output": "result2"})
 
 # Add traces for comparison
-profiler.add_trace(trace1)  # Fast execution
-profiler.add_trace(trace2)  # Slow execution
+profiler.add_trace(trace1)
+profiler.add_trace(trace2)
 
 # Analyze performance
 metrics = profiler.analyze_performance()
-print(f"Average cycle time: {metrics.avg_cycle_time:.3f}s")
-print(f"Bottlenecks: {metrics.bottlenecks}")
+print(f"Performance metrics: {metrics}")
 
 # Get optimization recommendations
 recommendations = profiler.get_optimization_recommendations()
 for rec in recommendations:
-    print(f"[{rec['priority']}] {rec['description']}")
+    print(f"Recommendation: {rec}")
 
 ```
 
@@ -61,32 +66,29 @@ for rec in recommendations:
 ```python
 from kailash.workflow import CycleAnalyzer
 
-# Create comprehensive analyzer
-analyzer = CycleAnalyzer(
-    analysis_level="comprehensive",
-    enable_profiling=True,
-    enable_debugging=True
-)
+# Create analyzer
+analyzer = CycleAnalyzer()
 
 # Start analysis session
 session = analyzer.start_analysis_session("optimization_study")
 
 # Analyze cycle
 trace = analyzer.start_cycle_analysis(
-    "experiment_1", "optimization_workflow", max_iterations=50
+    cycle_id="experiment_1",
+    workflow_id="optimization_workflow"
 )
 
-# Track iterations automatically
-for iteration_data in workflow_execution_iterator():
-    analyzer.track_iteration(
-        trace, iteration_data['input'], iteration_data['output']
-    )
+# Track iterations
+analyzer.track_iteration(
+    trace,
+    input_data={"value": 10},
+    output_data={"value": 15}
+)
 
-    # Real-time health monitoring
-    health = analyzer.get_real_time_metrics(trace)
-    if health['health_score'] < 0.5:
-        print("⚠️ Performance issue detected!")
-        break
+# Real-time health monitoring
+health = analyzer.get_real_time_metrics(trace)
+if health.get('health_score', 1.0) < 0.5:
+    print("⚠️ Performance issue detected!")
 
 # Generate reports
 cycle_report = analyzer.generate_cycle_report(trace)
@@ -98,292 +100,194 @@ session_report = analyzer.generate_session_report()
 
 ### Development Optimization
 ```python
+from kailash.workflow import CycleAnalyzer
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
 def optimize_during_development(workflow):
     """Optimize cycle performance during development."""
-    from kailash.workflow import CycleAnalyzer
 
-    def execute_workflow_with_tracking(wf, trace):
-        """Mock function for workflow execution."""
-        return {"results": "processed", "iterations": 5}
-
-    def apply_optimizations(wf, recommendations):
-        """Mock function for applying optimizations."""
-        return wf  # Return optimized workflow
-
-    analyzer = CycleAnalyzer(analysis_level="comprehensive")
+    analyzer = CycleAnalyzer()
     session = analyzer.start_analysis_session("development")
 
-    # Run baseline
-    trace_baseline = analyzer.start_cycle_analysis("baseline", workflow.workflow_id)
-    results_baseline = execute_workflow_with_tracking(workflow, trace_baseline)
+    # Run baseline analysis
+    trace_baseline = analyzer.start_cycle_analysis("baseline", "test_workflow")
+
+    # Simulate workflow execution tracking
+    analyzer.track_iteration(trace_baseline, {"input": "test"}, {"output": "processed"})
+
     baseline_report = analyzer.generate_cycle_report(trace_baseline)
+    print(f"Baseline analysis: {baseline_report}")
 
-    print(f"Baseline efficiency: {baseline_report['performance']['efficiency_score']:.3f}")
+    # Compare with optimized version
+    trace_optimized = analyzer.start_cycle_analysis("optimized", "test_workflow_v2")
+    analyzer.track_iteration(trace_optimized, {"input": "test"}, {"output": "optimized"})
 
-    # Apply optimizations
-    recommendations = baseline_report['recommendations']
-    optimized_workflow = apply_optimizations(workflow, recommendations)
-
-    # Test optimized version
-    trace_optimized = analyzer.start_cycle_analysis("optimized", optimized_workflow.workflow_id)
-    results_optimized = execute_workflow_with_tracking(optimized_workflow, trace_optimized)
     optimized_report = analyzer.generate_cycle_report(trace_optimized)
+    print(f"Optimized analysis: {optimized_report}")
 
-    improvement = (optimized_report['performance']['efficiency_score'] -
-                  baseline_report['performance']['efficiency_score']) * 100
-
-    print(f"Improvement: {improvement:.1f}%")
-    return optimized_workflow
+    return {"baseline": baseline_report, "optimized": optimized_report}
 
 ```
 
 ### Production Monitoring
 ```python
-def monitor_production_cycles():
+from kailash.workflow import CycleDebugger
+from kailash.runtime.local import LocalRuntime
+
+def monitor_production_cycles(workflow, parameters):
     """Monitor cycle health in production."""
-    from kailash.workflow import CycleDebugger
-    from kailash.runtime.local import LocalRuntime
 
-    def send_alerts(alerts, report):
-        """Mock function for sending alerts."""
-        print(f"ALERT: {alerts}")
-
-    debugger = CycleDebugger(
-        debug_level="basic",  # Minimal overhead
-        enable_profiling=True
-    )
+    debugger = CycleDebugger()
 
     # Define thresholds
     SLOW_THRESHOLD = 5.0  # seconds
-    LOW_EFFICIENCY = 0.3
-    HIGH_MEMORY = 1000    # MB
 
-    def monitor_execution(workflow, parameters):
-        trace = debugger.start_cycle("prod_cycle", workflow.workflow_id)
+    def monitor_execution():
+        trace = debugger.start_cycle("prod_cycle", "production_workflow")
 
         try:
+            # Simulate workflow execution
+            iteration = debugger.start_iteration(trace, parameters)
+
+            # Execute workflow
             runtime = LocalRuntime()
             results, run_id = runtime.execute(workflow, parameters=parameters)
 
+            debugger.end_iteration(trace, iteration, results)
+
             # Check health
             report = debugger.generate_report(trace)
-            efficiency = report['performance']['efficiency_score']
-            avg_time = report['statistics']['avg_iteration_time']
-            max_memory = report['statistics'].get('max_memory_mb', 0)
 
-            # Generate alerts
+            # Generate alerts based on performance
             alerts = []
-            if efficiency < LOW_EFFICIENCY:
-                alerts.append(f"Low efficiency: {efficiency:.3f}")
+            avg_time = report['statistics'].get('avg_iteration_time', 0)
+
             if avg_time > SLOW_THRESHOLD:
                 alerts.append(f"Slow iterations: {avg_time:.3f}s")
-            if max_memory > HIGH_MEMORY:
-                alerts.append(f"High memory: {max_memory:.1f}MB")
 
             if alerts:
-                send_alerts(alerts, report)
+                print(f"ALERTS: {alerts}")
 
-            return results, {'health_score': efficiency, 'alerts': alerts}
+            return results, {'health_report': report, 'alerts': alerts}
 
         except Exception as e:
-            debugger.end_cycle(trace, converged=False, termination_reason=f"error: {e}")
+            print(f"Execution failed: {e}")
             raise
 
-    return monitor_execution
+    return monitor_execution()
 
 ```
 
-### A/B Testing
+### Performance Comparison
 ```python
-def ab_test_cycle_variants():
-    """A/B test different cycle implementations."""
-    from kailash.workflow import CycleProfiler
+from kailash.workflow import CycleProfiler, CycleDebugger
 
-    def create_baseline_cycle():
-        """Mock function to create baseline cycle."""
-        from kailash import Workflow
-        return Workflow("baseline")
+def compare_cycle_variants():
+    """Compare different cycle implementations."""
 
-    def create_optimized_v1():
-        """Mock function to create optimized v1."""
-        from kailash import Workflow
-        return Workflow("optimized_v1")
+    profiler = CycleProfiler()
+    debugger = CycleDebugger()
 
-    def create_optimized_v2():
-        """Mock function to create optimized v2."""
-        from kailash import Workflow
-        return Workflow("optimized_v2")
+    # Test baseline variant
+    trace_baseline = debugger.start_cycle("baseline", "baseline_workflow")
+    iter_baseline = debugger.start_iteration(trace_baseline, {"test": "data"})
+    debugger.end_iteration(trace_baseline, iter_baseline, {"result": "baseline"})
 
-    def execute_workflow_with_profiling(workflow):
-        """Mock function for profiled execution."""
-        return {"trace_id": workflow.workflow_id, "performance": 0.75}
+    # Test optimized variant
+    trace_optimized = debugger.start_cycle("optimized", "optimized_workflow")
+    iter_optimized = debugger.start_iteration(trace_optimized, {"test": "data"})
+    debugger.end_iteration(trace_optimized, iter_optimized, {"result": "optimized"})
 
-    profiler = CycleProfiler(enable_advanced_metrics=True)
+    # Add traces to profiler
+    profiler.add_trace(trace_baseline)
+    profiler.add_trace(trace_optimized)
 
-    # Define variants
-    cycle_variants = {
-        "baseline": create_baseline_cycle(),
-        "optimized_v1": create_optimized_v1(),
-        "optimized_v2": create_optimized_v2()
-    }
+    # Analyze performance
+    metrics = profiler.analyze_performance()
+    recommendations = profiler.get_optimization_recommendations()
 
-    test_results = {}
+    print(f"Performance comparison:")
+    print(f"  Metrics: {metrics}")
+    print(f"  Recommendations: {len(recommendations)} items")
 
-    # Test each variant
-    for variant_name, workflow in cycle_variants.items():
-        print(f"Testing {variant_name}...")
-
-        # Run multiple times for statistical significance
-        variant_traces = []
-        for run in range(5):
-            trace = execute_workflow_with_profiling(workflow)
-            variant_traces.append(trace)
-            profiler.add_trace(trace)
-
-        # Calculate statistics
-        performance_stats = profiler.analyze_variant_performance(variant_traces)
-        test_results[variant_name] = performance_stats
-
-        print(f"  Avg efficiency: {performance_stats['avg_efficiency']:.3f}")
-
-    # Generate comparison
-    comparison_report = profiler.compare_variants(test_results)
-    best_variant = comparison_report['best_variant']
-
-    print(f"\n🏆 Best variant: {best_variant['name']}")
-    print(f"   Efficiency: {best_variant['efficiency']:.3f}")
-    print(f"   Improvement: {best_variant['improvement_percentage']:.1f}%")
-
-    return comparison_report
+    return {"metrics": metrics, "recommendations": recommendations}
 
 ```
 
 ## 🚀 Advanced Features
 
-### Custom Analysis Hooks
+### Custom Analysis
 ```python
-import time
-from kailash import Workflow
 from kailash.workflow import CycleAnalyzer
 
-class CustomCycleAnalyzer(CycleAnalyzer):
-    """Extended analyzer with custom metrics."""
+def advanced_cycle_analysis():
+    """Perform advanced cycle analysis with custom metrics."""
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.custom_metrics = {}
+    analyzer = CycleAnalyzer()
+    session = analyzer.start_analysis_session("advanced_study")
 
-    def _calculate_trend(self, values):
-        """Calculate trend from values."""
-        if len(values) < 2:
-            return "insufficient_data"
-        return "increasing" if values[-1] > values[0] else "decreasing"
+    # Start comprehensive analysis
+    trace = analyzer.start_cycle_analysis("advanced_test", "complex_workflow")
 
-    def track_custom_metric(self, trace, metric_name, value):
-        """Track custom business metrics."""
-        if trace.cycle_id not in self.custom_metrics:
-            self.custom_metrics[trace.cycle_id] = {}
+    # Track multiple iterations with custom data
+    for i in range(3):
+        analyzer.track_iteration(
+            trace,
+            input_data={"iteration": i, "data": f"input_{i}"},
+            output_data={"iteration": i, "result": f"output_{i}"}
+        )
 
-        if metric_name not in self.custom_metrics[trace.cycle_id]:
-            self.custom_metrics[trace.cycle_id][metric_name] = []
+        # Monitor real-time metrics
+        health = analyzer.get_real_time_metrics(trace)
+        print(f"Iteration {i+1} health: {health}")
 
-        self.custom_metrics[trace.cycle_id][metric_name].append({
-            'iteration': len(self.custom_metrics[trace.cycle_id][metric_name]),
-            'value': value,
-            'timestamp': time.time()
-        })
+    # Generate comprehensive reports
+    cycle_report = analyzer.generate_cycle_report(trace)
+    session_report = analyzer.generate_session_report()
 
-    def generate_custom_report(self, trace):
-        """Generate report with custom metrics."""
-        base_report = super().generate_cycle_report(trace)
+    print(f"Cycle analysis complete:")
+    print(f"  Cycle report keys: {list(cycle_report.keys())}")
+    print(f"  Session report keys: {list(session_report.keys())}")
 
-        if trace.cycle_id in self.custom_metrics:
-            base_report['custom_metrics'] = self.custom_metrics[trace.cycle_id]
-
-            # Ensure insights key exists
-            if 'insights' not in base_report:
-                base_report['insights'] = {}
-
-            # Calculate trends
-            for metric_name, values in self.custom_metrics[trace.cycle_id].items():
-                trend = self._calculate_trend([v['value'] for v in values])
-                base_report['insights'][f'{metric_name}_trend'] = trend
-
-        return base_report
-
-# Usage
-analyzer = CustomCycleAnalyzer(analysis_level="comprehensive")
-trace = analyzer.start_cycle_analysis("custom_test", "test_workflow")
-
-# Track custom metrics
-analyzer.track_custom_metric(trace, "customer_satisfaction", 0.85)
-analyzer.track_custom_metric(trace, "processing_cost", 12.50)
-
-# Generate enhanced report
-custom_report = analyzer.generate_custom_report(trace)
-print(f"Customer satisfaction trend: {custom_report['insights']['customer_satisfaction_trend']}")
-
-```
-
-### Export and Visualization
-```python
-def export_analysis_data(analyzer):
-    """Export analysis data for external tools."""
-    from kailash.workflow import CycleAnalyzer
-
-    # Export formats
-    exports = {
-        'jupyter': analyzer.export_for_jupyter("analysis.ipynb"),
-        'excel': analyzer.export_for_excel("analysis.xlsx"),
-        'visualization': analyzer.export_for_visualization("viz_data.json")
-    }
-
-    # Generate interactive HTML report
-    html_report = analyzer.generate_interactive_report(
-        include_charts=True,
-        template="comprehensive"
-    )
-
-    with open("cycle_analysis_report.html", "w") as f:
-        f.write(html_report)
-
-    return exports
+    return {"cycle": cycle_report, "session": session_report}
 
 ```
 
 ## 📋 Best Practices
 
 1. **Choose Right Analysis Level**
-   - Development: `analysis_level="comprehensive"`
-   - Testing: `analysis_level="standard"`
-   - Production: `analysis_level="basic"`
+   - Development: Use `CycleAnalyzer` for comprehensive analysis
+   - Testing: Use `CycleProfiler` for performance comparison
+   - Production: Use `CycleDebugger` for minimal overhead monitoring
 
 2. **Use Progressive Analysis**
    - Start with basic debugging
-   - Upgrade to detailed only when needed
-   - Sample high-frequency cycles
+   - Add profiling when performance issues detected
+   - Use comprehensive analysis only during optimization
 
 3. **Monitor Key Metrics**
-   - Efficiency score < 0.5 = performance issue
-   - Iteration time > 5s = slow performance
-   - Memory growth > 10MB = memory leak
+   - Track iteration time and memory usage
+   - Monitor convergence patterns
+   - Alert on performance degradation
 
 ## 🚀 Quick Reference
 
 ### Key Tools
-- **CycleDebugger**: Real-time execution tracking
-- **CycleProfiler**: Performance analysis & recommendations
-- **CycleAnalyzer**: Comprehensive analysis framework
+- **CycleDebugger**: Real-time execution tracking and reporting
+- **CycleProfiler**: Performance analysis and optimization recommendations
+- **CycleAnalyzer**: Comprehensive analysis framework with sessions
 
 ### Common Workflows
-1. **Development**: Analyze → optimize → test → deploy
+1. **Development**: Debug → profile → analyze → optimize
 2. **Production**: Monitor → alert → investigate
 3. **Research**: Compare → analyze → report
 
-### Alert Thresholds
-- Efficiency < 0.3 = critical issue
-- Iteration time > 5s = performance warning
-- Memory > 1GB = resource warning
+### Performance Indicators
+- Monitor iteration time trends
+- Track memory usage patterns
+- Analyze convergence behavior
+- Compare variant performance
 
 ---
 *Related: [021-cycle-aware-nodes.md](021-cycle-aware-nodes.md), [022-cycle-debugging-troubleshooting.md](022-cycle-debugging-troubleshooting.md)*

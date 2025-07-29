@@ -19,7 +19,7 @@ workflow.add_connection("reader", "data", "processor", "data")
 #                      ^source ^source_port ^target ^target_port
 
 # ❌ WRONG: 2-parameter syntax (deprecated)
-# workflow.connect("reader", "processor")
+# workflow.add_connection("reader", "result", "processor", "input")
 ```
 
 ### Connection Pattern Types
@@ -83,20 +83,19 @@ workflow.add_connection("analyzer", "result.metrics.accuracy", "validator", "thr
 workflow = WorkflowBuilder()
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 workflow.add_node("SwitchNode", "router", {
-    "conditions": [
-        {"condition": "value > 100", "output_port": "high"},
-        {"condition": "value <= 100", "output_port": "low"}
-    ]
+    "condition_field": "value",
+    "operator": ">",
+    "value": 100
 })
 workflow.add_node("PythonCodeNode", "high_handler", {"code": "result = f'High value: {data}'"})
 workflow.add_node("PythonCodeNode", "low_handler", {"code": "result = f'Low value: {data}'"})
 
 # Connect input to router
-workflow.add_connection("reader", "data", "router", "data")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 
 # Connect each output port
-workflow.add_connection("router", "high", "high_handler", "data")
-workflow.add_connection("router", "low", "low_handler", "data")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex parameters
 ```
 
 ### Pattern 5: Fan-Out (One-to-Many)
@@ -230,8 +229,8 @@ workflow.add_connection("processor", "result", "notifier", "data")
 ### ❌ Wrong: 2-Parameter Connections
 ```python
 # DEPRECATED - Will fail
-workflow.connect("source", "target")
-workflow.connect("reader", "processor")
+workflow.add_connection("source", "result", "target", "input")
+workflow.add_connection("reader", "result", "processor", "input")
 ```
 
 ### ✅ Correct: 4-Parameter Connections

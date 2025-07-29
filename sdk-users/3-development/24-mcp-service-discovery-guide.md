@@ -467,7 +467,7 @@ await dashboard.start()
 ### Workflow Integration
 
 ```python
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.base import Node
 
 # MCP Discovery Node

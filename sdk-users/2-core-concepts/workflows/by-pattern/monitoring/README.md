@@ -99,7 +99,7 @@ db_health_check = HTTPRequestNode(
 ### Alert Integration with Discord
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -109,8 +109,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Real-time Discord alerts for critical issues
 critical_alert = DiscordAlertNode(
@@ -136,7 +137,7 @@ health_dashboard = DiscordAlertNode(
 ### Results Analysis and Alerting
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -146,8 +147,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Analyze health check results and generate alerts
 health_analyzer = PythonCodeNode.from_function(
@@ -299,7 +301,7 @@ ALERT_THRESHOLDS = {
 ### Cascading Health Checks
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -309,14 +311,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Check dependent services in sequence
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("database_check", "api_check")  # API depends on DB
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("api_check", "frontend_check")  # Frontend depends on API
+workflow = WorkflowBuilder()
+workflow.add_connection("database_check", "result", "api_check", "input")  # API depends on DB
+workflow = WorkflowBuilder()
+workflow.add_connection("api_check", "result", "frontend_check", "input")  # Frontend depends on API
 
 ```
 
@@ -325,8 +328,7 @@ workflow.workflow.connect("api_check", "frontend_check")  # Frontend depends on 
 # Only alert if multiple consecutive checks fail
 alert_filter = SwitchNode(
     name="alert_filter",
-    condition_mapping={
-        "send_alert": "consecutive_failures >= 3",
+    condition_# mapping removed,
         "continue_monitoring": "consecutive_failures < 3"
     }
 )
@@ -336,7 +338,7 @@ alert_filter = SwitchNode(
 ### Health Score Aggregation
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -346,8 +348,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Calculate overall system health from individual service scores
 health_aggregator = PythonCodeNode.from_function(

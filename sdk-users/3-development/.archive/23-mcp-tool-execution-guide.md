@@ -22,10 +22,11 @@ The LLMAgent now supports automatic execution of MCP tools, allowing LLMs to:
 ### Basic Tool Execution
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai.llm_agent import LLMAgentNode
 
 # Create an LLM agent
-agent = LLMAgentNode()
+agent = "LLMAgentNode"
 
 # Run with automatic tool execution
 result = agent.run(
@@ -422,10 +423,10 @@ from kailash.workflow import Workflow
 from kailash.runtime.local import LocalRuntime
 
 # Create workflow with tool-executing agent
-workflow = Workflow("data-processing", "Data Processing with Tools")
+workflow = WorkflowBuilder()
 
 # Add agent node
-agent_node = LLMAgentNode()
+agent_node = "LLMAgentNode"
 workflow.add_node("agent", agent_node)
 
 # Configure inputs
@@ -440,7 +441,7 @@ workflow.set_node_inputs("agent", {
 
 # Execute workflow
 runtime = LocalRuntime()
-result = runtime.execute(workflow)
+result = runtime.execute(workflow.build())
 ```
 
 ## Testing MCP Tool Execution
@@ -454,7 +455,7 @@ The MCP implementation has been thoroughly tested with 407 tests:
 # Test tool discovery
 def test_tool_discovery():
     """Test MCP tool discovery from servers."""
-    node = LLMAgentNode()
+    node = "LLMAgentNode"
     # Use mock provider for unit tests
     result = node.run(
         provider="mock",
@@ -467,7 +468,7 @@ def test_tool_discovery():
 # Test tool execution
 def test_tool_execution():
     """Test automatic tool execution."""
-    node = LLMAgentNode()
+    node = "LLMAgentNode"
     result = node.run(
         provider="mock",
         model="gpt-4",
@@ -486,7 +487,7 @@ class TestMCPIntegration:
 
     def test_stdio_transport(self):
         """Test STDIO transport with real server."""
-        node = LLMAgentNode()
+        node = "LLMAgentNode"
         result = node.run(
             provider="ollama",
             model="llama3.2",
@@ -504,7 +505,7 @@ class TestMCPIntegration:
         """Test MCP in async environments."""
         # Tests Jupyter-like environments
         async def test_async():
-            node = LLMAgentNode()
+            node = "LLMAgentNode"
             return node.run(...)
 
         # Should handle event loop correctly
@@ -517,8 +518,8 @@ class TestMCPIntegration:
 @pytest.mark.e2e
 def test_complete_mcp_workflow():
     """Test complete MCP workflow with Ollama."""
-    workflow = Workflow("mcp-e2e")
-    workflow.add_node("agent", LLMAgentNode())
+    workflow = WorkflowBuilder()
+    workflow.add_node("LLMAgentNode", "agent", {}))
 
     runtime = LocalRuntime()
     results, run_id = runtime.execute(workflow, parameters={

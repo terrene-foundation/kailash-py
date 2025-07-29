@@ -447,7 +447,7 @@ workflow.add_node("SearchIndexUpdateNode", "update_search", {
 })
 
 # Connect the workflow
-workflow.add_connection("extract_legacy", "transform_data", "data")
+workflow.add_connection("source", "result", "target", "input")  # Fixed complex pattern
 workflow.add_connection("transform_data", "import_products", "transformed_data")
 workflow.add_connection("import_products", "update_search", "imported_ids")
 

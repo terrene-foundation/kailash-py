@@ -30,14 +30,14 @@ user = UserContext(
 
 # Use access-controlled runtime
 runtime = AccessControlledRuntime(user_context=user)
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
 ## Security Nodes
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -47,18 +47,19 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Authentication
-workflow = Workflow("example", name="Example")
-workflow.add_node("auth", MultiFactorAuthNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("MultiFactorAuthNode", "auth", {}),
     auth_methods=["password", "totp"],
     session_timeout=3600
 )
 
 # OAuth2 Integration with Runtime Secret Management
-workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
 workflow.add_node("oauth", OAuth2Node(),
     provider="azure",
     client_id="azure_client_id",  # Secret name, not value
@@ -69,8 +70,8 @@ workflow.add_node("oauth", OAuth2Node(),
 # Secrets are automatically injected at runtime by SecretProvider
 
 # Threat Detection
-workflow = Workflow("example", name="Example")
-workflow.add_node("security", ThreatDetectionNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("ThreatDetectionNode", "security", {}),
     detection_rules=["sql_injection", "xss", "path_traversal"],
     action="block_and_alert"
 )
@@ -89,7 +90,7 @@ with safe_open("data/file.txt", "r") as f:
     content = f.read()
 
 # Secure node with path validation
-workflow.add_node("reader", CSVReaderNode(),
+workflow.add_node("CSVReaderNode", "reader", {}),
     file_path=safe_path,
     validate_path=True  # Auto-validate
 )
@@ -107,7 +108,7 @@ secret_provider = EnvironmentSecretProvider()
 runtime = LocalRuntime(secret_provider=secret_provider)
 
 # Secrets are injected at runtime - NO hardcoding needed!
-workflow.add_node("api", HTTPRequestNode(),
+workflow.add_node("HTTPRequestNode", "api", {}),
     url="https://api.example.com",
     headers={"Authorization": "Bearer {secret_will_be_injected}"}
 )
@@ -147,7 +148,7 @@ api_key = os.getenv("API_KEY")  # Avoid this pattern
 ## Common Security Patterns
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -157,25 +158,21 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Input sanitization in PythonCodeNode
-workflow = Workflow("example", name="Example")
-workflow.add_node("sanitize", PythonCodeNode(
-    name="sanitize",
-    code='''
-import re
-# Remove dangerous characters
-safe_input = re.sub(r'[<>&"\'`;]', '', user_input)
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "sanitize", {})
 result = {'sanitized': safe_input}
 ''',
     input_types={"user_input": str}
 ))
 
 # Rate limiting
-workflow = Workflow("example", name="Example")
-workflow.add_node("limiter", RateLimiterNode(),
+workflow = WorkflowBuilder()
+workflow.add_node("RateLimiterNode", "limiter", {}),
     max_requests=100,
     window_seconds=60,
     key_field="user_id"

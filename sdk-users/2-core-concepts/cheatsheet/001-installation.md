@@ -112,7 +112,7 @@ workflow.add_node("PythonCodeNode", "processor", {
 })
 
 # Connect nodes with correct syntax
-workflow.connect("data_generator", "result", mapping={"processor": "input_data"})
+workflow.add_connection("data_generator", "result", "processor", "input_data")
 
 # Execute workflow
 runtime = LocalRuntime()

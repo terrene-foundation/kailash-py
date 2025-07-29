@@ -24,7 +24,7 @@ workflow.add_node("file_discoverer", dir_reader)
 ### Pattern Matching
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -34,8 +34,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Only CSV files
 DirectoryReaderNode(directory_path="./data", pattern="*.csv")
@@ -51,7 +52,7 @@ DirectoryReaderNode(directory_path="./data", pattern="reports/*.pdf")
 ### Metadata Control
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -61,8 +62,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Full metadata (default)
 DirectoryReaderNode(include_metadata=True)
@@ -112,7 +114,7 @@ DirectoryReaderNode(include_metadata=False)
 ### Connect to File Processors
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -122,21 +124,22 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Use files_by_type for typed processing
-workflow.connect("discoverer", "csv_processor", mapping={"files_by_type.csv": "files"})
+workflow.add_connection("discoverer", "csv_processor", "files_by_type.csv", "files")
 
 # Use discovered_files for generic processing
-workflow.connect("discoverer", "generic_processor", mapping={"discovered_files": "file_list"})
+workflow.add_connection("discoverer", "generic_processor", "discovered_files", "file_list")
 
 ```
 
 ### Process Specific File Types
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -146,8 +149,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # DataTransformer to extract CSV files only
 csv_extractor = DataTransformer(
@@ -160,8 +164,8 @@ result = {"csv_files": csv_files, "count": len(csv_files)}
 """]
 )
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -184,15 +188,15 @@ json_files = globals().get("files_by_type", {}).get("json", [])
 """])
 
 # 3. Connect to processors
-workflow.connect("discoverer", "csv_proc", mapping={"files_by_type": "files_by_type"})
-workflow.connect("discoverer", "json_proc", mapping={"files_by_type": "files_by_type"})
+workflow.add_connection("discoverer", "csv_proc", "files_by_type", "files_by_type")
+workflow.add_connection("discoverer", "json_proc", "files_by_type", "files_by_type")
 
 ```
 
 ### File Statistics and Reporting
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -202,8 +206,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Generate file inventory report
 stats_generator = DataTransformer(transformations=["""
@@ -222,15 +227,15 @@ report = {
 result = report
 """])
 
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
 ### Large Directory Optimization
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -240,8 +245,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # For directories with thousands of files
 big_dir_reader = DirectoryReaderNode(

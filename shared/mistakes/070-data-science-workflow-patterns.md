@@ -319,13 +319,68 @@ result = {
 '''
 ))
 
-# Create quality improvement cycle
+# ❌ WRONG - Using deprecated cycle=True pattern
 workflow.connect("iterative_cleaner", "iterative_cleaner",
     mapping={"result": "data"},
-    cycle=True,
+    cycle=True,  # DEPRECATED!
     max_iterations=10,
     convergence_check="converged == True"
 )
+
+# ✅ CORRECT - Modern CycleBuilder API
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "iterative_cleaner", {
+    "code": """
+# Data science processing with pandas
+import pandas as pd
+import numpy as np
+
+try:
+    df = pd.DataFrame(data.get("records", []))
+    iteration = data.get("iteration", 0)
+except NameError:
+    # First iteration - create sample data
+    df = pd.DataFrame({"values": [1, 2, 3, 4, 5], "quality": [0.6, 0.7, 0.5, 0.8, 0.4]})
+    iteration = 0
+
+new_iteration = iteration + 1
+
+# Clean data iteratively
+if len(df) > 0:
+    # Remove low quality rows
+    quality_threshold = 0.6 + (iteration * 0.05)
+    cleaned_df = df[df["quality"] >= quality_threshold]
+
+    # Calculate improvement
+    improvement = len(cleaned_df) / len(df) if len(df) > 0 else 1.0
+    converged = improvement >= 0.9 or new_iteration >= 5
+else:
+    cleaned_df = df
+    converged = True
+
+result = {
+    "records": cleaned_df.to_dict("records"),
+    "iteration": new_iteration,
+    "shape": list(cleaned_df.shape),
+    "converged": converged
+}
+"""
+})
+
+# Build workflow and create cycle
+built_workflow = workflow.build()
+cycle_builder = built_workflow.create_cycle('quality_improvement')
+cycle_builder.connect('iterative_cleaner', 'iterative_cleaner', mapping={'result': 'data'})
+cycle_builder.max_iterations(10)
+cycle_builder.converge_when('converged == True')
+cycle_builder.build()
+
+# Execute with runtime
+runtime = LocalRuntime()
+results, run_id = runtime.execute(built_workflow)
 ```
 
 ## Best Practices

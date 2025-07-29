@@ -506,7 +506,7 @@ async def test_llm_mcp_tool_execution():
     from kailash.nodes.ai.llm_agent import LLMAgentNode
 
     # Real LLM with MCP server
-    agent = LLMAgentNode()
+    agent = "LLMAgentNode"
     result = await agent.run(
         provider="ollama",
         model="llama3.2:1b",

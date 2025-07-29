@@ -29,13 +29,11 @@ except Exception:
     # Thread pool exhausted, application freezes
 
 # With circuit breaker - fail fast
-from kailash.core.resilience import CircuitBreaker
+from kailash.core.resilience.circuit_breaker import CircuitBreakerManager, CircuitBreakerConfig, CircuitBreakerError
 
-breaker = CircuitBreaker(
-    failure_threshold=5,
-    recovery_timeout=60,
-    error_rate_threshold=0.5
-)
+manager = CircuitBreakerManager()
+config = CircuitBreakerConfig(failure_threshold=5, success_threshold=2)
+breaker = manager.get_or_create("database_operations", config)
 
 try:
     result = await breaker.call(db.query, "SELECT * FROM users")
@@ -177,7 +175,7 @@ circuit_breaker = CircuitBreaker(
 The SDK automatically collects detailed metrics:
 
 ```python
-from kailash.workflow import WorkflowBuilder
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.tracking import MetricsCollector
 
 # Enable metrics collection

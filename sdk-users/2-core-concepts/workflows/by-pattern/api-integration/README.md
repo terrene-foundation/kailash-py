@@ -101,7 +101,7 @@ authenticated_api = HTTPRequestNode(
 ### Response Processing
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -111,8 +111,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Process API responses
 response_processor = PythonCodeNode.from_function(
@@ -150,7 +151,7 @@ def process_user_posts(users_data):
 ### Parallel API Calls
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -160,14 +161,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Execute multiple API calls simultaneously
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("data_source", ["api_call_1", "api_call_2", "api_call_3"])
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect(["api_call_1", "api_call_2", "api_call_3"], "results_aggregator")
+workflow = WorkflowBuilder()
+workflow.add_connection("data_source", ["api_call_1", "api_call_2", "api_call_3"])
+workflow = WorkflowBuilder()
+workflow.add_connection(["api_call_1", "api_call_2", "api_call_3"], "results_aggregator")
 
 ```
 
@@ -176,8 +178,7 @@ workflow.workflow.connect(["api_call_1", "api_call_2", "api_call_3"], "results_a
 # Route API calls based on response data
 api_router = SwitchNode(
     name="api_router",
-    condition_mapping={
-        "success_path": "status_code == 200",
+    condition_# mapping removed,
         "retry_path": "status_code in [429, 502, 503]",
         "error_path": "status_code >= 400"
     }
@@ -452,8 +453,7 @@ def compose_user_profile(user_id):
 # Trigger API calls based on events
 event_processor = SwitchNode(
     name="event_processor",
-    condition_mapping={
-        "user_created": "event_type == 'user.created'",
+    condition_# mapping removed,
         "order_placed": "event_type == 'order.placed'",
         "payment_received": "event_type == 'payment.received'"
     }

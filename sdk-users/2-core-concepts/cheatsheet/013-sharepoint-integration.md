@@ -4,12 +4,12 @@
 
 ```python
 import os
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import SharePointGraphReader, SharePointGraphWriter
 
 # Create workflow
-workflow = Workflow("sharepoint-demo", "SharePoint Integration")
+workflow = WorkflowBuilder()
 
 # Read from SharePoint
 workflow.add_node("sharepoint_read", SharePointGraphReader(),
@@ -22,7 +22,7 @@ workflow.add_node("sharepoint_read", SharePointGraphReader(),
 )
 
 # Process data
-workflow.add_node("processor", DataProcessorNode())
+workflow.add_node("DataProcessorNode", "processor", {}))
 
 # Write to SharePoint
 workflow.add_node("sharepoint_write", SharePointGraphWriter(),
@@ -35,12 +35,12 @@ workflow.add_node("sharepoint_write", SharePointGraphWriter(),
 )
 
 # Connect nodes
-workflow.connect("sharepoint_read", "processor")
-workflow.connect("processor", "sharepoint_write")
+workflow.add_connection("sharepoint_read", "result", "processor", "input")
+workflow.add_connection("processor", "result", "sharepoint_write", "input")
 
 # Execute
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 
 ```
 
@@ -49,7 +49,7 @@ results, run_id = runtime.execute(workflow)
 ### List Files
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -59,10 +59,11 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
 workflow.add_node("list_files", SharePointGraphReader(),
     operation="list_files",
     library_name="Documents",
@@ -74,7 +75,7 @@ workflow.add_node("list_files", SharePointGraphReader(),
 ### Download File
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -84,10 +85,11 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
 workflow.add_node("download", SharePointGraphReader(),
     operation="download_file",
     library_name="Documents",
@@ -100,7 +102,7 @@ workflow.add_node("download", SharePointGraphReader(),
 ### Upload File with Metadata
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -110,10 +112,11 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-workflow = Workflow("example", name="Example")
+workflow = WorkflowBuilder()
 workflow.add_node("upload", SharePointGraphWriter(),
     file_path="reports/analysis.xlsx",
     library_name="Reports",
@@ -130,7 +133,7 @@ workflow.add_node("upload", SharePointGraphWriter(),
 
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -140,8 +143,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Use parameter override for different tenants
 for tenant in ["tenant_a", "tenant_b"]:
@@ -164,7 +168,7 @@ results, run_id = runtime.execute(workflow, parameter_overrides={
 
 ```python
 try:
-    results, run_id = runtime.execute(workflow)
+    results, run_id = runtime.execute(workflow.build())
 except Exception as e:
     if "401" in str(e):
         print("Authentication failed. Check credentials.")

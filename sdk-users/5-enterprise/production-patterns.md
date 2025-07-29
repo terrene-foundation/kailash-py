@@ -25,7 +25,7 @@ from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.data import CSVReaderNode, AsyncSQLDatabaseNode
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 from kailash.middleware.auth import MiddlewareAuthManager
 
 # ❌ AVOID: Relative imports in production code
@@ -135,22 +135,22 @@ from myapp.utils.helpers import generate_job_id
 def create_data_processing_workflow():
     """Create a production data processing workflow with monitoring."""
     workflow = WorkflowBuilder()
-    
+
     # Add nodes with clear imports
     workflow.add_node("CSVReaderNode", "reader", {
         "file_path": "/data/input.csv"
     })
-    
+
     workflow.add_node("AsyncSQLDatabaseNode", "database", {
         "connection_string": "postgresql://user:pass@db:5432/production",
         "pool_size": 20
     })
-    
+
     workflow.add_node("LLMAgentNode", "processor", {
         "model": "gpt-4",
         "provider": "openai"
     })
-    
+
     # Health monitoring
     workflow.add_node("HealthCheckNode", "health", {
         "services": [
@@ -158,16 +158,16 @@ def create_data_processing_workflow():
             {"name": "ai_service", "type": "http"}
         ]
     })
-    
+
     # Connect nodes
     workflow.add_connection("reader", "data", "processor", "input")
     workflow.add_connection("processor", "result", "database", "data")
-    
+
     return workflow
 
 
 # myapp/main.py
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 from kailash.middleware.auth import MiddlewareAuthManager
 
 # Absolute imports for all app modules
@@ -180,7 +180,7 @@ from myapp.utils.helpers import load_config
 def main():
     """Main entry point for production application."""
     config = load_config()
-    
+
     # Create gateway with absolute imports
     gateway = create_gateway(
         title="Production Data Processing Gateway",
@@ -189,11 +189,11 @@ def main():
             database_url=config["database_url"]
         )
     )
-    
+
     # Register workflows
     gateway.register("process_data", create_data_processing_workflow())
     gateway.register("monitor_health", create_monitoring_workflow())
-    
+
     # Start server
     gateway.run(host="0.0.0.0", port=8000, workers=4)
 
@@ -219,10 +219,10 @@ def test_data_processing_workflow():
     """Test workflow with absolute imports."""
     workflow = create_data_processing_workflow()
     runtime = LocalRuntime()
-    
+
     # Execute workflow
     results, run_id = runtime.execute(workflow.build())
-    
+
     assert results is not None
     assert "processor" in results
 
@@ -248,9 +248,9 @@ def check_relative_imports(file_path):
             tree = ast.parse(f.read())
         except SyntaxError:
             return []
-    
+
     relative_imports = []
-    
+
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
             if node.level > 0:  # Relative import
@@ -259,29 +259,29 @@ def check_relative_imports(file_path):
                     'import': ast.unparse(node),
                     'file': str(file_path)
                 })
-    
+
     return relative_imports
 
 
 def validate_project_imports(project_root):
     """Validate all Python files in the project."""
     issues = []
-    
+
     for py_file in Path(project_root).rglob("*.py"):
         # Skip virtual environments and build directories
         if any(part in str(py_file) for part in ['venv', 'build', 'dist', '.git']):
             continue
-            
+
         file_issues = check_relative_imports(py_file)
         issues.extend(file_issues)
-    
+
     return issues
 
 
 # Usage in CI/CD pipeline
 if __name__ == "__main__":
     issues = validate_project_imports("/app")
-    
+
     if issues:
         print("❌ Found relative imports in production code:")
         for issue in issues:
@@ -304,12 +304,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: Validate absolute imports
         run: |
           python scripts/validate_imports.py
@@ -385,7 +385,7 @@ print('✅ All imports verified')
 ```python
 # gateway_app.py - Production gateway application
 import os
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 from kailash.middleware.auth import MiddlewareAuthManager
 # Note: Import PerformanceBenchmarkNode when added to exports
 
@@ -706,20 +706,11 @@ monitoring_workflow.add_node("DiscordAlertNode", "alerting", {
 })
 
 # Connect monitoring components
-monitoring_workflow.add_connection(
-    "health_checker", "result",
-    "alerting", "health_data"
-)
+monitoring_workflow.add_connection("health_checker", "result", "result", "input")
 
-monitoring_workflow.add_connection(
-    "threat_monitor", "threats",
-    "alerting", "threat_data"
-)
+monitoring_workflow.add_connection("threat_monitor", "result", "threats", "input")
 
-monitoring_workflow.add_connection(
-    "anomaly_detector", "anomalies",
-    "alerting", "anomaly_data"
-)
+monitoring_workflow.add_connection("anomaly_detector", "result", "anomalies", "input")
 ```
 
 ### Metrics Collection
@@ -802,10 +793,7 @@ metrics_workflow.add_node("HTTPRequestNode", "metrics_exporter", {
 })
 
 # Connect nodes
-metrics_workflow.add_connection(
-    "metrics_collector", "metrics",
-    "metrics_exporter", "body"
-)
+metrics_workflow.add_connection("metrics_collector", "result", "metrics", "input")
 ```
 
 ### Prometheus Integration
@@ -987,14 +975,10 @@ def create_monitored_enterprise_workflow():
     })
 
     # Connect with monitoring
-    workflow.connect("metrics", "status",
-                    mapping={"data_reader": "start_signal"})
-    workflow.connect("data_reader", "data",
-                    mapping={"database": "input_data"})
-    workflow.connect("database", "result",
-                    mapping={"processor": "data_input"})
-    workflow.connect("processor", "result",
-                    mapping={"anomaly_monitor": "execution_metrics"})
+    workflow.add_connection("metrics", "status", "data_reader", "start_signal")
+    workflow.add_connection("data_reader", "data", "database", "input_data")
+    workflow.add_connection("database", "result", "processor", "data_input")
+    workflow.add_connection("processor", "result", "anomaly_monitor", "execution_metrics")
 
     return workflow
 ```
@@ -1698,7 +1682,7 @@ async with session.get(url) as response:
 ```python
 from kailash.nodes.security import ThreatDetectionNode, AuditLogNode
 from kailash.nodes.api import RateLimitedAPINode
-from kailash.middleware import create_gateway
+from kailash.api.middleware import create_gateway
 
 # Security hardening workflow
 security_workflow = WorkflowBuilder()

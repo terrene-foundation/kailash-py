@@ -68,7 +68,7 @@ node = PythonCodeNode.from_function(complex_processor)
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -78,8 +78,9 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
   node = PythonCodeNode(
       config={
@@ -185,11 +186,11 @@ value = kwargs.get("value", 0)  # NameError: name 'kwargs' is not defined
 
 #### Basic Cycle with PythonCodeNode
 ```python
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 
-workflow = Workflow("cycle-example", "Cycle Example")
+workflow = WorkflowBuilder()
 
 # Iterative improvement code
 python_code = '''
@@ -220,19 +221,14 @@ result = {
 }
 '''
 
-workflow.add_node("improver", PythonCodeNode(name="improver", code=python_code))
+workflow.add_node("PythonCodeNode", "improver", {"code": python_code})
 
 # ✅ ESSENTIAL: Include mapping for data flow between iterations
-workflow.connect("improver", "improver",
-    mapping={"current_value": "current_value"},  # Pass data between iterations
-    cycle=True,
-    max_iterations=10,
-    convergence_check="converged == True")       # Direct field name
+# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()       # Direct field name
 
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={
-    "current_value": 10,
-    "target": 50
+results, run_id = runtime.execute(workflow.build(), parameters={
+    "improver": {"current_value": 10, "target": 50}
 })
 
 ```
@@ -290,7 +286,7 @@ result = {"value": 42, "status": "complete"}
 #### Convergence Check Format
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -300,18 +296,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ✅ CORRECT: Use direct field names from result
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("node", "node",
-    convergence_check="converged == True")      # Direct access
+workflow = WorkflowBuilder()
+workflow.add_connection("source", "converged", "target", "input")  # Direct field name
 
 # ❌ WRONG: Nested path access
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("node", "node",
-    convergence_check="result.converged == True")  # Will fail
+workflow = WorkflowBuilder()
+workflow.add_connection("source", "result.converged", "target", "input")  # Will fail
 
 ```
 
@@ -347,7 +342,7 @@ except NameError:
 #### 3. Cycle Not Iterating
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -357,16 +352,17 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # ❌ ERROR: Cycle runs only once, no data flow
-workflow = Workflow("example", name="Example")
-workflow.workflow.connect("node", "node", cycle=True, max_iterations=5)
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
 
 # ✅ FIX: Include mapping for data flow
-workflow = Workflow("example", name="Example")
-workflow.  # Method signature
+workflow = WorkflowBuilder()
+# Workflow setup goes here  # Method signature
 
 ```
 
@@ -385,7 +381,7 @@ convergence_check="converged == True"
 #### Debug Result Structure
 ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -395,12 +391,13 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
 # Always debug the actual result structure first
 runtime = LocalRuntime()
-workflow.execute(workflow)
+results, run_id = runtime.execute(workflow.build())
 print(f"Result keys: {list(results['node_name'].keys())}")
 print(f"Sample values: {results['node_name']}")
 
@@ -444,7 +441,7 @@ assert final_output["iteration_count"] == 5
 - **Example**:
   ```python
 # SDK Setup for example
-from kailash import Workflow
+from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
@@ -454,16 +451,15 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.base import Node, NodeParameter
 
 # Example setup
-workflow = Workflow("example", name="Example")
-workflow.runtime = LocalRuntime()
+workflow = WorkflowBuilder()
+# Runtime should be created separately
+runtime = LocalRuntime()
 
-  mcp_tool = MCPToolNode()
-  result = mcp_tool.run(
-      mcp_server="ai_tools",
-      tool_name="analyze",
-# Parameters setup
-workflow.{"method": "regression", "data": input_data}
-  )
+  workflow.add_node("MCPToolNode", "mcp_tool", {
+      "mcp_server": "ai_tools",
+      "tool_name": "analyze",
+      "parameters": {"method": "regression", "data": "input_data"}
+  })
 
   ```
 

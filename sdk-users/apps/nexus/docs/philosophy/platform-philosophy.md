@@ -27,6 +27,7 @@ Nexus is built around the **workflow-native paradigm**:
 Every operation is a **durable workflow**, not a ephemeral request:
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
 # Traditional: Request disappears if server crashes
 @app.post("/process-order")
 def process_order(order_data):
