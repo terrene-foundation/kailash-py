@@ -7,7 +7,7 @@ import os
 import time
 import uuid
 from contextlib import AsyncExitStack
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .auth import AuthManager, AuthProvider, PermissionManager, RateLimiter
 from .errors import (
@@ -98,7 +98,9 @@ class MCPClient:
 
         # Connection pooling
         self.connection_pool_config = connection_pool_config or {}
-        self._connection_pools: Dict[str, List[Any]] = {}
+        self._websocket_pools: Dict[str, Any] = {}  # url -> connection info
+        self._pool_lock = asyncio.Lock()
+        self._connection_last_used: Dict[str, float] = {}
 
         # Metrics
         if enable_metrics:
@@ -137,6 +139,8 @@ class MCPClient:
 
             # Update transport usage metrics
             if self.metrics:
+                if "transport_usage" not in self.metrics:
+                    self.metrics["transport_usage"] = {}
                 transport_counts = self.metrics["transport_usage"]
                 transport_counts[transport_type] = (
                     transport_counts.get(transport_type, 0) + 1
@@ -148,6 +152,8 @@ class MCPClient:
                 return await self._discover_tools_sse(server_config, timeout)
             elif transport_type == "http":
                 return await self._discover_tools_http(server_config, timeout)
+            elif transport_type == "websocket":
+                return await self._discover_tools_websocket(server_config, timeout)
             else:
                 raise TransportError(
                     f"Unsupported transport: {transport_type}",
@@ -173,7 +179,8 @@ class MCPClient:
 
         except Exception as e:
             if self.metrics:
-                self.metrics["requests_failed"] += 1
+                if "requests_failed" in self.metrics:
+                    self.metrics["requests_failed"] += 1
 
             logger.error(f"Failed to discover tools from {server_key}: {e}")
             return []
@@ -309,6 +316,67 @@ class MCPClient:
 
             return tools
 
+    async def _discover_tools_websocket(
+        self, server_config: Union[str, Dict[str, Any]], timeout: Optional[float]
+    ) -> List[Dict[str, Any]]:
+        """Discover tools using WebSocket transport."""
+        from mcp import ClientSession
+        from mcp.client.websocket import websocket_client
+
+        # Extract WebSocket URL from server config
+        if isinstance(server_config, str):
+            url = server_config
+        else:
+            url = server_config.get("url")
+            if not url:
+                raise TransportError(
+                    "WebSocket URL not provided", transport_type="websocket"
+                )
+
+        # Get or create connection from pool
+        session, is_new = await self._get_or_create_websocket_connection(url, timeout)
+
+        # Update metrics
+        if self.metrics:
+            if is_new:
+                self.metrics["websocket_pool_misses"] = (
+                    self.metrics.get("websocket_pool_misses", 0) + 1
+                )
+                self.metrics["websocket_connections_created"] = (
+                    self.metrics.get("websocket_connections_created", 0) + 1
+                )
+            else:
+                self.metrics["websocket_pool_hits"] = (
+                    self.metrics.get("websocket_pool_hits", 0) + 1
+                )
+                self.metrics["websocket_connections_reused"] = (
+                    self.metrics.get("websocket_connections_reused", 0) + 1
+                )
+
+        try:
+            # List tools with timeout
+            if timeout:
+                result = await asyncio.wait_for(session.list_tools(), timeout=timeout)
+            else:
+                result = await session.list_tools()
+
+            # Convert to standard format
+            tools = []
+            for tool in result.tools:
+                tools.append(
+                    {
+                        "name": tool.name,
+                        "description": tool.description,
+                        "parameters": tool.inputSchema,
+                    }
+                )
+
+            return tools
+        except Exception as e:
+            # On error, remove connection from pool
+            await self._remove_connection_from_pool(url)
+            raise
+
     async def call_tool(
         self,
         server_config: Union[str, Dict[str, Any]],
@@ -350,6 +418,10 @@ class MCPClient:
                 return await self._call_tool_http(
                     server_config, tool_name, arguments, timeout
                 )
+            elif transport_type == "websocket":
+                return await self._call_tool_websocket(
+                    server_config, tool_name, arguments, timeout
+                )
             else:
                 raise TransportError(
                     f"Unsupported transport: {transport_type}",
@@ -372,7 +444,8 @@ class MCPClient:
 
         except Exception as e:
             if self.metrics:
-                self.metrics["requests_failed"] += 1
+                if "requests_failed" in self.metrics:
+                    self.metrics["requests_failed"] += 1
 
             logger.error(f"Tool call failed for {tool_name}: {e}")
             return {"success": False, "error": str(e), "tool_name": tool_name}
@@ -524,6 +597,77 @@ class MCPClient:
                 "tool_name": tool_name,
             }
 
+    async def _call_tool_websocket(
+        self,
+        server_config: Union[str, Dict[str, Any]],
+        tool_name: str,
+        arguments: Dict[str, Any],
+        timeout: Optional[float],
+    ) -> Dict[str, Any]:
+        """Call tool using WebSocket transport."""
+        from mcp import ClientSession
+        from mcp.client.websocket import websocket_client
+
+        # Extract WebSocket URL from server config
+        if isinstance(server_config, str):
+            url = server_config
+        else:
+            url = server_config.get("url")
+            if not url:
+                raise TransportError(
+                    "WebSocket URL not provided", transport_type="websocket"
+                )
+
+        # Get or create connection from pool
+        session, is_new = await self._get_or_create_websocket_connection(url, timeout)
+
+        # Update metrics
+        if self.metrics:
+            if is_new:
+                self.metrics["websocket_pool_misses"] = (
+                    self.metrics.get("websocket_pool_misses", 0) + 1
+                )
+                self.metrics["websocket_connections_created"] = (
+                    self.metrics.get("websocket_connections_created", 0) + 1
+                )
+            else:
+                self.metrics["websocket_pool_hits"] = (
+                    self.metrics.get("websocket_pool_hits", 0) + 1
+                )
+                self.metrics["websocket_connections_reused"] = (
+                    self.metrics.get("websocket_connections_reused", 0) + 1
+                )
+
+        try:
+            # Call tool with timeout
+            if timeout:
+                result = await asyncio.wait_for(
+                    session.call_tool(name=tool_name, arguments=arguments),
+                    timeout=timeout,
+                )
+            else:
+                result = await session.call_tool(name=tool_name, arguments=arguments)
+
+            # Extract content from result
+            content = []
+            if hasattr(result, "content"):
+                for item in result.content:
+                    if hasattr(item, "text"):
+                        content.append(item.text)
+                    else:
+                        content.append(str(item))
+
+            return {
+                "success": True,
+                "content": "\n".join(content) if content else "",
+                "result": result,
+                "tool_name": tool_name,
+            }
+        except Exception as e:
+            # On error, remove connection from pool
+            await self._remove_connection_from_pool(url)
+            raise
+
     # Additional enhanced methods
     async def list_resources(
         self,
@@ -582,7 +726,12 @@ class MCPClient:
     def _get_transport_type(self, server_config: Union[str, Dict[str, Any]]) -> str:
         """Determine transport type from server config."""
         if isinstance(server_config, str):
-            return "sse" if server_config.startswith("http") else "stdio"
+            if server_config.startswith(("ws://", "wss://")):
+                return "websocket"
+            elif server_config.startswith(("http://", "https://")):
+                return "sse"
+            else:
+                return "stdio"
         else:
             return server_config.get("transport", "stdio")
 
@@ -596,7 +745,7 @@ class MCPClient:
                 command = server_config.get("command", "python")
                 args = server_config.get("args", [])
                 return f"stdio://{command}:{':'.join(args)}"
-            elif transport in ["sse", "http"]:
+            elif transport in ["sse", "http", "websocket"]:
                 return server_config.get("url", "unknown")
             else:
                 return str(hash(json.dumps(server_config, sort_keys=True)))
@@ -710,3 +859,189 @@ class MCPClient:
                 "timestamp": str(time.time()),
             },
         }
+
+    # WebSocket Connection Pooling Methods
+    async def _get_or_create_websocket_connection(
+        self, url: str, timeout: Optional[float] = None
+    ) -> Tuple[Any, bool]:
+        """Get existing connection from pool or create a new one.
+
+        Returns:
+            Tuple of (session, is_new_connection)
+        """
+        # Check if pooling is enabled
+        if not self._should_use_pooling():
+            # Create new connection without pooling
+            session = await self._create_websocket_connection(url, timeout)
+            return session, True
+
+        async with self._pool_lock:
+            # Update last used time
+            self._connection_last_used[url] = time.time()
+
+            # Check if we have an existing healthy connection
+            if url in self._websocket_pools:
+                conn_info = self._websocket_pools[url]
+                session = conn_info.get("session")
+
+                # Check if connection is still healthy
+                if session and await self._is_connection_healthy(session):
+                    return session, False
+                else:
+                    # Remove unhealthy connection
+                    del self._websocket_pools[url]
+
+            # Check pool size limits
+            if len(self._websocket_pools) >= self.connection_pool_config.get(
+                "max_connections", 10
+            ):
+                # Evict least recently used connection
+                await self._evict_lru_connection()
+
+            # Create new connection
+            session = await self._create_websocket_connection(url, timeout)
+
+            # Store in pool
+            self._websocket_pools[url] = {
+                "session": session,
+                "created_at": time.time(),
+                "url": url,
+            }
+
+            return session, True
+
+    async def _create_websocket_connection(
+        self, url: str, timeout: Optional[float]
+    ) -> Any:
+        """Create a new WebSocket connection and session."""
+        from mcp import ClientSession
+        from mcp.client.websocket import websocket_client
+
+        # Create connection - websocket_client is an async context manager
+        # For pooling, we need to keep the context manager alive
+        class WebSocketConnection:
+            def __init__(self):
+                self.websocket_context = None
+                self.session = None
+                self.read_stream = None
+                self.write_stream = None
+
+            async def connect(self, url):
+                # Enter the websocket context
+                self.websocket_context = websocket_client(url=url)
+                streams = await self.websocket_context.__aenter__()
+                self.read_stream, self.write_stream = streams
+
+                # Create and initialize session
+                self.session = ClientSession(self.read_stream, self.write_stream)
+                await self.session.__aenter__()
+                await self.session.initialize()
+
+                return self.session
+
+            async def close(self):
+                # Clean up in reverse order
+                if self.session:
+                    await self.session.__aexit__(None, None, None)
+                if self.websocket_context:
+                    await self.websocket_context.__aexit__(None, None, None)
+
+        # Create and connect
+        conn = WebSocketConnection()
+        session = await conn.connect(url)
+
+        # Store connection object for cleanup
+        if not hasattr(self, "_websocket_connections"):
+            self._websocket_connections = {}
+        self._websocket_connections[url] = conn
+
+        return session
+
+    async def _remove_connection_from_pool(self, url: str):
+        """Remove a connection from the pool."""
+        async with self._pool_lock:
+            if url in self._websocket_pools:
+                del self._websocket_pools[url]
+
+            # Clean up connection
+            if (
+                hasattr(self, "_websocket_connections")
+                and url in self._websocket_connections
+            ):
+                conn = self._websocket_connections[url]
+                try:
+                    await conn.close()
+                except Exception as e:
+                    logger.warning(f"Error closing WebSocket connection: {e}")
+                finally:
+                    del self._websocket_connections[url]
+
+            # Clean up last used tracking
+            if url in self._connection_last_used:
+                del self._connection_last_used[url]
+
+    def _should_use_pooling(self) -> bool:
+        """Check if connection pooling should be used."""
+        return self.connection_pool_config.get("enable_connection_reuse", True)
+
+    def _get_active_connections(self) -> List[str]:
+        """Get list of active connection URLs."""
+        return list(self._websocket_pools.keys())
+
+    def _has_active_connection(self, url: str) -> bool:
+        """Check if URL has an active connection."""
+        return url in self._websocket_pools
+
+    async def _is_connection_healthy(self, session: Any) -> bool:
+        """Check if a connection is healthy."""
+        try:
+            # Try to ping if method exists
+            if hasattr(session, "ping"):
+                await asyncio.wait_for(session.ping(), timeout=5.0)
+            return True
+        except Exception:
+            return False
+
+    async def _check_connection_health(self, url: str):
+        """Check and update health status of a connection."""
+        if url not in self._websocket_pools:
+            return
+
+        session = self._websocket_pools[url].get("session")
+        if session and not await self._is_connection_healthy(session):
+            # Remove unhealthy connection
+            await self._remove_connection_from_pool(url)
+
+    async def _cleanup_idle_connections(self, max_idle_seconds: float = None):
+        """Clean up idle connections."""
+        if max_idle_seconds is None:
+            max_idle_seconds = self.connection_pool_config.get("max_idle_time", 60)
+
+        current_time = time.time()
+        urls_to_remove = []
+
+        async with self._pool_lock:
+            for url, last_used in self._connection_last_used.items():
+                if current_time - last_used > max_idle_seconds:
+                    urls_to_remove.append(url)
+
+        # Remove idle connections
+        for url in urls_to_remove:
+            await self._remove_connection_from_pool(url)
+
+    async def _evict_lru_connection(self):
+        """Evict least recently used connection."""
+        if not self._connection_last_used:
+            return
+
+        # Find LRU connection
+        lru_url = min(self._connection_last_used, key=self._connection_last_used.get)
+
+        # Update metrics
+        if self.metrics:
+            self.metrics["websocket_pool_evictions"] = (
+                self.metrics.get("websocket_pool_evictions", 0) + 1
+            )
+
+        # Remove it
+        await self._remove_connection_from_pool(lru_url)

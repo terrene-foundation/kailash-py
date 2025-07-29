@@ -89,7 +89,7 @@ examples/output/
 .env.development.local
 .env.test.local
 .env.production.local
-.claude
+.claude/settings.local.json
 docs/build_output.txt
 
 # Prevent root-level data files (already covered above)
