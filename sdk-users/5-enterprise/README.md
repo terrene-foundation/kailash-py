@@ -16,6 +16,7 @@ This directory contains enterprise-specific patterns, architectures, and best pr
 | **[Performance](../developer/04-production.md)** | Scale and optimization | High-throughput workflows |
 | **[Monitoring](../developer/34-monitoring-observability-guide.md)** | Production monitoring | Enterprise observability |
 | **[Deployment](../developer/04-production.md)** | Production deployment | Container orchestration |
+| **[WebSocket Production](websocket-production-deployment.md)** | WebSocket MCP at scale | High-availability WebSocket deployments |
 
 ## 🎯 Quick Decision Matrix
 
@@ -28,6 +29,7 @@ This directory contains enterprise-specific patterns, architectures, and best pr
 | **High-throughput API** | API Gateway + Connection pooling | Rate limiting, caching, monitoring |
 | **Agent Coordination** | A2A + Self-organizing nodes | Dynamic agent pools, intelligent routing |
 | **Secure Enterprise** | JWT + ABAC + ThreatDetection | Multi-factor auth, threat monitoring |
+| **WebSocket MCP at Scale** | WebSocket Transport + Connection Pooling | Real-time MCP, enterprise pooling, load balancing |
 | **Distributed Transactions** | DTM + Saga/2PC patterns | Automatic pattern selection, compensation logic |
 
 ## 🚀 Quick Start Patterns

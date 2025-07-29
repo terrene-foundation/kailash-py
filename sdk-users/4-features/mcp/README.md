@@ -250,12 +250,141 @@ client_config = {
 }
 ```
 
-### WebSocket
+### WebSocket Transport
 ```python
-# Client via WebSocket
+# Basic WebSocket client
 client_config = {
     "transport": "websocket",
     "url": "ws://localhost:8080/ws"
+}
+
+# WebSocket with enterprise connection pooling
+client_config = {
+    "transport": "websocket",
+    "url": "wss://api.example.com/mcp",
+    "connection_pool_config": {
+        "max_connections": 10,
+        "connection_timeout": 30.0,
+        "pool_cleanup_interval": 300
+    },
+    "ping_interval": 20.0,
+    "ping_timeout": 20.0
+}
+
+# WebSocket server transport
+from kailash.mcp_server.transports import WebSocketTransport, WebSocketServerTransport
+
+# Client transport for connecting to servers
+ws_transport = WebSocketTransport(
+    url="wss://secure.example.com/mcp",
+    subprotocols=["mcp-v1"],  # MCP protocol version
+    ping_interval=20.0,
+    ping_timeout=20.0
+)
+
+# Server transport for accepting connections
+ws_server = WebSocketServerTransport(
+    host="0.0.0.0",
+    port=3001,
+    ping_interval=20.0,
+    ping_timeout=20.0,
+    max_message_size=10 * 1024 * 1024  # 10MB message limit
+)
+```
+
+## 🌐 WebSocket Transport Features
+
+### Connection Pooling
+Kailash MCP client includes enterprise-grade WebSocket connection pooling:
+
+```python
+from kailash.mcp_server import MCPClient
+
+# Configure connection pooling
+client = MCPClient(
+    connection_pool_config={
+        "max_connections": 20,      # Maximum pooled connections
+        "connection_timeout": 30.0, # Connection timeout in seconds
+        "pool_cleanup_interval": 300, # Pool cleanup interval in seconds
+        "keep_alive": True,         # Keep connections alive
+        "ping_interval": 20.0      # WebSocket ping interval
+    }
+)
+
+# Use pooled connections automatically
+async with client:
+    # First call creates connection and pools it
+    result1 = await client.call_tool("ws://api.example.com/mcp", "search", {"query": "AI"})
+    
+    # Second call reuses pooled connection (faster)
+    result2 = await client.call_tool("ws://api.example.com/mcp", "analyze", {"data": result1})
+    
+    # Pool automatically manages connection lifecycle
+```
+
+### Error Handling & Resilience
+WebSocket transport includes comprehensive error handling:
+
+```python
+from kailash.mcp_server.errors import TransportError, ConnectionError
+
+try:
+    async with client:
+        result = await client.call_tool("wss://unreliable.example.com/mcp", "process", {"data": "test"})
+        
+except TransportError as e:
+    if "connection" in str(e).lower():
+        print(f"Connection failed: {e}")
+        # Implement retry logic
+        
+except ConnectionError as e:
+    print(f"WebSocket connection error: {e}")
+    # Connection was dropped, will be cleaned from pool
+```
+
+### Performance Monitoring
+Built-in metrics for WebSocket connections:
+
+```python
+# Enable metrics collection
+client = MCPClient(enable_metrics=True)
+
+async with client:
+    # Make some calls
+    await client.call_tool("ws://api.example.com/mcp", "test", {})
+    
+    # Get connection metrics
+    metrics = client.get_metrics()
+    print(f"Pool hits: {metrics.get('websocket_pool_hits', 0)}")
+    print(f"Pool misses: {metrics.get('websocket_pool_misses', 0)}")
+    print(f"Active connections: {len(client._websocket_pools)}")
+```
+
+### Security Considerations
+WebSocket transport security limitations and best practices:
+
+```python
+# ⚠️ IMPORTANT: WebSocket transport limitations
+# - No support for custom authentication headers during handshake
+# - SSL/TLS termination should be handled by reverse proxy
+# - Use wss:// URLs for production environments
+
+# Production WebSocket setup
+client_config = {
+    "transport": "websocket",
+    "url": "wss://secure-api.example.com/mcp",  # Always use wss:// in production
+    "ping_interval": 30.0,     # Longer intervals for production
+    "ping_timeout": 10.0,      # Shorter timeout for faster failure detection
+    "allow_localhost": False,  # Disable localhost for production
+    "skip_security_validation": False  # Never skip security validation
+}
+
+# For development/testing only
+dev_config = {
+    "transport": "websocket", 
+    "url": "ws://localhost:3001/mcp",
+    "allow_localhost": True,          # OK for development
+    "skip_security_validation": True  # Only for testing
 }
 ```
 
@@ -612,6 +741,35 @@ curl http://localhost:8080/health
 
 # Check client configuration
 python -c "from kailash.mcp_server import MCPClient; print(MCPClient(config).validate())"
+```
+
+**WebSocket connection issues:**
+```python
+# Test WebSocket connectivity
+import asyncio
+import websockets
+
+async def test_websocket():
+    try:
+        async with websockets.connect("ws://localhost:3001") as ws:
+            await ws.send('{"method": "ping"}')
+            response = await ws.recv()
+            print(f"WebSocket working: {response}")
+    except Exception as e:
+        print(f"WebSocket failed: {e}")
+
+asyncio.run(test_websocket())
+```
+
+**Connection pool debugging:**
+```python
+# Debug connection pool state
+client = MCPClient(enable_metrics=True)
+print(f"Active pools: {len(client._websocket_pools)}")
+print(f"Pool config: {client.connection_pool_config}")
+
+# Clear connection pool if needed
+await client._clear_connection_pools()
 ```
 
 **Authentication failures:**
