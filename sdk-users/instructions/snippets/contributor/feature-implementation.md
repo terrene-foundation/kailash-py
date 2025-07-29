@@ -194,7 +194,7 @@ The local todo management system is in `# contrib (removed)/project/todos/`. You
 Write tests BEFORE implementation. This prevents missing tests and ensures working code. You MUST follow the 3-tier testing strategy exactly as specified in `sdk-users/3-development/testing/regression-testing-strategy.md` and `sdk-users/3-development/testing/test-organization-policy.md`.
 
 **Always ensure that your TDD covers all the detailed todo entries**
-z
+
 Do not write new tests without checking that existing ones can be modified to include them. You MUST have all 3 kinds of tests:
 
 **Tier 1 (Unit tests):**
@@ -271,7 +271,7 @@ For each component, you MUST:
    - Do not remove tests that are not implemented yet
 
 5. **Verify component follows SDK patterns:**
-   - Ensure 100% kailash SDK compliance
+   - Ensure 100% kailash SDK complia
    - Do not create new code without checking it against existing SDK components
    - Do not assume any new functionality without verifying it against specifications
    - If you meet any errors, check `sdk-users/` because we may have resolved it before

@@ -44,6 +44,13 @@ This directory contains in-depth guides for key features and architectural patte
 - Building custom MCP servers
 - Best practices for tool orchestration
 
+### [WebSocket Transport](./websocket-transport.md)
+**Enterprise WebSocket transport for MCP**
+- Connection pooling and performance optimization
+- Security configuration and best practices
+- Error handling and resilience patterns
+- Production monitoring and troubleshooting
+
 ### [Performance Tracking](./performance_tracking.md)
 **Monitoring and optimizing workflow performance**
 - Built-in metrics collection
