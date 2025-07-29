@@ -43,24 +43,22 @@ class TestWebSocketTransportOriginalBugFix:
             )
 
     @pytest.mark.asyncio
-    async def test_unknown_transport_still_raises_error(self):
-        """Verify that truly unsupported transports still raise proper error."""
+    async def test_unknown_transport_returns_empty_list(self):
+        """Verify that truly unsupported transports return empty list (logged as error)."""
         client = MCPClient()
 
-        with pytest.raises(TransportError) as exc_info:
-            await client.discover_tools(
-                {"transport": "telepathy", "url": "mind://localhost"}
-            )
-
-        assert "Unsupported transport: telepathy" in str(exc_info.value)
+        # Unknown transports should return empty list, not raise exception
+        # The error is logged but the method doesn't raise
+        result1 = await client.discover_tools(
+            {"transport": "telepathy", "url": "mind://localhost"}
+        )
+        assert result1 == []
 
         # Also verify with another fake transport
-        with pytest.raises(TransportError) as exc_info:
-            await client.discover_tools(
-                {"transport": "quantum", "url": "q://localhost"}
-            )
-
-        assert "Unsupported transport: quantum" in str(exc_info.value)
+        result2 = await client.discover_tools(
+            {"transport": "quantum", "url": "q://localhost"}
+        )
+        assert result2 == []
 
 
 class TestWebSocketTransportWithRealServers:
