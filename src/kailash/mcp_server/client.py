@@ -917,34 +917,59 @@ class MCPClient:
         from mcp import ClientSession
         from mcp.client.websocket import websocket_client
 
-        # Create connection - websocket_client is an async context manager
-        # For pooling, we need to keep the context manager alive
+        # Create connection using AsyncExitStack for proper lifecycle management
+        # This fixes the manual __aenter__/__aexit__ issue
+        from contextlib import AsyncExitStack
+        
         class WebSocketConnection:
             def __init__(self):
-                self.websocket_context = None
+                self.exit_stack = None
                 self.session = None
-                self.read_stream = None
-                self.write_stream = None
 
             async def connect(self, url):
-                # Enter the websocket context
-                self.websocket_context = websocket_client(url=url)
-                streams = await self.websocket_context.__aenter__()
-                self.read_stream, self.write_stream = streams
+                # Use AsyncExitStack to properly manage async context managers
+                self.exit_stack = AsyncExitStack()
+                
+                try:
+                    # Enter the websocket context using AsyncExitStack
+                    websocket_context = websocket_client(url=url)
+                    streams = await self.exit_stack.enter_async_context(websocket_context)
+                    self.read_stream, self.write_stream = streams
 
-                # Create and initialize session
-                self.session = ClientSession(self.read_stream, self.write_stream)
-                await self.session.__aenter__()
-                await self.session.initialize()
+                    # Create and initialize session using AsyncExitStack
+                    session = ClientSession(self.read_stream, self.write_stream)
+                    session_ref = await self.exit_stack.enter_async_context(session)
+                    await session_ref.initialize()
+                    
+                    self.session = session_ref
+                    return session_ref
 
-                return self.session
+                except Exception:
+                    # If anything fails during setup, clean up
+                    await self.close()
+                    raise
 
             async def close(self):
-                # Clean up in reverse order
-                if self.session:
-                    await self.session.__aexit__(None, None, None)
-                if self.websocket_context:
-                    await self.websocket_context.__aexit__(None, None, None)
+                # Handle cleanup with proper exception isolation
+                if self.exit_stack:
+                    exit_stack = self.exit_stack
+                    self.exit_stack = None
+                    self.session = None
+                    
+                    # Schedule cleanup for later to avoid cross-task issues
+                    # This prevents the "different task" async generator problems
+                    try:
+                        # Use create_task to run cleanup independently
+                        cleanup_task = asyncio.create_task(exit_stack.aclose())
+                        # Don't await - let it run in background to avoid blocking
+                        # But add a callback to log any errors
+                        def log_cleanup_error(task):
+                            if task.exception():
+                                logger.warning(f"Background cleanup error: {task.exception()}")
+                        
+                        cleanup_task.add_done_callback(log_cleanup_error)
+                    except Exception as e:
+                        logger.warning(f"Error scheduling connection cleanup: {e}")
 
         # Create and connect
         conn = WebSocketConnection()
