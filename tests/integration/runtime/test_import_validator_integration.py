@@ -10,6 +10,7 @@ from textwrap import dedent
 import pytest
 
 from kailash.runtime.validation import ImportPathValidator
+from kailash.runtime.validation.import_validator import ImportIssueType
 
 
 class TestImportValidatorIntegration:
@@ -38,13 +39,13 @@ class TestImportValidatorIntegration:
                 """
             import sys
             from src.myapp.workflows.data_processor import DataProcessor
-            
+
             def main():
                 processor = DataProcessor()
                 result = processor.run()
                 print(f"Result: {result}")
                 return result
-            
+
             if __name__ == "__main__":
                 sys.exit(0 if main() else 1)
         """
@@ -79,7 +80,7 @@ class TestImportValidatorIntegration:
             dedent(
                 """
             from .base_contract import BaseContract
-            
+
             class UserContract(BaseContract):
                 def validate(self, data):
                     return "name" in data and "email" in data
@@ -102,7 +103,7 @@ class TestImportValidatorIntegration:
             class BaseNode:
                 def execute(self, **kwargs):
                     return self.run(**kwargs)
-                
+
                 def run(self, **kwargs):
                     raise NotImplementedError
         """
@@ -121,11 +122,11 @@ class TestImportValidatorIntegration:
             from ..contracts.user_contract import UserContract
             from ..nodes.base.base_node import BaseNode
             from contracts.base_contract import BaseContract  # Implicit relative
-            
+
             class DataProcessor(BaseNode):
                 def __init__(self):
                     self.contract = UserContract()
-                
+
                 def run(self):
                     return {"status": "processed"}
         """
@@ -139,11 +140,11 @@ class TestImportValidatorIntegration:
             from src.myapp.contracts.user_contract import UserContract
             from src.myapp.nodes.base.base_node import BaseNode
             from src.myapp.contracts.base_contract import BaseContract
-            
+
             class DataProcessor(BaseNode):
                 def __init__(self):
                     self.contract = UserContract()
-                
+
                 def run(self):
                     return {"status": "processed"}
         """
@@ -179,20 +180,20 @@ class TestImportValidatorIntegration:
                 """
             import sys
             import os
-            
+
             # Add src to path (simulating production setup)
             sys.path.insert(0, os.path.dirname(__file__))
-            
+
             try:
                 # This should work - absolute import
                 from src.myapp.workflows.data_processor import DataProcessor
                 print("✅ Absolute import successful")
-                
+
                 # This should fail - module with relative imports
                 from src.myapp.workflows.data_processor_bad import DataProcessor as BadProcessor
                 print("❌ Relative import should have failed!")
                 sys.exit(1)
-                
+
             except ImportError as e:
                 print(f"✅ Relative import failed as expected: {e}")
                 sys.exit(0)
@@ -280,7 +281,7 @@ class TestImportValidatorIntegration:
             dedent(
                 """
             from setuptools import setup, find_packages
-            
+
             setup(
                 name="myapp",
                 packages=find_packages(where="src"),
@@ -314,10 +315,10 @@ class TestImportValidatorIntegration:
                 """
             from pathlib import Path
             from kailash.runtime.validation import ImportPathValidator
-            
+
             validator = ImportPathValidator()
             issues = validator.validate_directory("src", recursive=True)
-            
+
             if issues:
                 print(validator.generate_report(issues))
                 exit(1)
@@ -375,7 +376,7 @@ class TestImportValidatorIntegration:
                 """
             # Bad: trying to use relative import for cross-module
             from ..myapp.contracts import UserContract
-            
+
             # Good: absolute import
             from src.myapp.contracts.user_contract import UserContract
         """

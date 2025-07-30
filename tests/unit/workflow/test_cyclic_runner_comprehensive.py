@@ -363,6 +363,7 @@ class TestExecutionPlan:
         workflow = Mock(spec=Workflow)
         workflow.graph = Mock(spec=nx.DiGraph)
         workflow.graph.predecessors.return_value = []
+        workflow.graph.successors.return_value = []
 
         dag_graph = Mock(spec=nx.DiGraph)
 
@@ -437,6 +438,9 @@ class TestCycleGroup:
         subgraph = Mock(spec=nx.DiGraph)
         subgraph.copy.return_value = subgraph
         subgraph.has_edge.return_value = True
+        # Mock edges method to return empty list (no cycle edges to remove)
+        subgraph.edges.return_value = []
+        subgraph.remove_edge = Mock()
         full_graph.subgraph.return_value = subgraph
 
         # Mock nx.topological_sort to succeed
@@ -454,6 +458,9 @@ class TestCycleGroup:
         subgraph = Mock(spec=nx.DiGraph)
         subgraph.copy.return_value = subgraph
         subgraph.has_edge.return_value = True
+        # Mock edges method to return empty list
+        subgraph.edges.return_value = []
+        subgraph.remove_edge = Mock()
         full_graph.subgraph.return_value = subgraph
 
         # Mock nx.topological_sort to fail
@@ -595,7 +602,7 @@ class TestCyclicWorkflowExecutorAdvanced:
         state = WorkflowState("test_run")
 
         with patch.object(self.executor, "_execute_cycle_group") as mock_execute_cycle:
-            mock_execute_cycle.return_value = {"cycle_result": "success"}
+            mock_execute_cycle.return_value = ({"cycle_result": "success"}, None)
 
             results = self.executor._execute_plan(self.workflow, plan, state)
 
@@ -624,7 +631,7 @@ class TestCyclicWorkflowExecutorAdvanced:
             with patch.object(
                 self.executor, "_execute_cycle_group"
             ) as mock_execute_cycle:
-                mock_execute_cycle.return_value = {"cycle_result": "success"}
+                mock_execute_cycle.return_value = ({"cycle_result": "success"}, None)
 
                 results = self.executor._execute_plan(self.workflow, plan, state)
 

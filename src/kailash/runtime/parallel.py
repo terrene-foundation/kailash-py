@@ -199,7 +199,7 @@ class ParallelRuntime:
         )
 
         # Process nodes until all are complete
-        while ready_nodes or pending_nodes:
+        while ready_nodes or pending_nodes or node_tasks:
             # Schedule ready nodes up to max_workers limit
             while ready_nodes and len(node_tasks) < self.max_workers:
                 node_id = ready_nodes.popleft()

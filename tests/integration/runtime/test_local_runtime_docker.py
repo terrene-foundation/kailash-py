@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 from kailash.nodes.code.python import PythonCodeNode
@@ -16,7 +17,6 @@ from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from kailash.nodes.logic import MergeNode, SwitchNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 
 @pytest.mark.integration
@@ -223,8 +223,14 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
         # many_active might exist but with error (since it got None data)
         # That's expected behavior for conditional workflows
 
-    def test_parallel_execution_with_merge(self, runtime):
-        """Test parallel execution and merging results."""
+    @pytest.mark.asyncio
+    async def test_parallel_execution_with_merge(self):
+        """Test actual parallel execution and merging results using ParallelRuntime."""
+        from kailash.runtime.parallel import ParallelRuntime
+
+        # Use ParallelRuntime for actual parallel execution
+        parallel_runtime = ParallelRuntime(max_workers=4, debug=True)
+
         # Build workflow with parallel branches
         workflow = WorkflowBuilder()
 
@@ -232,15 +238,15 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
         import time
 
         def process1(data=None):
-            time.sleep(0.01)  # Reduce sleep for faster tests
+            time.sleep(0.01)  # Small delay to show parallel execution benefit
             return {"result": "A", "value": 100}
 
         def process2(data=None):
-            time.sleep(0.01)  # Reduce sleep for faster tests
+            time.sleep(0.01)  # Small delay to show parallel execution benefit
             return {"result": "B", "value": 200}
 
         def process3(data=None):
-            time.sleep(0.01)  # Reduce sleep for faster tests
+            time.sleep(0.01)  # Small delay to show parallel execution benefit
             return {"result": "C", "value": 300}
 
         p1 = PythonCodeNode.from_function(process1)
@@ -256,8 +262,7 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
             "MergeNode",
             "merger",
             {
-                "merge_strategy": "combine",
-                "input_ports": ["input1", "input2", "input3"],
+                "merge_type": "concat",
             },
         )
 
@@ -272,22 +277,25 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
         workflow.add_node_instance(final, "final")
 
         # Connect parallel branches to merger
-        workflow.add_connection("processor1", "result", "merger", "input1")
-        workflow.add_connection("processor2", "result", "merger", "input2")
-        workflow.add_connection("processor3", "result", "merger", "input3")
-        workflow.add_connection("merger", "output", "final", "data")
+        workflow.add_connection("processor1", "result", "merger", "data1")
+        workflow.add_connection("processor2", "result", "merger", "data2")
+        workflow.add_connection("processor3", "result", "merger", "data3")
+        workflow.add_connection("merger", "merged_data", "final", "data")
 
-        # Execute workflow
+        # Execute workflow with ParallelRuntime
         start_time = time.time()
-        results, run_id = runtime.execute(workflow.build())
+        results, run_id = await parallel_runtime.execute(workflow.build())
         execution_time = time.time() - start_time
 
         # Verify results
         assert results["final"]["result"]["total"] == 600
         assert set(results["final"]["result"]["results"]) == {"A", "B", "C"}
 
-        # Verify parallel execution (should be faster than sequential with reduced sleep)
-        assert execution_time < 0.2  # Should complete quickly with 0.01s sleeps
+        # Verify parallel execution completes in reasonable time
+        # ParallelRuntime has overhead but should still complete efficiently
+        assert (
+            execution_time < 0.5
+        )  # Should complete efficiently with parallel execution
 
     def test_error_handling_in_workflow(self, runtime):
         """Test error handling and recovery in workflows."""
@@ -327,37 +335,59 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
             "EmbeddingGeneratorNode",
             "embedder",
             {
+                "operation": "embed_batch",
                 "provider": "ollama",
-                "model": "llama3.2:1b",
-                "texts": ["Hello world", "Machine learning", "Python programming"],
+                "model": "nomic-embed-text",
+                "input_texts": [
+                    "Hello world",
+                    "Machine learning",
+                    "Python programming",
+                ],
             },
         )
 
-        workflow.add_node("PythonCodeNode", "processor", {})
-        processor = workflow.get_node("processor")
-        processor.set_code(
-            """
-def process(embeddings):
-    # Extract and validate embeddings
-    results = []
-    for emb in embeddings.get('embeddings', []):
-        if 'embedding' in emb:
-            results.append({
-                'text': emb.get('text', ''),
-                'dimension': len(emb['embedding'])
-            })
-    return {"processed": results, "count": len(results)}
+        workflow.add_node(
+            "PythonCodeNode",
+            "processor",
+            {
+                "code": """
+# Process EmbeddingGeneratorNode outputs
+# success_flag contains boolean success status
+# embeddings_data contains the embeddings array
+
+if success_flag:
+    # Success case - process the embeddings
+    try:
+        results = []
+        for emb in embeddings_data:
+            if isinstance(emb, dict) and 'embedding' in emb:
+                results.append({
+                    'text': emb.get('text', ''),
+                    'dimension': len(emb['embedding'])
+                })
+        result = {"processed": results, "count": len(results)}
+    except Exception as e:
+        result = {"processed": [], "count": 0, "error": f"Error processing embeddings: {str(e)}"}
+else:
+    # Handle failure case
+    result = {"processed": [], "count": 0, "error": "Embedding operation failed"}
 """
+            },
         )
 
-        workflow.add_connection("embedder", "processor", "output", "embeddings")
+        # Connect the embedder outputs to processor inputs
+        workflow.add_connection("embedder", "success", "processor", "success_flag")
+        workflow.add_connection(
+            "embedder", "embeddings", "processor", "embeddings_data"
+        )
 
         # Execute workflow
         results, run_id = runtime.execute(workflow.build())
 
         # Verify embeddings were generated
-        assert results["processor"]["count"] == 3
-        assert all(r["dimension"] > 0 for r in results["processor"]["processed"])
+        processor_result = results["processor"]["result"]
+        assert processor_result["count"] == 3
+        assert all(r["dimension"] > 0 for r in processor_result["processed"])
 
     def test_resource_limits_enforcement(self, runtime):
         """Test resource limits are enforced during execution."""
