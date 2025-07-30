@@ -33,8 +33,11 @@ class TestNestedConditionalE2E:
         workflow = WorkflowBuilder()
 
         # Customer data input
-        workflow.add_node("PythonCodeNode", "customer_data", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "customer_data",
+            {
+                "code": """
 result = {
     'customer_id': 'CUST-12345',
     'user_type': 'premium',
@@ -43,18 +46,22 @@ result = {
     'timestamp': '2024-01-15T10:00:00Z'
 }
 """
-        })
+            },
+        )
 
         # Business logic: Determine customer tier
-        workflow.add_node("SwitchNode", "tier_classifier", {
-            "condition_field": "user_type",
-            "operator": "==",
-            "value": "premium"
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "tier_classifier",
+            {"condition_field": "user_type", "operator": "==", "value": "premium"},
+        )
 
         # Premium customer validation
-        workflow.add_node("PythonCodeNode", "premium_validation", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "premium_validation",
+            {
+                "code": """
 result = {
     'tier': 'premium',
     'validated': True,
@@ -62,18 +69,22 @@ result = {
     'validation_timestamp': '2024-01-15T10:01:00Z'
 }
 """
-        })
+            },
+        )
 
         # Regional processing switch
-        workflow.add_node("SwitchNode", "region_processor", {
-            "condition_field": "region",
-            "operator": "==",
-            "value": "US"
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "region_processor",
+            {"condition_field": "region", "operator": "==", "value": "US"},
+        )
 
         # US premium processing (SHOULD execute for US customer)
-        workflow.add_node("PythonCodeNode", "us_premium_handler", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "us_premium_handler",
+            {
+                "code": """
 result = {
     'processor': 'US_PREMIUM',
     'discount_rate': 0.20,
@@ -84,11 +95,15 @@ result = {
     'currency': 'USD'
 }
 """
-        })
+            },
+        )
 
         # International premium processing (should NOT execute for US customer)
-        workflow.add_node("PythonCodeNode", "intl_premium_handler", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "intl_premium_handler",
+            {
+                "code": """
 result = {
     'processor': 'INTL_PREMIUM',
     'discount_rate': 0.15,
@@ -99,11 +114,15 @@ result = {
     'currency': 'EUR'
 }
 """
-        })
+            },
+        )
 
         # Basic customer processing (should NOT execute for premium customer)
-        workflow.add_node("PythonCodeNode", "basic_validation", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "basic_validation",
+            {
+                "code": """
 result = {
     'tier': 'basic',
     'validated': True,
@@ -111,10 +130,14 @@ result = {
     'validation_timestamp': '2024-01-15T10:01:00Z'
 }
 """
-        })
+            },
+        )
 
-        workflow.add_node("PythonCodeNode", "basic_handler", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "basic_handler",
+            {
+                "code": """
 result = {
     'processor': 'BASIC',
     'discount_rate': 0.05,
@@ -123,11 +146,15 @@ result = {
     'support_tier': 'bronze'
 }
 """
-        })
+            },
+        )
 
         # Final order processing
-        workflow.add_node("PythonCodeNode", "order_finalizer", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "order_finalizer",
+            {
+                "code": """
 # Collect all processing results
 processing_data = {}
 for key, value in locals().items():
@@ -142,25 +169,42 @@ result = {
     'processed_timestamp': '2024-01-15T10:05:00Z'
 }
 """
-        })
+            },
+        )
 
         # Connect the workflow
         workflow.add_connection("customer_data", "result", "tier_classifier", "input")
 
         # Premium path
-        workflow.add_connection("tier_classifier", "true_output", "premium_validation", "input")
-        workflow.add_connection("premium_validation", "result", "region_processor", "input")
-        workflow.add_connection("region_processor", "true_output", "us_premium_handler", "input")
-        workflow.add_connection("region_processor", "false_output", "intl_premium_handler", "input")
+        workflow.add_connection(
+            "tier_classifier", "true_output", "premium_validation", "input"
+        )
+        workflow.add_connection(
+            "premium_validation", "result", "region_processor", "input"
+        )
+        workflow.add_connection(
+            "region_processor", "true_output", "us_premium_handler", "input"
+        )
+        workflow.add_connection(
+            "region_processor", "false_output", "intl_premium_handler", "input"
+        )
 
         # Basic path
-        workflow.add_connection("tier_classifier", "false_output", "basic_validation", "input")
+        workflow.add_connection(
+            "tier_classifier", "false_output", "basic_validation", "input"
+        )
         workflow.add_connection("basic_validation", "result", "basic_handler", "input")
 
         # Final processing
-        workflow.add_connection("us_premium_handler", "result", "order_finalizer", "us_processing")
-        workflow.add_connection("intl_premium_handler", "result", "order_finalizer", "intl_processing")
-        workflow.add_connection("basic_handler", "result", "order_finalizer", "basic_processing")
+        workflow.add_connection(
+            "us_premium_handler", "result", "order_finalizer", "us_processing"
+        )
+        workflow.add_connection(
+            "intl_premium_handler", "result", "order_finalizer", "intl_processing"
+        )
+        workflow.add_connection(
+            "basic_handler", "result", "order_finalizer", "basic_processing"
+        )
 
         built_workflow = workflow.build()
 
@@ -203,14 +247,14 @@ result = {
 
         # 5. Verify no incorrect processing occurred
         intl_processing = results.get("intl_premium_handler")
-        assert intl_processing is None, (
-            f"International processing incorrectly executed: {intl_processing}"
-        )
+        assert (
+            intl_processing is None
+        ), f"International processing incorrectly executed: {intl_processing}"
 
         basic_processing = results.get("basic_handler")
-        assert basic_processing is None, (
-            f"Basic processing incorrectly executed: {basic_processing}"
-        )
+        assert (
+            basic_processing is None
+        ), f"Basic processing incorrectly executed: {basic_processing}"
 
         print("✅ US Premium customer journey completed correctly")
 
@@ -225,8 +269,11 @@ result = {
         workflow = WorkflowBuilder()
 
         # International customer data
-        workflow.add_node("PythonCodeNode", "customer_data", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "customer_data",
+            {
+                "code": """
 result = {
     'customer_id': 'CUST-67890',
     'user_type': 'premium',
@@ -236,45 +283,70 @@ result = {
     'timestamp': '2024-01-15T15:00:00Z'
 }
 """
-        })
+            },
+        )
 
         # Same business logic structure as US test
-        workflow.add_node("SwitchNode", "tier_classifier", {
-            "condition_field": "user_type",
-            "operator": "==",
-            "value": "premium"
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "tier_classifier",
+            {"condition_field": "user_type", "operator": "==", "value": "premium"},
+        )
 
-        workflow.add_node("PythonCodeNode", "premium_validation", {
-            "code": "result = {'tier': 'premium', 'validated': True}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "premium_validation",
+            {"code": "result = {'tier': 'premium', 'validated': True}"},
+        )
 
-        workflow.add_node("SwitchNode", "region_processor", {
-            "condition_field": "region",
-            "operator": "==",
-            "value": "US"
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "region_processor",
+            {"condition_field": "region", "operator": "==", "value": "US"},
+        )
 
-        workflow.add_node("PythonCodeNode", "us_premium_handler", {
-            "code": "result = {'processor': 'US_PREMIUM', 'discount_rate': 0.20, 'currency': 'USD'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "us_premium_handler",
+            {
+                "code": "result = {'processor': 'US_PREMIUM', 'discount_rate': 0.20, 'currency': 'USD'}"
+            },
+        )
 
-        workflow.add_node("PythonCodeNode", "intl_premium_handler", {
-            "code": "result = {'processor': 'INTL_PREMIUM', 'discount_rate': 0.15, 'currency': 'EUR'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "intl_premium_handler",
+            {
+                "code": "result = {'processor': 'INTL_PREMIUM', 'discount_rate': 0.15, 'currency': 'EUR'}"
+            },
+        )
 
-        workflow.add_node("PythonCodeNode", "order_finalizer", {
-            "code": "result = {'order_id': 'ORDER-456', 'status': 'processed'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "order_finalizer",
+            {"code": "result = {'order_id': 'ORDER-456', 'status': 'processed'}"},
+        )
 
         # Same connections
         workflow.add_connection("customer_data", "result", "tier_classifier", "input")
-        workflow.add_connection("tier_classifier", "true_output", "premium_validation", "input")
-        workflow.add_connection("premium_validation", "result", "region_processor", "input")
-        workflow.add_connection("region_processor", "true_output", "us_premium_handler", "input")
-        workflow.add_connection("region_processor", "false_output", "intl_premium_handler", "input")
-        workflow.add_connection("us_premium_handler", "result", "order_finalizer", "us_processing")
-        workflow.add_connection("intl_premium_handler", "result", "order_finalizer", "intl_processing")
+        workflow.add_connection(
+            "tier_classifier", "true_output", "premium_validation", "input"
+        )
+        workflow.add_connection(
+            "premium_validation", "result", "region_processor", "input"
+        )
+        workflow.add_connection(
+            "region_processor", "true_output", "us_premium_handler", "input"
+        )
+        workflow.add_connection(
+            "region_processor", "false_output", "intl_premium_handler", "input"
+        )
+        workflow.add_connection(
+            "us_premium_handler", "result", "order_finalizer", "us_processing"
+        )
+        workflow.add_connection(
+            "intl_premium_handler", "result", "order_finalizer", "intl_processing"
+        )
 
         built_workflow = workflow.build()
 
@@ -299,16 +371,20 @@ result = {
 
         # 3. Verify processing results
         intl_processing = results.get("intl_premium_handler")
-        assert intl_processing is not None, "International premium processing should have results"
+        assert (
+            intl_processing is not None
+        ), "International premium processing should have results"
         assert intl_processing["processor"] == "INTL_PREMIUM"
-        assert intl_processing["discount_rate"] == 0.15  # International premium discount
+        assert (
+            intl_processing["discount_rate"] == 0.15
+        )  # International premium discount
         assert intl_processing["currency"] == "EUR"
 
         # 4. Verify no US processing occurred
         us_processing = results.get("us_premium_handler")
-        assert us_processing is None, (
-            f"US processing incorrectly executed for international customer: {us_processing}"
-        )
+        assert (
+            us_processing is None
+        ), f"US processing incorrectly executed for international customer: {us_processing}"
 
         print("✅ International Premium customer journey completed correctly")
 
@@ -324,22 +400,26 @@ result = {
         workflow = WorkflowBuilder()
 
         # Customer input
-        workflow.add_node("PythonCodeNode", "customer_input", {
-            "code": "result = {'user_type': 'premium', 'region': 'US', 'value': 1500}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "customer_input",
+            {
+                "code": "result = {'user_type': 'premium', 'region': 'US', 'value': 1500}"
+            },
+        )
 
         # Multiple tier switches
-        workflow.add_node("SwitchNode", "tier_switch", {
-            "condition_field": "user_type",
-            "operator": "==",
-            "value": "premium"
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "tier_switch",
+            {"condition_field": "user_type", "operator": "==", "value": "premium"},
+        )
 
-        workflow.add_node("SwitchNode", "region_switch", {
-            "condition_field": "region",
-            "operator": "==",
-            "value": "US"
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "region_switch",
+            {"condition_field": "region", "operator": "==", "value": "US"},
+        )
 
         # Many processing nodes (most should be skipped)
         processing_nodes = [
@@ -350,52 +430,92 @@ result = {
             ("vip_us_processor", "US VIP Processing"),
             ("vip_intl_processor", "International VIP Processing"),
             ("enterprise_processor", "Enterprise Processing"),
-            ("standard_processor", "Standard Processing")
+            ("standard_processor", "Standard Processing"),
         ]
 
         for node_id, description in processing_nodes:
-            workflow.add_node("PythonCodeNode", node_id, {
-                "code": f"result = {{'processor': '{description}', 'executed': True}}"
-            })
+            workflow.add_node(
+                "PythonCodeNode",
+                node_id,
+                {
+                    "code": f"result = {{'processor': '{description}', 'executed': True}}"
+                },
+            )
 
-        workflow.add_node("PythonCodeNode", "premium_validator", {
-            "code": "result = {'validated': True, 'tier': 'premium'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "premium_validator",
+            {"code": "result = {'validated': True, 'tier': 'premium'}"},
+        )
 
-        workflow.add_node("PythonCodeNode", "basic_validator", {
-            "code": "result = {'validated': True, 'tier': 'basic'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "basic_validator",
+            {"code": "result = {'validated': True, 'tier': 'basic'}"},
+        )
 
-        workflow.add_node("PythonCodeNode", "final_aggregator", {
-            "code": "result = {'aggregated': True, 'final': True}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "final_aggregator",
+            {"code": "result = {'aggregated': True, 'final': True}"},
+        )
 
         # Connect workflow (only some paths are reachable)
         workflow.add_connection("customer_input", "result", "tier_switch", "input")
 
         # Premium path (reachable)
-        workflow.add_connection("tier_switch", "true_output", "premium_validator", "input")
+        workflow.add_connection(
+            "tier_switch", "true_output", "premium_validator", "input"
+        )
         workflow.add_connection("premium_validator", "result", "region_switch", "input")
-        workflow.add_connection("region_switch", "true_output", "premium_us_processor", "input")
-        workflow.add_connection("region_switch", "false_output", "premium_intl_processor", "input")
+        workflow.add_connection(
+            "region_switch", "true_output", "premium_us_processor", "input"
+        )
+        workflow.add_connection(
+            "region_switch", "false_output", "premium_intl_processor", "input"
+        )
 
         # Basic path (unreachable)
-        workflow.add_connection("tier_switch", "false_output", "basic_validator", "input")
-        workflow.add_connection("basic_validator", "result", "basic_us_processor", "input")
-        workflow.add_connection("basic_validator", "result", "basic_intl_processor", "input")
+        workflow.add_connection(
+            "tier_switch", "false_output", "basic_validator", "input"
+        )
+        workflow.add_connection(
+            "basic_validator", "result", "basic_us_processor", "input"
+        )
+        workflow.add_connection(
+            "basic_validator", "result", "basic_intl_processor", "input"
+        )
 
         # Other processors (unreachable)
-        workflow.add_connection("premium_validator", "result", "vip_us_processor", "input")
-        workflow.add_connection("basic_validator", "result", "enterprise_processor", "input")
-        workflow.add_connection("customer_input", "result", "standard_processor", "input")
+        workflow.add_connection(
+            "premium_validator", "result", "vip_us_processor", "input"
+        )
+        workflow.add_connection(
+            "basic_validator", "result", "enterprise_processor", "input"
+        )
+        workflow.add_connection(
+            "customer_input", "result", "standard_processor", "input"
+        )
 
         # Final aggregation
-        workflow.add_connection("premium_us_processor", "result", "final_aggregator", "premium_us")
-        workflow.add_connection("premium_intl_processor", "result", "final_aggregator", "premium_intl")
-        workflow.add_connection("basic_us_processor", "result", "final_aggregator", "basic_us")
-        workflow.add_connection("vip_us_processor", "result", "final_aggregator", "vip_us")
-        workflow.add_connection("enterprise_processor", "result", "final_aggregator", "enterprise")
-        workflow.add_connection("standard_processor", "result", "final_aggregator", "standard")
+        workflow.add_connection(
+            "premium_us_processor", "result", "final_aggregator", "premium_us"
+        )
+        workflow.add_connection(
+            "premium_intl_processor", "result", "final_aggregator", "premium_intl"
+        )
+        workflow.add_connection(
+            "basic_us_processor", "result", "final_aggregator", "basic_us"
+        )
+        workflow.add_connection(
+            "vip_us_processor", "result", "final_aggregator", "vip_us"
+        )
+        workflow.add_connection(
+            "enterprise_processor", "result", "final_aggregator", "enterprise"
+        )
+        workflow.add_connection(
+            "standard_processor", "result", "final_aggregator", "standard"
+        )
 
         built_workflow = workflow.build()
         total_nodes = len(built_workflow.graph.nodes())
@@ -416,25 +536,33 @@ result = {
         print(f"Performance improvement: {executed_route - executed_skip} fewer nodes")
 
         # Performance assertions
-        assert executed_skip < executed_route, (
-            "skip_branches should execute fewer nodes than route_data"
-        )
+        assert (
+            executed_skip < executed_route
+        ), "skip_branches should execute fewer nodes than route_data"
 
-        improvement_percentage = ((executed_route - executed_skip) / executed_route) * 100
-        assert improvement_percentage > 20, (
-            f"Should have significant performance improvement (>20%), got {improvement_percentage:.1f}%"
-        )
+        improvement_percentage = (
+            (executed_route - executed_skip) / executed_route
+        ) * 100
+        assert (
+            improvement_percentage > 20
+        ), f"Should have significant performance improvement (>20%), got {improvement_percentage:.1f}%"
 
         # Business logic verification
         executed_nodes_skip = set(k for k, v in results_skip.items() if v is not None)
 
         # Should execute the right path: premium US
-        assert "premium_us_processor" in executed_nodes_skip, "Should execute premium US processor"
+        assert (
+            "premium_us_processor" in executed_nodes_skip
+        ), "Should execute premium US processor"
 
         # Should NOT execute wrong paths
         wrong_processors = {
-            "premium_intl_processor", "basic_us_processor", "basic_intl_processor",
-            "vip_us_processor", "vip_intl_processor", "enterprise_processor"
+            "premium_intl_processor",
+            "basic_us_processor",
+            "basic_intl_processor",
+            "vip_us_processor",
+            "vip_intl_processor",
+            "enterprise_processor",
         }
 
         executed_wrong = wrong_processors.intersection(executed_nodes_skip)
@@ -456,76 +584,110 @@ result = {
         workflow = WorkflowBuilder()
 
         # Data source
-        workflow.add_node("PythonCodeNode", "data_source", {
-            "code": "result = {'user_type': 'premium', 'region': 'US', 'value': 1000}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "data_source",
+            {
+                "code": "result = {'user_type': 'premium', 'region': 'US', 'value': 1000}"
+            },
+        )
 
         # User type switch
-        workflow.add_node("SwitchNode", "user_type_switch", {
-            "condition_field": "user_type",
-            "operator": "==",
-            "value": "premium"
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "user_type_switch",
+            {"condition_field": "user_type", "operator": "==", "value": "premium"},
+        )
 
         # Region switch (only for premium users)
-        workflow.add_node("SwitchNode", "region_switch", {
-            "condition_field": "region",
-            "operator": "==",
-            "value": "US"
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "region_switch",
+            {"condition_field": "region", "operator": "==", "value": "US"},
+        )
 
         # Premium processors
-        workflow.add_node("PythonCodeNode", "premium_validator", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "premium_validator",
+            {
+                "code": """
 # Preserve original data and add validation info
 result = input.copy() if input else {}
 result.update({'validated': True, 'tier': 'premium'})
 """
-        })
+            },
+        )
 
-        workflow.add_node("PythonCodeNode", "us_premium_processor", {
-            "code": "result = {'processed': True, 'region': 'US', 'discount': 0.20}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "us_premium_processor",
+            {"code": "result = {'processed': True, 'region': 'US', 'discount': 0.20}"},
+        )
 
-        workflow.add_node("PythonCodeNode", "intl_premium_processor", {
-            "code": "result = {'processed': True, 'region': 'international', 'discount': 0.15}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "intl_premium_processor",
+            {
+                "code": "result = {'processed': True, 'region': 'international', 'discount': 0.15}"
+            },
+        )
 
         # Basic processors (should NOT execute)
-        workflow.add_node("PythonCodeNode", "basic_validator", {
-            "code": "result = {'validated': True, 'tier': 'basic'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "basic_validator",
+            {"code": "result = {'validated': True, 'tier': 'basic'}"},
+        )
 
-        workflow.add_node("PythonCodeNode", "basic_processor", {
-            "code": "result = {'processed': True, 'discount': 0.05}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "basic_processor",
+            {"code": "result = {'processed': True, 'discount': 0.05}"},
+        )
 
-        workflow.add_node("PythonCodeNode", "basic_support", {
-            "code": "result = {'support': 'standard'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "basic_support",
+            {"code": "result = {'support': 'standard'}"},
+        )
 
         # Final aggregator
-        workflow.add_node("PythonCodeNode", "aggregator", {
-            "code": "result = {'final': True, 'timestamp': 'now'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "aggregator",
+            {"code": "result = {'final': True, 'timestamp': 'now'}"},
+        )
 
         # Connect exactly as validation script
         workflow.add_connection("data_source", "result", "user_type_switch", "input")
 
         # Premium branch
-        workflow.add_connection("user_type_switch", "true_output", "premium_validator", "input")
+        workflow.add_connection(
+            "user_type_switch", "true_output", "premium_validator", "input"
+        )
         workflow.add_connection("premium_validator", "result", "region_switch", "input")
-        workflow.add_connection("region_switch", "true_output", "us_premium_processor", "input")
-        workflow.add_connection("region_switch", "false_output", "intl_premium_processor", "input")
+        workflow.add_connection(
+            "region_switch", "true_output", "us_premium_processor", "input"
+        )
+        workflow.add_connection(
+            "region_switch", "false_output", "intl_premium_processor", "input"
+        )
 
         # Basic branch
-        workflow.add_connection("user_type_switch", "false_output", "basic_validator", "input")
+        workflow.add_connection(
+            "user_type_switch", "false_output", "basic_validator", "input"
+        )
         workflow.add_connection("basic_validator", "result", "basic_processor", "input")
         workflow.add_connection("basic_processor", "result", "basic_support", "input")
 
         # Aggregator
-        workflow.add_connection("us_premium_processor", "result", "aggregator", "premium_input")
-        workflow.add_connection("intl_premium_processor", "result", "aggregator", "premium_input")
+        workflow.add_connection(
+            "us_premium_processor", "result", "aggregator", "premium_input"
+        )
+        workflow.add_connection(
+            "intl_premium_processor", "result", "aggregator", "premium_input"
+        )
         workflow.add_connection("basic_support", "result", "aggregator", "basic_input")
 
         built_workflow = workflow.build()
@@ -540,22 +702,33 @@ result.update({'validated': True, 'tier': 'premium'})
 
         # Expected for Premium US user
         expected_reachable = {
-            "data_source", "user_type_switch", "premium_validator",
-            "region_switch", "us_premium_processor", "aggregator"
+            "data_source",
+            "user_type_switch",
+            "premium_validator",
+            "region_switch",
+            "us_premium_processor",
+            "aggregator",
         }
 
         # Verify expected nodes executed
         for expected in expected_reachable:
-            assert expected in executed_nodes, (
-                f"Expected node {expected} should execute. Executed: {executed_nodes}"
-            )
+            assert (
+                expected in executed_nodes
+            ), f"Expected node {expected} should execute. Executed: {executed_nodes}"
 
         # BUG CHECK: Critical business logic validation
-        unreachable_nodes = {"basic_validator", "basic_processor", "basic_support", "intl_premium_processor"}
+        unreachable_nodes = {
+            "basic_validator",
+            "basic_processor",
+            "basic_support",
+            "intl_premium_processor",
+        }
         executed_unreachable = unreachable_nodes.intersection(executed_nodes)
 
         if executed_unreachable:
-            print(f"❌ BUG REPRODUCED: Unreachable nodes executed: {executed_unreachable}")
+            print(
+                f"❌ BUG REPRODUCED: Unreachable nodes executed: {executed_unreachable}"
+            )
             print(f"Full executed set: {executed_nodes}")
 
         assert not executed_unreachable, (

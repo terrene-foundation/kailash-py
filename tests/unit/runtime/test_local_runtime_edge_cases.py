@@ -96,7 +96,9 @@ class TestLocalRuntimeEdgeCases:
         self.workflow.add_node("node1", node1)
         self.workflow.add_node("node2", node2)
         self.workflow.connect("node1", "node2", {"result": "input"})
-        self.workflow.create_cycle("test_cycle").connect("node2", "node1", {"result": "input"}).max_iterations(2).build()
+        self.workflow.create_cycle("test_cycle").connect(
+            "node2", "node1", {"result": "input"}
+        ).max_iterations(2).build()
 
         runtime = LocalRuntime(enable_cycles=True)
 
@@ -107,8 +109,7 @@ class TestLocalRuntimeEdgeCases:
     def test_node_execution_with_missing_inputs(self):
         """Test node execution when required inputs are missing."""
         node = PythonCodeNode(
-            name="node",
-            code="result = {'value': input_data['required_field']}"
+            name="node", code="result = {'value': input_data['required_field']}"
         )
         self.workflow.add_node("node", node)
 
@@ -123,7 +124,9 @@ class TestLocalRuntimeEdgeCases:
         """Test workflow async execution with node execution errors."""
         # Create workflow with failing node
         good_node = PythonCodeNode(name="good", code="result = {'status': 'ok'}")
-        bad_node = PythonCodeNode(name="bad", code="1/0")  # Will raise ZeroDivisionError
+        bad_node = PythonCodeNode(
+            name="bad", code="1/0"
+        )  # Will raise ZeroDivisionError
 
         self.workflow.add_node("good", good_node)
         self.workflow.add_node("bad", bad_node)
@@ -157,7 +160,9 @@ class TestLocalRuntimeEdgeCases:
     def test_conditional_patterns_detection_error(self):
         """Test error handling in conditional pattern detection."""
         # Add switch to workflow
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         self.workflow.add_node("switch", switch)
 
         # Should detect patterns
@@ -169,10 +174,7 @@ class TestLocalRuntimeEdgeCases:
 
     def test_execution_with_parameter_injection(self):
         """Test execution with parameter injection."""
-        node = PythonCodeNode(
-            name="node",
-            code="result = {'injected': 'test'}"
-        )
+        node = PythonCodeNode(name="node", code="result = {'injected': 'test'}")
         self.workflow.add_node("node", node)
 
         # Execute
@@ -184,8 +186,12 @@ class TestLocalRuntimeEdgeCases:
         """Test switch execution with complex dependencies."""
         # Create dependent switches
         source = PythonCodeNode(name="source", code="result = {'a': 1, 'b': 2}")
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
 
         self.workflow.add_node("source", source)
         self.workflow.add_node("switch1", switch1)
@@ -244,8 +250,7 @@ class TestLocalRuntimeEdgeCases:
         """Test cleanup when execution fails."""
         # Create workflow that will fail
         failing_node = PythonCodeNode(
-            name="failing",
-            code="raise Exception('Test failure')"  # Force failure
+            name="failing", code="raise Exception('Test failure')"  # Force failure
         )
         self.workflow.add_node("failing", failing_node)
 
@@ -266,7 +271,7 @@ class TestLocalRuntimeEdgeCases:
             code="""
 # Fast computation
 result = {'computed': sum(range(100))}
-"""
+""",
         )
         self.workflow.add_node("simple", simple_node)
 
@@ -288,7 +293,7 @@ try:
 except:
     # Handle the error
     result = {'value': 'handled'}
-"""
+""",
         )
         self.workflow.add_node("context_node", context_node)
 
@@ -302,7 +307,9 @@ except:
         """Test complex error propagation through workflow."""
         # Create chain of nodes with error in middle
         node1 = PythonCodeNode(name="node1", code="result = {'step': 1}")
-        node2 = PythonCodeNode(name="node2", code="raise ValueError('Test error')")  # Explicit error
+        node2 = PythonCodeNode(
+            name="node2", code="raise ValueError('Test error')"
+        )  # Explicit error
         node3 = PythonCodeNode(name="node3", code="result = {'step': 3}")
 
         self.workflow.add_node("node1", node1)
@@ -330,7 +337,7 @@ import time
 # Simulate very short work
 time.sleep(0.01)
 result = {'completed': True}
-"""
+""",
         )
         self.workflow.add_node("fast_node", fast_node)
 

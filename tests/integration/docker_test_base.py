@@ -126,7 +126,7 @@ class DockerIntegrationTestBase:
         async with httpx.AsyncClient() as client:
             yield client
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def ollama_client(self):
         """Provide Ollama client for AI testing."""
         base_url = f"http://{OLLAMA_CONFIG['host']}:{OLLAMA_CONFIG['port']}"

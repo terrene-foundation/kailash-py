@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class CompatibilityLevel(Enum):
     """Compatibility levels for conditional execution."""
+
     FULLY_COMPATIBLE = "fully_compatible"
     PARTIALLY_COMPATIBLE = "partially_compatible"
     INCOMPATIBLE = "incompatible"
@@ -25,6 +26,7 @@ class CompatibilityLevel(Enum):
 @dataclass
 class PatternInfo:
     """Information about a detected pattern."""
+
     pattern_type: str
     node_ids: List[str]
     description: str
@@ -35,6 +37,7 @@ class PatternInfo:
 @dataclass
 class CompatibilityReport:
     """Comprehensive compatibility report for a workflow."""
+
     workflow_id: str
     workflow_name: str
     overall_compatibility: CompatibilityLevel
@@ -59,13 +62,13 @@ class CompatibilityReport:
                     "nodes": p.node_ids,
                     "description": p.description,
                     "compatibility": p.compatibility.value,
-                    "recommendation": p.recommendation
+                    "recommendation": p.recommendation,
                 }
                 for p in self.detected_patterns
             ],
             "warnings": self.warnings,
             "recommendations": self.recommendations,
-            "execution_estimate": self.execution_estimate
+            "execution_estimate": self.execution_estimate,
         }
 
     def to_markdown(self) -> str:
@@ -80,43 +83,57 @@ class CompatibilityReport:
         ]
 
         if self.execution_estimate:
-            lines.extend([
-                f"## Performance Estimate",
-                f"{self.execution_estimate}",
-                f"",
-            ])
+            lines.extend(
+                [
+                    f"## Performance Estimate",
+                    f"{self.execution_estimate}",
+                    f"",
+                ]
+            )
 
         if self.detected_patterns:
-            lines.extend([
-                f"## Detected Patterns",
-                f"",
-            ])
+            lines.extend(
+                [
+                    f"## Detected Patterns",
+                    f"",
+                ]
+            )
             for pattern in self.detected_patterns:
-                compat_icon = "✅" if pattern.compatibility == CompatibilityLevel.FULLY_COMPATIBLE else "⚠️"
-                lines.extend([
-                    f"### {compat_icon} {pattern.pattern_type}",
-                    f"- **Nodes**: {', '.join(pattern.node_ids)}",
-                    f"- **Description**: {pattern.description}",
-                    f"- **Compatibility**: {pattern.compatibility.value.replace('_', ' ').title()}",
-                ])
+                compat_icon = (
+                    "✅"
+                    if pattern.compatibility == CompatibilityLevel.FULLY_COMPATIBLE
+                    else "⚠️"
+                )
+                lines.extend(
+                    [
+                        f"### {compat_icon} {pattern.pattern_type}",
+                        f"- **Nodes**: {', '.join(pattern.node_ids)}",
+                        f"- **Description**: {pattern.description}",
+                        f"- **Compatibility**: {pattern.compatibility.value.replace('_', ' ').title()}",
+                    ]
+                )
                 if pattern.recommendation:
                     lines.append(f"- **Recommendation**: {pattern.recommendation}")
                 lines.append("")
 
         if self.warnings:
-            lines.extend([
-                f"## ⚠️ Warnings",
-                f"",
-            ])
+            lines.extend(
+                [
+                    f"## ⚠️ Warnings",
+                    f"",
+                ]
+            )
             for warning in self.warnings:
                 lines.append(f"- {warning}")
             lines.append("")
 
         if self.recommendations:
-            lines.extend([
-                f"## 💡 Recommendations",
-                f"",
-            ])
+            lines.extend(
+                [
+                    f"## 💡 Recommendations",
+                    f"",
+                ]
+            )
             for rec in self.recommendations:
                 lines.append(f"- {rec}")
 
@@ -147,7 +164,7 @@ class CompatibilityReporter:
             workflow_name=workflow.name or "Unnamed Workflow",
             overall_compatibility=CompatibilityLevel.FULLY_COMPATIBLE,
             node_count=len(workflow.graph.nodes()),
-            switch_count=len(self.analyzer._find_switch_nodes())
+            switch_count=len(self.analyzer._find_switch_nodes()),
         )
 
         # Analyze various patterns
@@ -185,40 +202,47 @@ class CompatibilityReporter:
                     complex_switches.append(switch_id)
 
             if simple_switches:
-                report.detected_patterns.append(PatternInfo(
-                    pattern_type="Simple Conditional Routing",
-                    node_ids=simple_switches,
-                    description="Basic true/false conditional branches",
-                    compatibility=CompatibilityLevel.FULLY_COMPATIBLE
-                ))
+                report.detected_patterns.append(
+                    PatternInfo(
+                        pattern_type="Simple Conditional Routing",
+                        node_ids=simple_switches,
+                        description="Basic true/false conditional branches",
+                        compatibility=CompatibilityLevel.FULLY_COMPATIBLE,
+                    )
+                )
 
             if complex_switches:
-                report.detected_patterns.append(PatternInfo(
-                    pattern_type="Multi-Case Switches",
-                    node_ids=complex_switches,
-                    description="Switches with multiple output cases",
-                    compatibility=CompatibilityLevel.FULLY_COMPATIBLE,
-                    recommendation="Multi-case switches are supported and will benefit from branch pruning"
-                ))
+                report.detected_patterns.append(
+                    PatternInfo(
+                        pattern_type="Multi-Case Switches",
+                        node_ids=complex_switches,
+                        description="Switches with multiple output cases",
+                        compatibility=CompatibilityLevel.FULLY_COMPATIBLE,
+                        recommendation="Multi-case switches are supported and will benefit from branch pruning",
+                    )
+                )
 
             # Also check for switches configured with cases parameter
             for switch_id in switch_nodes:
                 node_data = self.analyzer.workflow.graph.nodes[switch_id]
-                node_config = node_data.get('config', {})
-                if 'cases' in node_config and node_config['cases']:
+                node_config = node_data.get("config", {})
+                if "cases" in node_config and node_config["cases"]:
                     if switch_id not in complex_switches:
-                        report.detected_patterns.append(PatternInfo(
-                            pattern_type="Multi-Case Switches",
-                            node_ids=[switch_id],
-                            description=f"Switch with {len(node_config['cases'])} cases",
-                            compatibility=CompatibilityLevel.FULLY_COMPATIBLE,
-                            recommendation="Multi-case switches are supported and will benefit from branch pruning"
-                        ))
+                        report.detected_patterns.append(
+                            PatternInfo(
+                                pattern_type="Multi-Case Switches",
+                                node_ids=[switch_id],
+                                description=f"Switch with {len(node_config['cases'])} cases",
+                                compatibility=CompatibilityLevel.FULLY_COMPATIBLE,
+                                recommendation="Multi-case switches are supported and will benefit from branch pruning",
+                            )
+                        )
 
     def _analyze_cycles(self, workflow: Workflow, report: CompatibilityReport) -> None:
         """Analyze cycle patterns."""
         try:
             import networkx as nx
+
             cycles = list(nx.simple_cycles(workflow.graph))
 
             if cycles:
@@ -231,29 +255,39 @@ class CompatibilityReporter:
                         cycles_with_switches.append(cycle)
 
                 if cycles_with_switches:
-                    report.detected_patterns.append(PatternInfo(
-                        pattern_type="Cycles with Conditional Routing",
-                        node_ids=[node for cycle in cycles_with_switches for node in cycle],
-                        description="Cyclic workflows with conditional branches",
-                        compatibility=CompatibilityLevel.PARTIALLY_COMPATIBLE,
-                        recommendation="Conditional execution is disabled for cyclic workflows to prevent infinite loops"
-                    ))
+                    report.detected_patterns.append(
+                        PatternInfo(
+                            pattern_type="Cycles with Conditional Routing",
+                            node_ids=[
+                                node for cycle in cycles_with_switches for node in cycle
+                            ],
+                            description="Cyclic workflows with conditional branches",
+                            compatibility=CompatibilityLevel.PARTIALLY_COMPATIBLE,
+                            recommendation="Conditional execution is disabled for cyclic workflows to prevent infinite loops",
+                        )
+                    )
                     report.warnings.append(
                         "Workflow contains cycles. Conditional execution will fall back to standard mode."
                     )
-                    report.overall_compatibility = CompatibilityLevel.PARTIALLY_COMPATIBLE
+                    report.overall_compatibility = (
+                        CompatibilityLevel.PARTIALLY_COMPATIBLE
+                    )
                 else:
-                    report.detected_patterns.append(PatternInfo(
-                        pattern_type="Cycles without Switches",
-                        node_ids=[node for cycle in cycles for node in cycle],
-                        description="Cyclic workflows without conditional routing",
-                        compatibility=CompatibilityLevel.PARTIALLY_COMPATIBLE
-                    ))
+                    report.detected_patterns.append(
+                        PatternInfo(
+                            pattern_type="Cycles without Switches",
+                            node_ids=[node for cycle in cycles for node in cycle],
+                            description="Cyclic workflows without conditional routing",
+                            compatibility=CompatibilityLevel.PARTIALLY_COMPATIBLE,
+                        )
+                    )
 
         except Exception as e:
             logger.warning(f"Error analyzing cycles: {e}")
 
-    def _analyze_merge_nodes(self, workflow: Workflow, report: CompatibilityReport) -> None:
+    def _analyze_merge_nodes(
+        self, workflow: Workflow, report: CompatibilityReport
+    ) -> None:
         """Analyze merge node patterns."""
         # Look for nodes with multiple incoming edges (potential merge points)
         merge_candidates = []
@@ -265,8 +299,8 @@ class CompatibilityReporter:
                 incoming_from_switches = False
                 for pred in workflow.graph.predecessors(node_id):
                     node_data = workflow.graph.nodes[pred]
-                    node_instance = node_data.get('node') or node_data.get('instance')
-                    if node_instance and 'Switch' in node_instance.__class__.__name__:
+                    node_instance = node_data.get("node") or node_data.get("instance")
+                    if node_instance and "Switch" in node_instance.__class__.__name__:
                         incoming_from_switches = True
                         break
 
@@ -280,29 +314,33 @@ class CompatibilityReporter:
 
             for node_id in merge_candidates:
                 node_data = workflow.graph.nodes[node_id]
-                node_instance = node_data.get('node') or node_data.get('instance')
-                if node_instance and 'Merge' in node_instance.__class__.__name__:
+                node_instance = node_data.get("node") or node_data.get("instance")
+                if node_instance and "Merge" in node_instance.__class__.__name__:
                     actual_merge_nodes.append(node_id)
                 else:
                     implicit_merge_nodes.append(node_id)
 
             if actual_merge_nodes:
-                report.detected_patterns.append(PatternInfo(
-                    pattern_type="Merge Nodes with Conditional Inputs",
-                    node_ids=actual_merge_nodes,
-                    description="MergeNodes receiving conditional branches",
-                    compatibility=CompatibilityLevel.FULLY_COMPATIBLE,
-                    recommendation="MergeNodes handle conditional inputs gracefully"
-                ))
+                report.detected_patterns.append(
+                    PatternInfo(
+                        pattern_type="Merge Nodes with Conditional Inputs",
+                        node_ids=actual_merge_nodes,
+                        description="MergeNodes receiving conditional branches",
+                        compatibility=CompatibilityLevel.FULLY_COMPATIBLE,
+                        recommendation="MergeNodes handle conditional inputs gracefully",
+                    )
+                )
 
             if implicit_merge_nodes:
-                report.detected_patterns.append(PatternInfo(
-                    pattern_type="Implicit Merge Points",
-                    node_ids=implicit_merge_nodes,
-                    description="Regular nodes receiving multiple conditional inputs",
-                    compatibility=CompatibilityLevel.PARTIALLY_COMPATIBLE,
-                    recommendation="Consider using explicit MergeNode for better handling"
-                ))
+                report.detected_patterns.append(
+                    PatternInfo(
+                        pattern_type="Implicit Merge Points",
+                        node_ids=implicit_merge_nodes,
+                        description="Regular nodes receiving multiple conditional inputs",
+                        compatibility=CompatibilityLevel.PARTIALLY_COMPATIBLE,
+                        recommendation="Consider using explicit MergeNode for better handling",
+                    )
+                )
                 report.warnings.append(
                     f"Nodes {implicit_merge_nodes} receive multiple conditional inputs without explicit merge handling"
                 )
@@ -318,21 +356,27 @@ class CompatibilityReporter:
             if hierarchies:
                 for hierarchy in hierarchies:
                     if len(hierarchy["layers"]) > 1:
-                        all_switches = [s for layer in hierarchy["layers"] for s in layer]
-                        report.detected_patterns.append(PatternInfo(
-                            pattern_type="Hierarchical Switches",
-                            node_ids=all_switches,
-                            description=f"{len(hierarchy['layers'])} layers of dependent switches",
-                            compatibility=CompatibilityLevel.PARTIALLY_COMPATIBLE,
-                            recommendation="Complex hierarchies may require careful testing"
-                        ))
+                        all_switches = [
+                            s for layer in hierarchy["layers"] for s in layer
+                        ]
+                        report.detected_patterns.append(
+                            PatternInfo(
+                                pattern_type="Hierarchical Switches",
+                                node_ids=all_switches,
+                                description=f"{len(hierarchy['layers'])} layers of dependent switches",
+                                compatibility=CompatibilityLevel.PARTIALLY_COMPATIBLE,
+                                recommendation="Complex hierarchies may require careful testing",
+                            )
+                        )
 
                         if len(hierarchy["layers"]) > 3:
                             report.warnings.append(
                                 "Deep switch hierarchies (>3 levels) may impact performance"
                             )
 
-    def _analyze_complex_dependencies(self, workflow: Workflow, report: CompatibilityReport) -> None:
+    def _analyze_complex_dependencies(
+        self, workflow: Workflow, report: CompatibilityReport
+    ) -> None:
         """Analyze complex dependency patterns."""
         # Check for nodes that depend on multiple switches
         switch_nodes = set(self.analyzer._find_switch_nodes())
@@ -348,13 +392,15 @@ class CompatibilityReporter:
                     upstream_switches.add(pred)
 
             if len(upstream_switches) > 2:
-                report.detected_patterns.append(PatternInfo(
-                    pattern_type="Complex Switch Dependencies",
-                    node_ids=[node_id],
-                    description=f"Node depends on {len(upstream_switches)} switches",
-                    compatibility=CompatibilityLevel.PARTIALLY_COMPATIBLE,
-                    recommendation="Complex dependencies are supported but may benefit from refactoring"
-                ))
+                report.detected_patterns.append(
+                    PatternInfo(
+                        pattern_type="Complex Switch Dependencies",
+                        node_ids=[node_id],
+                        description=f"Node depends on {len(upstream_switches)} switches",
+                        compatibility=CompatibilityLevel.PARTIALLY_COMPATIBLE,
+                        recommendation="Complex dependencies are supported but may benefit from refactoring",
+                    )
+                )
 
     def _determine_overall_compatibility(self, report: CompatibilityReport) -> None:
         """Determine overall compatibility level."""
@@ -381,7 +427,9 @@ class CompatibilityReporter:
     def _add_performance_estimate(self, report: CompatibilityReport) -> None:
         """Add performance improvement estimate."""
         if report.switch_count == 0:
-            report.execution_estimate = "No conditional branches detected. No performance improvement expected."
+            report.execution_estimate = (
+                "No conditional branches detected. No performance improvement expected."
+            )
             return
 
         # Estimate based on switch patterns
@@ -390,7 +438,9 @@ class CompatibilityReporter:
             for switch_id in self.analyzer._find_switch_nodes()
         )
 
-        avg_branches_per_switch = total_branches / report.switch_count if report.switch_count > 0 else 0
+        avg_branches_per_switch = (
+            total_branches / report.switch_count if report.switch_count > 0 else 0
+        )
 
         # Rough estimate based on branching factor
         if avg_branches_per_switch <= 2:
@@ -428,7 +478,8 @@ class CompatibilityReporter:
 
         # Check for optimization opportunities
         simple_switch_count = sum(
-            1 for p in report.detected_patterns
+            1
+            for p in report.detected_patterns
             if p.pattern_type == "Simple Conditional Routing"
         )
 

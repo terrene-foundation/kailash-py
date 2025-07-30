@@ -48,7 +48,7 @@ class ConditionalBranchAnalyzer:
 
         switch_nodes = []
 
-        if not hasattr(self.workflow, 'graph') or self.workflow.graph is None:
+        if not hasattr(self.workflow, "graph") or self.workflow.graph is None:
             logger.warning("Workflow has no graph to analyze")
             return switch_nodes
 
@@ -56,7 +56,7 @@ class ConditionalBranchAnalyzer:
             try:
                 node_data = self.workflow.graph.nodes[node_id]
                 # Try both 'node' and 'instance' keys for compatibility
-                node_instance = node_data.get('node') or node_data.get('instance')
+                node_instance = node_data.get("node") or node_data.get("instance")
 
                 if isinstance(node_instance, SwitchNode):
                     switch_nodes.append(node_id)
@@ -88,9 +88,11 @@ class ConditionalBranchAnalyzer:
             branch_map[switch_id] = {}
 
             # Find all outgoing edges from this switch
-            if hasattr(self.workflow.graph, 'out_edges'):
-                for source, target, edge_data in self.workflow.graph.out_edges(switch_id, data=True):
-                    mapping = edge_data.get('mapping', {})
+            if hasattr(self.workflow.graph, "out_edges"):
+                for source, target, edge_data in self.workflow.graph.out_edges(
+                    switch_id, data=True
+                ):
+                    mapping = edge_data.get("mapping", {})
 
                     # Extract output ports from mapping
                     for source_port, target_port in mapping.items():
@@ -99,7 +101,9 @@ class ConditionalBranchAnalyzer:
                             branch_map[switch_id][source_port] = set()
 
                         branch_map[switch_id][source_port].add(target)
-                        logger.debug(f"Switch {switch_id} port {source_port} -> {target}")
+                        logger.debug(
+                            f"Switch {switch_id} port {source_port} -> {target}"
+                        )
 
                         # Find downstream nodes recursively
                         downstream = self._find_downstream_nodes(target, switch_nodes)
@@ -109,7 +113,9 @@ class ConditionalBranchAnalyzer:
         logger.info(f"Built branch map for {len(branch_map)} switches")
         return branch_map
 
-    def _find_downstream_nodes(self, start_node: str, exclude_switches: List[str]) -> Set[str]:
+    def _find_downstream_nodes(
+        self, start_node: str, exclude_switches: List[str]
+    ) -> Set[str]:
         """
         Find all downstream nodes from a starting node, excluding switches.
 
@@ -138,7 +144,7 @@ class ConditionalBranchAnalyzer:
             downstream.add(current)
 
             # Add successors to stack
-            if hasattr(self.workflow.graph, 'successors'):
+            if hasattr(self.workflow.graph, "successors"):
                 for successor in self.workflow.graph.successors(current):
                     if successor not in visited:
                         stack.append(successor)
@@ -147,7 +153,9 @@ class ConditionalBranchAnalyzer:
         downstream.discard(start_node)
         return downstream
 
-    def get_reachable_nodes(self, switch_results: Dict[str, Dict[str, Any]]) -> Set[str]:
+    def get_reachable_nodes(
+        self, switch_results: Dict[str, Dict[str, Any]]
+    ) -> Set[str]:
         """
         Get reachable nodes based on SwitchNode results.
 
@@ -181,22 +189,28 @@ class ConditionalBranchAnalyzer:
                         direct_nodes = switch_branches[port]
                         reachable.update(direct_nodes)
                         to_process.update(direct_nodes)
-                        logger.debug(f"Switch {switch_id} port {port} activated - added {len(direct_nodes)} direct nodes")
+                        logger.debug(
+                            f"Switch {switch_id} port {port} activated - added {len(direct_nodes)} direct nodes"
+                        )
 
         # Now traverse the graph to find ALL downstream nodes from the activated branches
         while to_process:
             current_node = to_process.pop()
 
             # Get all successors of the current node
-            if hasattr(self.workflow.graph, 'successors'):
+            if hasattr(self.workflow.graph, "successors"):
                 successors = list(self.workflow.graph.successors(current_node))
                 for successor in successors:
                     if successor not in reachable:
                         reachable.add(successor)
                         to_process.add(successor)
-                        logger.debug(f"Added downstream node {successor} from {current_node}")
+                        logger.debug(
+                            f"Added downstream node {successor} from {current_node}"
+                        )
 
-        logger.info(f"Determined {len(reachable)} reachable nodes from switch results (including downstream)")
+        logger.info(
+            f"Determined {len(reachable)} reachable nodes from switch results (including downstream)"
+        )
         return reachable
 
     def detect_conditional_patterns(self) -> Dict[str, Any]:
@@ -219,7 +233,9 @@ class ConditionalBranchAnalyzer:
             patterns["single_switch"] = switch_nodes
         elif len(switch_nodes) > 1:
             patterns["multiple_switches"] = switch_nodes
-            patterns["cascading_switches"] = self._detect_cascading_switches(switch_nodes)
+            patterns["cascading_switches"] = self._detect_cascading_switches(
+                switch_nodes
+            )
 
         # Detect merge nodes
         merge_nodes = self._find_merge_nodes()
@@ -249,14 +265,16 @@ class ConditionalBranchAnalyzer:
         """Detect if the workflow has cycles."""
         try:
             # Prioritize NetworkX cycle detection (detects structural cycles)
-            if hasattr(self.workflow.graph, 'nodes'):
+            if hasattr(self.workflow.graph, "nodes"):
                 # Use NetworkX to detect cycles in graph structure
-                has_structural_cycles = not nx.is_directed_acyclic_graph(self.workflow.graph)
+                has_structural_cycles = not nx.is_directed_acyclic_graph(
+                    self.workflow.graph
+                )
                 if has_structural_cycles:
                     return True
 
             # Also check for explicitly marked cycle connections
-            if hasattr(self.workflow, 'has_cycles'):
+            if hasattr(self.workflow, "has_cycles"):
                 return self.workflow.has_cycles()
 
             return False
@@ -275,7 +293,9 @@ class ConditionalBranchAnalyzer:
                     switch_chain = [switch_id]
 
                     # Find switches in downstream nodes
-                    downstream_switches = [node for node in downstream if node in switch_nodes]
+                    downstream_switches = [
+                        node for node in downstream if node in switch_nodes
+                    ]
                     if downstream_switches:
                         switch_chain.extend(downstream_switches)
                         if len(switch_chain) > 1:
@@ -287,14 +307,14 @@ class ConditionalBranchAnalyzer:
         """Find all MergeNode instances in the workflow."""
         merge_nodes = []
 
-        if not hasattr(self.workflow, 'graph') or self.workflow.graph is None:
+        if not hasattr(self.workflow, "graph") or self.workflow.graph is None:
             return merge_nodes
 
         for node_id in self.workflow.graph.nodes():
             try:
                 node_data = self.workflow.graph.nodes[node_id]
                 # Try both 'node' and 'instance' keys for compatibility
-                node_instance = node_data.get('node') or node_data.get('instance')
+                node_instance = node_data.get("node") or node_data.get("instance")
 
                 if isinstance(node_instance, MergeNode):
                     merge_nodes.append(node_id)
@@ -335,7 +355,7 @@ class ConditionalBranchAnalyzer:
                 ports = list(self._branch_map[switch_id].keys())
 
                 # Multi-case switches have more than 2 output ports or case_X patterns
-                case_ports = [p for p in ports if p.startswith('case_')]
+                case_ports = [p for p in ports if p.startswith("case_")]
                 if len(ports) > 2 or case_ports:
                     multi_case.append(switch_id)
 
@@ -371,11 +391,13 @@ class ConditionalBranchAnalyzer:
         hierarchy_info = self.analyze_switch_hierarchies(switch_nodes)
 
         if hierarchy_info["has_hierarchies"]:
-            hierarchies.append({
-                "layers": hierarchy_info["execution_layers"],
-                "max_depth": hierarchy_info["max_depth"],
-                "dependency_chains": hierarchy_info["dependency_chains"]
-            })
+            hierarchies.append(
+                {
+                    "layers": hierarchy_info["execution_layers"],
+                    "max_depth": hierarchy_info["max_depth"],
+                    "dependency_chains": hierarchy_info["dependency_chains"],
+                }
+            )
 
         return hierarchies
 
@@ -387,7 +409,9 @@ class ConditionalBranchAnalyzer:
 
     # ===== PHASE 4: ADVANCED FEATURES =====
 
-    def analyze_switch_hierarchies(self, switch_nodes: Optional[List[str]] = None) -> Dict[str, Any]:
+    def analyze_switch_hierarchies(
+        self, switch_nodes: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
         """
         Analyze hierarchical relationships between SwitchNodes.
 
@@ -405,13 +429,15 @@ class ConditionalBranchAnalyzer:
             "max_depth": 0,
             "dependency_chains": [],
             "independent_switches": [],
-            "execution_layers": []
+            "execution_layers": [],
         }
 
         try:
             if len(switch_nodes) <= 1:
                 hierarchy_info["independent_switches"] = switch_nodes
-                hierarchy_info["execution_layers"] = [switch_nodes] if switch_nodes else []
+                hierarchy_info["execution_layers"] = (
+                    [switch_nodes] if switch_nodes else []
+                )
                 hierarchy_info["max_depth"] = 1 if switch_nodes else 0
                 return hierarchy_info
 
@@ -419,7 +445,9 @@ class ConditionalBranchAnalyzer:
             switch_dependencies = {}
             for switch_id in switch_nodes:
                 predecessors = list(self.workflow.graph.predecessors(switch_id))
-                switch_predecessors = [pred for pred in predecessors if pred in switch_nodes]
+                switch_predecessors = [
+                    pred for pred in predecessors if pred in switch_nodes
+                ]
                 switch_dependencies[switch_id] = switch_predecessors
 
                 if switch_predecessors:
@@ -427,12 +455,16 @@ class ConditionalBranchAnalyzer:
 
             # Calculate execution layers (topological ordering of switches)
             if hierarchy_info["has_hierarchies"]:
-                layers = self._create_execution_layers(switch_nodes, switch_dependencies)
+                layers = self._create_execution_layers(
+                    switch_nodes, switch_dependencies
+                )
                 hierarchy_info["execution_layers"] = layers
                 hierarchy_info["max_depth"] = len(layers)
 
                 # Find dependency chains
-                hierarchy_info["dependency_chains"] = self._find_dependency_chains(switch_dependencies)
+                hierarchy_info["dependency_chains"] = self._find_dependency_chains(
+                    switch_dependencies
+                )
             else:
                 hierarchy_info["independent_switches"] = switch_nodes
                 hierarchy_info["execution_layers"] = [switch_nodes]
@@ -443,7 +475,9 @@ class ConditionalBranchAnalyzer:
 
         return hierarchy_info
 
-    def _create_execution_layers(self, switch_nodes: List[str], dependencies: Dict[str, List[str]]) -> List[List[str]]:
+    def _create_execution_layers(
+        self, switch_nodes: List[str], dependencies: Dict[str, List[str]]
+    ) -> List[List[str]]:
         """
         Create execution layers for hierarchical switches.
 
@@ -477,7 +511,9 @@ class ConditionalBranchAnalyzer:
 
         return layers
 
-    def _find_dependency_chains(self, dependencies: Dict[str, List[str]]) -> List[List[str]]:
+    def _find_dependency_chains(
+        self, dependencies: Dict[str, List[str]]
+    ) -> List[List[str]]:
         """
         Find dependency chains in switch hierarchies.
 
@@ -512,7 +548,9 @@ class ConditionalBranchAnalyzer:
 
         return chains
 
-    def create_hierarchical_execution_plan(self, switch_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    def create_hierarchical_execution_plan(
+        self, switch_results: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Create execution plan that handles hierarchical switch dependencies.
 
@@ -526,7 +564,7 @@ class ConditionalBranchAnalyzer:
             "execution_layers": [],
             "reachable_nodes": set(),
             "merge_strategies": {},
-            "performance_estimate": 0
+            "performance_estimate": 0,
         }
 
         try:
@@ -534,18 +572,22 @@ class ConditionalBranchAnalyzer:
             hierarchy_info = self.analyze_switch_hierarchies(switch_nodes)
 
             # Process each execution layer
-            for layer_index, layer_switches in enumerate(hierarchy_info["execution_layers"]):
+            for layer_index, layer_switches in enumerate(
+                hierarchy_info["execution_layers"]
+            ):
                 layer_plan = {
                     "layer_index": layer_index,
                     "switches": layer_switches,
                     "reachable_from_layer": set(),
-                    "blocked_from_layer": set()
+                    "blocked_from_layer": set(),
                 }
 
                 # Determine reachable nodes from this layer
                 for switch_id in layer_switches:
                     if switch_id in switch_results:
-                        reachable = self._get_reachable_from_switch(switch_id, switch_results[switch_id])
+                        reachable = self._get_reachable_from_switch(
+                            switch_id, switch_results[switch_id]
+                        )
                         layer_plan["reachable_from_layer"].update(reachable)
                         plan["reachable_nodes"].update(reachable)
                     else:
@@ -564,14 +606,18 @@ class ConditionalBranchAnalyzer:
             # Estimate performance improvement
             total_nodes = len(self.workflow.graph.nodes)
             reachable_count = len(plan["reachable_nodes"])
-            plan["performance_estimate"] = (total_nodes - reachable_count) / total_nodes if total_nodes > 0 else 0
+            plan["performance_estimate"] = (
+                (total_nodes - reachable_count) / total_nodes if total_nodes > 0 else 0
+            )
 
         except Exception as e:
             logger.warning(f"Error creating hierarchical execution plan: {e}")
 
         return plan
 
-    def _get_reachable_from_switch(self, switch_id: str, switch_result: Dict[str, Any]) -> Set[str]:
+    def _get_reachable_from_switch(
+        self, switch_id: str, switch_result: Dict[str, Any]
+    ) -> Set[str]:
         """
         Get nodes reachable from a specific switch result.
 
@@ -591,15 +637,22 @@ class ConditionalBranchAnalyzer:
 
             # Check which branches are active
             for output_key, nodes in switch_branches.items():
-                if output_key in switch_result and switch_result[output_key] is not None:
+                if (
+                    output_key in switch_result
+                    and switch_result[output_key] is not None
+                ):
                     reachable.update(nodes)
 
         except Exception as e:
-            logger.warning(f"Error getting reachable nodes from switch {switch_id}: {e}")
+            logger.warning(
+                f"Error getting reachable nodes from switch {switch_id}: {e}"
+            )
 
         return reachable
 
-    def _determine_merge_strategy(self, merge_id: str, reachable_nodes: Set[str]) -> Dict[str, Any]:
+    def _determine_merge_strategy(
+        self, merge_id: str, reachable_nodes: Set[str]
+    ) -> Dict[str, Any]:
         """
         Determine merge strategy for a MergeNode based on reachable inputs.
 
@@ -615,7 +668,7 @@ class ConditionalBranchAnalyzer:
             "available_inputs": [],
             "missing_inputs": [],
             "strategy_type": "partial",
-            "skip_merge": False
+            "skip_merge": False,
         }
 
         try:

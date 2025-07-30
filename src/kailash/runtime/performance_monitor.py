@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ExecutionMetrics:
     """Metrics for a single execution."""
+
     execution_time: float
     node_count: int
     skipped_nodes: int
@@ -49,7 +50,7 @@ class PerformanceMonitor:
         self,
         performance_threshold: float = 0.9,  # Switch if conditional is 90% slower
         sample_size: int = 10,
-        min_samples: int = 3
+        min_samples: int = 3,
     ):
         """Initialize performance monitor.
 
@@ -65,13 +66,13 @@ class PerformanceMonitor:
         # Track metrics for each mode
         self.metrics: Dict[str, deque] = {
             "route_data": deque(maxlen=sample_size),
-            "skip_branches": deque(maxlen=sample_size)
+            "skip_branches": deque(maxlen=sample_size),
         }
 
         # Performance statistics
         self.mode_performance: Dict[str, float] = {
             "route_data": 0.0,
-            "skip_branches": 0.0
+            "skip_branches": 0.0,
         }
 
         # Current recommendation
@@ -187,10 +188,13 @@ class PerformanceMonitor:
             if metrics_deque:
                 metrics_list = list(metrics_deque)
                 report[f"{mode}_stats"] = {
-                    "avg_execution_time": sum(m.execution_time for m in metrics_list) / len(metrics_list),
-                    "avg_nodes": sum(m.node_count for m in metrics_list) / len(metrics_list),
-                    "avg_skip_ratio": sum(m.skip_ratio for m in metrics_list) / len(metrics_list),
-                    "total_executions": len(metrics_list)
+                    "avg_execution_time": sum(m.execution_time for m in metrics_list)
+                    / len(metrics_list),
+                    "avg_nodes": sum(m.node_count for m in metrics_list)
+                    / len(metrics_list),
+                    "avg_skip_ratio": sum(m.skip_ratio for m in metrics_list)
+                    / len(metrics_list),
+                    "total_executions": len(metrics_list),
                 }
 
         return report

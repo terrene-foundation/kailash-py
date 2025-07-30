@@ -48,8 +48,12 @@ class TestConditionalBranchAnalyzerCoverage:
     def test_find_switch_nodes_with_mixed_nodes(self):
         """Test _find_switch_nodes with mixed node types."""
         # Add various node types
-        switch1 = SwitchNode(name="switch1", condition_field="status", operator="==", value="active")
-        switch2 = SwitchNode(name="switch2", condition_field="type", operator="==", value="premium")
+        switch1 = SwitchNode(
+            name="switch1", condition_field="status", operator="==", value="active"
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="type", operator="==", value="premium"
+        )
         proc = PythonCodeNode(name="proc", code="result = {'data': 1}")
         merge = MergeNode(name="merge", merge_type="merge_dict")
 
@@ -68,8 +72,12 @@ class TestConditionalBranchAnalyzerCoverage:
     def test_get_reachable_nodes_with_complex_conditions(self):
         """Test get_reachable_nodes with complex switch results."""
         # Create workflow with multiple branches
-        switch1 = SwitchNode(name="switch1", condition_field="status", operator="==", value="active")
-        switch2 = SwitchNode(name="switch2", condition_field="type", operator="==", value="premium")
+        switch1 = SwitchNode(
+            name="switch1", condition_field="status", operator="==", value="active"
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="type", operator="==", value="premium"
+        )
         proc1 = PythonCodeNode(name="proc1", code="result = {'step': 1}")
         proc2 = PythonCodeNode(name="proc2", code="result = {'step': 2}")
         proc3 = PythonCodeNode(name="proc3", code="result = {'step': 3}")
@@ -101,9 +109,13 @@ class TestConditionalBranchAnalyzerCoverage:
 
     def test_get_reachable_nodes_with_false_outputs(self):
         """Test get_reachable_nodes when false outputs are taken."""
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         proc_true = PythonCodeNode(name="proc_true", code="result = {'branch': 'true'}")
-        proc_false = PythonCodeNode(name="proc_false", code="result = {'branch': 'false'}")
+        proc_false = PythonCodeNode(
+            name="proc_false", code="result = {'branch': 'false'}"
+        )
 
         self.workflow.add_node("switch", switch)
         self.workflow.add_node("proc_true", proc_true)
@@ -133,7 +145,9 @@ class TestConditionalBranchAnalyzerCoverage:
         assert patterns["total_switches"] == 0
 
         # Add a switch
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         self.workflow.add_node("switch", switch)
 
         # Invalidate cache since we modified the workflow
@@ -146,9 +160,15 @@ class TestConditionalBranchAnalyzerCoverage:
     def test_analyze_switch_hierarchies_complex_workflow(self):
         """Test analyze_switch_hierarchies with complex hierarchical structure."""
         # Create hierarchical switches
-        switch1 = SwitchNode(name="switch1", condition_field="level1", operator="==", value="A")
-        switch2 = SwitchNode(name="switch2", condition_field="level2", operator="==", value="B")
-        switch3 = SwitchNode(name="switch3", condition_field="level3", operator="==", value="C")
+        switch1 = SwitchNode(
+            name="switch1", condition_field="level1", operator="==", value="A"
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="level2", operator="==", value="B"
+        )
+        switch3 = SwitchNode(
+            name="switch3", condition_field="level3", operator="==", value="C"
+        )
 
         proc1 = PythonCodeNode(name="proc1", code="result = {'level': 1}")
         proc2 = PythonCodeNode(name="proc2", code="result = {'level': 2}")
@@ -177,8 +197,12 @@ class TestConditionalBranchAnalyzerCoverage:
     def test_create_hierarchical_execution_plan(self):
         """Test create_hierarchical_execution_plan method."""
         # Create simple hierarchy
-        switch1 = SwitchNode(name="switch1", condition_field="status", operator="==", value="active")
-        switch2 = SwitchNode(name="switch2", condition_field="type", operator="==", value="premium")
+        switch1 = SwitchNode(
+            name="switch1", condition_field="status", operator="==", value="active"
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="type", operator="==", value="premium"
+        )
         proc = PythonCodeNode(name="proc", code="result = {'data': 1}")
 
         self.workflow.add_node("switch1", switch1)
@@ -190,7 +214,7 @@ class TestConditionalBranchAnalyzerCoverage:
 
         switch_results = {
             "switch1": {"true_output": {"status": "active"}, "false_output": None},
-            "switch2": {"true_output": {"type": "premium"}, "false_output": None}
+            "switch2": {"true_output": {"type": "premium"}, "false_output": None},
         }
 
         plan = self.analyzer.create_hierarchical_execution_plan(switch_results)
@@ -206,8 +230,12 @@ class TestConditionalBranchAnalyzerCoverage:
         self.workflow.add_node("merge", merge)
 
         # Add some predecessor switches
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
 
         self.workflow.add_node("switch1", switch1)
         self.workflow.add_node("switch2", switch2)
@@ -249,12 +277,18 @@ class TestConditionalBranchAnalyzerCoverage:
         """Test complex branch mapping scenarios."""
         # Create workflow with complex branching
         source = PythonCodeNode(name="source", code="result = {'data': 'test'}")
-        switch1 = SwitchNode(name="switch1", condition_field="branch", operator="==", value="A")
-        switch2 = SwitchNode(name="switch2", condition_field="sub_branch", operator="==", value="B")
+        switch1 = SwitchNode(
+            name="switch1", condition_field="branch", operator="==", value="A"
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="sub_branch", operator="==", value="B"
+        )
 
         proc_a = PythonCodeNode(name="proc_a", code="result = {'path': 'A'}")
         proc_b = PythonCodeNode(name="proc_b", code="result = {'path': 'B'}")
-        proc_default = PythonCodeNode(name="proc_default", code="result = {'path': 'default'}")
+        proc_default = PythonCodeNode(
+            name="proc_default", code="result = {'path': 'default'}"
+        )
 
         self.workflow.add_node("source", source)
         self.workflow.add_node("switch1", switch1)
@@ -280,7 +314,9 @@ class TestConditionalBranchAnalyzerCoverage:
 
     def test_reachable_nodes_with_missing_connections(self):
         """Test get_reachable_nodes with missing or incomplete connections."""
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         proc = PythonCodeNode(name="proc", code="result = {'data': 1}")
 
         self.workflow.add_node("switch", switch)
@@ -307,15 +343,9 @@ class TestConditionalBranchAnalyzerCoverage:
         # Add many switches and processors
         for i in range(20):
             switch = SwitchNode(
-                name=f"switch_{i}",
-                condition_field=f"field_{i}",
-                operator="==",
-                value=i
+                name=f"switch_{i}", condition_field=f"field_{i}", operator="==", value=i
             )
-            proc = PythonCodeNode(
-                name=f"proc_{i}",
-                code=f"result = {{'proc': {i}}}"
-            )
+            proc = PythonCodeNode(name=f"proc_{i}", code=f"result = {{'proc': {i}}}")
 
             self.workflow.add_node(f"switch_{i}", switch)
             self.workflow.add_node(f"proc_{i}", proc)
@@ -325,6 +355,7 @@ class TestConditionalBranchAnalyzerCoverage:
 
         # Test that analysis completes in reasonable time
         import time
+
         start_time = time.time()
 
         patterns = self.analyzer.detect_conditional_patterns()
@@ -360,7 +391,9 @@ class TestAnalyzeSwitchHierarchies:
 
     def test_analyze_switch_hierarchies_single_switch(self):
         """Test analyze_switch_hierarchies with single switch."""
-        switch = SwitchNode(name="switch1", condition_field="field", operator="==", value="value")
+        switch = SwitchNode(
+            name="switch1", condition_field="field", operator="==", value="value"
+        )
         self.workflow.add_node("switch1", switch)
 
         result = self.analyzer.analyze_switch_hierarchies(["switch1"])
@@ -373,9 +406,15 @@ class TestAnalyzeSwitchHierarchies:
     def test_analyze_switch_hierarchies_with_dependencies(self):
         """Test analyze_switch_hierarchies with dependent switches."""
         # Create chain: switch1 -> switch2 -> switch3
-        switch1 = SwitchNode(name="switch1", condition_field="f1", operator="==", value="v1")
-        switch2 = SwitchNode(name="switch2", condition_field="f2", operator="==", value="v2")
-        switch3 = SwitchNode(name="switch3", condition_field="f3", operator="==", value="v3")
+        switch1 = SwitchNode(
+            name="switch1", condition_field="f1", operator="==", value="v1"
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="f2", operator="==", value="v2"
+        )
+        switch3 = SwitchNode(
+            name="switch3", condition_field="f3", operator="==", value="v3"
+        )
 
         self.workflow.add_node("switch1", switch1)
         self.workflow.add_node("switch2", switch2)
@@ -385,7 +424,9 @@ class TestAnalyzeSwitchHierarchies:
         self.workflow.connect("switch1", "switch2", {"true_output": "input_data"})
         self.workflow.connect("switch2", "switch3", {"true_output": "input_data"})
 
-        result = self.analyzer.analyze_switch_hierarchies(["switch1", "switch2", "switch3"])
+        result = self.analyzer.analyze_switch_hierarchies(
+            ["switch1", "switch2", "switch3"]
+        )
 
         assert result["has_hierarchies"] is True
         assert result["max_depth"] == 3
@@ -397,16 +438,24 @@ class TestAnalyzeSwitchHierarchies:
     def test_analyze_switch_hierarchies_parallel_switches(self):
         """Test analyze_switch_hierarchies with parallel switches."""
         # Create parallel switches with no dependencies
-        switch1 = SwitchNode(name="switch1", condition_field="f1", operator="==", value="v1")
-        switch2 = SwitchNode(name="switch2", condition_field="f2", operator="==", value="v2")
-        switch3 = SwitchNode(name="switch3", condition_field="f3", operator="==", value="v3")
+        switch1 = SwitchNode(
+            name="switch1", condition_field="f1", operator="==", value="v1"
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="f2", operator="==", value="v2"
+        )
+        switch3 = SwitchNode(
+            name="switch3", condition_field="f3", operator="==", value="v3"
+        )
 
         self.workflow.add_node("switch1", switch1)
         self.workflow.add_node("switch2", switch2)
         self.workflow.add_node("switch3", switch3)
 
         # No connections between switches - they're all independent
-        result = self.analyzer.analyze_switch_hierarchies(["switch1", "switch2", "switch3"])
+        result = self.analyzer.analyze_switch_hierarchies(
+            ["switch1", "switch2", "switch3"]
+        )
 
         assert result["has_hierarchies"] is False
         assert result["max_depth"] == 1
@@ -423,10 +472,18 @@ class TestAnalyzeSwitchHierarchies:
         #    \      /
         #    switch4
 
-        switch1 = SwitchNode(name="switch1", condition_field="f1", operator="==", value="v1")
-        switch2 = SwitchNode(name="switch2", condition_field="f2", operator="==", value="v2")
-        switch3 = SwitchNode(name="switch3", condition_field="f3", operator="==", value="v3")
-        switch4 = SwitchNode(name="switch4", condition_field="f4", operator="==", value="v4")
+        switch1 = SwitchNode(
+            name="switch1", condition_field="f1", operator="==", value="v1"
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="f2", operator="==", value="v2"
+        )
+        switch3 = SwitchNode(
+            name="switch3", condition_field="f3", operator="==", value="v3"
+        )
+        switch4 = SwitchNode(
+            name="switch4", condition_field="f4", operator="==", value="v4"
+        )
 
         self.workflow.add_node("switch1", switch1)
         self.workflow.add_node("switch2", switch2)
@@ -439,7 +496,9 @@ class TestAnalyzeSwitchHierarchies:
         self.workflow.connect("switch2", "switch4", {"true_output": "input_data"})
         self.workflow.connect("switch3", "switch4", {"true_output": "input_data"})
 
-        result = self.analyzer.analyze_switch_hierarchies(["switch1", "switch2", "switch3", "switch4"])
+        result = self.analyzer.analyze_switch_hierarchies(
+            ["switch1", "switch2", "switch3", "switch4"]
+        )
 
         assert result["has_hierarchies"] is True
         assert result["max_depth"] == 3
@@ -584,7 +643,9 @@ class TestGetReachableFromSwitch:
 
     def test_get_reachable_from_switch_no_outputs(self):
         """Test _get_reachable_from_switch with no active outputs."""
-        switch = SwitchNode(name="switch", condition_field="field", operator="==", value="value")
+        switch = SwitchNode(
+            name="switch", condition_field="field", operator="==", value="value"
+        )
         self.workflow.add_node("switch", switch)
 
         # No outputs active
@@ -595,7 +656,9 @@ class TestGetReachableFromSwitch:
 
     def test_get_reachable_from_switch_true_output(self):
         """Test _get_reachable_from_switch with true output active."""
-        switch = SwitchNode(name="switch", condition_field="field", operator="==", value="value")
+        switch = SwitchNode(
+            name="switch", condition_field="field", operator="==", value="value"
+        )
         proc = PythonCodeNode(name="proc", code="result = 1")
 
         self.workflow.add_node("switch", switch)
@@ -610,7 +673,9 @@ class TestGetReachableFromSwitch:
 
     def test_get_reachable_from_switch_both_outputs(self):
         """Test _get_reachable_from_switch with both outputs active."""
-        switch = SwitchNode(name="switch", condition_field="field", operator="==", value="value")
+        switch = SwitchNode(
+            name="switch", condition_field="field", operator="==", value="value"
+        )
         proc1 = PythonCodeNode(name="proc1", code="result = 1")
         proc2 = PythonCodeNode(name="proc2", code="result = 2")
 
@@ -630,7 +695,9 @@ class TestGetReachableFromSwitch:
     def test_get_reachable_from_switch_with_invalid_switch_id(self):
         """Test _get_reachable_from_switch with invalid switch ID."""
         switch_result = {"true_output": {"data": 1}}
-        reachable = self.analyzer._get_reachable_from_switch("nonexistent", switch_result)
+        reachable = self.analyzer._get_reachable_from_switch(
+            "nonexistent", switch_result
+        )
 
         # Should return empty set for invalid switch
         assert reachable == set()

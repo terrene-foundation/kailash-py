@@ -33,8 +33,7 @@ class TestConditionalWorkflowIntegration:
 
         # Data source
         source = PythonCodeNode(
-            name="source",
-            code="result = {'user_type': 'premium', 'status': 'active'}"
+            name="source", code="result = {'user_type': 'premium', 'status': 'active'}"
         )
 
         # Conditional switch
@@ -42,18 +41,18 @@ class TestConditionalWorkflowIntegration:
             name="type_switch",
             condition_field="user_type",
             operator="==",
-            value="premium"
+            value="premium",
         )
 
         # Processing branches
         premium_processor = PythonCodeNode(
             name="premium_processor",
-            code="result = {'discount': 20, 'priority': 'high'}"
+            code="result = {'discount': 20, 'priority': 'high'}",
         )
 
         basic_processor = PythonCodeNode(
             name="basic_processor",
-            code="result = {'discount': 5, 'priority': 'normal'}"
+            code="result = {'discount': 5, 'priority': 'normal'}",
         )
 
         # Add nodes
@@ -94,25 +93,24 @@ class TestConditionalWorkflowIntegration:
         workflow = Workflow("simple_conditional_skip", "Simple Conditional Skip Test")
 
         source = PythonCodeNode(
-            name="source",
-            code="result = {'user_type': 'premium', 'status': 'active'}"
+            name="source", code="result = {'user_type': 'premium', 'status': 'active'}"
         )
 
         type_switch = SwitchNode(
             name="type_switch",
             condition_field="user_type",
             operator="==",
-            value="premium"
+            value="premium",
         )
 
         premium_processor = PythonCodeNode(
             name="premium_processor",
-            code="result = {'discount': 20, 'priority': 'high'}"
+            code="result = {'discount': 20, 'priority': 'high'}",
         )
 
         basic_processor = PythonCodeNode(
             name="basic_processor",
-            code="result = {'discount': 5, 'priority': 'normal'}"
+            code="result = {'discount': 5, 'priority': 'normal'}",
         )
 
         workflow.add_node("source", source)
@@ -155,7 +153,7 @@ class TestConditionalWorkflowIntegration:
         # Source data
         source = PythonCodeNode(
             name="source",
-            code="result = {'user_type': 'premium', 'region': 'US', 'status': 'active'}"
+            code="result = {'user_type': 'premium', 'region': 'US', 'status': 'active'}",
         )
 
         # First level switch - user type
@@ -163,31 +161,28 @@ class TestConditionalWorkflowIntegration:
             name="type_switch",
             condition_field="user_type",
             operator="==",
-            value="premium"
+            value="premium",
         )
 
         # Second level switch - region (only for premium users)
         region_switch = SwitchNode(
-            name="region_switch",
-            condition_field="region",
-            operator="==",
-            value="US"
+            name="region_switch", condition_field="region", operator="==", value="US"
         )
 
         # Final processors
         us_premium_processor = PythonCodeNode(
             name="us_premium_processor",
-            code="result = {'discount': 25, 'shipping': 'free', 'priority': 'highest'}"
+            code="result = {'discount': 25, 'shipping': 'free', 'priority': 'highest'}",
         )
 
         intl_premium_processor = PythonCodeNode(
             name="intl_premium_processor",
-            code="result = {'discount': 20, 'shipping': 'standard', 'priority': 'high'}"
+            code="result = {'discount': 20, 'shipping': 'standard', 'priority': 'high'}",
         )
 
         basic_processor = PythonCodeNode(
             name="basic_processor",
-            code="result = {'discount': 5, 'shipping': 'standard', 'priority': 'normal'}"
+            code="result = {'discount': 5, 'shipping': 'standard', 'priority': 'normal'}",
         )
 
         # Add nodes
@@ -202,8 +197,12 @@ class TestConditionalWorkflowIntegration:
         workflow.connect("source", "type_switch", {"result": "input_data"})
         workflow.connect("type_switch", "region_switch", {"true_output": "input_data"})
         workflow.connect("type_switch", "basic_processor", {"false_output": "input"})
-        workflow.connect("region_switch", "us_premium_processor", {"true_output": "input"})
-        workflow.connect("region_switch", "intl_premium_processor", {"false_output": "input"})
+        workflow.connect(
+            "region_switch", "us_premium_processor", {"true_output": "input"}
+        )
+        workflow.connect(
+            "region_switch", "intl_premium_processor", {"false_output": "input"}
+        )
 
         # Test with route_data mode (baseline)
         runtime_route = LocalRuntime(conditional_execution="route_data")
@@ -237,7 +236,10 @@ class TestConditionalWorkflowIntegration:
             assert "us_premium_processor" in results_skip  # Final destination
 
             # These should be skipped
-            if "intl_premium_processor" not in results_skip and "basic_processor" not in results_skip:
+            if (
+                "intl_premium_processor" not in results_skip
+                and "basic_processor" not in results_skip
+            ):
                 # Skip branches working correctly
                 assert True
             else:
@@ -254,7 +256,7 @@ class TestConditionalWorkflowIntegration:
         # Source data
         source = PythonCodeNode(
             name="source",
-            code="result = {'user_type': 'premium', 'has_coupon': True, 'region': 'US'}"
+            code="result = {'user_type': 'premium', 'has_coupon': True, 'region': 'US'}",
         )
 
         # Parallel switches
@@ -262,44 +264,35 @@ class TestConditionalWorkflowIntegration:
             name="type_switch",
             condition_field="user_type",
             operator="==",
-            value="premium"
+            value="premium",
         )
 
         coupon_switch = SwitchNode(
             name="coupon_switch",
             condition_field="has_coupon",
             operator="==",
-            value=True
+            value=True,
         )
 
         region_switch = SwitchNode(
-            name="region_switch",
-            condition_field="region",
-            operator="==",
-            value="US"
+            name="region_switch", condition_field="region", operator="==", value="US"
         )
 
         # Processors for each branch
         premium_processor = PythonCodeNode(
-            name="premium_processor",
-            code="result = {'type_discount': 20}"
+            name="premium_processor", code="result = {'type_discount': 20}"
         )
 
         coupon_processor = PythonCodeNode(
-            name="coupon_processor",
-            code="result = {'coupon_discount': 10}"
+            name="coupon_processor", code="result = {'coupon_discount': 10}"
         )
 
         us_processor = PythonCodeNode(
-            name="us_processor",
-            code="result = {'shipping_discount': 5}"
+            name="us_processor", code="result = {'shipping_discount': 5}"
         )
 
         # Merge results
-        merge_processor = MergeNode(
-            name="merge_processor",
-            merge_type="merge_dict"
-        )
+        merge_processor = MergeNode(name="merge_processor", merge_type="merge_dict")
 
         final_processor = PythonCodeNode(
             name="final_processor",
@@ -312,7 +305,7 @@ if 'coupon_discount' in merged_data:
 if 'shipping_discount' in merged_data:
     total_discount += merged_data['shipping_discount']
 result = {'total_discount': total_discount}
-"""
+""",
         )
 
         # Add all nodes
@@ -339,7 +332,9 @@ result = {'total_discount': total_discount}
         workflow.connect("coupon_processor", "merge_processor", {"result": "data2"})
         workflow.connect("us_processor", "merge_processor", {"result": "data3"})
 
-        workflow.connect("merge_processor", "final_processor", {"merged_data": "merged_data"})
+        workflow.connect(
+            "merge_processor", "final_processor", {"merged_data": "merged_data"}
+        )
 
         # Test execution
         runtime = LocalRuntime(conditional_execution="route_data")
@@ -365,41 +360,32 @@ result = {'total_discount': total_discount}
 
         # Source
         source = PythonCodeNode(
-            name="source",
-            code="result = {'process_a': True, 'process_b': False}"
+            name="source", code="result = {'process_a': True, 'process_b': False}"
         )
 
         # Conditional branches
         switch_a = SwitchNode(
-            name="switch_a",
-            condition_field="process_a",
-            operator="==",
-            value=True
+            name="switch_a", condition_field="process_a", operator="==", value=True
         )
 
         switch_b = SwitchNode(
-            name="switch_b",
-            condition_field="process_b",
-            operator="==",
-            value=True
+            name="switch_b", condition_field="process_b", operator="==", value=True
         )
 
         # Processors
         processor_a = PythonCodeNode(
-            name="processor_a",
-            code="result = {'data_a': 'processed'}"
+            name="processor_a", code="result = {'data_a': 'processed'}"
         )
 
         processor_b = PythonCodeNode(
-            name="processor_b",
-            code="result = {'data_b': 'processed'}"
+            name="processor_b", code="result = {'data_b': 'processed'}"
         )
 
         # Merge node that should handle partial inputs
         merge_node = MergeNode(
             name="merge_results",
             merge_type="merge_dict",
-            skip_none=True  # Handle missing inputs gracefully
+            skip_none=True,  # Handle missing inputs gracefully
         )
 
         # Final processor
@@ -412,7 +398,7 @@ if 'data_a' in merged_data:
 if 'data_b' in merged_data:
     available_data['has_b'] = True
 result = available_data
-"""
+""",
         )
 
         # Add nodes
@@ -434,7 +420,9 @@ result = available_data
         workflow.connect("processor_a", "merge_results", {"result": "data1"})
         workflow.connect("processor_b", "merge_results", {"result": "data2"})
 
-        workflow.connect("merge_results", "final_processor", {"merged_data": "merged_data"})
+        workflow.connect(
+            "merge_results", "final_processor", {"merged_data": "merged_data"}
+        )
 
         # Execute workflow
         runtime = LocalRuntime(conditional_execution="route_data")
@@ -457,7 +445,7 @@ result = available_data
         # Source
         source = PythonCodeNode(
             name="source",
-            code="result = {'active_branches': [1, 3, 5, 7, 9]}"  # Only odd branches active
+            code="result = {'active_branches': [1, 3, 5, 7, 9]}",  # Only odd branches active
         )
         workflow.add_node("source", source)
 
@@ -467,7 +455,7 @@ result = available_data
                 name=f"switch_{i}",
                 condition_field="active_branches",
                 operator="contains",
-                value=i
+                value=i,
             )
 
             # Expensive processor (simulated work)
@@ -477,7 +465,7 @@ result = available_data
 import time
 time.sleep(0.01)  # Simulate 10ms of work
 result = {{'branch': {i}, 'work_done': True}}
-"""
+""",
             )
 
             workflow.add_node(f"switch_{i}", switch)
@@ -506,12 +494,16 @@ result = {{'branch': {i}, 'work_done': True}}
             skip_time = time.time() - start_time
 
             # Verify only active processors executed
-            executed_processors_skip = [k for k in results_skip.keys() if "processor_" in k]
+            executed_processors_skip = [
+                k for k in results_skip.keys() if "processor_" in k
+            ]
 
             if len(executed_processors_skip) < 10:
                 # Skip branches working - should be faster
                 assert skip_time < route_time
-                print(f"Performance improvement: {((route_time - skip_time) / route_time) * 100:.1f}%")
+                print(
+                    f"Performance improvement: {((route_time - skip_time) / route_time) * 100:.1f}%"
+                )
             else:
                 # Fallback to route_data behavior
                 assert True
@@ -526,7 +518,7 @@ result = {{'branch': {i}, 'work_done': True}}
         # Source with invalid data
         source = PythonCodeNode(
             name="source",
-            code="result = {'invalid_field': None}"  # Missing expected field
+            code="result = {'invalid_field': None}",  # Missing expected field
         )
 
         # Switch expecting 'status' field
@@ -534,12 +526,11 @@ result = {{'branch': {i}, 'work_done': True}}
             name="status_switch",
             condition_field="status",  # Field doesn't exist in source
             operator="==",
-            value="active"
+            value="active",
         )
 
         processor = PythonCodeNode(
-            name="processor",
-            code="result = {'processed': True}"
+            name="processor", code="result = {'processed': True}"
         )
 
         workflow.add_node("source", source)
@@ -573,7 +564,7 @@ result = {{'branch': {i}, 'work_done': True}}
         def counter_func(count=0):
             """Increment counter."""
             count += 1
-            return {'count': count, 'done': count >= 3}
+            return {"count": count, "done": count >= 3}
 
         counter = PythonCodeNode.from_function(
             func=counter_func,
@@ -582,20 +573,17 @@ result = {{'branch': {i}, 'work_done': True}}
                 "count": NodeParameter(
                     name="count", type=int, required=False, default=0
                 )
-            }
+            },
         )
 
         # Switch to check if we should continue
         continue_switch = SwitchNode(
-            name="continue_switch",
-            condition_field="done",
-            operator="==",
-            value=False
+            name="continue_switch", condition_field="done", operator="==", value=False
         )
 
         # Final processor to handle completion
         def final_func(count=0, done=False):
-            return {'final_count': count, 'completed': done}
+            return {"final_count": count, "completed": done}
 
         final_processor = PythonCodeNode.from_function(
             func=final_func,
@@ -606,8 +594,8 @@ result = {{'branch': {i}, 'work_done': True}}
                 ),
                 "done": NodeParameter(
                     name="done", type=bool, required=False, default=False
-                )
-            }
+                ),
+            },
         )
 
         # Build workflow
@@ -620,21 +608,20 @@ result = {{'branch': {i}, 'work_done': True}}
 
         # Create cycle - continue_switch loops back to counter when done=False
         workflow.create_cycle("counting_cycle").connect(
-            "continue_switch", "counter",
-            {"true_output.count": "count"}  # true_output when done=False
+            "continue_switch",
+            "counter",
+            {"true_output.count": "count"},  # true_output when done=False
         ).max_iterations(5).converge_when("done == True").build()
 
         # Connect to final processor when done=True
-        workflow.connect("continue_switch", "final_processor", {
-            "false_output.count": "count",
-            "false_output.done": "done"
-        })
+        workflow.connect(
+            "continue_switch",
+            "final_processor",
+            {"false_output.count": "count", "false_output.done": "done"},
+        )
 
         # Execute with cycles enabled
-        runtime = LocalRuntime(
-            conditional_execution="route_data",
-            enable_cycles=True
-        )
+        runtime = LocalRuntime(conditional_execution="route_data", enable_cycles=True)
 
         # Start with initial count of 0
         results, _ = runtime.execute(workflow, parameters={"counter": {"count": 0}})
@@ -654,14 +641,18 @@ result = {{'branch': {i}, 'work_done': True}}
         assert counter_result is not None
         # The counter should have executed multiple times
         counter_count = counter_result["result"]["count"]
-        assert counter_count >= 2, f"Counter should have incremented at least twice, got {counter_count}"
+        assert (
+            counter_count >= 2
+        ), f"Counter should have incremented at least twice, got {counter_count}"
 
         # Check if final processor got the results
         final_result = results.get("final_processor")
         if final_result is None:
             # This is a known issue with conditional execution within cycles
             # The final processor after the cycle may not execute correctly
-            print("WARNING: Final processor didn't execute - known issue with cycles and switches")
+            print(
+                "WARNING: Final processor didn't execute - known issue with cycles and switches"
+            )
             # For now, just verify the cycle executed
             assert counter_result["result"]["done"] is True or counter_count >= 3
         else:
@@ -670,8 +661,7 @@ result = {{'branch': {i}, 'work_done': True}}
 
         # Test with conditional execution mode (should still work)
         runtime_conditional = LocalRuntime(
-            conditional_execution="skip_branches",
-            enable_cycles=True
+            conditional_execution="skip_branches", enable_cycles=True
         )
 
         # Cycles should work regardless of conditional execution mode
@@ -700,7 +690,7 @@ result = {
     'has_referral': True,
     'company_size': 500
 }
-"""
+""",
         )
 
         # User type classification
@@ -708,7 +698,7 @@ result = {
             name="type_classifier",
             condition_field="user_type",
             operator="==",
-            value="enterprise"
+            value="enterprise",
         )
 
         # Enterprise-specific processing
@@ -719,7 +709,7 @@ features = ['sso', 'advanced_analytics', 'priority_support']
 if input.get('company_size', 0) > 100:
     features.append('dedicated_manager')
 result = {'features': features, 'onboarding_type': 'enterprise', 'region': input.get('region', 'US')}
-"""
+""",
         )
 
         # Individual user processing
@@ -730,7 +720,7 @@ features = ['basic_analytics', 'standard_support']
 if input.get('plan', '') == 'premium':
     features.append('advanced_features')
 result = {'features': features, 'onboarding_type': 'individual', 'region': input.get('region', 'US')}
-"""
+""",
         )
 
         # Trial user processing
@@ -739,7 +729,7 @@ result = {'features': features, 'onboarding_type': 'individual', 'region': input
             code="""
 features = ['limited_analytics', 'community_support']
 result = {'features': features, 'onboarding_type': 'trial', 'trial_days': 14}
-"""
+""",
         )
 
         # Regional customization
@@ -747,7 +737,7 @@ result = {'features': features, 'onboarding_type': 'trial', 'trial_days': 14}
             name="region_customizer",
             condition_field="region",
             operator="==",
-            value="US"
+            value="US",
         )
 
         # US-specific customization
@@ -756,7 +746,7 @@ result = {'features': features, 'onboarding_type': 'trial', 'trial_days': 14}
             code="""
 regional_features = ['us_data_centers', 'usd_billing', 'us_compliance']
 result = {'regional_features': regional_features, 'currency': 'USD'}
-"""
+""",
         )
 
         # EU-specific customization
@@ -765,7 +755,7 @@ result = {'regional_features': regional_features, 'currency': 'USD'}
             code="""
 regional_features = ['eu_data_centers', 'eur_billing', 'gdpr_compliance']
 result = {'regional_features': regional_features, 'currency': 'EUR'}
-"""
+""",
         )
 
         # Referral bonus processor
@@ -773,7 +763,7 @@ result = {'regional_features': regional_features, 'currency': 'EUR'}
             name="referral_checker",
             condition_field="has_referral",
             operator="==",
-            value=True
+            value=True,
         )
 
         referral_processor = PythonCodeNode(
@@ -781,13 +771,12 @@ result = {'regional_features': regional_features, 'currency': 'EUR'}
             code="""
 bonus = {'type': 'referral_bonus', 'credits': 100, 'extra_features': ['beta_access']}
 result = bonus
-"""
+""",
         )
 
         # Final onboarding assembler
         onboarding_assembler = MergeNode(
-            name="onboarding_assembler",
-            merge_type="merge_dict"
+            name="onboarding_assembler", merge_type="merge_dict"
         )
 
         final_setup = PythonCodeNode(
@@ -814,7 +803,7 @@ if 'type' in data and data.get('type') == 'referral_bonus':
     }
 
 result = onboarding_plan
-"""
+""",
         )
 
         # Build workflow
@@ -830,7 +819,7 @@ result = onboarding_plan
             ("referral_checker", referral_checker),
             ("referral_processor", referral_processor),
             ("onboarding_assembler", onboarding_assembler),
-            ("final_setup", final_setup)
+            ("final_setup", final_setup),
         ]
 
         for node_id, node in nodes:
@@ -840,31 +829,57 @@ result = onboarding_plan
         workflow.connect("user_input", "type_classifier", {"result": "input_data"})
 
         # Type-specific paths (only enterprise path since we're checking for enterprise)
-        workflow.connect("type_classifier", "enterprise_processor", {"true_output": "input"})
-        workflow.connect("type_classifier", "individual_processor", {"false_output": "input"})
+        workflow.connect(
+            "type_classifier", "enterprise_processor", {"true_output": "input"}
+        )
+        workflow.connect(
+            "type_classifier", "individual_processor", {"false_output": "input"}
+        )
         # For trial, we'd need another switch node
 
         # All paths go to region customizer
-        workflow.connect("enterprise_processor", "region_customizer", {"result": "input_data"})
-        workflow.connect("individual_processor", "region_customizer", {"result": "input_data"})
+        workflow.connect(
+            "enterprise_processor", "region_customizer", {"result": "input_data"}
+        )
+        workflow.connect(
+            "individual_processor", "region_customizer", {"result": "input_data"}
+        )
         # Don't connect trial_processor since we removed the connection
 
         # Regional paths (checking for US)
-        workflow.connect("region_customizer", "us_customization", {"true_output": "input"})
-        workflow.connect("region_customizer", "eu_customization", {"false_output": "input"})
+        workflow.connect(
+            "region_customizer", "us_customization", {"true_output": "input"}
+        )
+        workflow.connect(
+            "region_customizer", "eu_customization", {"false_output": "input"}
+        )
 
         # Referral check (parallel to regional)
         workflow.connect("user_input", "referral_checker", {"result": "input_data"})
-        workflow.connect("referral_checker", "referral_processor", {"true_output": "input"})
+        workflow.connect(
+            "referral_checker", "referral_processor", {"true_output": "input"}
+        )
 
         # Assemble final result - include enterprise/individual processor outputs
-        workflow.connect("enterprise_processor", "onboarding_assembler", {"result": "data1"})
-        workflow.connect("individual_processor", "onboarding_assembler", {"result": "data2"})
-        workflow.connect("us_customization", "onboarding_assembler", {"result": "data3"})
-        workflow.connect("eu_customization", "onboarding_assembler", {"result": "data4"})
-        workflow.connect("referral_processor", "onboarding_assembler", {"result": "data5"})
+        workflow.connect(
+            "enterprise_processor", "onboarding_assembler", {"result": "data1"}
+        )
+        workflow.connect(
+            "individual_processor", "onboarding_assembler", {"result": "data2"}
+        )
+        workflow.connect(
+            "us_customization", "onboarding_assembler", {"result": "data3"}
+        )
+        workflow.connect(
+            "eu_customization", "onboarding_assembler", {"result": "data4"}
+        )
+        workflow.connect(
+            "referral_processor", "onboarding_assembler", {"result": "data5"}
+        )
 
-        workflow.connect("onboarding_assembler", "final_setup", {"merged_data": "merged_data"})
+        workflow.connect(
+            "onboarding_assembler", "final_setup", {"merged_data": "merged_data"}
+        )
 
         # Execute workflow
         runtime = LocalRuntime(conditional_execution="route_data")
@@ -872,14 +887,21 @@ result = onboarding_plan
 
         # Debug output
         print("Results summary:")
-        for node_id in ["type_classifier", "enterprise_processor", "region_customizer", "us_customization"]:
+        for node_id in [
+            "type_classifier",
+            "enterprise_processor",
+            "region_customizer",
+            "us_customization",
+        ]:
             if node_id in results:
                 print(f"  {node_id}: {results[node_id]}")
 
         # Verify enterprise path was taken
         assert "enterprise_processor" in results
         enterprise_result = results["enterprise_processor"]["result"]
-        assert "dedicated_manager" in enterprise_result["features"]  # Large company bonus
+        assert (
+            "dedicated_manager" in enterprise_result["features"]
+        )  # Large company bonus
 
         # Check what region_customizer got
         region_result = results.get("region_customizer")
@@ -892,7 +914,9 @@ result = onboarding_plan
             assert us_result["result"]["currency"] == "USD"
         else:
             # In route_data mode, nodes might be skipped if inputs are None
-            print("WARNING: us_customization was skipped - likely due to conditional routing")
+            print(
+                "WARNING: us_customization was skipped - likely due to conditional routing"
+            )
             # This is expected behavior in route_data mode when the switch doesn't route data
 
         # Verify referral bonus was applied
@@ -933,7 +957,7 @@ data = [
     {'type': 'order', 'status': 'completed', 'value': 750}
 ]
 result = {'raw_data': data, 'total_records': len(data)}
-"""
+""",
         )
 
         # Data type router
@@ -944,8 +968,8 @@ result = {'raw_data': data, 'total_records': len(data)}
             cases={
                 "customer": "customer_pipeline",
                 "order": "order_pipeline",
-                "product": "product_pipeline"
-            }
+                "product": "product_pipeline",
+            },
         )
 
         # Customer data processing
@@ -968,7 +992,7 @@ result = {
     'count': len(processed_customers),
     'needs_urgent_processing': any(c['status'] == 'active' for c in processed_customers)
 }
-"""
+""",
         )
 
         # Order data processing
@@ -991,7 +1015,7 @@ result = {
     'count': len(processed_orders),
     'needs_urgent_processing': any(o['status'] == 'pending' for o in processed_orders)
 }
-"""
+""",
         )
 
         # Status-based conditional processing
@@ -999,7 +1023,7 @@ result = {
             name="status_checker",
             condition_field="needs_urgent_processing",
             operator="==",
-            value=True
+            value=True,
         )
 
         urgent_processor = PythonCodeNode(
@@ -1012,14 +1036,11 @@ if 'orders' in data:
     urgent_items.extend([o for o in data['orders'] if o.get('status') == 'pending'])
 
 result = {'urgent_items': urgent_items, 'requires_immediate_action': len(urgent_items) > 0}
-"""
+""",
         )
 
         # Data aggregator
-        data_aggregator = MergeNode(
-            name="data_aggregator",
-            merge_type="merge_dict"
-        )
+        data_aggregator = MergeNode(name="data_aggregator", merge_type="merge_dict")
 
         # Final reporting
         report_generator = PythonCodeNode(
@@ -1038,7 +1059,7 @@ if aggregated_data.get('requires_immediate_action'):
     report['alerts'] = ['Urgent items require immediate attention']
 
 result = report
-"""
+""",
         )
 
         # Build workflow
@@ -1067,7 +1088,9 @@ result = report
         workflow.connect("urgent_processor", "data_aggregator", {"result": "data3"})
 
         # Generate final report
-        workflow.connect("data_aggregator", "report_generator", {"merged_data": "aggregated_data"})
+        workflow.connect(
+            "data_aggregator", "report_generator", {"merged_data": "aggregated_data"}
+        )
 
         # Execute pipeline
         runtime = LocalRuntime(conditional_execution="route_data")

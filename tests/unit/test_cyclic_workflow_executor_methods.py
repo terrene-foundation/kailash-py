@@ -155,9 +155,9 @@ class TestExecuteCycleGroups:
             edges=[("node2", "node1", {"cycle": True})],
         )
 
-        # Mock _execute_cycle_group to return results
+        # Mock _execute_cycle_group to return results tuple
         with patch.object(executor, "_execute_cycle_group") as mock_execute:
-            mock_execute.return_value = {"node1": {"iter": 1}, "node2": {"iter": 1}}
+            mock_execute.return_value = ({"node1": {"iter": 1}, "node2": {"iter": 1}}, None)
 
             # Execute
             results = executor._execute_cycle_groups(
@@ -197,11 +197,11 @@ class TestExecuteCycleGroups:
             edges=[("node4", "node3", {"cycle": True})],
         )
 
-        # Mock _execute_cycle_group to return different results
+        # Mock _execute_cycle_group to return different results as tuples
         with patch.object(executor, "_execute_cycle_group") as mock_execute:
             mock_execute.side_effect = [
-                {"node1": {"cycle": 1}, "node2": {"cycle": 1}},
-                {"node3": {"cycle": 2}, "node4": {"cycle": 2}},
+                ({"node1": {"cycle": 1}, "node2": {"cycle": 1}}, None),
+                ({"node3": {"cycle": 2}, "node4": {"cycle": 2}}, None),
             ]
 
             # Execute
@@ -236,7 +236,7 @@ class TestExecuteCycleGroups:
 
         # Mock _execute_cycle_group
         with patch.object(executor, "_execute_cycle_group") as mock_execute:
-            mock_execute.return_value = {"node1": {"final": "value"}}
+            mock_execute.return_value = ({"node1": {"final": "value"}}, None)
 
             # Execute
             executor._execute_cycle_groups(

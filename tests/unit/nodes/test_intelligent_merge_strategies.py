@@ -15,10 +15,7 @@ class TestIntelligentMergeStrategies:
     def test_adaptive_merge_single_input(self):
         """Test adaptive merge with single input."""
         result = self.node.execute(
-            method="adaptive",
-            input1={"data": "test1"},
-            input2=None,
-            input3=None
+            method="adaptive", input1={"data": "test1"}, input2=None, input3=None
         )
 
         assert result["output"]["strategy_used"] == "first_available"
@@ -32,7 +29,7 @@ class TestIntelligentMergeStrategies:
             input1={"data": "test1", "priority": 0.8},
             input2={"data": "test2", "priority": 0.6},
             input3=None,
-            priority_threshold=0.5
+            priority_threshold=0.5,
         )
 
         assert result["output"]["strategy_used"] == "priority_merge"
@@ -45,7 +42,7 @@ class TestIntelligentMergeStrategies:
             method="adaptive",
             input1={"score": 0.8, "weight": 0.3},
             input2={"score": 0.6, "weight": 0.7},
-            input3=None
+            input3=None,
         )
 
         assert result["output"]["strategy_used"] == "weighted"
@@ -60,14 +57,14 @@ class TestIntelligentMergeStrategies:
             input1=True,
             input2=True,
             input3=False,
-            consensus_threshold=2
+            consensus_threshold=2,
         )
 
         assert result["output"]["consensus"] is True
         assert result["output"]["result"] is True
         assert result["output"]["vote_count"]["true"] == 2
         assert result["output"]["vote_count"]["false"] == 1
-        assert result["output"]["confidence"] == 2/3
+        assert result["output"]["confidence"] == 2 / 3
 
     def test_consensus_merge_decisions(self):
         """Test consensus merge with decision inputs."""
@@ -76,7 +73,7 @@ class TestIntelligentMergeStrategies:
             input1={"decision": "approve"},
             input2={"decision": "approve"},
             input3={"decision": "reject"},
-            consensus_threshold=2
+            consensus_threshold=2,
         )
 
         assert result["output"]["consensus"] is True
@@ -87,10 +84,7 @@ class TestIntelligentMergeStrategies:
     def test_consensus_merge_insufficient_inputs(self):
         """Test consensus merge with insufficient inputs."""
         result = self.node.execute(
-            method="consensus",
-            input1=True,
-            input2=None,
-            consensus_threshold=3
+            method="consensus", input1=True, input2=None, consensus_threshold=3
         )
 
         assert result["output"]["consensus"] is False
@@ -103,7 +97,7 @@ class TestIntelligentMergeStrategies:
             input1={"data": "low", "priority": 0.3},
             input2={"data": "high", "priority": 0.8},
             input3={"data": "medium", "priority": 0.6},
-            priority_threshold=0.5
+            priority_threshold=0.5,
         )
 
         assert result["output"]["priorities_processed"] == 2  # Only high and medium
@@ -116,7 +110,7 @@ class TestIntelligentMergeStrategies:
             method="priority_merge",
             input1={"data": "low1", "priority": 0.2},
             input2={"data": "low2", "priority": 0.3},
-            priority_threshold=0.5
+            priority_threshold=0.5,
         )
 
         assert result["output"]["priorities_processed"] == 0
@@ -127,7 +121,7 @@ class TestIntelligentMergeStrategies:
         conditional_context = {
             "available_branches": ["1", "3"],
             "skipped_branches": ["2"],
-            "execution_confidence": 0.9
+            "execution_confidence": 0.9,
         }
 
         result = self.node.execute(
@@ -135,7 +129,7 @@ class TestIntelligentMergeStrategies:
             input1={"data": "branch1"},
             input2={"data": "branch2"},  # Should be filtered out
             input3={"data": "branch3"},
-            conditional_context=conditional_context
+            conditional_context=conditional_context,
         )
 
         assert result["output"]["strategy"] == "conditional_aware"
@@ -149,14 +143,14 @@ class TestIntelligentMergeStrategies:
         conditional_context = {
             "available_branches": ["1", "2"],
             "skipped_branches": [],
-            "execution_confidence": 0.3  # Low confidence
+            "execution_confidence": 0.3,  # Low confidence
         }
 
         result = self.node.execute(
             method="conditional_aware",
             input1={"data": "branch1"},
             input2={"data": "branch2"},
-            conditional_context=conditional_context
+            conditional_context=conditional_context,
         )
 
         assert result["output"]["strategy"] == "conditional_aware"
@@ -168,7 +162,7 @@ class TestIntelligentMergeStrategies:
         result = self.node.execute(
             method="conditional_aware",
             input1={"data": "branch1"},
-            input2={"data": "branch2"}
+            input2={"data": "branch2"},
         )
 
         assert result["output"]["strategy"] == "conditional_aware"
@@ -180,7 +174,7 @@ class TestIntelligentMergeStrategies:
         conditional_context = {
             "available_branches": ["4", "5"],
             "skipped_branches": ["1", "2", "3"],
-            "execution_confidence": 0.8
+            "execution_confidence": 0.8,
         }
 
         result = self.node.execute(
@@ -188,7 +182,7 @@ class TestIntelligentMergeStrategies:
             input1={"data": "branch1"},
             input2={"data": "branch2"},
             input3={"data": "branch3"},
-            conditional_context=conditional_context
+            conditional_context=conditional_context,
         )
 
         assert result["output"]["strategy"] == "conditional_aware"
@@ -202,23 +196,23 @@ class TestIntelligentMergeStrategies:
             input1={"data": "test1"},
             input2={"data": "test2"},
             input3=None,
-            handle_none=True
+            handle_none=True,
         )
 
         stats = result["merge_stats"]
         assert stats["method"] == "combine"
-        assert stats["total_inputs"] == 3  # method, handle_none, timeout = 3 control parameters
+        assert (
+            stats["total_inputs"] == 3
+        )  # method, handle_none, timeout = 3 control parameters
         assert stats["valid_inputs"] == 2
         assert stats["skipped_inputs"] == 1  # 3 - 2 = 1
 
     def test_unknown_merge_method(self):
         """Test error handling for unknown merge method."""
         from kailash.sdk_exceptions import NodeExecutionError
+
         with pytest.raises(NodeExecutionError, match="Unknown merge method: invalid"):
-            self.node.execute(
-                method="invalid",
-                input1={"data": "test"}
-            )
+            self.node.execute(method="invalid", input1={"data": "test"})
 
     def test_handle_none_parameter(self):
         """Test handle_none parameter functionality."""
@@ -228,7 +222,7 @@ class TestIntelligentMergeStrategies:
             input1={"data": "test1"},
             input2=None,
             input3={"data": "test3"},
-            handle_none=True
+            handle_none=True,
         )
 
         # With handle_none=False
@@ -237,7 +231,7 @@ class TestIntelligentMergeStrategies:
             input1={"data": "test1"},
             input2=None,
             input3={"data": "test3"},
-            handle_none=False
+            handle_none=False,
         )
 
         # With handle_none=True, None inputs should be filtered out
@@ -246,4 +240,6 @@ class TestIntelligentMergeStrategies:
 
         # With handle_none=False, None inputs should be included
         stats_without = result_without_none_handling["merge_stats"]
-        assert stats_without["valid_inputs"] == 2  # Still 2 because None input is still None
+        assert (
+            stats_without["valid_inputs"] == 2
+        )  # Still 2 because None input is still None
