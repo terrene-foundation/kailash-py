@@ -100,6 +100,7 @@ app.start()  # Available as API, CLI, and MCP
 - **Workflow**: `workflow.create_cycle(...).connect(...).build()` (direct chaining)
 - **SwitchNode + Cycles**: Set forward connections FIRST, then create cycle connections
 - **📖 Detailed patterns**: [sdk-users/](sdk-users/) → Cyclic Workflows section
+- **🔄 Implementation Note**: Kailash uses true cyclic edges (not SwitchNodes) with graph separation strategy - see [Cyclic Implementation Guide](sdk-users/2-core-concepts/workflows/cyclic-implementation-guide.md)
 
 ## 🚨 **Debugging Workflow Errors**
 **"Node 'X' missing required inputs"** → [Parameter Solution Guide](sdk-users/2-core-concepts/validation/common-mistakes.md#mistake--1-missing-required-parameters-new-in-v070)
@@ -178,8 +179,8 @@ The **App Framework** provides complete domain-specific applications built on th
 | **Core SDK** | **App Framework** | **Contributors** |
 |---------------|---------------------|-----------|
 | [sdk-users/](sdk-users/) - Complete workflow guides | [apps/](apps/) - Production-ready applications | [# contrib (removed)/architecture/](# contrib (removed)/architecture/) |
-| [sdk-users/2-core-concepts/nodes/node-selection-guide.md](sdk-users/2-core-concepts/nodes/node-selection-guide.md) - 110+ nodes | [sdk-users/apps/dataflow/](sdk-users/apps/dataflow/) - DataFlow guide (PyPI) | [# contrib (removed)/training/](# contrib (removed)/training/) |
-| [sdk-users/2-core-concepts/cheatsheet/](sdk-users/2-core-concepts/cheatsheet/) - Copy-paste patterns | [sdk-users/apps/nexus/](sdk-users/apps/nexus/) - Nexus guide (PyPI) | [tests/](tests/) - 2,400+ tests |
+| [sdk-users/2-core-concepts/nodes/node-selection-guide.md](sdk-users/2-core-concepts/nodes/node-selection-guide.md) - 110+ nodes | [sdk-users/4-apps/dataflow/](sdk-users/4-apps/dataflow/) - DataFlow guide (PyPI) | [# contrib (removed)/training/](# contrib (removed)/training/) |
+| [sdk-users/2-core-concepts/cheatsheet/](sdk-users/2-core-concepts/cheatsheet/) - Copy-paste patterns | [sdk-users/4-apps/nexus/](sdk-users/4-apps/nexus/) - Nexus guide (PyPI) | [tests/](tests/) - 2,400+ tests |
 | [sdk-users/5-enterprise/](sdk-users/5-enterprise/) - Advanced features | [apps/kailash-mcp/](apps/kailash-mcp/) - Enterprise MCP platform | [examples/](examples/) - Feature validation |
 
 ## ⚠️ MUST FOLLOW

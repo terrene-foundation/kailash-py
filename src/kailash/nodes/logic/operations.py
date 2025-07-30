@@ -106,9 +106,8 @@ class SwitchNode(Node):
                 auto_map_from=[
                     "data",
                     "input",
-                    "value",
                     "items",
-                ],  # Common alternatives
+                ],  # Common alternatives - removed 'value' to prevent conflict with condition value
                 workflow_alias="data",  # Preferred name in workflow connections
             ),
             "condition_field": NodeParameter(
@@ -276,13 +275,20 @@ class SwitchNode(Node):
             result = {"default": kwargs["input_data"], "condition_result": None}
             return result
 
-        # Ensure input_data is provided at execution time
+        # Handle missing input_data during conditional execution phase 1
+        # When executing switches before source nodes, we need to make routing decisions
+        # based on the configuration alone
         if "input_data" not in kwargs:
-            raise ValueError(
-                "Required parameter 'input_data' not provided at execution time"
+            # During phase 1 of conditional execution, source nodes haven't run yet
+            # We can still make routing decisions based on static conditions
+            self.logger.debug(
+                "SwitchNode executing without input_data (conditional phase 1)"
             )
-
-        input_data = kwargs["input_data"]
+            # For static comparisons (e.g., != with a value), we can assume no match
+            # This allows the workflow to proceed and execute the appropriate branches
+            input_data = None
+        else:
+            input_data = kwargs["input_data"]
         condition_field = kwargs.get("condition_field")
         operator = kwargs.get("operator", "==")
         value = kwargs.get("value")
@@ -293,7 +299,14 @@ class SwitchNode(Node):
         break_after_first_match = kwargs.get("break_after_first_match", True)
 
         # Extract the value to check
-        if condition_field:
+        if input_data is None:
+            # During conditional phase 1, we don't have actual data
+            # Use None as check_value which will typically not match conditions
+            check_value = None
+            self.logger.debug(
+                "No input_data available, using None for condition checks"
+            )
+        elif condition_field:
             # Handle both single dict and list of dicts
             if isinstance(input_data, dict):
                 check_value = input_data.get(condition_field)
@@ -417,6 +430,20 @@ class SwitchNode(Node):
             is_not_null: Check if not None
         """
         try:
+            # Handle None values gracefully during conditional execution phase 1
+            if check_value is None and operator not in [
+                "is_null",
+                "is_not_null",
+                "==",
+                "!=",
+            ]:
+                # For comparison operators with None, return False by default
+                # This ensures branches are properly evaluated when data is available
+                self.logger.debug(
+                    f"Condition check with None value for operator '{operator}', defaulting to False"
+                )
+                return False
+
             if operator == "==":
                 return check_value == compare_value
             elif operator == "!=":
@@ -430,8 +457,14 @@ class SwitchNode(Node):
             elif operator == "<=":
                 return check_value <= compare_value
             elif operator == "in":
+                # Handle None for 'in' operator
+                if check_value is None or compare_value is None:
+                    return False
                 return check_value in compare_value
             elif operator == "contains":
+                # Handle None for 'contains' operator
+                if check_value is None or compare_value is None:
+                    return False
                 return compare_value in check_value
             elif operator == "is_null":
                 return check_value is None

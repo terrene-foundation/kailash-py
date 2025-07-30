@@ -35,14 +35,20 @@ Examples:
 """
 
 import asyncio
+import hashlib
 import logging
+import time
+from collections import defaultdict
 from datetime import UTC, datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import networkx as nx
+import psutil
 
 from kailash.nodes import Node
+from kailash.runtime.compatibility_reporter import CompatibilityReporter
 from kailash.runtime.parameter_injector import WorkflowParameterInjector
+from kailash.runtime.performance_monitor import ExecutionMetrics, PerformanceMonitor
 from kailash.runtime.secret_provider import EnvironmentSecretProvider, SecretProvider
 from kailash.runtime.validation.connection_context import ConnectionContext
 from kailash.runtime.validation.enhanced_error_formatter import EnhancedErrorFormatter
@@ -65,6 +71,32 @@ from kailash.workflow.contracts import ConnectionContract, ContractValidator
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 
 logger = logging.getLogger(__name__)
+
+# Conditional execution imports (lazy-loaded to avoid circular imports)
+_ConditionalBranchAnalyzer = None
+_DynamicExecutionPlanner = None
+
+
+def _get_conditional_analyzer():
+    """Lazy import ConditionalBranchAnalyzer to avoid circular imports."""
+    global _ConditionalBranchAnalyzer
+    if _ConditionalBranchAnalyzer is None:
+        from kailash.analysis.conditional_branch_analyzer import (
+            ConditionalBranchAnalyzer,
+        )
+
+        _ConditionalBranchAnalyzer = ConditionalBranchAnalyzer
+    return _ConditionalBranchAnalyzer
+
+
+def _get_execution_planner():
+    """Lazy import DynamicExecutionPlanner to avoid circular imports."""
+    global _DynamicExecutionPlanner
+    if _DynamicExecutionPlanner is None:
+        from kailash.planning.dynamic_execution_planner import DynamicExecutionPlanner
+
+        _DynamicExecutionPlanner = DynamicExecutionPlanner
+    return _DynamicExecutionPlanner
 
 
 class LocalRuntime:
@@ -96,6 +128,7 @@ class LocalRuntime:
         resource_limits: Optional[dict[str, Any]] = None,
         secret_provider: Optional[Any] = None,
         connection_validation: str = "warn",
+        conditional_execution: str = "route_data",
     ):
         """Initialize the unified runtime.
 
@@ -114,13 +147,24 @@ class LocalRuntime:
                 - "off": No validation (backward compatibility)
                 - "warn": Log warnings on validation errors (default)
                 - "strict": Raise errors on validation failures
+            conditional_execution: Execution strategy for conditional routing:
+                - "route_data": Current behavior - all nodes execute, data routing only (default)
+                - "skip_branches": New behavior - skip unreachable branches entirely
         """
         # Validate connection_validation parameter
-        valid_modes = {"off", "warn", "strict"}
-        if connection_validation not in valid_modes:
+        valid_conn_modes = {"off", "warn", "strict"}
+        if connection_validation not in valid_conn_modes:
             raise ValueError(
                 f"Invalid connection_validation mode: {connection_validation}. "
-                f"Must be one of: {valid_modes}"
+                f"Must be one of: {valid_conn_modes}"
+            )
+
+        # Validate conditional_execution parameter
+        valid_exec_modes = {"route_data", "skip_branches"}
+        if conditional_execution not in valid_exec_modes:
+            raise ValueError(
+                f"Invalid conditional_execution mode: {conditional_execution}. "
+                f"Must be one of: {valid_exec_modes}"
             )
 
         self.debug = debug
@@ -134,6 +178,7 @@ class LocalRuntime:
         self.enable_audit = enable_audit
         self.resource_limits = resource_limits or {}
         self.connection_validation = connection_validation
+        self.conditional_execution = conditional_execution
         self.logger = logger
 
         # Enterprise feature managers (lazy initialization)
@@ -142,6 +187,30 @@ class LocalRuntime:
         # Initialize cyclic workflow executor if enabled
         if enable_cycles:
             self.cyclic_executor = CyclicWorkflowExecutor()
+
+        # Initialize conditional execution components (lazy initialization)
+        self._conditional_branch_analyzer = None
+        self._dynamic_execution_planner = None
+
+        # Phase 3: Basic Integration features
+        self._performance_monitor = None
+        self._compatibility_reporter = None
+        self._enable_performance_monitoring = False
+        self._performance_switch_enabled = False
+        self._enable_compatibility_reporting = False
+
+        # Phase 5: Production readiness features
+        self._execution_plan_cache = {}
+        self._performance_metrics = {}
+        self._fallback_metrics = {}
+        self._analytics_data = {
+            "conditional_executions": [],
+            "performance_history": [],
+            "cache_hits": 0,
+            "cache_misses": 0,
+            "execution_patterns": {},
+            "optimization_stats": {},
+        }
 
         # Configure logging
         if debug:
@@ -405,10 +474,112 @@ class LocalRuntime:
                     raise RuntimeExecutionError(
                         f"Cyclic workflow execution failed: {e}"
                     ) from e
+            elif (
+                self.conditional_execution == "skip_branches"
+                and self._has_conditional_patterns(workflow)
+            ):
+                # Check for automatic mode switching based on performance
+                current_mode = self.conditional_execution
+                if (
+                    self._enable_performance_monitoring
+                    and self._performance_switch_enabled
+                ):
+                    should_switch, recommended_mode, reason = (
+                        self._check_performance_switch(current_mode)
+                    )
+                    if should_switch:
+                        self.logger.info(f"Switching execution mode: {reason}")
+                        self.conditional_execution = recommended_mode
+                        # If switching to route_data, use standard execution
+                        if recommended_mode == "route_data":
+                            results = await self._execute_workflow_async(
+                                workflow=workflow,
+                                task_manager=task_manager,
+                                run_id=run_id,
+                                parameters=processed_parameters or {},
+                                workflow_context=workflow_context,
+                            )
+                        else:
+                            # Continue with conditional execution
+                            try:
+                                results = await self._execute_conditional_approach(
+                                    workflow=workflow,
+                                    parameters=processed_parameters or {},
+                                    task_manager=task_manager,
+                                    run_id=run_id,
+                                    workflow_context=workflow_context,
+                                )
+                            except Exception as e:
+                                self.logger.warning(
+                                    f"Conditional execution failed, falling back to standard execution: {e}"
+                                )
+                                # Fallback to standard execution
+                                results = await self._execute_workflow_async(
+                                    workflow=workflow,
+                                    task_manager=task_manager,
+                                    run_id=run_id,
+                                    parameters=processed_parameters or {},
+                                    workflow_context=workflow_context,
+                                )
+                    else:
+                        # No switch recommended, continue with current mode
+                        self.logger.info(
+                            "Conditional workflow detected, using conditional execution optimization"
+                        )
+                        try:
+                            results = await self._execute_conditional_approach(
+                                workflow=workflow,
+                                parameters=processed_parameters or {},
+                                task_manager=task_manager,
+                                run_id=run_id,
+                                workflow_context=workflow_context,
+                            )
+                        except Exception as e:
+                            self.logger.warning(
+                                f"Conditional execution failed, falling back to standard execution: {e}"
+                            )
+                            # Fallback to standard execution
+                            results = await self._execute_workflow_async(
+                                workflow=workflow,
+                                task_manager=task_manager,
+                                run_id=run_id,
+                                parameters=processed_parameters or {},
+                                workflow_context=workflow_context,
+                            )
+                else:
+                    # Performance monitoring disabled
+                    self.logger.info(
+                        "Conditional workflow detected, using conditional execution optimization"
+                    )
+                    try:
+                        results = await self._execute_conditional_approach(
+                            workflow=workflow,
+                            parameters=processed_parameters or {},
+                            task_manager=task_manager,
+                            run_id=run_id,
+                            workflow_context=workflow_context,
+                        )
+                    except Exception as e:
+                        self.logger.warning(
+                            f"Conditional execution failed, falling back to standard execution: {e}"
+                        )
+                        # Fallback to standard execution
+                        results = await self._execute_workflow_async(
+                            workflow=workflow,
+                            task_manager=task_manager,
+                            run_id=run_id,
+                            parameters=processed_parameters or {},
+                            workflow_context=workflow_context,
+                        )
             else:
                 # Execute standard DAG workflow with enterprise features
+                execution_mode = (
+                    "route_data"
+                    if self.conditional_execution == "route_data"
+                    else "standard"
+                )
                 self.logger.info(
-                    "Standard DAG workflow detected, using unified enterprise execution"
+                    f"Standard DAG workflow detected, using unified enterprise execution ({execution_mode} mode)"
                 )
                 results = await self._execute_workflow_async(
                     workflow=workflow,
@@ -545,6 +716,9 @@ class LocalRuntime:
         node_outputs = {}
         failed_nodes = []
 
+        # Make results available to _should_skip_conditional_node for transitive dependency checking
+        self._current_results = results
+
         # Use the workflow context passed from _execute_async
         if workflow_context is None:
             workflow_context = {}
@@ -638,6 +812,10 @@ class LocalRuntime:
 
                 # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
                 if self._should_skip_conditional_node(workflow, node_id, inputs):
+                    if self.debug:
+                        self.logger.debug(
+                            f"DEBUG: Skipping {node_id} - inputs: {inputs}"
+                        )
                     self.logger.info(
                         f"Skipping node {node_id} - all conditional inputs are None"
                     )
@@ -886,19 +1064,44 @@ class LocalRuntime:
                                     break
 
                         if found:
-                            inputs[target_key] = value
-                            if self.debug:
-                                self.logger.debug(
-                                    f"  MAPPED: {source_key} -> {target_key} (type: {type(value)})"
-                                )
+                            # CONDITIONAL EXECUTION FIX: Don't overwrite existing non-None values with None
+                            # This handles cases where multiple edges map to the same input parameter
+                            if (
+                                target_key in inputs
+                                and inputs[target_key] is not None
+                                and value is None
+                            ):
+                                if self.debug:
+                                    self.logger.debug(
+                                        f"  SKIP: Not overwriting existing non-None value for {target_key} with None from {source_node_id}"
+                                    )
+                            else:
+                                inputs[target_key] = value
+                                if self.debug:
+                                    self.logger.debug(
+                                        f"  MAPPED: {source_key} -> {target_key} (type: {type(value)})"
+                                    )
                     else:
                         # Simple key mapping
                         if source_key in source_outputs:
-                            inputs[target_key] = source_outputs[source_key]
-                            if self.debug:
-                                self.logger.debug(
-                                    f"  MAPPED: {source_key} -> {target_key} (type: {type(source_outputs[source_key])})"
-                                )
+                            value = source_outputs[source_key]
+                            # CONDITIONAL EXECUTION FIX: Don't overwrite existing non-None values with None
+                            # This handles cases where multiple edges map to the same input parameter
+                            if (
+                                target_key in inputs
+                                and inputs[target_key] is not None
+                                and value is None
+                            ):
+                                if self.debug:
+                                    self.logger.debug(
+                                        f"  SKIP: Not overwriting existing non-None value for {target_key} with None from {source_node_id}"
+                                    )
+                            else:
+                                inputs[target_key] = value
+                                if self.debug:
+                                    self.logger.debug(
+                                        f"  MAPPED: {source_key} -> {target_key} (type: {type(value)})"
+                                    )
                         else:
                             if self.debug:
                                 self.logger.debug(
@@ -1169,16 +1372,37 @@ class LocalRuntime:
         if not incoming_edges:
             return False
 
-        # Check if any incoming edges are from conditional nodes
+        # Check for conditional inputs and analyze the nature of the data
         has_conditional_inputs = False
+        has_non_none_connected_input = False
+
         for source_node_id, _, edge_data in incoming_edges:
             source_node = workflow._node_instances.get(source_node_id)
+            mapping = edge_data.get("mapping", {})
+
+            # Check if this edge provides any non-None inputs
+            for source_key, target_key in mapping.items():
+                if target_key in inputs and inputs[target_key] is not None:
+                    has_non_none_connected_input = True
+
+            # Direct connection from SwitchNode
             if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
                 has_conditional_inputs = True
-                break
+            # Transitive dependency: source node was skipped due to conditional routing
+            elif (
+                hasattr(self, "_current_results")
+                and source_node_id in self._current_results
+            ):
+                if self._current_results[source_node_id] is None:
+                    has_conditional_inputs = True
 
         # If no conditional inputs, don't skip
         if not has_conditional_inputs:
+            return False
+
+        # If we have conditional inputs but also have non-None data, don't skip
+        # This handles mixed scenarios where some inputs are skipped but others provide data
+        if has_non_none_connected_input:
             return False
 
         # Get the node instance to check for configuration parameters
@@ -1213,17 +1437,41 @@ class LocalRuntime:
         # Check if all connected inputs are None
         # This is the main condition for conditional routing
         has_non_none_input = False
-        for _, _, edge_data in incoming_edges:
+
+        # Count total connected inputs and None inputs from conditional sources
+        total_connected_inputs = 0
+        none_conditional_inputs = 0
+
+        for source_node_id, _, edge_data in incoming_edges:
             mapping = edge_data.get("mapping", {})
             for source_key, target_key in mapping.items():
-                if target_key in inputs and inputs[target_key] is not None:
-                    has_non_none_input = True
-                    break
-            if has_non_none_input:
-                break
+                if target_key in inputs:
+                    total_connected_inputs += 1
+                    if inputs[target_key] is not None:
+                        has_non_none_input = True
+                    else:
+                        # Check if this None input came from conditional routing
+                        source_node = workflow._node_instances.get(source_node_id)
+                        is_from_conditional = (
+                            source_node
+                            and source_node.__class__.__name__ in ["SwitchNode"]
+                        ) or (
+                            hasattr(self, "_current_results")
+                            and source_node_id in self._current_results
+                            and self._current_results[source_node_id] is None
+                        )
+                        if is_from_conditional:
+                            none_conditional_inputs += 1
 
-        # Skip the node if all connected inputs are None
-        return not has_non_none_input
+        # Skip the node only if ALL connected inputs are None AND from conditional routing
+        # This means nodes with mixed inputs (some None from conditional, some real data) should still execute
+        if (
+            total_connected_inputs > 0
+            and none_conditional_inputs == total_connected_inputs
+        ):
+            return True
+
+        return False
 
     def _should_stop_on_error(self, workflow: Workflow, node_id: str) -> bool:
         """Determine if execution should stop when a node fails.
@@ -1236,7 +1484,11 @@ class LocalRuntime:
             Whether to stop execution.
         """
         # Check if any downstream nodes depend on this node
-        has_dependents = workflow.graph.out_degree(node_id) > 0
+        try:
+            has_dependents = workflow.graph.out_degree(node_id) > 0
+        except (TypeError, KeyError):
+            # Handle case where node doesn't exist or graph issues
+            has_dependents = False
 
         # For now, stop if the failed node has dependents
         # Future: implement configurable error handling policies
@@ -1675,3 +1927,1512 @@ class LocalRuntime:
                             )
 
         return violations
+
+    def _has_conditional_patterns(self, workflow: Workflow) -> bool:
+        """
+        Check if workflow has conditional patterns (SwitchNodes) and is suitable for conditional execution.
+
+        CRITICAL: Only enable conditional execution for DAG workflows.
+        Cyclic workflows must use normal execution to preserve cycle safety mechanisms.
+
+        Args:
+            workflow: Workflow to check
+
+        Returns:
+            True if workflow contains SwitchNode instances AND is a DAG (no cycles)
+        """
+        try:
+            if not hasattr(workflow, "graph") or workflow.graph is None:
+                return False
+
+            # CRITICAL: Check for cycles first - conditional execution is only safe for DAGs
+            if self._workflow_has_cycles(workflow):
+                self.logger.info(
+                    "Cyclic workflow detected - using normal execution to preserve cycle safety mechanisms"
+                )
+                return False
+
+            # Import here to avoid circular dependencies
+            from kailash.analysis import ConditionalBranchAnalyzer
+
+            analyzer = ConditionalBranchAnalyzer(workflow)
+            switch_nodes = analyzer._find_switch_nodes()
+
+            has_switches = len(switch_nodes) > 0
+
+            if has_switches:
+                self.logger.debug(
+                    f"Found {len(switch_nodes)} SwitchNodes in DAG workflow - eligible for conditional execution"
+                )
+            else:
+                self.logger.debug("No SwitchNodes found - using normal execution")
+
+            return has_switches
+
+        except Exception as e:
+            self.logger.warning(f"Error checking conditional patterns: {e}")
+            return False
+
+    def _workflow_has_cycles(self, workflow: Workflow) -> bool:
+        """
+        Detect if workflow has cycles using multiple detection methods.
+
+        Args:
+            workflow: Workflow to check
+
+        Returns:
+            True if workflow contains any cycles
+        """
+        try:
+            # Method 1: Check for explicitly marked cycle connections
+            if hasattr(workflow, "has_cycles") and callable(workflow.has_cycles):
+                if workflow.has_cycles():
+                    self.logger.debug("Detected cycles via workflow.has_cycles()")
+                    return True
+
+            # Method 2: Check for cycle edges in connections
+            if hasattr(workflow, "connections"):
+                for connection in workflow.connections:
+                    if hasattr(connection, "cycle") and connection.cycle:
+                        self.logger.debug("Detected cycle via connection.cycle flag")
+                        return True
+
+            # Method 3: NetworkX graph cycle detection
+            if hasattr(workflow, "graph") and workflow.graph is not None:
+                import networkx as nx
+
+                is_dag = nx.is_directed_acyclic_graph(workflow.graph)
+                if not is_dag:
+                    self.logger.debug("Detected cycles via NetworkX graph analysis")
+                    return True
+
+            # Method 4: Check graph edges for cycle metadata
+            if hasattr(workflow, "graph") and workflow.graph is not None:
+                for u, v, edge_data in workflow.graph.edges(data=True):
+                    if edge_data.get("cycle", False):
+                        self.logger.debug("Detected cycle via edge metadata")
+                        return True
+
+            return False
+
+        except Exception as e:
+            self.logger.warning(f"Error detecting cycles: {e}")
+            # On error, assume cycles exist for safety
+            return True
+
+    async def _execute_conditional_approach(
+        self,
+        workflow: Workflow,
+        parameters: dict[str, Any],
+        task_manager: TaskManager,
+        run_id: str,
+        workflow_context: dict[str, Any],
+    ) -> dict[str, dict[str, Any]]:
+        """
+        Execute workflow using conditional approach with two-phase execution.
+
+        Phase 1: Execute SwitchNodes to determine branches
+        Phase 2: Execute only reachable nodes based on switch results
+
+        Args:
+            workflow: Workflow to execute
+            parameters: Node-specific parameters
+            task_manager: Task manager for execution
+            run_id: Unique run identifier
+            workflow_context: Workflow execution context
+
+        Returns:
+            Dictionary mapping node_id -> execution results
+        """
+        self.logger.info("Starting conditional execution approach")
+        results = {}
+        fallback_reason = None
+        start_time = time.time()
+        total_nodes = len(workflow.graph.nodes())
+
+        try:
+            # Enhanced pre-execution validation
+            if not self._validate_conditional_execution_prerequisites(workflow):
+                fallback_reason = "Prerequisites validation failed"
+                raise ValueError(
+                    f"Conditional execution prerequisites not met: {fallback_reason}"
+                )
+
+            # Phase 1: Execute SwitchNodes to determine conditional branches
+            self.logger.info("Phase 1: Executing SwitchNodes")
+            phase1_results = await self._execute_switch_nodes(
+                workflow=workflow,
+                parameters=parameters,
+                task_manager=task_manager,
+                run_id=run_id,
+                workflow_context=workflow_context,
+            )
+
+            # Extract just switch results for validation and planning
+            from kailash.analysis import ConditionalBranchAnalyzer
+
+            analyzer = ConditionalBranchAnalyzer(workflow)
+            switch_node_ids = analyzer._find_switch_nodes()
+            switch_results = {
+                node_id: phase1_results[node_id]
+                for node_id in switch_node_ids
+                if node_id in phase1_results
+            }
+
+            # Validate switch results before proceeding
+            if not self._validate_switch_results(switch_results):
+                fallback_reason = "Invalid switch results detected"
+                raise ValueError(f"Switch results validation failed: {fallback_reason}")
+
+            # Add all phase 1 results to overall results
+            results.update(phase1_results)
+
+            # Phase 2: Create pruned execution plan and execute remaining nodes
+            self.logger.info("Phase 2: Creating and executing pruned plan")
+            remaining_results = await self._execute_pruned_plan(
+                workflow=workflow,
+                switch_results=switch_results,
+                parameters=parameters,
+                task_manager=task_manager,
+                run_id=run_id,
+                workflow_context=workflow_context,
+                existing_results=results,
+            )
+
+            # Merge remaining results
+            results.update(remaining_results)
+
+            # Final validation of conditional execution results
+            if not self._validate_conditional_execution_results(results, workflow):
+                fallback_reason = "Results validation failed"
+                raise ValueError(
+                    f"Conditional execution results invalid: {fallback_reason}"
+                )
+
+            # Performance tracking
+            self._track_conditional_execution_performance(results, workflow)
+
+            # Record execution metrics for performance monitoring
+            execution_time = time.time() - start_time
+            nodes_executed = len(results)
+            nodes_skipped = total_nodes - nodes_executed
+
+            self._record_execution_metrics(
+                workflow=workflow,
+                execution_time=execution_time,
+                node_count=nodes_executed,
+                skipped_nodes=nodes_skipped,
+                execution_mode="skip_branches",
+            )
+
+            # Log performance improvement
+            if nodes_skipped > 0:
+                skip_percentage = (nodes_skipped / total_nodes) * 100
+                self.logger.info(
+                    f"Conditional execution performance: {skip_percentage:.1f}% reduction in executed nodes "
+                    f"({nodes_skipped}/{total_nodes} skipped)"
+                )
+
+            self.logger.info(
+                f"Conditional execution completed successfully: {nodes_executed} nodes executed"
+            )
+            return results
+
+        except Exception as e:
+            # Enhanced error logging with fallback reasoning
+            self.logger.error(f"Error in conditional execution approach: {e}")
+            if fallback_reason:
+                self.logger.warning(f"Fallback reason: {fallback_reason}")
+
+            # Log performance impact before fallback
+            self._log_conditional_execution_failure(e, workflow, len(results))
+
+            # Enhanced fallback with detailed logging
+            self.logger.warning(
+                "Falling back to normal execution approach due to conditional execution failure"
+            )
+
+            try:
+                # Execute fallback with additional monitoring
+                fallback_results, _ = await self._execute_async(
+                    workflow=workflow,
+                    parameters=parameters,
+                    task_manager=task_manager,
+                )
+
+                # Track fallback usage for monitoring
+                self._track_fallback_usage(workflow, str(e), fallback_reason)
+
+                return fallback_results
+
+            except Exception as fallback_error:
+                self.logger.error(f"Fallback execution also failed: {fallback_error}")
+                # If both conditional and fallback fail, re-raise the original error
+                raise e from fallback_error
+
+    async def _execute_switch_nodes(
+        self,
+        workflow: Workflow,
+        parameters: dict[str, Any],
+        task_manager: TaskManager,
+        run_id: str,
+        workflow_context: dict[str, Any],
+    ) -> dict[str, dict[str, Any]]:
+        """
+        Execute SwitchNodes first to determine conditional branches.
+
+        Args:
+            workflow: Workflow being executed
+            parameters: Node-specific parameters
+            task_manager: Task manager for execution
+            run_id: Unique run identifier
+            workflow_context: Workflow execution context
+
+        Returns:
+            Dictionary mapping switch_node_id -> execution results
+        """
+        self.logger.info("Phase 1: Executing SwitchNodes and their dependencies")
+        all_phase1_results = {}  # Store ALL results from Phase 1, not just switches
+
+        try:
+            # Import here to avoid circular dependencies
+            from kailash.analysis import ConditionalBranchAnalyzer
+
+            # Check if we should use hierarchical switch execution
+            analyzer = ConditionalBranchAnalyzer(workflow)
+            switch_node_ids = analyzer._find_switch_nodes()
+
+            if switch_node_ids and self._should_use_hierarchical_execution(
+                workflow, switch_node_ids
+            ):
+                # Use hierarchical switch executor for complex switch patterns
+                self.logger.info(
+                    "Using hierarchical switch execution for optimized performance"
+                )
+                from kailash.runtime.hierarchical_switch_executor import (
+                    HierarchicalSwitchExecutor,
+                )
+
+                executor = HierarchicalSwitchExecutor(workflow, debug=self.debug)
+
+                # Define node executor function
+                async def node_executor(
+                    node_id,
+                    node_instance,
+                    all_results,
+                    parameters,
+                    task_manager,
+                    workflow,
+                    workflow_context,
+                ):
+                    node_inputs = self._prepare_node_inputs(
+                        workflow=workflow,
+                        node_id=node_id,
+                        node_instance=node_instance,
+                        node_outputs=all_results,
+                        parameters=parameters,
+                    )
+
+                    result = await self._execute_single_node(
+                        node_id=node_id,
+                        node_instance=node_instance,
+                        node_inputs=node_inputs,
+                        task_manager=task_manager,
+                        workflow=workflow,
+                        workflow_context=workflow_context,
+                        run_id=run_id,
+                    )
+                    return result
+
+                # Execute switches hierarchically
+                all_results, switch_results = (
+                    await executor.execute_switches_hierarchically(
+                        parameters=parameters,
+                        task_manager=task_manager,
+                        run_id=run_id,
+                        workflow_context=workflow_context,
+                        node_executor=node_executor,
+                    )
+                )
+
+                # Log execution summary
+                if self.debug:
+                    summary = executor.get_execution_summary(switch_results)
+                    self.logger.debug(f"Hierarchical execution summary: {summary}")
+
+                return all_results
+
+            # Otherwise, use standard execution
+            self.logger.info("Using standard switch execution")
+
+            if not switch_node_ids:
+                self.logger.info("No SwitchNodes found in workflow")
+                return all_phase1_results
+
+            # Get topological order for all nodes
+            all_nodes_order = list(nx.topological_sort(workflow.graph))
+
+            # Find all nodes that switches depend on (need to execute these too)
+            nodes_to_execute = set(switch_node_ids)
+            for switch_id in switch_node_ids:
+                # Get all predecessors (direct and indirect) of this switch
+                predecessors = nx.ancestors(workflow.graph, switch_id)
+                nodes_to_execute.update(predecessors)
+
+            # Execute nodes in topological order, but only those needed for switches
+            execution_order = [
+                node_id for node_id in all_nodes_order if node_id in nodes_to_execute
+            ]
+
+            self.logger.info(
+                f"Executing {len(execution_order)} nodes in Phase 1 (switches and their dependencies)"
+            )
+            self.logger.debug(f"Phase 1 execution order: {execution_order}")
+
+            # Execute all nodes needed for switches in dependency order
+            for node_id in execution_order:
+                try:
+                    # Get node instance
+                    node_data = workflow.graph.nodes[node_id]
+                    # Try both 'node' and 'instance' keys for compatibility
+                    node_instance = node_data.get("node") or node_data.get("instance")
+
+                    if node_instance is None:
+                        self.logger.warning(f"No instance found for node {node_id}")
+                        continue
+
+                    # Prepare inputs for the node
+                    node_inputs = self._prepare_node_inputs(
+                        workflow=workflow,
+                        node_id=node_id,
+                        node_instance=node_instance,
+                        node_outputs=all_phase1_results,  # Use all results so far
+                        parameters=parameters,
+                    )
+
+                    # CRITICAL FIX: During phase 1, ensure SwitchNodes don't get their 'value' parameter
+                    # mistakenly used as 'input_data' when the actual input is missing
+                    if not node_inputs or "input_data" not in node_inputs:
+                        # Get incoming edges to check if input_data is expected
+                        has_input_connection = False
+                        for edge in workflow.graph.in_edges(switch_id, data=True):
+                            mapping = edge[2].get("mapping", {})
+                            if "input_data" in mapping.values():
+                                has_input_connection = True
+                                break
+
+                        if has_input_connection:
+                            # If input_data is expected from a connection but not available,
+                            # explicitly set it to None to prevent config fallback
+                            node_inputs["input_data"] = None
+
+                    # Execute the switch
+                    self.logger.debug(f"Executing SwitchNode: {switch_id}")
+                    result = await self._execute_single_node(
+                        node_id=node_id,
+                        node_instance=node_instance,
+                        node_inputs=node_inputs,
+                        task_manager=task_manager,
+                        workflow=workflow,
+                        run_id=run_id,
+                        workflow_context=workflow_context,
+                    )
+
+                    all_phase1_results[node_id] = result
+                    self.logger.debug(
+                        f"Node {node_id} completed with result keys: {list(result.keys()) if isinstance(result, dict) else type(result)}"
+                    )
+
+                except Exception as e:
+                    self.logger.error(f"Error executing node {node_id}: {e}")
+                    # Continue with other nodes
+                    all_phase1_results[node_id] = {
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                        "failed": True,
+                    }
+
+            # Extract just switch results to return
+            switch_results = {
+                node_id: all_phase1_results[node_id]
+                for node_id in switch_node_ids
+                if node_id in all_phase1_results
+            }
+
+            self.logger.info(
+                f"Phase 1 completed: {len(all_phase1_results)} nodes executed ({len(switch_results)} switches)"
+            )
+            return all_phase1_results  # Return ALL results, not just switches
+
+        except Exception as e:
+            self.logger.error(f"Error in switch execution phase: {e}")
+            return all_phase1_results
+
+    async def _execute_pruned_plan(
+        self,
+        workflow: Workflow,
+        switch_results: dict[str, dict[str, Any]],
+        parameters: dict[str, Any],
+        task_manager: TaskManager,
+        run_id: str,
+        workflow_context: dict[str, Any],
+        existing_results: dict[str, dict[str, Any]],
+    ) -> dict[str, dict[str, Any]]:
+        """
+        Execute pruned execution plan based on SwitchNode results.
+
+        Args:
+            workflow: Workflow being executed
+            switch_results: Results from SwitchNode execution
+            parameters: Node-specific parameters
+            task_manager: Task manager for execution
+            run_id: Unique run identifier
+            workflow_context: Workflow execution context
+            existing_results: Results from previous execution phases
+
+        Returns:
+            Dictionary mapping node_id -> execution results for remaining nodes
+        """
+        self.logger.info("Phase 2: Executing pruned plan based on switch results")
+        remaining_results = {}
+
+        try:
+            # Import here to avoid circular dependencies
+            from kailash.planning import DynamicExecutionPlanner
+
+            planner = DynamicExecutionPlanner(workflow)
+
+            # Create execution plan based on switch results
+            execution_plan = planner.create_execution_plan(switch_results)
+            self.logger.debug(
+                f"DynamicExecutionPlanner returned plan: {execution_plan}"
+            )
+
+            # Remove nodes that were already executed, but check if switches need re-execution
+            already_executed = set(existing_results.keys())
+            self.logger.debug(
+                f"Already executed nodes from Phase 1: {already_executed}"
+            )
+            self.logger.debug(f"Full execution plan for Phase 2: {execution_plan}")
+
+            # Check which switches had incomplete execution (no input_data in phase 1)
+            switches_needing_reexecution = set()
+            for switch_id, result in switch_results.items():
+                # If a switch executed with None input in phase 1, it needs re-execution
+                if (
+                    result.get("true_output") is None
+                    and result.get("false_output") is None
+                    and switch_id in execution_plan
+                ):
+                    # Check if this switch has dependencies that will now provide data
+                    has_dependencies = False
+                    for edge in workflow.graph.in_edges(switch_id):
+                        source_node = edge[0]
+                        if source_node in execution_plan:
+                            has_dependencies = True
+                            break
+
+                    if has_dependencies:
+                        switches_needing_reexecution.add(switch_id)
+                        self.logger.debug(
+                            f"Switch {switch_id} needs re-execution with actual data"
+                        )
+
+            # Include switches that need re-execution AND any nodes not yet executed
+            remaining_nodes = [
+                node_id
+                for node_id in execution_plan
+                if node_id not in already_executed
+                or node_id in switches_needing_reexecution
+            ]
+
+            # Debug log to understand what's happening
+            not_executed = set(execution_plan) - already_executed
+            self.logger.debug(
+                f"Nodes in execution plan but not executed: {not_executed}"
+            )
+            self.logger.debug(
+                f"Switches needing re-execution: {switches_needing_reexecution}"
+            )
+            self.logger.debug(f"Filtering logic: remaining_nodes = {remaining_nodes}")
+
+            self.logger.info(
+                f"Executing {len(remaining_nodes)} remaining nodes after pruning"
+            )
+            self.logger.debug(f"Remaining execution plan: {remaining_nodes}")
+
+            # Execute remaining nodes in the pruned order
+            for node_id in remaining_nodes:
+                try:
+                    # Get node instance
+                    node_data = workflow.graph.nodes[node_id]
+                    # Try both 'node' and 'instance' keys for compatibility
+                    node_instance = node_data.get("node") or node_data.get("instance")
+
+                    if node_instance is None:
+                        self.logger.warning(f"No instance found for node {node_id}")
+                        continue
+
+                    # Prepare inputs using all results so far (switches + remaining)
+                    all_results = {**existing_results, **remaining_results}
+                    node_inputs = self._prepare_node_inputs(
+                        workflow=workflow,
+                        node_id=node_id,
+                        node_instance=node_instance,
+                        node_outputs=all_results,
+                        parameters=parameters,
+                    )
+
+                    # Execute the node
+                    self.logger.debug(f"Executing remaining node: {node_id}")
+                    result = await self._execute_single_node(
+                        node_id=node_id,
+                        node_instance=node_instance,
+                        node_inputs=node_inputs,
+                        task_manager=task_manager,
+                        workflow=workflow,
+                        run_id=run_id,
+                        workflow_context=workflow_context,
+                    )
+
+                    remaining_results[node_id] = result
+                    self.logger.debug(f"Node {node_id} completed")
+
+                except Exception as e:
+                    self.logger.error(f"Error executing remaining node {node_id}: {e}")
+                    # Continue with other nodes or stop based on error handling
+                    if self._should_stop_on_error(workflow, node_id):
+                        raise
+                    else:
+                        remaining_results[node_id] = {
+                            "error": str(e),
+                            "error_type": type(e).__name__,
+                            "failed": True,
+                        }
+
+            self.logger.info(
+                f"Phase 2 completed: {len(remaining_results)} remaining nodes executed"
+            )
+            return remaining_results
+
+        except Exception as e:
+            self.logger.error(f"Error in pruned plan execution: {e}")
+            return remaining_results
+
+    async def _execute_single_node(
+        self,
+        node_id: str,
+        node_instance: Any,
+        node_inputs: dict[str, Any],
+        task_manager: Any,
+        workflow: Workflow,
+        run_id: str,
+        workflow_context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Execute a single node with proper validation and context setup.
+
+        Args:
+            node_id: Node identifier
+            node_instance: Node instance to execute
+            node_inputs: Prepared inputs for the node
+            task_manager: Task manager for tracking
+            workflow: Workflow being executed
+            run_id: Unique run identifier
+            workflow_context: Workflow execution context
+
+        Returns:
+            Node execution results
+        """
+        # Validate inputs before execution
+        from kailash.utils.data_validation import DataTypeValidator
+
+        validated_inputs = DataTypeValidator.validate_node_input(node_id, node_inputs)
+
+        # Set workflow context on the node instance
+        if hasattr(node_instance, "_workflow_context"):
+            node_instance._workflow_context = workflow_context
+        else:
+            # Initialize the workflow context if it doesn't exist
+            node_instance._workflow_context = workflow_context
+
+        # Execute the node with unified async/sync support
+        if self.enable_async and hasattr(node_instance, "execute_async"):
+            # Use async execution method that includes validation
+            outputs = await node_instance.execute_async(**validated_inputs)
+        else:
+            # Standard synchronous execution
+            outputs = node_instance.execute(**validated_inputs)
+
+        return outputs
+
+    def _should_use_hierarchical_execution(
+        self, workflow: Workflow, switch_node_ids: List[str]
+    ) -> bool:
+        """
+        Determine if hierarchical switch execution should be used.
+
+        Args:
+            workflow: The workflow to analyze
+            switch_node_ids: List of switch node IDs
+
+        Returns:
+            True if hierarchical execution would be beneficial
+        """
+        # Use hierarchical execution if:
+        # 1. There are multiple switches
+        if len(switch_node_ids) < 2:
+            return False
+
+        # 2. Check if switches have dependencies on each other
+        from kailash.analysis import ConditionalBranchAnalyzer
+
+        analyzer = ConditionalBranchAnalyzer(workflow)
+        hierarchy_info = analyzer.analyze_switch_hierarchies(switch_node_ids)
+
+        # Use hierarchical if there are multiple execution layers
+        execution_layers = hierarchy_info.get("execution_layers", [])
+        if len(execution_layers) > 1:
+            self.logger.debug(
+                f"Detected {len(execution_layers)} execution layers in switch hierarchy"
+            )
+            return True
+
+        # Use hierarchical if there are dependency chains
+        dependency_chains = hierarchy_info.get("dependency_chains", [])
+        if dependency_chains and any(len(chain) > 1 for chain in dependency_chains):
+            self.logger.debug("Detected dependency chains in switch hierarchy")
+            return True
+
+        return False
+
+    def _validate_conditional_execution_prerequisites(self, workflow: Workflow) -> bool:
+        """
+        Validate that workflow meets prerequisites for conditional execution.
+
+        Args:
+            workflow: Workflow to validate
+
+        Returns:
+            True if prerequisites are met, False otherwise
+        """
+        try:
+            # Check if workflow has at least one SwitchNode
+            from kailash.analysis import ConditionalBranchAnalyzer
+
+            analyzer = ConditionalBranchAnalyzer(workflow)
+            switch_nodes = analyzer._find_switch_nodes()
+
+            if not switch_nodes:
+                self.logger.debug(
+                    "No SwitchNodes found - cannot use conditional execution"
+                )
+                return False
+
+            # Check if workflow is too complex for conditional execution
+            if len(workflow.graph.nodes) > 100:  # Configurable threshold
+                self.logger.warning(
+                    "Workflow too large for conditional execution optimization"
+                )
+                return False
+
+            # Validate that all SwitchNodes have proper outputs
+            for switch_id in switch_nodes:
+                node_data = workflow.graph.nodes[switch_id]
+                node_instance = node_data.get("node") or node_data.get("instance")
+
+                if node_instance is None:
+                    self.logger.warning(f"SwitchNode {switch_id} has no instance")
+                    return False
+
+                # Check if the SwitchNode has proper output configuration
+                # SwitchNode might store condition_field in different ways
+                has_condition = (
+                    hasattr(node_instance, "condition_field")
+                    or hasattr(node_instance, "_condition_field")
+                    or (
+                        hasattr(node_instance, "parameters")
+                        and "condition_field"
+                        in getattr(node_instance, "parameters", {})
+                    )
+                    or "SwitchNode"
+                    in str(type(node_instance))  # Type-based validation as fallback
+                )
+
+                if not has_condition:
+                    self.logger.debug(
+                        f"SwitchNode {switch_id} condition validation unclear - allowing execution"
+                    )
+                    # Don't fail here - let conditional execution attempt and fall back if needed
+
+            return True
+
+        except Exception as e:
+            self.logger.warning(
+                f"Error validating conditional execution prerequisites: {e}"
+            )
+            return False
+
+    def _validate_switch_results(
+        self, switch_results: dict[str, dict[str, Any]]
+    ) -> bool:
+        """
+        Validate that switch results are valid for conditional execution.
+
+        Args:
+            switch_results: Results from SwitchNode execution
+
+        Returns:
+            True if results are valid, False otherwise
+        """
+        try:
+            if not switch_results:
+                self.logger.debug("No switch results to validate")
+                return True
+
+            for switch_id, result in switch_results.items():
+                # Check for execution errors
+                if isinstance(result, dict) and result.get("failed"):
+                    self.logger.warning(
+                        f"SwitchNode {switch_id} failed during execution"
+                    )
+                    return False
+
+                # Validate result structure
+                if not isinstance(result, dict):
+                    self.logger.warning(
+                        f"SwitchNode {switch_id} returned invalid result type: {type(result)}"
+                    )
+                    return False
+
+                # Check for required output keys (at least one branch should be present)
+                has_output = any(
+                    key in result for key in ["true_output", "false_output"]
+                )
+                if not has_output:
+                    self.logger.warning(
+                        f"SwitchNode {switch_id} missing required output keys"
+                    )
+                    return False
+
+            return True
+
+        except Exception as e:
+            self.logger.warning(f"Error validating switch results: {e}")
+            return False
+
+    def _validate_conditional_execution_results(
+        self, results: dict[str, dict[str, Any]], workflow: Workflow
+    ) -> bool:
+        """
+        Validate final results from conditional execution.
+
+        Args:
+            results: Execution results
+            workflow: Original workflow
+
+        Returns:
+            True if results are valid, False otherwise
+        """
+        try:
+            # Check that at least some nodes executed
+            if not results:
+                self.logger.warning("No results from conditional execution")
+                return False
+
+            # Validate that critical nodes (if any) were executed
+            # This could be expanded based on workflow metadata
+            total_nodes = len(workflow.graph.nodes)
+            executed_nodes = len(results)
+
+            # If we executed less than 30% of nodes, might be an issue
+            if executed_nodes < (total_nodes * 0.3):
+                self.logger.warning(
+                    f"Conditional execution only ran {executed_nodes}/{total_nodes} nodes - might indicate an issue"
+                )
+                # Don't fail here, but log for monitoring
+
+            # Check for excessive failures
+            failed_nodes = sum(
+                1
+                for result in results.values()
+                if isinstance(result, dict) and result.get("failed")
+            )
+
+            if failed_nodes > (executed_nodes * 0.5):
+                self.logger.warning(
+                    f"Too many node failures: {failed_nodes}/{executed_nodes}"
+                )
+                return False
+
+            return True
+
+        except Exception as e:
+            self.logger.warning(f"Error validating conditional execution results: {e}")
+            return False
+
+    def _track_conditional_execution_performance(
+        self, results: dict[str, dict[str, Any]], workflow: Workflow
+    ):
+        """
+        Track performance metrics for conditional execution.
+
+        Args:
+            results: Execution results
+            workflow: Original workflow
+        """
+        try:
+            total_nodes = len(workflow.graph.nodes)
+            executed_nodes = len(results)
+            skipped_nodes = total_nodes - executed_nodes
+
+            # Log performance metrics
+            if skipped_nodes > 0:
+                performance_improvement = (skipped_nodes / total_nodes) * 100
+                self.logger.info(
+                    f"Conditional execution performance: {performance_improvement:.1f}% reduction in executed nodes ({skipped_nodes}/{total_nodes} skipped)"
+                )
+
+            # Track for monitoring (could be sent to metrics system)
+            if hasattr(self, "_performance_metrics"):
+                self._performance_metrics["conditional_execution"] = {
+                    "total_nodes": total_nodes,
+                    "executed_nodes": executed_nodes,
+                    "skipped_nodes": skipped_nodes,
+                    "performance_improvement_percent": (
+                        (skipped_nodes / total_nodes) * 100 if total_nodes > 0 else 0
+                    ),
+                }
+
+        except Exception as e:
+            self.logger.warning(
+                f"Error tracking conditional execution performance: {e}"
+            )
+
+    def _log_conditional_execution_failure(
+        self, error: Exception, workflow: Workflow, nodes_completed: int
+    ):
+        """
+        Log detailed information about conditional execution failure.
+
+        Args:
+            error: Exception that caused the failure
+            workflow: Workflow that failed
+            nodes_completed: Number of nodes that completed before failure
+        """
+        try:
+            total_nodes = len(workflow.graph.nodes)
+
+            self.logger.error(
+                f"Conditional execution failed after {nodes_completed}/{total_nodes} nodes"
+            )
+            self.logger.error(f"Error type: {type(error).__name__}")
+            self.logger.error(f"Error message: {str(error)}")
+
+            # Log workflow characteristics for debugging
+            from kailash.analysis import ConditionalBranchAnalyzer
+
+            analyzer = ConditionalBranchAnalyzer(workflow)
+            switch_nodes = analyzer._find_switch_nodes()
+
+            self.logger.debug(
+                f"Workflow characteristics: {len(switch_nodes)} switches, {total_nodes} total nodes"
+            )
+
+        except Exception as log_error:
+            self.logger.warning(
+                f"Error logging conditional execution failure: {log_error}"
+            )
+
+    def _track_fallback_usage(
+        self, workflow: Workflow, error_message: str, fallback_reason: str
+    ):
+        """
+        Track fallback usage for monitoring and optimization.
+
+        Args:
+            workflow: Workflow that required fallback
+            error_message: Error that triggered fallback
+            fallback_reason: Reason for fallback
+        """
+        try:
+            import time
+
+            # Log fallback usage
+            self.logger.info(
+                f"Fallback used for workflow '{workflow.name}': {fallback_reason}"
+            )
+
+            # Track for monitoring (could be sent to metrics system)
+            if hasattr(self, "_fallback_metrics"):
+                if "fallback_usage" not in self._fallback_metrics:
+                    self._fallback_metrics["fallback_usage"] = []
+
+                self._fallback_metrics["fallback_usage"].append(
+                    {
+                        "workflow_name": workflow.name,
+                        "workflow_id": workflow.workflow_id,
+                        "error_message": error_message,
+                        "fallback_reason": fallback_reason,
+                        "timestamp": time.time(),
+                    }
+                )
+
+            # Limit tracking history to prevent memory growth
+            if (
+                hasattr(self, "_fallback_metrics")
+                and len(self._fallback_metrics.get("fallback_usage", [])) > 100
+            ):
+                self._fallback_metrics["fallback_usage"] = self._fallback_metrics[
+                    "fallback_usage"
+                ][-50:]
+
+        except Exception as e:
+            self.logger.warning(f"Error tracking fallback usage: {e}")
+
+    # ===== PHASE 5: PRODUCTION READINESS =====
+
+    def get_execution_plan_cached(
+        self, workflow: Workflow, switch_results: Dict[str, Dict[str, Any]]
+    ) -> List[str]:
+        """
+        Get execution plan with caching for improved performance.
+
+        Args:
+            workflow: Workflow to create execution plan for
+            switch_results: Results from SwitchNode execution
+
+        Returns:
+            Cached or newly computed execution plan
+        """
+        # Create cache key based on workflow structure and switch results
+        cache_key = self._create_execution_plan_cache_key(workflow, switch_results)
+
+        if cache_key in self._execution_plan_cache:
+            self._analytics_data["cache_hits"] += 1
+            self.logger.debug(f"Cache hit for execution plan: {cache_key[:32]}...")
+            return self._execution_plan_cache[cache_key]
+
+        # Cache miss - compute new plan
+        self._analytics_data["cache_misses"] += 1
+        self.logger.debug(f"Cache miss for execution plan: {cache_key[:32]}...")
+
+        try:
+            from kailash.planning import DynamicExecutionPlanner
+
+            planner = DynamicExecutionPlanner(workflow)
+            execution_plan = planner.create_execution_plan(switch_results)
+
+            # Cache the result (with size limit)
+            if len(self._execution_plan_cache) >= 100:  # Limit cache size
+                # Remove oldest entries (simple FIFO)
+                oldest_key = next(iter(self._execution_plan_cache))
+                del self._execution_plan_cache[oldest_key]
+
+            self._execution_plan_cache[cache_key] = execution_plan
+
+        except Exception as e:
+            self.logger.warning(f"Error creating cached execution plan: {e}")
+            # Fallback to basic topological order
+            execution_plan = list(nx.topological_sort(workflow.graph))
+
+        return execution_plan
+
+    def _create_execution_plan_cache_key(
+        self, workflow: Workflow, switch_results: Dict[str, Dict[str, Any]]
+    ) -> str:
+        """
+        Create cache key for execution plan.
+
+        Args:
+            workflow: Workflow instance
+            switch_results: SwitchNode results
+
+        Returns:
+            Cache key string
+        """
+        import json
+
+        try:
+            # Create key from workflow structure + switch results
+            workflow_key = f"{workflow.workflow_id}_{len(workflow.graph.nodes)}_{len(workflow.graph.edges)}"
+
+            # Sort switch results for consistent caching
+            sorted_results = {}
+            for switch_id, result in switch_results.items():
+                if isinstance(result, dict):
+                    # Create deterministic representation
+                    sorted_results[switch_id] = {
+                        k: v
+                        for k, v in sorted(result.items())
+                        if k in ["true_output", "false_output", "condition_result"]
+                    }
+
+            results_str = json.dumps(sorted_results, sort_keys=True, default=str)
+            combined_key = f"{workflow_key}:{results_str}"
+
+            # Hash to fixed length
+            return hashlib.md5(combined_key.encode()).hexdigest()
+
+        except Exception as e:
+            self.logger.warning(f"Error creating cache key: {e}")
+            # Fallback to simple key
+            return f"{workflow.workflow_id}_{hash(str(switch_results))}"
+
+    def get_execution_analytics(self) -> Dict[str, Any]:
+        """
+        Get comprehensive execution analytics for monitoring and optimization.
+
+        Returns:
+            Dictionary containing detailed analytics data
+        """
+        analytics = {
+            "cache_performance": {
+                "hits": self._analytics_data["cache_hits"],
+                "misses": self._analytics_data["cache_misses"],
+                "hit_rate": self._analytics_data["cache_hits"]
+                / max(
+                    1,
+                    self._analytics_data["cache_hits"]
+                    + self._analytics_data["cache_misses"],
+                ),
+            },
+            "conditional_execution_stats": {
+                "total_executions": len(self._analytics_data["conditional_executions"]),
+                "average_performance_improvement": 0.0,
+                "fallback_rate": 0.0,
+            },
+            "performance_history": self._analytics_data["performance_history"][
+                -50:
+            ],  # Last 50 executions
+            "execution_patterns": self._analytics_data["execution_patterns"],
+            "optimization_stats": self._analytics_data["optimization_stats"],
+        }
+
+        # Calculate conditional execution statistics
+        if self._analytics_data["conditional_executions"]:
+            improvements = [
+                exec_data.get("performance_improvement", 0)
+                for exec_data in self._analytics_data["conditional_executions"]
+            ]
+            analytics["conditional_execution_stats"][
+                "average_performance_improvement"
+            ] = sum(improvements) / len(improvements)
+
+            fallbacks = sum(
+                1
+                for exec_data in self._analytics_data["conditional_executions"]
+                if exec_data.get("used_fallback", False)
+            )
+            analytics["conditional_execution_stats"]["fallback_rate"] = fallbacks / len(
+                self._analytics_data["conditional_executions"]
+            )
+
+        # Add cache statistics
+        cache_size = len(self._execution_plan_cache)
+        analytics["cache_performance"]["cache_size"] = cache_size
+        analytics["cache_performance"]["cache_efficiency"] = min(
+            1.0, cache_size / 100.0
+        )  # Relative to max size
+
+        return analytics
+
+    def record_execution_performance(
+        self,
+        workflow: Workflow,
+        execution_time: float,
+        nodes_executed: int,
+        used_conditional: bool,
+        performance_improvement: float = 0.0,
+    ):
+        """
+        Record execution performance for analytics.
+
+        Args:
+            workflow: Workflow that was executed
+            execution_time: Total execution time in seconds
+            nodes_executed: Number of nodes actually executed
+            used_conditional: Whether conditional execution was used
+            performance_improvement: Performance improvement percentage (0.0-1.0)
+        """
+        import time
+
+        performance_record = {
+            "timestamp": time.time(),
+            "workflow_id": workflow.workflow_id,
+            "workflow_name": workflow.name,
+            "total_nodes": len(workflow.graph.nodes),
+            "executed_nodes": nodes_executed,
+            "execution_time": execution_time,
+            "used_conditional_execution": used_conditional,
+            "performance_improvement": performance_improvement,
+            "nodes_per_second": nodes_executed / max(0.001, execution_time),
+        }
+
+        # Add to performance history
+        self._analytics_data["performance_history"].append(performance_record)
+
+        # Limit history size
+        if len(self._analytics_data["performance_history"]) > 1000:
+            self._analytics_data["performance_history"] = self._analytics_data[
+                "performance_history"
+            ][-500:]
+
+        # Record conditional execution if used
+        if used_conditional:
+            self._analytics_data["conditional_executions"].append(
+                {
+                    "timestamp": time.time(),
+                    "workflow_id": workflow.workflow_id,
+                    "performance_improvement": performance_improvement,
+                    "nodes_skipped": len(workflow.graph.nodes) - nodes_executed,
+                    "used_fallback": False,  # Set by fallback tracking
+                }
+            )
+
+        # Update execution patterns
+        pattern_key = f"{len(workflow.graph.nodes)}_nodes"
+        if pattern_key not in self._analytics_data["execution_patterns"]:
+            self._analytics_data["execution_patterns"][pattern_key] = {
+                "count": 0,
+                "avg_execution_time": 0.0,
+                "avg_performance_improvement": 0.0,
+            }
+
+        pattern = self._analytics_data["execution_patterns"][pattern_key]
+        pattern["count"] += 1
+        pattern["avg_execution_time"] = (
+            pattern["avg_execution_time"] * (pattern["count"] - 1) + execution_time
+        ) / pattern["count"]
+        if used_conditional:
+            pattern["avg_performance_improvement"] = (
+                pattern["avg_performance_improvement"] * (pattern["count"] - 1)
+                + performance_improvement
+            ) / pattern["count"]
+
+    def clear_analytics_data(self, keep_patterns: bool = True):
+        """
+        Clear analytics data for fresh monitoring.
+
+        Args:
+            keep_patterns: Whether to preserve execution patterns
+        """
+        self._analytics_data["conditional_executions"] = []
+        self._analytics_data["performance_history"] = []
+        self._analytics_data["cache_hits"] = 0
+        self._analytics_data["cache_misses"] = 0
+
+        if not keep_patterns:
+            self._analytics_data["execution_patterns"] = {}
+            self._analytics_data["optimization_stats"] = {}
+
+        # Clear caches
+        self._execution_plan_cache.clear()
+
+        self.logger.info("Analytics data cleared")
+
+    def get_health_diagnostics(self) -> Dict[str, Any]:
+        """
+        Get health diagnostics for monitoring system health.
+
+        Returns:
+            Dictionary containing health check results
+        """
+        import os
+        import time
+
+        diagnostics = {
+            "timestamp": time.time(),
+            "runtime_health": "healthy",
+            "cache_health": "healthy",
+            "performance_health": "healthy",
+            "memory_usage": {},
+            "cache_statistics": {},
+            "performance_indicators": {},
+            "warnings": [],
+            "errors": [],
+        }
+
+        try:
+            # Memory usage
+            process = psutil.Process(os.getpid())
+            memory_info = process.memory_info()
+            diagnostics["memory_usage"] = {
+                "rss_mb": memory_info.rss / 1024 / 1024,
+                "vms_mb": memory_info.vms / 1024 / 1024,
+                "percent": process.memory_percent(),
+            }
+
+            # Cache health
+            cache_size = len(self._execution_plan_cache)
+            analytics = self.get_execution_analytics()
+            cache_hit_rate = analytics["cache_performance"]["hit_rate"]
+
+            diagnostics["cache_statistics"] = {
+                "size": cache_size,
+                "hit_rate": cache_hit_rate,
+                "hits": analytics["cache_performance"]["hits"],
+                "misses": analytics["cache_performance"]["misses"],
+            }
+
+            # Performance indicators
+            recent_executions = self._analytics_data["performance_history"][-10:]
+            if recent_executions:
+                avg_execution_time = sum(
+                    e["execution_time"] for e in recent_executions
+                ) / len(recent_executions)
+                avg_improvement = sum(
+                    e["performance_improvement"] for e in recent_executions
+                ) / len(recent_executions)
+
+                diagnostics["performance_indicators"] = {
+                    "avg_execution_time": avg_execution_time,
+                    "avg_performance_improvement": avg_improvement,
+                    "recent_executions": len(recent_executions),
+                }
+
+            # Health checks
+            if (
+                cache_hit_rate < 0.3
+                and analytics["cache_performance"]["hits"]
+                + analytics["cache_performance"]["misses"]
+                > 10
+            ):
+                diagnostics["warnings"].append(
+                    "Low cache hit rate - consider workflow optimization"
+                )
+                diagnostics["cache_health"] = "warning"
+
+            if diagnostics["memory_usage"]["percent"] > 80:
+                diagnostics["warnings"].append("High memory usage detected")
+                diagnostics["runtime_health"] = "warning"
+
+            if recent_executions and avg_execution_time > 5.0:
+                diagnostics["warnings"].append("Slow execution times detected")
+                diagnostics["performance_health"] = "warning"
+
+        except Exception as e:
+            diagnostics["errors"].append(f"Health check error: {e}")
+            diagnostics["runtime_health"] = "error"
+
+        return diagnostics
+
+    def optimize_runtime_performance(self) -> Dict[str, Any]:
+        """
+        Optimize runtime performance based on analytics data.
+
+        Returns:
+            Dictionary describing optimizations applied
+        """
+        optimization_result = {
+            "optimizations_applied": [],
+            "performance_impact": {},
+            "recommendations": [],
+            "cache_optimizations": {},
+            "memory_optimizations": {},
+        }
+
+        try:
+            # Cache optimization
+            cache_analytics = self.get_execution_analytics()["cache_performance"]
+
+            if (
+                cache_analytics["hit_rate"] < 0.5
+                and cache_analytics["hits"] + cache_analytics["misses"] > 20
+            ):
+                # Poor cache performance - clear and rebuild
+                old_size = len(self._execution_plan_cache)
+                self._execution_plan_cache.clear()
+                optimization_result["optimizations_applied"].append("cache_clear")
+                optimization_result["cache_optimizations"]["cleared_entries"] = old_size
+                optimization_result["recommendations"].append(
+                    "Consider using more consistent workflows for better caching"
+                )
+
+            # Memory optimization
+            if len(self._analytics_data["performance_history"]) > 500:
+                old_count = len(self._analytics_data["performance_history"])
+                self._analytics_data["performance_history"] = self._analytics_data[
+                    "performance_history"
+                ][-250:]
+                optimization_result["optimizations_applied"].append("history_cleanup")
+                optimization_result["memory_optimizations"][
+                    "history_entries_removed"
+                ] = (old_count - 250)
+
+            # Execution pattern analysis
+            patterns = self._analytics_data["execution_patterns"]
+            if patterns:
+                most_common_pattern = max(patterns.items(), key=lambda x: x[1]["count"])
+                optimization_result["recommendations"].append(
+                    f"Most common pattern: {most_common_pattern[0]} with {most_common_pattern[1]['count']} executions"
+                )
+
+                # Suggest optimizations based on patterns
+                for pattern_key, pattern_data in patterns.items():
+                    if pattern_data["avg_execution_time"] > 3.0:
+                        optimization_result["recommendations"].append(
+                            f"Consider optimizing workflows with {pattern_key} - avg time: {pattern_data['avg_execution_time']:.2f}s"
+                        )
+
+            self.logger.info(
+                f"Runtime optimization completed: {len(optimization_result['optimizations_applied'])} optimizations applied"
+            )
+
+        except Exception as e:
+            self.logger.warning(f"Error during runtime optimization: {e}")
+            optimization_result["error"] = str(e)
+
+        return optimization_result
+
+    # ===== PHASE 3 COMPLETION: Performance Monitoring & Compatibility =====
+
+    def _check_performance_switch(self, current_mode: str) -> Tuple[bool, str, str]:
+        """Check if execution mode should be switched based on performance.
+
+        Args:
+            current_mode: Current execution mode
+
+        Returns:
+            Tuple of (should_switch, recommended_mode, reason)
+        """
+        # Initialize performance monitor if needed
+        if self._performance_monitor is None:
+            self._performance_monitor = PerformanceMonitor()
+
+        return self._performance_monitor.should_switch_mode(current_mode)
+
+    def _record_execution_metrics(
+        self,
+        workflow: Workflow,
+        execution_time: float,
+        node_count: int,
+        skipped_nodes: int,
+        execution_mode: str,
+    ) -> None:
+        """Record execution metrics for performance monitoring.
+
+        Args:
+            workflow: Executed workflow
+            execution_time: Total execution time
+            node_count: Number of nodes executed
+            skipped_nodes: Number of nodes skipped
+            execution_mode: Execution mode used
+        """
+        if not self._enable_performance_monitoring:
+            return
+
+        # Initialize performance monitor if needed
+        if self._performance_monitor is None:
+            self._performance_monitor = PerformanceMonitor()
+
+        metrics = ExecutionMetrics(
+            execution_time=execution_time,
+            node_count=node_count,
+            skipped_nodes=skipped_nodes,
+            execution_mode=execution_mode,
+        )
+
+        self._performance_monitor.record_execution(metrics)
+
+    def get_performance_report(self) -> Dict[str, Any]:
+        """Get performance monitoring report.
+
+        Returns:
+            Performance statistics and recommendations
+        """
+        if self._performance_monitor is None:
+            return {"status": "Performance monitoring not initialized"}
+
+        return self._performance_monitor.get_performance_report()
+
+    def generate_compatibility_report(self, workflow: Workflow) -> Dict[str, Any]:
+        """Generate compatibility report for a workflow.
+
+        Args:
+            workflow: Workflow to analyze
+
+        Returns:
+            Compatibility report dictionary
+        """
+        if not self._enable_compatibility_reporting:
+            return {"status": "Compatibility reporting disabled"}
+
+        # Initialize reporter if needed
+        if self._compatibility_reporter is None:
+            self._compatibility_reporter = CompatibilityReporter()
+
+        report = self._compatibility_reporter.analyze_workflow(workflow)
+        return report.to_dict()
+
+    def get_compatibility_report_markdown(self, workflow: Workflow) -> str:
+        """Generate compatibility report in markdown format.
+
+        Args:
+            workflow: Workflow to analyze
+
+        Returns:
+            Markdown formatted report
+        """
+        if not self._enable_compatibility_reporting:
+            return "# Compatibility reporting disabled"
+
+        # Initialize reporter if needed
+        if self._compatibility_reporter is None:
+            self._compatibility_reporter = CompatibilityReporter()
+
+        report = self._compatibility_reporter.analyze_workflow(workflow)
+        return report.to_markdown()
+
+    def set_performance_monitoring(self, enabled: bool) -> None:
+        """Enable or disable performance monitoring.
+
+        Args:
+            enabled: Whether to enable performance monitoring
+        """
+        self._enable_performance_monitoring = enabled
+        self.logger.info(
+            f"Performance monitoring {'enabled' if enabled else 'disabled'}"
+        )
+
+    def set_automatic_mode_switching(self, enabled: bool) -> None:
+        """Enable or disable automatic mode switching based on performance.
+
+        Args:
+            enabled: Whether to enable automatic switching
+        """
+        self._performance_switch_enabled = enabled
+        self.logger.info(
+            f"Automatic mode switching {'enabled' if enabled else 'disabled'}"
+        )
+
+    def set_compatibility_reporting(self, enabled: bool) -> None:
+        """Enable or disable compatibility reporting.
+
+        Args:
+            enabled: Whether to enable compatibility reporting
+        """
+        self._enable_compatibility_reporting = enabled
+        self.logger.info(
+            f"Compatibility reporting {'enabled' if enabled else 'disabled'}"
+        )
+
+    def get_execution_path_debug_info(self) -> Dict[str, Any]:
+        """Get detailed debug information about execution paths.
+
+        Returns:
+            Debug information including execution decisions and paths
+        """
+        debug_info = {
+            "conditional_execution_mode": self.conditional_execution,
+            "performance_monitoring_enabled": self._enable_performance_monitoring,
+            "automatic_switching_enabled": self._performance_switch_enabled,
+            "compatibility_reporting_enabled": self._enable_compatibility_reporting,
+            "fallback_metrics": self._fallback_metrics,
+            "execution_analytics": self.get_execution_analytics(),
+        }
+
+        if self._performance_monitor:
+            debug_info["performance_report"] = self.get_performance_report()
+
+        return debug_info

@@ -517,7 +517,7 @@ class TestContractIntegrationWithExistingValidation:
             )
 
         workflow = builder.build()
-        runtime = LocalRuntime(connection_validation="strict")
+        runtime = LocalRuntime(connection_validation="strict", enable_monitoring=False)
 
         # Measure execution time
         start_time = time.time()

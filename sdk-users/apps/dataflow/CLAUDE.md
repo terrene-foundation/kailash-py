@@ -710,7 +710,7 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 ## 📚 COMPLETE NAVIGATION
 
 ### **🔗 Hierarchical Navigation Path**
-1. **Start**: [Root CLAUDE.md](../../../CLAUDE.md) → Essential patterns
+1. **Start**: [Root CLAUDE.md](../../../CLAUDE-archive.md) → Essential patterns
 2. **SDK Guidance**: [SDK Users](../../../sdk-users/) → Complete SDK navigation
 3. **This Guide**: DataFlow-specific complete function access
 4. **Integration**: [Nexus CLAUDE.md](../../kailash-nexus/CLAUDE.md) → Multi-channel platform
