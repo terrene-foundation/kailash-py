@@ -25,13 +25,13 @@ from kailash.runtime.local import LocalRuntime
 def audit_workflow_for_conditionals(workflow):
     """Check if workflow contains conditional logic."""
     conditional_nodes = []
-    
+
     # Check for SwitchNodes
     for node_id, node_data in workflow.graph.nodes(data=True):
         node_instance = node_data.get('node') or node_data.get('instance')
         if hasattr(node_instance, '__class__') and 'Switch' in node_instance.__class__.__name__:
             conditional_nodes.append(node_id)
-    
+
     return {
         'has_conditionals': len(conditional_nodes) > 0,
         'switch_nodes': conditional_nodes,
@@ -54,17 +54,17 @@ from typing import Dict, Any
 def measure_baseline_performance(workflow, test_data: Dict[str, Any], iterations: int = 5):
     """Measure current performance with traditional execution."""
     runtime = LocalRuntime(conditional_execution="route_data")
-    
+
     times = []
     for _ in range(iterations):
         start_time = time.time()
         results, _ = runtime.execute(workflow, parameters=test_data)
         execution_time = time.time() - start_time
         times.append(execution_time)
-    
+
     avg_time = sum(times) / len(times)
     node_count = len(results)
-    
+
     return {
         'average_time': avg_time,
         'node_count': node_count,
@@ -137,7 +137,7 @@ workflow = WorkflowBuilder()
 workflow.add_node("DataSourceNode", "data_source", {
     "data": {
         "user_type": "premium",
-        "region": "US", 
+        "region": "US",
         "subscription_status": "active",
         "payment_method": "credit_card"
     }
@@ -204,7 +204,7 @@ for branch in ['a', 'b', 'c']:
         "operator": "==",
         "value": True
     })
-    
+
     workflow.add_node("PythonCodeNode", f"processor_{branch}", {
         "code": f"result = {{'branch': '{branch}', 'value': {ord(branch)}}} if input else None"
     })
@@ -246,17 +246,17 @@ class MigrationTestCase:
     workflow: Any
     test_data: Dict[str, Any]
     expected_business_outcome: Any
-    
+
 class ConditionalMigrationValidator:
     """Validates migration from traditional to conditional execution."""
-    
+
     def __init__(self):
         self.test_cases: List[MigrationTestCase] = []
-        
+
     def add_test_case(self, name: str, workflow: Any, test_data: Dict[str, Any], expected_outcome: Any):
         """Add a test case for validation."""
         self.test_cases.append(MigrationTestCase(name, workflow, test_data, expected_outcome))
-    
+
     def validate_migration(self) -> Dict[str, Any]:
         """Run comprehensive migration validation."""
         results = {
@@ -266,7 +266,7 @@ class ConditionalMigrationValidator:
             'performance_improvements': [],
             'issues': []
         }
-        
+
         for test_case in self.test_cases:
             try:
                 # Test traditional execution
@@ -274,20 +274,20 @@ class ConditionalMigrationValidator:
                 start_time = time.time()
                 results_traditional, _ = runtime_traditional.execute(test_case.workflow, parameters=test_case.test_data)
                 traditional_time = time.time() - start_time
-                
+
                 # Test conditional execution
                 runtime_conditional = LocalRuntime(conditional_execution="skip_branches")
                 start_time = time.time()
                 results_conditional, _ = runtime_conditional.execute(test_case.workflow, parameters=test_case.test_data)
                 conditional_time = time.time() - start_time
-                
+
                 # Validate business outcome
                 traditional_outcome = self._extract_business_outcome(results_traditional)
                 conditional_outcome = self._extract_business_outcome(results_conditional)
-                
+
                 if traditional_outcome == conditional_outcome == test_case.expected_business_outcome:
                     results['passed'] += 1
-                    
+
                     # Calculate performance improvement
                     improvement = (traditional_time - conditional_time) / traditional_time * 100
                     results['performance_improvements'].append({
@@ -305,7 +305,7 @@ class ConditionalMigrationValidator:
                         'traditional': traditional_outcome,
                         'conditional': conditional_outcome
                     })
-                    
+
             except Exception as e:
                 results['failed'] += 1
                 results['issues'].append({
@@ -313,9 +313,9 @@ class ConditionalMigrationValidator:
                     'issue': 'Execution error',
                     'error': str(e)
                 })
-        
+
         return results
-    
+
     def _extract_business_outcome(self, execution_results: Dict[str, Any]) -> Any:
         """Extract business-relevant outcome from execution results."""
         # Implement your business logic here
@@ -337,7 +337,7 @@ validator.add_test_case(
 )
 
 validator.add_test_case(
-    "basic_user_workflow", 
+    "basic_user_workflow",
     basic_workflow,
     {"user_type": "basic", "region": "US"},
     {"discount": 5, "features": ["basic"]}
@@ -354,7 +354,7 @@ print(f"Average performance improvement: {sum(p['improvement_percent'] for p in 
 ```python
 def test_edge_cases():
     """Test edge cases that commonly cause migration issues."""
-    
+
     edge_cases = [
         {
             'name': 'all_false_conditions',
@@ -377,23 +377,23 @@ def test_edge_cases():
             'description': 'Empty input data'
         }
     ]
-    
+
     for case in edge_cases:
         print(f"\nTesting: {case['description']}")
-        
+
         try:
             # Traditional execution
             runtime_traditional = LocalRuntime(conditional_execution="route_data")
             results_traditional, _ = runtime_traditional.execute(workflow, parameters=case['data'])
-            
-            # Conditional execution  
+
+            # Conditional execution
             runtime_conditional = LocalRuntime(conditional_execution="skip_branches")
             results_conditional, _ = runtime_conditional.execute(workflow, parameters=case['data'])
-            
+
             print(f"✅ {case['name']}: Both modes handled gracefully")
             print(f"   Traditional: {len(results_traditional)} nodes")
             print(f"   Conditional: {len(results_conditional)} nodes")
-            
+
         except Exception as e:
             print(f"❌ {case['name']}: Error - {e}")
 
@@ -414,10 +414,10 @@ class ExecutionMode(Enum):
 
 class ConditionalExecutionRollout:
     """Manages gradual rollout of conditional execution."""
-    
+
     def __init__(self, rollout_percentage: float = 0.0):
         self.rollout_percentage = rollout_percentage
-        
+
     def should_use_conditional_execution(self, user_id: str = None) -> bool:
         """Determine if request should use conditional execution."""
         if user_id:
@@ -427,11 +427,11 @@ class ConditionalExecutionRollout:
         else:
             # Random assignment
             return random.random() * 100 < self.rollout_percentage
-    
+
     def get_runtime(self, user_id: str = None) -> LocalRuntime:
         """Get appropriate runtime based on rollout strategy."""
         mode = ExecutionMode.CONDITIONAL if self.should_use_conditional_execution(user_id) else ExecutionMode.TRADITIONAL
-        
+
         return LocalRuntime(
             conditional_execution=mode.value,
             enable_monitoring=True,  # Always monitor during rollout
@@ -441,7 +441,7 @@ class ConditionalExecutionRollout:
 # Week 1: 5% rollout
 rollout = ConditionalExecutionRollout(rollout_percentage=5.0)
 
-# Week 2: 15% rollout  
+# Week 2: 15% rollout
 # rollout = ConditionalExecutionRollout(rollout_percentage=15.0)
 
 # Week 3: 50% rollout
@@ -453,20 +453,20 @@ rollout = ConditionalExecutionRollout(rollout_percentage=5.0)
 # Usage in your application
 def process_workflow(workflow, parameters, user_id=None):
     runtime = rollout.get_runtime(user_id)
-    
+
     try:
         results, run_id = runtime.execute(workflow, parameters=parameters)
-        
+
         # Collect metrics
         analytics = runtime.get_execution_analytics()
         log_execution_metrics(analytics, runtime.conditional_execution)
-        
+
         return results
-        
+
     except Exception as e:
         # Log error with execution mode context
         log_error(f"Execution failed with mode {runtime.conditional_execution}: {e}")
-        
+
         # Fallback to traditional execution
         if runtime.conditional_execution == "skip_branches":
             fallback_runtime = LocalRuntime(conditional_execution="route_data")
@@ -498,19 +498,19 @@ class ExecutionMetrics:
 
 class ConditionalExecutionMonitor:
     """Monitor conditional execution performance and health."""
-    
+
     def __init__(self):
         self.metrics = []
         self.alerts = []
-        
+
     def record_execution(self, metrics: ExecutionMetrics):
         """Record execution metrics."""
         self.metrics.append(metrics)
         self._check_alerts(metrics)
-    
+
     def _check_alerts(self, metrics: ExecutionMetrics):
         """Check for alert conditions."""
-        
+
         # Alert: Performance regression
         if metrics.mode == "skip_branches" and metrics.performance_improvement < 0:
             self.alerts.append({
@@ -518,11 +518,11 @@ class ConditionalExecutionMonitor:
                 'message': f'Conditional execution slower than traditional: {metrics.performance_improvement:.1%}',
                 'timestamp': time.time()
             })
-        
+
         # Alert: High error rate
         recent_executions = self.metrics[-100:]  # Last 100 executions
         conditional_executions = [m for m in recent_executions if m.mode == "skip_branches"]
-        
+
         if len(conditional_executions) >= 10:
             error_rate = sum(1 for m in conditional_executions if not m.success) / len(conditional_executions)
             if error_rate > 0.05:  # 5% error rate threshold
@@ -531,34 +531,34 @@ class ConditionalExecutionMonitor:
                     'message': f'Conditional execution error rate: {error_rate:.1%}',
                     'timestamp': time.time()
                 })
-    
+
     def get_health_report(self) -> Dict[str, Any]:
         """Generate health report."""
         if not self.metrics:
             return {'status': 'no_data'}
-        
+
         recent_metrics = self.metrics[-1000:]  # Last 1000 executions
-        
+
         traditional_metrics = [m for m in recent_metrics if m.mode == "route_data"]
         conditional_metrics = [m for m in recent_metrics if m.mode == "skip_branches"]
-        
+
         report = {
             'total_executions': len(recent_metrics),
             'traditional_executions': len(traditional_metrics),
             'conditional_executions': len(conditional_metrics),
             'recent_alerts': len([a for a in self.alerts if time.time() - a['timestamp'] < 3600]),  # Last hour
         }
-        
+
         if conditional_metrics:
             avg_improvement = sum(m.performance_improvement for m in conditional_metrics) / len(conditional_metrics)
             success_rate = sum(1 for m in conditional_metrics if m.success) / len(conditional_metrics)
-            
+
             report.update({
                 'conditional_success_rate': success_rate,
                 'average_performance_improvement': avg_improvement,
                 'status': 'healthy' if success_rate > 0.95 and avg_improvement > 0.15 else 'warning'
             })
-        
+
         return report
 
 # Usage
@@ -568,15 +568,15 @@ def monitored_execution(workflow, parameters, user_id=None):
     """Execute workflow with monitoring."""
     rollout = ConditionalExecutionRollout(rollout_percentage=25.0)
     runtime = rollout.get_runtime(user_id)
-    
+
     start_time = time.time()
     try:
         results, run_id = runtime.execute(workflow, parameters=parameters)
         execution_time = time.time() - start_time
-        
+
         # Calculate performance improvement (simplified)
         performance_improvement = 0.3 if runtime.conditional_execution == "skip_branches" else 0.0
-        
+
         monitor.record_execution(ExecutionMetrics(
             mode=runtime.conditional_execution,
             execution_time=execution_time,
@@ -584,12 +584,12 @@ def monitored_execution(workflow, parameters, user_id=None):
             success=True,
             performance_improvement=performance_improvement
         ))
-        
+
         return results
-        
+
     except Exception as e:
         execution_time = time.time() - start_time
-        
+
         monitor.record_execution(ExecutionMetrics(
             mode=runtime.conditional_execution,
             execution_time=execution_time,
@@ -597,21 +597,21 @@ def monitored_execution(workflow, parameters, user_id=None):
             success=False,
             error=str(e)
         ))
-        
+
         raise
 
 # Regular health checks
 def check_migration_health():
     """Regular health check for conditional execution migration."""
     health_report = monitor.get_health_report()
-    
+
     if health_report['status'] == 'warning':
         print("⚠️ Warning: Conditional execution health issues detected")
         print(f"Success rate: {health_report.get('conditional_success_rate', 0):.1%}")
         print(f"Performance improvement: {health_report.get('average_performance_improvement', 0):.1%}")
-        
+
         # Consider rolling back or reducing rollout percentage
-        
+
     elif health_report['status'] == 'healthy':
         print("✅ Conditional execution performing well")
         print(f"Success rate: {health_report.get('conditional_success_rate', 0):.1%}")
@@ -625,47 +625,47 @@ def check_migration_health():
 ```python
 def optimize_workflow_for_conditional_execution(workflow):
     """Optimize workflow structure for better conditional execution performance."""
-    
+
     optimization_tips = []
-    
+
     # Tip 1: Move SwitchNodes early in execution order
     switches = []
     other_nodes = []
-    
+
     for node_id, node_data in workflow.graph.nodes(data=True):
         node_instance = node_data.get('node') or node_data.get('instance')
         if hasattr(node_instance, '__class__') and 'Switch' in node_instance.__class__.__name__:
             switches.append(node_id)
         else:
             other_nodes.append(node_id)
-    
+
     if switches:
         optimization_tips.append(f"Found {len(switches)} SwitchNodes - ensure they execute early")
-    
+
     # Tip 2: Identify expensive nodes that could be optimized
     expensive_nodes = []
     for node_id, node_data in workflow.graph.nodes(data=True):
         node_instance = node_data.get('node') or node_data.get('instance')
-        
+
         # Heuristics for expensive operations
         if hasattr(node_instance, 'code') and any(keyword in str(node_instance.code) for keyword in ['api', 'database', 'http', 'file']):
             expensive_nodes.append(node_id)
-    
+
     if expensive_nodes:
         optimization_tips.append(f"Found {len(expensive_nodes)} potentially expensive nodes: {expensive_nodes}")
         optimization_tips.append("Consider placing these behind conditional logic")
-    
+
     # Tip 3: Check for merge node opportunities
     merge_candidates = []
     for node_id in other_nodes:
         predecessors = list(workflow.graph.predecessors(node_id))
         if len(predecessors) > 1:
             merge_candidates.append((node_id, len(predecessors)))
-    
+
     if merge_candidates:
         optimization_tips.append(f"Nodes with multiple inputs (merge candidates): {merge_candidates}")
         optimization_tips.append("Consider using MergeNode with skip_none=True for conditional inputs")
-    
+
     return optimization_tips
 
 # Usage
@@ -682,40 +682,40 @@ from typing import List
 
 def comprehensive_performance_benchmark(workflow, test_datasets: List[Dict[str, Any]], iterations: int = 10):
     """Comprehensive performance comparison between execution modes."""
-    
+
     results = {
         'traditional': {'times': [], 'node_counts': []},
         'conditional': {'times': [], 'node_counts': []},
         'datasets': []
     }
-    
+
     for dataset_idx, test_data in enumerate(test_datasets):
         print(f"\nBenchmarking dataset {dataset_idx + 1}/{len(test_datasets)}")
-        
+
         dataset_results = {'traditional': [], 'conditional': []}
-        
+
         for iteration in range(iterations):
             # Traditional execution
             runtime_traditional = LocalRuntime(conditional_execution="route_data")
             start_time = time.time()
             results_traditional, _ = runtime_traditional.execute(workflow, parameters=test_data)
             traditional_time = time.time() - start_time
-            
+
             # Conditional execution
             runtime_conditional = LocalRuntime(conditional_execution="skip_branches")
             start_time = time.time()
             results_conditional, _ = runtime_conditional.execute(workflow, parameters=test_data)
             conditional_time = time.time() - start_time
-            
+
             dataset_results['traditional'].append((traditional_time, len(results_traditional)))
             dataset_results['conditional'].append((conditional_time, len(results_conditional)))
-        
+
         # Calculate statistics for this dataset
         trad_times = [r[0] for r in dataset_results['traditional']]
         trad_nodes = [r[1] for r in dataset_results['traditional']]
         cond_times = [r[0] for r in dataset_results['conditional']]
         cond_nodes = [r[1] for r in dataset_results['conditional']]
-        
+
         dataset_summary = {
             'dataset_idx': dataset_idx,
             'traditional_avg_time': statistics.mean(trad_times),
@@ -725,32 +725,32 @@ def comprehensive_performance_benchmark(workflow, test_datasets: List[Dict[str, 
             'conditional_std_time': statistics.stdev(cond_times) if len(cond_times) > 1 else 0,
             'conditional_avg_nodes': statistics.mean(cond_nodes),
         }
-        
+
         # Calculate improvements
         dataset_summary['time_improvement'] = (dataset_summary['traditional_avg_time'] - dataset_summary['conditional_avg_time']) / dataset_summary['traditional_avg_time'] * 100
         dataset_summary['node_reduction'] = (dataset_summary['traditional_avg_nodes'] - dataset_summary['conditional_avg_nodes']) / dataset_summary['traditional_avg_nodes'] * 100
-        
+
         results['datasets'].append(dataset_summary)
-        
+
         print(f"  Time improvement: {dataset_summary['time_improvement']:.1f}%")
         print(f"  Node reduction: {dataset_summary['node_reduction']:.1f}%")
-        
+
         # Add to overall results
         results['traditional']['times'].extend(trad_times)
         results['traditional']['node_counts'].extend(trad_nodes)
         results['conditional']['times'].extend(cond_times)
         results['conditional']['node_counts'].extend(cond_nodes)
-    
+
     # Overall statistics
     overall_time_improvement = (statistics.mean(results['traditional']['times']) - statistics.mean(results['conditional']['times'])) / statistics.mean(results['traditional']['times']) * 100
     overall_node_reduction = (statistics.mean(results['traditional']['node_counts']) - statistics.mean(results['conditional']['node_counts'])) / statistics.mean(results['traditional']['node_counts']) * 100
-    
+
     results['overall'] = {
         'time_improvement': overall_time_improvement,
         'node_reduction': overall_node_reduction,
         'statistical_significance': len(results['traditional']['times']) >= 30  # Basic check
     }
-    
+
     return results
 
 # Usage
@@ -794,7 +794,7 @@ else:
 """
 })
 
-# ✅ Fixed pattern  
+# ✅ Fixed pattern
 workflow.add_node("SwitchNode", "explicit_switch", {
     "condition_field": "user_type",
     "operator": "==",
@@ -821,9 +821,9 @@ workflow.add_node("PythonCodeNode", "basic_path", {
 # Check workflow complexity before enabling conditional execution
 def should_use_conditional_execution(workflow) -> bool:
     node_count = len(workflow.graph.nodes)
-    switch_count = len([n for n in workflow.graph.nodes(data=True) 
+    switch_count = len([n for n in workflow.graph.nodes(data=True)
                        if 'Switch' in str(type(n[1].get('node', '')))])
-    
+
     # Only beneficial for workflows with multiple switches or many nodes
     return switch_count >= 2 or (switch_count >= 1 and node_count >= 5)
 

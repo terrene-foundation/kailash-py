@@ -49,7 +49,7 @@ if report:
    ```python
    # Check if workflow has switches
    from kailash.analysis import ConditionalBranchAnalyzer
-   
+
    analyzer = ConditionalBranchAnalyzer(workflow)
    switch_nodes = analyzer._find_switch_nodes()
    print(f"Found {len(switch_nodes)} SwitchNodes")
@@ -84,7 +84,7 @@ if report:
    ```python
    # Wrong: connecting to wrong output port
    workflow.add_connection("switch", "output", "processor", "input")
-   
+
    # Correct: use specific conditional outputs
    workflow.add_connection("switch", "true_output", "processor", "input")
    workflow.add_connection("switch", "false_output", "alt_processor", "input")
@@ -117,7 +117,7 @@ if report:
        conditional_execution="skip_branches",
        enable_performance_monitoring=True
    )
-   
+
    results, _ = runtime.execute(workflow)
    metrics = runtime.get_execution_metrics()
    print(f"Nodes skipped: {metrics.skipped_nodes}/{metrics.node_count}")
@@ -288,7 +288,7 @@ runtime = LocalRuntime(
 ## Getting Help
 
 1. **Enable debug logging** to see detailed execution flow
-2. **Check compatibility report** for unsupported patterns  
+2. **Check compatibility report** for unsupported patterns
 3. **Monitor performance metrics** to verify improvements
 4. **Use execution analytics** to understand behavior
 5. **Review examples** in the [conditional execution guide](../2-core-concepts/conditional-execution-guide.md)

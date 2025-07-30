@@ -4,19 +4,20 @@ Edge case and error path tests for LocalRuntime to improve coverage.
 Tests error handling, edge cases, and rarely executed code paths.
 """
 
-import pytest
 import asyncio
-from unittest.mock import Mock, patch, AsyncMock, MagicMock
 import json
 import os
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.graph import Workflow
-from kailash.nodes.logic.operations import SwitchNode
+import pytest
+
 from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.logic.operations import SwitchNode
+from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import RuntimeExecutionError
 from kailash.tracking.manager import TaskManager
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
+from kailash.workflow.graph import Workflow
 
 
 class TestLocalRuntimeEdgeCases:
@@ -38,11 +39,11 @@ class TestLocalRuntimeEdgeCases:
         # Test strict mode
         strict_runtime = LocalRuntime(connection_validation="strict")
         assert strict_runtime.connection_validation == "strict"
-        
+
         # Test warn mode (default)
         warning_runtime = LocalRuntime(connection_validation="warn")
         assert warning_runtime.connection_validation == "warn"
-        
+
         # Test off mode
         off_runtime = LocalRuntime(connection_validation="off")
         assert off_runtime.connection_validation == "off"
@@ -50,9 +51,9 @@ class TestLocalRuntimeEdgeCases:
     def test_execute_with_empty_workflow(self):
         """Test execution with empty workflow."""
         empty_workflow = Workflow("empty", "Empty Workflow")
-        
+
         results, run_id = self.runtime.execute(empty_workflow)
-        
+
         # Should handle empty workflow gracefully
         assert results == {}
         assert run_id is not None
@@ -61,10 +62,10 @@ class TestLocalRuntimeEdgeCases:
         """Test execution with workflow_id parameter."""
         node = PythonCodeNode(name="node", code="result = {'data': 1}")
         self.workflow.add_node("node", node)
-        
+
         # Execute (workflow_id might not be supported as parameter)
         results, run_id = self.runtime.execute(self.workflow)
-        
+
         assert results["node"]["result"]["data"] == 1
 
     @pytest.mark.asyncio
@@ -72,7 +73,7 @@ class TestLocalRuntimeEdgeCases:
         """Test async execution when no event loop is running."""
         node = PythonCodeNode(name="node", code="result = {'data': 1}")
         self.workflow.add_node("node", node)
-        
+
         # This should work even without explicit event loop
         results, run_id = self.runtime.execute(self.workflow)
         assert results["node"]["result"]["data"] == 1
@@ -81,7 +82,7 @@ class TestLocalRuntimeEdgeCases:
         """Test handling of task manager creation failure."""
         node = PythonCodeNode(name="node", code="result = {'data': 1}")
         self.workflow.add_node("node", node)
-        
+
         # Execute normally - task manager issues handled internally
         results, run_id = self.runtime.execute(self.workflow)
         assert results["node"]["result"]["data"] == 1
@@ -91,14 +92,14 @@ class TestLocalRuntimeEdgeCases:
         # Create cyclic workflow
         node1 = PythonCodeNode(name="node1", code="result = {'data': 1}")
         node2 = PythonCodeNode(name="node2", code="result = {'data': 2}")
-        
+
         self.workflow.add_node("node1", node1)
         self.workflow.add_node("node2", node2)
         self.workflow.connect("node1", "node2", {"result": "input"})
         self.workflow.create_cycle("test_cycle").connect("node2", "node1", {"result": "input"}).max_iterations(2).build()
-        
+
         runtime = LocalRuntime(enable_cycles=True)
-        
+
         # Execute - should handle cyclic workflow
         results, run_id = runtime.execute(self.workflow)
         assert "node1" in results
@@ -110,10 +111,10 @@ class TestLocalRuntimeEdgeCases:
             code="result = {'value': input_data['required_field']}"
         )
         self.workflow.add_node("node", node)
-        
+
         # Execute without required input
         results, run_id = self.runtime.execute(self.workflow)
-        
+
         # Should handle error gracefully
         assert "node" in results
 
@@ -123,14 +124,14 @@ class TestLocalRuntimeEdgeCases:
         # Create workflow with failing node
         good_node = PythonCodeNode(name="good", code="result = {'status': 'ok'}")
         bad_node = PythonCodeNode(name="bad", code="1/0")  # Will raise ZeroDivisionError
-        
+
         self.workflow.add_node("good", good_node)
         self.workflow.add_node("bad", bad_node)
         self.workflow.connect("good", "bad", {"result": "input"})
-        
+
         # Execute - should handle node failure
         results, run_id = self.runtime.execute(self.workflow)
-        
+
         # Good node should have succeeded
         assert results["good"]["result"]["status"] == "ok"
         # Bad node result depends on error handling
@@ -139,17 +140,17 @@ class TestLocalRuntimeEdgeCases:
         """Test LocalRuntime initialization with concurrent settings."""
         # LocalRuntime with concurrent execution
         runtime = LocalRuntime(max_concurrency=4)
-        
+
         # Test with workflow
         node1 = PythonCodeNode(name="node1", code="result = {'data': 1}")
         node2 = PythonCodeNode(name="node2", code="result = {'data': 2}")
-        
+
         self.workflow.add_node("node1", node1)
         self.workflow.add_node("node2", node2)
-        
+
         # Parallel nodes (no dependencies)
         results, run_id = runtime.execute(self.workflow)
-        
+
         assert results["node1"]["result"]["data"] == 1
         assert results["node2"]["result"]["data"] == 2
 
@@ -158,10 +159,10 @@ class TestLocalRuntimeEdgeCases:
         # Add switch to workflow
         switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
         self.workflow.add_node("switch", switch)
-        
+
         # Should detect patterns
         assert self.runtime._has_conditional_patterns(self.workflow) is True
-        
+
         # Empty workflow should have no patterns
         empty_workflow = Workflow("empty", "Empty")
         assert self.runtime._has_conditional_patterns(empty_workflow) is False
@@ -173,10 +174,10 @@ class TestLocalRuntimeEdgeCases:
             code="result = {'injected': 'test'}"
         )
         self.workflow.add_node("node", node)
-        
+
         # Execute
         results, run_id = self.runtime.execute(self.workflow)
-        
+
         assert results["node"]["result"]["injected"] == "test"
 
     def test_phase1_switches_with_dependencies(self):
@@ -185,20 +186,20 @@ class TestLocalRuntimeEdgeCases:
         source = PythonCodeNode(name="source", code="result = {'a': 1, 'b': 2}")
         switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
         switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
-        
+
         self.workflow.add_node("source", source)
         self.workflow.add_node("switch1", switch1)
         self.workflow.add_node("switch2", switch2)
-        
+
         # switch2 depends on switch1 output
         self.workflow.connect("source", "switch1", {"result": "input_data"})
         self.workflow.connect("switch1", "switch2", {"true_output": "input_data"})
-        
+
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # Execute
         results, run_id = runtime.execute(self.workflow)
-        
+
         # Should handle dependencies correctly
         assert "source" in results
         assert "switch1" in results
@@ -207,12 +208,12 @@ class TestLocalRuntimeEdgeCases:
         """Test handling of gateway creation failure."""
         # Create runtime - gateway creation handled internally
         runtime = LocalRuntime()
-        
+
         # Should work normally
         node = PythonCodeNode(name="node", code="result = {'data': 1}")
         workflow = Workflow("test", "Test")
         workflow.add_node("node", node)
-        
+
         results, run_id = runtime.execute(workflow)
         assert results["node"]["result"]["data"] == 1
 
@@ -221,15 +222,15 @@ class TestLocalRuntimeEdgeCases:
         # Create workflow with validation issues
         node1 = PythonCodeNode(name="node1", code="result = {'data': 1}")
         node2 = PythonCodeNode(name="node2", code="result = {'value': input_data}")
-        
+
         self.workflow.add_node("node1", node1)
         self.workflow.add_node("node2", node2)
-        
+
         # Missing connection - node2 expects input_data
         # This might cause validation error in strict mode
-        
+
         strict_runtime = LocalRuntime(connection_validation="strict")
-        
+
         # Execute - behavior depends on validation handling
         try:
             results, run_id = strict_runtime.execute(self.workflow)
@@ -247,10 +248,10 @@ class TestLocalRuntimeEdgeCases:
             code="raise Exception('Test failure')"  # Force failure
         )
         self.workflow.add_node("failing", failing_node)
-        
+
         # Execute - should handle failure
         results, run_id = self.runtime.execute(self.workflow)
-        
+
         # Should have executed and captured the error
         assert "failing" in results
 
@@ -258,7 +259,7 @@ class TestLocalRuntimeEdgeCases:
         """Test execution with custom executor configurations."""
         # Test with custom parameters
         runtime = LocalRuntime(debug=True)
-        
+
         # Create simple workflow
         simple_node = PythonCodeNode(
             name="simple",
@@ -268,7 +269,7 @@ result = {'computed': sum(range(100))}
 """
         )
         self.workflow.add_node("simple", simple_node)
-        
+
         # Should execute successfully
         results, run_id = runtime.execute(self.workflow)
         assert results["simple"]["result"]["computed"] == 4950
@@ -290,10 +291,10 @@ except:
 """
         )
         self.workflow.add_node("context_node", context_node)
-        
+
         # Execute
         results, run_id = self.runtime.execute(self.workflow)
-        
+
         # Node should execute successfully with error handling
         assert results["context_node"]["result"]["value"] == "handled"
 
@@ -303,18 +304,18 @@ except:
         node1 = PythonCodeNode(name="node1", code="result = {'step': 1}")
         node2 = PythonCodeNode(name="node2", code="raise ValueError('Test error')")  # Explicit error
         node3 = PythonCodeNode(name="node3", code="result = {'step': 3}")
-        
+
         self.workflow.add_node("node1", node1)
         self.workflow.add_node("node2", node2)
         self.workflow.add_node("node3", node3)
-        
+
         self.workflow.connect("node1", "node2", {"result": "input"})
         self.workflow.connect("node2", "node3", {"result": "input"})
-        
+
         # Execute - should raise RuntimeExecutionError
         with pytest.raises(RuntimeExecutionError) as exc_info:
             results, run_id = self.runtime.execute(self.workflow)
-        
+
         # Should have error information
         assert "node2" in str(exc_info.value)
         assert "failed" in str(exc_info.value).lower()
@@ -332,7 +333,7 @@ result = {'completed': True}
 """
         )
         self.workflow.add_node("fast_node", fast_node)
-        
+
         # Test execution (signal handling is complex to test)
         # Just verify normal execution works
         results, run_id = self.runtime.execute(self.workflow)

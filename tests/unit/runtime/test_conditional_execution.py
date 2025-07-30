@@ -9,14 +9,15 @@ Tests the integration of conditional execution with LocalRuntime including:
 - Error handling and fallback mechanisms
 """
 
-import pytest
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 import networkx as nx
-from kailash.workflow.graph import Workflow
-from kailash.nodes.logic.operations import SwitchNode, MergeNode
+import pytest
+
 from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.logic.operations import MergeNode, SwitchNode
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow.graph import Workflow
 
 
 class TestLocalRuntimeConditionalExecution:
@@ -29,21 +30,21 @@ class TestLocalRuntimeConditionalExecution:
     def test_runtime_initialization_default(self):
         """Test LocalRuntime initialization with default conditional_execution."""
         runtime = LocalRuntime()
-        
+
         # Default should be "route_data" for backward compatibility
         assert runtime.conditional_execution == "route_data"
 
     def test_runtime_initialization_skip_branches(self):
         """Test LocalRuntime initialization with skip_branches mode."""
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         assert runtime.conditional_execution == "skip_branches"
 
     def test_runtime_initialization_invalid_mode(self):
         """Test LocalRuntime initialization with invalid conditional_execution mode."""
         with pytest.raises(ValueError) as exc_info:
             LocalRuntime(conditional_execution="invalid_mode")
-        
+
         assert "conditional_execution" in str(exc_info.value)
         assert "invalid_mode" in str(exc_info.value)
 
@@ -54,7 +55,7 @@ class TestLocalRuntimeConditionalExecution:
         for mode in valid_modes:
             runtime = LocalRuntime(conditional_execution=mode)
             assert runtime.conditional_execution == mode
-        
+
         # Invalid modes should raise ValueError
         invalid_modes = ["", "invalid", "true", "false", None, 123]
         for mode in invalid_modes:
@@ -72,27 +73,27 @@ class TestLocalRuntimeConditionalExecution:
         )
         true_proc = PythonCodeNode(name="true_proc", code="result = {'branch': 'true'}")
         false_proc = PythonCodeNode(name="false_proc", code="result = {'branch': 'false'}")
-        
+
         self.workflow.add_node("switch1", switch_node)
         self.workflow.add_node("true_proc", true_proc)
         self.workflow.add_node("false_proc", false_proc)
-        
+
         self.workflow.connect("switch1", "true_proc", {"true_output": "input"})
         self.workflow.connect("switch1", "false_proc", {"false_output": "input"})
-        
+
         # Test with default mode (should execute all nodes)
         runtime = LocalRuntime(conditional_execution="route_data")
-        
+
         # Mock the input data
         input_data = {"status": "active"}
-        
+
         results, run_id = runtime.execute(self.workflow, parameters={"switch1": input_data})
-        
+
         # In route_data mode, all nodes should execute (current behavior)
         assert "switch1" in results
         assert "true_proc" in results
         assert "false_proc" in results
-        
+
         # True branch should have data, false branch should have None
         assert results["switch1"]["true_output"] is not None
         assert results["switch1"]["false_output"] is None
@@ -108,11 +109,11 @@ class TestLocalRuntimeConditionalExecution:
             value="active"
         )
         true_proc = PythonCodeNode(name="true_proc", code="result = {'branch': 'true'}")
-        
+
         self.workflow.add_node("switch1", switch_node)
         self.workflow.add_node("true_proc", true_proc)
         self.workflow.connect("switch1", "true_proc", {"true_output": "input"})
-        
+
         # Configure mock to return expected results
         mock_conditional.return_value = (
             {
@@ -121,15 +122,15 @@ class TestLocalRuntimeConditionalExecution:
             },
             "test_run_id"
         )
-        
+
         runtime = LocalRuntime(conditional_execution="skip_branches")
         input_data = {"status": "active"}
-        
+
         results, run_id = runtime.execute(self.workflow, parameters={"switch1": input_data})
-        
+
         # Verify conditional execution was called
         mock_conditional.assert_called_once()
-        
+
         # Verify results structure
         result_dict, run_id = results
         assert "switch1" in result_dict
@@ -145,16 +146,16 @@ class TestLocalRuntimeConditionalExecution:
             value="active"
         )
         true_proc = PythonCodeNode(name="true_proc", code="result = {'branch': 'true'}")
-        
+
         self.workflow.add_node("switch1", switch_node)
         self.workflow.add_node("true_proc", true_proc)
         self.workflow.connect("switch1", "true_proc", {"true_output": "input"})
-        
+
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # Test the method exists and can be called
         assert hasattr(runtime, '_execute_conditional_approach')
-        
+
         # The method should be callable (implementation will be added later)
         try:
             with patch.object(runtime, '_execute_switch_nodes') as mock_switch_exec:
@@ -166,14 +167,14 @@ class TestLocalRuntimeConditionalExecution:
                         "switch1": {"result": {"true_output": {"status": "active"}}},
                         "true_proc": {"result": {"branch": "true"}}
                     }
-                    
+
                     # Test through public interface since private method requires more parameters
                     input_data = {"status": "active"}
                     results, run_id = runtime.execute(
-                        self.workflow, 
+                        self.workflow,
                         parameters={"switch1": input_data}
                     )
-                    
+
                     # Method should exist and be callable
                     assert results is not None
                     assert run_id is not None
@@ -184,41 +185,41 @@ class TestLocalRuntimeConditionalExecution:
     def test_execute_switch_nodes_method_signature(self):
         """Test _execute_switch_nodes method signature and basic behavior."""
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # Test method exists
         assert hasattr(runtime, '_execute_switch_nodes') or True  # Will be implemented
-        
+
         # Method should handle switch node execution in dependency order
         # This is a placeholder test for the method that will be implemented
 
     def test_execute_pruned_plan_method_signature(self):
         """Test _execute_pruned_plan method signature and basic behavior."""
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
-        # Test method exists  
+
+        # Test method exists
         assert hasattr(runtime, '_execute_pruned_plan') or True  # Will be implemented
-        
+
         # Method should execute only nodes in the pruned plan
         # This is a placeholder test for the method that will be implemented
 
     def test_workflow_detection_conditional_vs_regular(self):
         """Test automatic detection of conditional vs regular workflows."""
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # Regular workflow (no switches)
         proc1 = PythonCodeNode(name="proc1", code="result = {'step': 1}")
         proc2 = PythonCodeNode(name="proc2", code="result = {'step': 2}")
-        
+
         regular_workflow = Workflow("regular", "Regular Workflow")
         regular_workflow.add_node("proc1", proc1)
         regular_workflow.add_node("proc2", proc2)
         regular_workflow.connect("proc1", "proc2", {"result": "input"})
-        
+
         # Method to detect conditional patterns should exist
         if hasattr(runtime, '_has_conditional_patterns'):
             has_conditionals = runtime._has_conditional_patterns(regular_workflow)
             assert has_conditionals is False
-        
+
         # Conditional workflow (with switches)
         switch_node = SwitchNode(
             name="switch",
@@ -226,12 +227,12 @@ class TestLocalRuntimeConditionalExecution:
             operator="==",
             value="active"
         )
-        
+
         conditional_workflow = Workflow("conditional", "Conditional Workflow")
         conditional_workflow.add_node("switch1", switch_node)
         conditional_workflow.add_node("proc1", proc1)
         conditional_workflow.connect("switch1", "proc1", {"true_output": "input"})
-        
+
         if hasattr(runtime, '_has_conditional_patterns'):
             has_conditionals = runtime._has_conditional_patterns(conditional_workflow)
             assert has_conditionals is True
@@ -239,10 +240,10 @@ class TestLocalRuntimeConditionalExecution:
     def test_performance_impact_measurement(self):
         """Test performance impact measurement infrastructure."""
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # Should have performance tracking capabilities
         assert hasattr(runtime, '_performance_metrics') or True  # Will be implemented
-        
+
         # Should track execution time differences
         if hasattr(runtime, '_track_performance'):
             # Method should exist for performance tracking
@@ -251,21 +252,21 @@ class TestLocalRuntimeConditionalExecution:
     def test_error_handling_unsupported_patterns(self):
         """Test error handling for unsupported conditional patterns."""
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # Create complex workflow that might not be supported initially
         switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
         switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
-        
+
         self.workflow.add_node("switch1", switch1)
         self.workflow.add_node("switch2", switch2)
-        
+
         # Create circular dependency
         self.workflow.connect("switch1", "switch2", {"true_output": "input"})
         self.workflow.connect("switch2", "switch1", {"true_output": "input"})
-        
+
         # Should have fallback mechanism
         input_data = {"a": 1, "b": 2}
-        
+
         try:
             results, run_id = runtime.execute(self.workflow, parameters={"switch1": input_data})
             # Should either execute successfully or fall back gracefully
@@ -273,13 +274,13 @@ class TestLocalRuntimeConditionalExecution:
         except Exception as e:
             # Should have meaningful error messages
             error_msg = str(e).lower()
-            assert ("conditional" in error_msg or "unsupported" in error_msg or 
+            assert ("conditional" in error_msg or "unsupported" in error_msg or
                    "cycle" in error_msg or "circular" in error_msg)
 
     def test_fallback_to_route_data_behavior(self):
         """Test automatic fallback to route_data behavior for complex patterns."""
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # Create workflow that should trigger fallback
         switch_node = SwitchNode(
             name="complex_switch",
@@ -287,9 +288,9 @@ class TestLocalRuntimeConditionalExecution:
             operator="complex_operation",  # Unsupported operation
             value="complex_value"
         )
-        
+
         self.workflow.add_node("switch1", switch_node)
-        
+
         # Should have fallback detection
         if hasattr(runtime, '_should_fallback_to_route_data'):
             should_fallback = runtime._should_fallback_to_route_data(self.workflow)
@@ -299,10 +300,10 @@ class TestLocalRuntimeConditionalExecution:
     def test_debug_logging_conditional_execution(self):
         """Test debug logging for conditional execution paths."""
         runtime = LocalRuntime(conditional_execution="skip_branches", debug=True)
-        
+
         # Debug mode should provide detailed logging
         assert runtime.debug is True
-        
+
         # Should log execution path decisions
         if hasattr(runtime, '_log_execution_path'):
             assert callable(runtime._log_execution_path)
@@ -315,7 +316,7 @@ class TestLocalRuntimeConditionalExecution:
             debug=True,
             enable_cycles=True
         )
-        
+
         assert runtime.conditional_execution == "skip_branches"
         assert runtime.debug is True
         assert runtime.enable_cycles is True
@@ -323,7 +324,7 @@ class TestLocalRuntimeConditionalExecution:
     def test_parameter_validation_integration(self):
         """Test integration with existing parameter validation."""
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # Should work with existing parameter validation
         switch_node = SwitchNode(
             name="switch",
@@ -331,9 +332,9 @@ class TestLocalRuntimeConditionalExecution:
             operator="==",
             value="active"
         )
-        
+
         self.workflow.add_node("switch1", switch_node)
-        
+
         # Test that parameter validation still works
         try:
             # This should work fine - None is handled gracefully
@@ -342,7 +343,7 @@ class TestLocalRuntimeConditionalExecution:
         except Exception:
             # If it raises an exception, that's also acceptable
             pass
-        
+
         # Test that the runtime validates conditional_execution parameter properly
         with pytest.raises((ValueError, TypeError)):
             LocalRuntime(conditional_execution="invalid_mode")
@@ -353,7 +354,7 @@ class TestLocalRuntimeConditionalExecution:
             conditional_execution="skip_branches",
             enable_cycles=True
         )
-        
+
         # Create cycle with conditional logic
         counter = PythonCodeNode(
             name="counter",
@@ -365,16 +366,16 @@ class TestLocalRuntimeConditionalExecution:
             operator="<",
             value=3
         )
-        
+
         self.workflow.add_node("counter", counter)
         self.workflow.add_node("continue_switch", switch)
-        
+
         # Create cycle
         self.workflow.connect("counter", "continue_switch", {"result": "input"})
         self.workflow.create_cycle("conditional_cycle").connect(
             "continue_switch", "counter", {"true_output": "input"}
         ).max_iterations(5).build()
-        
+
         # Should handle conditional cycles appropriately
         try:
             results, run_id = runtime.execute(self.workflow)
@@ -405,7 +406,7 @@ class TestLocalRuntimeTwoPhaseExecution:
             "switch1": {"result": {"true_output": {"status": "active"}}},
             "true_proc": {"result": {"branch": "true"}}
         }
-        
+
         # Create simple conditional workflow
         switch_node = SwitchNode(
             name="switch",
@@ -414,25 +415,25 @@ class TestLocalRuntimeTwoPhaseExecution:
             value="active"
         )
         true_proc = PythonCodeNode(name="true_proc", code="result = {'branch': 'true'}")
-        
+
         self.workflow.add_node("switch1", switch_node)
         self.workflow.add_node("true_proc", true_proc)
         self.workflow.connect("switch1", "true_proc", {"true_output": "input"})
-        
+
         # Test execution triggers conditional approach
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # Use public interface instead of calling private methods
         try:
             results, _ = runtime.execute(self.workflow)
-            
+
             # Verify execution completed
             assert "switch1" in results
-            
+
             # Both phase methods should be called
             mock_switch.assert_called_once()
             mock_pruned.assert_called_once()
-            
+
         except Exception as e:
             # Skip test if not fully implemented
             self.skipTest(f"Conditional execution not fully implemented: {e}")
@@ -443,15 +444,15 @@ class TestLocalRuntimeTwoPhaseExecution:
         switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
         switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
         switch3 = SwitchNode(name="switch3", condition_field="c", operator="==", value=3)
-        
+
         self.workflow.add_node("switch1", switch1)
         self.workflow.add_node("switch2", switch2)
         self.workflow.add_node("switch3", switch3)
-        
+
         # Create dependencies: switch1 -> switch2 -> switch3
         self.workflow.connect("switch1", "switch2", {"true_output": "input"})
         self.workflow.connect("switch2", "switch3", {"true_output": "input"})
-        
+
         # Should execute switches in dependency order
         if hasattr(self.runtime, '_get_switch_execution_order'):
             order = self.runtime._get_switch_execution_order(self.workflow)
@@ -470,25 +471,25 @@ class TestLocalRuntimeTwoPhaseExecution:
         )
         true_proc = PythonCodeNode(name="true_proc", code="result = {'branch': 'true'}")
         false_proc = PythonCodeNode(name="false_proc", code="result = {'branch': 'false'}")
-        
+
         self.workflow.add_node("switch1", switch_node)
         self.workflow.add_node("true_proc", true_proc)
         self.workflow.add_node("false_proc", false_proc)
-        
+
         self.workflow.connect("switch1", "true_proc", {"true_output": "input"})
         self.workflow.connect("switch1", "false_proc", {"false_output": "input"})
-        
+
         # Test execution plan creation
         if hasattr(self.runtime, '_create_conditional_execution_plan'):
             switch_results = {
                 "switch1": {"true_output": {"status": "active"}, "false_output": None}
             }
-            
+
             plan = self.runtime._create_conditional_execution_plan(
-                self.workflow, 
+                self.workflow,
                 switch_results
             )
-            
+
             # Plan should include switch and true processor only
             assert "switch1" in plan
             assert "true_proc" in plan
@@ -503,23 +504,23 @@ class TestLocalRuntimeTwoPhaseExecution:
             operator="==",
             value="active"
         )
-        
+
         self.workflow.add_node("switch1", switch_node)
-        
+
         # Test Phase 1 failure handling
         if hasattr(self.runtime, '_execute_switch_nodes'):
             try:
                 # Test method exists and has proper error handling
                 assert hasattr(self.runtime, '_execute_conditional_approach')
-                
+
                 # The method should handle errors gracefully in real usage
                 # We test this through the public interface
                 results, run_id = self.runtime.execute(
-                    self.workflow, 
+                    self.workflow,
                     parameters={"switch1": {"status": "active"}}
                 )
                 assert results is not None
-                
+
             except (AttributeError, NotImplementedError, Exception):
                 # Method may have different implementation details
                 pass
@@ -528,7 +529,7 @@ class TestLocalRuntimeTwoPhaseExecution:
         """Test rollback mechanism for partial execution failures."""
         # Test should verify rollback capabilities exist
         assert hasattr(self.runtime, '_rollback_partial_execution') or True
-        
+
         # Rollback should restore previous state on failure
         if hasattr(self.runtime, '_rollback_partial_execution'):
             assert callable(self.runtime._rollback_partial_execution)
@@ -544,10 +545,10 @@ class TestLocalRuntimePerformanceImpact:
     def test_performance_measurement_infrastructure(self):
         """Test performance measurement infrastructure."""
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # Should have performance tracking
         assert hasattr(runtime, '_performance_tracker') or True
-        
+
         # Should measure execution time differences
         if hasattr(runtime, '_measure_execution_time'):
             assert callable(runtime._measure_execution_time)
@@ -566,23 +567,23 @@ class TestLocalRuntimePerformanceImpact:
                 name=f"proc_{i}",
                 code=f"result = {{'proc': {i}}}"
             )
-            
+
             self.workflow.add_node(f"switch_{i}", switch)
             self.workflow.add_node(f"proc_{i}", proc)
             self.workflow.connect(f"switch_{i}", f"proc_{i}", {"true_output": "input"})
-        
+
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # Analysis overhead should be minimal
         if hasattr(runtime, '_measure_analysis_overhead'):
             import time
             start_time = time.time()
-            
+
             # Simulate analysis
             overhead = runtime._measure_analysis_overhead(self.workflow)
-            
+
             analysis_time = time.time() - start_time
-            
+
             # Should complete quickly (< 5% of execution time target)
             assert analysis_time < 1.0  # Should be very fast for 50 nodes
             assert overhead < 0.05 if overhead is not None else True
@@ -590,11 +591,11 @@ class TestLocalRuntimePerformanceImpact:
     def test_memory_usage_optimization(self):
         """Test memory usage optimization."""
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # Should optimize memory usage for large workflows
         if hasattr(runtime, '_optimize_memory_usage'):
             assert callable(runtime._optimize_memory_usage)
-        
+
         # Should use caching efficiently
         if hasattr(runtime, '_execution_plan_cache'):
             assert hasattr(runtime._execution_plan_cache, 'clear')
@@ -608,19 +609,19 @@ class TestLocalRuntimePerformanceImpact:
             operator="==",
             value="active"
         )
-        
+
         self.workflow.add_node("switch1", switch_node)
-        
+
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # First execution should cache results
         input_data = {"status": "active"}
-        
+
         if hasattr(runtime, '_get_cached_execution_plan'):
             # Should have caching mechanism
             plan1 = runtime._get_cached_execution_plan(self.workflow, input_data)
             plan2 = runtime._get_cached_execution_plan(self.workflow, input_data)
-            
+
             # Second call should be faster (cached)
             assert plan1 == plan2 if plan1 is not None else True
 
@@ -640,28 +641,28 @@ class TestLocalRuntimePerformanceImpact:
                     name=f"proc_{i}",
                     code=f"result = {{'proc': {i}}}"
                 )
-            
+
             self.workflow.add_node(f"node_{i}", node)
-            
+
             if i > 0:
                 self.workflow.connect(f"node_{i-1}", f"node_{i}", {"result": "input"})
-        
+
         runtime = LocalRuntime(conditional_execution="skip_branches")
-        
+
         # Should handle large workflows efficiently
         import time
         start_time = time.time()
-        
+
         try:
             # Test workflow analysis
             if hasattr(runtime, '_analyze_workflow_complexity'):
                 complexity = runtime._analyze_workflow_complexity(self.workflow)
-                
+
             execution_time = time.time() - start_time
-            
+
             # Should complete analysis in reasonable time
             assert execution_time < 5.0  # 5 seconds for 100 nodes
-            
+
         except (AttributeError, NotImplementedError):
             # Methods not implemented yet
             pass

@@ -4,12 +4,13 @@ Unit tests for malformed node output validation.
 Tests designed to fail first, then be fixed with minimal implementation.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
+import pytest
+
+from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor, WorkflowState
-from kailash.runtime.local import LocalRuntime
 
 
 class TestMalformedOutputValidation:
@@ -19,17 +20,17 @@ class TestMalformedOutputValidation:
         """Test handling when exit_result is None in cycle termination logic."""
         # This specifically tests the bug on line 882 of cyclic_runner.py
         workflow = WorkflowBuilder()
-        
+
         workflow.add_node("PythonCodeNode", "start", {
             "code": "result = {'counter': 0}"
         })
-        
+
         workflow.add_node("SwitchNode", "condition", {
             "condition_field": "counter",
             "operator": "<",
             "value": 2
         })
-        
+
         # This node will produce None result under certain conditions
         workflow.add_node("PythonCodeNode", "problematic", {
             "code": """
@@ -40,18 +41,18 @@ else:
     result = {'counter': parameters.get('counter', 0) + 1}
 """
         })
-        
+
         workflow.add_connection("start", "result", "condition", "input_data")
         workflow.add_connection("condition", "true_output", "problematic", "parameters")
-        
+
         built_workflow = workflow.build()
         cycle = built_workflow.create_cycle("test_cycle")
         cycle.connect("problematic", "condition", mapping={"result": "input_data"})
         cycle.max_iterations(5)
         cycle.build()
-        
+
         runtime = LocalRuntime()
-        
+
         # This should handle None exit_result gracefully without AttributeError
         try:
             results, run_id = runtime.execute(built_workflow)
@@ -66,11 +67,11 @@ else:
     def test_node_returning_none_in_parameter_mapping(self):
         """Test parameter mapping when a node returns None instead of expected dict."""
         workflow = WorkflowBuilder()
-        
+
         workflow.add_node("PythonCodeNode", "none_source", {
             "code": "result = None"  # This will cause issues in parameter mapping
         })
-        
+
         workflow.add_node("PythonCodeNode", "consumer", {
             "code": """
 # This should handle None parameters gracefully
@@ -80,14 +81,14 @@ else:
     result = {'received_data': parameters}
 """
         })
-        
+
         workflow.add_connection("none_source", "result", "consumer", "parameters")
-        
+
         runtime = LocalRuntime()
-        
+
         # This should not raise 'NoneType' object is not subscriptable
         results, run_id = runtime.execute(workflow.build())
-        
+
         # Consumer should have received None and handled it
         assert "consumer" in results
         consumer_result = results["consumer"]["result"]
@@ -97,10 +98,10 @@ else:
         """Test accessing iteration results that might be None or missing."""
         # Simulate the scenario where iteration_results is None
         executor = CyclicWorkflowExecutor()
-        
+
         # Mock scenario where iteration results are None
         iteration_results = None
-        
+
         # Test that the code can handle None iteration results
         # This tests the logic around line 847-850 in cyclic_runner.py
         try:
@@ -110,7 +111,7 @@ else:
                 condition_result = exit_result.get("condition_result") if exit_result else None
             else:
                 condition_result = None
-            
+
             # Should not raise error
             assert condition_result is None
         except (TypeError, AttributeError) as e:
@@ -119,7 +120,7 @@ else:
     def test_state_node_outputs_none_handling(self):
         """Test when state.node_outputs contains None values."""
         workflow = WorkflowBuilder()
-        
+
         # Create a workflow that might result in None outputs
         workflow.add_node("PythonCodeNode", "conditional_source", {
             "code": """
@@ -131,7 +132,7 @@ else:
     result = {'data': 'valid'}
 """
         })
-        
+
         workflow.add_node("PythonCodeNode", "dependent", {
             "code": """
 # Handle potential None input
@@ -141,14 +142,14 @@ else:
     result = {'status': 'valid_input', 'data': parameters}
 """
         })
-        
+
         workflow.add_connection("conditional_source", "result", "dependent", "parameters")
-        
+
         runtime = LocalRuntime()
-        
+
         # Should handle None values in node outputs gracefully
         results, run_id = runtime.execute(workflow.build())
-        
+
         # Dependent node should handle None input
         assert "dependent" in results
         dependent_result = results["dependent"]["result"]
@@ -157,17 +158,17 @@ else:
     def test_cycle_edge_data_none_mapping(self):
         """Test when cycle edge data or mapping is None/malformed."""
         workflow = WorkflowBuilder()
-        
+
         workflow.add_node("PythonCodeNode", "source", {
             "code": "result = {'value': 1}"
         })
-        
+
         workflow.add_node("SwitchNode", "switch", {
             "condition_field": "value",
             "operator": "<",
             "value": 3
         })
-        
+
         workflow.add_node("PythonCodeNode", "processor", {
             "code": """
 # Handle potentially malformed parameters
@@ -179,21 +180,21 @@ else:
     result = {'value': 1, 'source': 'unknown_type', 'type': str(type(parameters))}
 """
         })
-        
+
         workflow.add_connection("source", "result", "switch", "input_data")
         workflow.add_connection("switch", "true_output", "processor", "parameters")
-        
+
         built_workflow = workflow.build()
         cycle = built_workflow.create_cycle("edge_test")
         cycle.connect("processor", "switch", mapping={"result": "input_data"})
         cycle.max_iterations(3)
         cycle.build()
-        
+
         runtime = LocalRuntime()
-        
+
         # Should handle malformed edge data/mapping gracefully
         results, run_id = runtime.execute(built_workflow)
-        
+
         # Processor should have executed and handled various input types
         assert "processor" in results
         processor_result = results["processor"]["result"]
@@ -202,21 +203,21 @@ else:
 
 class TestCycleStateNoneHandling:
     """Test cases for handling None values in cycle state management."""
-    
+
     def test_cycle_state_with_none_results(self):
         """Test cycle state updates when node results are None."""
         workflow = WorkflowBuilder()
-        
+
         workflow.add_node("PythonCodeNode", "init", {
             "code": "result = {'step': 0}"
         })
-        
+
         workflow.add_node("SwitchNode", "condition", {
-            "condition_field": "step", 
+            "condition_field": "step",
             "operator": "<",
             "value": 3
         })
-        
+
         workflow.add_node("PythonCodeNode", "stepper", {
             "code": """
 step = parameters.get('step', 0) if parameters else 0
@@ -229,18 +230,18 @@ else:
     result = {'step': new_step}
 """
         })
-        
+
         workflow.add_connection("init", "result", "condition", "input_data")
         workflow.add_connection("condition", "true_output", "stepper", "parameters")
-        
+
         built_workflow = workflow.build()
         cycle = built_workflow.create_cycle("state_test")
         cycle.connect("stepper", "condition", mapping={"result": "input_data"})
         cycle.max_iterations(5)
         cycle.build()
-        
+
         runtime = LocalRuntime()
-        
+
         # Should handle None results in cycle state updates
         try:
             results, run_id = runtime.execute(built_workflow)
@@ -255,24 +256,24 @@ else:
     def test_exit_node_none_result_handling(self):
         """Test when exit nodes produce None results during termination."""
         workflow = WorkflowBuilder()
-        
+
         workflow.add_node("PythonCodeNode", "starter", {
             "code": "result = {'count': 0}"
         })
-        
+
         workflow.add_node("SwitchNode", "exit_switch", {
             "condition_field": "count",
-            "operator": "<", 
+            "operator": "<",
             "value": 2
         })
-        
+
         workflow.add_node("PythonCodeNode", "counter", {
             "code": """
 count = parameters.get('count', 0) if parameters else 0
 result = {'count': count + 1}
 """
         })
-        
+
         workflow.add_node("PythonCodeNode", "terminator", {
             "code": """
 # This might receive None when cycle terminates
@@ -282,22 +283,22 @@ else:
     result = {'terminated_with_data': parameters}
 """
         })
-        
+
         workflow.add_connection("starter", "result", "exit_switch", "input_data")
         workflow.add_connection("exit_switch", "true_output", "counter", "parameters")
         workflow.add_connection("exit_switch", "false_output", "terminator", "parameters")
-        
+
         built_workflow = workflow.build()
         cycle = built_workflow.create_cycle("exit_test")
         cycle.connect("counter", "exit_switch", mapping={"result": "input_data"})
         cycle.max_iterations(5)
         cycle.build()
-        
+
         runtime = LocalRuntime()
-        
+
         # Should handle None results from exit nodes gracefully
         results, run_id = runtime.execute(built_workflow)
-        
+
         # Terminator should have executed and handled termination data
         assert "terminator" in results
         terminator_result = results["terminator"]["result"]
