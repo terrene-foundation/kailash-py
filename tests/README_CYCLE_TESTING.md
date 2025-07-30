@@ -20,7 +20,7 @@ This document explains how to properly classify cycle-related tests according to
 def test_cycle_detection_deterministic(self):
     """Test cycle detection without full execution."""
     workflow = create_workflow_with_cycle()
-    
+
     # Test multiple calls return consistent results
     results = [workflow.has_cycles() for _ in range(5)]
     assert all(r == results[0] for r in results)
@@ -44,13 +44,13 @@ def test_simple_cycle_deterministic_execution(self):
     """Test full cycle execution pipeline."""
     workflow = create_cyclic_workflow()
     runtime = LocalRuntime(enable_cycles=True, enable_monitoring=False)
-    
+
     # Execute multiple times to verify determinism
     results = []
     for _ in range(3):
         result, _ = runtime.execute(workflow, task_manager=None)
         results.append(result)
-    
+
     # Verify deterministic behavior
     assert all_results_identical(results)
 ```
@@ -74,7 +74,7 @@ def test_complete_cyclic_data_pipeline(self):
     # Uses real database, files, and full infrastructure
     workflow = build_data_processing_workflow_with_cycles()
     runtime = LocalRuntime()  # Full enterprise features
-    
+
     result, run_id = runtime.execute(workflow)
     verify_database_state(run_id)
     verify_output_files(run_id)
@@ -187,7 +187,7 @@ If tests hang or timeout:
 
 1. **Check Test Classification**: Are you using full execution in a unit test?
 2. **Disable Monitoring**: Use `enable_monitoring=False`
-3. **Disable Task Tracking**: Use `task_manager=None`  
+3. **Disable Task Tracking**: Use `task_manager=None`
 4. **Remove Print Statements**: Avoid I/O during execution
 5. **Check Async Handling**: Ensure proper event loop cleanup
 6. **Move to Higher Tier**: Complex execution may belong in integration/e2e

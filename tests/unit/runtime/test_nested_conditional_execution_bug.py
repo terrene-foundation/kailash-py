@@ -11,15 +11,16 @@ BUG SCENARIO:
 - But intl_premium_processor is incorrectly executing (false_output path)
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock
-import networkx as nx
+from unittest.mock import MagicMock, Mock
 
-from kailash.workflow.graph import Workflow
+import networkx as nx
+import pytest
+
 from kailash.analysis.conditional_branch_analyzer import ConditionalBranchAnalyzer
-from kailash.planning.dynamic_execution_planner import DynamicExecutionPlanner
-from kailash.nodes.logic.operations import SwitchNode
 from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.logic.operations import SwitchNode
+from kailash.planning.dynamic_execution_planner import DynamicExecutionPlanner
+from kailash.workflow.graph import Workflow
 
 
 class TestNestedConditionalExecutionBug:
@@ -30,44 +31,44 @@ class TestNestedConditionalExecutionBug:
         # Create the exact scenario from the validation script
         self.workflow = Mock(spec=Workflow)
         self.workflow.graph = nx.DiGraph()
-        
+
         # Add nodes to graph
         nodes = [
-            "data_source", "user_type_switch", "premium_validator", 
+            "data_source", "user_type_switch", "premium_validator",
             "region_switch", "us_premium_processor", "intl_premium_processor",
             "basic_validator", "basic_processor", "basic_support", "aggregator"
         ]
-        
+
         for node_id in nodes:
             if "switch" in node_id:
                 node_instance = Mock(spec=SwitchNode)
             else:
                 node_instance = Mock(spec=PythonCodeNode)
-            
+
             self.workflow.graph.add_node(node_id, node=node_instance, instance=node_instance)
-        
+
         # Add edges that match the validation script scenario
         edges = [
             # Main flow
             ("data_source", "user_type_switch", {"mapping": {"result": "input"}}),
-            
+
             # Premium branch (true_output from user_type_switch)
             ("user_type_switch", "premium_validator", {"mapping": {"true_output": "input"}}),
             ("premium_validator", "region_switch", {"mapping": {"result": "input"}}),
             ("region_switch", "us_premium_processor", {"mapping": {"true_output": "input"}}),
             ("region_switch", "intl_premium_processor", {"mapping": {"false_output": "input"}}),
-            
-            # Basic branch (false_output from user_type_switch) 
+
+            # Basic branch (false_output from user_type_switch)
             ("user_type_switch", "basic_validator", {"mapping": {"false_output": "input"}}),
             ("basic_validator", "basic_processor", {"mapping": {"result": "input"}}),
             ("basic_processor", "basic_support", {"mapping": {"result": "input"}}),
-            
+
             # Aggregator connections
             ("us_premium_processor", "aggregator", {"mapping": {"result": "premium_input"}}),
             ("intl_premium_processor", "aggregator", {"mapping": {"result": "premium_input"}}),
             ("basic_support", "aggregator", {"mapping": {"result": "basic_input"}}),
         ]
-        
+
         for source, target, edge_data in edges:
             self.workflow.graph.add_edge(source, target, **edge_data)
 
@@ -75,7 +76,7 @@ class TestNestedConditionalExecutionBug:
         """Test that ConditionalBranchAnalyzer correctly identifies SwitchNodes."""
         analyzer = ConditionalBranchAnalyzer(self.workflow)
         switch_nodes = analyzer._find_switch_nodes()
-        
+
         expected_switches = ["user_type_switch", "region_switch"]
         assert set(switch_nodes) == set(expected_switches)
         assert len(switch_nodes) == 2
@@ -84,35 +85,35 @@ class TestNestedConditionalExecutionBug:
         """Test that ConditionalBranchAnalyzer builds correct branch map for nested switches."""
         analyzer = ConditionalBranchAnalyzer(self.workflow)
         branch_map = analyzer._build_branch_map()
-        
+
         # Verify user_type_switch branches
         assert "user_type_switch" in branch_map
         user_branches = branch_map["user_type_switch"]
         assert "true_output" in user_branches
         assert "false_output" in user_branches
-        
+
         # true_output should lead to premium_validator and downstream
         assert "premium_validator" in user_branches["true_output"]
-        
+
         # false_output should lead to basic_validator and downstream
         assert "basic_validator" in user_branches["false_output"]
-        
-        # Verify region_switch branches  
+
+        # Verify region_switch branches
         assert "region_switch" in branch_map
         region_branches = branch_map["region_switch"]
         assert "true_output" in region_branches
         assert "false_output" in region_branches
-        
+
         # true_output should lead to us_premium_processor
         assert "us_premium_processor" in region_branches["true_output"]
-        
+
         # false_output should lead to intl_premium_processor
         assert "intl_premium_processor" in region_branches["false_output"]
 
     def test_get_reachable_nodes_premium_us_scenario(self):
         """Test reachable nodes calculation for Premium US user scenario (the bug case)."""
         analyzer = ConditionalBranchAnalyzer(self.workflow)
-        
+
         # Switch results that represent: Premium user (true) + US region (true)
         switch_results = {
             "user_type_switch": {
@@ -120,13 +121,13 @@ class TestNestedConditionalExecutionBug:
                 "false_output": None  # Basic user - not activated
             },
             "region_switch": {
-                "true_output": {"region": "US"},  # US region - true branch  
+                "true_output": {"region": "US"},  # US region - true branch
                 "false_output": None  # International - not activated
             }
         }
-        
+
         reachable_nodes = analyzer.get_reachable_nodes(switch_results)
-        
+
         # Expected reachable nodes for Premium US scenario
         expected_reachable = {
             "user_type_switch",      # Switch itself
@@ -135,13 +136,13 @@ class TestNestedConditionalExecutionBug:
             "us_premium_processor",  # From region_switch true_output
             "aggregator"             # Downstream from us_premium_processor
         }
-        
+
         # BUG CHECK: intl_premium_processor should NOT be reachable
         assert "intl_premium_processor" not in reachable_nodes, (
             f"BUG: intl_premium_processor should not be reachable in Premium US scenario. "
             f"Reachable nodes: {reachable_nodes}"
         )
-        
+
         # Verify expected nodes are reachable
         for expected_node in expected_reachable:
             assert expected_node in reachable_nodes, (
@@ -152,7 +153,7 @@ class TestNestedConditionalExecutionBug:
     def test_get_reachable_nodes_premium_intl_scenario(self):
         """Test reachable nodes calculation for Premium International user scenario."""
         analyzer = ConditionalBranchAnalyzer(self.workflow)
-        
+
         # Switch results that represent: Premium user (true) + International region (false)
         switch_results = {
             "user_type_switch": {
@@ -164,24 +165,24 @@ class TestNestedConditionalExecutionBug:
                 "false_output": {"region": "international"}  # International - false branch
             }
         }
-        
+
         reachable_nodes = analyzer.get_reachable_nodes(switch_results)
-        
+
         # Expected reachable nodes for Premium International scenario
         expected_reachable = {
             "user_type_switch",         # Switch itself
             "premium_validator",        # From user_type_switch true_output
-            "region_switch",            # Switch itself  
+            "region_switch",            # Switch itself
             "intl_premium_processor",   # From region_switch false_output
             "aggregator"                # Downstream from intl_premium_processor
         }
-        
+
         # us_premium_processor should NOT be reachable
         assert "us_premium_processor" not in reachable_nodes, (
             f"us_premium_processor should not be reachable in Premium International scenario. "
             f"Reachable nodes: {reachable_nodes}"
         )
-        
+
         # Verify expected nodes are reachable
         for expected_node in expected_reachable:
             assert expected_node in reachable_nodes, (
@@ -193,15 +194,15 @@ class TestNestedConditionalExecutionBug:
         """Test that DynamicExecutionPlanner creates correct execution plan."""
         from unittest.mock import patch
         planner = DynamicExecutionPlanner(self.workflow)
-        
+
         # Mock topological sort to return predictable order
         with patch('networkx.topological_sort') as mock_topo:
             mock_topo.return_value = [
                 "data_source", "user_type_switch", "premium_validator", "basic_validator",
-                "region_switch", "us_premium_processor", "intl_premium_processor", 
+                "region_switch", "us_premium_processor", "intl_premium_processor",
                 "basic_processor", "basic_support", "aggregator"
             ]
-            
+
             # Premium US scenario switch results
             switch_results = {
                 "user_type_switch": {
@@ -213,27 +214,27 @@ class TestNestedConditionalExecutionBug:
                     "false_output": None
                 }
             }
-            
+
             execution_plan = planner.create_execution_plan(switch_results)
-            
+
             # BUG CHECK: intl_premium_processor should NOT be in execution plan
             assert "intl_premium_processor" not in execution_plan, (
                 f"BUG: intl_premium_processor should not be in execution plan for Premium US scenario. "
                 f"Execution plan: {execution_plan}"
             )
-            
+
             # Verify expected nodes are in execution plan
             expected_in_plan = [
-                "data_source", "user_type_switch", "premium_validator", 
+                "data_source", "user_type_switch", "premium_validator",
                 "region_switch", "us_premium_processor", "aggregator"
             ]
-            
+
             for expected_node in expected_in_plan:
                 assert expected_node in execution_plan, (
                     f"Expected node {expected_node} should be in execution plan. "
                     f"Execution plan: {execution_plan}"
                 )
-            
+
             # Verify unreachable nodes are NOT in execution plan
             unreachable_nodes = ["basic_validator", "basic_processor", "basic_support"]
             for unreachable_node in unreachable_nodes:
@@ -245,34 +246,34 @@ class TestNestedConditionalExecutionBug:
     def test_execution_plan_validation_passes_for_correct_plan(self):
         """Test that execution plan validation passes for correctly generated plans."""
         planner = DynamicExecutionPlanner(self.workflow)
-        
+
         # Create a correct execution plan manually
         correct_plan = [
-            "data_source", "user_type_switch", "premium_validator", 
+            "data_source", "user_type_switch", "premium_validator",
             "region_switch", "us_premium_processor", "aggregator"
         ]
-        
+
         is_valid, errors = planner.validate_execution_plan(correct_plan)
-        
+
         assert is_valid, f"Correct execution plan should be valid. Errors: {errors}"
         assert len(errors) == 0, f"No validation errors expected. Errors: {errors}"
 
     def test_execution_plan_validation_fails_for_incorrect_plan(self):
         """Test that execution plan validation fails for plans with dependency violations."""
         planner = DynamicExecutionPlanner(self.workflow)
-        
+
         # Create an incorrect execution plan (dependencies out of order)
         incorrect_plan = [
             "aggregator",           # Aggregator before its dependencies - should fail
-            "data_source", 
+            "data_source",
             "user_type_switch"
         ]
-        
+
         is_valid, errors = planner.validate_execution_plan(incorrect_plan)
-        
+
         assert not is_valid, "Incorrect execution plan should be invalid"
         assert len(errors) > 0, "Validation errors expected for incorrect plan"
-        
+
         # Check that dependency violation is detected
         dependency_errors = [err for err in errors if "dependency" in err.lower()]
         assert len(dependency_errors) > 0, f"Dependency errors expected. Errors: {errors}"
@@ -282,19 +283,19 @@ class TestNestedConditionalExecutionBug:
         analyzer = ConditionalBranchAnalyzer(self.workflow)
         switch_nodes = analyzer._find_switch_nodes()
         hierarchy_info = analyzer.analyze_switch_hierarchies(switch_nodes)
-        
+
         # Should detect hierarchical relationship
         assert hierarchy_info["has_hierarchies"], "Should detect switch hierarchies"
         assert hierarchy_info["max_depth"] >= 2, "Should have at least 2 layers of switches"
-        
+
         # Should have execution layers
         layers = hierarchy_info["execution_layers"]
         assert len(layers) >= 2, f"Should have multiple execution layers. Got: {layers}"
-        
+
         # First layer should contain user_type_switch (no dependencies)
         first_layer = layers[0]
         assert "user_type_switch" in first_layer, f"user_type_switch should be in first layer. Got: {first_layer}"
-        
+
         # Second layer should contain region_switch (depends on user_type_switch)
         if len(layers) > 1:
             second_layer = layers[1]
@@ -304,14 +305,14 @@ class TestNestedConditionalExecutionBug:
         """Test handling of empty switch results."""
         analyzer = ConditionalBranchAnalyzer(self.workflow)
         planner = DynamicExecutionPlanner(self.workflow)
-        
+
         # Empty switch results
         empty_results = {}
-        
+
         # Should not crash and should return all nodes
         reachable_nodes = analyzer.get_reachable_nodes(empty_results)
         execution_plan = planner.create_execution_plan(empty_results)
-        
+
         # With no switch results, all nodes should be considered reachable
         assert len(execution_plan) == len(self.workflow.graph.nodes()), (
             "With empty switch results, all nodes should be in execution plan"
@@ -321,17 +322,17 @@ class TestNestedConditionalExecutionBug:
         """Test handling of invalid switch results."""
         analyzer = ConditionalBranchAnalyzer(self.workflow)
         planner = DynamicExecutionPlanner(self.workflow)
-        
+
         # Invalid switch results (None values, missing keys)
         invalid_results = {
             "user_type_switch": None,  # Invalid - should be dict
             "nonexistent_switch": {"true_output": "value"}  # Switch doesn't exist
         }
-        
+
         # Should not crash
         reachable_nodes = analyzer.get_reachable_nodes(invalid_results)
         execution_plan = planner.create_execution_plan(invalid_results)
-        
+
         # Should handle gracefully
         assert isinstance(reachable_nodes, set), "Should return set even with invalid results"
         assert isinstance(execution_plan, list), "Should return list even with invalid results"
@@ -340,7 +341,7 @@ class TestNestedConditionalExecutionBug:
         """Detailed analysis of the exact bug scenario that's happening."""
         from unittest.mock import patch
         analyzer = ConditionalBranchAnalyzer(self.workflow)
-        
+
         # Create the exact switch results from our validation script
         # This represents: user_type='premium' (true) AND region='US' (true)
         switch_results = {
@@ -353,22 +354,22 @@ class TestNestedConditionalExecutionBug:
                 "false_output": None  # International path NOT taken
             }
         }
-        
+
         # Debug: Check branch map construction
         branch_map = analyzer._build_branch_map()
         print(f"DEBUG: Branch map = {branch_map}")
-        
+
         # Check what the analyzer thinks is reachable
         reachable_nodes = analyzer.get_reachable_nodes(switch_results)
         print(f"DEBUG: Reachable nodes = {reachable_nodes}")
-        
+
         # BUG CHECK: intl_premium_processor should NOT be reachable
         # This test will fail if the bug exists
         if "intl_premium_processor" in reachable_nodes:
             # Print debug information to understand why
             region_branches = branch_map.get("region_switch", {})
             print(f"DEBUG: region_switch branches = {region_branches}")
-            
+
             # Check which output ports are being activated
             for switch_id, port_results in switch_results.items():
                 print(f"DEBUG: Switch {switch_id} port results = {port_results}")
@@ -377,7 +378,7 @@ class TestNestedConditionalExecutionBug:
                     for port, result in port_results.items():
                         if result is not None:
                             print(f"DEBUG: Port {port} activated -> leads to {switch_branches.get(port, 'NONE')}")
-        
+
         # The failing assertion - this should pass but currently fails due to the bug
         assert "intl_premium_processor" not in reachable_nodes, (
             f"BUG REPRODUCED: intl_premium_processor should not be reachable when region=US (true_output). "

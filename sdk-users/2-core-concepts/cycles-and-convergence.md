@@ -1,6 +1,6 @@
 # Cycles and Convergence - Production Ready ✅
 
-**Status**: ✅ **Production Ready** (v0.9.0+)  
+**Status**: ✅ **Production Ready** (v0.9.0+)
 **Critical Fixes**: TODO-128 cycle convergence issues resolved (2025-01-29)
 
 Kailash SDK provides robust support for cyclic workflows with reliable convergence, natural termination, and optimal performance.
@@ -87,7 +87,7 @@ workflow.add_node("SwitchNode", "primary_switch", {
 })
 
 workflow.add_node("SwitchNode", "secondary_switch", {
-    "condition_field": "value_b", 
+    "condition_field": "value_b",
     "operator": "<",
     "value": 35
 })
@@ -188,7 +188,7 @@ print(f"Accumulated: {results['accumulator']['result']['accumulated']}")
 
 ### Phase 2: Iterative Execution
 - **Deterministic execution**: Each node executes exactly once per iteration
-- **Parameter propagation**: 
+- **Parameter propagation**:
   - Cycle edges use previous iteration results (feedback)
   - Non-cycle edges use current iteration results (fresh data)
   - Fallback to cached state for DAG compatibility
@@ -207,7 +207,7 @@ print(f"Accumulated: {results['accumulator']['result']['accumulated']}")
 
 ### Benchmarks
 - **Small cycles** (2-3 nodes): < 1ms overhead per iteration
-- **Medium cycles** (5-10 nodes): < 5ms overhead per iteration  
+- **Medium cycles** (5-10 nodes): < 5ms overhead per iteration
 - **Large cycles** (20+ nodes): Linear scaling with node count
 - **Parameter propagation**: O(1) access time with intelligent caching
 
@@ -230,10 +230,10 @@ def convergence_check(iteration_results, previous_results):
     """Return True when cycle should terminate."""
     if not previous_results:
         return False
-    
+
     current_value = iteration_results.get('processor', {}).get('result', {}).get('value', 0)
     previous_value = previous_results.get('processor', {}).get('result', {}).get('value', 0)
-    
+
     # Terminate when value stops changing
     return abs(current_value - previous_value) < 0.001
 
@@ -288,7 +288,7 @@ result = {
 
 workflow.add_node("SwitchNode", "terminator", {
     "condition_field": "should_continue",
-    "operator": "==", 
+    "operator": "==",
     "value": True
 })
 ```
@@ -320,7 +320,7 @@ workflow.add_node("SwitchNode", "primary_condition", {
 })
 
 workflow.add_node("SwitchNode", "secondary_condition", {
-    "condition_field": "score", 
+    "condition_field": "score",
     "operator": ">",
     "value": 75
 })
@@ -354,14 +354,14 @@ pytest tests/e2e/workflows/ -k "cycle" -v
 
 ## 🎉 Success Stories
 
-**Before TODO-128 fixes**: 
+**Before TODO-128 fixes**:
 - Non-deterministic results (same test, different outputs)
 - Double node execution (2x performance overhead)
 - Cycles running to max_iterations instead of natural termination
 
 **After TODO-128 fixes**:
 - ✅ 100% deterministic execution
-- ✅ 50% performance improvement  
+- ✅ 50% performance improvement
 - ✅ Natural termination when conditions change
 - ✅ Originally failing tests now PASS consistently
 
@@ -376,5 +376,5 @@ pytest tests/e2e/workflows/ -k "cycle" -v
 - **[Performance Guide](../3-development/performance-optimization.md)** - Optimization techniques
 - **[Troubleshooting](../3-development/05-troubleshooting.md)** - Common cycle issues and solutions
 
-**Created**: 2025-01-29  
+**Created**: 2025-01-29
 **Status**: Production Ready (v0.9.0+)

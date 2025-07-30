@@ -8,7 +8,7 @@ Conditional execution in Kailash SDK allows workflows to skip unreachable branch
 ## Key Benefits
 
 - **20-50% Performance Improvement**: Skip unnecessary node execution
-- **Industry-Standard Behavior**: True if/else conditional execution 
+- **Industry-Standard Behavior**: True if/else conditional execution
 - **Backward Compatible**: Opt-in feature, existing workflows unchanged
 - **Production Ready**: Comprehensive error handling and monitoring
 
@@ -33,11 +33,11 @@ workflow.add_node("PythonCodeNode", "data_source", {
 # Add conditional switch
 workflow.add_node("SwitchNode", "user_type_switch", {
     "condition_field": "user_type",
-    "operator": "==", 
+    "operator": "==",
     "value": "premium"
 })
 
-# Add conditional processors  
+# Add conditional processors
 workflow.add_node("PythonCodeNode", "premium_processor", {
     "code": "result = {'discount': 30, 'features': ['all'], 'priority': 'high'}"
 })
@@ -117,7 +117,7 @@ When workflows contain multiple interdependent switches, the SDK now automatical
 
 **Key Benefits**:
 - **Parallel execution** within layers
-- **Dependency-aware** execution order  
+- **Dependency-aware** execution order
 - **Automatic optimization** for 2+ dependent switches
 - **15-30% performance gain** for complex conditionals
 
@@ -160,7 +160,7 @@ workflow.add_node("SwitchNode", "type_switch", {
 
 # Second level: Region check (only for premium users)
 workflow.add_node("SwitchNode", "region_switch", {
-    "condition_field": "region", 
+    "condition_field": "region",
     "operator": "==",
     "value": "US"
 })
@@ -168,7 +168,7 @@ workflow.add_node("SwitchNode", "region_switch", {
 # Third level: Status check (only for US premium users)
 workflow.add_node("SwitchNode", "status_switch", {
     "condition_field": "status",
-    "operator": "==", 
+    "operator": "==",
     "value": "active"
 })
 
@@ -182,7 +182,7 @@ workflow.add_node("PythonCodeNode", "us_premium_inactive", {
 })
 
 workflow.add_node("PythonCodeNode", "intl_premium", {
-    "code": "result = {'discount': 15, 'priority': 'high'}"  
+    "code": "result = {'discount': 15, 'priority': 'high'}"
 })
 
 workflow.add_node("PythonCodeNode", "basic_user", {
@@ -196,7 +196,7 @@ workflow.add_connection("data_source", "result", "type_switch", "input_data")
 workflow.add_connection("type_switch", "true_output", "region_switch", "input_data")
 workflow.add_connection("type_switch", "false_output", "basic_user", "input")
 
-# US premium path  
+# US premium path
 workflow.add_connection("region_switch", "true_output", "status_switch", "input_data")
 workflow.add_connection("region_switch", "false_output", "intl_premium", "input")
 
@@ -232,11 +232,11 @@ for branch in ["a", "b", "c"]:
         "operator": "==",
         "value": True
     })
-    
+
     workflow.add_node("PythonCodeNode", f"processor_{branch}", {
         "code": f"result = {{'data_{branch}': 'processed_{branch}', 'value_{branch}': {ord(branch) * 100}}}"
     })
-    
+
     # Connect each branch
     workflow.add_connection("data_source", "result", f"switch_{branch}", "input_data")
     workflow.add_connection(f"switch_{branch}", "true_output", f"processor_{branch}", "input")
@@ -299,17 +299,17 @@ workflow.add_node("DataSourceNode", "data_source", {
 # Create 10 feature processors, but only 3 will execute
 for i in range(10):
     feature_name = f"feature_{i}"
-    
+
     workflow.add_node("SwitchNode", f"feature_{i}_switch", {
         "condition_field": "feature_flags",
         "operator": "contains",
         "value": feature_name
     })
-    
+
     workflow.add_node("PythonCodeNode", f"feature_{i}_processor", {
         "code": f"result = {{'feature': '{feature_name}', 'processed': True, 'value': {i * 10}}}"
     })
-    
+
     workflow.add_connection("data_source", "result", f"feature_{i}_switch", "input_data")
     workflow.add_connection(f"feature_{i}_switch", "true_output", f"feature_{i}_processor", "input")
 
@@ -348,7 +348,7 @@ print(f"Cache hit rate: {diagnostics['cache_statistics']['hit_rate']:.2%}")
 # ✅ GOOD: Clear conditional structure
 workflow.add_node("SwitchNode", "user_check", {
     "condition_field": "user_type",
-    "operator": "==", 
+    "operator": "==",
     "value": "premium"
 })
 
@@ -364,7 +364,7 @@ workflow.add_node("PythonCodeNode", "complex_logic", {
 # Supported operators for optimal conditional execution:
 operators = [
     "==", "!=",           # Equality
-    "<", "<=", ">", ">=", # Comparison  
+    "<", "<=", ">", ">=", # Comparison
     "contains", "in",     # Membership
     "is_null", "is_not_null"  # Null checks
 ]
@@ -418,7 +418,7 @@ results, run_id = runtime.execute(workflow.build())
 
 **Causes & Solutions**:
 ```python
-# Cause: Logic depends on None values from skipped branches  
+# Cause: Logic depends on None values from skipped branches
 # Solution: Use explicit conditional logic instead
 
 # ❌ PROBLEMATIC: Depends on None propagation
@@ -470,7 +470,7 @@ baseline_nodes = len(results_baseline)
 ```python
 # Test with conditional execution
 runtime_conditional = LocalRuntime(conditional_execution="skip_branches")
-start_time = time.time() 
+start_time = time.time()
 results_conditional, _ = runtime_conditional.execute(workflow.build())
 conditional_time = time.time() - start_time
 conditional_nodes = len(results_conditional)
@@ -523,7 +523,7 @@ LocalRuntime(
 # Get execution analytics
 analytics = runtime.get_execution_analytics()
 
-# Get health diagnostics  
+# Get health diagnostics
 diagnostics = runtime.get_health_diagnostics()
 
 # Optimize runtime performance
