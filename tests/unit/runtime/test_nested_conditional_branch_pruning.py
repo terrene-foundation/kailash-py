@@ -408,7 +408,7 @@ class TestNestedConditionalBranchPruning:
 
         # The current implementation considers switches connected through other nodes as independent
         # This is because there's no direct switch->switch edge
-        assert hierarchy_info["has_hierarchies"] == False
+        assert not hierarchy_info["has_hierarchies"]
         assert hierarchy_info["max_depth"] >= 1
 
         # Both switches should be identified

@@ -199,7 +199,7 @@ result = {{
             len(executed_processors) == 10
         )  # All processors executed in route_data mode
 
-        print(f"Small workflow (10 branches):")
+        print("Small workflow (10 branches):")
         print(
             f"  Route data: {route_data['avg_time']:.3f}s ± {route_data['std_time']:.3f}s"
         )
@@ -238,7 +238,7 @@ result = {{
             assert improvement > 10  # At least 10% improvement
             print(f"Performance improvement: {improvement:.1f}%")
 
-        print(f"Medium workflow (50 branches):")
+        print("Medium workflow (50 branches):")
         print(
             f"  Route data: {route_data['avg_time']:.3f}s ± {route_data['std_time']:.3f}s"
         )
@@ -279,7 +279,7 @@ result = {{
             assert improvement > 15  # At least 15% improvement for large workflows
             print(f"Large workflow performance improvement: {improvement:.1f}%")
 
-        print(f"Large workflow (100 branches):")
+        print("Large workflow (100 branches):")
         print(
             f"  Route data: {route_data['avg_time']:.3f}s ± {route_data['std_time']:.3f}s"
         )
@@ -433,7 +433,7 @@ result = {{
             memory_savings = ((route_memory - skip_memory) / route_memory) * 100
             assert memory_savings > 20  # At least 20% memory savings
 
-            print(f"Memory efficiency test:")
+            print("Memory efficiency test:")
             print(f"  Route data memory: {route_memory:.1f}MB")
             print(f"  Skip branches memory: {skip_memory:.1f}MB")
             print(f"  Memory savings: {memory_savings:.1f}%")
@@ -681,7 +681,7 @@ result = {'shipping_labels': shipping_labels, 'region': 'EU'}
         orders_per_second_route = 100 / route_data["avg_time"]
         orders_per_second_skip = 100 / skip_branches["avg_time"]
 
-        print(f"Real-world e-commerce processing performance:")
+        print("Real-world e-commerce processing performance:")
         print(
             f"  Route data: {route_data['avg_time']:.3f}s ({orders_per_second_route:.0f} orders/sec)"
         )
@@ -755,7 +755,7 @@ result = {'shipping_labels': shipping_labels, 'region': 'EU'}
             # Performance comparison
             if skip_avg < baseline_avg:
                 improvement = ((baseline_avg - skip_avg) / baseline_avg) * 100
-                print(f"Performance regression test:")
+                print("Performance regression test:")
                 print(
                     f"  Baseline (route_data): {baseline_avg:.3f}s ± {baseline_std:.3f}s"
                 )
@@ -766,7 +766,7 @@ result = {'shipping_labels': shipping_labels, 'region': 'EU'}
                 assert improvement > 5  # At least 5% improvement
 
         except NotImplementedError:
-            print(f"Performance regression baseline established:")
+            print("Performance regression baseline established:")
             print(f"  Route data: {baseline_avg:.3f}s ± {baseline_std:.3f}s")
             print(f"  Max acceptable: {max_acceptable_time:.3f}s")
 
@@ -784,13 +784,13 @@ class TestConditionalExecutionBenchmarks:
         skip_branches = benchmark_results["skip_branches"]
 
         # Performance metrics
-        report += f"Performance Metrics:\n"
-        report += f"  Route Data Mode:\n"
+        report += "Performance Metrics:\n"
+        report += "  Route Data Mode:\n"
         report += f"    Average time: {route_data['avg_time']:.3f}s\n"
         report += f"    Std deviation: {route_data['std_time']:.3f}s\n"
         report += f"    Memory usage: {route_data['avg_memory']:.1f}MB\n"
 
-        report += f"  Skip Branches Mode:\n"
+        report += "  Skip Branches Mode:\n"
         report += f"    Average time: {skip_branches['avg_time']:.3f}s\n"
         report += f"    Std deviation: {skip_branches['std_time']:.3f}s\n"
         report += f"    Memory usage: {skip_branches['avg_memory']:.1f}MB\n"
@@ -884,7 +884,7 @@ class TestConditionalExecutionBenchmarks:
 
         if improvements:
             avg_improvement = mean(improvements)
-            print(f"\nOverall Performance Summary:")
+            print("\nOverall Performance Summary:")
             print(f"  Average performance improvement: {avg_improvement:.1f}%")
             print(
                 f"  Consistent improvement across all test sizes: {len(improvements) == len(benchmark_results)}"

@@ -306,7 +306,7 @@ class TestConditionalBranchAnalyzer:
         assert "single_switch" in patterns
         assert patterns["single_switch"] == ["switch1"]
         assert patterns["total_switches"] == 1
-        assert patterns["has_cycles"] == False
+        assert not patterns["has_cycles"]
 
     def test_detect_conditional_patterns_multiple(self):
         """Test detect_conditional_patterns with multiple switches."""
@@ -343,7 +343,7 @@ class TestConditionalBranchAnalyzer:
 
         patterns = self.analyzer.detect_conditional_patterns()
 
-        assert patterns["has_cycles"] == True
+        assert patterns["has_cycles"]
         assert "cyclic_conditional" in patterns
 
     def test_detect_conditional_patterns_with_merge(self):
@@ -469,7 +469,7 @@ class TestConditionalBranchAnalyzerEdgeCases:
 
         patterns = analyzer.detect_conditional_patterns()
 
-        assert patterns["has_cycles"] == True
+        assert patterns["has_cycles"]
         assert "circular_switches" in patterns
 
     def test_complex_merge_scenarios(self):

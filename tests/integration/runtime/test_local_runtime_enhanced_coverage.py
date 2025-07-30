@@ -141,18 +141,21 @@ class TestSecretAndParameterHandling:
         # Mock the method since the infrastructure doesn't store actual node instances
         runtime = LocalRuntime()
         workflow = Workflow("test", "Test")
-        
+
         # Add a dummy node
         from kailash.nodes.code.python import PythonCodeNode
-        workflow.add_node("secret_node", PythonCodeNode(name="secret_node", code="result = 'test'"))
+
+        workflow.add_node(
+            "secret_node", PythonCodeNode(name="secret_node", code="result = 'test'")
+        )
 
         # Mock the method directly to return the expected requirements
         original_method = runtime._extract_secret_requirements
         runtime._extract_secret_requirements = lambda w: ["API_KEY", "DB_PASSWORD"]
-        
+
         requirements = runtime._extract_secret_requirements(workflow)
         assert requirements == ["API_KEY", "DB_PASSWORD"]
-        
+
         # Restore original method
         runtime._extract_secret_requirements = original_method
 
@@ -163,16 +166,25 @@ class TestSecretAndParameterHandling:
 
         # Add dummy nodes
         from kailash.nodes.code.python import PythonCodeNode
-        workflow.add_node("node1", PythonCodeNode(name="node1", code="result = 'test1'"))
-        workflow.add_node("node2", PythonCodeNode(name="node2", code="result = 'test2'"))
+
+        workflow.add_node(
+            "node1", PythonCodeNode(name="node1", code="result = 'test1'")
+        )
+        workflow.add_node(
+            "node2", PythonCodeNode(name="node2", code="result = 'test2'")
+        )
 
         # Mock the method to return expected requirements
         original_method = runtime._extract_secret_requirements
-        runtime._extract_secret_requirements = lambda w: ["API_KEY", "DB_PASSWORD", "OAUTH_TOKEN"]
-        
+        runtime._extract_secret_requirements = lambda w: [
+            "API_KEY",
+            "DB_PASSWORD",
+            "OAUTH_TOKEN",
+        ]
+
         requirements = runtime._extract_secret_requirements(workflow)
         assert set(requirements) == {"API_KEY", "DB_PASSWORD", "OAUTH_TOKEN"}
-        
+
         # Restore original method
         runtime._extract_secret_requirements = original_method
 
@@ -196,11 +208,16 @@ class TestSecretAndParameterHandling:
         """Test _separate_parameter_formats method."""
         runtime = LocalRuntime()
         workflow = Workflow("test", "Test")
-        
+
         # Add nodes to workflow
         from kailash.nodes.code.python import PythonCodeNode
-        workflow.add_node("node1", PythonCodeNode(name="node1", code="result = 'test1'"))
-        workflow.add_node("node2", PythonCodeNode(name="node2", code="result = 'test2'"))
+
+        workflow.add_node(
+            "node1", PythonCodeNode(name="node1", code="result = 'test1'")
+        )
+        workflow.add_node(
+            "node2", PythonCodeNode(name="node2", code="result = 'test2'")
+        )
 
         # Test with mixed formats
         parameters = {
@@ -209,7 +226,9 @@ class TestSecretAndParameterHandling:
             "node2": {"param2": "value2"},  # Node-specific
         }
 
-        node_specific, global_params = runtime._separate_parameter_formats(parameters, workflow)
+        node_specific, global_params = runtime._separate_parameter_formats(
+            parameters, workflow
+        )
 
         assert node_specific == {
             "node1": {"param1": "value1"},
@@ -227,10 +246,15 @@ class TestSecretAndParameterHandling:
 
         # Test node-specific format (dict with dict values and node-like keys)
         assert runtime._is_node_specific_format({"node1": {"param": "value"}}) is True
-        assert runtime._is_node_specific_format({"node_1": {"p1": 1}, "node_2": {"p2": 2}}) is True
+        assert (
+            runtime._is_node_specific_format({"node_1": {"p1": 1}, "node_2": {"p2": 2}})
+            is True
+        )
 
         # Test empty parameters
-        assert runtime._is_node_specific_format({}) is True  # Empty is considered node-specific
+        assert (
+            runtime._is_node_specific_format({}) is True
+        )  # Empty is considered node-specific
 
 
 class TestWorkflowValidation:
@@ -283,9 +307,10 @@ class TestWorkflowValidation:
         """Test _should_stop_on_error method."""
         runtime = LocalRuntime()
         workflow = Workflow("test", "Test")
-        
+
         # Add a node to the workflow
         from kailash.nodes.code.python import PythonCodeNode
+
         workflow.add_node("node1", PythonCodeNode(name="node1", code="result = 'test'"))
 
         # Test basic behavior - node with no dependents should return False
@@ -435,7 +460,8 @@ class TestConditionalExecution:
         mock_workflow.has_cycles.return_value = False
         # This should still return False due to mock causing ConditionalBranchAnalyzer to fail
         assert (
-            runtime._validate_conditional_execution_prerequisites(mock_workflow) is False
+            runtime._validate_conditional_execution_prerequisites(mock_workflow)
+            is False
         )
 
     def test_validate_switch_results_valid(self):
@@ -495,19 +521,19 @@ class TestConditionalExecution:
         # Test with route_data mode
         runtime.conditional_execution = "route_data"
         assert (
-            runtime._should_skip_conditional_node(workflow, "node1", {"input": "value"}) is False
+            runtime._should_skip_conditional_node(workflow, "node1", {"input": "value"})
+            is False
         )
 
         # Test with skip_branches mode - node with inputs
         runtime.conditional_execution = "skip_branches"
         assert (
-            runtime._should_skip_conditional_node(workflow, "node1", {"input": "value"}) is False
+            runtime._should_skip_conditional_node(workflow, "node1", {"input": "value"})
+            is False
         )
 
         # Test with skip_branches mode - node with no inputs (returns False in current implementation)
-        assert (
-            runtime._should_skip_conditional_node(workflow, "node3", {}) is False
-        )
+        assert runtime._should_skip_conditional_node(workflow, "node3", {}) is False
 
 
 class TestPerformanceAndAnalytics:
@@ -527,7 +553,7 @@ class TestPerformanceAndAnalytics:
 
         # Add performance_metrics attribute for the method to use
         runtime._performance_metrics = {}
-        
+
         # Track performance
         runtime._track_conditional_execution_performance(results, workflow)
 
@@ -556,7 +582,7 @@ class TestPerformanceAndAnalytics:
         runtime = LocalRuntime()
         workflow = Workflow("test", "Test")
         workflow.name = "test_workflow"
-        
+
         # Initialize fallback_metrics for the method to use
         runtime._fallback_metrics = {}
 
@@ -565,7 +591,7 @@ class TestPerformanceAndAnalytics:
         # Check fallback metrics (implementation uses fallback_usage list)
         assert "fallback_usage" in runtime._fallback_metrics
         assert len(runtime._fallback_metrics["fallback_usage"]) == 1
-        
+
         fallback_entry = runtime._fallback_metrics["fallback_usage"][0]
         assert fallback_entry["workflow_name"] == "test_workflow"
         assert fallback_entry["error_message"] == "Test error"
@@ -579,7 +605,7 @@ class TestPerformanceAndAnalytics:
         switch_results = {"switch1": {"true_output": {"data": 1}}}
 
         # Patch the DynamicExecutionPlanner class constructor
-        with patch('kailash.planning.DynamicExecutionPlanner') as mock_planner_class:
+        with patch("kailash.planning.DynamicExecutionPlanner") as mock_planner_class:
             mock_instance = Mock()
             mock_instance.create_execution_plan.return_value = ["node1", "node2"]
             mock_planner_class.return_value = mock_instance
@@ -646,7 +672,13 @@ class TestPerformanceAndAnalytics:
         workflow.name = "test_workflow"
         workflow.workflow_id = "test_workflow_id"
         workflow.graph = Mock()
-        workflow.graph.nodes = ["node1", "node2", "node3", "node4", "node5"]  # Mock nodes list
+        workflow.graph.nodes = [
+            "node1",
+            "node2",
+            "node3",
+            "node4",
+            "node5",
+        ]  # Mock nodes list
 
         runtime.record_execution_performance(
             workflow=workflow,
@@ -663,7 +695,9 @@ class TestPerformanceAndAnalytics:
         assert perf["execution_time"] == 1.5
         assert perf["executed_nodes"] == 10  # Implementation uses "executed_nodes"
         assert perf["total_nodes"] == 5  # Length of mock nodes list
-        assert perf["used_conditional_execution"] is True  # Implementation uses "used_conditional_execution"
+        assert (
+            perf["used_conditional_execution"] is True
+        )  # Implementation uses "used_conditional_execution"
         assert perf["performance_improvement"] == 0.25
         assert "timestamp" in perf
         assert "nodes_per_second" in perf
@@ -766,7 +800,7 @@ class TestHealthAndOptimization:
         assert isinstance(should_switch, bool)
         assert isinstance(new_mode, str)
         assert isinstance(reason, str)
-        
+
         # new_mode should be a valid mode or an informational message
         assert new_mode in ["route_data", "skip_branches"] or "data" in new_mode.lower()
 
@@ -861,13 +895,13 @@ class TestValidationAndErrorHandling:
     def test_prepare_node_inputs(self):
         """Test _prepare_node_inputs method."""
         runtime = LocalRuntime()
-        
+
         # Create a mock workflow and node
         workflow = Mock()
         workflow.graph = Mock()
         workflow.graph.in_edges.return_value = []
         workflow.connections = []  # Add connections as empty list
-        
+
         node_instance = Mock()
         node_outputs = {"prev_node": {"result": {"data": "value"}}}
         parameters = {"param1": "value1", "param2": "value2"}
@@ -917,7 +951,9 @@ class TestValidationAndErrorHandling:
         workflow.add_node("node2", node2)
         workflow.connect("node1", "node2", {"result": "input"})
 
-        context = runtime._build_connection_context("node2", workflow, {"param": "value"})
+        context = runtime._build_connection_context(
+            "node2", workflow, {"param": "value"}
+        )
 
         assert context is not None
         assert context.source_node == "node1"
@@ -938,7 +974,7 @@ class TestValidationAndErrorHandling:
     def test_validate_connection_contracts_warn(self):
         """Test _validate_connection_contracts with warn mode."""
         runtime = LocalRuntime(connection_validation="warn")
-        
+
         # Create a real workflow to test contract validation
         workflow = Workflow("test", "Test")
         node1 = PythonCodeNode(name="node1", code="result = {'data': 1}")
@@ -949,14 +985,17 @@ class TestValidationAndErrorHandling:
 
         # In warn mode, should return errors but not raise
         errors = runtime._validate_connection_contracts(
-            workflow, "node2", {"input": {"data": 1}}, {"node1": {"result": {"data": 1}}}
+            workflow,
+            "node2",
+            {"input": {"data": 1}},
+            {"node1": {"result": {"data": 1}}},
         )
         assert isinstance(errors, list)
 
     def test_validate_connection_contracts_strict(self):
         """Test _validate_connection_contracts with strict mode."""
         runtime = LocalRuntime(connection_validation="strict")
-        
+
         # Create a workflow
         workflow = Workflow("test", "Test")
         node1 = PythonCodeNode(name="node1", code="result = {'data': 1}")
@@ -967,7 +1006,10 @@ class TestValidationAndErrorHandling:
 
         # In strict mode, contract validation will check data types and compatibility
         errors = runtime._validate_connection_contracts(
-            workflow, "node2", {"input": {"data": 1}}, {"node1": {"result": {"data": 1}}}
+            workflow,
+            "node2",
+            {"input": {"data": 1}},
+            {"node1": {"result": {"data": 1}}},
         )
         # Should return a list (empty if no validation errors)
         assert isinstance(errors, list)
@@ -1015,7 +1057,7 @@ class TestMetricsAndReporting:
 
         # Check if we get a status message or actual report
         assert isinstance(report, dict)
-        
+
         # If monitoring is not initialized, we get a status message
         if "status" in report:
             assert report["status"] == "Performance monitoring not initialized"
@@ -1097,16 +1139,16 @@ class TestEdgeCasesAndIntegration:
 
         # Create cyclic workflow
         workflow = Workflow("test", "Test")
-        node = PythonCodeNode(
-            name="counter", code="result = {'count': count + 1}"
-        )
+        node = PythonCodeNode(name="counter", code="result = {'count': count + 1}")
         workflow.add_node("counter", node)
         workflow.create_cycle("test_cycle").connect(
             "counter", "counter", {"result.count": "count"}
         ).max_iterations(3).build()
 
         # Execute through the public interface which handles cycles properly
-        results, run_id = await runtime.execute_async(workflow, parameters={"counter": {"count": 0}})
+        results, run_id = await runtime.execute_async(
+            workflow, parameters={"counter": {"count": 0}}
+        )
 
         assert "counter" in results
         # The counter should have executed multiple times due to the cycle

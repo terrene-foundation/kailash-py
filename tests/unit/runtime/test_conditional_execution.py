@@ -9,7 +9,7 @@ Tests the integration of conditional execution with LocalRuntime including:
 - Error handling and fallback mechanisms
 """
 
-from unittest.mock import MagicMock, Mock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import networkx as nx
 import pytest
@@ -115,8 +115,9 @@ class TestLocalRuntimeConditionalExecution:
         input_data = {"status": "active"}
 
         # Capture log messages to verify conditional execution path
-        import logging
         import io
+        import logging
+
         log_capture = io.StringIO()
         handler = logging.StreamHandler(log_capture)
         logger = logging.getLogger("kailash.runtime.local")
@@ -130,7 +131,10 @@ class TestLocalRuntimeConditionalExecution:
 
             # Verify conditional execution was triggered by checking log messages
             log_output = log_capture.getvalue()
-            assert "Conditional workflow detected, using conditional execution optimization" in log_output
+            assert (
+                "Conditional workflow detected, using conditional execution optimization"
+                in log_output
+            )
             assert "Starting conditional execution approach" in log_output
             assert "Phase 1: Executing SwitchNodes" in log_output
             assert "Phase 2: Creating and executing pruned plan" in log_output

@@ -339,7 +339,9 @@ class TestNestedConditionalExecutionBug:
         hierarchy_info = analyzer.analyze_switch_hierarchies(switch_nodes)
 
         # Current implementation considers switches connected through other nodes as independent
-        assert not hierarchy_info["has_hierarchies"], "Switches connected through other nodes are considered independent"
+        assert not hierarchy_info[
+            "has_hierarchies"
+        ], "Switches connected through other nodes are considered independent"
         assert (
             hierarchy_info["max_depth"] >= 1
         ), "Should have at least 1 layer of switches"
