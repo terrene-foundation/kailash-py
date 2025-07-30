@@ -53,7 +53,9 @@ class TestDynamicExecutionPlannerAdvancedMethods:
         """Test _get_always_reachable_nodes with switches present."""
         # Create workflow with source -> switch -> processor
         source = PythonCodeNode(name="source", code="result = {'data': 'test'}")
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         proc = PythonCodeNode(name="proc", code="result = {'step': 1}")
 
         self.workflow.add_node("source", source)
@@ -78,18 +80,24 @@ class TestDynamicExecutionPlannerAdvancedMethods:
         self.workflow.add_node("source", source)
 
         switch_node_ids = {"switch1"}
-        is_reachable = self.planner._is_reachable_without_switches("source", switch_node_ids)
+        is_reachable = self.planner._is_reachable_without_switches(
+            "source", switch_node_ids
+        )
 
         # Source nodes are always reachable without switches
         assert is_reachable is True
 
     def test_is_reachable_without_switches_switch_node(self):
         """Test _is_reachable_without_switches with switch node itself."""
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         self.workflow.add_node("switch", switch)
 
         switch_node_ids = {"switch"}
-        is_reachable = self.planner._is_reachable_without_switches("switch", switch_node_ids)
+        is_reachable = self.planner._is_reachable_without_switches(
+            "switch", switch_node_ids
+        )
 
         # Switches themselves are always reachable
         assert is_reachable is True
@@ -98,7 +106,9 @@ class TestDynamicExecutionPlannerAdvancedMethods:
         """Test _is_reachable_without_switches when path goes through switch."""
         # Create workflow: source -> switch -> proc
         source = PythonCodeNode(name="source", code="result = {'data': 'test'}")
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         proc = PythonCodeNode(name="proc", code="result = {'step': 1}")
 
         self.workflow.add_node("source", source)
@@ -109,7 +119,9 @@ class TestDynamicExecutionPlannerAdvancedMethods:
         self.workflow.connect("switch", "proc", {"true_output": "input"})
 
         switch_node_ids = {"switch"}
-        is_reachable = self.planner._is_reachable_without_switches("proc", switch_node_ids)
+        is_reachable = self.planner._is_reachable_without_switches(
+            "proc", switch_node_ids
+        )
 
         # proc can only be reached through switch, so not always reachable
         assert is_reachable is False
@@ -129,7 +141,9 @@ class TestDynamicExecutionPlannerAdvancedMethods:
         self.workflow.connect("proc1", "proc2", {"result": "input"})
 
         switch_node_ids = {"switch1"}  # No actual switches in this workflow
-        is_reachable = self.planner._is_reachable_without_switches("proc2", switch_node_ids)
+        is_reachable = self.planner._is_reachable_without_switches(
+            "proc2", switch_node_ids
+        )
 
         # proc2 can be reached without going through any switches
         assert is_reachable is True
@@ -137,17 +151,13 @@ class TestDynamicExecutionPlannerAdvancedMethods:
     def test_create_cache_key_complex_scenarios(self):
         """Test _create_cache_key with complex switch result structures."""
         # Test with None ports
-        results_with_none_ports = {
-            "switch1": None
-        }
+        results_with_none_ports = {"switch1": None}
         key1 = self.planner._create_cache_key(results_with_none_ports)
         assert isinstance(key1, str)
         assert "None" in key1
 
         # Test with invalid port format
-        results_with_invalid_ports = {
-            "switch1": "invalid_format"
-        }
+        results_with_invalid_ports = {"switch1": "invalid_format"}
         key2 = self.planner._create_cache_key(results_with_invalid_ports)
         assert isinstance(key2, str)
         assert "invalid" in key2
@@ -156,7 +166,7 @@ class TestDynamicExecutionPlannerAdvancedMethods:
         complex_results = {
             "switch1": {"true_output": {"data": "active"}, "false_output": None},
             "switch2": None,
-            "switch3": {"case_A": {"type": "premium"}, "case_B": None, "case_C": None}
+            "switch3": {"case_A": {"type": "premium"}, "case_B": None, "case_C": None},
         }
         key3 = self.planner._create_cache_key(complex_results)
         assert isinstance(key3, str)
@@ -185,9 +195,15 @@ class TestDynamicExecutionPlannerAdvancedMethods:
     def test_create_hierarchical_plan_linear_switches(self):
         """Test create_hierarchical_plan with linear switch dependencies."""
         # Create linear switch chain: switch1 -> switch2 -> switch3
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
-        switch3 = SwitchNode(name="switch3", condition_field="c", operator="==", value=3)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
+        switch3 = SwitchNode(
+            name="switch3", condition_field="c", operator="==", value=3
+        )
 
         self.workflow.add_node("switch1", switch1)
         self.workflow.add_node("switch2", switch2)
@@ -207,9 +223,15 @@ class TestDynamicExecutionPlannerAdvancedMethods:
     def test_create_hierarchical_plan_parallel_switches(self):
         """Test create_hierarchical_plan with parallel switches."""
         # Create parallel switches (no dependencies between them)
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
-        switch3 = SwitchNode(name="switch3", condition_field="c", operator="==", value=3)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
+        switch3 = SwitchNode(
+            name="switch3", condition_field="c", operator="==", value=3
+        )
 
         source = PythonCodeNode(name="source", code="result = {'data': 'test'}")
 
@@ -234,9 +256,15 @@ class TestDynamicExecutionPlannerAdvancedMethods:
     def test_create_hierarchical_plan_circular_dependencies(self):
         """Test create_hierarchical_plan with circular dependencies."""
         # Create circular dependency: switch1 -> switch2 -> switch3 -> switch1
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
-        switch3 = SwitchNode(name="switch3", condition_field="c", operator="==", value=3)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
+        switch3 = SwitchNode(
+            name="switch3", condition_field="c", operator="==", value=3
+        )
 
         self.workflow.add_node("switch1", switch1)
         self.workflow.add_node("switch2", switch2)
@@ -269,7 +297,9 @@ class TestDynamicExecutionPlannerAdvancedMethods:
     def test_handle_merge_with_conditional_inputs_with_available_inputs(self):
         """Test _handle_merge_with_conditional_inputs with available inputs."""
         # Create workflow with merge node
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         proc = PythonCodeNode(name="proc", code="result = {'data': 1}")
         merge = MergeNode(name="merge", merge_type="merge_dict")
 
@@ -294,7 +324,9 @@ class TestDynamicExecutionPlannerAdvancedMethods:
     def test_handle_merge_with_conditional_inputs_no_available_inputs(self):
         """Test _handle_merge_with_conditional_inputs with no available inputs."""
         # Create workflow with merge node but no reachable inputs
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         proc = PythonCodeNode(name="proc", code="result = {'data': 1}")
         merge = MergeNode(name="merge", merge_type="merge_dict")
 
@@ -374,7 +406,9 @@ class TestAdvancedExecutionPlanOptimization:
         reachable_nodes = {"proc1", "proc2", "merge"}
         switch_results = {}
 
-        strategy = self.planner._create_merge_strategy("merge", reachable_nodes, switch_results)
+        strategy = self.planner._create_merge_strategy(
+            "merge", reachable_nodes, switch_results
+        )
 
         assert strategy["merge_id"] == "merge"
         assert strategy["strategy_type"] == "full"
@@ -400,7 +434,9 @@ class TestAdvancedExecutionPlanOptimization:
         reachable_nodes = {"merge"}
         switch_results = {}
 
-        strategy = self.planner._create_merge_strategy("merge", reachable_nodes, switch_results)
+        strategy = self.planner._create_merge_strategy(
+            "merge", reachable_nodes, switch_results
+        )
 
         assert strategy["strategy_type"] == "skip"
         assert strategy["confidence"] == 1.0
@@ -428,10 +464,12 @@ class TestAdvancedExecutionPlanOptimization:
         reachable_nodes = {"proc1", "proc3", "merge"}
         switch_results = {}
 
-        strategy = self.planner._create_merge_strategy("merge", reachable_nodes, switch_results)
+        strategy = self.planner._create_merge_strategy(
+            "merge", reachable_nodes, switch_results
+        )
 
         assert strategy["strategy_type"] == "partial"
-        assert strategy["confidence"] == 2/3  # 2 out of 3 inputs available
+        assert strategy["confidence"] == 2 / 3  # 2 out of 3 inputs available
         assert set(strategy["available_inputs"]) == {"proc1", "proc3"}
         assert strategy["missing_inputs"] == ["proc2"]
 
@@ -459,7 +497,9 @@ class TestAdvancedExecutionPlanOptimization:
         self.workflow.connect("proc3", "merge", {"result": "data3"})
 
         execution_plan = ["source", "proc1", "proc2", "proc3", "merge"]
-        parallel_groups = self.planner._identify_parallel_execution_groups(execution_plan)
+        parallel_groups = self.planner._identify_parallel_execution_groups(
+            execution_plan
+        )
 
         # proc1, proc2, proc3 should be identified as a parallel group
         assert len(parallel_groups) >= 1
@@ -478,10 +518,12 @@ class TestAdvancedExecutionPlanOptimization:
             "proc1": ["source"],
             "proc2": ["source"],
             "proc3": ["source"],
-            "merge": ["proc1", "proc2", "proc3"]
+            "merge": ["proc1", "proc2", "proc3"],
         }
 
-        depth_groups = self.planner._group_by_dependency_depth(execution_plan, dependencies)
+        depth_groups = self.planner._group_by_dependency_depth(
+            execution_plan, dependencies
+        )
 
         # Should group by dependency depth
         assert 0 in depth_groups  # source at depth 0
@@ -498,7 +540,7 @@ class TestAdvancedExecutionPlanOptimization:
             "source": [],
             "proc1": ["source"],
             "proc2": ["proc1"],
-            "proc3": ["proc2"]
+            "proc3": ["proc2"],
         }
         node_depths = {}
 
@@ -517,10 +559,7 @@ class TestAdvancedExecutionPlanOptimization:
 
     def test_calculate_node_depth_with_cache(self):
         """Test _calculate_node_depth uses cache correctly."""
-        dependencies = {
-            "proc1": ["source"],
-            "proc2": ["proc1"]
-        }
+        dependencies = {"proc1": ["source"], "proc2": ["proc1"]}
         node_depths = {"source": 0, "proc1": 1}  # Pre-populate cache
 
         # Should use cached value for proc1
@@ -533,8 +572,10 @@ class TestAdvancedExecutionPlanOptimization:
         switch_results = {"nonexistent_switch": {"true_output": {"data": 1}}}
 
         # Mock the analyzer to raise an exception
-        with patch.object(self.planner, 'analyzer') as mock_analyzer:
-            mock_analyzer.create_hierarchical_execution_plan.side_effect = Exception("Test error")
+        with patch.object(self.planner, "analyzer") as mock_analyzer:
+            mock_analyzer.create_hierarchical_execution_plan.side_effect = Exception(
+                "Test error"
+            )
 
             plan = self.planner.create_hierarchical_execution_plan(switch_results)
 
@@ -548,8 +589,14 @@ class TestAdvancedExecutionPlanOptimization:
         switch_results = {}
 
         # Mock analyzer to raise exception
-        with patch.object(self.planner.analyzer, '_find_merge_nodes', side_effect=Exception("Test error")):
-            result = self.planner.handle_merge_nodes_with_conditional_inputs(execution_plan, switch_results)
+        with patch.object(
+            self.planner.analyzer,
+            "_find_merge_nodes",
+            side_effect=Exception("Test error"),
+        ):
+            result = self.planner.handle_merge_nodes_with_conditional_inputs(
+                execution_plan, switch_results
+            )
 
             # Should handle error gracefully
             assert "warnings" in result
@@ -561,8 +608,14 @@ class TestAdvancedExecutionPlanOptimization:
         switch_results = {}
 
         # Mock a method to raise exception
-        with patch.object(self.planner, '_identify_parallel_execution_groups', side_effect=Exception("Test error")):
-            result = self.planner.optimize_execution_plan(execution_plan, switch_results)
+        with patch.object(
+            self.planner,
+            "_identify_parallel_execution_groups",
+            side_effect=Exception("Test error"),
+        ):
+            result = self.planner.optimize_execution_plan(
+                execution_plan, switch_results
+            )
 
             # Should handle error gracefully
             assert "analysis" in result
@@ -619,7 +672,9 @@ class TestEdgeCasesAndErrorHandling:
 
         # Create cycle
         self.workflow.connect("proc1", "proc2", {"result": "input"})
-        self.workflow.create_cycle("test_cycle").connect("proc2", "proc1", {"result": "input"}).max_iterations(5).build()
+        self.workflow.create_cycle("test_cycle").connect(
+            "proc2", "proc1", {"result": "input"}
+        ).max_iterations(5).build()
 
         # Should handle cycles gracefully (fallback to node list)
         order = self.planner._get_all_nodes_topological_order()
@@ -648,7 +703,11 @@ class TestEdgeCasesAndErrorHandling:
     def test_create_execution_plan_error_handling(self):
         """Test create_execution_plan error handling."""
         # Mock analyzer to raise exception
-        with patch.object(self.planner.analyzer, 'get_reachable_nodes', side_effect=Exception("Test error")):
+        with patch.object(
+            self.planner.analyzer,
+            "get_reachable_nodes",
+            side_effect=Exception("Test error"),
+        ):
             switch_results = {"switch1": {"true_output": {"data": 1}}}
 
             # Should fall back to all nodes despite error

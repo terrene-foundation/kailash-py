@@ -30,18 +30,30 @@ class TestHierarchicalSwitchEnhancements:
 
         # Add 10 switches that can execute in parallel
         for i in range(10):
-            switch = SwitchNode(name=f"switch_{i}", condition_field="data", operator="==", value="test")
+            switch = SwitchNode(
+                name=f"switch_{i}", condition_field="data", operator="==", value="test"
+            )
             self.workflow.add_node(f"switch_{i}", switch)
             self.workflow.connect("source", f"switch_{i}", {"result": "input_data"})
 
         # Create executor with max_parallelism=3
-        executor = HierarchicalSwitchExecutor(self.workflow, debug=True, max_parallelism=3)
+        executor = HierarchicalSwitchExecutor(
+            self.workflow, debug=True, max_parallelism=3
+        )
 
         # Track concurrent executions
         concurrent_count = 0
         max_concurrent = 0
 
-        async def mock_executor(node_id, node_instance, all_results, parameters, task_manager, workflow, workflow_context):
+        async def mock_executor(
+            node_id,
+            node_instance,
+            all_results,
+            parameters,
+            task_manager,
+            workflow,
+            workflow_context,
+        ):
             nonlocal concurrent_count, max_concurrent
             concurrent_count += 1
             max_concurrent = max(max_concurrent, concurrent_count)
@@ -58,8 +70,7 @@ class TestHierarchicalSwitchEnhancements:
 
         # Execute
         all_results, switch_results = await executor.execute_switches_hierarchically(
-            parameters={},
-            node_executor=mock_executor
+            parameters={}, node_executor=mock_executor
         )
 
         # Verify max parallelism was respected
@@ -75,8 +86,12 @@ class TestHierarchicalSwitchEnhancements:
         """Test layer timeout functionality."""
         # Create simple hierarchy
         source = PythonCodeNode(name="source", code="result = {'data': 'test'}")
-        switch1 = SwitchNode(name="switch1", condition_field="data", operator="==", value="test")
-        switch2 = SwitchNode(name="switch2", condition_field="data", operator="==", value="test")
+        switch1 = SwitchNode(
+            name="switch1", condition_field="data", operator="==", value="test"
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="data", operator="==", value="test"
+        )
 
         self.workflow.add_node("source", source)
         self.workflow.add_node("switch1", switch1)
@@ -86,10 +101,20 @@ class TestHierarchicalSwitchEnhancements:
         self.workflow.connect("switch1", "switch2", {"true_output": "input_data"})
 
         # Create executor with short timeout
-        executor = HierarchicalSwitchExecutor(self.workflow, debug=True, layer_timeout=0.1)
+        executor = HierarchicalSwitchExecutor(
+            self.workflow, debug=True, layer_timeout=0.1
+        )
 
         # Mock executor that simulates slow switch
-        async def slow_executor(node_id, node_instance, all_results, parameters, task_manager, workflow, workflow_context):
+        async def slow_executor(
+            node_id,
+            node_instance,
+            all_results,
+            parameters,
+            task_manager,
+            workflow,
+            workflow_context,
+        ):
             if node_id == "switch2":
                 # This will timeout
                 await asyncio.sleep(0.5)
@@ -101,8 +126,7 @@ class TestHierarchicalSwitchEnhancements:
 
         # Execute
         all_results, switch_results = await executor.execute_switches_hierarchically(
-            parameters={},
-            node_executor=slow_executor
+            parameters={}, node_executor=slow_executor
         )
 
         # Check that switch2 timed out
@@ -118,10 +142,18 @@ class TestHierarchicalSwitchEnhancements:
         """Test detailed execution metrics collection."""
         # Create multi-layer hierarchy
         source = PythonCodeNode(name="source", code="result = {'data': 'test'}")
-        switch1 = SwitchNode(name="switch1", condition_field="data", operator="==", value="test")
-        switch2a = SwitchNode(name="switch2a", condition_field="data", operator="==", value="test")
-        switch2b = SwitchNode(name="switch2b", condition_field="data", operator="==", value="test")
-        switch3 = SwitchNode(name="switch3", condition_field="data", operator="==", value="test")
+        switch1 = SwitchNode(
+            name="switch1", condition_field="data", operator="==", value="test"
+        )
+        switch2a = SwitchNode(
+            name="switch2a", condition_field="data", operator="==", value="test"
+        )
+        switch2b = SwitchNode(
+            name="switch2b", condition_field="data", operator="==", value="test"
+        )
+        switch3 = SwitchNode(
+            name="switch3", condition_field="data", operator="==", value="test"
+        )
 
         self.workflow.add_node("source", source)
         self.workflow.add_node("switch1", switch1)
@@ -140,7 +172,15 @@ class TestHierarchicalSwitchEnhancements:
         executor = HierarchicalSwitchExecutor(self.workflow, debug=True)
 
         # Mock executor with timing
-        async def timed_executor(node_id, node_instance, all_results, parameters, task_manager, workflow, workflow_context):
+        async def timed_executor(
+            node_id,
+            node_instance,
+            all_results,
+            parameters,
+            task_manager,
+            workflow,
+            workflow_context,
+        ):
             # Simulate different execution times
             if "2" in node_id:  # Layer 2 switches
                 await asyncio.sleep(0.05)
@@ -154,8 +194,7 @@ class TestHierarchicalSwitchEnhancements:
 
         # Execute
         all_results, switch_results = await executor.execute_switches_hierarchically(
-            parameters={},
-            node_executor=timed_executor
+            parameters={}, node_executor=timed_executor
         )
 
         # Get metrics
@@ -185,9 +224,15 @@ class TestHierarchicalSwitchEnhancements:
     def test_circular_dependency_handling(self):
         """Test handling of circular dependencies."""
         # Create circular dependency: switch1 -> switch2 -> switch3 -> switch1
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
-        switch3 = SwitchNode(name="switch3", condition_field="c", operator="==", value=3)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
+        switch3 = SwitchNode(
+            name="switch3", condition_field="c", operator="==", value=3
+        )
 
         self.workflow.add_node("switch1", switch1)
         self.workflow.add_node("switch2", switch2)
@@ -201,7 +246,9 @@ class TestHierarchicalSwitchEnhancements:
         executor = HierarchicalSwitchExecutor(self.workflow)
 
         # Test cycle breaking
-        layers = executor.handle_circular_dependencies(["switch1", "switch2", "switch3"])
+        layers = executor.handle_circular_dependencies(
+            ["switch1", "switch2", "switch3"]
+        )
 
         # Should have broken the cycle and created layers
         assert len(layers) > 0
@@ -217,9 +264,15 @@ class TestHierarchicalSwitchEnhancements:
         """Test that execution continues even if some switches fail."""
         # Create workflow with multiple switches
         source = PythonCodeNode(name="source", code="result = {'data': 'test'}")
-        switch1 = SwitchNode(name="switch1", condition_field="data", operator="==", value="test")
-        switch2 = SwitchNode(name="switch2", condition_field="data", operator="==", value="test")
-        switch3 = SwitchNode(name="switch3", condition_field="data", operator="==", value="test")
+        switch1 = SwitchNode(
+            name="switch1", condition_field="data", operator="==", value="test"
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="data", operator="==", value="test"
+        )
+        switch3 = SwitchNode(
+            name="switch3", condition_field="data", operator="==", value="test"
+        )
 
         self.workflow.add_node("source", source)
         self.workflow.add_node("switch1", switch1)
@@ -235,7 +288,15 @@ class TestHierarchicalSwitchEnhancements:
         executor = HierarchicalSwitchExecutor(self.workflow)
 
         # Mock executor where switch2 fails
-        async def failing_executor(node_id, node_instance, all_results, parameters, task_manager, workflow, workflow_context):
+        async def failing_executor(
+            node_id,
+            node_instance,
+            all_results,
+            parameters,
+            task_manager,
+            workflow,
+            workflow_context,
+        ):
             if node_id == "switch2":
                 raise Exception("Switch2 failed!")
 
@@ -246,8 +307,7 @@ class TestHierarchicalSwitchEnhancements:
 
         # Execute
         all_results, switch_results = await executor.execute_switches_hierarchically(
-            parameters={},
-            node_executor=failing_executor
+            parameters={}, node_executor=failing_executor
         )
 
         # Verify execution continued despite error
@@ -271,8 +331,7 @@ class TestHierarchicalSwitchEnhancements:
 
         # Execute
         all_results, switch_results = await executor.execute_switches_hierarchically(
-            parameters={},
-            node_executor=None
+            parameters={}, node_executor=None
         )
 
         # Should handle gracefully

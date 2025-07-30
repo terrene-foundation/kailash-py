@@ -25,8 +25,13 @@ class HierarchicalSwitchExecutor:
     on the results of the previous layer.
     """
 
-    def __init__(self, workflow: Workflow, debug: bool = False,
-                 max_parallelism: int = 10, layer_timeout: float = None):
+    def __init__(
+        self,
+        workflow: Workflow,
+        debug: bool = False,
+        max_parallelism: int = 10,
+        layer_timeout: float = None,
+    ):
         """
         Initialize the hierarchical switch executor.
 
@@ -44,7 +49,7 @@ class HierarchicalSwitchExecutor:
         self._execution_metrics = {
             "layer_timings": [],
             "parallelism_achieved": [],
-            "errors_by_layer": []
+            "errors_by_layer": [],
         }
 
     async def execute_switches_hierarchically(
@@ -53,7 +58,7 @@ class HierarchicalSwitchExecutor:
         task_manager: Optional[TaskManager] = None,
         run_id: str = "",
         workflow_context: Dict[str, Any] = None,
-        node_executor = None  # Function to execute individual nodes
+        node_executor=None,  # Function to execute individual nodes
     ) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Any]]:
         """
         Execute switches in hierarchical layers.
@@ -88,23 +93,33 @@ class HierarchicalSwitchExecutor:
 
         if not execution_layers:
             # Fallback to simple execution if no layers detected
-            logger.warning("No execution layers detected, falling back to simple execution")
+            logger.warning(
+                "No execution layers detected, falling back to simple execution"
+            )
             execution_layers = [switch_node_ids]
 
-        logger.info(f"Executing switches in {len(execution_layers)} hierarchical layers")
+        logger.info(
+            f"Executing switches in {len(execution_layers)} hierarchical layers"
+        )
 
         # Execute each layer
         for layer_index, layer_switches in enumerate(execution_layers):
             layer_start_time = asyncio.get_event_loop().time()
             layer_errors = []
 
-            logger.info(f"Executing layer {layer_index + 1}/{len(execution_layers)} with {len(layer_switches)} switches")
+            logger.info(
+                f"Executing layer {layer_index + 1}/{len(execution_layers)} with {len(layer_switches)} switches"
+            )
 
             # First, execute dependencies for switches in this layer
-            layer_dependencies = self._get_layer_dependencies(layer_switches, all_results.keys())
+            layer_dependencies = self._get_layer_dependencies(
+                layer_switches, all_results.keys()
+            )
 
             if layer_dependencies:
-                logger.debug(f"Executing {len(layer_dependencies)} dependencies for layer {layer_index + 1}")
+                logger.debug(
+                    f"Executing {len(layer_dependencies)} dependencies for layer {layer_index + 1}"
+                )
                 # Execute dependencies sequentially (could be optimized for parallel execution)
                 for dep_node_id in layer_dependencies:
                     if dep_node_id not in all_results:
@@ -115,7 +130,7 @@ class HierarchicalSwitchExecutor:
                             task_manager,
                             run_id,
                             workflow_context,
-                            node_executor
+                            node_executor,
                         )
                         if result is not None:
                             all_results[dep_node_id] = result
@@ -131,34 +146,41 @@ class HierarchicalSwitchExecutor:
                         task_manager,
                         run_id,
                         workflow_context,
-                        node_executor
+                        node_executor,
                     )
                     layer_tasks.append((switch_id, task))
 
             # Wait for all switches in this layer to complete with timeout
             if layer_tasks:
                 # Apply concurrency limit by chunking tasks
-                task_chunks = [layer_tasks[i:i+self.max_parallelism]
-                              for i in range(0, len(layer_tasks), self.max_parallelism)]
+                task_chunks = [
+                    layer_tasks[i : i + self.max_parallelism]
+                    for i in range(0, len(layer_tasks), self.max_parallelism)
+                ]
 
                 for chunk in task_chunks:
                     try:
                         if self.layer_timeout:
                             chunk_results = await asyncio.wait_for(
-                                asyncio.gather(*[task for _, task in chunk], return_exceptions=True),
-                                timeout=self.layer_timeout
+                                asyncio.gather(
+                                    *[task for _, task in chunk], return_exceptions=True
+                                ),
+                                timeout=self.layer_timeout,
                             )
                         else:
                             chunk_results = await asyncio.gather(
-                                *[task for _, task in chunk],
-                                return_exceptions=True
+                                *[task for _, task in chunk], return_exceptions=True
                             )
 
                         # Process results
                         for (switch_id, _), result in zip(chunk, chunk_results):
                             if isinstance(result, Exception):
-                                logger.error(f"Error executing switch {switch_id}: {result}")
-                                layer_errors.append({"switch": switch_id, "error": str(result)})
+                                logger.error(
+                                    f"Error executing switch {switch_id}: {result}"
+                                )
+                                layer_errors.append(
+                                    {"switch": switch_id, "error": str(result)}
+                                )
                                 # Store error result
                                 all_results[switch_id] = {"error": str(result)}
                                 switch_results[switch_id] = {"error": str(result)}
@@ -167,32 +189,44 @@ class HierarchicalSwitchExecutor:
                                 switch_results[switch_id] = result
 
                     except asyncio.TimeoutError:
-                        logger.error(f"Layer {layer_index + 1} execution timed out after {self.layer_timeout}s")
+                        logger.error(
+                            f"Layer {layer_index + 1} execution timed out after {self.layer_timeout}s"
+                        )
                         for switch_id, _ in chunk:
                             if switch_id not in all_results:
                                 error_msg = f"Timeout after {self.layer_timeout}s"
-                                layer_errors.append({"switch": switch_id, "error": error_msg})
+                                layer_errors.append(
+                                    {"switch": switch_id, "error": error_msg}
+                                )
                                 all_results[switch_id] = {"error": error_msg}
                                 switch_results[switch_id] = {"error": error_msg}
 
             # Record layer metrics
             layer_execution_time = asyncio.get_event_loop().time() - layer_start_time
-            self._execution_metrics["layer_timings"].append({
-                "layer": layer_index + 1,
-                "switches": len(layer_switches),
-                "execution_time": layer_execution_time,
-                "parallelism": min(len(layer_switches), self.max_parallelism)
-            })
-            self._execution_metrics["parallelism_achieved"].append(len(layer_switches))
+            self._execution_metrics["layer_timings"].append(
+                {
+                    "layer": layer_index + 1,
+                    "switches": len(layer_switches),
+                    "execution_time": layer_execution_time,
+                    "parallelism": min(len(layer_switches), self.max_parallelism),
+                }
+            )
+            self._execution_metrics["parallelism_achieved"].append(min(len(layer_switches), self.max_parallelism))
             self._execution_metrics["errors_by_layer"].append(layer_errors)
 
         # Log execution summary
-        successful_switches = sum(1 for r in switch_results.values() if "error" not in r)
-        logger.info(f"Hierarchical switch execution complete: {successful_switches}/{len(switch_results)} switches executed successfully")
+        successful_switches = sum(
+            1 for r in switch_results.values() if "error" not in r
+        )
+        logger.info(
+            f"Hierarchical switch execution complete: {successful_switches}/{len(switch_results)} switches executed successfully"
+        )
 
         return all_results, switch_results
 
-    def _get_layer_dependencies(self, layer_switches: List[str], already_executed: Set[str]) -> List[str]:
+    def _get_layer_dependencies(
+        self, layer_switches: List[str], already_executed: Set[str]
+    ) -> List[str]:
         """
         Get all dependencies needed for switches in this layer.
 
@@ -217,7 +251,9 @@ class HierarchicalSwitchExecutor:
 
         return dependencies
 
-    def _collect_dependencies(self, node_id: str, dependencies: List[str], visited: Set[str]):
+    def _collect_dependencies(
+        self, node_id: str, dependencies: List[str], visited: Set[str]
+    ):
         """
         Recursively collect dependencies for a node.
 
@@ -250,7 +286,7 @@ class HierarchicalSwitchExecutor:
         task_manager: Optional[TaskManager],
         run_id: str,
         workflow_context: Dict[str, Any],
-        node_executor
+        node_executor,
     ) -> Optional[Dict[str, Any]]:
         """
         Execute a node after ensuring its dependencies are met.
@@ -285,7 +321,7 @@ class HierarchicalSwitchExecutor:
                     parameters=parameters,
                     task_manager=task_manager,
                     workflow=self.workflow,
-                    workflow_context=workflow_context
+                    workflow_context=workflow_context,
                 )
                 return result
             else:
@@ -304,7 +340,7 @@ class HierarchicalSwitchExecutor:
         task_manager: Optional[TaskManager],
         run_id: str,
         workflow_context: Dict[str, Any],
-        node_executor
+        node_executor,
     ) -> Dict[str, Any]:
         """
         Execute a switch node with proper context from dependencies.
@@ -321,7 +357,9 @@ class HierarchicalSwitchExecutor:
         Returns:
             Switch execution result
         """
-        logger.debug(f"Executing switch {switch_id} with context from {len(all_results)} previous results")
+        logger.debug(
+            f"Executing switch {switch_id} with context from {len(all_results)} previous results"
+        )
 
         # Execute the switch using the standard node execution
         result = await self._execute_node_with_dependencies(
@@ -331,7 +369,7 @@ class HierarchicalSwitchExecutor:
             task_manager,
             run_id,
             workflow_context,
-            node_executor
+            node_executor,
         )
 
         if result and self.debug:
@@ -345,7 +383,9 @@ class HierarchicalSwitchExecutor:
 
         return result or {"error": "Switch execution failed"}
 
-    def get_execution_summary(self, switch_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    def get_execution_summary(
+        self, switch_results: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Get a summary of the hierarchical switch execution.
 
@@ -355,16 +395,22 @@ class HierarchicalSwitchExecutor:
         Returns:
             Summary dictionary with execution statistics
         """
-        hierarchy_info = self.analyzer.analyze_switch_hierarchies(list(switch_results.keys()))
+        hierarchy_info = self.analyzer.analyze_switch_hierarchies(
+            list(switch_results.keys())
+        )
 
         summary = {
             "total_switches": len(switch_results),
-            "successful_switches": sum(1 for r in switch_results.values() if "error" not in r),
+            "successful_switches": sum(
+                1 for r in switch_results.values() if "error" not in r
+            ),
             "failed_switches": sum(1 for r in switch_results.values() if "error" in r),
             "execution_layers": hierarchy_info.get("execution_layers", []),
             "max_depth": hierarchy_info.get("max_depth", 0),
-            "has_circular_dependencies": hierarchy_info.get("has_circular_dependencies", False),
-            "dependency_chains": hierarchy_info.get("dependency_chains", [])
+            "has_circular_dependencies": hierarchy_info.get(
+                "has_circular_dependencies", False
+            ),
+            "dependency_chains": hierarchy_info.get("dependency_chains", []),
         }
 
         # Analyze branch decisions
@@ -385,7 +431,7 @@ class HierarchicalSwitchExecutor:
         summary["branch_decisions"] = {
             "true_branches": true_branches,
             "false_branches": false_branches,
-            "multi_branches": multi_branches
+            "multi_branches": multi_branches,
         }
 
         return summary
@@ -397,21 +443,34 @@ class HierarchicalSwitchExecutor:
         Returns:
             Dictionary containing execution metrics
         """
-        total_time = sum(timing["execution_time"] for timing in self._execution_metrics["layer_timings"])
-        total_errors = sum(len(errors) for errors in self._execution_metrics["errors_by_layer"])
+        total_time = sum(
+            timing["execution_time"]
+            for timing in self._execution_metrics["layer_timings"]
+        )
+        total_errors = sum(
+            len(errors) for errors in self._execution_metrics["errors_by_layer"]
+        )
 
         metrics = {
             "total_execution_time": total_time,
             "layer_count": len(self._execution_metrics["layer_timings"]),
             "layer_timings": self._execution_metrics["layer_timings"],
-            "average_layer_time": total_time / len(self._execution_metrics["layer_timings"]) if self._execution_metrics["layer_timings"] else 0,
-            "max_parallelism_used": max(self._execution_metrics["parallelism_achieved"]) if self._execution_metrics["parallelism_achieved"] else 0,
+            "average_layer_time": (
+                total_time / len(self._execution_metrics["layer_timings"])
+                if self._execution_metrics["layer_timings"]
+                else 0
+            ),
+            "max_parallelism_used": (
+                max(self._execution_metrics["parallelism_achieved"])
+                if self._execution_metrics["parallelism_achieved"]
+                else 0
+            ),
             "total_errors": total_errors,
             "errors_by_layer": self._execution_metrics["errors_by_layer"],
             "configuration": {
                 "max_parallelism": self.max_parallelism,
-                "layer_timeout": self.layer_timeout
-            }
+                "layer_timeout": self.layer_timeout,
+            },
         }
 
         return metrics
@@ -443,14 +502,18 @@ class HierarchicalSwitchExecutor:
             cycles = list(nx.simple_cycles(G))
 
             if cycles:
-                logger.warning(f"Found {len(cycles)} circular dependencies in switch hierarchy")
+                logger.warning(
+                    f"Found {len(cycles)} circular dependencies in switch hierarchy"
+                )
 
                 # Break cycles by removing back edges
                 for cycle in cycles:
                     # Remove the edge that creates the cycle (last -> first)
                     if len(cycle) >= 2:
                         G.remove_edge(cycle[-1], cycle[0])
-                        logger.debug(f"Breaking cycle by removing edge {cycle[-1]} -> {cycle[0]}")
+                        logger.debug(
+                            f"Breaking cycle by removing edge {cycle[-1]} -> {cycle[0]}"
+                        )
 
                 # Now create layers from the acyclic graph
                 layers = []
@@ -460,7 +523,9 @@ class HierarchicalSwitchExecutor:
                     # Find nodes with no incoming edges from remaining nodes
                     current_layer = []
                     for node in remaining:
-                        has_deps = any(pred in remaining for pred in G.predecessors(node))
+                        has_deps = any(
+                            pred in remaining for pred in G.predecessors(node)
+                        )
                         if not has_deps:
                             current_layer.append(node)
 

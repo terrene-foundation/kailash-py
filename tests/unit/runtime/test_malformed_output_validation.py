@@ -21,26 +21,30 @@ class TestMalformedOutputValidation:
         # This specifically tests the bug on line 882 of cyclic_runner.py
         workflow = WorkflowBuilder()
 
-        workflow.add_node("PythonCodeNode", "start", {
-            "code": "result = {'counter': 0}"
-        })
+        workflow.add_node(
+            "PythonCodeNode", "start", {"code": "result = {'counter': 0}"}
+        )
 
-        workflow.add_node("SwitchNode", "condition", {
-            "condition_field": "counter",
-            "operator": "<",
-            "value": 2
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "condition",
+            {"condition_field": "counter", "operator": "<", "value": 2},
+        )
 
         # This node will produce None result under certain conditions
-        workflow.add_node("PythonCodeNode", "problematic", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "problematic",
+            {
+                "code": """
 # Simulate a node that sometimes returns None
 if parameters.get('counter', 0) >= 2:
     result = None  # This causes the issue
 else:
     result = {'counter': parameters.get('counter', 0) + 1}
 """
-        })
+            },
+        )
 
         workflow.add_connection("start", "result", "condition", "input_data")
         workflow.add_connection("condition", "true_output", "problematic", "parameters")
@@ -68,19 +72,25 @@ else:
         """Test parameter mapping when a node returns None instead of expected dict."""
         workflow = WorkflowBuilder()
 
-        workflow.add_node("PythonCodeNode", "none_source", {
-            "code": "result = None"  # This will cause issues in parameter mapping
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "none_source",
+            {"code": "result = None"},  # This will cause issues in parameter mapping
+        )
 
-        workflow.add_node("PythonCodeNode", "consumer", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "consumer",
+            {
+                "code": """
 # This should handle None parameters gracefully
 if parameters is None:
     result = {'handled_none': True}
 else:
     result = {'received_data': parameters}
 """
-        })
+            },
+        )
 
         workflow.add_connection("none_source", "result", "consumer", "parameters")
 
@@ -108,7 +118,9 @@ else:
             # Simulate the problematic access pattern
             if iteration_results and "some_node" in iteration_results:
                 exit_result = iteration_results["some_node"]
-                condition_result = exit_result.get("condition_result") if exit_result else None
+                condition_result = (
+                    exit_result.get("condition_result") if exit_result else None
+                )
             else:
                 condition_result = None
 
@@ -122,8 +134,11 @@ else:
         workflow = WorkflowBuilder()
 
         # Create a workflow that might result in None outputs
-        workflow.add_node("PythonCodeNode", "conditional_source", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "conditional_source",
+            {
+                "code": """
 # Sometimes return None based on condition
 import random
 if random.random() < 0.5:  # 50% chance of None
@@ -131,19 +146,26 @@ if random.random() < 0.5:  # 50% chance of None
 else:
     result = {'data': 'valid'}
 """
-        })
+            },
+        )
 
-        workflow.add_node("PythonCodeNode", "dependent", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "dependent",
+            {
+                "code": """
 # Handle potential None input
 if parameters is None:
     result = {'status': 'none_input_handled'}
 else:
     result = {'status': 'valid_input', 'data': parameters}
 """
-        })
+            },
+        )
 
-        workflow.add_connection("conditional_source", "result", "dependent", "parameters")
+        workflow.add_connection(
+            "conditional_source", "result", "dependent", "parameters"
+        )
 
         runtime = LocalRuntime()
 
@@ -153,24 +175,27 @@ else:
         # Dependent node should handle None input
         assert "dependent" in results
         dependent_result = results["dependent"]["result"]
-        assert "status" in dependent_result  # Should have handled input regardless of None/valid
+        assert (
+            "status" in dependent_result
+        )  # Should have handled input regardless of None/valid
 
     def test_cycle_edge_data_none_mapping(self):
         """Test when cycle edge data or mapping is None/malformed."""
         workflow = WorkflowBuilder()
 
-        workflow.add_node("PythonCodeNode", "source", {
-            "code": "result = {'value': 1}"
-        })
+        workflow.add_node("PythonCodeNode", "source", {"code": "result = {'value': 1}"})
 
-        workflow.add_node("SwitchNode", "switch", {
-            "condition_field": "value",
-            "operator": "<",
-            "value": 3
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "switch",
+            {"condition_field": "value", "operator": "<", "value": 3},
+        )
 
-        workflow.add_node("PythonCodeNode", "processor", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "processor",
+            {
+                "code": """
 # Handle potentially malformed parameters
 if parameters is None:
     result = {'value': 1, 'source': 'none_fallback'}
@@ -179,7 +204,8 @@ elif isinstance(parameters, dict):
 else:
     result = {'value': 1, 'source': 'unknown_type', 'type': str(type(parameters))}
 """
-        })
+            },
+        )
 
         workflow.add_connection("source", "result", "switch", "input_data")
         workflow.add_connection("switch", "true_output", "processor", "parameters")
@@ -208,18 +234,19 @@ class TestCycleStateNoneHandling:
         """Test cycle state updates when node results are None."""
         workflow = WorkflowBuilder()
 
-        workflow.add_node("PythonCodeNode", "init", {
-            "code": "result = {'step': 0}"
-        })
+        workflow.add_node("PythonCodeNode", "init", {"code": "result = {'step': 0}"})
 
-        workflow.add_node("SwitchNode", "condition", {
-            "condition_field": "step",
-            "operator": "<",
-            "value": 3
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "condition",
+            {"condition_field": "step", "operator": "<", "value": 3},
+        )
 
-        workflow.add_node("PythonCodeNode", "stepper", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "stepper",
+            {
+                "code": """
 step = parameters.get('step', 0) if parameters else 0
 new_step = step + 1
 
@@ -229,7 +256,8 @@ if new_step == 2:
 else:
     result = {'step': new_step}
 """
-        })
+            },
+        )
 
         workflow.add_connection("init", "result", "condition", "input_data")
         workflow.add_connection("condition", "true_output", "stepper", "parameters")
@@ -257,36 +285,46 @@ else:
         """Test when exit nodes produce None results during termination."""
         workflow = WorkflowBuilder()
 
-        workflow.add_node("PythonCodeNode", "starter", {
-            "code": "result = {'count': 0}"
-        })
+        workflow.add_node(
+            "PythonCodeNode", "starter", {"code": "result = {'count': 0}"}
+        )
 
-        workflow.add_node("SwitchNode", "exit_switch", {
-            "condition_field": "count",
-            "operator": "<",
-            "value": 2
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "exit_switch",
+            {"condition_field": "count", "operator": "<", "value": 2},
+        )
 
-        workflow.add_node("PythonCodeNode", "counter", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "counter",
+            {
+                "code": """
 count = parameters.get('count', 0) if parameters else 0
 result = {'count': count + 1}
 """
-        })
+            },
+        )
 
-        workflow.add_node("PythonCodeNode", "terminator", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "terminator",
+            {
+                "code": """
 # This might receive None when cycle terminates
 if parameters is None:
     result = {'terminated_with_none': True}
 else:
     result = {'terminated_with_data': parameters}
 """
-        })
+            },
+        )
 
         workflow.add_connection("starter", "result", "exit_switch", "input_data")
         workflow.add_connection("exit_switch", "true_output", "counter", "parameters")
-        workflow.add_connection("exit_switch", "false_output", "terminator", "parameters")
+        workflow.add_connection(
+            "exit_switch", "false_output", "terminator", "parameters"
+        )
 
         built_workflow = workflow.build()
         cycle = built_workflow.create_cycle("exit_test")
@@ -303,4 +341,7 @@ else:
         assert "terminator" in results
         terminator_result = results["terminator"]["result"]
         # Should have handled the termination case (None or data)
-        assert "terminated_with_none" in terminator_result or "terminated_with_data" in terminator_result
+        assert (
+            "terminated_with_none" in terminator_result
+            or "terminated_with_data" in terminator_result
+        )

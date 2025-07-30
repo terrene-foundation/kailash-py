@@ -23,9 +23,7 @@ class TestPerformanceMonitoring:
     def test_performance_monitor_initialization(self):
         """Test performance monitor initialization."""
         monitor = PerformanceMonitor(
-            performance_threshold=0.9,
-            sample_size=10,
-            min_samples=3
+            performance_threshold=0.9, sample_size=10, min_samples=3
         )
 
         assert monitor.performance_threshold == 0.9
@@ -42,7 +40,7 @@ class TestPerformanceMonitoring:
             execution_time=1.0,
             node_count=10,
             skipped_nodes=5,
-            execution_mode="skip_branches"
+            execution_mode="skip_branches",
         )
         monitor.record_execution(metrics1)
 
@@ -50,7 +48,7 @@ class TestPerformanceMonitoring:
             execution_time=2.0,
             node_count=10,
             skipped_nodes=0,
-            execution_mode="route_data"
+            execution_mode="route_data",
         )
         monitor.record_execution(metrics2)
 
@@ -68,7 +66,7 @@ class TestPerformanceMonitoring:
                 execution_time=1.0,
                 node_count=10,
                 skipped_nodes=5,
-                execution_mode="skip_branches"
+                execution_mode="skip_branches",
             )
             monitor.record_execution(metrics)
 
@@ -78,10 +76,7 @@ class TestPerformanceMonitoring:
 
     def test_should_switch_mode_performance_based(self):
         """Test performance-based mode switching."""
-        monitor = PerformanceMonitor(
-            performance_threshold=0.9,
-            min_samples=3
-        )
+        monitor = PerformanceMonitor(performance_threshold=0.9, min_samples=3)
 
         # Skip the time check
         monitor._evaluation_interval = 0
@@ -92,7 +87,7 @@ class TestPerformanceMonitoring:
                 execution_time=0.5,  # 0.05s per node
                 node_count=10,
                 skipped_nodes=10,
-                execution_mode="skip_branches"
+                execution_mode="skip_branches",
             )
             monitor.record_execution(metrics)
 
@@ -102,7 +97,7 @@ class TestPerformanceMonitoring:
                 execution_time=2.0,  # 0.2s per node
                 node_count=10,
                 skipped_nodes=0,
-                execution_mode="route_data"
+                execution_mode="route_data",
             )
             monitor.record_execution(metrics)
 
@@ -122,7 +117,7 @@ class TestPerformanceMonitoring:
                 execution_time=1.0 + i * 0.1,
                 node_count=10,
                 skipped_nodes=i,
-                execution_mode="skip_branches"
+                execution_mode="skip_branches",
             )
             monitor.record_execution(metrics)
 
@@ -141,14 +136,14 @@ class TestCompatibilityReporter:
     def test_basic_workflow_compatibility(self):
         """Test compatibility analysis for basic workflow."""
         workflow = WorkflowBuilder()
-        workflow.add_node("PythonCodeNode", "source", {
-            "code": "result = {'value': 42}"
-        })
-        workflow.add_node("SwitchNode", "switch", {
-            "condition_field": "value",
-            "operator": ">",
-            "value": 40
-        })
+        workflow.add_node(
+            "PythonCodeNode", "source", {"code": "result = {'value': 42}"}
+        )
+        workflow.add_node(
+            "SwitchNode",
+            "switch",
+            {"condition_field": "value", "operator": ">", "value": 40},
+        )
         workflow.add_connection("source", "result", "switch", "input_data")
 
         reporter = CompatibilityReporter()
@@ -161,8 +156,12 @@ class TestCompatibilityReporter:
 
         # Should detect simple conditional routing
         simple_pattern = next(
-            (p for p in report.detected_patterns if p.pattern_type == "Simple Conditional Routing"),
-            None
+            (
+                p
+                for p in report.detected_patterns
+                if p.pattern_type == "Simple Conditional Routing"
+            ),
+            None,
         )
         assert simple_pattern is not None
         assert simple_pattern.compatibility == CompatibilityLevel.FULLY_COMPATIBLE
@@ -187,13 +186,17 @@ class TestCompatibilityReporter:
     def test_multi_case_switches(self):
         """Test compatibility with multi-case switches."""
         workflow = WorkflowBuilder()
-        workflow.add_node("PythonCodeNode", "source", {
-            "code": "result = {'priority': 'high'}"
-        })
-        workflow.add_node("SwitchNode", "switch", {
-            "condition_field": "priority",
-            "cases": ["low", "medium", "high", "critical"]
-        })
+        workflow.add_node(
+            "PythonCodeNode", "source", {"code": "result = {'priority': 'high'}"}
+        )
+        workflow.add_node(
+            "SwitchNode",
+            "switch",
+            {
+                "condition_field": "priority",
+                "cases": ["low", "medium", "high", "critical"],
+            },
+        )
         workflow.add_connection("source", "result", "switch", "input_data")
 
         reporter = CompatibilityReporter()
@@ -203,8 +206,12 @@ class TestCompatibilityReporter:
 
         # Should detect multi-case switch
         multi_case_pattern = next(
-            (p for p in report.detected_patterns if p.pattern_type == "Multi-Case Switches"),
-            None
+            (
+                p
+                for p in report.detected_patterns
+                if p.pattern_type == "Multi-Case Switches"
+            ),
+            None,
         )
         assert multi_case_pattern is not None
 
@@ -229,20 +236,20 @@ class TestLocalRuntimeIntegration:
     async def test_performance_monitoring_integration(self):
         """Test performance monitoring in LocalRuntime."""
         workflow = WorkflowBuilder()
-        workflow.add_node("PythonCodeNode", "source", {
-            "code": "result = {'value': 42}"
-        })
-        workflow.add_node("SwitchNode", "switch", {
-            "condition_field": "value",
-            "operator": ">",
-            "value": 40
-        })
-        workflow.add_node("PythonCodeNode", "true_branch", {
-            "code": "result = {'processed': True}"
-        })
-        workflow.add_node("PythonCodeNode", "false_branch", {
-            "code": "result = {'processed': False}"
-        })
+        workflow.add_node(
+            "PythonCodeNode", "source", {"code": "result = {'value': 42}"}
+        )
+        workflow.add_node(
+            "SwitchNode",
+            "switch",
+            {"condition_field": "value", "operator": ">", "value": 40},
+        )
+        workflow.add_node(
+            "PythonCodeNode", "true_branch", {"code": "result = {'processed': True}"}
+        )
+        workflow.add_node(
+            "PythonCodeNode", "false_branch", {"code": "result = {'processed': False}"}
+        )
 
         workflow.add_connection("source", "result", "switch", "input_data")
         workflow.add_connection("switch", "true_output", "true_branch", "data")
@@ -257,7 +264,10 @@ class TestLocalRuntimeIntegration:
         # Get performance report
         perf_report = runtime.get_performance_report()
         assert perf_report is not None
-        assert "status" not in perf_report or perf_report["status"] != "Performance monitoring not initialized"
+        assert (
+            "status" not in perf_report
+            or perf_report["status"] != "Performance monitoring not initialized"
+        )
 
     def test_compatibility_reporting_integration(self):
         """Test compatibility reporting in LocalRuntime."""
@@ -318,7 +328,10 @@ class TestEnhancedDebugging:
         runtime.execute(workflow.build())
 
         # Check for execution path logs
-        assert any("Phase 1: Executing SwitchNodes" in record.message for record in caplog.records)
+        assert any(
+            "Phase 1: Executing SwitchNodes" in record.message
+            for record in caplog.records
+        )
         assert any("Phase 2:" in record.message for record in caplog.records)
 
     def test_performance_improvement_logging(self, caplog):
@@ -338,6 +351,5 @@ class TestEnhancedDebugging:
 
         # Should log performance improvement
         assert any(
-            "reduction in executed nodes" in record.message
-            for record in caplog.records
+            "reduction in executed nodes" in record.message for record in caplog.records
         )

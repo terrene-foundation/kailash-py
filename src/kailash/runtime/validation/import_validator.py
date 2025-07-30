@@ -207,6 +207,7 @@ class ImportPathValidator:
         - Module exists as sibling to current file
         - Module is not a known SDK module
         - Module is not a standard library module
+        - Module is not a legitimate top-level package
         """
         # Skip if it's a known SDK module
         if module_name in self.sdk_modules:
@@ -226,6 +227,12 @@ class ImportPathValidator:
             "pandas",
             "requests",
         ]:
+            return False
+
+        # Skip common top-level package names that are meant for absolute imports
+        # These are legitimate when used as project structure roots
+        top_level_packages = ["src", "lib", "app", "pkg"]
+        if module_name in top_level_packages:
             return False
 
         # Check if module exists as sibling

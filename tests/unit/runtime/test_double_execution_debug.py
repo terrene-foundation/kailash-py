@@ -19,17 +19,23 @@ class TestDoubleExecutionDebug:
 
     def test_double_execution_reproduction(self):
         """Reproduce the exact double execution issue with minimal workflow."""
+
         def create_minimal_cyclic_workflow():
             workflow = WorkflowBuilder()
 
             # Simple source
-            workflow.add_node("PythonCodeNode", "source", {
-                "code": "result = {'iteration': 0, 'value': 10}"
-            })
+            workflow.add_node(
+                "PythonCodeNode",
+                "source",
+                {"code": "result = {'iteration': 0, 'value': 10}"},
+            )
 
             # Processor that logs execution (without import)
-            workflow.add_node("PythonCodeNode", "processor", {
-                "code": """
+            workflow.add_node(
+                "PythonCodeNode",
+                "processor",
+                {
+                    "code": """
 # Handle parameters input
 try:
     input_data = parameters if isinstance(parameters, dict) else {}
@@ -44,18 +50,25 @@ print(f"[PROCESSOR] iteration={iteration}, value={value}")
 
 result = {'iteration': iteration, 'value': value}
 """
-            })
+                },
+            )
 
             # Threshold check
-            workflow.add_node("SwitchNode", "threshold", {
-                "condition_field": "value",
-                "operator": "<",
-                "value": 25  # Only 3 iterations: 10→15→20→25
-            })
+            workflow.add_node(
+                "SwitchNode",
+                "threshold",
+                {
+                    "condition_field": "value",
+                    "operator": "<",
+                    "value": 25,  # Only 3 iterations: 10→15→20→25
+                },
+            )
 
             # Connect workflow
             workflow.add_connection("source", "result", "threshold", "input_data")
-            workflow.add_connection("threshold", "true_output", "processor", "parameters")
+            workflow.add_connection(
+                "threshold", "true_output", "processor", "parameters"
+            )
 
             # Create cycle
             built_workflow = workflow.build()
@@ -67,7 +80,7 @@ result = {'iteration': iteration, 'value': value}
             return built_workflow
 
         workflow = create_minimal_cyclic_workflow()
-        runtime = LocalRuntime()
+        runtime = LocalRuntime(enable_monitoring=False)
 
         # Execute and measure time
         start_time = time.time()
@@ -79,7 +92,9 @@ result = {'iteration': iteration, 'value': value}
         # CRITICAL ASSERTIONS - These should FAIL initially
 
         # 1. Performance check - should be <1 second
-        assert execution_time < 1.0, f"Performance regression: took {execution_time:.3f}s (expected <1s)"
+        assert (
+            execution_time < 1.0
+        ), f"Performance regression: took {execution_time:.3f}s (expected <1s)"
 
         # Check the final result to validate proper execution
         # We can't easily track duplicates without imports, but we can verify the workflow completed correctly
@@ -91,19 +106,27 @@ result = {'iteration': iteration, 'value': value}
 
         # The false_output should be None (no processing after threshold fails)
         threshold_result = result["threshold"]
-        assert "false_output" in threshold_result, "Threshold should have false_output when condition fails"
+        assert (
+            "false_output" in threshold_result
+        ), "Threshold should have false_output when condition fails"
 
     def test_parameter_propagation_validation(self):
         """Test that parameter propagation works correctly without duplication."""
+
         def create_parameter_test_workflow():
             workflow = WorkflowBuilder()
 
-            workflow.add_node("PythonCodeNode", "source", {
-                "code": "result = {'counter': 0, 'data': 'initial'}"
-            })
+            workflow.add_node(
+                "PythonCodeNode",
+                "source",
+                {"code": "result = {'counter': 0, 'data': 'initial'}"},
+            )
 
-            workflow.add_node("PythonCodeNode", "processor", {
-                "code": """
+            workflow.add_node(
+                "PythonCodeNode",
+                "processor",
+                {
+                    "code": """
 # Handle parameters
 try:
     input_data = parameters if isinstance(parameters, dict) else {}
@@ -117,17 +140,24 @@ print(f"[PROCESSOR] counter={counter}, data={data}")
 
 result = {'counter': counter, 'data': data}
 """
-            })
+                },
+            )
 
-            workflow.add_node("SwitchNode", "threshold", {
-                "condition_field": "counter",
-                "operator": "<",
-                "value": 3  # 2 iterations
-            })
+            workflow.add_node(
+                "SwitchNode",
+                "threshold",
+                {
+                    "condition_field": "counter",
+                    "operator": "<",
+                    "value": 3,  # 2 iterations
+                },
+            )
 
             # Connect
             workflow.add_connection("source", "result", "threshold", "input_data")
-            workflow.add_connection("threshold", "true_output", "processor", "parameters")
+            workflow.add_connection(
+                "threshold", "true_output", "processor", "parameters"
+            )
 
             # Create cycle
             built_workflow = workflow.build()
@@ -139,7 +169,7 @@ result = {'counter': counter, 'data': data}
             return built_workflow
 
         workflow = create_parameter_test_workflow()
-        runtime = LocalRuntime()
+        runtime = LocalRuntime(enable_monitoring=False)
 
         start_time = time.time()
         result, run_id = runtime.execute(workflow)
@@ -148,22 +178,26 @@ result = {'counter': counter, 'data': data}
         print(f"\nParameter test execution time: {execution_time:.3f}s")
 
         # Performance check
-        assert execution_time < 1.0, f"Parameter test took too long: {execution_time:.3f}s"
+        assert (
+            execution_time < 1.0
+        ), f"Parameter test took too long: {execution_time:.3f}s"
 
         # Check that workflow completed correctly
         assert "threshold" in result, "Threshold node should have executed"
 
     def test_performance_baseline(self):
         """Establish performance baseline - this should pass after fix."""
+
         def create_performance_workflow():
             workflow = WorkflowBuilder()
 
-            workflow.add_node("PythonCodeNode", "source", {
-                "code": "result = {'i': 0}"
-            })
+            workflow.add_node("PythonCodeNode", "source", {"code": "result = {'i': 0}"})
 
-            workflow.add_node("PythonCodeNode", "increment", {
-                "code": """
+            workflow.add_node(
+                "PythonCodeNode",
+                "increment",
+                {
+                    "code": """
 try:
     input_data = parameters if isinstance(parameters, dict) else {}
 except NameError:
@@ -172,13 +206,14 @@ except NameError:
 i = input_data.get('i', 0) + 1
 result = {'i': i}
 """
-            })
+                },
+            )
 
-            workflow.add_node("SwitchNode", "check", {
-                "condition_field": "i",
-                "operator": "<",
-                "value": 10  # 9 iterations
-            })
+            workflow.add_node(
+                "SwitchNode",
+                "check",
+                {"condition_field": "i", "operator": "<", "value": 10},  # 9 iterations
+            )
 
             workflow.add_connection("source", "result", "check", "input_data")
             workflow.add_connection("check", "true_output", "increment", "parameters")
@@ -192,7 +227,7 @@ result = {'i': i}
             return built_workflow
 
         workflow = create_performance_workflow()
-        runtime = LocalRuntime()
+        runtime = LocalRuntime(enable_monitoring=False)
 
         # Run multiple times to get average
         times = []
@@ -210,5 +245,9 @@ result = {'i': i}
         print(f"All times: {[f'{t:.3f}' for t in times]}")
 
         # After fix, should be consistently fast
-        assert avg_time < 0.5, f"Average execution too slow: {avg_time:.3f}s (expected <0.5s)"
-        assert max_time < 1.0, f"Max execution too slow: {max_time:.3f}s (expected <1.0s)"
+        assert (
+            avg_time < 0.5
+        ), f"Average execution too slow: {avg_time:.3f}s (expected <0.5s)"
+        assert (
+            max_time < 1.0
+        ), f"Max execution too slow: {max_time:.3f}s (expected <1.0s)"

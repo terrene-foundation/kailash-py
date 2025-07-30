@@ -56,7 +56,7 @@ class TestConditionalExecutionPerformance:
 import random
 active_branches = random.sample(range({num_branches}), {num_branches // 5})
 result = {{'active_branches': active_branches, 'total_branches': {num_branches}}}
-"""
+""",
         )
         workflow.add_node("source", source)
 
@@ -67,7 +67,7 @@ result = {{'active_branches': active_branches, 'total_branches': {num_branches}}
                 name=f"switch_{i}",
                 condition_field="active_branches",
                 operator="contains",
-                value=i
+                value=i,
             )
 
             # Processor with configurable work amount
@@ -77,7 +77,7 @@ result = {{'active_branches': active_branches, 'total_branches': {num_branches}}
 import time
 time.sleep({work_per_branch})  # Simulate work
 result = {{'branch_id': {i}, 'work_done': True, 'timestamp': time.time()}}
-"""
+""",
             )
 
             workflow.add_node(f"switch_{i}", switch)
@@ -96,7 +96,7 @@ result = {{
     'message': 'Aggregation complete',
     'total_possible_branches': {num_branches}
 }}
-"""
+""",
         )
         workflow.add_node("aggregator", aggregator)
 
@@ -154,20 +154,24 @@ result = {{
                 "avg_time": mean(route_times),
                 "std_time": stdev(route_times) if len(route_times) > 1 else 0,
                 "avg_memory": mean(route_memory),
-                "results": results_route
+                "results": results_route,
             },
             "skip_branches": {
                 "times": skip_times,
                 "avg_time": mean(skip_times),
                 "std_time": stdev(skip_times) if len(skip_times) > 1 else 0,
                 "avg_memory": mean(skip_memory),
-                "results": results_skip if 'results_skip' in locals() else results_route
-            }
+                "results": (
+                    results_skip if "results_skip" in locals() else results_route
+                ),
+            },
         }
 
     def test_small_workflow_performance_baseline(self):
         """Test performance baseline with small workflow (10 branches)."""
-        workflow = self.create_large_conditional_workflow(num_branches=10, work_per_branch=0.002)
+        workflow = self.create_large_conditional_workflow(
+            num_branches=10, work_per_branch=0.002
+        )
 
         benchmark_results = self.benchmark_execution_modes(workflow, iterations=3)
 
@@ -188,17 +192,29 @@ result = {{
         assert "aggregator" in route_results
 
         # Count executed processors
-        executed_processors = [k for k in route_results.keys() if k.startswith("processor_")]
-        assert len(executed_processors) == 10  # All processors executed in route_data mode
+        executed_processors = [
+            k for k in route_results.keys() if k.startswith("processor_")
+        ]
+        assert (
+            len(executed_processors) == 10
+        )  # All processors executed in route_data mode
 
         print(f"Small workflow (10 branches):")
-        print(f"  Route data: {route_data['avg_time']:.3f}s ± {route_data['std_time']:.3f}s")
-        print(f"  Skip branches: {skip_branches['avg_time']:.3f}s ± {skip_branches['std_time']:.3f}s")
-        print(f"  Memory - Route: {route_data['avg_memory']:.1f}MB, Skip: {skip_branches['avg_memory']:.1f}MB")
+        print(
+            f"  Route data: {route_data['avg_time']:.3f}s ± {route_data['std_time']:.3f}s"
+        )
+        print(
+            f"  Skip branches: {skip_branches['avg_time']:.3f}s ± {skip_branches['std_time']:.3f}s"
+        )
+        print(
+            f"  Memory - Route: {route_data['avg_memory']:.1f}MB, Skip: {skip_branches['avg_memory']:.1f}MB"
+        )
 
     def test_medium_workflow_performance(self):
         """Test performance with medium workflow (50 branches)."""
-        workflow = self.create_large_conditional_workflow(num_branches=50, work_per_branch=0.001)
+        workflow = self.create_large_conditional_workflow(
+            num_branches=50, work_per_branch=0.001
+        )
 
         benchmark_results = self.benchmark_execution_modes(workflow, iterations=3)
 
@@ -215,20 +231,33 @@ result = {{
 
         # Skip branches should show performance benefit (if implemented)
         if skip_branches["avg_time"] < route_data["avg_time"]:
-            improvement = ((route_data["avg_time"] - skip_branches["avg_time"]) / route_data["avg_time"]) * 100
+            improvement = (
+                (route_data["avg_time"] - skip_branches["avg_time"])
+                / route_data["avg_time"]
+            ) * 100
             assert improvement > 10  # At least 10% improvement
             print(f"Performance improvement: {improvement:.1f}%")
 
         print(f"Medium workflow (50 branches):")
-        print(f"  Route data: {route_data['avg_time']:.3f}s ± {route_data['std_time']:.3f}s")
-        print(f"  Skip branches: {skip_branches['avg_time']:.3f}s ± {skip_branches['std_time']:.3f}s")
-        print(f"  Memory - Route: {route_data['avg_memory']:.1f}MB, Skip: {skip_branches['avg_memory']:.1f}MB")
+        print(
+            f"  Route data: {route_data['avg_time']:.3f}s ± {route_data['std_time']:.3f}s"
+        )
+        print(
+            f"  Skip branches: {skip_branches['avg_time']:.3f}s ± {skip_branches['std_time']:.3f}s"
+        )
+        print(
+            f"  Memory - Route: {route_data['avg_memory']:.1f}MB, Skip: {skip_branches['avg_memory']:.1f}MB"
+        )
 
     def test_large_workflow_scalability(self):
         """Test scalability with large workflow (100 branches)."""
-        workflow = self.create_large_conditional_workflow(num_branches=100, work_per_branch=0.0005)
+        workflow = self.create_large_conditional_workflow(
+            num_branches=100, work_per_branch=0.0005
+        )
 
-        benchmark_results = self.benchmark_execution_modes(workflow, iterations=2)  # Fewer iterations for large test
+        benchmark_results = self.benchmark_execution_modes(
+            workflow, iterations=2
+        )  # Fewer iterations for large test
 
         route_data = benchmark_results["route_data"]
         skip_branches = benchmark_results["skip_branches"]
@@ -243,14 +272,23 @@ result = {{
 
         # Performance improvement should be more significant with larger workflows
         if skip_branches["avg_time"] < route_data["avg_time"]:
-            improvement = ((route_data["avg_time"] - skip_branches["avg_time"]) / route_data["avg_time"]) * 100
+            improvement = (
+                (route_data["avg_time"] - skip_branches["avg_time"])
+                / route_data["avg_time"]
+            ) * 100
             assert improvement > 15  # At least 15% improvement for large workflows
             print(f"Large workflow performance improvement: {improvement:.1f}%")
 
         print(f"Large workflow (100 branches):")
-        print(f"  Route data: {route_data['avg_time']:.3f}s ± {route_data['std_time']:.3f}s")
-        print(f"  Skip branches: {skip_branches['avg_time']:.3f}s ± {skip_branches['std_time']:.3f}s")
-        print(f"  Memory - Route: {route_data['avg_memory']:.1f}MB, Skip: {skip_branches['avg_memory']:.1f}MB")
+        print(
+            f"  Route data: {route_data['avg_time']:.3f}s ± {route_data['std_time']:.3f}s"
+        )
+        print(
+            f"  Skip branches: {skip_branches['avg_time']:.3f}s ± {skip_branches['std_time']:.3f}s"
+        )
+        print(
+            f"  Memory - Route: {route_data['avg_memory']:.1f}MB, Skip: {skip_branches['avg_memory']:.1f}MB"
+        )
 
     def test_graph_analysis_overhead(self):
         """Test graph analysis overhead for conditional execution."""
@@ -260,7 +298,7 @@ result = {{
         # Create nested conditional structure
         source = PythonCodeNode(
             name="source",
-            code="result = {'level1': True, 'level2': True, 'level3': False}"
+            code="result = {'level1': True, 'level2': True, 'level3': False}",
         )
         workflow.add_node("source", source)
 
@@ -271,12 +309,12 @@ result = {{
                     name=f"switch_l{level}_b{branch}",
                     condition_field=f"level{level}",
                     operator="equals",
-                    value=True
+                    value=True,
                 )
 
                 processor = PythonCodeNode(
                     name=f"proc_l{level}_b{branch}",
-                    code=f"result = {{'level': {level}, 'branch': {branch}}}"
+                    code=f"result = {{'level': {level}, 'branch': {branch}}}",
                 )
 
                 workflow.add_node(f"switch_l{level}_b{branch}", switch)
@@ -284,12 +322,22 @@ result = {{
 
                 # Connect to source or previous level
                 if level == 1:
-                    workflow.connect("source", f"switch_l{level}_b{branch}", {"result": "input_data"})
+                    workflow.connect(
+                        "source", f"switch_l{level}_b{branch}", {"result": "input_data"}
+                    )
                 else:
                     parent_branch = branch // 2
-                    workflow.connect(f"proc_l{level-1}_b{parent_branch}", f"switch_l{level}_b{branch}", {"result": "input_data"})
+                    workflow.connect(
+                        f"proc_l{level-1}_b{parent_branch}",
+                        f"switch_l{level}_b{branch}",
+                        {"result": "input_data"},
+                    )
 
-                workflow.connect(f"switch_l{level}_b{branch}", f"proc_l{level}_b{branch}", {"true_output": "input"})
+                workflow.connect(
+                    f"switch_l{level}_b{branch}",
+                    f"proc_l{level}_b{branch}",
+                    {"true_output": "input"},
+                )
 
         # Measure analysis overhead
         runtime = LocalRuntime(conditional_execution="skip_branches")
@@ -306,11 +354,13 @@ result = {{
             assert total_time < 2.0  # Should complete quickly
 
             # If we can measure analysis time separately
-            if hasattr(runtime, '_last_analysis_time'):
+            if hasattr(runtime, "_last_analysis_time"):
                 analysis_time = runtime._last_analysis_time
                 analysis_overhead = (analysis_time / total_time) * 100
                 assert analysis_overhead < 10  # Analysis should be < 10% of total time
-                print(f"Graph analysis overhead: {analysis_overhead:.1f}% ({analysis_time:.3f}s)")
+                print(
+                    f"Graph analysis overhead: {analysis_overhead:.1f}% ({analysis_time:.3f}s)"
+                )
 
         except NotImplementedError:
             pytest.skip("Skip branches mode not implemented yet")
@@ -326,7 +376,7 @@ result = {{
             code="""
 active_branches = [0, 9, 19, 29, 39]  # Only 5 out of 50 branches
 result = {'active_branches': active_branches}
-"""
+""",
         )
         workflow.add_node("source", source)
 
@@ -336,7 +386,7 @@ result = {'active_branches': active_branches}
                 name=f"switch_{i}",
                 condition_field="active_branches",
                 operator="contains",
-                value=i
+                value=i,
             )
 
             # Memory-intensive processor
@@ -351,7 +401,7 @@ result = {{
     'data_size': len(processed_data),
     'sample_data': processed_data[:10]  # Only return sample to avoid huge results
 }}
-"""
+""",
             )
 
             workflow.add_node(f"switch_{i}", switch)
@@ -389,7 +439,9 @@ result = {{
             print(f"  Memory savings: {memory_savings:.1f}%")
 
             # Verify only active branches executed
-            executed_processors = [k for k in results_skip.keys() if k.startswith("processor_")]
+            executed_processors = [
+                k for k in results_skip.keys() if k.startswith("processor_")
+            ]
             assert len(executed_processors) <= 5  # Only active branches
 
         except NotImplementedError:
@@ -425,7 +477,7 @@ result = {
     'batch_size': len(orders),
     'processing_timestamp': time.time()
 }
-"""
+""",
         )
 
         # Customer type routing
@@ -436,8 +488,8 @@ result = {
             cases={
                 "premium": "premium_processing",
                 "standard": "standard_processing",
-                "guest": "guest_processing"
-            }
+                "guest": "guest_processing",
+            },
         )
 
         # Premium customer processing (complex logic)
@@ -462,7 +514,7 @@ for order in orders:
         processed_orders.append(processed)
 
 result = {'processed_orders': processed_orders, 'processor': 'premium'}
-"""
+""",
         )
 
         # Standard customer processing
@@ -486,7 +538,7 @@ for order in orders:
         processed_orders.append(processed)
 
 result = {'processed_orders': processed_orders, 'processor': 'standard'}
-"""
+""",
         )
 
         # Fraud check routing (parallel processing)
@@ -494,7 +546,7 @@ result = {'processed_orders': processed_orders, 'processor': 'standard'}
             name="fraud_router",
             condition_field="requires_fraud_check",
             operator="equals",
-            value=True
+            value=True,
         )
 
         # Fraud check processor (expensive operation)
@@ -517,7 +569,7 @@ for order in orders:
         fraud_results.append(result)
 
 result = {'fraud_checks': fraud_results, 'total_checked': len(fraud_results)}
-"""
+""",
         )
 
         # Regional shipping processor
@@ -525,11 +577,7 @@ result = {'fraud_checks': fraud_results, 'total_checked': len(fraud_results)}
             name="shipping_router",
             condition_field="region",
             operator="switch",
-            cases={
-                "US": "us_shipping",
-                "EU": "eu_shipping",
-                "APAC": "apac_shipping"
-            }
+            cases={"US": "us_shipping", "EU": "eu_shipping", "APAC": "apac_shipping"},
         )
 
         # US shipping (fastest processing)
@@ -551,7 +599,7 @@ for order in us_orders:
     shipping_labels.append(label)
 
 result = {'shipping_labels': shipping_labels, 'region': 'US'}
-"""
+""",
         )
 
         # EU shipping (medium processing)
@@ -574,7 +622,7 @@ for order in eu_orders:
     shipping_labels.append(label)
 
 result = {'shipping_labels': shipping_labels, 'region': 'EU'}
-"""
+""",
         )
 
         # Build workflow
@@ -587,7 +635,7 @@ result = {'shipping_labels': shipping_labels, 'region': 'EU'}
             ("fraud_checker", fraud_checker),
             ("shipping_router", shipping_router),
             ("us_shipping", us_shipping),
-            ("eu_shipping", eu_shipping)
+            ("eu_shipping", eu_shipping),
         ]
 
         for node_id, node in nodes:
@@ -599,8 +647,12 @@ result = {'shipping_labels': shipping_labels, 'region': 'EU'}
         workflow.connect("order_source", "shipping_router", {"result": "input_data"})
 
         # Customer processing paths
-        workflow.connect("customer_router", "premium_processor", {"case_premium": "input"})
-        workflow.connect("customer_router", "standard_processor", {"case_standard": "input"})
+        workflow.connect(
+            "customer_router", "premium_processor", {"case_premium": "input"}
+        )
+        workflow.connect(
+            "customer_router", "standard_processor", {"case_standard": "input"}
+        )
 
         # Fraud check path
         workflow.connect("fraud_router", "fraud_checker", {"true_output": "input"})
@@ -616,7 +668,9 @@ result = {'shipping_labels': shipping_labels, 'region': 'EU'}
         skip_branches = benchmark_results["skip_branches"]
 
         # Real-world performance requirements
-        assert route_data["avg_time"] < 2.0  # Should process 100 orders in under 2 seconds
+        assert (
+            route_data["avg_time"] < 2.0
+        )  # Should process 100 orders in under 2 seconds
         assert skip_branches["avg_time"] < 2.0
 
         # Memory should be reasonable for production use
@@ -628,9 +682,15 @@ result = {'shipping_labels': shipping_labels, 'region': 'EU'}
         orders_per_second_skip = 100 / skip_branches["avg_time"]
 
         print(f"Real-world e-commerce processing performance:")
-        print(f"  Route data: {route_data['avg_time']:.3f}s ({orders_per_second_route:.0f} orders/sec)")
-        print(f"  Skip branches: {skip_branches['avg_time']:.3f}s ({orders_per_second_skip:.0f} orders/sec)")
-        print(f"  Memory - Route: {route_data['avg_memory']:.1f}MB, Skip: {skip_branches['avg_memory']:.1f}MB")
+        print(
+            f"  Route data: {route_data['avg_time']:.3f}s ({orders_per_second_route:.0f} orders/sec)"
+        )
+        print(
+            f"  Skip branches: {skip_branches['avg_time']:.3f}s ({orders_per_second_skip:.0f} orders/sec)"
+        )
+        print(
+            f"  Memory - Route: {route_data['avg_memory']:.1f}MB, Skip: {skip_branches['avg_memory']:.1f}MB"
+        )
 
         # Verify processing results
         route_results = route_data["results"]
@@ -643,7 +703,9 @@ result = {'shipping_labels': shipping_labels, 'region': 'EU'}
 
         # Verify realistic processing occurred
         premium_result = route_results["premium_processor"]["result"]
-        assert len(premium_result["processed_orders"]) > 0  # Some premium customers processed
+        assert (
+            len(premium_result["processed_orders"]) > 0
+        )  # Some premium customers processed
 
         fraud_result = route_results["fraud_checker"]["result"]
         assert len(fraud_result["fraud_checks"]) > 0  # Some fraud checks performed
@@ -651,7 +713,9 @@ result = {'shipping_labels': shipping_labels, 'region': 'EU'}
     def test_performance_regression_monitoring(self):
         """Test performance regression monitoring capabilities."""
         # Create baseline workflow for regression testing
-        workflow = self.create_large_conditional_workflow(num_branches=20, work_per_branch=0.001)
+        workflow = self.create_large_conditional_workflow(
+            num_branches=20, work_per_branch=0.001
+        )
 
         # Run multiple iterations to establish baseline
         iterations = 5
@@ -692,7 +756,9 @@ result = {'shipping_labels': shipping_labels, 'region': 'EU'}
             if skip_avg < baseline_avg:
                 improvement = ((baseline_avg - skip_avg) / baseline_avg) * 100
                 print(f"Performance regression test:")
-                print(f"  Baseline (route_data): {baseline_avg:.3f}s ± {baseline_std:.3f}s")
+                print(
+                    f"  Baseline (route_data): {baseline_avg:.3f}s ± {baseline_std:.3f}s"
+                )
                 print(f"  Skip branches: {skip_avg:.3f}s")
                 print(f"  Performance improvement: {improvement:.1f}%")
 
@@ -731,11 +797,17 @@ class TestConditionalExecutionBenchmarks:
 
         # Performance improvement
         if skip_branches["avg_time"] < route_data["avg_time"]:
-            time_improvement = ((route_data["avg_time"] - skip_branches["avg_time"]) / route_data["avg_time"]) * 100
+            time_improvement = (
+                (route_data["avg_time"] - skip_branches["avg_time"])
+                / route_data["avg_time"]
+            ) * 100
             report += f"  Performance Improvement: {time_improvement:.1f}%\n"
 
         if skip_branches["avg_memory"] < route_data["avg_memory"]:
-            memory_improvement = ((route_data["avg_memory"] - skip_branches["avg_memory"]) / route_data["avg_memory"]) * 100
+            memory_improvement = (
+                (route_data["avg_memory"] - skip_branches["avg_memory"])
+                / route_data["avg_memory"]
+            ) * 100
             report += f"  Memory Improvement: {memory_improvement:.1f}%\n"
 
         report += f"{'='*60}\n"
@@ -747,24 +819,30 @@ class TestConditionalExecutionBenchmarks:
         benchmark_results = []
 
         # Small workflow benchmark
-        small_workflow = self.create_large_conditional_workflow(num_branches=10, work_per_branch=0.001)
+        small_workflow = self.create_large_conditional_workflow(
+            num_branches=10, work_per_branch=0.001
+        )
         small_results = self.benchmark_execution_modes(small_workflow, iterations=5)
         benchmark_results.append(("Small Workflow (10 branches)", small_results))
 
         # Medium workflow benchmark
-        medium_workflow = self.create_large_conditional_workflow(num_branches=30, work_per_branch=0.001)
+        medium_workflow = self.create_large_conditional_workflow(
+            num_branches=30, work_per_branch=0.001
+        )
         medium_results = self.benchmark_execution_modes(medium_workflow, iterations=3)
         benchmark_results.append(("Medium Workflow (30 branches)", medium_results))
 
         # Large workflow benchmark
-        large_workflow = self.create_large_conditional_workflow(num_branches=50, work_per_branch=0.0005)
+        large_workflow = self.create_large_conditional_workflow(
+            num_branches=50, work_per_branch=0.0005
+        )
         large_results = self.benchmark_execution_modes(large_workflow, iterations=2)
         benchmark_results.append(("Large Workflow (50 branches)", large_results))
 
         # Generate comprehensive report
-        full_report = "\n" + "="*80 + "\n"
+        full_report = "\n" + "=" * 80 + "\n"
         full_report += "CONDITIONAL EXECUTION COMPREHENSIVE BENCHMARK REPORT\n"
-        full_report += "="*80 + "\n"
+        full_report += "=" * 80 + "\n"
 
         for test_name, results in benchmark_results:
             report = self.create_benchmark_report(test_name, results)
@@ -790,7 +868,9 @@ class TestConditionalExecutionBenchmarks:
         skip_times = [r[1]["skip_branches"]["avg_time"] for r in benchmark_results]
 
         # Performance should scale reasonably with workflow size
-        assert route_times[0] < route_times[1] < route_times[2]  # Should increase with size
+        assert (
+            route_times[0] < route_times[1] < route_times[2]
+        )  # Should increase with size
 
         # Skip branches should consistently perform better (if implemented)
         improvements = []
@@ -806,14 +886,18 @@ class TestConditionalExecutionBenchmarks:
             avg_improvement = mean(improvements)
             print(f"\nOverall Performance Summary:")
             print(f"  Average performance improvement: {avg_improvement:.1f}%")
-            print(f"  Consistent improvement across all test sizes: {len(improvements) == len(benchmark_results)}")
+            print(
+                f"  Consistent improvement across all test sizes: {len(improvements) == len(benchmark_results)}"
+            )
 
             # Should show consistent improvement
             assert avg_improvement > 10.0  # At least 10% average improvement
 
     def create_large_conditional_workflow(self, num_branches, work_per_branch):
         """Helper method to create large conditional workflow."""
-        workflow = Workflow("benchmark_workflow", f"Benchmark with {num_branches} branches")
+        workflow = Workflow(
+            "benchmark_workflow", f"Benchmark with {num_branches} branches"
+        )
 
         # Source that activates 20% of branches
         source = PythonCodeNode(
@@ -823,7 +907,7 @@ import random
 active_count = max(1, {num_branches} // 5)  # 20% of branches
 active_branches = random.sample(range({num_branches}), active_count)
 result = {{'active_branches': active_branches}}
-"""
+""",
         )
         workflow.add_node("source", source)
 
@@ -833,7 +917,7 @@ result = {{'active_branches': active_branches}}
                 name=f"switch_{i}",
                 condition_field="active_branches",
                 operator="contains",
-                value=i
+                value=i,
             )
 
             processor = PythonCodeNode(
@@ -842,7 +926,7 @@ result = {{'active_branches': active_branches}}
 import time
 time.sleep({work_per_branch})
 result = {{'branch_id': {i}, 'completed': True}}
-"""
+""",
             )
 
             workflow.add_node(f"switch_{i}", switch)
@@ -906,13 +990,15 @@ result = {{'branch_id': {i}, 'completed': True}}
                 "avg_time": mean(route_times),
                 "std_time": stdev(route_times) if len(route_times) > 1 else 0,
                 "avg_memory": mean(route_memory),
-                "results": results_route
+                "results": results_route,
             },
             "skip_branches": {
                 "times": skip_times,
                 "avg_time": mean(skip_times),
                 "std_time": stdev(skip_times) if len(skip_times) > 1 else 0,
                 "avg_memory": mean(skip_memory),
-                "results": results_skip if 'results_skip' in locals() else results_route
-            }
+                "results": (
+                    results_skip if "results_skip" in locals() else results_route
+                ),
+            },
         }

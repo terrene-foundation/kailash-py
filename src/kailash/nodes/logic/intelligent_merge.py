@@ -42,42 +42,42 @@ class IntelligentMergeNode(Node):
                 type=str,
                 required=False,
                 default="combine",
-                description="Merge strategy: combine, first_available, weighted, fallback, adaptive, consensus, priority_merge, conditional_aware"
+                description="Merge strategy: combine, first_available, weighted, fallback, adaptive, consensus, priority_merge, conditional_aware",
             ),
             "handle_none": NodeParameter(
                 name="handle_none",
                 type=bool,
                 required=False,
                 default=True,
-                description="Whether to intelligently handle None inputs"
+                description="Whether to intelligently handle None inputs",
             ),
             "timeout": NodeParameter(
                 name="timeout",
                 type=float,
                 required=False,
                 default=None,
-                description="Timeout for waiting on async inputs"
+                description="Timeout for waiting on async inputs",
             ),
             "priority_threshold": NodeParameter(
                 name="priority_threshold",
                 type=float,
                 required=False,
                 default=0.5,
-                description="Minimum priority threshold for priority_merge strategy"
+                description="Minimum priority threshold for priority_merge strategy",
             ),
             "consensus_threshold": NodeParameter(
                 name="consensus_threshold",
                 type=int,
                 required=False,
                 default=2,
-                description="Minimum number of inputs needed for consensus strategy"
+                description="Minimum number of inputs needed for consensus strategy",
             ),
             "conditional_context": NodeParameter(
                 name="conditional_context",
                 type=dict,
                 required=False,
                 default=None,
-                description="Context from conditional execution for strategy optimization"
+                description="Context from conditional execution for strategy optimization",
             ),
             # Dynamic inputs - up to 10 for flexibility
             **{
@@ -86,25 +86,23 @@ class IntelligentMergeNode(Node):
                     type=Any,
                     required=False,
                     default=None,
-                    description=f"Input source {i}"
+                    description=f"Input source {i}",
                 )
                 for i in range(1, 11)
-            }
+            },
         }
 
     def get_output_schema(self) -> Dict[str, NodeParameter]:
         """Define output schema."""
         return {
             "output": NodeParameter(
-                name="output",
-                type=Any,
-                description="Merged result based on strategy"
+                name="output", type=Any, description="Merged result based on strategy"
             ),
             "merge_stats": NodeParameter(
                 name="merge_stats",
                 type=dict,
-                description="Statistics about the merge operation"
-            )
+                description="Statistics about the merge operation",
+            ),
         }
 
     def run(self, **kwargs) -> Dict[str, Any]:
@@ -140,7 +138,9 @@ class IntelligentMergeNode(Node):
         elif method == "priority_merge":
             result = self._merge_priority(inputs, kwargs.get("priority_threshold", 0.5))
         elif method == "conditional_aware":
-            result = self._merge_conditional_aware(inputs, kwargs.get("conditional_context"))
+            result = self._merge_conditional_aware(
+                inputs, kwargs.get("conditional_context")
+            )
         else:
             raise ValueError(f"Unknown merge method: {method}")
 
@@ -149,13 +149,10 @@ class IntelligentMergeNode(Node):
             "method": method,
             "total_inputs": len(kwargs) - 3,  # Exclude method, handle_none, timeout
             "valid_inputs": len(inputs),
-            "skipped_inputs": len(kwargs) - 3 - len(inputs)
+            "skipped_inputs": len(kwargs) - 3 - len(inputs),
         }
 
-        return {
-            "output": result,
-            "merge_stats": stats
-        }
+        return {"output": result, "merge_stats": stats}
 
     def _merge_combine(self, inputs: Dict[str, Any]) -> Any:
         """Combine all inputs into a single structure."""
@@ -223,7 +220,7 @@ class IntelligentMergeNode(Node):
         return {
             "score": final_score,
             "components": len(components),
-            "details": components
+            "details": components,
         }
 
     def _merge_fallback(self, inputs: Dict[str, Any]) -> Any:
@@ -263,7 +260,9 @@ class IntelligentMergeNode(Node):
             # All inputs have priority - use priority merge
             strategy_used = "priority_merge"
             result = self._merge_priority(inputs, kwargs.get("priority_threshold", 0.5))
-        elif all(isinstance(v, dict) and "score" in v and "weight" in v for v in input_values):
+        elif all(
+            isinstance(v, dict) and "score" in v and "weight" in v for v in input_values
+        ):
             # All inputs have scores and weights - use weighted merge
             strategy_used = "weighted"
             result = self._merge_weighted(inputs)
@@ -280,7 +279,7 @@ class IntelligentMergeNode(Node):
             "strategy_used": strategy_used,
             "result": result,
             "input_count": len(inputs),
-            "adaptation_reason": f"Selected {strategy_used} based on input analysis"
+            "adaptation_reason": f"Selected {strategy_used} based on input analysis",
         }
 
     def _merge_consensus(self, inputs: Dict[str, Any], threshold: int) -> Any:
@@ -289,7 +288,7 @@ class IntelligentMergeNode(Node):
             return {
                 "consensus": False,
                 "result": None,
-                "reason": f"Insufficient inputs ({len(inputs)} < {threshold})"
+                "reason": f"Insufficient inputs ({len(inputs)} < {threshold})",
             }
 
         # For boolean decisions
@@ -302,7 +301,7 @@ class IntelligentMergeNode(Node):
                 "consensus": True,
                 "result": consensus_result,
                 "vote_count": {"true": true_count, "false": false_count},
-                "confidence": max(true_count, false_count) / len(inputs)
+                "confidence": max(true_count, false_count) / len(inputs),
             }
 
         # For dict inputs with decisions
@@ -319,7 +318,7 @@ class IntelligentMergeNode(Node):
                 "consensus": majority_count >= threshold,
                 "result": majority_decision,
                 "vote_count": decision_counts,
-                "confidence": majority_count / len(inputs)
+                "confidence": majority_count / len(inputs),
             }
 
         # For other types, use most common value
@@ -343,7 +342,7 @@ class IntelligentMergeNode(Node):
                 "consensus": most_common_count >= threshold,
                 "result": consensus_value,
                 "vote_count": value_counts,
-                "confidence": most_common_count / len(inputs)
+                "confidence": most_common_count / len(inputs),
             }
 
         return {"consensus": False, "result": None, "reason": "no_valid_inputs"}
@@ -365,7 +364,11 @@ class IntelligentMergeNode(Node):
                 prioritized_inputs.append((1.0, key, value))
 
         if not prioritized_inputs:
-            return {"result": None, "priorities_processed": 0, "reason": "no_inputs_above_threshold"}
+            return {
+                "result": None,
+                "priorities_processed": 0,
+                "reason": "no_inputs_above_threshold",
+            }
 
         # Sort by priority (highest first)
         prioritized_inputs.sort(key=lambda x: x[0], reverse=True)
@@ -383,24 +386,28 @@ class IntelligentMergeNode(Node):
             result = high_priority_data[0]
         else:
             # Create temporary inputs dict for combining
-            temp_inputs = {f"input{i}": data for i, data in enumerate(high_priority_data)}
+            temp_inputs = {
+                f"input{i}": data for i, data in enumerate(high_priority_data)
+            }
             result = self._merge_combine(temp_inputs)
 
         return {
             "result": result,
             "priorities_processed": len(high_priority_data),
             "priorities_used": priorities_used,
-            "highest_priority": max(priorities_used) if priorities_used else 0
+            "highest_priority": max(priorities_used) if priorities_used else 0,
         }
 
-    def _merge_conditional_aware(self, inputs: Dict[str, Any], conditional_context: Optional[Dict[str, Any]]) -> Any:
+    def _merge_conditional_aware(
+        self, inputs: Dict[str, Any], conditional_context: Optional[Dict[str, Any]]
+    ) -> Any:
         """Conditional execution optimized merge strategy."""
         if not inputs:
             return {
                 "result": None,
                 "strategy": "conditional_aware",
                 "inputs_processed": 0,
-                "conditional_context": conditional_context
+                "conditional_context": conditional_context,
             }
 
         # Use conditional context to optimize merge
@@ -423,7 +430,7 @@ class IntelligentMergeNode(Node):
                     "strategy": "conditional_aware",
                     "reason": "all_inputs_from_skipped_branches",
                     "skipped_branches": skipped_branches,
-                    "inputs_processed": 0
+                    "inputs_processed": 0,
                 }
 
             # Choose merge strategy based on execution confidence
@@ -449,11 +456,13 @@ class IntelligentMergeNode(Node):
                 "execution_confidence": execution_confidence,
                 "available_branches": available_branches,
                 "inputs_processed": len(filtered_inputs),
-                "inputs_skipped": len(inputs) - len(filtered_inputs)
+                "inputs_skipped": len(inputs) - len(filtered_inputs),
             }
         else:
             # No conditional context - fall back to adaptive merge
-            logger.debug("No conditional context provided, falling back to adaptive merge")
+            logger.debug(
+                "No conditional context provided, falling back to adaptive merge"
+            )
             temp_kwargs = {"consensus_threshold": 2, "priority_threshold": 0.5}
             adaptive_result = self._merge_adaptive(inputs, temp_kwargs)
 
@@ -462,5 +471,5 @@ class IntelligentMergeNode(Node):
                 "strategy": "conditional_aware",
                 "sub_strategy": f"fallback->{adaptive_result['strategy_used']}",
                 "reason": "no_conditional_context",
-                "inputs_processed": len(inputs)
+                "inputs_processed": len(inputs),
             }

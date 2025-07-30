@@ -33,7 +33,9 @@ class TestLocalRuntimeConditionalCoverage:
         assert not self.runtime._has_conditional_patterns(self.workflow)
 
         # Add a switch node
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         self.workflow.add_node("switch", switch)
 
         # Should detect conditional patterns
@@ -44,9 +46,13 @@ class TestLocalRuntimeConditionalCoverage:
         """Test successful conditional execution approach."""
         # Create workflow with switches
         source = PythonCodeNode(name="source", code="result = {'status': 'active'}")
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         proc_true = PythonCodeNode(name="proc_true", code="result = {'branch': 'true'}")
-        proc_false = PythonCodeNode(name="proc_false", code="result = {'branch': 'false'}")
+        proc_false = PythonCodeNode(
+            name="proc_false", code="result = {'branch': 'false'}"
+        )
 
         self.workflow.add_node("source", source)
         self.workflow.add_node("switch", switch)
@@ -64,7 +70,7 @@ class TestLocalRuntimeConditionalCoverage:
             parameters={},
             task_manager=task_manager,
             run_id="test-run",
-            workflow_context={}
+            workflow_context={},
         )
 
         # Should have executed source, switch, and true branch
@@ -76,7 +82,12 @@ class TestLocalRuntimeConditionalCoverage:
     def test_execute_conditional_approach_phase1_error(self):
         """Test conditional execution with phase 1 error."""
         # Create workflow with failing switch
-        switch = SwitchNode(name="switch", condition_field="missing_field", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch",
+            condition_field="missing_field",
+            operator="==",
+            value="active",
+        )
         self.workflow.add_node("switch", switch)
 
         # Execute - should handle missing field gracefully
@@ -88,8 +99,12 @@ class TestLocalRuntimeConditionalCoverage:
     def test_execute_phase1_switches(self):
         """Test switch execution."""
         # Create workflow with multiple switches
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
 
         self.workflow.add_node("switch1", switch1)
         self.workflow.add_node("switch2", switch2)
@@ -99,8 +114,7 @@ class TestLocalRuntimeConditionalCoverage:
 
         # Execute
         results, run_id = self.runtime.execute(
-            self.workflow,
-            parameters={"switch1": {"a": 1}, "switch2": {"b": 2}}
+            self.workflow, parameters={"switch1": {"a": 1}, "switch2": {"b": 2}}
         )
 
         assert "switch1" in results
@@ -127,8 +141,7 @@ class TestLocalRuntimeConditionalCoverage:
         """Test single node execution with error handling."""
         # Create node that will fail
         failing_node = PythonCodeNode(
-            name="failing_node",
-            code="raise Exception('Test error')"
+            name="failing_node", code="raise Exception('Test error')"
         )
 
         self.workflow.add_node("failing_node", failing_node)
@@ -157,7 +170,9 @@ class TestLocalRuntimeConditionalCoverage:
     def test_conditional_execution_fallback(self):
         """Test fallback to standard execution when conditional fails."""
         # Create workflow with switches
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         self.workflow.add_node("switch", switch)
 
         # Execute - should handle missing status field
@@ -170,8 +185,12 @@ class TestLocalRuntimeConditionalCoverage:
     async def test_gather_switch_dependencies(self):
         """Test gathering switch dependencies for hierarchical execution."""
         # Create hierarchical switches
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
         proc = PythonCodeNode(name="proc", code="result = {'data': 1}")
 
         self.workflow.add_node("switch1", switch1)
@@ -211,8 +230,12 @@ class TestLocalRuntimeConditionalCoverage:
     def test_merge_node_conditional_handling(self):
         """Test merge node handling with conditional inputs."""
         # Create workflow with conditional merge
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
         proc1 = PythonCodeNode(name="proc1", code="result = {'data_a': 1}")
         proc2 = PythonCodeNode(name="proc2", code="result = {'data_b': 2}")
         merge = MergeNode(name="merge", merge_type="merge_dict", skip_none=True)
@@ -229,15 +252,9 @@ class TestLocalRuntimeConditionalCoverage:
         self.workflow.connect("proc2", "merge", {"result": "data2"})
 
         # Execute with only switch1 true
-        parameters = {
-            "switch1": {"a": 1},
-            "switch2": {"b": 3}  # Will be false
-        }
+        parameters = {"switch1": {"a": 1}, "switch2": {"b": 3}}  # Will be false
 
-        results, run_id = self.runtime.execute(
-            self.workflow,
-            parameters=parameters
-        )
+        results, run_id = self.runtime.execute(self.workflow, parameters=parameters)
 
         # Merge should handle partial inputs
         assert "merge" in results
@@ -245,17 +262,27 @@ class TestLocalRuntimeConditionalCoverage:
     def test_complex_conditional_patterns(self):
         """Test complex conditional patterns with multiple switches and merges."""
         # Create complex workflow
-        source = PythonCodeNode(name="source", code="result = {'type': 'A', 'value': 100}")
+        source = PythonCodeNode(
+            name="source", code="result = {'type': 'A', 'value': 100}"
+        )
 
         # Type routing
-        type_switch = SwitchNode(name="type_switch", condition_field="type", operator="==", value="A")
+        type_switch = SwitchNode(
+            name="type_switch", condition_field="type", operator="==", value="A"
+        )
 
         # Value routing
-        value_switch = SwitchNode(name="value_switch", condition_field="value", operator=">", value=50)
+        value_switch = SwitchNode(
+            name="value_switch", condition_field="value", operator=">", value=50
+        )
 
         # Processors
-        type_a_proc = PythonCodeNode(name="type_a_proc", code="result = {'processed': 'type_a'}")
-        high_value_proc = PythonCodeNode(name="high_value_proc", code="result = {'processed': 'high_value'}")
+        type_a_proc = PythonCodeNode(
+            name="type_a_proc", code="result = {'processed': 'type_a'}"
+        )
+        high_value_proc = PythonCodeNode(
+            name="high_value_proc", code="result = {'processed': 'high_value'}"
+        )
 
         # Final merge
         final_merge = MergeNode(name="final_merge", merge_type="merge_dict")
@@ -272,7 +299,9 @@ class TestLocalRuntimeConditionalCoverage:
         self.workflow.connect("source", "type_switch", {"result": "input_data"})
         self.workflow.connect("source", "value_switch", {"result": "input_data"})
         self.workflow.connect("type_switch", "type_a_proc", {"true_output": "input"})
-        self.workflow.connect("value_switch", "high_value_proc", {"true_output": "input"})
+        self.workflow.connect(
+            "value_switch", "high_value_proc", {"true_output": "input"}
+        )
         self.workflow.connect("type_a_proc", "final_merge", {"result": "data1"})
         self.workflow.connect("high_value_proc", "final_merge", {"result": "data2"})
 
@@ -303,7 +332,9 @@ class TestLocalRuntimeConditionalCoverage:
     async def test_phase_execution_error_handling(self):
         """Test error handling in different phases of conditional execution."""
         # Test phase 1 switch execution error
-        switch = SwitchNode(name="switch", condition_field="field", operator="invalid_op", value=1)
+        switch = SwitchNode(
+            name="switch", condition_field="field", operator="invalid_op", value=1
+        )
         self.workflow.add_node("switch", switch)
 
         task_manager = Mock()
@@ -316,7 +347,7 @@ class TestLocalRuntimeConditionalCoverage:
                 parameters={},
                 task_manager=task_manager,
                 run_id="test-run",
-                workflow_context={}
+                workflow_context={},
             )
             # Might return error result or raise exception
             assert True  # Just verify it doesn't crash
@@ -330,7 +361,9 @@ class TestLocalRuntimeConditionalCoverage:
         runtime = LocalRuntime(conditional_execution="skip_branches")
 
         # Create workflow with switch
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         proc = PythonCodeNode(name="proc", code="result = {'data': 1}")
 
         self.workflow.add_node("switch", switch)

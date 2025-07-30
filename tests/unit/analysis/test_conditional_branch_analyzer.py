@@ -46,7 +46,7 @@ class TestConditionalBranchAnalyzer:
             name="test_switch",
             condition_field="status",
             operator="equals",
-            value="active"
+            value="active",
         )
         self.workflow.add_node("switch1", switch_node)
 
@@ -58,16 +58,10 @@ class TestConditionalBranchAnalyzer:
         """Test _find_switch_nodes with multiple SwitchNodes."""
         # Add multiple SwitchNodes
         switch1 = SwitchNode(
-            name="switch1",
-            condition_field="status",
-            operator="equals",
-            value="active"
+            name="switch1", condition_field="status", operator="equals", value="active"
         )
         switch2 = SwitchNode(
-            name="switch2",
-            condition_field="type",
-            operator="equals",
-            value="premium"
+            name="switch2", condition_field="type", operator="equals", value="premium"
         )
 
         self.workflow.add_node("switch1", switch1)
@@ -82,14 +76,10 @@ class TestConditionalBranchAnalyzer:
         """Test _find_switch_nodes with mixed node types."""
         # Add SwitchNode and regular nodes
         switch_node = SwitchNode(
-            name="switch",
-            condition_field="status",
-            operator="equals",
-            value="active"
+            name="switch", condition_field="status", operator="equals", value="active"
         )
         python_node = PythonCodeNode(
-            name="processor",
-            code="result = {'processed': True}"
+            name="processor", code="result = {'processed': True}"
         )
 
         self.workflow.add_node("switch1", switch_node)
@@ -104,18 +94,13 @@ class TestConditionalBranchAnalyzer:
         """Test _build_branch_map with single SwitchNode."""
         # Create simple conditional workflow
         switch_node = SwitchNode(
-            name="switch",
-            condition_field="status",
-            operator="equals",
-            value="active"
+            name="switch", condition_field="status", operator="equals", value="active"
         )
         true_processor = PythonCodeNode(
-            name="true_proc",
-            code="result = {'branch': 'true'}"
+            name="true_proc", code="result = {'branch': 'true'}"
         )
         false_processor = PythonCodeNode(
-            name="false_proc",
-            code="result = {'branch': 'false'}"
+            name="false_proc", code="result = {'branch': 'false'}"
         )
 
         self.workflow.add_node("switch1", switch_node)
@@ -139,21 +124,12 @@ class TestConditionalBranchAnalyzer:
         """Test _build_branch_map with cascading SwitchNodes."""
         # Create cascading conditional workflow: Switch1 -> Switch2 -> Processors
         switch1 = SwitchNode(
-            name="switch1",
-            condition_field="type",
-            operator="equals",
-            value="premium"
+            name="switch1", condition_field="type", operator="equals", value="premium"
         )
         switch2 = SwitchNode(
-            name="switch2",
-            condition_field="status",
-            operator="equals",
-            value="active"
+            name="switch2", condition_field="status", operator="equals", value="active"
         )
-        processor = PythonCodeNode(
-            name="final_proc",
-            code="result = {'final': True}"
-        )
+        processor = PythonCodeNode(name="final_proc", code="result = {'final': True}")
 
         self.workflow.add_node("switch1", switch1)
         self.workflow.add_node("switch2", switch2)
@@ -174,16 +150,10 @@ class TestConditionalBranchAnalyzer:
         """Test _build_branch_map with parallel SwitchNodes."""
         # Create parallel conditional branches
         switch1 = SwitchNode(
-            name="switch1",
-            condition_field="type",
-            operator="equals",
-            value="premium"
+            name="switch1", condition_field="type", operator="equals", value="premium"
         )
         switch2 = SwitchNode(
-            name="switch2",
-            condition_field="region",
-            operator="equals",
-            value="US"
+            name="switch2", condition_field="region", operator="equals", value="US"
         )
         proc1 = PythonCodeNode(name="proc1", code="result = {'proc': 1}")
         proc2 = PythonCodeNode(name="proc2", code="result = {'proc': 2}")
@@ -209,13 +179,12 @@ class TestConditionalBranchAnalyzer:
         """Test get_reachable_nodes with simple switch results."""
         # Setup simple conditional workflow
         switch_node = SwitchNode(
-            name="switch",
-            condition_field="status",
-            operator="equals",
-            value="active"
+            name="switch", condition_field="status", operator="equals", value="active"
         )
         true_proc = PythonCodeNode(name="true_proc", code="result = {'branch': 'true'}")
-        false_proc = PythonCodeNode(name="false_proc", code="result = {'branch': 'false'}")
+        false_proc = PythonCodeNode(
+            name="false_proc", code="result = {'branch': 'false'}"
+        )
 
         self.workflow.add_node("switch1", switch_node)
         self.workflow.add_node("true_proc", true_proc)
@@ -226,10 +195,7 @@ class TestConditionalBranchAnalyzer:
 
         # Test true branch reachability
         switch_results = {
-            "switch1": {
-                "true_output": {"data": "processed"},
-                "false_output": None
-            }
+            "switch1": {"true_output": {"data": "processed"}, "false_output": None}
         }
 
         reachable = self.analyzer.get_reachable_nodes(switch_results)
@@ -242,13 +208,12 @@ class TestConditionalBranchAnalyzer:
         """Test get_reachable_nodes with false branch execution."""
         # Setup simple conditional workflow
         switch_node = SwitchNode(
-            name="switch",
-            condition_field="status",
-            operator="equals",
-            value="active"
+            name="switch", condition_field="status", operator="equals", value="active"
         )
         true_proc = PythonCodeNode(name="true_proc", code="result = {'branch': 'true'}")
-        false_proc = PythonCodeNode(name="false_proc", code="result = {'branch': 'false'}")
+        false_proc = PythonCodeNode(
+            name="false_proc", code="result = {'branch': 'false'}"
+        )
 
         self.workflow.add_node("switch1", switch_node)
         self.workflow.add_node("true_proc", true_proc)
@@ -259,10 +224,7 @@ class TestConditionalBranchAnalyzer:
 
         # Test false branch reachability
         switch_results = {
-            "switch1": {
-                "true_output": None,
-                "false_output": {"data": "processed"}
-            }
+            "switch1": {"true_output": None, "false_output": {"data": "processed"}}
         }
 
         reachable = self.analyzer.get_reachable_nodes(switch_results)
@@ -275,16 +237,10 @@ class TestConditionalBranchAnalyzer:
         """Test get_reachable_nodes with cascading conditions."""
         # Create cascading workflow
         switch1 = SwitchNode(
-            name="switch1",
-            condition_field="type",
-            operator="equals",
-            value="premium"
+            name="switch1", condition_field="type", operator="equals", value="premium"
         )
         switch2 = SwitchNode(
-            name="switch2",
-            condition_field="status",
-            operator="equals",
-            value="active"
+            name="switch2", condition_field="status", operator="equals", value="active"
         )
         final_proc = PythonCodeNode(name="final_proc", code="result = {'final': True}")
 
@@ -297,14 +253,8 @@ class TestConditionalBranchAnalyzer:
 
         # Test cascading true path
         switch_results = {
-            "switch1": {
-                "true_output": {"type": "premium"},
-                "false_output": None
-            },
-            "switch2": {
-                "true_output": {"status": "active"},
-                "false_output": None
-            }
+            "switch1": {"true_output": {"type": "premium"}, "false_output": None},
+            "switch2": {"true_output": {"status": "active"}, "false_output": None},
         }
 
         reachable = self.analyzer.get_reachable_nodes(switch_results)
@@ -317,16 +267,10 @@ class TestConditionalBranchAnalyzer:
         """Test get_reachable_nodes with blocked cascade (first switch false)."""
         # Create cascading workflow
         switch1 = SwitchNode(
-            name="switch1",
-            condition_field="type",
-            operator="equals",
-            value="premium"
+            name="switch1", condition_field="type", operator="equals", value="premium"
         )
         switch2 = SwitchNode(
-            name="switch2",
-            condition_field="status",
-            operator="equals",
-            value="active"
+            name="switch2", condition_field="status", operator="equals", value="active"
         )
         final_proc = PythonCodeNode(name="final_proc", code="result = {'final': True}")
 
@@ -339,10 +283,7 @@ class TestConditionalBranchAnalyzer:
 
         # Test blocked cascade (switch1 false blocks switch2)
         switch_results = {
-            "switch1": {
-                "true_output": None,
-                "false_output": {"type": "basic"}
-            }
+            "switch1": {"true_output": None, "false_output": {"type": "basic"}}
             # switch2 not executed because switch1 blocked it
         }
 
@@ -356,10 +297,7 @@ class TestConditionalBranchAnalyzer:
         """Test detect_conditional_patterns with simple pattern."""
         # Create simple conditional pattern
         switch_node = SwitchNode(
-            name="switch",
-            condition_field="status",
-            operator="equals",
-            value="active"
+            name="switch", condition_field="status", operator="equals", value="active"
         )
         self.workflow.add_node("switch1", switch_node)
 
@@ -374,16 +312,10 @@ class TestConditionalBranchAnalyzer:
         """Test detect_conditional_patterns with multiple switches."""
         # Create multiple switches
         switch1 = SwitchNode(
-            name="switch1",
-            condition_field="type",
-            operator="equals",
-            value="premium"
+            name="switch1", condition_field="type", operator="equals", value="premium"
         )
         switch2 = SwitchNode(
-            name="switch2",
-            condition_field="status",
-            operator="equals",
-            value="active"
+            name="switch2", condition_field="status", operator="equals", value="active"
         )
 
         self.workflow.add_node("switch1", switch1)
@@ -400,10 +332,7 @@ class TestConditionalBranchAnalyzer:
         """Test detect_conditional_patterns with cycles."""
         # Create conditional pattern with cycle
         switch_node = SwitchNode(
-            name="switch",
-            condition_field="continue",
-            operator="equals",
-            value=True
+            name="switch", condition_field="continue", operator="equals", value=True
         )
         self.workflow.add_node("switch1", switch_node)
 
@@ -421,10 +350,7 @@ class TestConditionalBranchAnalyzer:
         """Test detect_conditional_patterns with merge nodes."""
         # Create conditional pattern with merge
         switch_node = SwitchNode(
-            name="switch",
-            condition_field="status",
-            operator="equals",
-            value="active"
+            name="switch", condition_field="status", operator="equals", value="active"
         )
         merge_node = MergeNode(name="merge", merge_type="merge_dict")
 
@@ -457,10 +383,7 @@ class TestConditionalBranchAnalyzer:
         """Test that results are cached for performance."""
         # Add switch node
         switch_node = SwitchNode(
-            name="switch",
-            condition_field="status",
-            operator="equals",
-            value="active"
+            name="switch", condition_field="status", operator="equals", value="active"
         )
         self.workflow.add_node("switch1", switch_node)
 
@@ -481,10 +404,7 @@ class TestConditionalBranchAnalyzer:
         """Test cache invalidation when workflow changes."""
         # Add initial switch
         switch1 = SwitchNode(
-            name="switch1",
-            condition_field="status",
-            operator="equals",
-            value="active"
+            name="switch1", condition_field="status", operator="equals", value="active"
         )
         self.workflow.add_node("switch1", switch1)
 
@@ -494,10 +414,7 @@ class TestConditionalBranchAnalyzer:
 
         # Add another switch (should invalidate cache)
         switch2 = SwitchNode(
-            name="switch2",
-            condition_field="type",
-            operator="equals",
-            value="premium"
+            name="switch2", condition_field="type", operator="equals", value="premium"
         )
         self.workflow.add_node("switch2", switch2)
 
@@ -523,7 +440,7 @@ class TestConditionalBranchAnalyzerEdgeCases:
             name="isolated_switch",
             condition_field="status",
             operator="equals",
-            value="active"
+            value="active",
         )
         workflow.add_node("switch1", switch_node)
 
@@ -539,16 +456,10 @@ class TestConditionalBranchAnalyzerEdgeCases:
 
         # Create circular dependency: switch1 -> switch2 -> switch1
         switch1 = SwitchNode(
-            name="switch1",
-            condition_field="a",
-            operator="equals",
-            value=1
+            name="switch1", condition_field="a", operator="equals", value=1
         )
         switch2 = SwitchNode(
-            name="switch2",
-            condition_field="b",
-            operator="equals",
-            value=2
+            name="switch2", condition_field="b", operator="equals", value=2
         )
 
         workflow.add_node("switch1", switch1)
@@ -567,8 +478,12 @@ class TestConditionalBranchAnalyzerEdgeCases:
         analyzer = ConditionalBranchAnalyzer(workflow)
 
         # Create complex merge scenario
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="equals", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="equals", value=2)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="equals", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="equals", value=2
+        )
         merge1 = MergeNode(name="merge1", merge_type="merge_dict")
         merge2 = MergeNode(name="merge2", merge_type="concat")
 
@@ -598,21 +513,23 @@ class TestConditionalBranchAnalyzerEdgeCases:
                 name=f"switch_{i}",
                 condition_field=f"field_{i}",
                 operator="equals",
-                value=i
+                value=i,
             )
             workflow.add_node(f"switch_{i}", switch)
 
             # Add 9 processing nodes per switch
             for j in range(9):
                 proc = PythonCodeNode(
-                    name=f"proc_{i}_{j}",
-                    code=f"result = {{'proc': {i}, 'sub': {j}}}"
+                    name=f"proc_{i}_{j}", code=f"result = {{'proc': {i}, 'sub': {j}}}"
                 )
                 workflow.add_node(f"proc_{i}_{j}", proc)
-                workflow.connect(f"switch_{i}", f"proc_{i}_{j}", {"true_output": "input"})
+                workflow.connect(
+                    f"switch_{i}", f"proc_{i}_{j}", {"true_output": "input"}
+                )
 
         # Performance test - should complete quickly
         import time
+
         start_time = time.time()
 
         switch_nodes = analyzer._find_switch_nodes()
@@ -636,7 +553,11 @@ class TestConditionalBranchAnalyzerEdgeCases:
             name="multi_switch",
             condition_field="type",
             operator="switch",
-            cases={"premium": "premium_proc", "basic": "basic_proc", "trial": "trial_proc"}
+            cases={
+                "premium": "premium_proc",
+                "basic": "basic_proc",
+                "trial": "trial_proc",
+            },
         )
 
         proc1 = PythonCodeNode(name="premium_proc", code="result = {'type': 'premium'}")

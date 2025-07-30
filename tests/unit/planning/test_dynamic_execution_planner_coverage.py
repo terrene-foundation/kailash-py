@@ -62,7 +62,9 @@ class TestDynamicExecutionPlannerCoverage:
         """Test create_execution_plan respects node dependencies."""
         # Create workflow with dependencies
         source = PythonCodeNode(name="source", code="result = {'data': 'test'}")
-        switch = SwitchNode(name="switch", condition_field="status", operator="==", value="active")
+        switch = SwitchNode(
+            name="switch", condition_field="status", operator="==", value="active"
+        )
         proc1 = PythonCodeNode(name="proc1", code="result = {'step': 1}")
         proc2 = PythonCodeNode(name="proc2", code="result = {'step': 2}")
 
@@ -178,7 +180,7 @@ class TestDynamicExecutionPlannerCoverage:
 
         complex_results = {
             "switch1": {"true_output": {"status": "active", "type": "premium"}},
-            "switch2": {"false_output": {"region": "US"}}
+            "switch2": {"false_output": {"region": "US"}},
         }
         key2 = self.planner._create_cache_key(complex_results)
         assert isinstance(key2, str)
@@ -216,8 +218,12 @@ class TestDynamicExecutionPlannerCoverage:
     def test_create_hierarchical_execution_plan_simple(self):
         """Test create_hierarchical_execution_plan with simple hierarchy."""
         # Create hierarchical workflow
-        switch1 = SwitchNode(name="switch1", condition_field="level1", operator="==", value="A")
-        switch2 = SwitchNode(name="switch2", condition_field="level2", operator="==", value="B")
+        switch1 = SwitchNode(
+            name="switch1", condition_field="level1", operator="==", value="A"
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="level2", operator="==", value="B"
+        )
         proc = PythonCodeNode(name="proc", code="result = {'data': 1}")
 
         self.workflow.add_node("switch1", switch1)
@@ -229,7 +235,7 @@ class TestDynamicExecutionPlannerCoverage:
 
         switch_results = {
             "switch1": {"true_output": {"level1": "A"}, "false_output": None},
-            "switch2": {"true_output": {"level2": "B"}, "false_output": None}
+            "switch2": {"true_output": {"level2": "B"}, "false_output": None},
         }
 
         plan = self.planner.create_hierarchical_execution_plan(switch_results)
@@ -240,8 +246,12 @@ class TestDynamicExecutionPlannerCoverage:
     def test_handle_merge_nodes_with_conditional_inputs(self):
         """Test handle_merge_nodes_with_conditional_inputs method."""
         # Create workflow with merge node
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
         proc1 = PythonCodeNode(name="proc1", code="result = {'data_a': 1}")
         proc2 = PythonCodeNode(name="proc2", code="result = {'data_b': 2}")
         merge = MergeNode(name="merge", merge_type="merge_dict")
@@ -261,10 +271,12 @@ class TestDynamicExecutionPlannerCoverage:
         execution_plan = ["switch1", "proc1", "merge"]
         switch_results = {
             "switch1": {"true_output": {"a": 1}, "false_output": None},
-            "switch2": {"true_output": None, "false_output": None}
+            "switch2": {"true_output": None, "false_output": None},
         }
 
-        result = self.planner.handle_merge_nodes_with_conditional_inputs(execution_plan, switch_results)
+        result = self.planner.handle_merge_nodes_with_conditional_inputs(
+            execution_plan, switch_results
+        )
 
         assert "strategies" in result  # Not "merge_strategies"
         assert "merge_nodes" in result
@@ -296,15 +308,27 @@ class TestDynamicExecutionPlannerCoverage:
         """Test plan validation with complex workflow structure."""
         # Create complex workflow
         source = PythonCodeNode(name="source", code="result = {'data': 'test'}")
-        switch1 = SwitchNode(name="switch1", condition_field="branch", operator="==", value="A")
-        switch2 = SwitchNode(name="switch2", condition_field="sub_branch", operator="==", value="B")
+        switch1 = SwitchNode(
+            name="switch1", condition_field="branch", operator="==", value="A"
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="sub_branch", operator="==", value="B"
+        )
         proc_a = PythonCodeNode(name="proc_a", code="result = {'path': 'A'}")
         proc_b = PythonCodeNode(name="proc_b", code="result = {'path': 'B'}")
         merge = MergeNode(name="merge", merge_type="merge_dict")
         final = PythonCodeNode(name="final", code="result = {'final': True}")
 
         nodes = [source, switch1, switch2, proc_a, proc_b, merge, final]
-        node_names = ["source", "switch1", "switch2", "proc_a", "proc_b", "merge", "final"]
+        node_names = [
+            "source",
+            "switch1",
+            "switch2",
+            "proc_a",
+            "proc_b",
+            "merge",
+            "final",
+        ]
 
         for name, node in zip(node_names, nodes):
             self.workflow.add_node(name, node)
@@ -324,7 +348,12 @@ class TestDynamicExecutionPlannerCoverage:
         assert is_valid is True
 
         # Test partial plan (missing dependencies)
-        partial_plan = ["source", "switch1", "proc_a", "final"]  # Missing switch2, proc_b, merge
+        partial_plan = [
+            "source",
+            "switch1",
+            "proc_a",
+            "final",
+        ]  # Missing switch2, proc_b, merge
         is_valid, errors = self.planner.validate_execution_plan(partial_plan)
         assert is_valid is False
 
@@ -337,15 +366,9 @@ class TestDynamicExecutionPlannerCoverage:
         # Add many nodes
         for i in range(50):
             switch = SwitchNode(
-                name=f"switch_{i}",
-                condition_field=f"field_{i}",
-                operator="==",
-                value=i
+                name=f"switch_{i}", condition_field=f"field_{i}", operator="==", value=i
             )
-            proc = PythonCodeNode(
-                name=f"proc_{i}",
-                code=f"result = {{'proc': {i}}}"
-            )
+            proc = PythonCodeNode(name=f"proc_{i}", code=f"result = {{'proc': {i}}}")
 
             self.workflow.add_node(f"switch_{i}", switch)
             self.workflow.add_node(f"proc_{i}", proc)
@@ -358,11 +381,12 @@ class TestDynamicExecutionPlannerCoverage:
         for i in range(0, 50, 2):  # Only even switches return true
             switch_results[f"switch_{i}"] = {
                 "true_output": {f"field_{i}": i},
-                "false_output": None
+                "false_output": None,
             }
 
         # Test performance
         import time
+
         start_time = time.time()
 
         plan = self.planner.create_execution_plan(switch_results)
@@ -392,6 +416,7 @@ class TestDynamicExecutionPlannerCoverage:
 
         # First call - should cache the result
         import time
+
         start_time = time.time()
         plan1 = self.planner.create_execution_plan(switch_results)
         first_call_time = time.time() - start_time

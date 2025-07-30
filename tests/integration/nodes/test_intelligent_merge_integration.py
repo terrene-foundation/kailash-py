@@ -15,8 +15,11 @@ class TestIntelligentMergeIntegration:
         workflow = WorkflowBuilder()
 
         # Data source with conditional flags
-        workflow.add_node("PythonCodeNode", "data_source", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "data_source",
+            {
+                "code": """
 result = {
     'process_a': True,
     'process_b': False,
@@ -24,45 +27,59 @@ result = {
     'base_data': {'value': 100}
 }
 """
-        })
+            },
+        )
 
         # Conditional processors
-        workflow.add_node("SwitchNode", "switch_a", {
-            "condition_field": "process_a",
-            "operator": "==",
-            "value": True
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "switch_a",
+            {"condition_field": "process_a", "operator": "==", "value": True},
+        )
 
-        workflow.add_node("SwitchNode", "switch_b", {
-            "condition_field": "process_b",
-            "operator": "==",
-            "value": True
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "switch_b",
+            {"condition_field": "process_b", "operator": "==", "value": True},
+        )
 
-        workflow.add_node("SwitchNode", "switch_c", {
-            "condition_field": "process_c",
-            "operator": "==",
-            "value": True
-        })
+        workflow.add_node(
+            "SwitchNode",
+            "switch_c",
+            {"condition_field": "process_c", "operator": "==", "value": True},
+        )
 
         # Processors for each branch
-        workflow.add_node("PythonCodeNode", "processor_a", {
-            "code": "result = {'branch': 'a', 'data': {'processed_a': True, 'value': 150}}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "processor_a",
+            {
+                "code": "result = {'branch': 'a', 'data': {'processed_a': True, 'value': 150}}"
+            },
+        )
 
-        workflow.add_node("PythonCodeNode", "processor_b", {
-            "code": "result = {'branch': 'b', 'data': {'processed_b': True, 'value': 200}}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "processor_b",
+            {
+                "code": "result = {'branch': 'b', 'data': {'processed_b': True, 'value': 200}}"
+            },
+        )
 
-        workflow.add_node("PythonCodeNode", "processor_c", {
-            "code": "result = {'branch': 'c', 'data': {'processed_c': True, 'value': 250}}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "processor_c",
+            {
+                "code": "result = {'branch': 'c', 'data': {'processed_c': True, 'value': 250}}"
+            },
+        )
 
         # Intelligent merge node with adaptive strategy
-        workflow.add_node("IntelligentMergeNode", "intelligent_merge", {
-            "method": "adaptive",
-            "handle_none": True
-        })
+        workflow.add_node(
+            "IntelligentMergeNode",
+            "intelligent_merge",
+            {"method": "adaptive", "handle_none": True},
+        )
 
         # Connect workflow
         workflow.add_connection("data_source", "result", "switch_a", "input_data")
@@ -88,7 +105,9 @@ result = {
 
         # Should have used consensus strategy since 2 valid inputs meet consensus threshold
         assert merge_result["output"]["strategy_used"] == "consensus"
-        assert merge_result["output"]["input_count"] == 2  # Only branches A and C should execute
+        assert (
+            merge_result["output"]["input_count"] == 2
+        )  # Only branches A and C should execute
 
         # Verify only expected processors executed
         assert "processor_a" in results
@@ -104,32 +123,44 @@ result = {
         workflow = WorkflowBuilder()
 
         # Simple data source
-        workflow.add_node("PythonCodeNode", "source", {
-            "code": "result = {'data': 'test', 'priority': 'high'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "source",
+            {"code": "result = {'data': 'test', 'priority': 'high'}"},
+        )
 
         # Three processors
-        workflow.add_node("PythonCodeNode", "proc1", {
-            "code": "result = {'processor': 1, 'result': 'proc1_result'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "proc1",
+            {"code": "result = {'processor': 1, 'result': 'proc1_result'}"},
+        )
 
-        workflow.add_node("PythonCodeNode", "proc2", {
-            "code": "result = {'processor': 2, 'result': 'proc2_result'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "proc2",
+            {"code": "result = {'processor': 2, 'result': 'proc2_result'}"},
+        )
 
-        workflow.add_node("PythonCodeNode", "proc3", {
-            "code": "result = {'processor': 3, 'result': 'proc3_result'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "proc3",
+            {"code": "result = {'processor': 3, 'result': 'proc3_result'}"},
+        )
 
         # Conditional-aware merge with execution context
-        workflow.add_node("IntelligentMergeNode", "conditional_merge", {
-            "method": "conditional_aware",
-            "conditional_context": {
-                "available_branches": ["1", "3"],  # Only proc1 and proc3 available
-                "skipped_branches": ["2"],  # proc2 skipped
-                "execution_confidence": 0.85
-            }
-        })
+        workflow.add_node(
+            "IntelligentMergeNode",
+            "conditional_merge",
+            {
+                "method": "conditional_aware",
+                "conditional_context": {
+                    "available_branches": ["1", "3"],  # Only proc1 and proc3 available
+                    "skipped_branches": ["2"],  # proc2 skipped
+                    "execution_confidence": 0.85,
+                },
+            },
+        )
 
         # Connect workflow
         workflow.add_connection("source", "result", "proc1", "input_data")
@@ -152,48 +183,64 @@ result = {
         assert merge_result["output"]["sub_strategy"] == "combine"  # High confidence
         assert merge_result["output"]["execution_confidence"] == 0.85
         assert merge_result["output"]["inputs_processed"] == 2  # Only proc1 and proc3
-        assert merge_result["output"]["inputs_skipped"] == 1   # proc2 filtered out
+        assert merge_result["output"]["inputs_skipped"] == 1  # proc2 filtered out
 
     def test_priority_merge_with_weighted_inputs(self):
         """Test priority merge with weighted priority inputs."""
         workflow = WorkflowBuilder()
 
         # Create processors that output priority data
-        workflow.add_node("PythonCodeNode", "high_priority", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "high_priority",
+            {
+                "code": """
 result = {
     'data': 'critical_alert',
     'priority': 0.9,
     'source': 'security_system'
 }
 """
-        })
+            },
+        )
 
-        workflow.add_node("PythonCodeNode", "medium_priority", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "medium_priority",
+            {
+                "code": """
 result = {
     'data': 'warning_alert',
     'priority': 0.6,
     'source': 'monitoring_system'
 }
 """
-        })
+            },
+        )
 
-        workflow.add_node("PythonCodeNode", "low_priority", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "low_priority",
+            {
+                "code": """
 result = {
     'data': 'info_alert',
     'priority': 0.3,
     'source': 'logging_system'
 }
 """
-        })
+            },
+        )
 
         # Priority merge node
-        workflow.add_node("IntelligentMergeNode", "priority_merge", {
-            "method": "priority_merge",
-            "priority_threshold": 0.5  # Only medium and high priority
-        })
+        workflow.add_node(
+            "IntelligentMergeNode",
+            "priority_merge",
+            {
+                "method": "priority_merge",
+                "priority_threshold": 0.5,  # Only medium and high priority
+            },
+        )
 
         # Connect all to merge
         workflow.add_connection("high_priority", "result", "priority_merge", "input1")
@@ -208,7 +255,9 @@ result = {
         assert "priority_merge" in results
         merge_result = results["priority_merge"]
 
-        assert merge_result["output"]["priorities_processed"] == 2  # High and medium only
+        assert (
+            merge_result["output"]["priorities_processed"] == 2
+        )  # High and medium only
         assert merge_result["output"]["highest_priority"] == 0.9
         assert len(merge_result["output"]["priorities_used"]) == 2
 
@@ -222,23 +271,36 @@ result = {
         workflow = WorkflowBuilder()
 
         # Decision nodes
-        workflow.add_node("PythonCodeNode", "reviewer_1", {
-            "code": "result = {'decision': 'approve', 'confidence': 0.8, 'reviewer': 'alice'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "reviewer_1",
+            {
+                "code": "result = {'decision': 'approve', 'confidence': 0.8, 'reviewer': 'alice'}"
+            },
+        )
 
-        workflow.add_node("PythonCodeNode", "reviewer_2", {
-            "code": "result = {'decision': 'approve', 'confidence': 0.9, 'reviewer': 'bob'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "reviewer_2",
+            {
+                "code": "result = {'decision': 'approve', 'confidence': 0.9, 'reviewer': 'bob'}"
+            },
+        )
 
-        workflow.add_node("PythonCodeNode", "reviewer_3", {
-            "code": "result = {'decision': 'reject', 'confidence': 0.7, 'reviewer': 'charlie'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "reviewer_3",
+            {
+                "code": "result = {'decision': 'reject', 'confidence': 0.7, 'reviewer': 'charlie'}"
+            },
+        )
 
         # Consensus merge
-        workflow.add_node("IntelligentMergeNode", "consensus_decision", {
-            "method": "consensus",
-            "consensus_threshold": 2
-        })
+        workflow.add_node(
+            "IntelligentMergeNode",
+            "consensus_decision",
+            {"method": "consensus", "consensus_threshold": 2},
+        )
 
         # Connect reviewers to consensus
         workflow.add_connection("reviewer_1", "result", "consensus_decision", "input1")
@@ -257,4 +319,4 @@ result = {
         assert consensus_result["output"]["result"] == "approve"  # Majority decision
         assert consensus_result["output"]["vote_count"]["approve"] == 2
         assert consensus_result["output"]["vote_count"]["reject"] == 1
-        assert consensus_result["output"]["confidence"] == 2/3  # 2 out of 3 votes
+        assert consensus_result["output"]["confidence"] == 2 / 3  # 2 out of 3 votes

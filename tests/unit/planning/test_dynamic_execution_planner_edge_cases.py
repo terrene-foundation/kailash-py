@@ -54,8 +54,12 @@ class TestDynamicExecutionPlannerEdgeCases:
         workflow = Workflow("test", "Test")
 
         # Add switches with circular dependency
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
 
         workflow.add_node("switch1", switch1)
         workflow.add_node("switch2", switch2)
@@ -77,7 +81,11 @@ class TestDynamicExecutionPlannerEdgeCases:
         planner = DynamicExecutionPlanner(workflow)
 
         # Mock analyzer method to raise error
-        with patch.object(planner.analyzer, 'create_hierarchical_execution_plan', side_effect=Exception("Test error")):
+        with patch.object(
+            planner.analyzer,
+            "create_hierarchical_execution_plan",
+            side_effect=Exception("Test error"),
+        ):
             result = planner.create_hierarchical_execution_plan({})
 
             # Should fallback to basic execution plan
@@ -100,7 +108,7 @@ class TestDynamicExecutionPlannerEdgeCases:
         planner = DynamicExecutionPlanner(workflow)
 
         # Mock graph nodes to raise error
-        with patch.object(workflow.graph, 'nodes', side_effect=Exception("Test error")):
+        with patch.object(workflow.graph, "nodes", side_effect=Exception("Test error")):
             merge_nodes = planner._find_merge_nodes_fallback()
             assert merge_nodes == []
 
@@ -110,7 +118,9 @@ class TestDynamicExecutionPlannerEdgeCases:
         planner = DynamicExecutionPlanner(workflow)
 
         # Mock graph predecessors to raise error
-        with patch.object(workflow.graph, 'predecessors', side_effect=Exception("Test error")):
+        with patch.object(
+            workflow.graph, "predecessors", side_effect=Exception("Test error")
+        ):
             strategy = planner._create_merge_strategy("merge", set(), {})
 
             assert strategy["strategy_type"] == "error"
@@ -149,7 +159,9 @@ class TestDynamicExecutionPlannerEdgeCases:
         planner = DynamicExecutionPlanner(workflow)
 
         # Test with None execution plan
-        with patch.object(planner, '_analyze_dependencies', side_effect=Exception("Test error")):
+        with patch.object(
+            planner, "_analyze_dependencies", side_effect=Exception("Test error")
+        ):
             groups = planner._identify_parallel_execution_groups(["node1", "node2"])
 
             # Should return default grouping
@@ -194,7 +206,9 @@ class TestDynamicExecutionPlannerEdgeCases:
 
         # Create complex graph
         source = PythonCodeNode(name="source", code="result = {'data': 1}")
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
         proc = PythonCodeNode(name="proc", code="result = {'data': 2}")
 
         workflow.add_node("source", source)
@@ -233,7 +247,7 @@ class TestDynamicExecutionPlannerEdgeCases:
         results3 = {
             "switch1": {
                 "true_output": {"nested": {"data": [1, 2, 3]}},
-                "false_output": None
+                "false_output": None,
             }
         }
         key3 = planner._create_cache_key(results3)
@@ -249,7 +263,9 @@ class TestDynamicExecutionPlannerEdgeCases:
         planner = DynamicExecutionPlanner(workflow)
 
         # Mock analyzer to not have _find_merge_nodes method
-        with patch.object(planner.analyzer, '_find_merge_nodes', side_effect=AttributeError):
+        with patch.object(
+            planner.analyzer, "_find_merge_nodes", side_effect=AttributeError
+        ):
             result = planner.handle_merge_nodes_with_conditional_inputs(["merge"], {})
 
             # Should use fallback method

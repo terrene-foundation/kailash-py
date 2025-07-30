@@ -26,10 +26,18 @@ class TestHierarchicalSwitchExecution:
     def test_simple_switch_hierarchy(self):
         """Test simple hierarchical switch pattern."""
         # Create workflow: source -> switch1 -> switch2 -> processor
-        source = PythonCodeNode(name="source", code="result = {'level': 1, 'type': 'A'}")
-        switch1 = SwitchNode(name="switch1", condition_field="level", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="type", operator="==", value="A")
-        processor = PythonCodeNode(name="processor", code="result = {'processed': True}")
+        source = PythonCodeNode(
+            name="source", code="result = {'level': 1, 'type': 'A'}"
+        )
+        switch1 = SwitchNode(
+            name="switch1", condition_field="level", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="type", operator="==", value="A"
+        )
+        processor = PythonCodeNode(
+            name="processor", code="result = {'processed': True}"
+        )
 
         self.workflow.add_node("source", source)
         self.workflow.add_node("switch1", switch1)
@@ -57,8 +65,12 @@ class TestHierarchicalSwitchExecution:
         # Create workflow with parallel switches
         # source -> [switch1, switch2] -> merge
         source = PythonCodeNode(name="source", code="result = {'a': 1, 'b': 2}")
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
         merge = PythonCodeNode(name="merge", code="result = {'merged': True}")
 
         self.workflow.add_node("source", source)
@@ -84,11 +96,22 @@ class TestHierarchicalSwitchExecution:
         """Test complex multi-layer switch hierarchy."""
         # Create complex hierarchy:
         # source -> switch1 -> [switch2, switch3] -> switch4 -> final
-        source = PythonCodeNode(name="source", code="result = {'level1': True, 'level2a': True, 'level2b': False, 'level3': True}")
-        switch1 = SwitchNode(name="switch1", condition_field="level1", operator="==", value=True)
-        switch2 = SwitchNode(name="switch2", condition_field="level2a", operator="==", value=True)
-        switch3 = SwitchNode(name="switch3", condition_field="level2b", operator="==", value=True)
-        switch4 = SwitchNode(name="switch4", condition_field="level3", operator="==", value=True)
+        source = PythonCodeNode(
+            name="source",
+            code="result = {'level1': True, 'level2a': True, 'level2b': False, 'level3': True}",
+        )
+        switch1 = SwitchNode(
+            name="switch1", condition_field="level1", operator="==", value=True
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="level2a", operator="==", value=True
+        )
+        switch3 = SwitchNode(
+            name="switch3", condition_field="level2b", operator="==", value=True
+        )
+        switch4 = SwitchNode(
+            name="switch4", condition_field="level3", operator="==", value=True
+        )
         final = PythonCodeNode(name="final", code="result = {'complete': True}")
 
         self.workflow.add_node("source", source)
@@ -122,29 +145,43 @@ class TestHierarchicalSwitchExecution:
     def test_should_use_hierarchical_execution(self):
         """Test the decision logic for using hierarchical execution."""
         # Single switch - should not use hierarchical
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
         self.workflow.add_node("switch1", switch1)
 
-        assert not self.runtime._should_use_hierarchical_execution(self.workflow, ["switch1"])
+        assert not self.runtime._should_use_hierarchical_execution(
+            self.workflow, ["switch1"]
+        )
 
         # Multiple independent switches - should not use hierarchical
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
         self.workflow.add_node("switch2", switch2)
 
-        assert not self.runtime._should_use_hierarchical_execution(self.workflow, ["switch1", "switch2"])
+        assert not self.runtime._should_use_hierarchical_execution(
+            self.workflow, ["switch1", "switch2"]
+        )
 
         # Dependent switches - should use hierarchical
         self.workflow.connect("switch1", "switch2", {"true_output": "input_data"})
 
-        assert self.runtime._should_use_hierarchical_execution(self.workflow, ["switch1", "switch2"])
+        assert self.runtime._should_use_hierarchical_execution(
+            self.workflow, ["switch1", "switch2"]
+        )
 
     @pytest.mark.asyncio
     async def test_hierarchical_executor_directly(self):
         """Test HierarchicalSwitchExecutor directly."""
         # Create simple hierarchy
         source = PythonCodeNode(name="source", code="result = {'value': 10}")
-        switch1 = SwitchNode(name="switch1", condition_field="value", operator=">", value=5)
-        switch2 = SwitchNode(name="switch2", condition_field="value", operator="<", value=20)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="value", operator=">", value=5
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="value", operator="<", value=20
+        )
 
         self.workflow.add_node("source", source)
         self.workflow.add_node("switch1", switch1)
@@ -157,7 +194,15 @@ class TestHierarchicalSwitchExecution:
         executor = HierarchicalSwitchExecutor(self.workflow, debug=True)
 
         # Mock node executor
-        async def mock_executor(node_id, node_instance, all_results, parameters, task_manager, workflow, workflow_context):
+        async def mock_executor(
+            node_id,
+            node_instance,
+            all_results,
+            parameters,
+            task_manager,
+            workflow,
+            workflow_context,
+        ):
             # Simple execution
             if node_id == "source":
                 return {"result": {"value": 10}}
@@ -169,8 +214,7 @@ class TestHierarchicalSwitchExecution:
 
         # Execute
         all_results, switch_results = await executor.execute_switches_hierarchically(
-            parameters={},
-            node_executor=mock_executor
+            parameters={}, node_executor=mock_executor
         )
 
         # Verify results
@@ -188,9 +232,15 @@ class TestHierarchicalSwitchExecution:
     def test_hierarchical_with_errors(self):
         """Test hierarchical execution with switch errors."""
         # Create workflow with a failing switch
-        source = PythonCodeNode(name="source", code="result = {'value': 'not_a_number'}")
-        switch1 = SwitchNode(name="switch1", condition_field="value", operator=">", value=5)  # Will fail with string
-        switch2 = SwitchNode(name="switch2", condition_field="other", operator="==", value=1)
+        source = PythonCodeNode(
+            name="source", code="result = {'value': 'not_a_number'}"
+        )
+        switch1 = SwitchNode(
+            name="switch1", condition_field="value", operator=">", value=5
+        )  # Will fail with string
+        switch2 = SwitchNode(
+            name="switch2", condition_field="other", operator="==", value=1
+        )
 
         self.workflow.add_node("source", source)
         self.workflow.add_node("switch1", switch1)
@@ -212,7 +262,9 @@ class TestHierarchicalSwitchExecution:
         # Create workflow with dependencies
         prep1 = PythonCodeNode(name="prep1", code="result = {'data': 1}")
         prep2 = PythonCodeNode(name="prep2", code="result = {'data': 2}")
-        switch1 = SwitchNode(name="switch1", condition_field="data", operator="==", value=1)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="data", operator="==", value=1
+        )
 
         self.workflow.add_node("prep1", prep1)
         self.workflow.add_node("prep2", prep2)
@@ -232,8 +284,12 @@ class TestHierarchicalSwitchExecution:
     def test_execution_summary(self):
         """Test execution summary generation."""
         # Create workflow
-        switch1 = SwitchNode(name="switch1", condition_field="a", operator="==", value=1)
-        switch2 = SwitchNode(name="switch2", condition_field="b", operator="==", value=2)
+        switch1 = SwitchNode(
+            name="switch1", condition_field="a", operator="==", value=1
+        )
+        switch2 = SwitchNode(
+            name="switch2", condition_field="b", operator="==", value=2
+        )
 
         self.workflow.add_node("switch1", switch1)
         self.workflow.add_node("switch2", switch2)
@@ -245,7 +301,7 @@ class TestHierarchicalSwitchExecution:
         # Mock switch results
         switch_results = {
             "switch1": {"true_output": {"a": 1}, "false_output": None},
-            "switch2": {"true_output": None, "false_output": {"b": 3}}
+            "switch2": {"true_output": None, "false_output": {"b": 3}},
         }
 
         # Get summary

@@ -37,7 +37,9 @@ class DynamicExecutionPlanner:
         self._execution_plan_cache: Dict[str, List[str]] = {}
         self._dependency_cache: Optional[Dict[str, List[str]]] = None
 
-    def create_execution_plan(self, switch_results: Dict[str, Dict[str, Any]]) -> List[str]:
+    def create_execution_plan(
+        self, switch_results: Dict[str, Dict[str, Any]]
+    ) -> List[str]:
         """
         Create pruned execution plan based on SwitchNode results.
 
@@ -79,7 +81,9 @@ class DynamicExecutionPlanner:
             # Cache the result
             self._execution_plan_cache[cache_key] = pruned_plan
 
-            logger.info(f"Created execution plan: {len(pruned_plan)}/{len(all_nodes)} nodes")
+            logger.info(
+                f"Created execution plan: {len(pruned_plan)}/{len(all_nodes)} nodes"
+            )
             return pruned_plan
 
         except Exception as e:
@@ -99,7 +103,7 @@ class DynamicExecutionPlanner:
 
         dependencies = defaultdict(list)
 
-        if not hasattr(self.workflow, 'graph') or self.workflow.graph is None:
+        if not hasattr(self.workflow, "graph") or self.workflow.graph is None:
             return dict(dependencies)
 
         # Build dependency map from graph edges
@@ -115,7 +119,9 @@ class DynamicExecutionPlanner:
         logger.debug(f"Analyzed dependencies for {len(dependencies)} nodes")
         return self._dependency_cache
 
-    def _prune_unreachable_branches(self, all_nodes: List[str], reachable_nodes: Set[str]) -> List[str]:
+    def _prune_unreachable_branches(
+        self, all_nodes: List[str], reachable_nodes: Set[str]
+    ) -> List[str]:
         """
         Prune unreachable branches from execution plan.
 
@@ -136,7 +142,9 @@ class DynamicExecutionPlanner:
 
         return pruned_plan
 
-    def validate_execution_plan(self, execution_plan: List[str]) -> Tuple[bool, List[str]]:
+    def validate_execution_plan(
+        self, execution_plan: List[str]
+    ) -> Tuple[bool, List[str]]:
         """
         Validate execution plan for correctness.
 
@@ -148,7 +156,7 @@ class DynamicExecutionPlanner:
         """
         errors = []
 
-        if not hasattr(self.workflow, 'graph') or self.workflow.graph is None:
+        if not hasattr(self.workflow, "graph") or self.workflow.graph is None:
             errors.append("Workflow has no graph to validate against")
             return False, errors
 
@@ -168,10 +176,14 @@ class DynamicExecutionPlanner:
                 if dep not in seen_nodes:
                     if dep in execution_plan:
                         # Dependency is in plan but hasn't been seen yet - order issue
-                        errors.append(f"Node '{node_id}' dependency '{dep}' not satisfied")
+                        errors.append(
+                            f"Node '{node_id}' dependency '{dep}' not satisfied"
+                        )
                     else:
                         # Dependency is missing from execution plan entirely
-                        errors.append(f"Node '{node_id}' dependency '{dep}' missing from execution plan")
+                        errors.append(
+                            f"Node '{node_id}' dependency '{dep}' missing from execution plan"
+                        )
 
             seen_nodes.add(node_id)
 
@@ -185,7 +197,7 @@ class DynamicExecutionPlanner:
 
     def _get_all_nodes_topological_order(self) -> List[str]:
         """Get all nodes in topological order."""
-        if not hasattr(self.workflow, 'graph') or self.workflow.graph is None:
+        if not hasattr(self.workflow, "graph") or self.workflow.graph is None:
             return []
 
         try:
@@ -207,7 +219,7 @@ class DynamicExecutionPlanner:
         """
         always_reachable = set()
 
-        if not hasattr(self.workflow, 'graph') or self.workflow.graph is None:
+        if not hasattr(self.workflow, "graph") or self.workflow.graph is None:
             return always_reachable
 
         # Find nodes that don't depend on any switches
@@ -218,7 +230,9 @@ class DynamicExecutionPlanner:
         logger.debug(f"Found {len(always_reachable)} always reachable nodes")
         return always_reachable
 
-    def _is_reachable_without_switches(self, node_id: str, switch_node_ids: Set[str]) -> bool:
+    def _is_reachable_without_switches(
+        self, node_id: str, switch_node_ids: Set[str]
+    ) -> bool:
         """
         Check if a node is reachable without going through any switches.
 
@@ -244,7 +258,7 @@ class DynamicExecutionPlanner:
             visited.add(current)
 
             # Get predecessors
-            if hasattr(self.workflow.graph, 'predecessors'):
+            if hasattr(self.workflow.graph, "predecessors"):
                 predecessors = list(self.workflow.graph.predecessors(current))
 
                 if not predecessors:
@@ -324,7 +338,11 @@ class DynamicExecutionPlanner:
                 # Find switches with no dependencies in remaining set
                 current_layer = []
                 for switch_id in remaining_switches:
-                    deps = [d for d in switch_deps.predecessors(switch_id) if d in remaining_switches]
+                    deps = [
+                        d
+                        for d in switch_deps.predecessors(switch_id)
+                        if d in remaining_switches
+                    ]
                     if not deps:
                         current_layer.append(switch_id)
 
@@ -342,7 +360,12 @@ class DynamicExecutionPlanner:
             # Fallback to single layer
             return [switch_nodes]
 
-    def _handle_merge_with_conditional_inputs(self, merge_node: str, workflow: Workflow, switch_results: Dict[str, Dict[str, Any]]) -> bool:
+    def _handle_merge_with_conditional_inputs(
+        self,
+        merge_node: str,
+        workflow: Workflow,
+        switch_results: Dict[str, Dict[str, Any]],
+    ) -> bool:
         """
         Handle merge node with conditional inputs.
 
@@ -354,7 +377,7 @@ class DynamicExecutionPlanner:
         Returns:
             True if merge node should be included in execution plan
         """
-        if not hasattr(workflow, 'graph') or workflow.graph is None:
+        if not hasattr(workflow, "graph") or workflow.graph is None:
             return True
 
         # Check how many inputs to the merge node are available
@@ -375,13 +398,15 @@ class DynamicExecutionPlanner:
         self._execution_plan_cache.clear()
         self._dependency_cache = None
         # Also invalidate the analyzer's cache when workflow structure changes
-        if hasattr(self.analyzer, 'invalidate_cache'):
+        if hasattr(self.analyzer, "invalidate_cache"):
             self.analyzer.invalidate_cache()
         logger.debug("DynamicExecutionPlanner cache invalidated")
 
     # ===== PHASE 4: ADVANCED FEATURES =====
 
-    def create_hierarchical_execution_plan(self, switch_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    def create_hierarchical_execution_plan(
+        self, switch_results: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Create advanced execution plan with hierarchical switch support and merge strategies.
 
@@ -397,13 +422,15 @@ class DynamicExecutionPlanner:
             "merge_strategies": {},
             "performance_metrics": {},
             "reachable_nodes": set(),
-            "skipped_nodes": set()
+            "skipped_nodes": set(),
         }
 
         try:
             # Use analyzer's hierarchical capabilities
-            if hasattr(self.analyzer, 'create_hierarchical_execution_plan'):
-                hierarchical_plan = self.analyzer.create_hierarchical_execution_plan(switch_results)
+            if hasattr(self.analyzer, "create_hierarchical_execution_plan"):
+                hierarchical_plan = self.analyzer.create_hierarchical_execution_plan(
+                    switch_results
+                )
                 plan.update(hierarchical_plan)
 
             # Create traditional execution plan as fallback
@@ -418,7 +445,11 @@ class DynamicExecutionPlanner:
                 "total_nodes": total_nodes,
                 "executed_nodes": executed_nodes,
                 "skipped_nodes": total_nodes - executed_nodes,
-                "performance_improvement": (total_nodes - executed_nodes) / total_nodes if total_nodes > 0 else 0
+                "performance_improvement": (
+                    (total_nodes - executed_nodes) / total_nodes
+                    if total_nodes > 0
+                    else 0
+                ),
             }
 
             # Convert sets to lists for JSON serialization
@@ -434,9 +465,9 @@ class DynamicExecutionPlanner:
 
         return plan
 
-    def handle_merge_nodes_with_conditional_inputs(self,
-                                                 execution_plan: List[str],
-                                                 switch_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    def handle_merge_nodes_with_conditional_inputs(
+        self, execution_plan: List[str], switch_results: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Analyze and handle MergeNodes that receive conditional inputs.
 
@@ -451,12 +482,12 @@ class DynamicExecutionPlanner:
             "merge_nodes": [],
             "strategies": {},
             "execution_modifications": [],
-            "warnings": []
+            "warnings": [],
         }
 
         try:
             # Find merge nodes in the workflow
-            if hasattr(self.analyzer, '_find_merge_nodes'):
+            if hasattr(self.analyzer, "_find_merge_nodes"):
                 merge_nodes = self.analyzer._find_merge_nodes()
             else:
                 merge_nodes = self._find_merge_nodes_fallback()
@@ -465,24 +496,30 @@ class DynamicExecutionPlanner:
 
             for merge_id in merge_nodes:
                 if merge_id in execution_plan:
-                    strategy = self._create_merge_strategy(merge_id, reachable_nodes, switch_results)
+                    strategy = self._create_merge_strategy(
+                        merge_id, reachable_nodes, switch_results
+                    )
                     merge_handling["strategies"][merge_id] = strategy
                     merge_handling["merge_nodes"].append(merge_id)
 
                     # Add execution modifications if needed
                     if strategy["strategy_type"] == "skip":
-                        merge_handling["execution_modifications"].append({
-                            "type": "skip_node",
-                            "node_id": merge_id,
-                            "reason": "No available inputs"
-                        })
+                        merge_handling["execution_modifications"].append(
+                            {
+                                "type": "skip_node",
+                                "node_id": merge_id,
+                                "reason": "No available inputs",
+                            }
+                        )
                     elif strategy["strategy_type"] == "partial":
-                        merge_handling["execution_modifications"].append({
-                            "type": "partial_merge",
-                            "node_id": merge_id,
-                            "available_inputs": strategy["available_inputs"],
-                            "missing_inputs": strategy["missing_inputs"]
-                        })
+                        merge_handling["execution_modifications"].append(
+                            {
+                                "type": "partial_merge",
+                                "node_id": merge_id,
+                                "available_inputs": strategy["available_inputs"],
+                                "missing_inputs": strategy["missing_inputs"],
+                            }
+                        )
 
         except Exception as e:
             logger.warning(f"Error handling merge nodes: {e}")
@@ -507,7 +544,12 @@ class DynamicExecutionPlanner:
 
         return merge_nodes
 
-    def _create_merge_strategy(self, merge_id: str, reachable_nodes: Set[str], switch_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    def _create_merge_strategy(
+        self,
+        merge_id: str,
+        reachable_nodes: Set[str],
+        switch_results: Dict[str, Dict[str, Any]],
+    ) -> Dict[str, Any]:
         """
         Create merge strategy for a specific MergeNode.
 
@@ -525,7 +567,7 @@ class DynamicExecutionPlanner:
             "missing_inputs": [],
             "strategy_type": "unknown",
             "confidence": 0.0,
-            "recommendations": []
+            "recommendations": [],
         }
 
         try:
@@ -545,7 +587,9 @@ class DynamicExecutionPlanner:
             if available_count == 0:
                 strategy["strategy_type"] = "skip"
                 strategy["confidence"] = 1.0
-                strategy["recommendations"].append("Skip merge node - no inputs available")
+                strategy["recommendations"].append(
+                    "Skip merge node - no inputs available"
+                )
             elif available_count == total_count:
                 strategy["strategy_type"] = "full"
                 strategy["confidence"] = 1.0
@@ -553,8 +597,12 @@ class DynamicExecutionPlanner:
             else:
                 strategy["strategy_type"] = "partial"
                 strategy["confidence"] = available_count / total_count
-                strategy["recommendations"].append(f"Execute merge with {available_count}/{total_count} inputs")
-                strategy["recommendations"].append("Consider merge node's skip_none parameter")
+                strategy["recommendations"].append(
+                    f"Execute merge with {available_count}/{total_count} inputs"
+                )
+                strategy["recommendations"].append(
+                    "Consider merge node's skip_none parameter"
+                )
 
         except Exception as e:
             logger.warning(f"Error creating merge strategy for {merge_id}: {e}")
@@ -563,7 +611,9 @@ class DynamicExecutionPlanner:
 
         return strategy
 
-    def optimize_execution_plan(self, execution_plan: List[str], switch_results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    def optimize_execution_plan(
+        self, execution_plan: List[str], switch_results: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Any]:
         """
         Optimize execution plan with advanced performance techniques.
 
@@ -579,20 +629,26 @@ class DynamicExecutionPlanner:
             "optimized_plan": execution_plan.copy(),
             "optimizations_applied": [],
             "performance_improvement": 0.0,
-            "analysis": {}
+            "analysis": {},
         }
 
         try:
             # Parallel execution opportunities
             parallel_groups = self._identify_parallel_execution_groups(execution_plan)
             if parallel_groups:
-                optimization_result["optimizations_applied"].append("parallel_execution_grouping")
+                optimization_result["optimizations_applied"].append(
+                    "parallel_execution_grouping"
+                )
                 optimization_result["analysis"]["parallel_groups"] = parallel_groups
 
             # Merge node optimizations
-            merge_handling = self.handle_merge_nodes_with_conditional_inputs(execution_plan, switch_results)
+            merge_handling = self.handle_merge_nodes_with_conditional_inputs(
+                execution_plan, switch_results
+            )
             if merge_handling["execution_modifications"]:
-                optimization_result["optimizations_applied"].append("merge_node_optimization")
+                optimization_result["optimizations_applied"].append(
+                    "merge_node_optimization"
+                )
                 optimization_result["analysis"]["merge_optimizations"] = merge_handling
 
                 # Apply merge optimizations to plan
@@ -608,7 +664,9 @@ class DynamicExecutionPlanner:
             original_count = len(optimization_result["original_plan"])
             optimized_count = len(optimization_result["optimized_plan"])
             if original_count > 0:
-                optimization_result["performance_improvement"] = (original_count - optimized_count) / original_count
+                optimization_result["performance_improvement"] = (
+                    original_count - optimized_count
+                ) / original_count
 
         except Exception as e:
             logger.warning(f"Error optimizing execution plan: {e}")
@@ -616,7 +674,9 @@ class DynamicExecutionPlanner:
 
         return optimization_result
 
-    def _identify_parallel_execution_groups(self, execution_plan: List[str]) -> List[List[str]]:
+    def _identify_parallel_execution_groups(
+        self, execution_plan: List[str]
+    ) -> List[List[str]]:
         """
         Identify groups of nodes that can be executed in parallel.
 
@@ -636,7 +696,9 @@ class DynamicExecutionPlanner:
             for node_id in execution_plan:
                 predecessors = list(self.workflow.graph.predecessors(node_id))
                 # Only consider dependencies within the execution plan
-                plan_predecessors = [pred for pred in predecessors if pred in plan_nodes]
+                plan_predecessors = [
+                    pred for pred in predecessors if pred in plan_nodes
+                ]
                 dependencies[node_id] = plan_predecessors
 
             # Group nodes by their dependency depth
@@ -652,7 +714,9 @@ class DynamicExecutionPlanner:
 
         return parallel_groups
 
-    def _group_by_dependency_depth(self, execution_plan: List[str], dependencies: Dict[str, List[str]]) -> Dict[int, List[str]]:
+    def _group_by_dependency_depth(
+        self, execution_plan: List[str], dependencies: Dict[str, List[str]]
+    ) -> Dict[int, List[str]]:
         """
         Group nodes by their dependency depth for parallel execution analysis.
 
@@ -678,7 +742,12 @@ class DynamicExecutionPlanner:
 
         return dict(depth_groups)
 
-    def _calculate_node_depth(self, node_id: str, dependencies: Dict[str, List[str]], node_depths: Dict[str, int]) -> int:
+    def _calculate_node_depth(
+        self,
+        node_id: str,
+        dependencies: Dict[str, List[str]],
+        node_depths: Dict[str, int],
+    ) -> int:
         """
         Calculate the dependency depth of a node.
 
