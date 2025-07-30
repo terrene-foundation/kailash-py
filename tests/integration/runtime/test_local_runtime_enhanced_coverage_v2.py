@@ -653,9 +653,7 @@ class TestConditionalExecution:
 
         # Create cyclic workflow
         workflow = Workflow("test", "Test")
-        node = PythonCodeNode(
-            name="counter", code="result = {'count': count + 1}" 
-        )
+        node = PythonCodeNode(name="counter", code="result = {'count': count + 1}")
         workflow.add_node("counter", node)
         workflow.create_cycle("test_cycle").connect(
             "counter", "counter", {"result.count": "count"}
@@ -663,7 +661,9 @@ class TestConditionalExecution:
 
         # The workflow has cycles, so execute it through the public interface
         # which will handle cycles properly
-        results, run_id = await runtime.execute_async(workflow, parameters={"counter": {"count": 0}})
+        results, run_id = await runtime.execute_async(
+            workflow, parameters={"counter": {"count": 0}}
+        )
 
         assert "counter" in results
         # The counter should have executed multiple times due to the cycle
@@ -676,13 +676,13 @@ class TestValidationAndErrorHandling:
     def test_prepare_node_inputs(self):
         """Test _prepare_node_inputs method."""
         runtime = LocalRuntime()
-        
+
         # Create a mock workflow and node
         workflow = Mock()
         workflow.graph = Mock()
         workflow.graph.in_edges.return_value = []
         workflow.connections = []  # Add connections as empty list
-        
+
         node_instance = Mock()
         node_outputs = {"prev_node": {"result": {"data": "value"}}}
         parameters = {"param1": "value1", "param2": "value2"}
@@ -732,7 +732,9 @@ class TestValidationAndErrorHandling:
         workflow.add_node("node2", node2)
         workflow.connect("node1", "node2", {"result": "input"})
 
-        context = runtime._build_connection_context("node2", workflow, {"param": "value"})
+        context = runtime._build_connection_context(
+            "node2", workflow, {"param": "value"}
+        )
 
         assert context is not None
         assert context.source_node == "node1"
@@ -860,7 +862,11 @@ class TestEdgeCasesAndIntegration:
         # Create a real workflow that will fail validation
         workflow = Workflow("test", "Test")
         # Add an invalid connection to cause validation error
-        with patch.object(workflow, 'validate', side_effect=WorkflowValidationError("Invalid workflow")):
+        with patch.object(
+            workflow,
+            "validate",
+            side_effect=WorkflowValidationError("Invalid workflow"),
+        ):
             with pytest.raises(WorkflowValidationError):
                 runtime.execute(workflow)
 
@@ -891,7 +897,7 @@ class TestEdgeCasesAndIntegration:
         # Create a real node and then mock cleanup
         node = PythonCodeNode(name="node", code="result = {'data': 1}")
         workflow.add_node("node", node)
-        
+
         # Mock the cleanup method on the actual node instance
         node_instance = workflow._node_instances["node"]
         node_instance.cleanup = AsyncMock()

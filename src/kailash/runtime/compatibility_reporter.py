@@ -74,28 +74,28 @@ class CompatibilityReport:
     def to_markdown(self) -> str:
         """Generate markdown report."""
         lines = [
-            f"# Conditional Execution Compatibility Report",
-            f"",
+            "# Conditional Execution Compatibility Report",
+            "",
             f"**Workflow**: {self.workflow_name} ({self.workflow_id})",
             f"**Overall Compatibility**: {self.overall_compatibility.value.replace('_', ' ').title()}",
             f"**Nodes**: {self.node_count} total, {self.switch_count} switches",
-            f"",
+            "",
         ]
 
         if self.execution_estimate:
             lines.extend(
                 [
-                    f"## Performance Estimate",
+                    "## Performance Estimate",
                     f"{self.execution_estimate}",
-                    f"",
+                    "",
                 ]
             )
 
         if self.detected_patterns:
             lines.extend(
                 [
-                    f"## Detected Patterns",
-                    f"",
+                    "## Detected Patterns",
+                    "",
                 ]
             )
             for pattern in self.detected_patterns:
@@ -119,8 +119,8 @@ class CompatibilityReport:
         if self.warnings:
             lines.extend(
                 [
-                    f"## ⚠️ Warnings",
-                    f"",
+                    "## ⚠️ Warnings",
+                    "",
                 ]
             )
             for warning in self.warnings:
@@ -130,8 +130,8 @@ class CompatibilityReport:
         if self.recommendations:
             lines.extend(
                 [
-                    f"## 💡 Recommendations",
-                    f"",
+                    "## 💡 Recommendations",
+                    "",
                 ]
             )
             for rec in self.recommendations:

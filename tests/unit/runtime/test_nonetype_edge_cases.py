@@ -57,7 +57,7 @@ else:
         # Processor should handle the switch output
         assert "processor" in results
         processor_result = results["processor"]["result"]
-        
+
         # In route_data mode, the processor executes with the data it receives
         # When switch condition is false, false_output may be an empty dict or None
         assert processor_result["status"] in ["skipped", "processed"]
@@ -351,7 +351,7 @@ result = {
         assert "key_checker" in results
         assert "result" in results["key_checker"]
         checker_result = results["key_checker"]["result"]
-        
+
         # Should show that the error was handled
-        assert checker_result["error_handled"] == True
+        assert checker_result["error_handled"]
         assert checker_result["missing_key_handled"] == "default_value"

@@ -211,7 +211,9 @@ class HierarchicalSwitchExecutor:
                     "parallelism": min(len(layer_switches), self.max_parallelism),
                 }
             )
-            self._execution_metrics["parallelism_achieved"].append(min(len(layer_switches), self.max_parallelism))
+            self._execution_metrics["parallelism_achieved"].append(
+                min(len(layer_switches), self.max_parallelism)
+            )
             self._execution_metrics["errors_by_layer"].append(layer_errors)
 
         # Log execution summary

@@ -157,7 +157,10 @@ class TestExecuteCycleGroups:
 
         # Mock _execute_cycle_group to return results tuple
         with patch.object(executor, "_execute_cycle_group") as mock_execute:
-            mock_execute.return_value = ({"node1": {"iter": 1}, "node2": {"iter": 1}}, None)
+            mock_execute.return_value = (
+                {"node1": {"iter": 1}, "node2": {"iter": 1}},
+                None,
+            )
 
             # Execute
             results = executor._execute_cycle_groups(

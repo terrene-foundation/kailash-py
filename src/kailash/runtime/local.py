@@ -715,7 +715,7 @@ class LocalRuntime:
         results = {}
         node_outputs = {}
         failed_nodes = []
-        
+
         # Make results available to _should_skip_conditional_node for transitive dependency checking
         self._current_results = results
 
@@ -813,7 +813,9 @@ class LocalRuntime:
                 # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
                 if self._should_skip_conditional_node(workflow, node_id, inputs):
                     if self.debug:
-                        self.logger.debug(f"DEBUG: Skipping {node_id} - inputs: {inputs}")
+                        self.logger.debug(
+                            f"DEBUG: Skipping {node_id} - inputs: {inputs}"
+                        )
                     self.logger.info(
                         f"Skipping node {node_id} - all conditional inputs are None"
                     )
@@ -1064,7 +1066,11 @@ class LocalRuntime:
                         if found:
                             # CONDITIONAL EXECUTION FIX: Don't overwrite existing non-None values with None
                             # This handles cases where multiple edges map to the same input parameter
-                            if target_key in inputs and inputs[target_key] is not None and value is None:
+                            if (
+                                target_key in inputs
+                                and inputs[target_key] is not None
+                                and value is None
+                            ):
                                 if self.debug:
                                     self.logger.debug(
                                         f"  SKIP: Not overwriting existing non-None value for {target_key} with None from {source_node_id}"
@@ -1081,7 +1087,11 @@ class LocalRuntime:
                             value = source_outputs[source_key]
                             # CONDITIONAL EXECUTION FIX: Don't overwrite existing non-None values with None
                             # This handles cases where multiple edges map to the same input parameter
-                            if target_key in inputs and inputs[target_key] is not None and value is None:
+                            if (
+                                target_key in inputs
+                                and inputs[target_key] is not None
+                                and value is None
+                            ):
                                 if self.debug:
                                     self.logger.debug(
                                         f"  SKIP: Not overwriting existing non-None value for {target_key} with None from {source_node_id}"
@@ -1365,28 +1375,31 @@ class LocalRuntime:
         # Check for conditional inputs and analyze the nature of the data
         has_conditional_inputs = False
         has_non_none_connected_input = False
-        
+
         for source_node_id, _, edge_data in incoming_edges:
             source_node = workflow._node_instances.get(source_node_id)
             mapping = edge_data.get("mapping", {})
-            
+
             # Check if this edge provides any non-None inputs
             for source_key, target_key in mapping.items():
                 if target_key in inputs and inputs[target_key] is not None:
                     has_non_none_connected_input = True
-            
+
             # Direct connection from SwitchNode
             if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
                 has_conditional_inputs = True
             # Transitive dependency: source node was skipped due to conditional routing
-            elif hasattr(self, '_current_results') and source_node_id in self._current_results:
+            elif (
+                hasattr(self, "_current_results")
+                and source_node_id in self._current_results
+            ):
                 if self._current_results[source_node_id] is None:
                     has_conditional_inputs = True
 
         # If no conditional inputs, don't skip
         if not has_conditional_inputs:
             return False
-            
+
         # If we have conditional inputs but also have non-None data, don't skip
         # This handles mixed scenarios where some inputs are skipped but others provide data
         if has_non_none_connected_input:
@@ -1424,11 +1437,11 @@ class LocalRuntime:
         # Check if all connected inputs are None
         # This is the main condition for conditional routing
         has_non_none_input = False
-        
+
         # Count total connected inputs and None inputs from conditional sources
         total_connected_inputs = 0
         none_conditional_inputs = 0
-        
+
         for source_node_id, _, edge_data in incoming_edges:
             mapping = edge_data.get("mapping", {})
             for source_key, target_key in mapping.items():
@@ -1439,16 +1452,25 @@ class LocalRuntime:
                     else:
                         # Check if this None input came from conditional routing
                         source_node = workflow._node_instances.get(source_node_id)
-                        is_from_conditional = (source_node and source_node.__class__.__name__ in ["SwitchNode"]) or \
-                                            (hasattr(self, '_current_results') and source_node_id in self._current_results and self._current_results[source_node_id] is None)
+                        is_from_conditional = (
+                            source_node
+                            and source_node.__class__.__name__ in ["SwitchNode"]
+                        ) or (
+                            hasattr(self, "_current_results")
+                            and source_node_id in self._current_results
+                            and self._current_results[source_node_id] is None
+                        )
                         if is_from_conditional:
                             none_conditional_inputs += 1
 
         # Skip the node only if ALL connected inputs are None AND from conditional routing
         # This means nodes with mixed inputs (some None from conditional, some real data) should still execute
-        if total_connected_inputs > 0 and none_conditional_inputs == total_connected_inputs:
+        if (
+            total_connected_inputs > 0
+            and none_conditional_inputs == total_connected_inputs
+        ):
             return True
-        
+
         return False
 
     def _should_stop_on_error(self, workflow: Workflow, node_id: str) -> bool:
@@ -2933,9 +2955,7 @@ class LocalRuntime:
 
         try:
             # Create key from workflow structure + switch results
-            workflow_key = (
-                f"{workflow.workflow_id}_{len(workflow.graph.nodes)}_{len(workflow.graph.edges)}"
-            )
+            workflow_key = f"{workflow.workflow_id}_{len(workflow.graph.nodes)}_{len(workflow.graph.edges)}"
 
             # Sort switch results for consistent caching
             sorted_results = {}

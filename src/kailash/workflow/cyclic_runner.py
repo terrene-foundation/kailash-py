@@ -967,10 +967,14 @@ class CyclicWorkflowExecutor:
                                             ][succ].values():
                                                 # Handle both dict and string edge_data formats
                                                 if isinstance(edge_data, dict):
-                                                    mapping = edge_data.get("mapping", {})
+                                                    mapping = edge_data.get(
+                                                        "mapping", {}
+                                                    )
                                                 else:
                                                     # Old format where edge_data might be a string
-                                                    logger.debug(f"    Legacy edge_data format: {edge_data} (type: {type(edge_data)})")
+                                                    logger.debug(
+                                                        f"    Legacy edge_data format: {edge_data} (type: {type(edge_data)})"
+                                                    )
                                                     mapping = {}
                                                 logger.debug(
                                                     f"    Edge mapping: {mapping}"

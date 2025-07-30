@@ -48,12 +48,14 @@ class TestNestedConditionalExecutionDebug:
         workflow.add_node(
             "PythonCodeNode",
             "premium_validator",
-            {"code": """
+            {
+                "code": """
 # Preserve original input data and add validation
 input_data = input if isinstance(input, dict) else {}
 result = input_data.copy()
 result.update({'validated': True, 'tier': 'premium'})
-            """},
+            """
+            },
         )
 
         workflow.add_node(
@@ -74,12 +76,14 @@ result.update({'validated': True, 'tier': 'premium'})
         workflow.add_node(
             "PythonCodeNode",
             "basic_validator",
-            {"code": """
+            {
+                "code": """
 # Preserve original input data and add validation
 input_data = input if isinstance(input, dict) else {}
 result = input_data.copy()
 result.update({'validated': True, 'tier': 'basic'})
-            """},
+            """
+            },
         )
 
         workflow.add_node(

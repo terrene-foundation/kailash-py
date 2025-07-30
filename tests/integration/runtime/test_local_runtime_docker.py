@@ -8,6 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 from kailash.nodes.ai import EmbeddingGeneratorNode, LLMAgentNode
 from kailash.nodes.code.python import PythonCodeNode
@@ -16,7 +17,6 @@ from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from kailash.nodes.logic import MergeNode, SwitchNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 
 @pytest.mark.integration
@@ -227,10 +227,10 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
     async def test_parallel_execution_with_merge(self):
         """Test actual parallel execution and merging results using ParallelRuntime."""
         from kailash.runtime.parallel import ParallelRuntime
-        
+
         # Use ParallelRuntime for actual parallel execution
         parallel_runtime = ParallelRuntime(max_workers=4, debug=True)
-        
+
         # Build workflow with parallel branches
         workflow = WorkflowBuilder()
 
@@ -293,7 +293,9 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
 
         # Verify parallel execution completes in reasonable time
         # ParallelRuntime has overhead but should still complete efficiently
-        assert execution_time < 0.5  # Should complete efficiently with parallel execution
+        assert (
+            execution_time < 0.5
+        )  # Should complete efficiently with parallel execution
 
     def test_error_handling_in_workflow(self, runtime):
         """Test error handling and recovery in workflows."""
@@ -336,12 +338,19 @@ class TestLocalRuntimeWithRealServicesDocker(DockerIntegrationTestBase):
                 "operation": "embed_batch",
                 "provider": "ollama",
                 "model": "nomic-embed-text",
-                "input_texts": ["Hello world", "Machine learning", "Python programming"],
+                "input_texts": [
+                    "Hello world",
+                    "Machine learning",
+                    "Python programming",
+                ],
             },
         )
 
-        workflow.add_node("PythonCodeNode", "processor", {
-            "code": """
+        workflow.add_node(
+            "PythonCodeNode",
+            "processor",
+            {
+                "code": """
 # Process EmbeddingGeneratorNode outputs
 # success_flag contains boolean success status
 # embeddings_data contains the embeddings array
@@ -363,11 +372,14 @@ else:
     # Handle failure case
     result = {"processed": [], "count": 0, "error": "Embedding operation failed"}
 """
-        })
+            },
+        )
 
         # Connect the embedder outputs to processor inputs
         workflow.add_connection("embedder", "success", "processor", "success_flag")
-        workflow.add_connection("embedder", "embeddings", "processor", "embeddings_data")
+        workflow.add_connection(
+            "embedder", "embeddings", "processor", "embeddings_data"
+        )
 
         # Execute workflow
         results, run_id = runtime.execute(workflow.build())

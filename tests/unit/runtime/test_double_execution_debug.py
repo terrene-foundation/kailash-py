@@ -239,7 +239,7 @@ result = {'i': i}
         avg_time = sum(times) / len(times)
         max_time = max(times)
 
-        print(f"\nPerformance results:")
+        print("\nPerformance results:")
         print(f"Average time: {avg_time:.3f}s")
         print(f"Max time: {max_time:.3f}s")
         print(f"All times: {[f'{t:.3f}' for t in times]}")

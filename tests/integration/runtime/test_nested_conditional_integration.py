@@ -446,21 +446,35 @@ result.update({'validated': True, 'tier': 'basic'})
 
         # Both modes now execute the same nodes correctly
         # Performance improvement comes from algorithm efficiency, not node count reduction
-        print(f"Both modes correctly execute {executed_count_route_data} reachable nodes")
-        print("Performance improvement comes from two-phase vs single-phase execution algorithms")
+        print(
+            f"Both modes correctly execute {executed_count_route_data} reachable nodes"
+        )
+        print(
+            "Performance improvement comes from two-phase vs single-phase execution algorithms"
+        )
 
         # Verify both modes execute the same number of non-None nodes (correctness)
         # Note: route_data includes skipped nodes as None, skip_branches omits them entirely
         executed_nodes_route_data = set(k for k, v in results1.items() if v is not None)
-        executed_nodes_skip_branches = set(k for k, v in results2.items() if v is not None)
-        assert executed_nodes_route_data == executed_nodes_skip_branches, "Both modes should execute same non-None nodes"
-        
+        executed_nodes_skip_branches = set(
+            k for k, v in results2.items() if v is not None
+        )
+        assert (
+            executed_nodes_route_data == executed_nodes_skip_branches
+        ), "Both modes should execute same non-None nodes"
+
         # Check that the executed nodes are the expected reachable ones
         expected_executed = {
-            "data_source", "user_type_switch", "premium_validator", 
-            "region_switch", "us_premium_processor", "aggregator"
+            "data_source",
+            "user_type_switch",
+            "premium_validator",
+            "region_switch",
+            "us_premium_processor",
+            "aggregator",
         }
-        assert executed_nodes_route_data == expected_executed, f"Expected {expected_executed}, got {executed_nodes_route_data}"
+        assert (
+            executed_nodes_route_data == expected_executed
+        ), f"Expected {expected_executed}, got {executed_nodes_route_data}"
 
     def test_workflow_validation_and_structure(self):
         """Test that the workflow structure is correct."""
