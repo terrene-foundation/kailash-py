@@ -727,26 +727,38 @@ class IterativeLLMAgentNode(LLMAgentNode):
             elif isinstance(tool, dict):
                 plan["selected_tools"].append(tool.get("name", "unknown"))
 
-        # Create execution steps
+        # Create execution steps based on query and available tools
         if "analyze" in user_query.lower():
+            # For analysis queries, create multi-step plan
             plan["execution_steps"] = [
                 {
                     "step": 1,
                     "action": "gather_data",
-                    "tools": plan["selected_tools"][:1],
+                    "tools": (
+                        plan["selected_tools"][:1] if plan["selected_tools"] else []
+                    ),
                 },
                 {
                     "step": 2,
                     "action": "perform_analysis",
-                    "tools": plan["selected_tools"][1:2],
+                    "tools": (
+                        plan["selected_tools"][1:2]
+                        if len(plan["selected_tools"]) > 1
+                        else []
+                    ),
                 },
                 {
                     "step": 3,
                     "action": "generate_insights",
-                    "tools": plan["selected_tools"][2:3],
+                    "tools": (
+                        plan["selected_tools"][2:3]
+                        if len(plan["selected_tools"]) > 2
+                        else []
+                    ),
                 },
             ]
         else:
+            # For other queries, single step execution
             plan["execution_steps"] = [
                 {"step": 1, "action": "execute_query", "tools": plan["selected_tools"]}
             ]
@@ -959,11 +971,60 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 self.logger.error(f"Tool execution failed for {tool_name}: {e}")
 
         # Combine all tool outputs
-        step_result["output"] = (
-            "\n".join(tool_results)
-            if tool_results
-            else f"No tools executed for action: {action}"
-        )
+        if tool_results:
+            step_result["output"] = "\n".join(tool_results)
+        else:
+            # No tools were executed - fall back to LLM for this action
+            self.logger.info(
+                f"No MCP tools available for action: {action}, using LLM fallback"
+            )
+
+            # Extract user query from kwargs
+            messages = kwargs.get("messages", [])
+            user_query = ""
+            for msg in reversed(messages):
+                if msg.get("role") == "user":
+                    user_query = msg.get("content", "")
+                    break
+
+            # Create a prompt for the LLM to handle this action
+            action_prompt = f"Please {action} for the following request: {user_query}"
+            llm_messages = [
+                {
+                    "role": "system",
+                    "content": kwargs.get(
+                        "system_prompt", "You are a helpful AI assistant."
+                    ),
+                },
+                {"role": "user", "content": action_prompt},
+            ]
+
+            # Use parent's LLM capabilities
+            try:
+                llm_kwargs = {
+                    "provider": kwargs.get("provider", "openai"),
+                    "model": kwargs.get("model", "gpt-4"),
+                    "messages": llm_messages,
+                    "temperature": kwargs.get("temperature", 0.7),
+                    "max_tokens": kwargs.get("max_tokens", 1000),
+                }
+
+                llm_response = super().run(**llm_kwargs)
+
+                if llm_response.get("success") and llm_response.get("response"):
+                    content = llm_response["response"].get("content", "")
+                    step_result["output"] = f"LLM Response for {action}: {content}"
+                    step_result["success"] = True
+                else:
+                    step_result["output"] = (
+                        f"Failed to execute {action}: {llm_response.get('error', 'Unknown error')}"
+                    )
+                    step_result["success"] = False
+            except Exception as e:
+                self.logger.error(f"LLM fallback failed for action {action}: {e}")
+                step_result["output"] = f"Error executing {action}: {str(e)}"
+                step_result["success"] = False
+
         step_result["duration"] = time.time() - start_time
 
         # Mark as failed if no tools executed successfully
