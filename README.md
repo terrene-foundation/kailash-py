@@ -22,18 +22,28 @@
 
 ---
 
-## 🔥 Latest Release: v0.8.5 (January 20, 2025)
+## 🔥 Latest Release: v0.9.4 (July 31, 2025)
 
-**Architecture Cleanup & Enterprise Security**
+**Critical DataFlow Fixes & Runtime Enhancements**
 
-- 🏗️ **Architecture Clarity**: Removed confusing `src/kailash/nexus` module
-- 🔒 **Connection Validation**: Enterprise-grade parameter validation with type safety
-- 🌐 **Edge Computing**: 50+ new nodes for geo-distributed infrastructure
-- 📊 **Advanced Monitoring**: AlertManager with proactive threshold monitoring
-- 🚀 **Performance**: <1ms validation overhead with intelligent caching
-- ✅ **Breaking Changes**: See [migration guide](sdk-users/6-reference/changelogs/releases/v0.8.5-2025-07-20.md)
+### 🛡️ DataFlow Connection String Parsing
+- **Fixed**: Special characters in passwords (`#`, `$`, `@`, `?`) now work automatically
+- **Before**: `invalid literal for int() with base 10` errors with special characters
+- **After**: All passwords work seamlessly without manual URL encoding
+- **Impact**: Major usability improvement for production deployments
 
-[Full Changelog](sdk-users/6-reference/changelogs/releases/v0.8.5-2025-07-20.md) | [PyPI Packages](https://pypi.org/project/kailash/0.8.5/)
+### 🎯 Runtime Content-Aware Success Detection
+- **New**: LocalRuntime detects `{"success": False}` patterns in node responses
+- **Benefit**: Earlier failure detection and better error reporting
+- **Default**: Enabled by default, backward compatible
+- **Config**: `LocalRuntime(content_aware_success_detection=True)`
+
+### 📚 Documentation Updates
+- Updated DataFlow connection examples with special character support
+- Added runtime configuration options documentation
+- Enhanced troubleshooting guide with new diagnosis patterns
+
+[Full Changelog](sdk-users/6-reference/changelogs/releases/v0.9.4-2025-07-31.md) | [Core SDK 0.9.4](https://pypi.org/project/kailash/0.9.4/) | [DataFlow 0.3.3](https://pypi.org/project/kailash-dataflow/0.3.3/)
 
 ## 🎯 What Makes Kailash Different
 
@@ -250,7 +260,7 @@ results, run_id = runtime.execute(workflow.build())
 
 ## 🚀 Applications Built with Kailash
 
-### 1. DataFlow - Zero-Config Database Platform (v0.3.1)
+### 1. DataFlow - Zero-Config Database Platform (v0.3.3)
 ```bash
 pip install kailash-dataflow
 ```
@@ -258,7 +268,7 @@ pip install kailash-dataflow
 - **Redis caching** with enterprise-grade invalidation
 - **Automatic API generation** with OpenAPI documentation
 - **4 production examples** with complete deployment guides
-- **Latest**: v0.3.1 - Enhanced transaction support and schema management
+- **Latest**: v0.3.3 - Critical connection parsing fix for special characters in passwords
 
 ### 2. Nexus - Multi-Channel Platform (v1.0.3)
 ```bash
