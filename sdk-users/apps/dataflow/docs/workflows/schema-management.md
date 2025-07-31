@@ -228,7 +228,7 @@ workflow.add_connection("copy_data", "result", "drop_old_column", "input")
 
 ## Integration with DataFlow Models
 
-When using DataFlow's model system, schema changes should be coordinated with model updates:
+DataFlow now features **automatic schema management** that eliminates manual migrations:
 
 ```python
 from dataflow import DataFlow
@@ -241,13 +241,25 @@ class User:
     name: str
     email: str
 
-# After schema modification, update model
+# Simply add fields to your model - DataFlow handles the rest!
 @db.model
 class User:
     name: str
     email: str
-    phone_number: Optional[str] = None  # Added field
+    phone_number: Optional[str] = None  # Auto-migration detects new field
+
+# Auto-migration shows you exactly what will change
+await db.auto_migrate()  # Visual preview + confirmation
 ```
+
+**DataFlow's auto-migration system provides:**
+- ✅ **Visual migration preview** with safety assessment
+- ✅ **Interactive confirmation** before applying changes
+- ✅ **Automatic rollback plans** for every migration
+- ✅ **Production-safe deployment** with dry-run mode
+- ✅ **PostgreSQL optimization** with JSONB and advanced types
+
+For complex scenarios requiring manual control, you can still use the manual migration patterns below.
 
 ## Best Practices
 
@@ -389,8 +401,9 @@ workflow.add_node("MonitoringNode", "post_migration_metrics", {
 
 ## Next Steps
 
+- **🔄 Auto-Migration System**: [Auto-Migration Guide](auto-migration.md) - Master DataFlow's revolutionary migration system
 - **Transaction Management**: [Transaction Guide](transactions.md)
 - **Data Migration**: [Data Migration Patterns](../advanced/data-migration.md)
 - **Performance**: [Schema Optimization](../production/performance.md)
 
-Proper schema management is crucial for maintaining database integrity and supporting application evolution. Always test migrations thoroughly and have a rollback plan.
+**Modern DataFlow approach:** Use the auto-migration system for effortless schema evolution with visual confirmation and safety checks. Manual migration patterns are still available for complex transformations that require fine-grained control.
