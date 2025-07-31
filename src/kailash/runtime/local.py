@@ -77,6 +77,31 @@ class ContentAwareExecutionError(Exception):
     """Exception raised when content-aware success detection identifies a failure."""
     pass
 
+
+def should_stop_on_content_failure(result, content_aware_mode=True, stop_on_error=True):
+    """Check if execution should stop based on content indicating failure."""
+    if not content_aware_mode or not stop_on_error:
+        return False, None
+    
+    # Check for DataFlow-style success/failure pattern
+    if isinstance(result, dict) and "success" in result:
+        if not result["success"]:
+            error_msg = result.get("error", "Operation failed")
+            return True, error_msg
+    
+    return False, None
+
+
+def create_content_aware_error(node_id, result, error_message=None):
+    """Create a ContentAwareExecutionError from node result."""
+    if error_message is None:
+        error_message = result.get("error", "Operation failed")
+    
+    error = ContentAwareExecutionError(f"Node '{node_id}' reported failure: {error_message}")
+    error.node_id = node_id
+    error.failure_data = result
+    return error
+
 # Conditional execution imports (lazy-loaded to avoid circular imports)
 _ConditionalBranchAnalyzer = None
 _DynamicExecutionPlanner = None
