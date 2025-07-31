@@ -58,12 +58,6 @@ from kailash.runtime.validation.metrics import (
     get_metrics_collector,
 )
 from kailash.runtime.validation.suggestion_engine import ValidationSuggestionEngine
-from kailash.runtime.utils.success_detection import (
-    detect_success,
-    should_stop_on_content_failure,
-    ContentAwareExecutionError,
-    create_content_aware_error,
-)
 from kailash.sdk_exceptions import (
     RuntimeExecutionError,
     WorkflowExecutionError,
@@ -77,6 +71,11 @@ from kailash.workflow.contracts import ConnectionContract, ContractValidator
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 
 logger = logging.getLogger(__name__)
+
+
+class ContentAwareExecutionError(Exception):
+    """Exception raised when content-aware success detection identifies a failure."""
+    pass
 
 # Conditional execution imports (lazy-loaded to avoid circular imports)
 _ConditionalBranchAnalyzer = None
