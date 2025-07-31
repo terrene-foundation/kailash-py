@@ -61,18 +61,16 @@ class BrokenGetParametersNode(Node):
     """Node with broken get_parameters() method - triggers PAR000."""
 
     def __init__(self):
-        # Initialize with empty parameters to pass validation
-        self._call_count = 0
-        super().__init__()
+        # Override the base class initialization to avoid calling get_parameters()
+        # during init, so we can test the validation behavior separately
+        self.node_id = "test_node"
+        self.metadata = {}
+        self._cached_params = None
+        # Don't call super().__init__() to avoid parameter validation during construction
 
     def get_parameters(self):
-        # First call (during __init__) returns empty dict to pass validation
-        # Subsequent calls (during testing) fail
-        self._call_count += 1
-        if self._call_count <= 1:
-            return {}  # Allow construction
-        else:
-            raise ValueError("Intentionally broken for testing")
+        # Always raise error to test PAR000 validation
+        raise ValueError("Intentionally broken for testing")
 
     def run(self, **kwargs):
         return {"result": "broken"}
