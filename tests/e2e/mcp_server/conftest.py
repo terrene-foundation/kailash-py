@@ -10,7 +10,7 @@ from aiohttp import web
 from kailash.mcp_server.auth import AuthManager
 from kailash.mcp_server.protocol import get_protocol_manager
 from kailash.mcp_server.server import MCPServer
-from kailash.mcp_server.transport import WebSocketServerTransport
+from kailash.mcp_server.transports import WebSocketServerTransport
 from kailash.middleware.gateway.event_store import EventStore
 
 # from tests.utils.mcp_utils import create_test_mcp_server
