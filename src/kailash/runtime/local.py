@@ -75,32 +75,71 @@ logger = logging.getLogger(__name__)
 
 class ContentAwareExecutionError(Exception):
     """Exception raised when content-aware success detection identifies a failure."""
+
     pass
+
+
+def detect_success(result):
+    """Detect success or failure from a node execution result."""
+    # Handle None result (backward compatibility)
+    if result is None:
+        return True, None
+
+    # Handle non-dict results (backward compatibility)
+    if not isinstance(result, dict):
+        return True, None
+
+    # Handle empty dict (backward compatibility)
+    if not result:
+        return True, None
+
+    # Check for success field
+    if "success" not in result:
+        # No success field, default to success (backward compatibility)
+        return True, None
+
+    success_value = result["success"]
+
+    # Evaluate success value as boolean
+    is_success = bool(success_value)
+
+    if is_success:
+        # Operation succeeded
+        return True, None
+    else:
+        # Operation failed, extract error information
+        error_info = result.get("error", "Operation failed (no error details provided)")
+        return False, error_info
 
 
 def should_stop_on_content_failure(result, content_aware_mode=True, stop_on_error=True):
     """Check if execution should stop based on content indicating failure."""
     if not content_aware_mode or not stop_on_error:
         return False, None
-    
-    # Check for DataFlow-style success/failure pattern
-    if isinstance(result, dict) and "success" in result:
-        if not result["success"]:
-            error_msg = result.get("error", "Operation failed")
-            return True, error_msg
-    
-    return False, None
+
+    # Use detect_success for the actual detection logic
+    is_success, error_info = detect_success(result)
+
+    if is_success:
+        # Operation succeeded, continue execution
+        return False, None
+    else:
+        # Operation failed, stop execution
+        return True, error_info
 
 
 def create_content_aware_error(node_id, result, error_message=None):
     """Create a ContentAwareExecutionError from node result."""
     if error_message is None:
         error_message = result.get("error", "Operation failed")
-    
-    error = ContentAwareExecutionError(f"Node '{node_id}' reported failure: {error_message}")
+
+    error = ContentAwareExecutionError(
+        f"Node '{node_id}' reported failure: {error_message}"
+    )
     error.node_id = node_id
     error.failure_data = result
     return error
+
 
 # Conditional execution imports (lazy-loaded to avoid circular imports)
 _ConditionalBranchAnalyzer = None
