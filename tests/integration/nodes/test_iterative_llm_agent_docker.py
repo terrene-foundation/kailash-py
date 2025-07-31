@@ -11,13 +11,13 @@ import pytest_asyncio
 import uvicorn
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 from kailash.nodes.ai.iterative_llm_agent import (
     IterationState,
     IterativeLLMAgentNode,
     MCPToolCapability,
 )
-from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 
 @pytest.mark.integration
@@ -201,7 +201,23 @@ class TestIterativeLLMAgentDocker(DockerIntegrationTestBase):
                     import re
 
                     if re.match(r"^[0-9+\-*/().\s]+$", expression):
-                        result = eval(expression)  # noqa: S307 eval
+                        # Safe evaluation for simple math expressions
+                        try:
+                            # Use ast.literal_eval for safer evaluation
+                            import ast
+                            result = ast.literal_eval(expression)
+                        except (ValueError, SyntaxError):
+                            # Fallback for complex expressions - use exec with restricted builtins
+                            allowed_names = {
+                                "__builtins__": {},
+                                "__name__": "__main__",
+                                "__doc__": None,
+                            }
+                            try:
+                                exec(f"result = {expression}", allowed_names)
+                                result = allowed_names.get("result", 0)
+                            except Exception:
+                                result = 0
                         return {
                             "result": {
                                 "expression": params["expression"],

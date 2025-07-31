@@ -22,28 +22,27 @@
 
 ---
 
-## 🔥 Latest Release: v0.9.4 (July 31, 2025)
+## 🔥 Latest Release: v0.9.5 (July 31, 2025)
 
-**Critical DataFlow Fixes & Runtime Enhancements**
+**PythonCodeNode Serialization Stability & Testing**
 
-### 🛡️ DataFlow Connection String Parsing
-- **Fixed**: Special characters in passwords (`#`, `$`, `@`, `?`) now work automatically
-- **Before**: `invalid literal for int() with base 10` errors with special characters
-- **After**: All passwords work seamlessly without manual URL encoding
-- **Impact**: Major usability improvement for production deployments
+### 🧪 Comprehensive Regression Test Suite (TODO-129)
+- **Added**: 33 unit tests validating PythonCodeNode serialization behavior and JSON compatibility
+- **Added**: 6 integration tests with real infrastructure using only allowed modules
+- **Added**: 6 E2E tests for complete business workflows and multi-channel consistency
+- **Impact**: Ensures serialization fix from commit 2fcf8591 (June 11, 2025) stays stable
 
-### 🎯 Runtime Content-Aware Success Detection
-- **New**: LocalRuntime detects `{"success": False}` patterns in node responses
-- **Benefit**: Earlier failure detection and better error reporting
-- **Default**: Enabled by default, backward compatible
-- **Config**: `LocalRuntime(content_aware_success_detection=True)`
+### 📚 Documentation Clarifications
+- **Updated**: PythonCodeNode output structure documentation (all outputs wrapped in "result" key)
+- **Enhanced**: Serialization consistency notes for multi-channel deployment
+- **Improved**: Testing patterns for node serialization validation
 
-### 📚 Documentation Updates
-- Updated DataFlow connection examples with special character support
-- Added runtime configuration options documentation
-- Enhanced troubleshooting guide with new diagnosis patterns
+### 🛡️ Stability Improvements
+- **Focus**: Testing and documentation release to ensure PythonCodeNode serialization remains stable
+- **Validation**: Complete test coverage for serialization edge cases
+- **Quality**: Comprehensive regression prevention for critical workflow components
 
-[Full Changelog](sdk-users/6-reference/changelogs/releases/v0.9.4-2025-07-31.md) | [Core SDK 0.9.4](https://pypi.org/project/kailash/0.9.4/) | [DataFlow 0.3.3](https://pypi.org/project/kailash-dataflow/0.3.3/)
+[Full Changelog](sdk-users/6-reference/changelogs/releases/v0.9.5-2025-07-31.md) | [Core SDK 0.9.5](https://pypi.org/project/kailash/0.9.5/) | [DataFlow 0.3.4](https://pypi.org/project/kailash-dataflow/0.3.4/)
 
 ## 🎯 What Makes Kailash Different
 

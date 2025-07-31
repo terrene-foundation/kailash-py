@@ -9,6 +9,7 @@ import time
 from datetime import datetime, timezone
 
 import pytest
+from tests.utils.docker_config import REDIS_CONFIG, get_postgres_connection_string
 
 from kailash import Workflow, WorkflowBuilder
 from kailash.nodes.base import Node, NodeParameter
@@ -16,7 +17,6 @@ from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime import LocalRuntime
 from kailash.sdk_exceptions import NodeExecutionError, WorkflowValidationError
-from tests.utils.docker_config import REDIS_CONFIG, get_postgres_connection_string
 
 
 @pytest.mark.integration

@@ -14,7 +14,6 @@ from typing import Any, Dict
 import psycopg2
 import pytest
 import requests
-
 from tests.utils.docker_config import DATABASE_CONFIG, OLLAMA_CONFIG, REDIS_CONFIG
 
 try:
