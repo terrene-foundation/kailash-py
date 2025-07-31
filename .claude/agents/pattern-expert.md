@@ -1,6 +1,6 @@
 ---
 name: pattern-expert
-description: "Core SDK pattern specialist for workflows, nodes, parameters, and cyclic patterns. Use proactively when implementing workflows or debugging pattern issues."
+description: "Kailash Core SDK pattern specialist for workflows, nodes, parameters, and cyclic patterns. Use proactively when implementing workflows or debugging pattern issues."
 ---
 
 # Core SDK Pattern Expert

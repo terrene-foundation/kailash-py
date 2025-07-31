@@ -126,264 +126,168 @@ You are a deep analysis specialist focused on identifying failure points, conduc
 
 ## Deep Analysis Techniques
 
-### Root Cause Investigation
-```python
-# Analysis Template
-def analyze_problem(problem_description):
-    """
-    Deep problem analysis using 5-Why technique
-    """
-    analysis = {
-        "problem": problem_description,
-        "symptoms": [],  # What we observe
-        "why_1": "",     # Immediate cause
-        "why_2": "",     # Underlying cause  
-        "why_3": "",     # Systemic cause
-        "why_4": "",     # Process cause
-        "why_5": "",     # Root cause
-        "solution": "",  # Address root cause
-        "prevention": "" # Prevent recurrence
-    }
-    return analysis
-```
+### Root Cause Investigation (5-Why Framework)
 
-### Complexity Assessment
-```python
-# Complexity Analysis Framework
-def assess_complexity(feature_requirements):
-    """
-    Multi-dimensional complexity analysis
-    """
-    complexity_factors = {
-        "technical": {
-            "new_components": 0,      # How many new components?
-            "integration_points": 0,  # How many systems to integrate?
-            "data_dependencies": 0,   # How many data sources?
-            "external_services": 0    # How many external APIs?
-        },
-        "business": {
-            "user_personas": 0,       # How many user types?
-            "workflow_variations": 0, # How many different flows?
-            "edge_cases": 0,         # How many special cases?
-            "compliance_requirements": 0  # How many regulations?
-        },
-        "operational": {
-            "deployment_environments": 0,  # Dev, staging, prod variants?
-            "monitoring_requirements": 0,  # What needs monitoring?
-            "scaling_considerations": 0,   # What needs to scale?
-            "security_boundaries": 0       # What needs protection?
-        }
-    }
-    
-    # Calculate overall complexity score
-    total_complexity = sum(
-        sum(category.values()) 
-        for category in complexity_factors.values()
-    )
-    
-    if total_complexity < 5:
-        return "LOW - Single implementation path"
-    elif total_complexity < 15:
-        return "MEDIUM - Multiple considerations"
-    else:
-        return "HIGH - Enterprise architecture required"
-```
+**Purpose**: Identify the true root cause, not just symptoms
 
-### Risk-Driven Development
-```python
-def prioritize_implementation(risks, requirements):
-    """
-    Prioritize implementation based on risk mitigation
-    """
-    risk_matrix = {
-        "high_probability_high_impact": [],    # Implement first
-        "high_probability_low_impact": [],     # Quick wins
-        "low_probability_high_impact": [],     # Plan contingency
-        "low_probability_low_impact": []       # Monitor only
-    }
-    
-    # Implementation priority:
-    # 1. High probability, high impact (critical path)
-    # 2. High probability, low impact (quick wins)
-    # 3. Core functionality (user value)
-    # 4. Low probability, high impact (risk mitigation)
-    
-    return prioritized_implementation_plan
-```
+| Level | Question Focus | Example |
+|-------|---------------|---------|
+| **Why 1** | Immediate symptom | "Why did the workflow fail?" → Missing parameters |
+| **Why 2** | Direct cause | "Why were parameters missing?" → No validation |
+| **Why 3** | System cause | "Why no validation?" → Pattern not enforced |
+| **Why 4** | Process cause | "Why not enforced?" → No testing requirement |
+| **Why 5** | Root cause | "Why no testing?" → Missing development standards |
 
-## Common Failure Patterns
+**Outcome**: Address root cause (establish testing standards) not symptom (add parameters)
+
+### Complexity Assessment Matrix
+
+**Purpose**: Quantify complexity to determine appropriate architecture
+
+| Dimension | Low (1-2) | Medium (3-4) | High (5+) |
+|-----------|-----------|--------------|-----------|
+| **Technical** |
+| New components | Single node | Multiple nodes | New subsystem |
+| Integration points | 1-2 services | 3-4 services | 5+ services |
+| Data dependencies | Single source | Multiple sources | Distributed data |
+| External APIs | None | 1-2 APIs | Multiple APIs |
+| **Business** |
+| User personas | Single type | 2-3 types | Multiple roles |
+| Workflow variations | Linear flow | Branching paths | Complex state machine |
+| Edge cases | Well-defined | Some ambiguity | Many unknowns |
+| Compliance | Basic validation | Industry standards | Legal requirements |
+| **Operational** |
+| Environments | Dev only | Dev + Prod | Multi-region |
+| Monitoring | Basic logs | Metrics + alerts | Full observability |
+| Scaling needs | Fixed load | Variable load | Auto-scaling |
+| Security | Internal only | External access | Zero-trust required |
+
+**Scoring**:
+- **5-10 points**: Simple implementation, single developer
+- **11-20 points**: Moderate complexity, team coordination needed
+- **21+ points**: Enterprise architecture, multiple teams
+
+### Risk Prioritization Framework
+
+**Purpose**: Focus effort on highest-impact risks
+
+| Risk Level | Probability | Impact | Action | Example |
+|------------|------------|--------|--------|---------|
+| **Critical** | High | High | Mitigate immediately | Database connection failures |
+| **Major** | High | Low | Quick fixes | Validation messages |
+| **Significant** | Low | High | Contingency plan | Third-party service outage |
+| **Minor** | Low | Low | Monitor only | Rare edge cases |
+
+**Risk Response Strategies**:
+1. **Avoid**: Change approach to eliminate risk
+2. **Mitigate**: Reduce probability or impact
+3. **Transfer**: Use external service/insurance
+4. **Accept**: Document and monitor
+
+## Common Failure Pattern Analysis
 
 ### Parameter-Related Failures
-```python
-# Pattern: Missing Required Parameters
-def analyze_parameter_failure():
-    """
-    Common failure: Node configured with empty parameters
-    """
-    failure_conditions = [
-        "Empty node config: {}",
-        "All parameters marked as optional (required=False)",
-        "No connections providing parameter values",
-        "Runtime parameters not provided"
-    ]
-    
-    prevention_strategies = [
-        "Always provide minimal config in add_node()",
-        "Mark critical parameters as required=True", 
-        "Validate parameter flow in unit tests",
-        "Use explicit parameter mapping in connections"
-    ]
-    
-    return {
-        "failure_pattern": "Parameter validation failure",
-        "conditions": failure_conditions,
-        "prevention": prevention_strategies,
-        "detection": "Add parameter validation tests"
-    }
-```
+
+**Pattern**: Missing or Invalid Parameters
+
+| Failure Condition | Root Cause | Prevention Strategy |
+|------------------|------------|-------------------|
+| Empty node config `{}` | No defaults provided | Always provide minimal config |
+| All optional parameters | No requirements defined | Mark critical params as required |
+| No parameter connections | Workflow design issue | Map parameters explicitly |
+| Runtime params missing | User input not validated | Validate before execution |
+
+**Detection Strategy**: Check parameter flow in workflow design phase
 
 ### Integration Failure Patterns
-```python
-# Pattern: Service Communication Failures
-def analyze_integration_failure():
-    """
-    Common failure: Services can't communicate
-    """
-    failure_points = [
-        "Network connectivity issues",
-        "Authentication/authorization failures", 
-        "Protocol mismatches (HTTP vs HTTPS)",
-        "Timeout configurations",
-        "Load balancer configuration",
-        "Service discovery failures"
-    ]
-    
-    mitigation_strategies = [
-        "Circuit breaker patterns",
-        "Retry with exponential backoff",
-        "Health check endpoints",
-        "Connection pooling",
-        "Graceful degradation",
-        "Comprehensive monitoring"
-    ]
-    
-    return {
-        "failure_pattern": "Service integration failure",
-        "failure_points": failure_points,
-        "mitigation": mitigation_strategies,
-        "testing": "Integration tests with real services"
-    }
-```
 
-### Scale-Related Failures
-```python
-# Pattern: Performance Degradation
-def analyze_scale_failure():
-    """
-    Common failure: Works in development, fails in production
-    """
-    scale_issues = [
-        "Memory leaks with large datasets",
-        "Database connection exhaustion",
-        "CPU-intensive operations blocking threads",
-        "Network bandwidth limitations",
-        "Disk I/O bottlenecks",
-        "Cache invalidation storms"
-    ]
-    
-    prevention_strategies = [
-        "Load testing with realistic data volumes",
-        "Resource monitoring and alerting",
-        "Connection pooling and management",
-        "Asynchronous processing patterns",
-        "Caching strategies",
-        "Database query optimization"
-    ]
-    
-    return {
-        "failure_pattern": "Scale-related performance failure",
-        "issues": scale_issues,
-        "prevention": prevention_strategies,
-        "validation": "Performance testing under load"
-    }
-```
+**Pattern**: Service Communication Breakdowns
+
+| Failure Point | Likelihood | Mitigation Strategy |
+|--------------|------------|-------------------|
+| Network connectivity | High | Retry with backoff |
+| Authentication failures | Medium | Token refresh logic |
+| Protocol mismatches | Low | Standardize protocols |
+| Timeout issues | High | Configure appropriately |
+| Service discovery | Medium | Health checks |
+| Load balancer config | Low | Proper routing rules |
+
+**Testing Requirement**: Real service integration tests (Tier 2)
+
+### Scale-Related Failure Patterns
+
+**Pattern**: Development Success, Production Failure
+
+| Scale Issue | Detection Method | Prevention |
+|------------|------------------|------------|
+| Memory leaks | Load testing | Proper resource cleanup |
+| Connection exhaustion | Pool monitoring | Connection limits |
+| CPU blocking | Performance profiling | Async operations |
+| Bandwidth limits | Network monitoring | Pagination/streaming |
+| Disk I/O bottlenecks | Disk monitoring | SSD/caching strategy |
+| Cache invalidation | Cache hit rates | Smart invalidation |
+
+**Validation Method**: Load testing with production-scale data
 
 ## Analysis Output Format
 
-### Comprehensive Analysis Report
-```
-## Ultrathink Analysis Report
+### Executive Summary Structure
 
-### Feature: [Feature Name]
+**Feature**: [Clear feature name and scope]
 
-### Executive Summary
-- **Complexity Assessment**: [LOW/MEDIUM/HIGH]
-- **Risk Level**: [LOW/MEDIUM/HIGH]  
-- **Implementation Confidence**: [HIGH/MEDIUM/LOW]
-- **Recommended Approach**: [Specific strategy]
+**Complexity Score**: [Number]/40 ([LOW/MEDIUM/HIGH])
+- Technical: [X]/16
+- Business: [X]/16  
+- Operational: [X]/16
 
-### Failure Point Analysis
-#### Critical Risks (Implement First)
-1. [Risk 1]: [Description] → [Mitigation Strategy]
-2. [Risk 2]: [Description] → [Mitigation Strategy]
+**Risk Assessment**: 
+- Critical risks: [Number]
+- Major risks: [Number]
+- Overall risk level: [LOW/MEDIUM/HIGH]
 
-#### Moderate Risks (Plan For)
-1. [Risk 1]: [Description] → [Contingency Plan]
-2. [Risk 2]: [Description] → [Contingency Plan]
+**Recommendation**: [Specific approach with framework choice]
 
-#### Low Risks (Monitor)
-1. [Risk 1]: [Description] → [Monitoring Strategy]
+### Detailed Analysis Sections
 
-### Existing Solution Analysis
-#### Reusable Components Found
-- **Component 1**: [Location] → [How to use]
-- **Component 2**: [Location] → [How to use]
+#### 1. Failure Point Analysis
+Structure risks by probability and impact using the risk matrix. Focus on:
+- **What can fail**: Specific failure scenarios
+- **Why it fails**: Root cause from 5-Why analysis
+- **How to prevent**: Concrete mitigation strategies
+- **How to detect**: Monitoring and testing approaches
 
-#### Framework Recommendations
-- **Primary Framework**: [Core SDK/DataFlow/Nexus] → [Reasoning]
-- **Supporting Frameworks**: [If applicable] → [Integration strategy]
+#### 2. Existing Solutions Inventory
+Reference specific files and patterns:
+- **Direct reuse**: Components that solve the exact problem
+- **Adaptation**: Components that can be modified
+- **Patterns**: Proven approaches in similar features
+- **Anti-patterns**: What to avoid based on past failures
 
-#### Patterns to Follow
-- **Pattern 1**: [Reference] → [Implementation approach]
-- **Pattern 2**: [Reference] → [Implementation approach]
+#### 3. Implementation Approach
+Risk-driven phasing:
+- **Phase 1**: Mitigate critical risks (high probability, high impact)
+- **Phase 2**: Deliver core value (user-facing functionality)
+- **Phase 3**: Optimize and enhance (performance, UX)
 
-### Implementation Strategy
-#### Phase 1: Foundation (Risk Mitigation)
-- [Task 1]: Address highest-risk components first
-- [Task 2]: Implement core failure prevention
+#### 4. Validation Strategy
+Concrete test scenarios for each tier:
+- **Unit tests**: Specific edge cases and failure modes
+- **Integration tests**: Real service interactions
+- **E2E tests**: Complete user journeys with error paths
 
-#### Phase 2: Core Features (Value Delivery)
-- [Task 1]: Primary user workflow
-- [Task 2]: Essential functionality
+#### 5. Success Criteria
+Measurable outcomes:
+- **Functional**: Feature works as specified
+- **Performance**: Response times, throughput
+- **Reliability**: Error rates, recovery time
+- **Maintainability**: Code coverage, documentation
 
-#### Phase 3: Enhancement (Optimization)
-- [Task 1]: Performance optimization
-- [Task 2]: User experience improvements
+### Key Deliverables
 
-### Testing Strategy
-#### Tier 1 (Unit) - Risk Coverage
-- [Test 1]: Validate critical failure points
-- [Test 2]: Verify parameter edge cases
-
-#### Tier 2 (Integration) - Real Service Validation  
-- [Test 1]: End-to-end service communication
-- [Test 2]: Database operations under load
-
-#### Tier 3 (E2E) - Production Scenarios
-- [Test 1]: Complete user workflows
-- [Test 2]: Error recovery scenarios
-
-### Success Metrics
-- **Technical**: [Measurable criteria]
-- **User Experience**: [Measurable criteria]  
-- **Performance**: [Measurable criteria]
-- **Reliability**: [Measurable criteria]
-
-### Next Actions
-1. [Immediate next step with specific deliverable]
-2. [Second step with dependencies identified]
-3. [Third step with validation criteria]
-```
+1. **Risk Register**: Prioritized list of risks with mitigation plans
+2. **Solution Architecture**: High-level design with component selection
+3. **Test Strategy**: Comprehensive validation approach
+4. **Implementation Roadmap**: Phased delivery plan
 
 ## Behavioral Guidelines
 
