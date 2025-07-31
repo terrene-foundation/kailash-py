@@ -16,7 +16,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import pytest
-from tests.utils.docker_config import OLLAMA_CONFIG
 
 from kailash import Workflow
 from kailash.nodes.ai import A2ACoordinatorNode, LLMAgentNode, SharedMemoryPoolNode
@@ -25,6 +24,7 @@ from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
 from kailash.runtime.local import LocalRuntime
+from tests.utils.docker_config import OLLAMA_CONFIG
 
 # Mark all tests as ollama-dependent and slow
 pytestmark = [pytest.mark.ollama, pytest.mark.slow, pytest.mark.e2e]

@@ -12,15 +12,15 @@ from typing import Any, Dict
 import asyncpg
 import pytest
 import redis
-from tests.utils.docker_config import (
-    ensure_docker_services,
-    get_postgres_connection_string,
-    get_redis_connection_params,
-)
 
 from kailash.nodes.transaction.two_phase_commit import (
     TransactionState,
     TwoPhaseCommitCoordinatorNode,
+)
+from tests.utils.docker_config import (
+    ensure_docker_services,
+    get_postgres_connection_string,
+    get_redis_connection_params,
 )
 
 

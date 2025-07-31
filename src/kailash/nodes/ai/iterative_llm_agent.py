@@ -706,7 +706,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 "expected_outcomes": ["direct_response"],
                 "resource_requirements": {},
                 "success_criteria": {"response_generated": True},
-                "planning_mode": "direct_llm"
+                "planning_mode": "direct_llm",
             }
 
         # Create plan with available tools
@@ -717,7 +717,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
             "expected_outcomes": [],
             "resource_requirements": {},
             "success_criteria": {},
-            "planning_mode": "tool_based"
+            "planning_mode": "tool_based",
         }
 
         # Select relevant tools
@@ -774,7 +774,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
         if plan.get("planning_mode") == "direct_llm":
             try:
                 llm_response = super().run(**kwargs)
-                
+
                 if llm_response.get("success") and llm_response.get("response"):
                     content = llm_response["response"].get("content", "")
                     step_result = {
@@ -784,19 +784,21 @@ class IterativeLLMAgentNode(LLMAgentNode):
                         "output": content,
                         "success": True,
                         "duration": 2.0,  # Estimate for LLM call
-                        "llm_response": llm_response
+                        "llm_response": llm_response,
                     }
-                    
+
                     execution_results["steps_completed"].append(step_result)
                     execution_results["intermediate_results"].append(content)
                     execution_results["tool_outputs"]["llm_response"] = content
                 else:
-                    raise Exception(f"LLM response failed: {llm_response.get('error', 'Unknown error')}")
-                    
+                    raise Exception(
+                        f"LLM response failed: {llm_response.get('error', 'Unknown error')}"
+                    )
+
             except Exception as e:
                 error_result = {
                     "step": 1,
-                    "action": "direct_llm_response", 
+                    "action": "direct_llm_response",
                     "tools_used": [],
                     "error": str(e),
                     "success": False,
@@ -804,7 +806,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 execution_results["steps_completed"].append(error_result)
                 execution_results["errors"].append(str(e))
                 execution_results["success"] = False
-                
+
             return execution_results
 
         # Execute each step in the plan
@@ -831,13 +833,18 @@ class IterativeLLMAgentNode(LLMAgentNode):
                     }
                 else:
                     # No tools available, try direct LLM call for this step
-                    self.logger.info(f"No tools for step {step_num}, using direct LLM call")
+                    self.logger.info(
+                        f"No tools for step {step_num}, using direct LLM call"
+                    )
                     step_messages = [
-                        {"role": "user", "content": f"Please {action}: {plan.get('user_query', '')}"}
+                        {
+                            "role": "user",
+                            "content": f"Please {action}: {plan.get('user_query', '')}",
+                        }
                     ]
                     step_kwargs = {**kwargs, "messages": step_messages}
                     llm_response = super().run(**step_kwargs)
-                    
+
                     if llm_response.get("success") and llm_response.get("response"):
                         content = llm_response["response"].get("content", "")
                         step_result = {
@@ -867,7 +874,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
                             ] = f"Error executing {tool}: {step_result.get('error', 'Unknown error')}"
                 else:
                     # Store LLM response output
-                    execution_results["tool_outputs"][f"step_{step_num}_llm"] = step_result["output"]
+                    execution_results["tool_outputs"][f"step_{step_num}_llm"] = (
+                        step_result["output"]
+                    )
 
             except Exception as e:
                 error_result = {
@@ -1600,7 +1609,9 @@ class IterativeLLMAgentNode(LLMAgentNode):
 
         # If we have no meaningful results from iterations, fall back to base LLM agent
         if not all_results and not all_insights:
-            self.logger.info("No iterative results found, falling back to base LLM response")
+            self.logger.info(
+                "No iterative results found, falling back to base LLM response"
+            )
             try:
                 # Use parent's run method to get a proper LLM response
                 base_response = super().run(**kwargs)
@@ -1614,10 +1625,10 @@ class IterativeLLMAgentNode(LLMAgentNode):
             {
                 "role": "system",
                 "content": """You are an AI assistant synthesizing results from an iterative analysis process. 
-                Create a comprehensive, helpful response based on the findings from multiple iterations of analysis."""
+                Create a comprehensive, helpful response based on the findings from multiple iterations of analysis.""",
             },
             {
-                "role": "user", 
+                "role": "user",
                 "content": f"""Original query: {user_query}
 
 Results from {len(iterations)} iterations:
@@ -1627,8 +1638,8 @@ Insights achieved:
 {chr(10).join(all_insights[:5]) if all_insights else "No specific insights achieved"}
 
 Please provide a comprehensive response to the original query based on these findings. If the findings are limited, 
-provide your best analysis of the query directly."""
-            }
+provide your best analysis of the query directly.""",
+            },
         ]
 
         try:
@@ -1640,7 +1651,7 @@ provide your best analysis of the query directly."""
                 "temperature": kwargs.get("temperature", 0.7),
                 "max_tokens": kwargs.get("max_tokens", 1000),
             }
-            
+
             synthesis_response = super().run(**synthesis_kwargs)
             if synthesis_response.get("success") and synthesis_response.get("response"):
                 return synthesis_response["response"].get("content", "")

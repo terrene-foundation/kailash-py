@@ -4,6 +4,55 @@ Comprehensive guide to diagnosing and resolving common issues in DataFlow applic
 
 ## Common Issues
 
+### Database Connection Issues
+
+**Symptoms:**
+- `AdapterError: Invalid connection string`
+- `invalid literal for int() with base 10` errors
+- Connection failures with special characters in passwords
+
+**Common Causes (Fixed in v0.9.4+):**
+- Special characters in database passwords (#, $, @, ?)
+- Incorrect URL encoding/decoding
+- Malformed connection strings
+
+**Diagnosis:**
+```python
+from dataflow.adapters.connection_parser import ConnectionParser
+
+# Test connection string parsing
+connection_string = "postgresql://admin:MySecret#123$@localhost:5432/mydb"
+try:
+    components = ConnectionParser.parse_connection_string(connection_string)
+    print(f"✅ Parsed successfully: {components}")
+except Exception as e:
+    print(f"❌ Parsing failed: {e}")
+```
+
+**Solutions:**
+```python
+# ✅ Since v0.9.4: Special characters work automatically
+db = DataFlow(
+    database_url="postgresql://admin:Complex#Pass$word@localhost:5432/mydb"
+)
+
+# ✅ Alternative: Manual URL encoding (for older versions)
+from urllib.parse import quote
+password = quote("Complex#Pass$word", safe="")
+connection_string = f"postgresql://admin:{password}@localhost:5432/mydb"
+
+# ✅ Environment variables (recommended for production)
+import os
+db = DataFlow(
+    database_url=os.getenv("DATABASE_URL", "postgresql://admin:password@localhost:5432/mydb")
+)
+```
+
+**Prevention Tips:**
+- Use environment variables for connection strings
+- Test connection parsing in development
+- Validate connection strings before deployment
+
 ### Connection Pool Exhaustion
 
 **Symptoms:**

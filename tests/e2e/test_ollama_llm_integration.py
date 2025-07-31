@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import pytest
-from tests.utils.docker_config import OLLAMA_CONFIG
 
 from kailash.testing import (
     AsyncAssertions,
@@ -23,6 +22,7 @@ from kailash.testing import (
     AsyncWorkflowTestCase,
 )
 from kailash.workflow import AsyncWorkflowBuilder
+from tests.utils.docker_config import OLLAMA_CONFIG
 
 # Mark all tests as ollama-dependent and slow
 pytestmark = [pytest.mark.ollama, pytest.mark.slow]
