@@ -58,6 +58,12 @@ from kailash.runtime.validation.metrics import (
     get_metrics_collector,
 )
 from kailash.runtime.validation.suggestion_engine import ValidationSuggestionEngine
+from kailash.runtime.utils.success_detection import (
+    detect_success,
+    should_stop_on_content_failure,
+    ContentAwareExecutionError,
+    create_content_aware_error,
+)
 from kailash.sdk_exceptions import (
     RuntimeExecutionError,
     WorkflowExecutionError,
@@ -129,6 +135,7 @@ class LocalRuntime:
         secret_provider: Optional[Any] = None,
         connection_validation: str = "warn",
         conditional_execution: str = "route_data",
+        content_aware_success_detection: bool = True,
     ):
         """Initialize the unified runtime.
 
@@ -150,6 +157,9 @@ class LocalRuntime:
             conditional_execution: Execution strategy for conditional routing:
                 - "route_data": Current behavior - all nodes execute, data routing only (default)
                 - "skip_branches": New behavior - skip unreachable branches entirely
+            content_aware_success_detection: Whether to enable content-aware success detection:
+                - True: Check return value content for success/failure patterns (default)
+                - False: Only use exception-based failure detection (legacy mode)
         """
         # Validate connection_validation parameter
         valid_conn_modes = {"off", "warn", "strict"}
@@ -179,6 +189,7 @@ class LocalRuntime:
         self.resource_limits = resource_limits or {}
         self.connection_validation = connection_validation
         self.conditional_execution = conditional_execution
+        self.content_aware_success_detection = content_aware_success_detection
         self.logger = logger
 
         # Enterprise feature managers (lazy initialization)
@@ -869,6 +880,43 @@ class LocalRuntime:
                 if self.debug:
                     self.logger.debug(f"Node {node_id} outputs: {outputs}")
 
+                # Content-aware success detection (CRITICAL FIX)
+                if self.content_aware_success_detection:
+                    should_stop, error_message = should_stop_on_content_failure(
+                        result=outputs,
+                        content_aware_mode=True,
+                        stop_on_error=True,  # Always stop on content failures when content-aware mode is enabled
+                    )
+
+                    if should_stop:
+                        # Create detailed error for content-aware failure
+                        error = create_content_aware_error(
+                            node_id=node_id,
+                            result=(
+                                outputs
+                                if isinstance(outputs, dict)
+                                else {"error": error_message}
+                            ),
+                            error_message=error_message,
+                        )
+
+                        # Log the content-aware failure
+                        self.logger.error(
+                            f"Content-aware failure detected in node {node_id}: {error_message}"
+                        )
+
+                        # Update task status to failed if task manager exists
+                        if task and task_manager:
+                            task_manager.update_task_status(
+                                task.task_id,
+                                TaskStatus.FAILED,
+                                error=str(error),
+                                ended_at=datetime.now(UTC),
+                            )
+
+                        # Raise the content-aware execution error
+                        raise error
+
                 # Update task status with enhanced metrics
                 if task and task_manager:
                     # Convert performance metrics to TaskMetrics format
@@ -922,7 +970,12 @@ class LocalRuntime:
                             f"Error during node {node_id} cleanup after failure: {cleanup_error}"
                         )
 
-                # Determine if we should continue
+                # Content-aware execution errors should always stop execution
+                if isinstance(e, ContentAwareExecutionError):
+                    error_msg = f"Content-aware failure in node '{node_id}': {e}"
+                    raise WorkflowExecutionError(error_msg) from e
+
+                # Determine if we should continue for other exceptions
                 if self._should_stop_on_error(workflow, node_id):
                     error_msg = f"Node '{node_id}' failed: {e}"
                     if len(failed_nodes) > 1:
