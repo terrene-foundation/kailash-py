@@ -183,12 +183,15 @@ workflow.add_node("PostListNode", "user_posts", {
 When ready for production, add configuration:
 
 ```python
-# Production database
+# Production database with secure password
 db = DataFlow(
-    database_url="postgresql://user:pass@localhost/myapp",
+    database_url="postgresql://admin:SecureP@ss#123$@prod-db:5432/myapp",
     pool_size=20,
     echo=False  # Disable SQL logging
 )
+
+# DataFlow automatically handles special characters in passwords (v0.9.4+)
+# No manual URL encoding required!
 
 # Enable enterprise features
 @db.model

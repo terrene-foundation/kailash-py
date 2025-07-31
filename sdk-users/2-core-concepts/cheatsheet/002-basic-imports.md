@@ -66,8 +66,8 @@ workflow.add_node("PythonCodeNode", "processor", {
 # Connect with correct syntax
 workflow.add_connection("data_source", "result", "processor", "input_data")
 
-# Execute
-runtime = LocalRuntime()
+# Execute with enhanced error detection (v0.9.4+)
+runtime = LocalRuntime()  # content_aware_success_detection=True by default
 results, run_id = runtime.execute(workflow.build())
 print(f"Processed {results['processor']['result']['processed_count']} items")
 ```

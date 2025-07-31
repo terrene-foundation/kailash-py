@@ -1068,6 +1068,9 @@ class Node(ABC):
         if an object can be serialized. Used by validate_outputs()
         to identify problematic values.
 
+        Enhanced to recognize objects with .to_dict() methods and validate their output.
+        This resolves platform-specific serialization issues between LocalRuntime and Nexus.
+
         Args:
             obj: Any object to test for JSON serializability
 
@@ -1081,6 +1084,16 @@ class Node(ABC):
             json.dumps(obj)
             return True
         except (TypeError, ValueError):
+            # Check if object has .to_dict() method for enhanced validation
+            if hasattr(obj, "to_dict") and callable(getattr(obj, "to_dict")):
+                try:
+                    dict_result = obj.to_dict()
+                    # Validate that .to_dict() result is actually serializable
+                    json.dumps(dict_result)
+                    return True
+                except (TypeError, ValueError, AttributeError):
+                    # If .to_dict() fails or returns non-serializable data, fall back to False
+                    return False
             return False
 
     def execute(self, **runtime_inputs) -> dict[str, Any]:

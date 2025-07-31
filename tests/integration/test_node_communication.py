@@ -5,14 +5,14 @@ from typing import Any
 
 import pytest
 
-# Register MockNode from conftest
-from tests.conftest import MockNode
-
 from kailash.nodes.base import Node, NodeRegistry
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.runner import WorkflowRunner
 from kailash.sdk_exceptions import NodeValidationError
 from kailash.workflow import Workflow, WorkflowBuilder
+
+# Register MockNode from conftest
+from tests.conftest import MockNode
 
 NodeRegistry.register(MockNode)
 

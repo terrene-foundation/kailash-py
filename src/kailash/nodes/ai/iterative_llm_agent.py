@@ -310,6 +310,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
         convergence_reason = "max_iterations_reached"
 
         try:
+
             # Main iterative loop
             for iteration_num in range(1, max_iterations + 1):
                 iteration_state = IterationState(
@@ -694,7 +695,21 @@ class IterativeLLMAgentNode(LLMAgentNode):
             global_discoveries.get("tools", {}).values()
         )
 
-        # Simple planning logic (in real implementation, use LLM for planning)
+        # If we have no tools available, create a plan for direct LLM response
+        if not available_tools:
+            return {
+                "user_query": user_query,
+                "selected_tools": [],
+                "execution_steps": [
+                    {"step": 1, "action": "direct_llm_response", "tools": []}
+                ],
+                "expected_outcomes": ["direct_response"],
+                "resource_requirements": {},
+                "success_criteria": {"response_generated": True},
+                "planning_mode": "direct_llm",
+            }
+
+        # Create plan with available tools
         plan = {
             "user_query": user_query,
             "selected_tools": [],
@@ -702,6 +717,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
             "expected_outcomes": [],
             "resource_requirements": {},
             "success_criteria": {},
+            "planning_mode": "tool_based",
         }
 
         # Select relevant tools
@@ -754,6 +770,45 @@ class IterativeLLMAgentNode(LLMAgentNode):
         # Check if we should use real MCP tool execution
         use_real_mcp = kwargs.get("use_real_mcp", True)
 
+        # Handle direct LLM response mode
+        if plan.get("planning_mode") == "direct_llm":
+            try:
+                llm_response = super().run(**kwargs)
+
+                if llm_response.get("success") and llm_response.get("response"):
+                    content = llm_response["response"].get("content", "")
+                    step_result = {
+                        "step": 1,
+                        "action": "direct_llm_response",
+                        "tools_used": [],
+                        "output": content,
+                        "success": True,
+                        "duration": 2.0,  # Estimate for LLM call
+                        "llm_response": llm_response,
+                    }
+
+                    execution_results["steps_completed"].append(step_result)
+                    execution_results["intermediate_results"].append(content)
+                    execution_results["tool_outputs"]["llm_response"] = content
+                else:
+                    raise Exception(
+                        f"LLM response failed: {llm_response.get('error', 'Unknown error')}"
+                    )
+
+            except Exception as e:
+                error_result = {
+                    "step": 1,
+                    "action": "direct_llm_response",
+                    "tools_used": [],
+                    "error": str(e),
+                    "success": False,
+                }
+                execution_results["steps_completed"].append(error_result)
+                execution_results["errors"].append(str(e))
+                execution_results["success"] = False
+
+            return execution_results
+
         # Execute each step in the plan
         for step in plan.get("execution_steps", []):
             step_num = step.get("step", 0)
@@ -761,12 +816,12 @@ class IterativeLLMAgentNode(LLMAgentNode):
             tools = step.get("tools", [])
 
             try:
-                if use_real_mcp:
+                if use_real_mcp and tools:
                     # Real MCP tool execution
                     step_result = self._execute_tools_with_mcp(
                         step_num, action, tools, discoveries, kwargs
                     )
-                else:
+                elif tools:
                     # Mock tool execution for backward compatibility
                     step_result = {
                         "step": step_num,
@@ -776,20 +831,52 @@ class IterativeLLMAgentNode(LLMAgentNode):
                         "success": True,
                         "duration": 1.5,
                     }
+                else:
+                    # No tools available, try direct LLM call for this step
+                    self.logger.info(
+                        f"No tools for step {step_num}, using direct LLM call"
+                    )
+                    step_messages = [
+                        {
+                            "role": "user",
+                            "content": f"Please {action}: {plan.get('user_query', '')}",
+                        }
+                    ]
+                    step_kwargs = {**kwargs, "messages": step_messages}
+                    llm_response = super().run(**step_kwargs)
+
+                    if llm_response.get("success") and llm_response.get("response"):
+                        content = llm_response["response"].get("content", "")
+                        step_result = {
+                            "step": step_num,
+                            "action": action,
+                            "tools_used": [],
+                            "output": content,
+                            "success": True,
+                            "duration": 2.0,
+                        }
+                    else:
+                        raise Exception(f"LLM call failed for step {step_num}")
 
                 execution_results["steps_completed"].append(step_result)
                 execution_results["intermediate_results"].append(step_result["output"])
 
                 # Store tool outputs
-                for tool in tools:
-                    if step_result["success"]:
-                        execution_results["tool_outputs"][tool] = step_result.get(
-                            "tool_outputs", {}
-                        ).get(tool, step_result["output"])
-                    else:
-                        execution_results["tool_outputs"][
-                            tool
-                        ] = f"Error executing {tool}: {step_result.get('error', 'Unknown error')}"
+                if tools:
+                    for tool in tools:
+                        if step_result["success"]:
+                            execution_results["tool_outputs"][tool] = step_result.get(
+                                "tool_outputs", {}
+                            ).get(tool, step_result["output"])
+                        else:
+                            execution_results["tool_outputs"][
+                                tool
+                            ] = f"Error executing {tool}: {step_result.get('error', 'Unknown error')}"
+                else:
+                    # Store LLM response output
+                    execution_results["tool_outputs"][f"step_{step_num}_llm"] = (
+                        step_result["output"]
+                    )
 
             except Exception as e:
                 error_result = {
@@ -1520,7 +1607,58 @@ class IterativeLLMAgentNode(LLMAgentNode):
                     )
                     all_insights.extend(goals_achieved)
 
-        # Create synthesized response
+        # If we have no meaningful results from iterations, fall back to base LLM agent
+        if not all_results and not all_insights:
+            self.logger.info(
+                "No iterative results found, falling back to base LLM response"
+            )
+            try:
+                # Use parent's run method to get a proper LLM response
+                base_response = super().run(**kwargs)
+                if base_response.get("success") and base_response.get("response"):
+                    return base_response["response"].get("content", "")
+            except Exception as e:
+                self.logger.warning(f"Base LLM fallback failed: {e}")
+
+        # Create synthesized response using LLM
+        synthesis_messages = [
+            {
+                "role": "system",
+                "content": """You are an AI assistant synthesizing results from an iterative analysis process. 
+                Create a comprehensive, helpful response based on the findings from multiple iterations of analysis.""",
+            },
+            {
+                "role": "user",
+                "content": f"""Original query: {user_query}
+
+Results from {len(iterations)} iterations:
+{chr(10).join(all_results[:10]) if all_results else "No specific results generated"}
+
+Insights achieved:
+{chr(10).join(all_insights[:5]) if all_insights else "No specific insights achieved"}
+
+Please provide a comprehensive response to the original query based on these findings. If the findings are limited, 
+provide your best analysis of the query directly.""",
+            },
+        ]
+
+        try:
+            # Use the parent's LLM capabilities to generate synthesis
+            synthesis_kwargs = {
+                "provider": kwargs.get("provider", "openai"),
+                "model": kwargs.get("model", "gpt-4"),
+                "messages": synthesis_messages,
+                "temperature": kwargs.get("temperature", 0.7),
+                "max_tokens": kwargs.get("max_tokens", 1000),
+            }
+
+            synthesis_response = super().run(**synthesis_kwargs)
+            if synthesis_response.get("success") and synthesis_response.get("response"):
+                return synthesis_response["response"].get("content", "")
+        except Exception as e:
+            self.logger.warning(f"LLM synthesis failed: {e}")
+
+        # Fallback to basic synthesis if LLM fails
         synthesis = f"## Analysis Results for: {user_query}\n\n"
 
         if all_results:
@@ -1538,20 +1676,6 @@ class IterativeLLMAgentNode(LLMAgentNode):
         synthesis += (
             f"- {successful_iterations}/{len(iterations)} iterations successful\n\n"
         )
-
-        # Add confidence and evidence
-        final_confidence = 0.8  # Mock final confidence
-        synthesis += f"### Confidence: {final_confidence:.1%}\n"
-        synthesis += f"Based on analysis using {len(global_discoveries.get('tools', {}))} MCP tools and comprehensive iterative processing.\n\n"
-
-        # Add recommendations if analysis-focused
-        if "analyze" in user_query.lower() or "recommend" in user_query.lower():
-            synthesis += "### Recommendations:\n"
-            synthesis += (
-                "1. Continue monitoring key metrics identified in this analysis\n"
-            )
-            synthesis += "2. Consider implementing suggested improvements\n"
-            synthesis += "3. Review findings with stakeholders for validation\n"
 
         return synthesis
 

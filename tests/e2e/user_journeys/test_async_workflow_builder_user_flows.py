@@ -15,7 +15,6 @@ from typing import Any, Dict
 
 import pandas as pd
 import pytest
-from tests.utils.docker_config import DATABASE_CONFIG, OLLAMA_CONFIG, REDIS_CONFIG
 
 from kailash.resources.registry import ResourceRegistry
 from kailash.runtime.async_local import AsyncLocalRuntime
@@ -25,6 +24,7 @@ from kailash.workflow import (
     ErrorHandler,
     RetryPolicy,
 )
+from tests.utils.docker_config import DATABASE_CONFIG, OLLAMA_CONFIG, REDIS_CONFIG
 
 
 @pytest.mark.integration
