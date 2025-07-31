@@ -1,10 +1,57 @@
 # DataFlow Quick Start Guide
 
-Get up and running with DataFlow in 5 minutes! This guide shows you how to build a complete database-backed application with zero configuration.
+Get up and running with DataFlow in 5 minutes! This guide shows you how to build a complete database-backed application with **automatic schema management** and zero configuration.
+
+## 🚀 The DataFlow "Wow Factor"
+
+**Watch your database automatically evolve as you code:**
+
+```python
+from dataflow import DataFlow
+
+db = DataFlow()
+
+# Define your initial model
+@db.model
+class User:
+    name: str
+    email: str
+
+# Initialize - creates database and tables automatically
+await db.initialize()
+
+# Later, just add fields to your model...
+@db.model
+class User:
+    name: str
+    email: str
+    phone: str = None        # NEW FIELD
+    is_active: bool = True   # NEW FIELD
+
+# Auto-migration detects changes and shows visual preview:
+await db.auto_migrate()
+```
+
+**You'll see this interactive preview:**
+```
+🔄 DataFlow Auto-Migration Preview
+
+Schema Changes Detected:
+┌─────────────────┬──────────────────┬────────────────┬──────────────┐
+│ Table           │ Operation        │ Details        │ Safety Level │
+├─────────────────┼──────────────────┼────────────────┼──────────────┤
+│ user            │ ADD_COLUMN       │ phone (TEXT)   │ ✅ SAFE      │
+│ user            │ ADD_COLUMN       │ is_active      │ ✅ SAFE      │
+│                 │                  │ (BOOLEAN)      │              │
+└─────────────────┴──────────────────┴────────────────┴──────────────┘
+
+Apply these changes? [y/N]: y
+✅ Migration completed successfully!
+```
+
+**No manual migrations. No SQL scripts. Just code and go!**
 
 ## Installation
-
-First, install DataFlow:
 
 ```bash
 pip install kailash-dataflow
@@ -28,8 +75,9 @@ db = DataFlow()
 That's it! You now have a fully functional database connection with:
 - ✅ Automatic SQLite database creation
 - ✅ Connection pooling
-- ✅ Schema management
-- ✅ Migration support
+- ✅ **Revolutionary auto-migration system**
+- ✅ Visual schema change previews
+- ✅ Rollback capabilities
 
 ### 2. Define Your First Model
 
@@ -38,13 +86,18 @@ Add a model to your app:
 ```python
 @db.model
 class User:
-    """User model with auto-generated nodes."""
+    """User model with auto-generated nodes and auto-migration."""
     name: str
     email: str
     active: bool = True
 ```
 
-This single decorator creates 9 database nodes automatically:
+This single decorator creates:
+- **9 database nodes automatically**
+- **Automatic schema migration when fields change**
+- **Visual preview of all database changes**
+
+**Generated nodes:**
 - `UserCreateNode` - Create a user
 - `UserReadNode` - Get user by ID
 - `UserUpdateNode` - Update a user
@@ -131,6 +184,56 @@ print(f"Created: {results['create_user']['record']}")
 print(f"All users: {results['list_users']['records']}")
 ```
 
+## ✨ Auto-Migration in Action
+
+### Schema Evolution Example
+
+```python
+# Start with basic model
+@db.model
+class Product:
+    name: str
+    price: float
+
+await db.initialize()  # Creates initial schema
+
+# Evolve your model - add features as you code
+@db.model
+class Product:
+    name: str
+    price: float
+    description: str = None      # NEW: product description
+    category: str = None         # NEW: categorization
+    specifications: dict = None  # NEW: JSONB specifications
+    in_stock: bool = True        # NEW: inventory flag
+    created_at: datetime = None  # NEW: timestamp
+
+# Auto-migration shows you exactly what will change
+await db.auto_migrate()
+```
+
+**Migration preview shows:**
+- ✅ Safe operations (no data loss)
+- ⚠️ Risky operations (with warnings)
+- 🚨 Dangerous operations (require confirmation)
+- 📊 Estimated execution time
+- 🔄 Rollback plan available
+
+### Production-Safe Migrations
+
+```python
+# Production deployment with safety checks
+success, migrations = await db.auto_migrate(
+    dry_run=True,              # Preview only
+    max_risk_level="MEDIUM",   # Block dangerous operations
+    backup_before_migration=True,  # Auto-backup
+    rollback_on_error=True     # Auto-rollback failures
+)
+
+if success:
+    print(f"Applied {len(migrations)} migrations safely")
+```
+
 ## Advanced Features in 30 Seconds
 
 ### Bulk Operations
@@ -206,13 +309,14 @@ class Order:
 
 ## Next Steps
 
-You've just built a complete database application! Here's what to explore next:
+You've just built a complete database application with **automatic schema management**! Here's what to explore next:
 
-1. **[Core Concepts](concepts.md)** - Understand DataFlow's architecture
-2. **[Model Definition](../development/models.md)** - Advanced model features
-3. **[Bulk Operations](../development/bulk-operations.md)** - High-performance data handling
-4. **[Multi-Database Support](../features/multi-database.md)** - Use PostgreSQL or MySQL
-5. **[Progressive Configuration](../features/progressive-config.md)** - Scale from prototype to enterprise
+1. **[Auto-Migration System](../workflows/auto-migration.md)** - Master the revolutionary migration system
+2. **[Core Concepts](concepts.md)** - Understand DataFlow's architecture
+3. **[Model Definition](../development/models.md)** - Advanced model features
+4. **[Bulk Operations](../development/bulk-operations.md)** - High-performance data handling
+5. **[Multi-Database Support](../features/multi-database.md)** - Use PostgreSQL or MySQL
+6. **[Progressive Configuration](../features/progressive-config.md)** - Scale from prototype to enterprise
 
 ## Common Patterns
 
@@ -249,14 +353,17 @@ workflow.add_node("UserListNode", "stats", {
 })
 ```
 
-## Tips
+## 💡 DataFlow Tips
 
 - 🚀 **Start Simple**: Use zero-config SQLite for prototyping
+- 🔄 **Embrace Auto-Migration**: Let DataFlow manage your schema evolution
+- 📊 **Preview First**: Always use `dry_run=True` in production
 - 📈 **Scale Gradually**: Add features as you need them
 - 🔍 **Use Filters**: MongoDB-style query operators for complex queries
 - ⚡ **Bulk for Speed**: Use bulk nodes for operations on multiple records
 - 🛡️ **Enable Security**: Add multi-tenant and audit features for production
+- 🔄 **Plan Rollbacks**: DataFlow generates rollback plans automatically
 
 ---
 
-**Congratulations!** You've learned the basics of DataFlow. The framework grows with your needs - from simple prototypes to enterprise applications without changing your code.
+**Congratulations!** You've discovered DataFlow's revolutionary auto-migration system. **Your database now evolves automatically as you code** - from simple prototypes to enterprise applications without manual schema management.
