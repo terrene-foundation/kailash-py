@@ -212,6 +212,12 @@ class TestIterativeLLMAgentMCPExecution:
             1, "test_action", ["unknown_tool"], discoveries, kwargs
         )
 
-        # Should handle gracefully with no server config
+        # Should handle gracefully with LLM fallback
         assert result["success"] is False
-        assert "No tools executed" in result["output"]
+        # With the fix, it should now try LLM fallback which will fail due to provider not being available
+        # Instead of "No tools executed", we should see either "Failed to execute" or "Error executing"
+        assert (
+            "Failed to execute" in result["output"]
+            or "Error executing" in result["output"]
+            or "Provider openai error" in result["output"]
+        )
