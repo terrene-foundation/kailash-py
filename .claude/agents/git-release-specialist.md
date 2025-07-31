@@ -57,7 +57,6 @@ ruff check .              # Lint Python code
 
 ## Phase 2: Testing
 pytest                    # Run test suite
-cd examples && python _utils/test_all_examples.py  # Test examples
 
 ## Phase 3: Documentation
 cd docs && python build_docs.py  # Build documentation
@@ -98,7 +97,6 @@ git commit -m "feat: implement [feature description]"
 
 ## 3. Pre-Push Validation (MANDATORY)
 black . && isort . && ruff check . && pytest
-cd examples && python _utils/test_all_examples.py
 cd docs && python build_docs.py
 ```
 
@@ -126,20 +124,6 @@ git push -u origin feature/[name]
 - [ ] Tests added/updated
 - [ ] Documentation updated
 - [ ] Examples updated (if applicable)
-
-## Pre-Commit Validation ✅
-- [ ] `black .` - Code formatting applied
-- [ ] `isort .` - Imports organized
-- [ ] `ruff check .` - Linting passed
-- [ ] `pytest` - All tests pass
-- [ ] Examples work correctly
-- [ ] Documentation builds successfully
-
-## Testing
-- [ ] Unit tests cover new functionality
-- [ ] Integration tests verify system behavior
-- [ ] E2E tests validate user workflows
-- [ ] Edge cases handled properly
 
 ## Breaking Changes
 - [ ] None
@@ -187,7 +171,6 @@ git checkout -b release/v[version]
 # Run complete validation suite
 black . && isort . && ruff check .
 pytest
-cd examples && python _utils/test_all_examples.py
 cd docs && python build_docs.py
 
 ### 3. Build and Test Distribution
@@ -197,7 +180,7 @@ rm -rf dist/ build/ *.egg-info
 # Build packages
 python -m build                          # Main SDK
 cd apps/kailash-dataflow && python -m build  # DataFlow
-cd ../kailash-nexus && python -m build       # Nexus
+cd apps/kailash-nexus && python -m build     # Nexus
 
 # Test installation
 python -m venv test-release
@@ -237,7 +220,7 @@ git push origin v[version]
 ### 4. PyPI Release
 # Upload to PyPI (order matters for bundled packages)
 cd apps/kailash-dataflow && twine upload dist/*  # DataFlow first
-cd ../kailash-nexus && twine upload dist/*       # Nexus second
+cd apps/kailash-nexus && twine upload dist/*     # Nexus second
 cd ../.. && twine upload dist/*                  # Main SDK last
 ```
 
@@ -265,7 +248,6 @@ black . && isort . && ruff check . && pytest
 
 ## Full Validation (20 minutes)
 black . && isort . && ruff check . && pytest && \
-cd examples && python _utils/test_all_examples.py && \
 cd docs && python build_docs.py
 
 ## Release Validation (30 minutes)

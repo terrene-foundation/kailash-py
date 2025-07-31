@@ -219,22 +219,31 @@ class Node(ABC):
             # Filter out internal fields from config with comprehensive parameter handling
             # Get parameter definitions once and cache for both filtering and validation
             try:
-                if not hasattr(self, '_temp_param_definitions'):
+                if not hasattr(self, "_temp_param_definitions"):
                     self._temp_param_definitions = self.get_parameters()
                 defined_params = set(self._temp_param_definitions.keys())
             except Exception as e:
                 # If get_parameters() fails, log but continue with safe defaults
-                self.logger.debug(f"Could not get parameter definitions during init: {e}")
+                self.logger.debug(
+                    f"Could not get parameter definitions during init: {e}"
+                )
                 defined_params = set()
                 self._temp_param_definitions = {}
 
             # Comprehensive parameter filtering: handle ALL potential conflicts
             # Fields that are always internal (never user parameters)
             always_internal = {"metadata"}
-            
+
             # Fields that can be either internal or user parameters
-            potentially_user_params = {"id", "name", "description", "version", "author", "tags"}
-            
+            potentially_user_params = {
+                "id",
+                "name",
+                "description",
+                "version",
+                "author",
+                "tags",
+            }
+
             # Build dynamic filter list based on user-defined parameters
             internal_fields = always_internal.copy()
             for field in potentially_user_params:
@@ -250,10 +259,10 @@ class Node(ABC):
                 if field_name in internal_fields:
                     return True
                 # Check for metadata-related field patterns
-                if field_name.startswith('metadata_'):
+                if field_name.startswith("metadata_"):
                     return True
                 # Check for other internal patterns
-                if field_name.startswith('_'):  # Private fields
+                if field_name.startswith("_"):  # Private fields
                     return True
                 return False
 
@@ -587,21 +596,21 @@ class Node(ABC):
 
     def _get_cached_parameters(self) -> dict[str, NodeParameter]:
         """Get cached parameter definitions with optimal performance.
-        
+
         Uses parameters cached during initialization to avoid duplicate get_parameters() calls.
 
         Returns:
             Dictionary of parameter definitions, cached for performance
         """
         # First check if we have parameters cached from initialization
-        if hasattr(self, '_temp_param_definitions') and self._temp_param_definitions:
+        if hasattr(self, "_temp_param_definitions") and self._temp_param_definitions:
             # Use cached parameters from init and clean up temporary cache
             if self._cached_params is None:
                 self._cached_params = self._temp_param_definitions
                 # Clean up temporary cache to free memory
-                delattr(self, '_temp_param_definitions')
+                delattr(self, "_temp_param_definitions")
             return self._cached_params
-        
+
         # Fallback to original behavior if no cached parameters from init
         if self._cached_params is None:
             try:
