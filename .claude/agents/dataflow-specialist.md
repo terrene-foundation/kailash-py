@@ -57,7 +57,7 @@ class User:
 workflow = WorkflowBuilder()
 workflow.add_node("UserCreateNode", "create_user", {
     "name": "Alice",
-    "email": "alice@example.com", 
+    "email": "alice@example.com",
     "age": 25
 })
 
@@ -66,7 +66,7 @@ runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 ```
 
-### Production Configuration  
+### Production Configuration
 ```python
 # Environment-based (recommended)
 # DATABASE_URL=postgresql://user:pass@localhost/db
@@ -110,15 +110,15 @@ class Order:
     total: float
     status: str = "pending"
     items: Optional[list] = None
-    
+
     # Enterprise features
     __dataflow__ = {
         'multi_tenant': True,     # Adds tenant_id field
-        'soft_delete': True,      # Adds deleted_at field 
+        'soft_delete': True,      # Adds deleted_at field
         'versioned': True,        # Adds version field for optimistic locking
         'audit_log': True         # Tracks all changes
     }
-    
+
     # Performance optimization
     __indexes__ = [
         {'name': 'idx_tenant_status', 'fields': ['tenant_id', 'status']},
@@ -176,7 +176,7 @@ class TenantData:
 # Automatic tenant isolation
 workflow.add_node("TenantDataCreateNode", "create", {
     "name": "setting",
-    "value": "data", 
+    "value": "data",
     "tenant_id": "tenant_123"  # Automatic isolation
 })
 ```
@@ -201,7 +201,7 @@ workflow.add_node("TransactionManagerNode", "payment_flow", {
 # Connection pooling
 db = DataFlow(
     pool_size=20,              # Base connections
-    pool_max_overflow=30,      # Extra connections  
+    pool_max_overflow=30,      # Extra connections
     pool_recycle=3600,         # Recycle after 1 hour
     pool_pre_ping=True         # Validate connections
 )
@@ -240,7 +240,7 @@ workflow.add_node("OrderCreateNode", "create", {
     "total": 100.0
 })
 
-# String datetime fails validation  
+# String datetime fails validation
 workflow.add_node("OrderCreateNode", "create", {
     "due_date": datetime.now().isoformat(),  # FAILS
     "total": 250.0
@@ -286,7 +286,7 @@ workflow.add_node("OrderAggregateNode", "analytics", {
 ### Benchmarks
 - **Single CRUD**: <1ms
 - **Bulk Create**: 10,000+ records/sec
-- **Bulk Update**: 50,000+ records/sec  
+- **Bulk Update**: 50,000+ records/sec
 - **Query Operations**: 5,000+ queries/sec
 - **Transaction Throughput**: 500+ txns/sec
 
@@ -346,94 +346,224 @@ class SensitiveData:
     }
 ```
 
-## Database Migration & Schema Management
+## Revolutionary Auto-Migration System
 
-### Automatic Table Creation
-DataFlow automatically creates tables when models are defined:
+### Core Auto-Migration Features
+DataFlow's auto-migration system provides:
+- **Visual Migration Preview**: See exactly what changes will be applied
+- **Interactive Confirmation**: Review and approve migrations with detailed explanations
+- **PostgreSQL Optimized**: Advanced ALTER syntax, JSONB metadata
+- **Automatic Rollback Analysis**: Intelligent safety assessment for every migration
+- **Schema Comparison Engine**: Precise diff generation between models and database
+- **Production Safety**: Dry-run mode, data loss prevention, transaction rollback
+
+### Basic Auto-Migration Pattern
 ```python
-# Tables are created automatically when first accessed
+from dataflow import DataFlow
+
+db = DataFlow()
+
+# Define initial model
 @db.model
 class User:
     name: str
     email: str
-    age: int
 
-# Table 'users' is created on first operation
-workflow.add_node("UserCreateNode", "create", {"name": "Alice", "email": "alice@example.com", "age": 25})
-```
+# Initialize database
+await db.initialize()
 
-### Schema Updates & Migrations
-```python
-# Add new fields to existing models
+# Evolve model by adding fields
 @db.model
 class User:
     name: str
     email: str
-    age: int
-    phone: str = None  # New field with default
-    created_at: datetime = None  # Auto-managed
+    phone: str = None        # NEW FIELD - triggers auto-migration
+    is_active: bool = True   # NEW FIELD - triggers auto-migration
+    created_at: datetime = None  # NEW FIELD - triggers auto-migration
 
-# DataFlow handles ALTER TABLE automatically
-# Existing data is preserved, new fields get defaults
+# Auto-migration detects changes and provides visual confirmation
+await db.auto_migrate()  # Shows interactive preview + confirmation
 ```
 
-### Manual Migration Control
+### Migration Modes & Safety
 ```python
-# For complex migrations, use migration nodes
-workflow.add_node("MigrationNode", "add_column", {
-    "table": "users",
-    "column": "department",
-    "type": "varchar(50)",
-    "default": "unassigned"
+# Interactive mode with visual confirmation (default)
+success, migrations = await db.auto_migrate()
+
+# Dry-run mode (preview only)
+success, migrations = await db.auto_migrate(dry_run=True)
+
+# Production mode with safety checks
+success, migrations = await db.auto_migrate(
+    auto_confirm=True,           # Skip interactive prompts
+    max_risk_level="MEDIUM",     # Block HIGH risk operations
+    backup_before_migration=True, # Auto-backup before changes
+    rollback_on_error=True       # Auto-rollback on failure
+)
+
+# Check migration safety
+if not success:
+    print("Migration blocked by safety checks")
+```
+
+### Visual Migration Preview
+When you run auto-migration, you see:
+```
+🔄 DataFlow Auto-Migration Preview
+
+Schema Changes Detected:
+┌─────────────────┬──────────────────┬────────────────┬──────────────┐
+│ Table           │ Operation        │ Details        │ Safety Level │
+├─────────────────┼──────────────────┼────────────────┼──────────────┤
+│ user            │ ADD_COLUMN       │ phone (TEXT)   │ ✅ SAFE      │
+│ user            │ ADD_COLUMN       │ is_active      │ ✅ SAFE      │
+│                 │                  │ (BOOLEAN)      │              │
+└─────────────────┴──────────────────┴────────────────┴──────────────┘
+
+Generated SQL:
+  ALTER TABLE user ADD COLUMN phone TEXT NULL;
+  ALTER TABLE user ADD COLUMN is_active BOOLEAN DEFAULT true;
+
+✅ Migration Safety Assessment:
+  • All operations are backward compatible
+  • No data loss risk detected
+  • Estimated execution time: <100ms
+  • Rollback plan: Available (2 steps)
+
+Apply these changes? [y/N]: y
+```
+
+### Rollback System
+```python
+# Automatic rollback analysis included with every migration
+success, migrations = await db.auto_migrate(dry_run=True)
+
+for migration in migrations:
+    print(f"Migration: {migration.description}")
+    print(f"Rollback available: {migration.rollback_plan.fully_reversible}")
+    print(f"Rollback steps: {len(migration.rollback_plan.steps)}")
+
+# Manual rollback to previous state
+success = await db.rollback_migration("migration_20250131_120000")
+
+# View rollback plan before applying
+rollback_analysis = await db.analyze_rollback("migration_20250131_120000")
+print(f"Data loss warning: {rollback_analysis.data_loss_warning}")
+```
+
+### Production CI/CD Integration
+```python
+# Production deployment script
+async def deploy_migrations():
+    db = DataFlow()
+
+    # Check for pending migrations
+    pending = await db.get_pending_migrations()
+    if not pending:
+        return True
+
+    # Apply with production safety
+    success, applied = await db.auto_migrate(
+        auto_confirm=True,              # No interactive prompts
+        max_risk_level="MEDIUM",        # Block dangerous operations
+        backup_before_migration=True,   # Always backup first
+        rollback_on_error=True,         # Auto-rollback failures
+        timeout=600                     # 10 minute timeout
+    )
+
+    return success
+
+# Use in deployment pipeline
+if __name__ == "__main__":
+    success = await deploy_migrations()
+    exit(0 if success else 1)
+```
+
+### Schema Evolution Patterns
+```python
+# Safe additive changes
+@db.model
+class Product:
+    name: str
+    price: float
+    # Add new fields safely
+    description: str = None      # Safe: nullable
+    in_stock: bool = True        # Safe: has default
+    tags: list = None            # Safe: JSONB array
+    metadata: dict = None        # Safe: JSONB object
+
+# Complex transformations with migration plans
+from dataflow.migrations import MigrationPlan
+
+plan = MigrationPlan([
+    # Step 1: Add new structure
+    {"operation": "add_column", "table": "users", "column": "profile_json"},
+    # Step 2: Migrate existing data
+    {"operation": "migrate_data", "source": "users.bio", "target": "users.profile_json"},
+    # Step 3: Clean up old structure
+    {"operation": "drop_column", "table": "users", "column": "bio"}
+])
+
+success = await db.apply_migration_plan(plan)
+```
+
+### PostgreSQL-Specific Optimizations
+```python
+@db.model
+class AdvancedModel:
+    name: str
+    specs: dict         # Optimized as JSONB
+    tags: list          # Optimized as JSONB array
+    location: str       # Can use PostGIS types
+
+    __dataflow__ = {
+        'postgresql': {
+            'jsonb_gin_indexes': ['specs', 'tags'],  # Auto-create GIN indexes
+            'text_search': ['name'],                 # Full-text search
+            'partial_indexes': [                     # Conditional indexes
+                {'fields': ['specs'], 'condition': 'specs IS NOT NULL'}
+            ]
+        }
+    }
+
+# Auto-migration applies PostgreSQL-specific optimizations automatically
+await db.auto_migrate()  # Creates GIN indexes, text search, etc.
+```
+
+### Concurrent Access Protection
+```python
+# Automatic migration locking for multi-process environments
+async with db.migration_lock("schema_name"):
+    success = await db.auto_migrate()
+
+# Queue migrations for high-concurrency scenarios
+migration_id = await db.queue_migration({
+    "target_schema": updated_schema,
+    "priority": 1,
+    "timeout": 300
 })
 
-# Data migrations between schemas
-workflow.add_node("DataMigrationNode", "migrate_users", {
-    "source_table": "old_users",
-    "target_table": "users",
-    "mapping": {
-        "full_name": "name",
-        "email_address": "email"
-    },
-    "batch_size": 1000
-})
+status = await db.get_migration_status(migration_id)
+print(f"Queue position: {status.position}")
 ```
 
-### Database Initialization & Support
+### Migration Monitoring
 ```python
-# Development: SQLite for schema generation only
-db = DataFlow()  # Schema generation works, execution requires PostgreSQL
+# Enable migration performance tracking
+db = DataFlow(
+    migration_config={
+        "monitoring": True,
+        "performance_tracking": True,
+        "slow_migration_threshold": 5000,  # 5 seconds
+        "webhook_url": "https://monitoring.com/webhooks/migrations"
+    }
+)
 
-# Production: PostgreSQL only in alpha release
-# DATABASE_URL=postgresql://user:pass@localhost/mydb
-db = DataFlow()  # Connects to existing PostgreSQL database
-
-# Important: Alpha release limitation
-# - Schema generation: Works for PostgreSQL, MySQL, SQLite
-# - Execution: PostgreSQL only (AsyncSQLDatabaseNode limitation)
-# - Future releases will support MySQL and SQLite execution
+# View migration history and metrics
+history = await db.get_migration_history(limit=10)
+metrics = await db.get_migration_metrics()
+print(f"Average migration time: {metrics.avg_duration_ms}ms")
 ```
-
-### Auto-Migration Control
-```python
-# Enable automatic migrations (default in development)
-db = DataFlow(auto_migrate=True)
-
-# Disable automatic migrations (recommended for production)
-db = DataFlow(auto_migrate=False)
-
-# Manual migration control
-db.auto_migrate()  # Manually trigger migration when needed
-```
-
-### Migration System Features
-DataFlow includes an auto-migration system that:
-- Automatically detects schema changes when enabled
-- Can be disabled with `auto_migrate=False` for production control
-- Provides visual confirmation before applying changes
-- Supports rollback and versioning
-- Schema generation works for all databases (PostgreSQL, MySQL, SQLite)
-- Execution currently limited to PostgreSQL only
 
 ## Common Patterns & Solutions
 
@@ -445,7 +575,7 @@ class Order:
     total: float
     status: str = "pending"
 
-@db.model  
+@db.model
 class OrderItem:
     order_id: int
     product_id: int
@@ -472,7 +602,7 @@ workflow.add_connection("create_order", "id", "add_items", "order_id")
 ```python
 # From SQLAlchemy ORM
 # Before: session.query(User).filter(User.age > 18).all()
-# After: 
+# After:
 workflow.add_node("UserListNode", "adults", {
     "filter": {"age": {"$gt": 18}}
 })
@@ -538,20 +668,24 @@ workflow.add_node("PerformanceTestNode", "benchmark", {
 
 ### ✅ Always Do
 - Use `@db.model` decorator for automatic node generation
+- Leverage auto-migration system for schema evolution
+- Use `dry_run=True` for production migration previews
+- Enable rollback analysis before applying migrations
+- Configure connection pooling for production
+- Set safety levels for production migrations (`max_risk_level="MEDIUM"`)
+- Use PostgreSQL for alpha release execution
 - Leverage bulk operations for >100 records
 - Enable multi-tenancy for SaaS applications
-- Use soft deletes for audit trails
-- Configure connection pooling for production
-- Set `auto_migrate=False` for production environments
-- Use PostgreSQL for alpha release execution
 
 ### ❌ Never Do
 - Try to instantiate models directly (`User()`)
+- Skip migration safety checks in production
+- Apply HIGH risk migrations without manual review
 - Use `${}` syntax in node parameters
 - Use `.isoformat()` for datetime parameters
 - Skip connection pooling configuration
 - Use single operations for bulk data
-- Ignore soft delete for important data
+- Ignore rollback plans for production migrations
 - Expect MySQL/SQLite execution in alpha (PostgreSQL only)
 
 This agent specializes in DataFlow-specific database operations, automatic node generation, and enterprise data management patterns.
