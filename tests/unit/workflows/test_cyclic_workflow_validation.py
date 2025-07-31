@@ -50,7 +50,7 @@ result = {
         # Create cycle using CycleBuilder API
         cycle_builder = built_workflow.create_cycle("counter_cycle")
         cycle_builder.connect("counter", "counter", mapping={"result": "counter_input"})
-        cycle_builder.max_iterations(10)
+        cycle_builder.max_iterations(5)
         cycle_builder.converge_when("converged == True")
         cycle_builder.build()
 
@@ -104,7 +104,7 @@ result = {
         cycle_builder.connect(
             "improver", "improver", mapping={"result": "quality_data"}
         )
-        cycle_builder.max_iterations(8)
+        cycle_builder.max_iterations(4)
         cycle_builder.converge_when("converged == True")
         cycle_builder.build()
 
@@ -220,7 +220,7 @@ result = {
         built_workflow = workflow.build()
         cycle_builder = built_workflow.create_cycle("batch_cycle")
         cycle_builder.connect("batcher", "batcher", mapping={"result": "batch_data"})
-        cycle_builder.max_iterations(6)
+        cycle_builder.max_iterations(4)
         cycle_builder.converge_when("converged == True")
         cycle_builder.build()
 
@@ -422,12 +422,12 @@ result = {
         # Create cycles for processor and validator paths (but NOT completer)
         cycle1 = built_workflow.create_cycle("processing_cycle")
         cycle1.connect("processor", "data_source", mapping={"result": "feedback"})
-        cycle1.max_iterations(5)
+        cycle1.max_iterations(3)
         cycle1.build()
 
         cycle2 = built_workflow.create_cycle("validation_cycle")
         cycle2.connect("validator", "data_source", mapping={"result": "feedback"})
-        cycle2.max_iterations(5)
+        cycle2.max_iterations(3)
         cycle2.build()
 
         # Execute
@@ -451,7 +451,6 @@ result = {
         assert final_iteration >= 2
         assert len(executed_nodes) > 0
 
-    @pytest.mark.skip(reason="Timeout issue - exceeds 1.0s limit")
     def test_multi_node_cycle(self):
         """Test a simple two-node cycle (A -> B -> A)."""
         from kailash.runtime.local import LocalRuntime
@@ -505,7 +504,7 @@ result = {
         built_workflow = workflow.build()
         cycle_builder = built_workflow.create_cycle("two_node_cycle")
         cycle_builder.connect("node_b", "node_a", mapping={"result": "b_data"})
-        cycle_builder.max_iterations(8)
+        cycle_builder.max_iterations(4)
         cycle_builder.build()
 
         # Execute

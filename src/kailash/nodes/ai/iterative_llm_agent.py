@@ -727,26 +727,38 @@ class IterativeLLMAgentNode(LLMAgentNode):
             elif isinstance(tool, dict):
                 plan["selected_tools"].append(tool.get("name", "unknown"))
 
-        # Create execution steps
+        # Create execution steps based on query and available tools
         if "analyze" in user_query.lower():
+            # For analysis queries, create multi-step plan
             plan["execution_steps"] = [
                 {
                     "step": 1,
                     "action": "gather_data",
-                    "tools": plan["selected_tools"][:1],
+                    "tools": (
+                        plan["selected_tools"][:1] if plan["selected_tools"] else []
+                    ),
                 },
                 {
                     "step": 2,
                     "action": "perform_analysis",
-                    "tools": plan["selected_tools"][1:2],
+                    "tools": (
+                        plan["selected_tools"][1:2]
+                        if len(plan["selected_tools"]) > 1
+                        else []
+                    ),
                 },
                 {
                     "step": 3,
                     "action": "generate_insights",
-                    "tools": plan["selected_tools"][2:3],
+                    "tools": (
+                        plan["selected_tools"][2:3]
+                        if len(plan["selected_tools"]) > 2
+                        else []
+                    ),
                 },
             ]
         else:
+            # For other queries, single step execution
             plan["execution_steps"] = [
                 {"step": 1, "action": "execute_query", "tools": plan["selected_tools"]}
             ]
@@ -1012,15 +1024,16 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 self.logger.error(f"LLM fallback failed for action {action}: {e}")
                 step_result["output"] = f"Error executing {action}: {str(e)}"
                 step_result["success"] = False
+
         step_result["duration"] = time.time() - start_time
 
         # Mark as failed if no tools executed successfully
-        # Note: Don't override success for LLM fallback case - it's already set correctly above
         if tool_results:
             step_result["success"] = any(
                 "failed" not in result for result in tool_results
             )
-        # else: Don't override success when no tools - LLM fallback success is already determined
+        else:
+            step_result["success"] = False
 
         return step_result
 
