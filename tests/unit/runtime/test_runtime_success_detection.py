@@ -12,18 +12,19 @@ Test focus:
 - Edge cases and malformed data
 """
 
-import pytest
-from unittest.mock import Mock, patch
 from typing import Any, Dict
+from unittest.mock import Mock, patch
 
+import pytest
+
+from kailash.nodes.base import Node
 from kailash.runtime.local import (
     LocalRuntime,
-    should_stop_on_content_failure,
     detect_success,
+    should_stop_on_content_failure,
 )
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
-from kailash.nodes.base import Node
 
 
 class MockSuccessNode(Node):
