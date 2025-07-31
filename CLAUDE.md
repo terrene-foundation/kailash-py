@@ -33,10 +33,14 @@
 ### Analysis & Planning
 - **ultrathink-analyst** → Deep failure analysis, complexity assessment
 - **requirements-analyst** → Requirements breakdown, ADR creation
-- **sdk-navigator** → Find existing patterns and documentation
-- **framework-advisor** → Choose Core SDK, DataFlow, or Nexus
+- **sdk-navigator** → Find patterns before coding, resolve errors during development
+- **framework-advisor** → Choose Core SDK, DataFlow, or Nexus; coordinates with specialists
 
-### Implementation
+### Framework Implementation
+- **nexus-specialist** → Multi-channel platform implementation (API/CLI/MCP)
+- **dataflow-specialist** → Database operations with auto-generated nodes (PostgreSQL-only alpha)
+
+### Core Implementation  
 - **pattern-expert** → Workflow patterns, nodes, parameters
 - **tdd-implementer** → Test-first development
 - **intermediate-reviewer** → Review after todos and implementation
@@ -45,6 +49,11 @@
 ### Testing & Validation
 - **testing-specialist** → 3-tier strategy with real infrastructure
 - **documentation-validator** → Test code examples, ensure accuracy
+
+### Release & Operations
+- **todo-manager** → Task management and project tracking
+- **mcp-specialist** → MCP server implementation and integration
+- **git-release-specialist** → Git workflows, CI validation, releases
 
 ## ⚡ Essential Pattern (All Frameworks)
 ```python
@@ -58,9 +67,12 @@ results, run_id = runtime.execute(workflow.build())  # ALWAYS .build()
 ```
 
 ## 🚨 Emergency Fixes
-- **"Missing required inputs"** → Use sdk-navigator for common-mistakes.md
-- **Parameter issues** → Use pattern-expert for 3-method guide
+- **"Missing required inputs"** → Use sdk-navigator for common-mistakes.md solutions
+- **Parameter issues** → Use pattern-expert for 3-method parameter guide
 - **Test failures** → Use testing-specialist for real infrastructure setup
+- **DataFlow errors** → Use dataflow-specialist for PostgreSQL-specific debugging
+- **Nexus platform issues** → Use nexus-specialist for multi-channel troubleshooting
+- **Framework selection** → Use framework-advisor to coordinate appropriate specialists
 
 ## ⚠️ Critical Rules
 - ALWAYS: `runtime.execute(workflow.build())`
