@@ -12,12 +12,12 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from tests.utils.docker_config import ensure_docker_services, get_redis_url
 
 from kailash.mcp_server import MCPServer
 from kailash.mcp_server.auth import APIKeyAuth
 from kailash.mcp_server.discovery import FileBasedDiscovery, ServiceRegistry
 from kailash.nodes.ai.llm_agent import LLMAgentNode
+from tests.utils.docker_config import ensure_docker_services, get_redis_url
 
 
 @pytest.mark.integration

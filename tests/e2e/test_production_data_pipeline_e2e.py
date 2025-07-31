@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import pytest
-from tests.utils.docker_config import get_postgres_connection_string
 
 from kailash import Workflow
 from kailash.nodes.base import Node, NodeParameter
@@ -27,6 +26,7 @@ from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode, SQLDatabaseNode
 from kailash.runtime.local import LocalRuntime
+from tests.utils.docker_config import get_postgres_connection_string
 
 # Mark as production e2e tests
 pytestmark = [pytest.mark.e2e, pytest.mark.slow]

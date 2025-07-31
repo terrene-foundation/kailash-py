@@ -36,6 +36,53 @@ results, run_id = runtime.execute(
 
 ```
 
+## Runtime Configuration Options
+
+### Content-Aware Success Detection (v0.9.4+)
+
+LocalRuntime now includes intelligent failure detection that analyzes node return values:
+
+```python
+# Default behavior - content-aware detection enabled
+runtime = LocalRuntime()  # content_aware_success_detection=True by default
+
+# Explicit configuration
+runtime = LocalRuntime(content_aware_success_detection=True)
+
+# Disable content-aware detection (legacy behavior)
+runtime = LocalRuntime(content_aware_success_detection=False)
+```
+
+**How it works:**
+- Analyzes node return values for failure patterns
+- Detects `{"success": False, "error": "..."}` patterns
+- Stops execution early when content failures are detected
+- Maintains backward compatibility with exception-only detection
+
+**Example failure detection:**
+```python
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "failing_node", {
+    "code": """
+# This will be detected as a failure
+result = {"success": False, "error": "Database connection failed"}
+"""
+})
+
+runtime = LocalRuntime(content_aware_success_detection=True)
+try:
+    results, run_id = runtime.execute(workflow.build())
+except Exception as e:
+    print(f"Runtime detected content failure: {e}")
+    # Will include detailed error information from the node result
+```
+
+**Benefits:**
+- Earlier failure detection
+- Better error reporting
+- No breaking changes to existing code
+- Compatible with DataFlow error patterns
+
 ## Parameters Structure
 ```python
 # The 'parameters' dict maps node IDs to their parameter overrides

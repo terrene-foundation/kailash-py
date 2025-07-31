@@ -223,6 +223,12 @@ db = DataFlow(
     analytics_db="postgresql://user:pass@localhost/analytics"
 )
 
+# Special characters in passwords are now fully supported (v0.9.4+)
+db = DataFlow(
+    database_url="postgresql://admin:MySecret#123$@localhost:5432/production",
+    read_replica="postgresql://readonly:Complex@Pass!@replica:5432/production"
+)
+
 # Models can specify their database
 @db.model
 class User:
@@ -428,6 +434,60 @@ health = results["health_monitor"]["result"]
 #   "cache": "connected",
 #   "queries_per_second": 31800000
 # }
+```
+
+## Database Connection
+
+### Connection String Support
+
+DataFlow supports robust database connection string parsing with full support for special characters in passwords (enhanced in v0.9.4):
+
+```python
+# Supports complex passwords with special characters
+connection_examples = [
+    "postgresql://admin:MySecret#123$@localhost:5432/mydb",
+    "postgresql://user:P@ssw0rd!@db.example.com:5432/production", 
+    "mysql://service:Complex$ecret?@mysql.internal:3306/analytics",
+    "postgresql://readonly:temp#pass@replica.host:5432/reports"
+]
+
+# All these connection strings work seamlessly
+for conn_str in connection_examples:
+    db = DataFlow(database_url=conn_str)
+    # DataFlow automatically handles URL encoding/decoding
+```
+
+### Connection String Format
+
+```python
+# Standard format
+scheme://[username[:password]@]host[:port]/database[?param1=value1&param2=value2]
+
+# Examples
+postgresql://username:password@localhost:5432/database_name
+mysql://user:pass@host:3306/db_name?charset=utf8mb4
+sqlite:///path/to/database.db
+```
+
+### Password Special Characters
+
+DataFlow now handles these special characters in passwords automatically:
+- `#` (hash/pound) - commonly used in passwords
+- `$` (dollar sign) - shell variable syntax  
+- `@` (at symbol) - email-like passwords
+- `?` (question mark) - query parameter conflicts
+- And many more URL-sensitive characters
+
+**Before v0.9.4:** Required manual URL encoding
+```python
+# Old workaround (no longer needed)
+password = "MySecret%23123%24"  # %23 = #, %24 = $
+```
+
+**Since v0.9.4:** Works automatically
+```python
+# Just use the password directly
+db = DataFlow(database_url="postgresql://admin:MySecret#123$@localhost/db")
 ```
 
 ## Deployment
