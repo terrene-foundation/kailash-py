@@ -573,6 +573,29 @@ Key takeaways:
 - Use descriptive names to avoid variable conflicts
 - Leverage different creation methods based on your needs
 
+## ✅ Serialization Consistency (Fixed in v0.6.2+)
+
+All PythonCodeNode outputs are consistently wrapped in a `"result"` key for reliable serialization:
+
+```python
+# All these patterns produce consistent output structure:
+# results["node_id"]["result"] = {your_actual_output}
+
+# Code string: result = {"data": processed}
+# Function return: return {"data": processed}
+# Class method return: return {"data": processed}
+# All become: {"result": {"data": processed}}
+```
+
+This ensures reliable serialization across all PythonCodeNode creation methods (function, class, code string, inline, file-based).
+
+When connecting nodes, always use "result" as the output key:
+```python
+workflow.add_connection("python_node", "result", "next_node", "input_data")
+# Or access nested data:
+workflow.add_connection("python_node", "result.data", "next_node", "input_data")
+```
+
 ## Summary
 
 1. **Variables are injected directly** - no `inputs` dictionary
@@ -581,3 +604,4 @@ Key takeaways:
 4. **Input variables excluded** from output
 5. **Output must be JSON serializable**
 6. **Use different variable names** in connections to avoid conflicts
+7. **All outputs wrapped in `"result"` key** for consistent serialization
