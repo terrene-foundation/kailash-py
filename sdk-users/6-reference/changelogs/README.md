@@ -9,10 +9,12 @@ This directory contains the organized changelog for the Kailash Python SDK.
 
 ## Current Version
 
-The current version is **0.9.5** (released 2025-07-31).
+The current version is **0.9.7** (released 2025-07-31).
 
 ## Recent Releases
 
+- [v0.9.7 - 2025-07-31](releases/v0.9.7-2025-07-31.md) - IterativeLLMAgentNode MCP Fallback & Performance Optimizations
+- [v0.9.6 - 2025-01-31](releases/v0.9.6-2025-01-31.md) - IterativeLLMAgentNode Fallback Architecture & W8 Serialization
 - [v0.9.5 - 2025-07-31](releases/v0.9.5-2025-07-31.md) - PythonCodeNode Serialization Stability & Testing
 - [v0.9.4 - 2025-07-31](releases/v0.9.4-2025-07-31.md) - Critical DataFlow Fixes & Runtime Enhancements
 - [v0.9.3 - 2025-01-30](releases/v0.9.3-2025-01-30.md) - ParallelRuntime Test Fix
@@ -29,11 +31,13 @@ The current version is **0.9.5** (released 2025-07-31).
 ### 2025
 
 #### July
+- [v0.9.7 - 2025-07-31](releases/v0.9.7-2025-07-31.md) - IterativeLLMAgentNode MCP Fallback & Performance Optimizations
 - [v0.9.5 - 2025-07-31](releases/v0.9.5-2025-07-31.md) - PythonCodeNode Serialization Stability & Testing
 - [v0.9.4 - 2025-07-31](releases/v0.9.4-2025-07-31.md) - Critical DataFlow Fixes & Runtime Enhancements
 - [v0.9.0 - 2025-07-27](releases/v0.9.0-2025-07-27.md) - CycleBuilder API Migration
 
 #### January
+- [v0.9.6 - 2025-01-31](releases/v0.9.6-2025-01-31.md) - IterativeLLMAgentNode Fallback Architecture & W8 Serialization
 - [v0.9.3 - 2025-01-30](releases/v0.9.3-2025-01-30.md) - ParallelRuntime Test Fix
 - [v0.8.7 - 2025-01-25](releases/v0.8.7-2025-01-25.md) - MCP Parameter Validation & Phase 2 Enhancements
 - [v0.8.6 - 2025-07-22](releases/v0.8.6-2025-07-22.md) - Enhanced Parameter Validation & Debugging
