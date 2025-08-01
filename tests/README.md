@@ -47,6 +47,36 @@ The test suite was **completely reorganized** from 321 scattered files into a cl
 - **Unified conftest.py** with 76+ fixtures
 - **4 duplicate files removed**
 
+## 🎯 3-Tier Testing Strategy
+
+### Test Philosophy: Real Infrastructure + NO MOCKING (Tiers 2-3)
+
+The Kailash SDK follows a rigorous 3-tier testing strategy that emphasizes **real infrastructure** for integration and E2E tests:
+
+- **Tier 1 (Unit)**: Mocking allowed, isolated components (< 1s per test)
+- **Tier 2 (Integration)**: **NO MOCKING** - Real Docker services required (< 5s per test)  
+- **Tier 3 (E2E)**: **NO MOCKING** - Complete real infrastructure (< 10s per test)
+
+### Why NO MOCKING for Tiers 2-3?
+
+1. **Real-world validation**: Tests must prove the system works in production
+2. **Integration verification**: Mocks hide integration failures  
+3. **Deployment confidence**: Real tests = real confidence
+4. **Configuration validation**: Real services catch config errors
+
+### Critical Test Execution Commands
+
+```bash
+# ✅ TIER 1: Proper unit tests (mocking allowed)
+python -m pytest tests/unit/ --tb=short --timeout=5 -v -m "not (integration or e2e or slow or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)" --maxfail=10 -q
+
+# ✅ TIER 2: Integration tests (NO MOCKING)  
+./tests/utils/test-env up && pytest tests/integration/ --timeout=5
+
+# ✅ TIER 3: E2E tests (NO MOCKING)
+./tests/utils/test-env up && pytest tests/e2e/ --timeout=10
+```
+
 ## Test Organization
 
 The test suite is organized into three main categories:
@@ -107,15 +137,36 @@ pytest
 ```
 
 ### Run specific test category
+
+#### Tier 1: Unit Tests (Fast, Isolated, < 1 second per test)
 ```bash
-# Unit tests only (fast)
+# RECOMMENDED: Proper tier 1 tests with NO MOCKING restrictions for integration/E2E 
+python -m pytest tests/unit/ --tb=short --timeout=5 -v -m "not (integration or e2e or slow or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)" --maxfail=10 -q
+
+# Unit tests only (basic - may include some E2E collection issues)
 pytest tests/unit/
 
-# Integration tests
+# Quick unit test run for development
+python -m pytest tests/unit/ --tb=short --timeout=1 -x -q
+```
+
+#### Tier 2: Integration Tests (Component Interactions, < 5 seconds per test)
+```bash
+# Integration tests (requires real infrastructure - NO MOCKING!)
 pytest tests/integration/
 
-# E2E tests (slow)
+# Start infrastructure first for integration tests
+./tests/utils/test-env up && ./tests/utils/test-env status
+pytest tests/integration/ --timeout=5
+```
+
+#### Tier 3: E2E Tests (Complete Scenarios, < 10 seconds per test)
+```bash
+# E2E tests (requires full infrastructure - NO MOCKING!)
 pytest tests/e2e/
+
+# Complete E2E test run
+./tests/utils/test-env up && pytest tests/e2e/ --timeout=10
 ```
 
 ### Run tests for specific component
