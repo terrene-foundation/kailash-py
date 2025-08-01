@@ -158,7 +158,6 @@ class TestIterativeLLMAgentMCPDockerIntegration:
             model="test-model",
             messages=[{"role": "user", "content": "Test"}],
             max_iterations=1,
-            use_real_mcp=False,  # Force mock execution
         )
 
         # Test 2: With real execution (new behavior)

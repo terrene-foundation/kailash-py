@@ -119,7 +119,6 @@ class TestIterativeLLMAgentMCPIntegration:
                     model="test-model",
                     messages=[{"role": "user", "content": "Search for AI trends"}],
                     mcp_servers=[],
-                    use_real_mcp=False,
                     max_iterations=1,
                 )
 
