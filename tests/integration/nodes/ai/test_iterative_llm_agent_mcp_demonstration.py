@@ -257,7 +257,6 @@ class TestIterativeLLMAgentMCPDemonstration:
                                 model="test-model",
                                 messages=[{"role": "user", "content": "Test"}],
                                 max_iterations=1,
-                                use_real_mcp=False,  # Mock execution
                             )
 
         # Test 2: Real execution (use_real_mcp=True)

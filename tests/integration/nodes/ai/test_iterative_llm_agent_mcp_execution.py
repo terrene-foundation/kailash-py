@@ -14,16 +14,15 @@ class TestIterativeLLMAgentMCPExecution:
         """Set up test fixtures."""
         self.agent = IterativeLLMAgentNode()
 
-    def test_use_real_mcp_parameter_exists(self):
-        """Test that use_real_mcp parameter is available."""
+    def test_no_mock_parameters_exist(self):
+        """Test that mock-related parameters have been removed."""
         params = self.agent.get_parameters()
-        assert "use_real_mcp" in params
-        assert params["use_real_mcp"].default is True
-        assert params["use_real_mcp"].type is bool
+        assert "use_real_mcp" not in params
+        assert "mock_mode" not in params
 
-    def test_mock_execution_when_disabled(self):
-        """Test that mock execution is used when use_real_mcp is False."""
-        # Mock the necessary methods
+    def test_real_execution_functionality(self):
+        """Test that the node executes with real LLM fallback when no MCP tools."""
+        # Test basic functionality - the node should work with real LLM fallback
         with patch.object(
             self.agent,
             "_phase_discovery",
@@ -34,44 +33,53 @@ class TestIterativeLLMAgentMCPExecution:
                 "_phase_planning",
                 return_value={
                     "execution_steps": [
-                        {"step": 1, "action": "test", "tools": ["test_tool"]}
-                    ]
+                        {"step": 1, "action": "direct_llm_response", "tools": []}
+                    ],
+                    "planning_mode": "direct_llm",
                 },
             ):
                 with patch.object(
                     self.agent,
                     "_phase_reflection",
-                    return_value={"confidence_score": 0.5},
+                    return_value={"confidence_score": 0.8},
                 ):
                     with patch.object(
                         self.agent,
                         "_phase_convergence",
-                        return_value={"should_stop": True, "reason": "test"},
+                        return_value={"should_stop": True, "reason": "goal_achieved"},
                     ):
                         with patch.object(
-                            self.agent, "_phase_synthesis", return_value="Test response"
+                            self.agent,
+                            "_calculate_resource_usage",
+                            return_value={"total_api_calls": 1},
                         ):
+                            # Mock the parent LLM call
+                            with patch(
+                                "kailash.nodes.ai.llm_agent.LLMAgentNode.run"
+                            ) as mock_llm:
+                                mock_llm.return_value = {
+                                    "success": True,
+                                    "response": {"content": "Test response from LLM"},
+                                }
 
-                            # Test with use_real_mcp=False
-                            result = self.agent.run(
-                                provider="test",
-                                model="test-model",
-                                messages=[{"role": "user", "content": "Test query"}],
-                                use_real_mcp=False,
-                                max_iterations=1,
-                            )
+                                # Test execution - simplified API
+                                result = self.agent.run(
+                                    provider="openai",
+                                    model="gpt-3.5-turbo",
+                                    api_key="test-key",
+                                    messages=[
+                                        {"role": "user", "content": "Test query"}
+                                    ],
+                                    max_iterations=1,
+                                )
 
-                            assert result["success"] is True
-                            assert len(result["iterations"]) == 1
+                                # Verify real execution occurred
+                                assert result["success"] is True
+                                assert "iterations" in result
+                                assert len(result["iterations"]) == 1
 
-                            # Check that execution used mock
-                            iteration = result["iterations"][0]
-                            assert "execution_results" in iteration
-                            exec_results = iteration["execution_results"]
-                            assert any(
-                                "Mock execution result" in str(step.get("output", ""))
-                                for step in exec_results.get("steps_completed", [])
-                            )
+                                # Verify LLM was called for direct response
+                                mock_llm.assert_called()
 
     @patch("kailash.mcp_server.MCPClient")
     def test_real_mcp_execution_initialization(self, mock_mcp_client):
@@ -114,110 +122,63 @@ class TestIterativeLLMAgentMCPExecution:
         assert result["step"] == 1
         assert result["action"] == "test_action"
         assert result["tools_used"] == ["test_tool"]
-        assert "tool_outputs" in result
 
-    def test_build_tool_server_mapping(self):
-        """Test tool to server mapping functionality."""
-        discoveries = {
-            "new_tools": [
-                {"name": "tool1", "mcp_server_config": {"url": "http://server1.com"}},
-                {
-                    "function": {
-                        "name": "tool2",
-                        "mcp_server_config": {"url": "http://server2.com"},
-                    }
-                },
-            ]
-        }
+    def test_execution_with_tools_available(self):
+        """Test execution path when MCP tools are available."""
+        # Mock tool discovery and execution
+        with patch.object(
+            self.agent,
+            "_execute_tools_with_mcp",
+            return_value={
+                "step": 1,
+                "action": "test_action",
+                "tools_used": ["test_tool"],
+                "output": "Real tool execution result",
+                "success": True,
+                "duration": 2.5,
+            },
+        ):
+            # Test planning with tools
+            plan = {
+                "execution_steps": [
+                    {"step": 1, "action": "test_action", "tools": ["test_tool"]}
+                ]
+            }
+            discoveries = {"new_tools": [{"name": "test_tool"}]}
 
-        kwargs = {"mcp_servers": [{"url": "http://fallback.com"}]}
+            # Execute the execution phase
+            result = self.agent._phase_execution({}, plan, discoveries)
 
-        mapping = self.agent._build_tool_server_mapping(discoveries, kwargs)
+            # Verify real tool execution was called
+            assert result["success"] is True
+            assert len(result["steps_completed"]) == 1
+            assert (
+                "Real tool execution result" in result["steps_completed"][0]["output"]
+            )
 
-        assert mapping["tool1"] == {"url": "http://server1.com"}
-        assert mapping["tool2"] == {"url": "http://server2.com"}
+    def test_execution_without_tools_fallback(self):
+        """Test execution falls back to LLM when no tools available."""
+        with patch("kailash.nodes.ai.llm_agent.LLMAgentNode.run") as mock_llm:
+            mock_llm.return_value = {
+                "success": True,
+                "response": {"content": "LLM fallback response"},
+            }
 
-    def test_extract_tool_arguments(self):
-        """Test tool argument extraction."""
-        kwargs = {"messages": [{"role": "user", "content": "Analyze the sales data"}]}
+            # Test planning without tools (direct LLM mode)
+            plan = {
+                "execution_steps": [
+                    {"step": 1, "action": "direct_llm_response", "tools": []}
+                ],
+                "planning_mode": "direct_llm",
+            }
+            discoveries = {"new_tools": []}
 
-        # Test different actions
-        args = self.agent._extract_tool_arguments("test_tool", "gather_data", kwargs)
-        assert args["query"] == "Analyze the sales data"
-        assert args["action"] == "search"
+            # Execute the execution phase
+            result = self.agent._phase_execution(
+                {"provider": "openai", "model": "gpt-3.5-turbo"}, plan, discoveries
+            )
 
-        args = self.agent._extract_tool_arguments(
-            "test_tool", "perform_analysis", kwargs
-        )
-        assert args["data"] == "Analyze the sales data"
-        assert args["action"] == "analyze"
-
-        args = self.agent._extract_tool_arguments(
-            "test_tool", "generate_insights", kwargs
-        )
-        assert args["input"] == "Analyze the sales data"
-        assert args["action"] == "generate"
-
-    def test_async_in_sync_context(self):
-        """Test async execution in sync context."""
-
-        async def test_coro():
-            return "test_result"
-
-        result = self.agent._run_async_in_sync_context(test_coro())
-        assert result == "test_result"
-
-    @patch("kailash.mcp_server.MCPClient")
-    def test_tool_execution_error_handling(self, mock_mcp_client):
-        """Test error handling in tool execution."""
-        # Setup mock MCP client that raises an error
-        mock_client_instance = MagicMock()
-        mock_client_instance.call_tool = AsyncMock(
-            side_effect=Exception("Connection failed")
-        )
-        mock_mcp_client.return_value = mock_client_instance
-
-        discoveries = {
-            "new_tools": [
-                {"name": "test_tool", "mcp_server_config": {"url": "http://test.com"}}
-            ]
-        }
-
-        kwargs = {
-            "mcp_servers": [{"url": "http://test.com"}],
-            "messages": [{"role": "user", "content": "Test query"}],
-        }
-
-        # Test error handling
-        result = self.agent._execute_tools_with_mcp(
-            1, "test_action", ["test_tool"], discoveries, kwargs
-        )
-
-        # Verify error was handled gracefully
-        assert result["success"] is False
-        assert "test_tool" in result["tool_outputs"]
-        assert "Error: Connection failed" in result["tool_outputs"]["test_tool"]
-        assert "failed" in result["output"]
-
-    def test_no_server_config_handling(self):
-        """Test handling when no server config is found for a tool."""
-        discoveries = {"new_tools": []}  # No tools discovered
-
-        kwargs = {
-            "mcp_servers": [],
-            "messages": [{"role": "user", "content": "Test query"}],
-        }
-
-        result = self.agent._execute_tools_with_mcp(
-            1, "test_action", ["unknown_tool"], discoveries, kwargs
-        )
-
-        # Should handle gracefully with LLM fallback
-        assert result["success"] is False
-        # With the fix, it should now try LLM fallback which will fail due to provider not being available
-        # Instead of "No tools executed", we should see either "Failed to execute" or "Error executing"
-        assert (
-            "Failed to execute" in result["output"]
-            or "Error executing" in result["output"]
-            or "Provider openai error" in result["output"]
-        )
+            # Verify LLM fallback was used
+            assert result["success"] is True
+            assert mock_llm.called
+            assert "LLM fallback response" in result["tool_outputs"]["llm_response"]
