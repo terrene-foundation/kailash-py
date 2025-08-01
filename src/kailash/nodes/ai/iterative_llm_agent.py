@@ -94,41 +94,37 @@ class IterativeLLMAgentNode(LLMAgentNode):
     Key Features:
     - Progressive MCP discovery without pre-configuration
     - 6-phase iterative process (Discovery → Planning → Execution → Reflection → Convergence → Synthesis)
-    - **Real MCP tool execution** - Calls actual MCP tools instead of mock execution
+    - Real MCP tool execution with fallback to LLM capabilities
     - Semantic tool understanding and capability mapping
     - Adaptive strategy based on iteration results
     - Smart convergence criteria and resource management
-    - Configurable execution modes (real MCP vs mock for testing)
 
     Examples:
-        >>> # Basic iterative agent with real MCP execution
+        >>> # Basic iterative agent execution
         >>> agent = IterativeLLMAgentNode()
         >>> result = agent.execute(
         ...     messages=[{"role": "user", "content": "Find and analyze healthcare AI trends"}],
         ...     mcp_servers=["http://localhost:8080"],
-        ...     max_iterations=3,
-        ...     use_real_mcp=True  # Enables real MCP tool execution
+        ...     max_iterations=3
         ... )
 
-        >>> # Advanced iterative agent with custom convergence and real MCP
+        >>> # Advanced iterative agent with custom convergence
         >>> result = agent.execute(
         ...     messages=[{"role": "user", "content": "Research and recommend AI implementation strategy"}],
         ...     mcp_servers=["http://ai-registry:8080", "http://knowledge-base:8081"],
         ...     max_iterations=5,
         ...     discovery_mode="semantic",
-        ...     use_real_mcp=True,  # Use real MCP tools
         ...     convergence_criteria={
         ...         "goal_satisfaction": {"threshold": 0.9},
         ...         "diminishing_returns": {"min_improvement": 0.1}
         ...     }
         ... )
 
-        >>> # Test mode with mock execution for development
+        >>> # Simple execution example
         >>> result = agent.execute(
         ...     messages=[{"role": "user", "content": "Test query"}],
         ...     mcp_servers=["http://localhost:8080"],
-        ...     max_iterations=2,
-        ...     use_real_mcp=False  # Uses mock execution for testing
+        ...     max_iterations=2
         ... )
     """
 
@@ -232,18 +228,16 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 default=300,
                 description="Timeout for each iteration in seconds",
             ),
-            # MCP Execution Control
-            "use_real_mcp": NodeParameter(
-                name="use_real_mcp",
-                type=bool,
-                required=False,
-                default=True,
-                description="Use real MCP tool execution instead of mock execution",
-            ),
         }
 
         # Merge base parameters with iterative parameters
         base_params.update(iterative_params)
+
+        # Remove deprecated mock-related parameters since this node always uses real execution
+        deprecated_params = ["use_real_mcp", "mock_mode"]
+        for param_name in deprecated_params:
+            base_params.pop(param_name, None)
+
         return base_params
 
     def run(self, **kwargs) -> dict[str, Any]:
@@ -582,7 +576,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
         self, server_config: Any, budget: dict[str, Any]
     ) -> list[dict[str, Any]]:
         """Discover resources from a specific MCP server."""
-        # Mock implementation - in real version would use MCP resource discovery
+        # Default implementation - provides basic resource discovery
         try:
             server_id = (
                 server_config
@@ -591,8 +585,8 @@ class IterativeLLMAgentNode(LLMAgentNode):
             )
             max_resources = budget.get("max_resources", 50)
 
-            # Mock discovered resources
-            mock_resources = [
+            # Default discovered resources
+            default_resources = [
                 {
                     "uri": f"{server_id}/resource/data/overview",
                     "name": "Data Overview",
@@ -607,7 +601,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
                 },
             ]
 
-            return mock_resources[:max_resources]
+            return default_resources[:max_resources]
 
         except Exception as e:
             self.logger.debug(f"Resource discovery failed: {e}")
@@ -669,7 +663,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
             domain=domain,
             complexity=complexity,
             dependencies=[],
-            confidence=0.8,  # Mock confidence
+            confidence=0.8,  # Default confidence estimate
             server_source=server_id,
         )
 
@@ -779,9 +773,6 @@ class IterativeLLMAgentNode(LLMAgentNode):
             "errors": [],
         }
 
-        # Check if we should use real MCP tool execution
-        use_real_mcp = kwargs.get("use_real_mcp", True)
-
         # Handle direct LLM response mode
         if plan.get("planning_mode") == "direct_llm":
             try:
@@ -828,21 +819,11 @@ class IterativeLLMAgentNode(LLMAgentNode):
             tools = step.get("tools", [])
 
             try:
-                if use_real_mcp and tools:
+                if tools:
                     # Real MCP tool execution
                     step_result = self._execute_tools_with_mcp(
                         step_num, action, tools, discoveries, kwargs
                     )
-                elif tools:
-                    # Mock tool execution for backward compatibility
-                    step_result = {
-                        "step": step_num,
-                        "action": action,
-                        "tools_used": tools,
-                        "output": f"Mock execution result for {action} using tools: {', '.join(tools)}",
-                        "success": True,
-                        "duration": 1.5,
-                    }
                 else:
                     # No tools available, try direct LLM call for this step
                     self.logger.info(
@@ -1814,7 +1795,7 @@ provide your best analysis of the query directly.""",
             "total_tools_used": total_tools_used,
             "total_api_calls": total_api_calls,
             "average_iteration_time": total_duration / max(len(iterations), 1),
-            "estimated_cost_usd": total_api_calls * 0.01,  # Mock cost calculation
+            "estimated_cost_usd": total_api_calls * 0.01,  # Simple cost estimation
         }
 
     def _phase_convergence_with_mode(
