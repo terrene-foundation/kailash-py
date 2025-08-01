@@ -11,10 +11,10 @@ import pytest
 import websockets
 
 from kailash.mcp_server.auth import AuthManager
-from kailash.middleware.gateway.event_store import EventStore
 from kailash.mcp_server.protocol import get_protocol_manager
 from kailash.mcp_server.server import MCPServer
 from kailash.mcp_server.transports import WebSocketServerTransport
+from kailash.middleware.gateway.event_store import EventStore
 
 # Note: These utilities will be created when needed for E2E testing infrastructure
 # from tests.utils.docker_utils import wait_for_postgres
