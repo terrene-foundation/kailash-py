@@ -7,11 +7,11 @@
 - **E2E Tests**: 2 complete workflow scenarios
 - **Test Coverage**: Client, server, tool execution, async handling, error recovery
 
-## 🚨 BREAKING CHANGE v0.6.6: Real MCP by Default
-**All LLMAgentNode instances now default to real MCP execution.**
-- **Migration Required**: Set `use_real_mcp=False` for mock execution
-- **Environment Override**: `KAILASH_USE_REAL_MCP=false` for global mock
-- **See**: [MCP_MIGRATION_NOTES.md](../../MCP_MIGRATION_NOTES.md) for full details
+## ✅ Simplified API v0.9.9: Always Real MCP
+**All MCP nodes now use real execution with graceful fallback.**
+- **Simplified Configuration**: No more mock/test mode parameters needed
+- **Graceful Fallback**: Automatically handles unavailable MCP servers
+- **Always Production-Ready**: Real tool execution by default with robust error handling
 
 ## 🔌 Multi-Channel MCP Integration
 **NEW: Nexus Framework Integration** - MCP now available as unified channel
@@ -64,8 +64,7 @@ results, run_id = runtime.execute(workflow, parameters={
             }
         ],
         "auto_discover_tools": True,
-        "auto_execute_tools": True,  # Execute tools automatically
-        "use_real_mcp": True  # Default - real MCP execution
+        "auto_execute_tools": True  # Execute tools automatically
     }
 })
 
@@ -474,7 +473,7 @@ results, run_id = runtime.execute(workflow, parameters={
         "provider": "openai",
         "model": "gpt-4",
         "mcp_servers": mcp_servers,
-        "use_real_mcp": True,  # Enable real tool execution (default: True)
+        # Real MCP execution is always enabled
         "auto_discover_tools": True,
         "auto_execute_tools": True,
         "max_iterations": 5,
@@ -499,7 +498,7 @@ if results["iterative"]["success"]:
 - **Real MCP Tool Execution**: Actually calls MCP tools instead of mock responses
 - **6-Phase Process**: Discovery → Planning → Execution → Reflection → Convergence → Synthesis
 - **Test-Driven Convergence**: Only stops when deliverables actually work
-- **Backward Compatibility**: Set `use_real_mcp=False` for legacy mock behavior
+- **Simplified API**: Always uses real MCP execution with graceful fallback
 
 ## Testing MCP Integration
 

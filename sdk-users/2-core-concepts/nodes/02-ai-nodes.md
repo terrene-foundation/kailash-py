@@ -108,7 +108,7 @@ runtime = LocalRuntime()
   - `messages`: Input conversation messages
   - `max_iterations`: Maximum number of refinement iterations
   - `mcp_servers`: List of MCP server configurations
-  - `use_real_mcp`: Enable real MCP tool execution (default: True)
+  - Real MCP tool execution is always enabled with graceful fallback
   - `discovery_mode`: Discovery strategy (progressive, exhaustive, focused)
   - `convergence_criteria`: Criteria for determining completion
   - `auto_discover_tools`: Enable automatic tool discovery
@@ -158,7 +158,7 @@ runtime = LocalRuntime()
           "command": "python",
           "args": ["-m", "weather_mcp_server"]
       }],
-      "use_real_mcp": True,  # Enable real tool execution
+      # Real MCP tool execution is always enabled
       "auto_discover_tools": True,
       "auto_execute_tools": True,
       "max_iterations": 3
@@ -174,7 +174,7 @@ runtime = LocalRuntime()
 
   ```
 
-**Backward Compatibility**: The `use_real_mcp` parameter defaults to `True` for real execution. Set to `False` for legacy mock behavior.
+**Simplified API**: IterativeLLMAgentNode now always uses real MCP execution with graceful fallback when MCP tools are unavailable.
 
 ## Ollama Integration Patterns
 
