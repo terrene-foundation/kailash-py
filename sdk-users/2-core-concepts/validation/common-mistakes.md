@@ -631,26 +631,26 @@ except Exception as e:
         })
 ```
 
-### **Mistake #19: IterativeLLMAgent Mock Execution**
+### **Mistake #19: Using Deprecated MCP Parameters**
 
 ```python
-# ❌ WRONG - Disabling real MCP execution (reverts to mock)
+# ❌ WRONG - Using deprecated use_real_mcp parameter (removed in v0.9.9)
 workflow = WorkflowBuilder()
 workflow.add_node("IterativeLLMAgentNode", "agent", {
     "provider": "openai",
     "model": "gpt-4",
     "messages": [{"role": "user", "content": "Search for data"}],
     "mcp_servers": [{"name": "data-server", "transport": "stdio", "command": "mcp-server"}],
-    "use_real_mcp": False  # This causes mock execution!
+    "use_real_mcp": True  # This parameter no longer exists!
 })
 
-# ✅ CORRECT - Use real MCP execution (default behavior)
+# ✅ CORRECT - Simplified API always uses real MCP execution
 workflow.add_node("IterativeLLMAgentNode", "agent", {
     "provider": "openai",
     "model": "gpt-4",
     "messages": [{"role": "user", "content": "Search for data"}],
-    "mcp_servers": [{"name": "data-server", "transport": "stdio", "command": "mcp-server"}],
-    "use_real_mcp": True  # Default: True (real tool execution)
+    "mcp_servers": [{"name": "data-server", "transport": "stdio", "command": "mcp-server"}]
+    # Real MCP execution is always enabled with graceful fallback
 })
 runtime = LocalRuntime()
 result, run_id = runtime.execute(workflow.build())

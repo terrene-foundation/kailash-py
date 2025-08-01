@@ -2,10 +2,12 @@
 
 import os
 import time
+
 import pytest
 import requests
-from kailash.workflow.builder import WorkflowBuilder
+
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 @pytest.mark.integration

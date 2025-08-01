@@ -47,7 +47,7 @@
 | App Type | Workflow | Interface | Performance | Rationale |
 |----------|----------|-----------|-------------|-----------|
 | **AI Assistant** | Class-based | MCP | Async runtime | Structured AI tool integration |
-| **Iterative AI Agent** | Class-based | MCP | Async runtime | **IterativeLLMAgent** with `use_real_mcp=True` |
+| **Iterative AI Agent** | Class-based | MCP | Async runtime | **IterativeLLMAgent** with real MCP execution |
 | **API Gateway** | Hybrid | Hybrid | Full middleware | Maximum flexibility |
 | **Data Pipeline** | Class-based | Direct | Connection pooling | High-throughput processing |
 | **Enterprise App** | Hybrid | MCP | Full middleware | Complete feature set |
