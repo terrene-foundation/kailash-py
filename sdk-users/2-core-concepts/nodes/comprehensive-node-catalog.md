@@ -504,11 +504,11 @@ workflow = WorkflowBuilder()
 # Runtime should be created separately
 runtime = LocalRuntime()
 
-  # Real MCP tool execution (default behavior)
+  # Real MCP tool execution (always enabled)
   node = IterativeLLMAgentNode(
       model="gpt-4",
       max_iterations=10,
-      use_real_mcp=True,  # Default: True - executes real MCP tools
+      # Real MCP execution is always enabled with graceful fallback
       mcp_servers=[{
           "name": "data-server",
           "transport": "stdio",
@@ -523,8 +523,8 @@ runtime = LocalRuntime()
       model="gpt-4",
       convergence_mode=ConvergenceMode.TEST_DRIVEN,
       validation_levels=["syntax", "imports", "semantic"],
-      max_iterations=10,
-      use_real_mcp=True
+      max_iterations=10
+      # Real MCP execution is always enabled
   )
 
   # Hybrid mode - combines satisfaction and validation
@@ -532,8 +532,8 @@ runtime = LocalRuntime()
       model="gpt-4",
       convergence_mode=ConvergenceMode.HYBRID,
       satisfaction_threshold=0.8,
-      validation_required=True,
-      use_real_mcp=True
+      validation_required=True
+      # Real MCP execution is always enabled
   )
 
   ```
@@ -546,7 +546,7 @@ runtime = LocalRuntime()
   - **6-Phase Process**: Discovery → Planning → Execution → Reflection → Convergence → Synthesis
   - **Validation Integration**: Built-in code validation with sandbox execution
   - **Iteration Tracking**: Comprehensive state tracking and progress visualization
-  - **Backward Compatibility**: Set `use_real_mcp=False` to use legacy mock execution
+  - **Simplified API**: Always uses real MCP execution with graceful fallback
 
   **When to use:** For complex tasks requiring iterative refinement where deliverable quality is critical - code generation, workflow creation, complex analysis. The agent now executes real MCP tools and can iteratively discover and use new tools as needed.
 - **ChatAgent**: Conversational agent with context management

@@ -31,8 +31,7 @@ def main():
                 # Configuration
                 "provider": "ollama",  # Change to "openai" or "anthropic" as needed
                 "model": "llama3.2",  # Change to "gpt-4" or "claude-3" as needed
-                # Use real MCP execution for this example (default)
-                "use_real_mcp": True,
+                # Real MCP execution is now always enabled
                 # Request to analyze files
                 "messages": [
                     {

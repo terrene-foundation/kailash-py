@@ -1,7 +1,7 @@
 """
 Example: Simple MCP Agent
 Description: Basic example of an LLM agent using MCP tools
-Requirements: None (uses mock MCP server)
+Requirements: None (uses mock provider for demonstration)
 """
 
 from kailash.runtime.local import LocalRuntime
@@ -26,8 +26,7 @@ def main():
                 # Use mock provider for testing (no API key needed)
                 "provider": "mock",
                 "model": "gpt-4",
-                # Use mock MCP execution for this example
-                "use_real_mcp": False,
+                # Using mock provider for this example (no real MCP needed)
                 # User message
                 "messages": [
                     {"role": "user", "content": "What tools do you have available?"}
