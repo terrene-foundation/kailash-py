@@ -19,7 +19,7 @@ class TestIterativeLLMAgentMCPExecution:
         params = self.agent.get_parameters()
         assert "use_real_mcp" not in params
         assert "mock_mode" not in params
-        
+
     def test_real_execution_functionality(self):
         """Test that the node executes with real LLM fallback when no MCP tools."""
         # Test basic functionality - the node should work with real LLM fallback
@@ -30,12 +30,12 @@ class TestIterativeLLMAgentMCPExecution:
         ):
             with patch.object(
                 self.agent,
-                "_phase_planning", 
+                "_phase_planning",
                 return_value={
                     "execution_steps": [
                         {"step": 1, "action": "direct_llm_response", "tools": []}
                     ],
-                    "planning_mode": "direct_llm"
+                    "planning_mode": "direct_llm",
                 },
             ):
                 with patch.object(
@@ -54,18 +54,22 @@ class TestIterativeLLMAgentMCPExecution:
                             return_value={"total_api_calls": 1},
                         ):
                             # Mock the parent LLM call
-                            with patch('kailash.nodes.ai.llm_agent.LLMAgentNode.run') as mock_llm:
+                            with patch(
+                                "kailash.nodes.ai.llm_agent.LLMAgentNode.run"
+                            ) as mock_llm:
                                 mock_llm.return_value = {
                                     "success": True,
-                                    "response": {"content": "Test response from LLM"}
+                                    "response": {"content": "Test response from LLM"},
                                 }
-                                
+
                                 # Test execution - simplified API
                                 result = self.agent.run(
                                     provider="openai",
                                     model="gpt-3.5-turbo",
                                     api_key="test-key",
-                                    messages=[{"role": "user", "content": "Test query"}],
+                                    messages=[
+                                        {"role": "user", "content": "Test query"}
+                                    ],
                                     max_iterations=1,
                                 )
 
@@ -73,7 +77,7 @@ class TestIterativeLLMAgentMCPExecution:
                                 assert result["success"] is True
                                 assert "iterations" in result
                                 assert len(result["iterations"]) == 1
-                                
+
                                 # Verify LLM was called for direct response
                                 mock_llm.assert_called()
 
@@ -127,12 +131,12 @@ class TestIterativeLLMAgentMCPExecution:
             "_execute_tools_with_mcp",
             return_value={
                 "step": 1,
-                "action": "test_action", 
+                "action": "test_action",
                 "tools_used": ["test_tool"],
                 "output": "Real tool execution result",
                 "success": True,
-                "duration": 2.5
-            }
+                "duration": 2.5,
+            },
         ):
             # Test planning with tools
             plan = {
@@ -141,39 +145,39 @@ class TestIterativeLLMAgentMCPExecution:
                 ]
             }
             discoveries = {"new_tools": [{"name": "test_tool"}]}
-            
+
             # Execute the execution phase
             result = self.agent._phase_execution({}, plan, discoveries)
-            
+
             # Verify real tool execution was called
             assert result["success"] is True
             assert len(result["steps_completed"]) == 1
-            assert "Real tool execution result" in result["steps_completed"][0]["output"]
+            assert (
+                "Real tool execution result" in result["steps_completed"][0]["output"]
+            )
 
     def test_execution_without_tools_fallback(self):
         """Test execution falls back to LLM when no tools available."""
-        with patch('kailash.nodes.ai.llm_agent.LLMAgentNode.run') as mock_llm:
+        with patch("kailash.nodes.ai.llm_agent.LLMAgentNode.run") as mock_llm:
             mock_llm.return_value = {
                 "success": True,
-                "response": {"content": "LLM fallback response"}
+                "response": {"content": "LLM fallback response"},
             }
-            
+
             # Test planning without tools (direct LLM mode)
             plan = {
                 "execution_steps": [
                     {"step": 1, "action": "direct_llm_response", "tools": []}
                 ],
-                "planning_mode": "direct_llm"
+                "planning_mode": "direct_llm",
             }
             discoveries = {"new_tools": []}
-            
+
             # Execute the execution phase
             result = self.agent._phase_execution(
-                {"provider": "openai", "model": "gpt-3.5-turbo"},
-                plan, 
-                discoveries
+                {"provider": "openai", "model": "gpt-3.5-turbo"}, plan, discoveries
             )
-            
+
             # Verify LLM fallback was used
             assert result["success"] is True
             assert mock_llm.called

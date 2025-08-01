@@ -232,12 +232,12 @@ class IterativeLLMAgentNode(LLMAgentNode):
 
         # Merge base parameters with iterative parameters
         base_params.update(iterative_params)
-        
+
         # Remove deprecated mock-related parameters since this node always uses real execution
         deprecated_params = ["use_real_mcp", "mock_mode"]
         for param_name in deprecated_params:
             base_params.pop(param_name, None)
-        
+
         return base_params
 
     def run(self, **kwargs) -> dict[str, Any]:
@@ -772,7 +772,6 @@ class IterativeLLMAgentNode(LLMAgentNode):
             "success": True,
             "errors": [],
         }
-
 
         # Handle direct LLM response mode
         if plan.get("planning_mode") == "direct_llm":
