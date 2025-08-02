@@ -4,7 +4,7 @@
   <a href="https://pypi.org/project/kailash/"><img src="https://img.shields.io/pypi/v/kailash.svg" alt="PyPI version"></a>
   <a href="https://pypi.org/project/kailash/"><img src="https://img.shields.io/pypi/pyversions/kailash.svg" alt="Python versions"></a>
   <a href="https://pepy.tech/project/kailash"><img src="https://static.pepy.tech/badge/kailash" alt="Downloads"></a>
-  <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License">
+  <img src="https://img.shields.io/badge/license-Apache%202.0%20with%20Additional%20Terms-orange.svg" alt="Apache 2.0 with Additional Terms">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
   <img src="https://img.shields.io/badge/tests-2400%2B%20passing-brightgreen.svg" alt="Tests: 2400+ Passing">
   <img src="https://img.shields.io/badge/performance-11x%20faster-yellow.svg" alt="Performance: 11x Faster">
@@ -22,27 +22,28 @@
 
 ---
 
-## 🔥 Latest Release: v0.9.5 (July 31, 2025)
+## 🔥 Latest Release: v0.9.10 (August 1, 2025)
 
-**PythonCodeNode Serialization Stability & Testing**
+**License Update & IterativeLLMAgentNode API Simplification**
 
-### 🧪 Comprehensive Regression Test Suite (TODO-129)
-- **Added**: 33 unit tests validating PythonCodeNode serialization behavior and JSON compatibility
-- **Added**: 6 integration tests with real infrastructure using only allowed modules
-- **Added**: 6 E2E tests for complete business workflows and multi-channel consistency
-- **Impact**: Ensures serialization fix from commit 2fcf8591 (June 11, 2025) stays stable
+### 📄 License Changed to Apache 2.0 with Additional Terms
+- **Changed**: From MIT to Apache License 2.0 with Additional Terms
+- **Protection**: Prevents standalone commercial distribution of the SDK
+- **Freedom**: Allows commercial use of derivatives and integration into larger systems
+- **Patent Grant**: Includes Apache 2.0 patent protection clauses
 
-### 📚 Documentation Clarifications
-- **Updated**: PythonCodeNode output structure documentation (all outputs wrapped in "result" key)
-- **Enhanced**: Serialization consistency notes for multi-channel deployment
-- **Improved**: Testing patterns for node serialization validation
+### 🤖 IterativeLLMAgentNode Improvements (v0.9.9)
+- **Removed**: Mock mode entirely - real MCP execution always enabled
+- **Simplified**: API by removing confusing `use_real_mcp` parameter
+- **Enhanced**: Graceful fallback when MCP tools unavailable
+- **Updated**: All documentation and examples with simplified API
 
-### 🛡️ Stability Improvements
-- **Focus**: Testing and documentation release to ensure PythonCodeNode serialization remains stable
-- **Validation**: Complete test coverage for serialization edge cases
-- **Quality**: Comprehensive regression prevention for critical workflow components
+### 📦 Package Updates
+- **kailash**: v0.9.10 - License update
+- **kailash-nexus**: v1.0.6 - License update 
+- **kailash-dataflow**: v0.3.7 - License update
 
-[Full Changelog](sdk-users/6-reference/changelogs/releases/v0.9.5-2025-07-31.md) | [Core SDK 0.9.5](https://pypi.org/project/kailash/0.9.5/) | [DataFlow 0.3.4](https://pypi.org/project/kailash-dataflow/0.3.4/)
+[Full Changelog](sdk-users/6-reference/changelogs/releases/v0.9.10-2025-08-01.md) | [Core SDK 0.9.10](https://pypi.org/project/kailash/0.9.10/) | [Nexus 1.0.6](https://pypi.org/project/kailash-nexus/1.0.6/) | [DataFlow 0.3.7](https://pypi.org/project/kailash-dataflow/0.3.7/)
 
 ## 🎯 What Makes Kailash Different
 
@@ -447,7 +448,24 @@ See [Contributing Guide](CONTRIBUTING.md) and [# contrib (removed)/CLAUDE.md](# 
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **Apache License 2.0 with Additional Terms** that protect against standalone commercial distribution while encouraging innovation.
+
+### ✅ What You CAN Do:
+- **Use** Kailash SDK in your commercial applications and services
+- **Create and sell** derivative works that add substantial functionality
+- **Integrate** Kailash as a component of larger systems
+- **Use internally** within your organization without restrictions
+- **Provide services** using Kailash without distributing the SDK itself
+
+### ❌ What You CANNOT Do:
+- **Sell the SDK as-is** without substantial modifications
+- **Repackage and sell** with only cosmetic changes
+- **Distribute commercially** as a standalone product
+
+### 📋 Summary:
+We encourage commercial use of Kailash SDK as part of your innovative solutions while preventing direct resale of our work. This ensures the community benefits from continuous development while protecting the project's sustainability.
+
+For complete license terms, see the [LICENSE](LICENSE) file. For commercial licensing inquiries or clarifications, please contact info@terrene.foundation.
 
 ## 🙏 Acknowledgments
 
