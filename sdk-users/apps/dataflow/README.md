@@ -81,6 +81,8 @@ workflow.add_node("UserCreateNode", "create", {
 
 ## Quick Start
 
+### Option 1: Traditional Model Definition
+
 ```python
 from dataflow import DataFlow
 from kailash.workflow.builder import WorkflowBuilder
@@ -120,10 +122,51 @@ runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 ```
 
+### Option 2: Dynamic Model Registration (NEW)
+
+Perfect for connecting to existing databases or LLM agent scenarios:
+
+```python
+from dataflow import DataFlow
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+# Connect to existing database safely
+db = DataFlow(
+    database_url="postgresql://user:pass@localhost/existing_db",
+    existing_schema_mode=True  # Safe mode - no schema changes
+)
+
+# Discover and register existing tables as models
+schema = db.discover_schema(use_real_inspection=True)
+result = db.register_schema_as_models(tables=['users', 'orders'])
+
+# Use generated nodes immediately (no @db.model needed)
+workflow = WorkflowBuilder()
+user_nodes = result['generated_nodes']['users']
+
+workflow.add_node(user_nodes['list'], "get_users", {
+    "filter": {"active": True},
+    "limit": 10
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
+
 ## Key Features
 
 ### 🔧 Zero Configuration
 Start with a single line: `app = DataFlow()` - no database setup, no schema definitions, no configuration files.
+
+### 🔍 Dynamic Schema Discovery & Model Registration
+Connect to existing databases without @db.model decorators. Perfect for LLM agents and dynamic database exploration.
+
+### 🔄 Cross-Session Model Persistence
+Models registered by one user/session are available to others via the model registry.
+
+### 🛡️ Safe Existing Database Mode
+Connect to production databases safely with `existing_schema_mode=True` - prevents any schema modifications.
 
 ### 🗄️ Universal Database Support
 MongoDB-style queries work across PostgreSQL, MySQL, SQLite with automatic SQL generation and optimization.
@@ -211,6 +254,197 @@ workflow.add_node("UserBulkUpsertNode", "bulk_upsert", {
     ],
     "match_fields": ["email"]
 })
+```
+
+## Dynamic Model Registration (NEW)
+
+### Working with Existing Databases
+
+Connect to existing databases without needing @db.model decorators. Perfect for LLM agents, data exploration, and legacy database integration.
+
+```python
+from dataflow import DataFlow
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+# Connect safely to existing database
+db = DataFlow(
+    database_url="postgresql://user:pass@localhost/existing_db",
+    auto_migrate=False,              # Don't modify existing schema
+    existing_schema_mode=True        # Extra safety - prevents ALL modifications
+)
+
+# Discover existing database structure
+schema = db.discover_schema(use_real_inspection=True)
+print(f"Found {len(schema)} tables: {list(schema.keys())}")
+
+# Register discovered tables as DataFlow models
+result = db.register_schema_as_models(tables=['customers', 'orders'])
+
+print(f"Registered {result['success_count']} models")
+print(f"Generated nodes: {result['generated_nodes']}")
+
+# Now you can use the models in workflows
+workflow = WorkflowBuilder()
+customer_nodes = result['generated_nodes']['customers']
+
+workflow.add_node(customer_nodes['list'], "get_customers", {
+    "filter": {"status": "active"},
+    "limit": 10
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
+
+### Cross-Session Model Sharing
+
+Models registered by one user/session are automatically available to others via the model registry.
+
+```python
+# === SESSION 1: Data Engineer discovers and registers models ===
+db_engineer = DataFlow(
+    database_url="postgresql://user:pass@localhost/company_db",
+    existing_schema_mode=True
+)
+
+# Engineer discovers and registers models for the team
+schema = db_engineer.discover_schema(use_real_inspection=True)
+result = db_engineer.register_schema_as_models(
+    tables=['users', 'products', 'orders']
+)
+print(f"Team models registered: {result['registered_models']}")
+
+# === SESSION 2: Developer uses registered models ===
+db_developer = DataFlow(
+    database_url="postgresql://user:pass@localhost/company_db",
+    existing_schema_mode=True
+)
+
+# Developer reconstructs models from registry (no @db.model needed)
+models = db_developer.reconstruct_models_from_registry()
+print(f"Available models: {models['reconstructed_models']}")
+
+# Developer can now build workflows immediately
+workflow = WorkflowBuilder()
+user_nodes = models['generated_nodes']['users']
+
+workflow.add_node(user_nodes['list'], "active_users", {
+    "filter": {"active": True},
+    "order_by": ["-created_at"],
+    "limit": 20
+})
+```
+
+### LLM Agent Database Exploration
+
+Perfect for AI agents that need to explore and understand database structures dynamically.
+
+```python
+# LLM Agent workflow for database exploration
+db_agent = DataFlow(
+    database_url="postgresql://user:pass@localhost/unknown_db",
+    existing_schema_mode=True  # Safe exploration mode
+)
+
+# Agent discovers database structure
+schema = db_agent.discover_schema(use_real_inspection=True)
+interesting_tables = [t for t in schema.keys() 
+                     if not t.startswith('dataflow_')]  # Skip system tables
+
+# Agent registers tables it wants to work with
+result = db_agent.register_schema_as_models(tables=interesting_tables[:5])
+
+# Agent builds exploration workflow
+workflow = WorkflowBuilder()
+
+for model_name in result['registered_models']:
+    nodes = result['generated_nodes'][model_name]
+    
+    # Sample a few records from each table
+    workflow.add_node(nodes['list'], f"sample_{model_name}", {
+        "limit": 3,
+        "order_by": []
+    })
+
+# Execute exploration
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+
+# Agent can now analyze the data structure and content
+for node_id, result in results.items():
+    if node_id.startswith('sample_'):
+        table_name = node_id.replace('sample_', '')
+        data = result.get('result', [])
+        print(f"Table {table_name}: {len(data)} sample records")
+```
+
+### Safe Database Connection Modes
+
+DataFlow provides multiple safety levels for connecting to existing databases:
+
+```python
+# Development Mode - Full auto-migration
+db_dev = DataFlow(
+    database_url="postgresql://user:pass@localhost/dev_db",
+    auto_migrate=True,           # Create/modify tables as needed
+    existing_schema_mode=False   # Allow schema changes
+)
+
+# Production Mode - Read existing schema only
+db_prod = DataFlow(
+    database_url="postgresql://user:pass@localhost/prod_db",
+    auto_migrate=False,          # No automatic migrations
+    existing_schema_mode=True    # Prevent ALL schema modifications
+)
+
+# Even if you accidentally define a new model, no tables will be created
+@db_prod.model  
+class NewModel:
+    name: str
+    value: int
+
+# Model is registered locally but NO table created in database
+assert 'NewModel' in db_prod.list_models()  # ✓ Local registration
+schema = db_prod.discover_schema(use_real_inspection=True)
+assert 'new_models' not in schema  # ✓ No table in database
+```
+
+### Key API Methods
+
+DataFlow provides powerful methods for dynamic database operations:
+
+```python
+# Schema Discovery
+schema = db.discover_schema(use_real_inspection=True)
+# Returns: Dict[str, Dict] - Complete table structure with columns, types, constraints
+
+# Dynamic Model Registration  
+result = db.register_schema_as_models(tables=['users', 'orders'])
+# Returns: {
+#   'registered_models': ['User', 'Order'],
+#   'generated_nodes': {
+#     'User': {'create': 'UserCreateNode', 'list': 'UserListNode', ...},
+#     'Order': {'create': 'OrderCreateNode', 'list': 'OrderListNode', ...}
+#   },
+#   'success_count': 2,
+#   'error_count': 0
+# }
+
+# Cross-Session Model Reconstruction
+models = db.reconstruct_models_from_registry()
+# Returns: {
+#   'reconstructed_models': ['User', 'Order'],
+#   'generated_nodes': {...},
+#   'success_count': 2
+# }
+
+# Model Persistence Control
+db = DataFlow(
+    database_url="...",
+    enable_model_persistence=True,  # Default: saves models to registry
+    existing_schema_mode=True       # Safety: prevents schema changes
+)
 ```
 
 ## Advanced Features
