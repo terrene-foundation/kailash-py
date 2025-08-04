@@ -15,6 +15,8 @@ DataFlow's auto-migration system automatically detects schema changes when you m
 - **Schema Comparison Engine**: Precise diff generation between model definitions and database state
 - **Concurrent Access Protection**: Migration locking and queue management for multi-process environments
 - **Production Safety**: Dry-run mode, data loss prevention, and transaction rollback
+- **Existing Database Protection**: Safe mode prevents destructive migrations (Bug 006 fix)
+- **Migration History Tracking**: Checksum-based duplicate prevention (Bug 006 fix)
 
 ## 🚀 Quick Start
 
@@ -47,6 +49,24 @@ class User:
 
 # Auto-migration detects changes and provides visual confirmation
 await db.auto_migrate()  # Interactive preview + confirmation
+```
+
+### ⚠️ Working with Existing Databases (Bug 006 Fix)
+
+```python
+# CRITICAL: For existing databases, use safe mode to prevent destructive migrations
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=False,  # Disable automatic migrations
+    existing_schema_mode=True  # Enable safe mode for existing databases
+)
+
+# Manually trigger migrations with safety checks
+success, migrations = await db.auto_migrate(
+    dry_run=True,  # Preview first
+    max_risk_level="LOW",  # Extra cautious
+    data_loss_protection=True
+)
 ```
 
 ### Visual Migration Preview

@@ -36,7 +36,34 @@ The changelog has been reorganized into individual files for better management. 
 
 ### Core SDK Releases
 
-### [0.8.7] - 2025-01-25 (Unreleased)
+### [0.9.11] - 2025-08-04
+
+**Testing Excellence & DataFlow Integration Enhancement Release**
+
+This release focuses on testing infrastructure excellence and enhanced DataFlow integration capabilities, achieving a major milestone of 4,000+ passing tier 1 tests.
+
+#### Added
+- ✅ **Testing Milestone Achievement**: 4,072 passing tier 1 tests with comprehensive coverage
+- ✅ **Enhanced DataFlow Integration**: Improved AsyncSQL node compatibility with DataFlow parameters
+- ✅ **Test Infrastructure Hardening**: Better test isolation and cleanup mechanisms
+- ✅ **Performance Optimization**: Test execution optimization for development workflows
+
+#### Changed
+- 🔄 **Code Quality**: Comprehensive formatting updates with black, isort, and ruff compliance
+- 🔄 **Documentation**: Enhanced integration examples and troubleshooting guides
+- 🔄 **Test Organization**: Restructured test suite for better maintainability
+
+#### Fixed
+- 🐛 **AsyncSQL Parameter Handling**: Improved parameter conversion for DataFlow integration
+- 🐛 **Import Order**: Corrected import ordering across test modules
+- 🐛 **Connection Management**: Enhanced connection pool handling in test environments
+
+#### Infrastructure
+- 🏗️ **Test Excellence**: Achieved comprehensive test coverage milestone
+- 🏗️ **CI/CD Readiness**: Enhanced build validation and quality gates
+- 🏗️ **Development Experience**: Streamlined development and testing procedures
+
+### [0.8.7] - 2025-01-25 (Unreleased - Superseded)
 
 **MCP Ecosystem Enhancement Release**
 

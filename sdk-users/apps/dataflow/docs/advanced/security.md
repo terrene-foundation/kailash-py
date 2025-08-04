@@ -1,10 +1,159 @@
 # DataFlow Security Guide
 
-Comprehensive security guide for DataFlow applications.
+Comprehensive security guide for DataFlow applications including the **6-Level Write Protection System**.
 
 ## Overview
 
-Security is paramount in DataFlow applications. This guide covers authentication, authorization, encryption, audit logging, and security best practices.
+DataFlow provides enterprise-grade security with a multi-layered write protection system that integrates directly with Core SDK workflow execution. This includes authentication, authorization, encryption, audit logging, and comprehensive write protection.
+
+## 6-Level Write Protection System
+
+DataFlow implements a comprehensive write protection system with six protection levels:
+
+### Protection Levels
+
+```python
+from dataflow.core.protection import ProtectionLevel
+
+# Available protection levels:
+ProtectionLevel.OFF     # No protection
+ProtectionLevel.WARN    # Log warnings but allow operations  
+ProtectionLevel.BLOCK   # Block operations with detailed errors
+ProtectionLevel.AUDIT   # Block and create audit entries
+```
+
+### Level 1: Global Protection
+
+```python
+from dataflow import DataFlow
+from dataflow.core.protection import GlobalProtection, ProtectionLevel
+
+# Enable global write protection
+global_protection = GlobalProtection(
+    default_level=ProtectionLevel.BLOCK,
+    maintenance_mode=True,
+    allowed_users={"admin", "system"}
+)
+
+db = DataFlow(
+    "postgresql://user:pass@localhost/db",
+    protection=global_protection
+)
+```
+
+### Level 2: Connection Protection
+
+```python
+# Connection-level protection based on time windows
+from dataflow.core.protection import TimeWindow
+from datetime import time
+
+# Protect during business hours
+business_hours = TimeWindow(
+    start_time=time(9, 0),   # 9 AM
+    end_time=time(17, 0),    # 5 PM
+    days_of_week={0, 1, 2, 3, 4}  # Monday-Friday
+)
+
+db = DataFlow(
+    "postgresql://user:pass@localhost/db",
+    write_protection_window=business_hours
+)
+```
+
+### Level 3: Model Protection
+
+```python
+from dataflow.core.protection import ModelProtection, OperationType
+
+# Model-level protection configuration
+user_protection = ModelProtection(
+    model_name="User",
+    protection_level=ProtectionLevel.AUDIT,
+    allowed_operations={OperationType.READ, OperationType.CREATE},
+    reason="User model requires approval for modifications"
+)
+
+@db.model
+class User:
+    name: str
+    email: str
+    
+    __dataflow__ = {
+        'protection': user_protection
+    }
+```
+
+### Level 4: Operation Protection
+
+```python
+# Operation-specific protection
+from dataflow.core.protection import OperationType
+
+@db.model
+class CriticalData:
+    value: str
+    
+    __dataflow__ = {
+        'protection': {
+            'bulk_operations': ProtectionLevel.BLOCK,  # No bulk operations
+            'delete_operations': ProtectionLevel.AUDIT,  # Audit all deletes
+        }
+    }
+```
+
+### Level 5: Field Protection
+
+```python
+from dataflow.core.protection import FieldProtection
+
+@db.model
+class Employee:
+    name: str
+    email: str
+    salary: float
+    ssn: str
+    
+    __dataflow__ = {
+        'protection': {
+            'fields': [
+                FieldProtection(
+                    field_name="salary",
+                    protection_level=ProtectionLevel.AUDIT,
+                    allowed_operations={OperationType.READ}
+                ),
+                FieldProtection(
+                    field_name="ssn", 
+                    protection_level=ProtectionLevel.BLOCK,
+                    reason="SSN is permanently read-only"
+                )
+            ]
+        }
+    }
+```
+
+### Level 6: Runtime Protection
+
+```python
+# Runtime protection with custom conditions
+def protect_critical_records(context):
+    """Custom protection logic."""
+    if context.get('record_count', 0) > 1000:
+        return False  # Block operations on large datasets
+    return True
+
+@db.model
+class Order:
+    amount: float
+    status: str
+    
+    __dataflow__ = {
+        'protection': {
+            'conditions': [protect_critical_records],
+            'runtime_checks': True
+        }
+    }
+```
 
 ## Authentication
 

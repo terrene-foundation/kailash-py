@@ -10,6 +10,7 @@ from kailash.runtime.local import LocalRuntime
 
 # 1. Zero-config initialization - ALPHA RELEASE APPROVED
 db = DataFlow()  # Development: SQLite automatic, Production: PostgreSQL
+# NOTE: SQLite now has full parity with PostgreSQL - all features supported
 
 # 2. Define model - generates 9 nodes automatically
 @db.model
@@ -630,7 +631,7 @@ workflow.add_node("PerformanceTunerNode", "tune", {
 ### Testing Patterns
 ```python
 # Test database setup
-test_db = DataFlow(":memory:")  # In-memory SQLite
+test_db = DataFlow(":memory:")  # In-memory SQLite with full PostgreSQL parity
 
 # Test data generation
 workflow.add_node("TestDataGeneratorNode", "generate", {

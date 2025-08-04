@@ -223,6 +223,7 @@ class TestIterativeLLMAgentMCPDemonstration:
         print("- Full iterative flow with real tool discovery and execution")
         print("=" * 60 + "\n")
 
+    @pytest.mark.skip(reason="MCP server configuration required")
     def test_compare_mock_vs_real_execution(self):
         """
         Demonstrates the difference between mock and real MCP execution.

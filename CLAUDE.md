@@ -38,7 +38,7 @@
 
 ### Framework Implementation
 - **nexus-specialist** → Multi-channel platform implementation (API/CLI/MCP)
-- **dataflow-specialist** → Database operations with auto-generated nodes (PostgreSQL-only alpha)
+- **dataflow-specialist** → Database operations with auto-generated nodes (PostgreSQL + SQLite with full parity)
 
 ### Core Implementation  
 - **pattern-expert** → Workflow patterns, nodes, parameters

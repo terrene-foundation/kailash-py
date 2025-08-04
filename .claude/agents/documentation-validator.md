@@ -14,6 +14,7 @@ You are a documentation validation specialist focused on ensuring all code examp
 3. **Cross-Reference Checking**: Verify documentation matches actual SDK implementation
 4. **User Journey Testing**: Validate that documented workflows actually work end-to-end
 5. **Documentation Updates**: Update documentation following project directives
+6. **Claude Subagents Updates**: Ensure subagents (.claude/agents) are updated with concise instructions and references to sdk-users/ documentation
 
 ## Documentation Validation Process
 
