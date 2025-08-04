@@ -16,7 +16,7 @@ Welcome to the DataFlow documentation! DataFlow is a zero-configuration database
 - **[Custom Development](development/custom-nodes.md)** - Create custom nodes
 
 ### **Features**
-- **[Multi-Database Support](features/multi-database.md)** - PostgreSQL, MySQL, SQLite
+- **[Multi-Database Support](features/multi-database.md)** - PostgreSQL + SQLite (full parity), MySQL (coming soon)
 - **[Query Builder](features/query-builder.md)** - MongoDB-style query building
 
 ### **Enterprise Features**

@@ -1,35 +1,41 @@
 # DataFlow Quick Start Guide
 
-Get up and running with DataFlow in 5 minutes! This guide shows you how to build a complete database-backed application with **automatic schema management** and zero configuration.
+Get up and running with DataFlow in 5 minutes! This guide shows you how to build database workflows with **automatic node generation** and zero configuration.
 
 ## 🚀 The DataFlow "Wow Factor"
 
-**Watch your database automatically evolve as you code:**
+**One decorator generates 9 workflow nodes automatically:**
 
 ```python
 from dataflow import DataFlow
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-db = DataFlow()
+# Zero-config database setup
+db = DataFlow("postgresql://user:password@localhost/database")
 
-# Define your initial model
+# ONE decorator generates 9 nodes automatically
 @db.model
 class User:
     name: str
     email: str
+    active: bool = True
 
-# Initialize - creates database and tables automatically
-await db.initialize()
+# Generated automatically:
+# - UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode
+# - UserListNode, UserBulkCreateNode, UserBulkUpdateNode, 
+# - UserBulkDeleteNode, UserBulkUpsertNode
 
-# Later, just add fields to your model...
-@db.model
-class User:
-    name: str
-    email: str
-    phone: str = None        # NEW FIELD
-    is_active: bool = True   # NEW FIELD
+# Use in Core SDK workflows immediately
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create_user", {
+    "name": "Alice Smith",
+    "email": "alice@example.com"
+})
 
-# Auto-migration detects changes and shows visual preview:
-await db.auto_migrate()
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+print(f"Created user: {results['create_user']}")
 ```
 
 **You'll see this interactive preview:**
@@ -318,7 +324,7 @@ You've just built a complete database application with **automatic schema manage
 2. **[Core Concepts](concepts.md)** - Understand DataFlow's architecture
 3. **[Model Definition](../development/models.md)** - Advanced model features
 4. **[Bulk Operations](../development/bulk-operations.md)** - High-performance data handling
-5. **[Multi-Database Support](../features/multi-database.md)** - Use PostgreSQL or MySQL
+5. **[Multi-Database Support](../features/multi-database.md)** - PostgreSQL and SQLite (full parity), MySQL coming soon
 6. **[Progressive Configuration](../features/progressive-config.md)** - Scale from prototype to enterprise
 
 ## Common Patterns
