@@ -6,7 +6,7 @@
   <a href="https://pepy.tech/project/kailash"><img src="https://static.pepy.tech/badge/kailash" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/license-Apache%202.0%20with%20Additional%20Terms-orange.svg" alt="Apache 2.0 with Additional Terms">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
-  <img src="https://img.shields.io/badge/tests-2400%2B%20passing-brightgreen.svg" alt="Tests: 2400+ Passing">
+  <img src="https://img.shields.io/badge/tests-4000%2B%20passing-brightgreen.svg" alt="Tests: 4000+ Passing">
   <img src="https://img.shields.io/badge/performance-11x%20faster-yellow.svg" alt="Performance: 11x Faster">
   <img src="https://img.shields.io/badge/docker-integrated-blue.svg" alt="Docker: Integrated">
   <img src="https://img.shields.io/badge/AI-MCP%20validated-purple.svg" alt="AI: MCP Validated">
@@ -59,7 +59,7 @@ Not just a toolkit - complete production-ready applications built on enterprise-
 - **11x faster test execution** (117s → 10.75s) with smart isolation
 - **31.8M operations/second** query performance baseline
 - **30,000+ iterations/second** cyclic workflow execution
-- **100% test pass rate** across 2,400+ tests
+- **100% test pass rate** across 4,000+ tests
 
 ### 🤖 **AI-First Architecture**
 - **A2A Google Protocol** for enterprise multi-agent coordination
@@ -99,7 +99,7 @@ kailash_python_sdk/
 │   ├── kailash-mcp/      # Enterprise MCP platform
 │   ├── ai_registry/      # Advanced RAG capabilities
 │   └── user_management/  # Enterprise RBAC system
-├── tests/               # 2,400+ tests (100% pass rate)
+├── tests/               # 4,000+ tests (100% pass rate)
 ├── docs/                # Comprehensive documentation
 └── examples/            # Feature validation examples
 ```
@@ -200,7 +200,7 @@ results, run_id = runtime.execute(workflow.build())
 ## 🎯 Key Features
 
 ### 🧪 **Testing Excellence**
-- **2,400+ tests** with 100% pass rate
+- **4,000+ tests** with 100% pass rate
 - **11x performance improvement** (117s → 10.75s execution)
 - **Docker integration** for real PostgreSQL, Redis, MongoDB
 - **Smart isolation** without process forking overhead
@@ -248,7 +248,7 @@ results, run_id = runtime.execute(workflow.build())
 
 ### Recent Achievements
 - **11x faster test execution**: 117s → 10.75s with smart isolation
-- **100% test pass rate**: 2,400+ tests across all categories
+- **100% test pass rate**: 4,000+ tests across all categories
 - **31.8M operations/second**: Query performance baseline
 - **30,000+ iterations/second**: Cyclic workflow execution
 
@@ -302,7 +302,7 @@ pip install kailash-user-management
 
 ### Comprehensive Test Suite
 ```bash
-# All tests (2,400+ tests)
+# All tests (4,000+ tests)
 pytest
 
 # Fast unit tests (11x faster execution)
@@ -397,7 +397,7 @@ git clone https://github.com/terrene-foundation/kailash-py.git
 cd kailash-python-sdk
 uv sync
 
-# Run tests (2,400+ tests)
+# Run tests (4,000+ tests)
 pytest tests/unit/ --timeout=1      # Fast unit tests
 pytest tests/integration/ --timeout=5  # Integration tests
 pytest tests/e2e/ --timeout=10     # End-to-end tests
@@ -430,7 +430,7 @@ See [Contributing Guide](CONTRIBUTING.md) and [# contrib (removed)/CLAUDE.md](# 
 - **Complete Application Framework**: DataFlow, Nexus, AI Registry, User Management
 - **PyPI Integration**: All packages available with proper extras support
 - **Performance Breakthrough**: 11x faster test execution
-- **Testing Excellence**: 2,400+ tests with 100% pass rate
+- **Testing Excellence**: 4,000+ tests with 100% pass rate
 - **Enterprise Ready**: Production deployment patterns
 
 ### ✅ v0.7.0 - Major Framework Release

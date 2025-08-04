@@ -324,7 +324,7 @@ You've just built a complete database application with **automatic schema manage
 2. **[Core Concepts](concepts.md)** - Understand DataFlow's architecture
 3. **[Model Definition](../development/models.md)** - Advanced model features
 4. **[Bulk Operations](../development/bulk-operations.md)** - High-performance data handling
-5. **[Multi-Database Support](../features/multi-database.md)** - Use PostgreSQL or MySQL
+5. **[Multi-Database Support](../features/multi-database.md)** - PostgreSQL and SQLite (full parity), MySQL coming soon
 6. **[Progressive Configuration](../features/progressive-config.md)** - Scale from prototype to enterprise
 
 ## Common Patterns

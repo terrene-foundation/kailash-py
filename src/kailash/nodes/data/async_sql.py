@@ -775,6 +775,10 @@ class MySQLAdapter(DatabaseAdapter):
 
 class SQLiteAdapter(DatabaseAdapter):
     """SQLite adapter using aiosqlite."""
+    
+    # Class-level shared connections for memory databases to solve isolation issues
+    _shared_memory_connections = {}
+    _connection_locks = {}
 
     async def connect(self) -> None:
         """Establish connection pool."""
@@ -786,7 +790,7 @@ class SQLiteAdapter(DatabaseAdapter):
             )
 
         # SQLite doesn't have true connection pooling
-        # We'll manage a single connection for simplicity
+        # We'll manage connections based on database type
         self._aiosqlite = aiosqlite
         
         # Extract database path from connection string if database path not provided
@@ -800,7 +804,12 @@ class SQLiteAdapter(DatabaseAdapter):
             conn_str = self.config.connection_string
             if conn_str.startswith("sqlite:///"):
                 # Absolute path: sqlite:///path/to/file.db -> /path/to/file.db
-                self._db_path = conn_str[10:]  # Remove "sqlite:///"
+                # Special case: sqlite:///:memory: -> :memory:
+                path_part = conn_str[9:]  # Remove "sqlite://" to keep the leading slash
+                if path_part == "/:memory:":
+                    self._db_path = ":memory:"
+                else:
+                    self._db_path = path_part
             elif conn_str.startswith("sqlite://"):
                 # Relative path: sqlite://path/to/file.db -> path/to/file.db
                 self._db_path = conn_str[9:]   # Remove "sqlite://"
@@ -814,10 +823,37 @@ class SQLiteAdapter(DatabaseAdapter):
             raise NodeExecutionError(
                 "SQLite requires either 'database' path or 'connection_string'"
             )
+        
+        # Set up connection sharing for memory databases to prevent isolation
+        self._is_memory_db = self._db_path == ":memory:"
+        if self._is_memory_db:
+            import asyncio
+            # All :memory: databases should share the same connection to avoid isolation
+            self._memory_key = "global_memory_db"
+            if self._memory_key not in self._connection_locks:
+                self._connection_locks[self._memory_key] = asyncio.Lock()
+
+    async def _get_connection(self):
+        """Get a database connection, using shared connection for memory databases."""
+        if self._is_memory_db:
+            # Use shared connection for memory databases to prevent isolation
+            async with self._connection_locks[self._memory_key]:
+                if self._memory_key not in self._shared_memory_connections:
+                    # Create the shared memory connection
+                    conn = await self._aiosqlite.connect(self._db_path)
+                    conn.row_factory = self._aiosqlite.Row
+                    self._shared_memory_connections[self._memory_key] = conn
+                return self._shared_memory_connections[self._memory_key]
+        else:
+            # For file databases, create new connections as before
+            conn = await self._aiosqlite.connect(self._db_path)
+            conn.row_factory = self._aiosqlite.Row
+            return conn
 
     async def disconnect(self) -> None:
         """Close connection."""
-        # Connections are managed per-operation for SQLite
+        # For memory databases, we keep the shared connection alive
+        # For file databases, connections are managed per-operation
         pass
 
     async def execute(
@@ -848,21 +884,43 @@ class SQLiteAdapter(DatabaseAdapter):
                 return [self._convert_row(dict(row)) for row in rows]
         else:
             # Create new connection for non-transactional queries
-            async with self._aiosqlite.connect(self._db_path) as db:
-                db.row_factory = self._aiosqlite.Row
+            if self._is_memory_db:
+                # Use shared connection for memory databases
+                db = await self._get_connection()
                 cursor = await db.execute(query, params or [])
 
                 if fetch_mode == FetchMode.ONE:
                     row = await cursor.fetchone()
-                    return self._convert_row(dict(row)) if row else None
+                    result = self._convert_row(dict(row)) if row else None
                 elif fetch_mode == FetchMode.ALL:
                     rows = await cursor.fetchall()
-                    return [self._convert_row(dict(row)) for row in rows]
+                    result = [self._convert_row(dict(row)) for row in rows]
                 elif fetch_mode == FetchMode.MANY:
                     if not fetch_size:
                         raise ValueError("fetch_size required for MANY mode")
                     rows = await cursor.fetchmany(fetch_size)
-                    return [self._convert_row(dict(row)) for row in rows]
+                    result = [self._convert_row(dict(row)) for row in rows]
+                
+                # Commit for memory databases (needed for INSERT/UPDATE/DELETE)
+                await db.commit()
+                return result
+            else:
+                # Use context manager for file databases
+                async with self._aiosqlite.connect(self._db_path) as db:
+                    db.row_factory = self._aiosqlite.Row
+                    cursor = await db.execute(query, params or [])
+
+                    if fetch_mode == FetchMode.ONE:
+                        row = await cursor.fetchone()
+                        return self._convert_row(dict(row)) if row else None
+                    elif fetch_mode == FetchMode.ALL:
+                        rows = await cursor.fetchall()
+                        return [self._convert_row(dict(row)) for row in rows]
+                    elif fetch_mode == FetchMode.MANY:
+                        if not fetch_size:
+                            raise ValueError("fetch_size required for MANY mode")
+                        rows = await cursor.fetchmany(fetch_size)
+                        return [self._convert_row(dict(row)) for row in rows]
 
                 await db.commit()
 
@@ -879,26 +937,44 @@ class SQLiteAdapter(DatabaseAdapter):
             # Don't commit here - let transaction handling do it
         else:
             # Create new connection for non-transactional queries
-            async with self._aiosqlite.connect(self._db_path) as db:
+            if self._is_memory_db:
+                # Use shared connection for memory databases
+                db = await self._get_connection()
                 await db.executemany(query, params_list)
                 await db.commit()
+            else:
+                # Use context manager for file databases
+                async with self._aiosqlite.connect(self._db_path) as db:
+                    await db.executemany(query, params_list)
+                    await db.commit()
 
     async def begin_transaction(self) -> Any:
         """Begin a transaction."""
-        db = await self._aiosqlite.connect(self._db_path)
-        db.row_factory = self._aiosqlite.Row
-        await db.execute("BEGIN")
-        return db
+        if self._is_memory_db:
+            # Use shared connection for memory databases
+            db = await self._get_connection()
+            await db.execute("BEGIN")
+            return db
+        else:
+            # Create new connection for file databases
+            db = await self._aiosqlite.connect(self._db_path)
+            db.row_factory = self._aiosqlite.Row
+            await db.execute("BEGIN")
+            return db
 
     async def commit_transaction(self, transaction: Any) -> None:
         """Commit a transaction."""
         await transaction.commit()
-        await transaction.close()
+        # Don't close shared memory connections
+        if not self._is_memory_db:
+            await transaction.close()
 
     async def rollback_transaction(self, transaction: Any) -> None:
         """Rollback a transaction."""
         await transaction.rollback()
-        await transaction.close()
+        # Don't close shared memory connections
+        if not self._is_memory_db:
+            await transaction.close()
 
 
 class DatabaseConfigManager:

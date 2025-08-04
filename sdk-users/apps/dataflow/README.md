@@ -16,7 +16,8 @@ pip install kailash[dataflow]
 
 **Database Support:**
 - ✅ **PostgreSQL**: Full support with all enterprise features
-- ⚠️ **SQLite**: Basic support, some advanced features limited
+- ✅ **SQLite**: Full parity with PostgreSQL - all features supported (file-based and in-memory)
+  - Recent fixes: Path extraction and connection isolation for memory databases
 - ❌ **MySQL**: Not yet supported in alpha
 
 **Migration System:**
