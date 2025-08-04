@@ -671,9 +671,11 @@ class MySQLAdapter(DatabaseAdapter):
         fetch_mode: FetchMode = FetchMode.ALL,
         fetch_size: Optional[int] = None,
         transaction: Optional[Any] = None,
+        parameter_types: Optional[dict[str, str]] = None,
     ) -> Any:
         """Execute query and return results."""
         # Use transaction connection if provided, otherwise get from pool
+        # Note: parameter_types is only used by PostgreSQL adapter
         if transaction:
             conn = transaction
             async with conn.cursor() as cursor:
@@ -786,7 +788,32 @@ class SQLiteAdapter(DatabaseAdapter):
         # SQLite doesn't have true connection pooling
         # We'll manage a single connection for simplicity
         self._aiosqlite = aiosqlite
-        self._db_path = self.config.database
+        
+        # Extract database path from connection string if database path not provided
+        if self.config.database:
+            self._db_path = self.config.database
+        elif self.config.connection_string:
+            # Parse SQLite connection string formats:
+            # sqlite:///path/to/file.db (absolute path)
+            # sqlite://path/to/file.db (relative path - rare)
+            # file:path/to/file.db (file URI scheme)
+            conn_str = self.config.connection_string
+            if conn_str.startswith("sqlite:///"):
+                # Absolute path: sqlite:///path/to/file.db -> /path/to/file.db
+                self._db_path = conn_str[10:]  # Remove "sqlite:///"
+            elif conn_str.startswith("sqlite://"):
+                # Relative path: sqlite://path/to/file.db -> path/to/file.db
+                self._db_path = conn_str[9:]   # Remove "sqlite://"
+            elif conn_str.startswith("file:"):
+                # File URI: file:path/to/file.db -> path/to/file.db
+                self._db_path = conn_str[5:]   # Remove "file:"
+            else:
+                # Assume the connection string IS the path
+                self._db_path = conn_str
+        else:
+            raise NodeExecutionError(
+                "SQLite requires either 'database' path or 'connection_string'"
+            )
 
     async def disconnect(self) -> None:
         """Close connection."""
@@ -800,6 +827,7 @@ class SQLiteAdapter(DatabaseAdapter):
         fetch_mode: FetchMode = FetchMode.ALL,
         fetch_size: Optional[int] = None,
         transaction: Optional[Any] = None,
+        parameter_types: Optional[dict[str, str]] = None,
     ) -> Any:
         """Execute query and return results."""
         if transaction:
@@ -1420,9 +1448,38 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
         # Re-initialize instance variables with updated config
         self._reinitialize_from_config()
+        
+        # Auto-detect database type from connection string if not explicitly set
+        db_type = self.config.get("database_type", "").lower()
+        connection_string = self.config.get("connection_string")
+        
+        # If database_type is the default and we have a connection string, try to auto-detect
+        if (db_type == "postgresql" and connection_string and 
+            self.config.get("database_type") == self.get_parameters()["database_type"].default):
+            try:
+                # Simple detection based on connection string patterns
+                conn_lower = connection_string.lower()
+                if (connection_string == ":memory:" or 
+                    conn_lower.endswith(".db") or 
+                    conn_lower.endswith(".sqlite") or 
+                    conn_lower.endswith(".sqlite3") or
+                    conn_lower.startswith("sqlite") or
+                    # File path without URL scheme (likely SQLite)
+                    ("/" in connection_string and "://" not in connection_string)):
+                    db_type = "sqlite"
+                    self.config["database_type"] = "sqlite"
+                elif conn_lower.startswith("mysql"):
+                    db_type = "mysql"
+                    self.config["database_type"] = "mysql"
+                elif conn_lower.startswith(("postgresql", "postgres")):
+                    db_type = "postgresql"
+                    self.config["database_type"] = "postgresql"
+                # Otherwise keep default postgresql
+            except Exception:
+                # If detection fails, keep the default
+                pass
 
         # Validate database type
-        db_type = self.config.get("database_type", "").lower()
         if db_type not in ["postgresql", "mysql", "sqlite"]:
             raise NodeValidationError(
                 f"Invalid database_type: {db_type}. "

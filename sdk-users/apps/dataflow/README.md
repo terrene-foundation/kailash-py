@@ -1,6 +1,6 @@
-# DataFlow - Zero-Config Database Platform
+# DataFlow - Zero-Config Database Framework
 
-DataFlow provides MongoDB-style queries across any database with enterprise-grade caching and automatic API generation. This guide is for users who have installed DataFlow via PyPI.
+DataFlow is a **zero-config database framework** built on Core SDK that automatically generates 9 workflow nodes per model using the `@db.model` decorator. DataFlow IS NOT AN ORM - it's a workflow-native database framework designed for enterprise applications.
 
 ## Installation
 
@@ -11,6 +11,19 @@ pip install kailash-dataflow
 # Or as part of Kailash SDK
 pip install kailash[dataflow]
 ```
+
+## Current Status: Alpha Release
+
+**Database Support:**
+- ✅ **PostgreSQL**: Full support with all enterprise features
+- ⚠️ **SQLite**: Basic support, some advanced features limited
+- ❌ **MySQL**: Not yet supported in alpha
+
+**Migration System:**
+- ✅ Auto-migration with 6-level write protection
+- ✅ Schema state management 
+- ✅ Migration performance tracking
+- ✅ Safe staging environment support
 
 ## 🏗️ DataFlow vs Traditional ORMs
 
@@ -40,12 +53,33 @@ user.save()  # Individual database calls
 
 **DataFlow Advantages:**
 ```python
-# DataFlow - built for enterprise scale
+# DataFlow - @db.model decorator generates 9 nodes automatically
+from dataflow import DataFlow
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+# Zero-config setup
+db = DataFlow("postgresql://user:password@localhost/database")
+
+# Automatic node generation from model
+@db.model
+class User:
+    name: str
+    email: str
+    active: bool = True
+
+# Generated nodes: UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode,
+# UserListNode, UserBulkCreateNode, UserBulkUpdateNode, UserBulkDeleteNode, UserBulkUpsertNode
+
+# Use in workflows
+workflow = WorkflowBuilder()
 workflow.add_node("UserCreateNode", "create_user", {
-    "name": "John Doe",
+    "name": "John Doe", 
     "email": "john@example.com"
 })
-# Benefits: Automatic caching, bulk operations, tenant isolation
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Enterprise Benefits

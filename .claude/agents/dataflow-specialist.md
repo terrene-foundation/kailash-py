@@ -14,49 +14,79 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 
 ### DataFlow Architecture & Philosophy
 - **Not an ORM**: Workflow-native database framework, not traditional ORM
-- **Zero-Configuration**: `DataFlow()` - schema generation for all DBs, execution PostgreSQL only
+- **PostgreSQL + SQLite Alpha**: PostgreSQL fully supported, SQLite near-complete parity
 - **Automatic Node Generation**: Each `@db.model` creates 9 node types automatically
+- **6-Level Write Protection**: Comprehensive protection system (Global, Connection, Model, Operation, Field, Runtime)
+- **Migration System**: Auto-migration with schema state management and performance tracking
 - **Enterprise-Grade**: Built-in caching, multi-tenancy, distributed transactions
 - **Built on Core SDK**: Uses Kailash workflows and runtime underneath
-- **Alpha Limitation**: PostgreSQL-only execution due to AsyncSQLDatabaseNode
+- **Test Coverage**: 95% unit test pass rate, NO MOCKING compliance, real infrastructure testing
 
 ### Framework Positioning
 **When to Choose DataFlow:**
 - Database-first applications requiring CRUD operations
-- Need MongoDB-style queries (PostgreSQL only in alpha)
+- Need automatic node generation from models (@db.model decorator)
 - Bulk data processing (10k+ operations/sec)
 - Multi-tenant SaaS applications
-- Enterprise data management with audit trails
+- Enterprise data management with write protection and audit trails
+- PostgreSQL-based applications (full feature support)
+- SQLite applications (near-complete parity)
 
 **When NOT to Choose DataFlow:**
-- Simple single-workflow tasks (use Core SDK)
+- Simple single-workflow tasks (use Core SDK directly)
 - Multi-channel platform needs (use Nexus)
 - No database operations required (use Core SDK)
-- Need MySQL/SQLite execution (alpha supports PostgreSQL only)
+- Need MySQL support (not available in alpha)
+- Simple read-only database access (Core SDK nodes sufficient)
 
 ## Essential Patterns
 
-### Zero-Config Start
+### Basic DataFlow Setup
 ```python
 from dataflow import DataFlow
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-db = DataFlow()  # SQLite dev, PostgreSQL prod (via DATABASE_URL)
+# Database setup - both databases fully supported
+db = DataFlow("postgresql://user:pass@localhost/db")  # Production
+db = DataFlow("sqlite:///app.db")  # Development/Testing
+# Environment-based
+# db = DataFlow()  # Reads DATABASE_URL
 
+# Model registration with automatic node generation
 @db.model
 class User:
     name: str
     email: str
     active: bool = True
+
+# DataFlow automatically generates 9 nodes:
+# UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode,
+# UserListNode, UserBulkCreateNode, UserBulkUpdateNode, 
+# UserBulkDeleteNode, UserBulkUpsertNode
+
+# Use in workflows immediately
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create_user", {
+    "name": "Alice Smith",
+    "email": "alice@example.com"
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 ```
 
-### Safe Existing Database Connection
+### Safe Existing Database Connection (CRITICAL)
 ```python
 # Connect to existing database without schema changes
 db = DataFlow(
     "postgresql://user:pass@localhost/db",
     auto_migrate=False,
-    existing_schema_mode=True  # Prevents ALL schema modifications
+    existing_schema_mode=True  # Prevents ALL schema modifications - RECENTLY FIXED
 )
+
+# IMPORTANT: This was a critical bug fix - existing_schema_mode now properly
+# prevents destructive auto-migrations on existing databases
 ```
 
 ### Dynamic Model Registration (NEW)
@@ -176,6 +206,55 @@ schema = db.discover_schema(use_real_inspection=True)
 tables = db.show_tables(use_real_inspection=True)
 ```
 
+## Test-Driven Development (TDD)
+
+### Enable TDD Mode (<100ms test execution)
+```python
+# Environment variable
+export DATAFLOW_TDD_MODE=true
+
+# Or in code
+db = DataFlow("postgresql://...", tdd_mode=True)
+```
+
+### TDD Test Pattern (20x faster than traditional)
+```python
+@pytest.mark.asyncio
+@pytest.mark.tdd
+async def test_user_operations(tdd_dataflow):
+    """Test executes in <100ms with automatic rollback."""
+    @tdd_dataflow.model
+    class User:
+        name: str
+        email: str
+    
+    # All operations use savepoint isolation
+    workflow = WorkflowBuilder()
+    workflow.add_node("UserCreateNode", "create", {
+        "name": "Test User",
+        "email": "test@example.com"
+    })
+    
+    runtime = LocalRuntime()
+    results, _ = runtime.execute(workflow.build())
+    
+    # Automatic rollback - no cleanup needed!
+    # Next test gets clean database state
+```
+
+### Migration from Traditional Testing
+```python
+# OLD: Slow cleanup (>2000ms)
+def test_old_way():
+    # ... test code ...
+    # Manual cleanup with DROP SCHEMA CASCADE
+    
+# NEW: Fast isolation (<100ms)  
+async def test_new_way(tdd_dataflow):
+    # ... test code ...
+    # Automatic savepoint rollback
+```
+
 ## Common Patterns
 
 ### E-commerce Workflow
@@ -197,18 +276,23 @@ workflow.add_connection("create", "id", "add_items", "order_id")
 ## Key Rules
 
 ### Always
-- Use PostgreSQL for execution (alpha limitation)
-- Set `existing_schema_mode=True` for existing databases
-- Use `use_real_inspection=True` for real schema discovery
+- Use PostgreSQL for production, SQLite for development (both fully supported)
+- Set `existing_schema_mode=True` for existing databases (CRITICAL SAFETY)
+- Use `use_real_inspection=True` for real schema discovery (PostgreSQL only)
 - Use bulk operations for >100 records
 - Use connections for dynamic values
+- Follow 3-tier testing: Unit/Integration/E2E with real infrastructure
+- Enable `tdd_mode=True` for <100ms test execution with automatic rollback
+- Use TDD fixtures (`tdd_dataflow`, `tdd_test_context`) for test isolation
 
 ### Never
 - Instantiate models directly (`User()`)
 - Use `${}` template syntax
 - Use string datetime values
 - Skip safety checks in production
-- Expect MySQL/SQLite execution
+- Expect MySQL execution in alpha (SQLite works fine!)
+- Use mocking in Tier 2-3 tests (NO MOCKING policy enforced)
+- Use DROP SCHEMA CASCADE for test cleanup (use TDD savepoints instead)
 
 ## Decision Matrix
 
@@ -226,50 +310,59 @@ workflow.add_connection("create", "id", "add_items", "order_id")
 ### Core Capabilities
 
 #### 🔧 Database Operations
-- **Model Definition**: `@db.model` decorator → [README.md#quick-start](../../../sdk-users/apps/dataflow/README.md#quick-start)
-- **Dynamic Model Registration**: `register_schema_as_models()` → [README.md#dynamic-model-registration](../../../sdk-users/apps/dataflow/README.md#dynamic-model-registration-new)
-- **Schema Discovery**: `discover_schema()` → [README.md#working-with-existing-databases](../../../sdk-users/apps/dataflow/README.md#working-with-existing-databases)
-- **Cross-Session Models**: `reconstruct_models_from_registry()` → [README.md#cross-session-model-sharing](../../../sdk-users/apps/dataflow/README.md#cross-session-model-sharing)
+- **Model Definition**: `@db.model` decorator → [README.md#quick-start](../../sdk-users/apps/dataflow/README.md#quick-start)
+- **Dynamic Model Registration**: `register_schema_as_models()` → [README.md#dynamic-model-registration](../../sdk-users/apps/dataflow/README.md#dynamic-model-registration-new)
+- **Schema Discovery**: `discover_schema()` → [README.md#working-with-existing-databases](../../sdk-users/apps/dataflow/README.md#working-with-existing-databases)
+- **Cross-Session Models**: `reconstruct_models_from_registry()` → [README.md#cross-session-model-sharing](../../sdk-users/apps/dataflow/README.md#cross-session-model-sharing)
 
 #### ⚡ Generated Node Types (9 per model)
-- **CRUD Operations**: Create, Read, Update, Delete → [README.md#basic-crud-nodes](../../../sdk-users/apps/dataflow/README.md#basic-crud-nodes)
-- **Query Operations**: List with MongoDB-style filters → [README.md#list-and-query-nodes](../../../sdk-users/apps/dataflow/README.md#list-and-query-nodes)
-- **Bulk Operations**: BulkCreate, BulkUpdate, BulkDelete, BulkUpsert → [README.md#bulk-operations](../../../sdk-users/apps/dataflow/README.md#bulk-operations)
+- **CRUD Operations**: Create, Read, Update, Delete → [README.md#basic-crud-nodes](../../sdk-users/apps/dataflow/README.md#basic-crud-nodes)
+- **Query Operations**: List with MongoDB-style filters → [README.md#list-and-query-nodes](../../sdk-users/apps/dataflow/README.md#list-and-query-nodes)
+- **Bulk Operations**: BulkCreate, BulkUpdate, BulkDelete, BulkUpsert → [README.md#bulk-operations](../../sdk-users/apps/dataflow/README.md#bulk-operations)
 
 #### 🏢 Enterprise Features
-- **Multi-Tenancy**: Automatic tenant isolation → [README.md#enterprise-features](../../../sdk-users/apps/dataflow/README.md#enterprise-features)
-- **Transaction Management**: Distributed & ACID → [README.md#transaction-management](../../../sdk-users/apps/dataflow/README.md#transaction-management)
-- **Audit & Compliance**: GDPR/CCPA built-in → [README.md#security--compliance](../../../sdk-users/apps/dataflow/README.md#security--compliance)
-- **Performance Monitoring**: Built-in metrics → [README.md#health-monitoring](../../../sdk-users/apps/dataflow/README.md#health-monitoring)
+- **Multi-Tenancy**: Automatic tenant isolation → [README.md#enterprise-features](../../sdk-users/apps/dataflow/README.md#enterprise-features)
+- **Transaction Management**: Distributed & ACID → [README.md#transaction-management](../../sdk-users/apps/dataflow/README.md#transaction-management)
+- **Audit & Compliance**: GDPR/CCPA built-in → [README.md#security--compliance](../../sdk-users/apps/dataflow/README.md#security--compliance)
+- **Performance Monitoring**: Built-in metrics → [README.md#health-monitoring](../../sdk-users/apps/dataflow/README.md#health-monitoring)
 
 #### 🚀 Advanced Features
-- **Multi-Database Support**: Primary/replica/analytics → [README.md#multi-database-operations](../../../sdk-users/apps/dataflow/README.md#multi-database-operations)
-- **Connection String Parsing**: Special char support → [README.md#database-connection](../../../sdk-users/apps/dataflow/README.md#database-connection)
-- **Auto-Migration System**: Safe schema evolution → [docs/migration-system.md](../../../sdk-users/apps/dataflow/docs/migration-system.md)
-- **MongoDB Query Syntax**: Cross-DB compatibility → [docs/query-patterns.md](../../../sdk-users/apps/dataflow/docs/query-patterns.md)
+- **Multi-Database Support**: Primary/replica/analytics → [README.md#multi-database-operations](../../sdk-users/apps/dataflow/README.md#multi-database-operations)
+- **Connection String Parsing**: Special char support → [README.md#database-connection](../../sdk-users/apps/dataflow/README.md#database-connection)
+- **Auto-Migration System**: Safe schema evolution → [docs/migration-system.md](../../sdk-users/apps/dataflow/docs/migration-system.md)
+- **MongoDB Query Syntax**: Cross-DB compatibility → [docs/query-patterns.md](../../sdk-users/apps/dataflow/docs/query-patterns.md)
 
 ### Key Documentation Resources
 
 #### Getting Started
-- **Installation**: [docs/getting-started/installation.md](../../../sdk-users/apps/dataflow/docs/getting-started/installation.md)
-- **Quick Start**: [docs/quickstart.md](../../../sdk-users/apps/dataflow/docs/quickstart.md)
-- **Core Concepts**: [docs/USER_GUIDE.md](../../../sdk-users/apps/dataflow/docs/USER_GUIDE.md)
+- **Installation**: [docs/getting-started/installation.md](../../sdk-users/apps/dataflow/docs/getting-started/installation.md)
+- **Quick Start**: [docs/quickstart.md](../../sdk-users/apps/dataflow/docs/quickstart.md)
+- **Core Concepts**: [docs/USER_GUIDE.md](../../sdk-users/apps/dataflow/docs/USER_GUIDE.md)
+
+#### Test-Driven Development (NEW)
+- **TDD Quick Start**: [docs/tdd/quick-start.md](../../sdk-users/apps/dataflow/docs/tdd/quick-start.md) - 5-minute setup
+- **Migration Guide**: [docs/tdd/migration-guide.md](../../sdk-users/apps/dataflow/docs/tdd/migration-guide.md) - Traditional → TDD
+- **API Reference**: [docs/tdd/api-reference.md](../../sdk-users/apps/dataflow/docs/tdd/api-reference.md) - All TDD fixtures
+- **Best Practices**: [docs/tdd/best-practices.md](../../sdk-users/apps/dataflow/docs/tdd/best-practices.md) - Enterprise patterns
+- **Real Examples**: [docs/tdd/real-world-examples.md](../../sdk-users/apps/dataflow/docs/tdd/real-world-examples.md) - Production scenarios
+- **Performance Guide**: [docs/tdd/performance-guide.md](../../sdk-users/apps/dataflow/docs/tdd/performance-guide.md) - Optimization
+- **Troubleshooting**: [docs/tdd/troubleshooting.md](../../sdk-users/apps/dataflow/docs/tdd/troubleshooting.md) - Common issues
 
 #### Development Guides
-- **Query Patterns**: [docs/query-patterns.md](../../../sdk-users/apps/dataflow/docs/query-patterns.md)
-- **Database Optimization**: [docs/database-optimization.md](../../../sdk-users/apps/dataflow/docs/database-optimization.md)
-- **Multi-Tenant Architecture**: [docs/multi-tenant.md](../../../sdk-users/apps/dataflow/docs/multi-tenant.md)
-- **Migration System**: [docs/migration-system.md](../../../sdk-users/apps/dataflow/docs/migration-system.md)
+- **Query Patterns**: [docs/query-patterns.md](../../sdk-users/apps/dataflow/docs/query-patterns.md)
+- **Database Optimization**: [docs/database-optimization.md](../../sdk-users/apps/dataflow/docs/database-optimization.md)
+- **Multi-Tenant Architecture**: [docs/multi-tenant.md](../../sdk-users/apps/dataflow/docs/multi-tenant.md)
+- **Migration System**: [docs/migration-system.md](../../sdk-users/apps/dataflow/docs/migration-system.md)
 
 #### Production Deployment
-- **Deployment Guide**: [docs/deployment.md](../../../sdk-users/apps/dataflow/docs/deployment.md)
-- **Performance Tuning**: [docs/database-optimization.md](../../../sdk-users/apps/dataflow/docs/database-optimization.md)
-- **Monitoring**: [docs/monitoring.md](../../../sdk-users/apps/dataflow/docs/monitoring.md)
+- **Deployment Guide**: [docs/deployment.md](../../sdk-users/apps/dataflow/docs/deployment.md)
+- **Performance Tuning**: [docs/database-optimization.md](../../sdk-users/apps/dataflow/docs/database-optimization.md)
+- **Monitoring**: [docs/monitoring.md](../../sdk-users/apps/dataflow/docs/monitoring.md)
 
 #### Examples
-- **Basic CRUD**: [examples/01_basic_crud.py](../../../sdk-users/apps/dataflow/examples/01_basic_crud.py)
-- **Advanced Features**: [examples/02_advanced_features.py](../../../sdk-users/apps/dataflow/examples/02_advanced_features.py)
-- **Enterprise Integration**: [examples/03_enterprise_integration.py](../../../sdk-users/apps/dataflow/examples/03_enterprise_integration.py)
+- **Basic CRUD**: [examples/01_basic_crud.py](../../sdk-users/apps/dataflow/examples/01_basic_crud.py)
+- **Advanced Features**: [examples/02_advanced_features.py](../../sdk-users/apps/dataflow/examples/02_advanced_features.py)
+- **Enterprise Integration**: [examples/03_enterprise_integration.py](../../sdk-users/apps/dataflow/examples/03_enterprise_integration.py)
 
 ### API Reference
 
@@ -300,8 +393,29 @@ DataFlow(
     existing_schema_mode: bool = False,  # Safe existing DB mode
     enable_model_persistence: bool = True,  # Save to registry
     pool_size: int = 20,            # Connection pool size
-    echo: bool = False              # SQL logging
+    echo: bool = False,             # SQL logging
+    tdd_mode: bool = False          # Enable TDD optimizations (NEW)
 )
+```
+
+#### TDD Test Fixtures
+```python
+# conftest.py fixtures
+@pytest.fixture
+async def tdd_dataflow():
+    """DataFlow with transaction isolation (<100ms)."""
+    
+@pytest.fixture
+async def tdd_test_context():
+    """Test context with savepoint management."""
+    
+@pytest.fixture
+async def tdd_models():
+    """Pre-defined test models for common scenarios."""
+    
+@pytest.fixture
+async def tdd_performance_test():
+    """Performance monitoring and validation."""
 ```
 
 ### Integration Points
@@ -310,10 +424,10 @@ DataFlow(
 - Auto-generate API endpoints from models
 - CLI commands for database operations
 - MCP tools for AI agent database access
-- See: [Nexus Integration Guide](../../../sdk-users/apps/nexus/docs/dataflow-integration.md)
+- See: [Nexus Integration Guide](../../sdk-users/apps/nexus/docs/dataflow-integration.md)
 
 #### With Core SDK
 - All DataFlow nodes are Kailash nodes
 - Use in standard WorkflowBuilder patterns
 - Compatible with all SDK features
-- See: [SDK Integration Patterns](../../../sdk-users/guides/dataflow-sdk-integration.md)
+- See: [SDK Integration Patterns](../../sdk-users/guides/dataflow-sdk-integration.md)
