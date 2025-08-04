@@ -362,14 +362,15 @@ class TestEdgeIntegration:
                 {"action": "read", "consistency": consistency},
             )
 
-            # Connect write output to read input  
+            # Connect write output to read input
             workflow.add_connection(
                 f"write_{consistency}", "key", f"read_{consistency}", "key"
             )
-            
+
             # Add a small delay for eventual consistency
             if consistency == "eventual":
                 import asyncio
+
                 await asyncio.sleep(0.1)
 
             runtime = LocalRuntime()

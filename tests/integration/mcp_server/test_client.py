@@ -50,7 +50,7 @@ class TestMCPClientInitialization:
         assert len(client._discovered_tools) == 0
         assert len(client._discovered_resources) == 0
         # Connection pools are managed internally by transports
-        assert hasattr(client, '_sessions')
+        assert hasattr(client, "_sessions")
         assert len(client._sessions) == 0
 
     def test_init_with_config_dict(self):
@@ -1163,7 +1163,7 @@ class TestMCPClientEdgeCases:
         assert client.connection_pool_config == pool_config
         # Connection pools are managed by transports, not directly on client
         # Connection pools are managed internally by transports
-        assert hasattr(client, '_sessions')
+        assert hasattr(client, "_sessions")
         assert len(client._sessions) == 0
 
     def test_session_management_initialization(self):

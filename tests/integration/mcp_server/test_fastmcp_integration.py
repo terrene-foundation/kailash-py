@@ -126,7 +126,9 @@ class TestFastMCPImportFix:
 
             # The decorator returns a FunctionResource object
             # We need to check that the resource was registered
-            assert hasattr(test_resource, '__name__') or hasattr(test_resource, 'function')
+            assert hasattr(test_resource, "__name__") or hasattr(
+                test_resource, "function"
+            )
             # Resource registration successful
 
         except ImportError as e:

@@ -775,7 +775,7 @@ class MySQLAdapter(DatabaseAdapter):
 
 class SQLiteAdapter(DatabaseAdapter):
     """SQLite adapter using aiosqlite."""
-    
+
     # Class-level shared connections for memory databases to solve isolation issues
     _shared_memory_connections = {}
     _connection_locks = {}
@@ -792,7 +792,7 @@ class SQLiteAdapter(DatabaseAdapter):
         # SQLite doesn't have true connection pooling
         # We'll manage connections based on database type
         self._aiosqlite = aiosqlite
-        
+
         # Extract database path from connection string if database path not provided
         if self.config.database:
             self._db_path = self.config.database
@@ -812,10 +812,10 @@ class SQLiteAdapter(DatabaseAdapter):
                     self._db_path = path_part
             elif conn_str.startswith("sqlite://"):
                 # Relative path: sqlite://path/to/file.db -> path/to/file.db
-                self._db_path = conn_str[9:]   # Remove "sqlite://"
+                self._db_path = conn_str[9:]  # Remove "sqlite://"
             elif conn_str.startswith("file:"):
                 # File URI: file:path/to/file.db -> path/to/file.db
-                self._db_path = conn_str[5:]   # Remove "file:"
+                self._db_path = conn_str[5:]  # Remove "file:"
             else:
                 # Assume the connection string IS the path
                 self._db_path = conn_str
@@ -823,11 +823,12 @@ class SQLiteAdapter(DatabaseAdapter):
             raise NodeExecutionError(
                 "SQLite requires either 'database' path or 'connection_string'"
             )
-        
+
         # Set up connection sharing for memory databases to prevent isolation
         self._is_memory_db = self._db_path == ":memory:"
         if self._is_memory_db:
             import asyncio
+
             # All :memory: databases should share the same connection to avoid isolation
             self._memory_key = "global_memory_db"
             if self._memory_key not in self._connection_locks:
@@ -900,7 +901,7 @@ class SQLiteAdapter(DatabaseAdapter):
                         raise ValueError("fetch_size required for MANY mode")
                     rows = await cursor.fetchmany(fetch_size)
                     result = [self._convert_row(dict(row)) for row in rows]
-                
+
                 # Commit for memory databases (needed for INSERT/UPDATE/DELETE)
                 await db.commit()
                 return result
@@ -1524,24 +1525,31 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
         # Re-initialize instance variables with updated config
         self._reinitialize_from_config()
-        
+
         # Auto-detect database type from connection string if not explicitly set
         db_type = self.config.get("database_type", "").lower()
         connection_string = self.config.get("connection_string")
-        
+
         # If database_type is the default and we have a connection string, try to auto-detect
-        if (db_type == "postgresql" and connection_string and 
-            self.config.get("database_type") == self.get_parameters()["database_type"].default):
+        if (
+            db_type == "postgresql"
+            and connection_string
+            and self.config.get("database_type")
+            == self.get_parameters()["database_type"].default
+        ):
             try:
                 # Simple detection based on connection string patterns
                 conn_lower = connection_string.lower()
-                if (connection_string == ":memory:" or 
-                    conn_lower.endswith(".db") or 
-                    conn_lower.endswith(".sqlite") or 
-                    conn_lower.endswith(".sqlite3") or
-                    conn_lower.startswith("sqlite") or
+                if (
+                    connection_string == ":memory:"
+                    or conn_lower.endswith(".db")
+                    or conn_lower.endswith(".sqlite")
+                    or conn_lower.endswith(".sqlite3")
+                    or conn_lower.startswith("sqlite")
+                    or
                     # File path without URL scheme (likely SQLite)
-                    ("/" in connection_string and "://" not in connection_string)):
+                    ("/" in connection_string and "://" not in connection_string)
+                ):
                     db_type = "sqlite"
                     self.config["database_type"] = "sqlite"
                 elif conn_lower.startswith("mysql"):
