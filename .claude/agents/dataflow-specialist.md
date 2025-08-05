@@ -14,29 +14,12 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 
 ### DataFlow Architecture & Philosophy
 - **Not an ORM**: Workflow-native database framework, not traditional ORM
-- **PostgreSQL + SQLite Full Parity**: Both databases fully supported with identical functionality (v0.4.0+)
+- **PostgreSQL + SQLite Full Parity**: Both databases fully supported with identical functionality
 - **Automatic Node Generation**: Each `@db.model` creates 9 node types automatically
 - **6-Level Write Protection**: Comprehensive protection system (Global, Connection, Model, Operation, Field, Runtime)
 - **Migration System**: Auto-migration with schema state management and performance tracking
 - **Enterprise-Grade**: Built-in caching, multi-tenancy, distributed transactions
 - **Built on Core SDK**: Uses Kailash workflows and runtime underneath
-- **Production Ready**: v0.4.0 with 11+ critical bug fixes, robust parameter handling, and TEXT field support
-
-### 🎉 v0.4.0 Major Bug Fixes (CRITICAL IMPROVEMENTS)
-**All 11 major bugs resolved - DataFlow now production-ready:**
-1. **✅ DateTime Serialization**: Fixed datetime objects being converted to strings
-2. **✅ PostgreSQL Parameter Types**: Added explicit type casting for parameter determination  
-3. **✅ Content Size Limits**: Changed VARCHAR(255) to TEXT for unlimited content
-4. **✅ Workflow Connections**: Fixed parameter order in workflow connections
-5. **✅ Parameter Naming**: Fixed conflicts with Core SDK internal fields
-6. **✅ Data Access Patterns**: Corrected list node result access
-7. **✅ SERIAL Column Generation**: Fixed duplicate DEFAULT clauses in PostgreSQL
-8. **✅ TIMESTAMP Defaults**: Fixed quoting of SQL functions in schema generation
-9. **✅ Schema Inspection**: Fixed bounds checking errors
-10. **✅ Test Fixtures**: Improved migration test configuration
-11. **✅ auto_migrate=False**: Fixed tables being created despite disabled auto-migration
-
-**Impact**: Content applications, datetime-heavy workflows, and production deployments now work reliably.
 
 ### Framework Positioning
 **When to Choose DataFlow:**
@@ -46,7 +29,7 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - Multi-tenant SaaS applications
 - Enterprise data management with write protection and audit trails
 - PostgreSQL-based applications (full feature support)
-- SQLite applications (full parity as of v0.4.0)
+- SQLite applications
 
 **When NOT to Choose DataFlow:**
 - Simple single-workflow tasks (use Core SDK directly)

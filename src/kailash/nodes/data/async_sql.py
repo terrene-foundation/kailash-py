@@ -434,25 +434,26 @@ class PostgreSQLAdapter(DatabaseAdapter):
         parameter_types: Optional[dict[str, str]] = None,
     ) -> Any:
         """Execute query and return results."""
-        
+
         import logging
+
         logger = logging.getLogger(__name__)
-        
-        
+
         # Convert dict params to positional for asyncpg
         if isinstance(params, dict):
             # Simple parameter substitution for named params
             # Fix: Use proper ordering and safe replacement to avoid collisions
             import json
             import logging
+
             logger = logging.getLogger(__name__)
 
             query_params = []
             param_names = []  # Track parameter names for type mapping
-            
+
             # Keep original order for parameter values, but do replacements safely
             original_items = list(params.items())
-            
+
             # Create parameter values in original order
             for key, value in original_items:
                 param_names.append(key)
@@ -461,22 +462,24 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 if isinstance(value, dict):
                     value = json.dumps(value)
                 # Fix for parameter $11 issue: Handle ambiguous integer values
-                # AsyncPG has trouble with certain integer values (especially 0) 
+                # AsyncPG has trouble with certain integer values (especially 0)
                 # where it can't determine the PostgreSQL type automatically
                 elif isinstance(value, int) and value == 0:
                     # Keep as int but we'll add explicit casting in the query later
                     pass
                 query_params.append(value)
-            
+
             # Replace parameters in the query, processing longer keys first to avoid collision
             # Sort keys by length (descending) for replacement order only
             keys_by_length = sorted(params.keys(), key=len, reverse=True)
-            
+
             for key in keys_by_length:
                 # Find the position of this key in the original order
-                position = next(i for i, (k, v) in enumerate(original_items) if k == key) + 1
+                position = (
+                    next(i for i, (k, v) in enumerate(original_items) if k == key) + 1
+                )
                 value = original_items[position - 1][1]  # Get the actual value
-                
+
                 # Fix for parameter $11 issue: Add explicit type casting for ambiguous values
                 # Note: Check boolean first since bool is a subclass of int in Python
                 if isinstance(value, bool):
@@ -487,7 +490,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
                     query = query.replace(f":{key}", f"${position}::integer")
                 else:
                     query = query.replace(f":{key}", f"${position}")
-                
+
             params = query_params
 
             # Apply parameter type casts if provided
@@ -501,7 +504,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
 
         else:
             # Parameters are not dict - they might be list/tuple
-            
+
             # For positional params, apply type casts if provided
             if parameter_types and isinstance(params, (list, tuple)):
                 # Build query with type casts for positional parameters
@@ -515,7 +518,6 @@ class PostgreSQLAdapter(DatabaseAdapter):
             params = []
         elif not isinstance(params, (list, tuple)):
             params = [params]
-
 
         # Execute query on appropriate connection
         if transaction:
@@ -2089,7 +2091,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
             except Exception as e:
                 last_error = e
-                
+
                 # Parameter type determination is now handled during dict-to-positional conversion
                 # No special retry logic needed for parameter $11
 
