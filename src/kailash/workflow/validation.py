@@ -208,9 +208,18 @@ class ParameterDeclarationValidator:
                 )
             )
 
-        # Security: Undeclared parameter access attempts
+        # Security: Undeclared parameter access attempts (WITH auto_map_from support)
         if declared_params and workflow_parameters:
-            undeclared = set(workflow_parameters.keys()) - set(declared_params.keys())
+            # Build complete set of valid parameter names including auto_map_from
+            valid_param_names = set(declared_params.keys())
+
+            # Add all auto_map_from alternatives to valid set
+            for param_name, param_def in declared_params.items():
+                if hasattr(param_def, "auto_map_from") and param_def.auto_map_from:
+                    valid_param_names.update(param_def.auto_map_from)
+
+            # Check against expanded valid parameter set
+            undeclared = set(workflow_parameters.keys()) - valid_param_names
             if undeclared:
                 issues.append(
                     ValidationIssue(
