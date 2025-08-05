@@ -70,7 +70,7 @@ results, run_id = runtime.execute(workflow.build())  # ALWAYS .build()
 - **"Missing required inputs"** → Use sdk-navigator for common-mistakes.md solutions
 - **Parameter issues** → Use pattern-expert for 3-method parameter guide
 - **Test failures** → Use testing-specialist for real infrastructure setup
-- **DataFlow errors** → Use dataflow-specialist for PostgreSQL-specific debugging
+- **DataFlow errors** → Use dataflow-specialist for database debugging (PostgreSQL + SQLite)
 - **Nexus platform issues** → Use nexus-specialist for multi-channel troubleshooting
 - **Framework selection** → Use framework-advisor to coordinate appropriate specialists
 

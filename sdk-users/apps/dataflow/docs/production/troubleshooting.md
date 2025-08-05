@@ -2,6 +2,8 @@
 
 Comprehensive guide to diagnosing and resolving common issues in DataFlow applications.
 
+**🎉 Major Updates for v0.4.0**: Many common issues have been resolved in the latest release. Check if updating resolves your issue first.
+
 ## Common Issues
 
 ### Database Connection Issues
@@ -11,9 +13,10 @@ Comprehensive guide to diagnosing and resolving common issues in DataFlow applic
 - `invalid literal for int() with base 10` errors
 - Connection failures with special characters in passwords
 
-**Common Causes (Fixed in v0.9.4+):**
-- Special characters in database passwords (#, $, @, ?)
-- Incorrect URL encoding/decoding
+**Common Causes (Fixed in v0.9.4+ and v0.4.0+):**
+- Special characters in database passwords (#, $, @, ?) - FIXED in v0.9.4
+- Incorrect URL encoding/decoding - IMPROVED in v0.9.4
+- PostgreSQL parameter type casting issues - FIXED in v0.4.0
 - Malformed connection strings
 
 **Diagnosis:**
@@ -32,6 +35,7 @@ except Exception as e:
 **Solutions:**
 ```python
 # ✅ Since v0.9.4: Special characters work automatically
+# ✅ Since v0.4.0: Enhanced parameter type casting
 db = DataFlow(
     database_url="postgresql://admin:Complex#Pass$word@localhost:5432/mydb"
 )
@@ -235,12 +239,14 @@ workflow.add_node("AdvisoryLockNode", "lock_resource", {
 })
 ```
 
-### Data Corruption
+### Data Corruption (Many Issues Fixed in v0.4.0)
 
 **Symptoms:**
-- Constraint violations
-- Inconsistent relationships
+- Constraint violations - IMPROVED with better parameter type casting
+- Inconsistent relationships - FIXED with corrected workflow connections
 - Missing or duplicate data
+- Content truncation at 255 characters - FIXED (now TEXT unlimited)
+- DateTime serialization errors - FIXED in v0.4.0
 
 **Diagnosis:**
 ```python
@@ -550,6 +556,9 @@ workflow.add_node("PointInTimeRecoveryNode", "recover_data", {
 6. **Implement Retries**: With exponential backoff for transient errors
 7. **Log Comprehensively**: But avoid logging sensitive data
 8. **Version Everything**: Database schemas, configurations, and code
+9. **Update Regularly**: v0.4.0+ includes 11+ critical bug fixes
+10. **Test Migration Scenarios**: auto_migrate=False now works correctly
+11. **Use TEXT Fields**: VARCHAR(255) limits removed in v0.4.0
 
 ## Next Steps
 
