@@ -12,13 +12,25 @@ pip install kailash-dataflow
 pip install kailash[dataflow]
 ```
 
-## Current Status: Alpha Release
+## Current Status: v0.4.0 Release Ready
 
 **Database Support:**
 - ✅ **PostgreSQL**: Full support with all enterprise features
 - ✅ **SQLite**: Full parity with PostgreSQL - all features supported (file-based and in-memory)
   - Recent fixes: Path extraction and connection isolation for memory databases
-- ❌ **MySQL**: Not yet supported in alpha
+- ❌ **MySQL**: Not yet supported (coming in future release)
+
+**🎉 Major Bug Fixes in v0.4.0:**
+- **DateTime Serialization**: Fixed datetime objects being converted to strings
+- **PostgreSQL Parameter Types**: Added explicit type casting for parameter determination
+- **Content Size Limits**: Changed VARCHAR(255) to TEXT for unlimited content
+- **Workflow Connections**: Fixed parameter order in workflow connections
+- **Parameter Naming Conflicts**: Fixed conflicts with Core SDK internal fields
+- **Data Access Patterns**: Corrected list node result access
+- **SERIAL Column Generation**: Fixed duplicate DEFAULT clauses in PostgreSQL
+- **TIMESTAMP Defaults**: Fixed quoting of SQL functions in schema generation
+- **Schema Inspection**: Fixed bounds checking errors
+- **auto_migrate=False**: Fixed tables being created despite disabled auto-migration
 
 **Migration System:**
 - ✅ Auto-migration with 6-level write protection
@@ -709,7 +721,7 @@ health = results["health_monitor"]["result"]
 
 ### Connection String Support
 
-DataFlow supports robust database connection string parsing with full support for special characters in passwords (enhanced in v0.9.4):
+DataFlow supports robust database connection string parsing with full support for special characters in passwords (enhanced in v0.9.4 and v0.4.0 with improved parameter type casting):
 
 ```python
 # Supports complex passwords with special characters
@@ -755,7 +767,7 @@ password = "MySecret%23123%24"  # %23 = #, %24 = $
 
 **Since v0.9.4:** Works automatically
 ```python
-# Just use the password directly
+# Just use the password directly - enhanced in v0.4.0 with better type casting
 db = DataFlow(database_url="postgresql://admin:MySecret#123$@localhost/db")
 ```
 

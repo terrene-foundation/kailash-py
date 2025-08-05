@@ -300,6 +300,7 @@ db = DataFlow(
 )
 
 # DataFlow automatically handles special characters in passwords (v0.9.4+)
+# Enhanced parameter type casting in v0.4.0+
 # No manual URL encoding required!
 
 # Enable enterprise features
@@ -372,6 +373,8 @@ workflow.add_node("UserListNode", "stats", {
 - ⚡ **Bulk for Speed**: Use bulk nodes for operations on multiple records
 - 🛡️ **Enable Security**: Add multi-tenant and audit features for production
 - 🔄 **Plan Rollbacks**: DataFlow generates rollback plans automatically
+- 🎆 **Update Regularly**: v0.4.0+ includes major stability improvements
+- 📋 **Use TEXT Fields**: No more 255-character limits (fixed in v0.4.0)
 
 ---
 
