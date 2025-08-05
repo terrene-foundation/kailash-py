@@ -1,4 +1,11 @@
-# Kailash DataFlow - Complete Function Access Guide (Alpha Ready)
+# Kailash DataFlow - Complete Function Access Guide (v0.4.0 Release Ready)
+
+**🎉 Major Release: v0.4.0 with 11+ Critical Bug Fixes**
+- DateTime serialization issues resolved
+- PostgreSQL parameter type casting improved
+- VARCHAR(255) limits removed (now TEXT with unlimited content)
+- Workflow connection parameter order fixed
+- Full PostgreSQL + SQLite parity achieved
 
 ## 🚀 IMMEDIATE SUCCESS PATTERNS
 
@@ -10,7 +17,8 @@ from kailash.runtime.local import LocalRuntime
 
 # 1. Zero-config initialization - ALPHA RELEASE APPROVED
 db = DataFlow()  # Development: SQLite automatic, Production: PostgreSQL
-# NOTE: SQLite now has full parity with PostgreSQL - all features supported
+# NOTE: SQLite has full parity with PostgreSQL - all features supported (v0.4.0+)
+# RECENT FIXES: DateTime handling, parameter types, content limits, connection order
 
 # 2. Define model - generates 9 nodes automatically
 @db.model
@@ -686,6 +694,8 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 - Use soft deletes for audit trails
 - Configure connection pooling for production
 - Implement proper error handling and retries
+- Use workflow connections for dynamic parameter passing
+- Test with TEXT fields for unlimited content (fixed VARCHAR(255) limits)
 
 ### ❌ NEVER DO
 - Direct database session management
@@ -695,7 +705,21 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 - Ignore soft delete for important data
 - Use single operations for bulk data
 - Use `${}` syntax in node parameters (conflicts with PostgreSQL)
-- Use `.isoformat()` for datetime parameters (use native datetime objects)
+- Use `.isoformat()` for datetime parameters (serialize before passing to workflows)
+- Assume VARCHAR(255) limits still exist (now TEXT with unlimited content)
+
+### 🔧 MAJOR BUG FIXES COMPLETED (v0.9.11 & v0.4.0)
+- **✅ DateTime Serialization**: Fixed datetime objects being converted to strings
+- **✅ PostgreSQL Parameter Types**: Added explicit type casting for parameter determination
+- **✅ Content Size Limits**: Changed VARCHAR(255) to TEXT for unlimited content
+- **✅ Workflow Connections**: Fixed parameter order in workflow connections  
+- **✅ Parameter Naming**: Fixed conflicts with Core SDK internal fields
+- **✅ Data Access Patterns**: Corrected list node result access
+- **✅ SERIAL Column Generation**: Fixed duplicate DEFAULT clauses in PostgreSQL
+- **✅ TIMESTAMP Defaults**: Fixed quoting of SQL functions in schema generation
+- **✅ Schema Inspection**: Fixed bounds checking errors
+- **✅ Test Fixtures**: Improved migration test configuration
+- **✅ auto_migrate=False**: Fixed tables being created despite disabled auto-migration
 
 ### 🎯 OPTIMIZATION CHECKLIST
 - [ ] Connection pool sized for workload

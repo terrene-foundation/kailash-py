@@ -14,13 +14,29 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 
 ### DataFlow Architecture & Philosophy
 - **Not an ORM**: Workflow-native database framework, not traditional ORM
-- **PostgreSQL + SQLite Alpha**: PostgreSQL fully supported, SQLite near-complete parity
+- **PostgreSQL + SQLite Full Parity**: Both databases fully supported with identical functionality (v0.4.0+)
 - **Automatic Node Generation**: Each `@db.model` creates 9 node types automatically
 - **6-Level Write Protection**: Comprehensive protection system (Global, Connection, Model, Operation, Field, Runtime)
 - **Migration System**: Auto-migration with schema state management and performance tracking
 - **Enterprise-Grade**: Built-in caching, multi-tenancy, distributed transactions
 - **Built on Core SDK**: Uses Kailash workflows and runtime underneath
-- **Test Coverage**: 95% unit test pass rate, NO MOCKING compliance, real infrastructure testing
+- **Production Ready**: v0.4.0 with 11+ critical bug fixes, robust parameter handling, and TEXT field support
+
+### 🎉 v0.4.0 Major Bug Fixes (CRITICAL IMPROVEMENTS)
+**All 11 major bugs resolved - DataFlow now production-ready:**
+1. **✅ DateTime Serialization**: Fixed datetime objects being converted to strings
+2. **✅ PostgreSQL Parameter Types**: Added explicit type casting for parameter determination  
+3. **✅ Content Size Limits**: Changed VARCHAR(255) to TEXT for unlimited content
+4. **✅ Workflow Connections**: Fixed parameter order in workflow connections
+5. **✅ Parameter Naming**: Fixed conflicts with Core SDK internal fields
+6. **✅ Data Access Patterns**: Corrected list node result access
+7. **✅ SERIAL Column Generation**: Fixed duplicate DEFAULT clauses in PostgreSQL
+8. **✅ TIMESTAMP Defaults**: Fixed quoting of SQL functions in schema generation
+9. **✅ Schema Inspection**: Fixed bounds checking errors
+10. **✅ Test Fixtures**: Improved migration test configuration
+11. **✅ auto_migrate=False**: Fixed tables being created despite disabled auto-migration
+
+**Impact**: Content applications, datetime-heavy workflows, and production deployments now work reliably.
 
 ### Framework Positioning
 **When to Choose DataFlow:**
@@ -30,7 +46,7 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - Multi-tenant SaaS applications
 - Enterprise data management with write protection and audit trails
 - PostgreSQL-based applications (full feature support)
-- SQLite applications (near-complete parity)
+- SQLite applications (full parity as of v0.4.0)
 
 **When NOT to Choose DataFlow:**
 - Simple single-workflow tasks (use Core SDK directly)
@@ -82,11 +98,11 @@ results, run_id = runtime.execute(workflow.build())
 db = DataFlow(
     "postgresql://user:pass@localhost/db",
     auto_migrate=False,
-    existing_schema_mode=True  # Prevents ALL schema modifications - RECENTLY FIXED
+    existing_schema_mode=True  # Prevents ALL schema modifications
 )
 
-# IMPORTANT: This was a critical bug fix - existing_schema_mode now properly
-# prevents destructive auto-migrations on existing databases
+# v0.4.0 FIX: auto_migrate=False now properly respected
+# Tables are no longer created on model registration when disabled
 ```
 
 ### Dynamic Model Registration (NEW)
@@ -107,9 +123,9 @@ workflow.add_node(result['generated_nodes']['User']['create'], 'create_user', {.
 | Node | Pattern | Performance |
 |------|---------|-------------|
 | **{Model}CreateNode** | `{"name": "John", "email": "john@example.com"}` | <1ms |
-| **{Model}ReadNode** | `{"id": 123}` | <1ms |
-| **{Model}UpdateNode** | `{"id": 123, "name": "Jane"}` | <1ms |
-| **{Model}DeleteNode** | `{"id": 123}` | <1ms |
+| **{Model}ReadNode** | `{"record_id": 123}` | <1ms |
+| **{Model}UpdateNode** | `{"record_id": 123, "name": "Jane"}` | <1ms |
+| **{Model}DeleteNode** | `{"record_id": 123}` | <1ms |
 | **{Model}ListNode** | `{"filter": {"active": true}, "limit": 10}` | <10ms |
 | **{Model}BulkCreateNode** | `{"data": [...], "batch_size": 1000}` | 10k/sec |
 | **{Model}BulkUpdateNode** | `{"filter": {...}, "update": {...}}` | 50k/sec |
@@ -273,6 +289,68 @@ workflow.add_node("OrderItemBulkCreateNode", "add_items", {
 workflow.add_connection("create", "id", "add_items", "order_id")
 ```
 
+## Critical Limitations & Workarounds
+
+### PostgreSQL Array Types (Still Limited)
+```python
+# ❌ AVOID - PostgreSQL List[str] fields cause parameter type issues  
+@db.model
+class BlogPost:
+    title: str
+    tags: List[str] = []  # CAUSES ERRORS - avoid array types
+
+# ✅ WORKAROUND - Use JSON field or separate table
+@db.model  
+class BlogPost:
+    title: str
+    content: str  # v0.4.0: Now unlimited with TEXT fix!
+    tags_json: Dict[str, Any] = {}  # Store as JSON object
+```
+
+### JSON Field Behavior  
+```python
+# ❌ WRONG - JSON fields are returned as strings, not parsed objects
+result = results["create_config"]
+config = result["config"]["database"]["host"]  # FAILS - config is a string
+
+# ✅ CORRECT - Handle JSON as string or parse if needed
+result = results["create_config"] 
+config_str = result["config"]  # This is a string representation
+if isinstance(config_str, str):
+    import json
+    config = json.loads(config_str)  # Parse if needed
+```
+
+### Result Access Patterns
+```python
+# Results can vary between direct access and wrapper access
+result = results[node_id]
+
+# Check both patterns:
+if isinstance(result, dict) and "output" in result:
+    data = result["output"]  # Wrapper format
+else:  
+    data = result  # Direct format
+```
+
+### Manual Table Creation
+```python
+# Auto-migration may not work - create tables manually in tests
+setup_workflow = WorkflowBuilder()
+setup_workflow.add_node("AsyncSQLDatabaseNode", "create_table", {
+    "connection_string": database_url,
+    "query": """
+        CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            email VARCHAR(255) UNIQUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """,
+    "validate_queries": False
+})
+```
+
 ## Key Rules
 
 ### Always
@@ -293,6 +371,8 @@ workflow.add_connection("create", "id", "add_items", "order_id")
 - Expect MySQL execution in alpha (SQLite works fine!)
 - Use mocking in Tier 2-3 tests (NO MOCKING policy enforced)
 - Use DROP SCHEMA CASCADE for test cleanup (use TDD savepoints instead)
+- Use PostgreSQL array types (`List[str]` fields) - causes parameter type issues
+- Assume JSON fields are returned as parsed objects - they return as strings
 
 ## Decision Matrix
 

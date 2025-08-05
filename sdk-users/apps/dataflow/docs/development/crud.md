@@ -101,9 +101,9 @@ workflow.add_node("UserCreateNode", "create_user", {
 ### Read Single Record
 
 ```python
-# Read user by ID
+# Read user by ID - CORRECTED PARAMETER NAME
 workflow.add_node("UserReadNode", "get_user", {
-    "record_id": 1
+    "record_id": 1  # CRITICAL: Use 'record_id', not 'id'
 })
 
 # Read user by email (if indexed)
@@ -113,7 +113,7 @@ workflow.add_node("UserReadNode", "get_user_by_email", {
 
 # Read with specific fields
 workflow.add_node("UserReadNode", "get_user_fields", {
-    "record_id": 1,
+    "record_id": 1,  # CRITICAL: Use 'record_id', not 'id'
     "fields": ["name", "email", "created_at"]
 })
 ```
@@ -153,9 +153,9 @@ workflow.add_node("UserReadNode", "get_or_create_user", {
 ### Single Record Update
 
 ```python
-# Update user by ID
+# Update user by ID - CORRECTED PARAMETER NAME
 workflow.add_node("UserUpdateNode", "update_user", {
-    "record_id": 1,
+    "record_id": 1,  # CRITICAL: Use 'record_id', not 'id'
     "name": "John Smith",
     "age": 31
 })
@@ -224,15 +224,15 @@ workflow.add_node("UserUpdateNode", "increment_login_count", {
 ### Single Record Delete
 
 ```python
-# Hard delete
+# Hard delete - CORRECTED PARAMETER NAME
 workflow.add_node("UserDeleteNode", "delete_user", {
-    "record_id": 1,
+    "record_id": 1,  # CRITICAL: Use 'record_id', not 'id'
     "hard_delete": True
 })
 
 # Soft delete (if enabled in model)
 workflow.add_node("UserDeleteNode", "soft_delete_user", {
-    "record_id": 1,
+    "record_id": 1,  # CRITICAL: Use 'record_id', not 'id'
     "soft_delete": True
 })
 ```
@@ -515,14 +515,57 @@ workflow.add_node("UserUpdateNode", "update_user_audited", {
 })
 ```
 
+## Critical Limitations & Warnings
+
+### PostgreSQL Array Types
+```python
+# ❌ AVOID - PostgreSQL List[str] fields cause parameter type issues
+@db.model
+class BlogPost:
+    title: str
+    tags: List[str] = []  # CAUSES ERRORS - avoid array types
+
+# ✅ WORKAROUND - Use JSON field or separate table
+@db.model  
+class BlogPost:
+    title: str
+    tags_json: Dict[str, Any] = {}  # Store as JSON object
+```
+
+### JSON Field Behavior  
+```python
+# ❌ WRONG - JSON fields are returned as strings, not parsed objects
+result = results["create_config"]
+config = result["config"]["database"]["host"]  # FAILS - config is a string
+
+# ✅ CORRECT - Handle JSON as string or parse if needed
+result = results["create_config"] 
+config_str = result["config"]  # This is a string representation
+if isinstance(config_str, str):
+    import json
+    config = json.loads(config_str)  # Parse if needed
+```
+
+### Result Access Patterns
+```python
+# Results can vary between direct access and wrapper access
+result = results[node_id]
+
+# Check both patterns:
+if isinstance(result, dict) and "output" in result:
+    data = result["output"]  # Wrapper format
+else:  
+    data = result  # Direct format
+```
+
 ## Best Practices
 
 ### 1. Use Appropriate Operations
 
 ```python
 # Good: Use specific operations
-workflow.add_node("UserReadNode", "get_user", {"id": 1})
-workflow.add_node("UserUpdateNode", "update_user", {"id": 1, "name": "New Name"})
+workflow.add_node("UserReadNode", "get_user", {"record_id": 1})
+workflow.add_node("UserUpdateNode", "update_user", {"record_id": 1, "name": "New Name"})
 
 # Avoid: Generic operations for specific use cases
 workflow.add_node("UserListNode", "get_user", {"filter": {"id": 1}, "limit": 1})
