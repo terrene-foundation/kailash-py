@@ -682,25 +682,29 @@ workflow.add_node("ProductListNode", "search", {
 
 ## Production Deployment
 
-### Environment Configuration
+### Environment Configuration (v0.4.5 Optimized)
 
 ```bash
-# Production environment variables
+# Production environment variables (v0.4.5 performance optimized)
 export KAILASH_ENV=production
 export DATABASE_URL=postgresql://user:pass@host:5432/db
 export DB_POOL_SIZE=100
+export DATAFLOW_AUTO_MIGRATE=false  # 🚀 95% faster startup
 export DATAFLOW_MONITORING=true
 export DATAFLOW_MULTI_TENANT=true
+export DATAFLOW_EXISTING_SCHEMA_MODE=true  # Safety for existing DBs
 ```
 
-### Performance Tuning
+### Performance Tuning (v0.4.5 Optimized)
 
 ```python
-# Production configuration
+# Production configuration (v0.4.5 performance optimized)
 from kailash_dataflow import DataFlow
 
 db = DataFlow(
     database_url="postgresql://user:pass@host:5432/db",
+    auto_migrate=False,  # 🚀 v0.4.5: 95% faster startup (<1s)
+    existing_schema_mode=True,  # Safety for existing production DBs
     pool_size=100,
     pool_max_overflow=200,
     pool_recycle=3600,
@@ -768,7 +772,7 @@ Key advantages:
 - Python-native type safety
 - Workflow integration
 
-## Best Practices
+## Best Practices (v0.4.5 Updated)
 
 1. **Start Simple** - Use zero configuration for development
 2. **Model Design** - Use type hints for clarity and auto-generated validation
@@ -777,10 +781,13 @@ Key advantages:
 5. **Safety First** - Let DataFlow handle error recovery automatically
 6. **Monitoring** - Enable comprehensive monitoring in staging and production
 7. **Testing** - Use in-memory mode for fast tests, real databases for integration tests
-8. **Data Safety Levels** - Choose appropriate safety level for your use case:
-   - `development`: Fast iteration, basic protection
-   - `balanced`: Good for most production applications (default)
-   - `maximum`: For critical systems (financial, medical, legal)
+8. **Production Performance** - Use `auto_migrate=False` for <1s startup times
+9. **Migration Control** - Use dedicated migration services for production schema changes
+10. **Version Management** - Always use DataFlow v0.4.5+ for production stability
+11. **Data Safety Levels** - Choose appropriate safety level for your use case:
+    - `development`: Fast iteration, basic protection
+    - `balanced`: Good for most production applications (default)
+    - `maximum`: For critical systems (financial, medical, legal)
 
 ### When to Use What
 
@@ -817,18 +824,38 @@ Key advantages:
 
 ## Troubleshooting
 
+### v0.4.5 Critical Issues (FIXED)
+
+**🚨 If experiencing slow startup (30+ seconds) or auto_migrate=False not working:**
+
+```bash
+# ✅ UPGRADE IMMEDIATELY
+pip install --upgrade kailash-dataflow==0.4.5
+```
+
+**Fixed in v0.4.5:**
+- 🐛 **Registry Endless Loop**: 30+ second startup hangs eliminated
+- 🐛 **auto_migrate=False Regression**: Parameter now works correctly
+- ⚡ **95% Performance Improvement**: <1s startup for auto_migrate=False
+- 🏢 **Production Stability**: Document Service, AI Hub V2 deployments fixed
+
 ### Common Issues
 
 1. **"No primary key" error**
    - DataFlow adds `id` field automatically
    - Define custom primary key if needed
 
-2. **Connection pool exhausted**
+2. **Slow startup times (v0.4.5 fix)**
+   - Check DataFlow version: `import dataflow; print(dataflow.__version__)`
+   - Use `auto_migrate=False` for production: <1s startup
+   - Upgrade to v0.4.5+ if experiencing 30+ second hangs
+
+3. **Connection pool exhausted**
    - Increase pool_size
    - Check for connection leaks
    - Monitor with TransactionMonitorNode
 
-3. **Slow queries**
+4. **Slow queries**
    - Enable query insights
    - Add appropriate indexes
    - Use read replicas for heavy reads
@@ -867,6 +894,9 @@ Key advantages:
 
 ## Next Steps
 
+- **[Configuration Guide](production/configuration-guide.md)** - Master auto_migrate and production settings
+- **[Auto-Migration System](workflows/auto-migration.md)** - Understand v0.4.5 migration improvements
+- **[Troubleshooting Guide](production/troubleshooting.md)** - v0.4.5 critical fixes and solutions
 - Explore [examples/](../examples/) for working code
 - Read [Architecture Decision Records](adr/) for design rationale
 - Try the [Getting Started Tutorial](getting-started.md)

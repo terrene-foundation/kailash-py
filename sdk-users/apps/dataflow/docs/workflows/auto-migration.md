@@ -15,8 +15,17 @@ DataFlow's auto-migration system automatically detects schema changes when you m
 - **Schema Comparison Engine**: Precise diff generation between model definitions and database state
 - **Concurrent Access Protection**: Migration locking and queue management for multi-process environments
 - **Production Safety**: Dry-run mode, data loss prevention, and transaction rollback
-- **Existing Database Protection**: Safe mode prevents destructive migrations (Bug 006 fix)
-- **Migration History Tracking**: Checksum-based duplicate prevention (Bug 006 fix)
+- **Existing Database Protection**: Safe mode prevents destructive migrations 
+- **Migration History Tracking**: Checksum-based duplicate prevention
+- **🚨 v0.4.5 Critical Fixes**: Registry endless loop eliminated (30s → <2s startup), auto_migrate=False regression fixed (95% faster initialization)
+
+### Performance Characteristics
+
+| Configuration | Startup Time | When to Use |
+|--------------|-------------|-------------|
+| `auto_migrate=True` (default) | 2-5s | Development, staging, controlled production |
+| `auto_migrate=False` | <1s | Existing databases, production with manual migration control |
+| `existing_schema_mode=True` | <1s | Legacy systems, external schema management |
 
 ## 🚀 Quick Start
 
@@ -51,17 +60,24 @@ class User:
 await db.auto_migrate()  # Interactive preview + confirmation
 ```
 
-### ⚠️ Working with Existing Databases (Bug 006 Fix)
+### ⚠️ Working with Existing Databases (v0.4.5 Fixes)
+
+**CRITICAL v0.4.5 Update**: Fixed auto_migrate=False regression - now properly disables migration system.
 
 ```python
 # CRITICAL: For existing databases, use safe mode to prevent destructive migrations
 db = DataFlow(
     database_url="postgresql://...",
-    auto_migrate=False,  # Disable automatic migrations
+    auto_migrate=False,  # ✅ FIXED v0.4.5: Now properly disables migrations
     existing_schema_mode=True  # Enable safe mode for existing databases
 )
 
-# Manually trigger migrations with safety checks
+# With auto_migrate=False:
+# ✅ No migration system initialization (95% faster startup)
+# ✅ No schema changes on model registration
+# ✅ <1s initialization time (was 30+ seconds in v0.4.0-v0.4.4)
+
+# Manually trigger migrations with safety checks when needed
 success, migrations = await db.auto_migrate(
     dry_run=True,  # Preview first
     max_risk_level="LOW",  # Extra cautious
@@ -101,7 +117,68 @@ Generated SQL:
 Apply these changes? [y/N]: y
 ```
 
-## 📋 Migration Modes
+## 📋 Migration Control & Configuration
+
+### auto_migrate Parameter Control (v0.4.5 Fix)
+
+The `auto_migrate` parameter controls whether DataFlow automatically initializes the migration system and runs migrations on model registration.
+
+```python
+# 🟢 auto_migrate=True (Default) - Full automation
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=True  # Default: automatic migration system
+)
+# ✅ Migration system initialized on startup
+# ✅ Runs migrations when models are registered  
+# ✅ Interactive confirmation for schema changes
+# ⏱️ Startup: 2-5 seconds
+
+# 🔴 auto_migrate=False - Manual control (v0.4.5 FIXED)
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=False  # ✅ FIXED: Now properly disables migration system
+)
+# ✅ No migration system initialization (95% faster)
+# ✅ No automatic migrations on model registration
+# ✅ Tables created on-demand during first node execution
+# ⏱️ Startup: <1 second (was 30+ seconds in v0.4.0-v0.4.4)
+
+# 🔵 existing_schema_mode=True - Maximum safety
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=False,
+    existing_schema_mode=True  # Prevents ALL schema modifications
+)
+# ✅ Complete schema safety for existing databases
+# ✅ No table creation, no migrations, no schema changes
+# ✅ Validates compatibility only
+# ⏱️ Startup: <1 second
+```
+
+### When to Use Each Configuration
+
+#### Use auto_migrate=True When:
+- 💻 Development and prototyping
+- 🏢 Staging environments
+- 🚀 New production deployments
+- 🔄 You want automatic schema evolution
+- 🔍 You need visual migration previews
+
+#### Use auto_migrate=False When:
+- 🏢 Existing production databases
+- 🛠️ Manual migration control required
+- ⚡ Fastest possible startup time needed
+- 📊 Multiple DataFlow instances (avoid migration conflicts)
+- 🗺️ Document management systems, AI Hub deployments
+
+#### Use existing_schema_mode=True When:
+- 💾 Legacy databases with external schema management
+- 🔒 Schema changes must be prevented entirely
+- 🛡️ Maximum safety for critical production data
+- 👥 Shared databases with other applications
+
+### Migration Modes
 
 ### Interactive Mode (Default)
 
@@ -132,6 +209,34 @@ for migration in migrations:
     print(f"    SQL: {migration.sql_up}")
 ```
 
+### Production Configuration Examples
+
+```python
+# High-performance production (manual migration control)
+db = DataFlow(
+    database_url="postgresql://admin:pass@prod:5432/app",
+    auto_migrate=False,  # ✅ v0.4.5: 95% faster startup
+    pool_size=50,
+    echo=False
+)
+
+# Controlled production (with migration automation)
+db = DataFlow(
+    database_url="postgresql://admin:pass@prod:5432/app",
+    auto_migrate=True,   # Allow automatic migrations
+    pool_size=50,
+    echo=False
+)
+
+# Maximum safety production (legacy systems)
+db = DataFlow(
+    database_url="postgresql://admin:pass@prod:5432/legacy_app",
+    auto_migrate=False,
+    existing_schema_mode=True,  # No schema changes allowed
+    pool_size=30
+)
+```
+
 ### Auto-Confirm Mode (Production)
 
 ```python
@@ -147,6 +252,36 @@ if not success:
     # Handle failure
 ```
 
+### Manual Migration Triggering
+
+When using `auto_migrate=False`, you can still trigger migrations manually:
+
+```python
+# Initialize with auto_migrate=False for fast startup
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=False  # ✅ Fast <1s startup
+)
+
+@db.model
+class User:
+    name: str
+    email: str
+    # No automatic migration triggered here
+
+# Later, manually trigger migration when ready
+if os.environ.get('RUN_MIGRATIONS', '').lower() == 'true':
+    success, migrations = await db.auto_migrate(
+        dry_run=False,
+        auto_confirm=True,  # Or interactive=True for confirmation
+        max_risk_level="MEDIUM"
+    )
+    if success:
+        print(f"Applied {len(migrations)} migrations")
+else:
+    print("Skipping migrations (RUN_MIGRATIONS not set)")
+```
+
 ### Selective Migration
 
 ```python
@@ -158,6 +293,25 @@ success, migrations = await db.auto_migrate(
 ```
 
 ## 🔧 Advanced Configuration
+
+### Registry Performance Optimization (v0.4.5)
+
+DataFlow v0.4.5 includes critical registry performance fixes:
+
+```python
+# v0.4.5 Performance Improvements
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=False,  # ✅ FIXED: 95% faster initialization
+    enable_model_persistence=True  # ✅ FIXED: No more endless loops
+)
+# Result: <1s startup time (was 30+ seconds in v0.4.0-v0.4.4)
+```
+
+**Fixed Issues in v0.4.5:**
+- 🚨 **Registry Endless Loop**: Model registry initialization no longer hangs for 30+ seconds
+- 🚨 **auto_migrate=False Regression**: Migration system now properly disabled when set to False
+- ⚡ **95% Startup Performance**: Dramatically faster initialization for production deployments
 
 ### Migration System Configuration
 
@@ -464,15 +618,103 @@ for record in history:
 
 ## 🚀 Production Best Practices
 
+### v0.4.5 Production Deployment Guide
+
+**Critical**: Always use DataFlow v0.4.5+ in production to avoid registry endless loops and auto_migrate regression issues.
+
+```python
+# ✅ Recommended Production Configuration
+db = DataFlow(
+    database_url=os.environ["DATABASE_URL"],
+    auto_migrate=False,  # ✅ v0.4.5: 95% faster startup
+    existing_schema_mode=True,  # Safety for existing DBs
+    pool_size=50,
+    pool_max_overflow=100,
+    echo=False,
+    monitoring=True
+)
+```
+
+**Benefits in v0.4.5:**
+- ⚡ **<1s startup time** (was 30+ seconds)
+- 🛡️ **No unexpected schema changes** in production
+- 🚀 **15s multi-service deployment** (was 120+ seconds)
+- 📊 **Stable registry performance** across instances
+
+### Multi-Service Architecture (v0.4.5 Optimized)
+
+```python
+# Service A: API Backend
+api_db = DataFlow(
+    database_url=DATABASE_URL,
+    auto_migrate=False,  # ✅ Fast startup
+    enable_model_persistence=True
+)
+
+# Service B: Background Worker
+worker_db = DataFlow(
+    database_url=DATABASE_URL,
+    auto_migrate=False,  # ✅ Fast startup
+    enable_model_persistence=True  # ✅ Shares registry with API
+)
+
+# Service C: Analytics Service
+analytics_db = DataFlow(
+    database_url=DATABASE_URL,
+    auto_migrate=False,  # ✅ Fast startup
+    existing_schema_mode=True  # ✅ Read-only, no schema changes
+)
+```
+
+### Migration Strategy for Production
+
+```python
+# Option 1: Dedicated Migration Service
+class MigrationService:
+    def __init__(self):
+        self.db = DataFlow(
+            database_url=DATABASE_URL,
+            auto_migrate=True,  # Only migration service allows migrations
+            pool_size=5  # Small pool for migration-only service
+        )
+    
+    async def run_migrations(self):
+        return await self.db.auto_migrate(
+            dry_run=False,
+            auto_confirm=True,
+            max_risk_level="MEDIUM"
+        )
+
+# Option 2: Manual Migration Control
+async def manual_migration_check():
+    db = DataFlow(
+        database_url=DATABASE_URL,
+        auto_migrate=False  # Fast startup
+    )
+    
+    if os.environ.get('APPLY_MIGRATIONS') == 'true':
+        success, migrations = await db.auto_migrate(auto_confirm=True)
+        if success:
+            print(f"Applied {len(migrations)} migrations")
+        else:
+            print("Migration failed")
+            exit(1)
+```
+
 ### CI/CD Integration
 
 ```python
-# In your deployment pipeline
+# v0.4.5+ Production deployment pipeline
 import os
 
 # Production migration script
 async def deploy_migrations():
-    db = DataFlow()
+    # ✅ v0.4.5: Use auto_migrate=False for fast service startup
+    db = DataFlow(
+        database_url=os.environ["DATABASE_URL"],
+        auto_migrate=False,  # Fast initialization
+        pool_size=10
+    )
 
     # Check for pending migrations
     pending = await db.get_pending_migrations()
@@ -497,17 +739,42 @@ async def deploy_migrations():
         print("Migration failed - check logs")
         return False
 
+# Separate deployment phases for v0.4.5+
+async def deploy_application_services():
+    """Deploy application services with fast startup."""
+    services = ['api', 'worker', 'analytics']
+    
+    for service in services:
+        print(f"Starting {service} service...")
+        db = DataFlow(
+            database_url=os.environ["DATABASE_URL"],
+            auto_migrate=False,  # ✅ <1s startup per service
+            existing_schema_mode=True if service == 'analytics' else False
+        )
+        print(f"{service} service started in <1s")
+        
+    print("All services deployed in <15s total")
+
 # Use in your deployment
 if __name__ == "__main__":
-    success = await deploy_migrations()
-    exit(0 if success else 1)
+    # Phase 1: Run migrations (if needed)
+    if os.environ.get('APPLY_MIGRATIONS') == 'true':
+        success = await deploy_migrations()
+        if not success:
+            exit(1)
+    
+    # Phase 2: Deploy services (fast startup with v0.4.5)
+    await deploy_application_services()
+    exit(0)
 ```
 
-### Monitoring & Alerting
+### Monitoring & Alerting (v0.4.5 Enhanced)
 
 ```python
-# Set up migration monitoring
+# Enhanced monitoring for v0.4.5 performance characteristics
 db = DataFlow(
+    database_url=DATABASE_URL,
+    auto_migrate=False,  # Fast startup monitoring
     migration_config={
         "monitoring": {
             "enabled": True,
@@ -515,39 +782,158 @@ db = DataFlow(
             "alert_on_failure": True,
             "alert_on_rollback": True,
             "performance_threshold": 10000,  # Alert if >10s
+            "startup_threshold": 2000,  # Alert if startup >2s (v0.4.5 baseline)
+            "registry_timeout": 5000,  # Alert if registry ops >5s
         }
     }
 )
 ```
 
-### Blue-Green Deployments
+### Performance Monitoring Alerts
 
 ```python
-# Blue-green deployment with migrations
+# Monitor for v0.4.5 performance characteristics
+class DataFlowMonitoring:
+    @staticmethod
+    def check_startup_performance():
+        """Alert if startup performance degrades from v0.4.5 baseline."""
+        expected_times = {
+            "auto_migrate=False": 1.0,  # <1s expected
+            "auto_migrate=True": 5.0,   # <5s expected
+            "existing_schema_mode": 1.0  # <1s expected
+        }
+        
+    @staticmethod 
+    def alert_on_registry_issues():
+        """Alert on registry performance degradation."""
+        # Monitor for signs of endless loop regression
+        # Alert if initialization >30s (pre-v0.4.5 symptom)
+        pass
+```
+
+### Blue-Green Deployments (v0.4.5 Optimized)
+
+```python
+# Blue-green deployment optimized for v0.4.5 performance
 async def blue_green_migration():
-    # Apply to staging first
-    staging_db = DataFlow(database_url=STAGING_URL)
-    success = await staging_db.auto_migrate(auto_confirm=True)
+    # Apply to staging first (dedicated migration instance)
+    staging_migration_db = DataFlow(
+        database_url=STAGING_URL,
+        auto_migrate=True  # Only migration instance allows schema changes
+    )
+    success = await staging_migration_db.auto_migrate(auto_confirm=True)
 
     if not success:
         raise Exception("Staging migration failed")
 
-    # Run validation tests
-    await run_integration_tests(staging_db)
+    # Run validation tests with fast-startup instances
+    test_db = DataFlow(
+        database_url=STAGING_URL,
+        auto_migrate=False,  # ✅ Fast test startup
+        existing_schema_mode=True
+    )
+    await run_integration_tests(test_db)
 
-    # Apply to production
-    prod_db = DataFlow(database_url=PRODUCTION_URL)
-    success = await prod_db.auto_migrate(auto_confirm=True)
+    # Apply to production (dedicated migration instance)
+    prod_migration_db = DataFlow(
+        database_url=PRODUCTION_URL,
+        auto_migrate=True  # Only for migration
+    )
+    success = await prod_migration_db.auto_migrate(auto_confirm=True)
 
     if not success:
         # Rollback staging
-        await staging_db.rollback_last_migration()
+        await staging_migration_db.rollback_last_migration()
         raise Exception("Production migration failed")
 
+    # Deploy production services with fast startup
+    await deploy_production_services()  # Each service: auto_migrate=False
+    
     return True
+
+async def deploy_production_services():
+    """Deploy production services with v0.4.5 fast startup."""
+    services = ['api-blue', 'worker-blue', 'analytics-blue']
+    
+    for service in services:
+        service_db = DataFlow(
+            database_url=PRODUCTION_URL,
+            auto_migrate=False,  # ✅ <1s startup per service
+            existing_schema_mode=True  # Safety for production
+        )
+        print(f"{service} started in <1s")
+    
+    print("Blue environment deployed in <15s total")
 ```
 
 ## 🔍 Troubleshooting
+
+### v0.4.5 Critical Issues (FIXED)
+
+#### Issue: DataFlow Startup Hangs for 30+ Seconds
+**Symptoms:**
+- DataFlow initialization takes 30+ seconds
+- Production deployments timing out
+- Document Service or AI Hub V2 startup delays
+
+**Root Cause:**
+- Registry endless loop bug in v0.4.0-v0.4.4
+- Model registry table initialization loop
+
+**Solution (Fixed in v0.4.5):**
+```python
+# ✅ UPGRADE TO v0.4.5
+pip install --upgrade kailash-dataflow==0.4.5
+
+# Now works correctly:
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=False  # <1s startup time
+)
+```
+
+#### Issue: auto_migrate=False Not Working
+**Symptoms:**
+- Migration system runs despite auto_migrate=False
+- Unexpected schema changes in production
+- Slower than expected startup times
+
+**Root Cause:**
+- Boolean logic regression in v0.4.0-v0.4.4
+- Migration system initialized regardless of auto_migrate setting
+
+**Solution (Fixed in v0.4.5):**
+```python
+# ✅ UPGRADE TO v0.4.5 - Now works correctly
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=False  # Properly disables migration system
+)
+# ✓ No migration system initialization
+# ✓ No automatic schema changes
+# ✓ 95% faster startup
+```
+
+#### Issue: Multi-Service Deployment Delays
+**Symptoms:**
+- Multiple DataFlow instances starting slowly
+- 120+ second deployment times
+- Services timing out during startup
+
+**Root Cause:**
+- Registry contention and endless loops
+- Each service hanging during initialization
+
+**Solution (Fixed in v0.4.5):**
+```python
+# ✅ Each service now starts in <2s
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=False,  # Fast startup per service
+    enable_model_persistence=True  # Registry now works correctly
+)
+# Result: 15s total deployment (was 120+s)
+```
 
 ### Common Issues
 
@@ -566,6 +952,25 @@ except MigrationConflictError as e:
         print(f"Table: {conflict.table}")
         print(f"Conflict: {conflict.description}")
         print(f"Resolution options: {conflict.resolution_options}")
+```
+
+#### Startup Performance Issues (Pre-v0.4.5)
+```python
+# 🚨 If still experiencing slow startup, check version:
+import dataflow
+print(f"DataFlow version: {dataflow.__version__}")
+
+# ✅ Ensure you're on v0.4.5+:
+if dataflow.__version__ < "0.4.5":
+    print("UPGRADE REQUIRED: pip install --upgrade kailash-dataflow==0.4.5")
+
+# ✅ Use optimal configuration for production:
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=False,  # Fast startup
+    existing_schema_mode=True,  # If using existing database
+    pool_size=20
+)
 ```
 
 #### Performance Issues

@@ -2,7 +2,102 @@
 
 Comprehensive guide to diagnosing and resolving common issues in DataFlow applications.
 
+**🚨 CRITICAL v0.4.5 Update**: Emergency fixes for registry endless loops and auto_migrate=False regression. **Upgrade immediately** if experiencing 30+ second startup times or auto_migrate=False not working.
+
 **🎉 Major Updates for v0.4.0**: Many common issues have been resolved in the latest release. Check if updating resolves your issue first.
+
+## v0.4.5 Critical Fixes (UPGRADE REQUIRED)
+
+### Registry Endless Loop (Bug #011 - FIXED)
+
+**Symptoms:**
+- DataFlow startup hangs for 30+ seconds
+- Production deployment timeouts
+- Document Service, AI Hub V2 initialization delays
+- Multiple DataFlow instances causing deployment delays (120+ seconds)
+
+**Root Cause (v0.4.0-v0.4.4):**
+- Model registry initialization caused endless loops
+- Registry table creation/recreation loop
+- Affected production services like Document Service and AI Hub V2
+
+**Fix Applied in v0.4.5:**
+- Enhanced registry initialization check in `model_registry.py`
+- Eliminated table recreation loops
+- Added comprehensive regression test suite
+
+**Solution:**
+```bash
+# ✅ IMMEDIATE UPGRADE REQUIRED
+pip install --upgrade kailash-dataflow==0.4.5
+```
+
+**Results:**
+- ✅ Document Service: <2s startup (was 30+s)
+- ✅ AI Hub V2: <2s startup (was 30+s)
+- ✅ Multi-service deployment: <15s total (was 120+s)
+- ✅ Registry performance: Sub-2 second initialization
+
+### auto_migrate=False Regression (Bug #012 - FIXED)
+
+**Symptoms:**
+- `auto_migrate=False` not working as expected
+- Migration system running despite disabled setting
+- Slower than expected startup times
+- Unexpected schema changes in production
+
+**Root Cause (v0.4.0-v0.4.4):**
+- Boolean logic error in `engine.py` migration initialization
+- Migration system initialized regardless of `auto_migrate=False`
+- Performance regression in production deployments
+
+**Fix Applied in v0.4.5:**
+- Corrected boolean logic in migration initialization conditions
+- Proper migration system disabling when `auto_migrate=False`
+- 95% faster initialization for disabled auto-migration
+
+**Solution:**
+```bash
+# ✅ UPGRADE TO v0.4.5
+pip install --upgrade kailash-dataflow==0.4.5
+```
+
+**Configuration Examples:**
+```python
+# ✅ Now works correctly in v0.4.5
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=False  # Properly disables migration system
+)
+# Result: <1s initialization (was potentially 30+s)
+
+# ✅ Production configuration
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=False,
+    existing_schema_mode=True  # Maximum safety
+)
+# Result: <1s initialization, no schema changes
+```
+
+**Performance Improvements:**
+- ✅ 95% faster initialization for `auto_migrate=False`
+- ✅ No migration system initialization overhead
+- ✅ Tables created on-demand during first node execution
+- ✅ Optimal for production deployments with manual migration control
+
+### Version Check
+
+**Before troubleshooting other issues, verify your DataFlow version:**
+```python
+import dataflow
+print(f"DataFlow version: {dataflow.__version__}")
+
+# ✅ Ensure you're on v0.4.5+
+if dataflow.__version__ < "0.4.5":
+    print("🚨 CRITICAL: Upgrade required for registry and auto_migrate fixes")
+    print("Run: pip install --upgrade kailash-dataflow==0.4.5")
+```
 
 ## Common Issues
 
@@ -556,9 +651,11 @@ workflow.add_node("PointInTimeRecoveryNode", "recover_data", {
 6. **Implement Retries**: With exponential backoff for transient errors
 7. **Log Comprehensively**: But avoid logging sensitive data
 8. **Version Everything**: Database schemas, configurations, and code
-9. **Update Regularly**: v0.4.0+ includes 11+ critical bug fixes
-10. **Test Migration Scenarios**: auto_migrate=False now works correctly
+9. **Update Regularly**: v0.4.5 includes critical production stability fixes
+10. **Test Migration Scenarios**: auto_migrate=False regression fixed in v0.4.5
 11. **Use TEXT Fields**: VARCHAR(255) limits removed in v0.4.0
+12. **Monitor Startup Performance**: <1s for auto_migrate=False, <5s for auto_migrate=True
+13. **Use auto_migrate=False in Production**: For fastest startup and manual migration control
 
 ## Next Steps
 

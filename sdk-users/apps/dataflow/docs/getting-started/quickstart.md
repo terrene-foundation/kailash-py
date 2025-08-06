@@ -363,17 +363,19 @@ workflow.add_node("UserListNode", "stats", {
 })
 ```
 
-## 💡 DataFlow Tips
+## 💡 DataFlow Tips (v0.4.5 Updated)
 
 - 🚀 **Start Simple**: Use zero-config SQLite for prototyping
-- 🔄 **Embrace Auto-Migration**: Let DataFlow manage your schema evolution
+- 🔄 **Embrace Auto-Migration**: Let DataFlow manage your schema evolution in development
+- 🏢 **Production Performance**: Use `auto_migrate=False` for <1s startup in production
 - 📊 **Preview First**: Always use `dry_run=True` in production
 - 📈 **Scale Gradually**: Add features as you need them
 - 🔍 **Use Filters**: MongoDB-style query operators for complex queries
 - ⚡ **Bulk for Speed**: Use bulk nodes for operations on multiple records
 - 🛡️ **Enable Security**: Add multi-tenant and audit features for production
 - 🔄 **Plan Rollbacks**: DataFlow generates rollback plans automatically
-- 🎆 **Update Regularly**: v0.4.0+ includes major stability improvements
+- 🚨 **Upgrade Critical**: v0.4.5 fixes registry endless loops and auto_migrate regression
+- 🏢 **Production Safety**: Use `existing_schema_mode=True` for existing databases
 - 📋 **Use TEXT Fields**: No more 255-character limits (fixed in v0.4.0)
 
 ---

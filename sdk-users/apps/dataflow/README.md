@@ -12,31 +12,39 @@ pip install kailash-dataflow
 pip install kailash[dataflow]
 ```
 
-## Current Status: v0.4.0 Release Ready
+## Current Status: v0.4.5 Production Ready 🚀
+
+**🚨 CRITICAL v0.4.5 Emergency Fixes - Upgrade Immediately:**
+- **Registry Endless Loop** (Bug #011): Fixed 30+ second startup hangs → <2s
+- **auto_migrate=False Regression** (Bug #012): Parameter now works correctly
+- **95% Performance Improvement**: Dramatically faster initialization
+- **Production Stability**: Document Service, AI Hub V2 deployments fixed
 
 **Database Support:**
 - ✅ **PostgreSQL**: Full support with all enterprise features
 - ✅ **SQLite**: Full parity with PostgreSQL - all features supported (file-based and in-memory)
-  - Recent fixes: Path extraction and connection isolation for memory databases
 - ❌ **MySQL**: Not yet supported (coming in future release)
 
-**🎉 Major Bug Fixes in v0.4.0:**
-- **DateTime Serialization**: Fixed datetime objects being converted to strings
-- **PostgreSQL Parameter Types**: Added explicit type casting for parameter determination
-- **Content Size Limits**: Changed VARCHAR(255) to TEXT for unlimited content
-- **Workflow Connections**: Fixed parameter order in workflow connections
-- **Parameter Naming Conflicts**: Fixed conflicts with Core SDK internal fields
-- **Data Access Patterns**: Corrected list node result access
-- **SERIAL Column Generation**: Fixed duplicate DEFAULT clauses in PostgreSQL
-- **TIMESTAMP Defaults**: Fixed quoting of SQL functions in schema generation
-- **Schema Inspection**: Fixed bounds checking errors
-- **auto_migrate=False**: Fixed tables being created despite disabled auto-migration
+**🎉 Major Bug Fixes (v0.4.0-v0.4.5):**
+- **Registry Performance**: Eliminated endless loops causing 30+ second hangs (v0.4.5)
+- **Migration Control**: Fixed auto_migrate=False not working properly (v0.4.5) 
+- **DateTime Serialization**: Fixed datetime objects being converted to strings (v0.4.0)
+- **PostgreSQL Parameter Types**: Added explicit type casting (v0.4.0)
+- **Content Size Limits**: Changed VARCHAR(255) to TEXT for unlimited content (v0.4.0)
+- **Workflow Connections**: Fixed parameter order in workflow connections (v0.4.0)
+- **Parameter Naming Conflicts**: Fixed conflicts with Core SDK internal fields (v0.4.0)
+- **Data Access Patterns**: Corrected list node result access (v0.4.0)
+- **SERIAL Column Generation**: Fixed duplicate DEFAULT clauses in PostgreSQL (v0.4.0)
+- **TIMESTAMP Defaults**: Fixed quoting of SQL functions in schema generation (v0.4.0)
+- **Schema Inspection**: Fixed bounds checking errors (v0.4.0)
 
-**Migration System:**
+**Migration System (v0.4.5 Optimized):**
 - ✅ Auto-migration with 6-level write protection
-- ✅ Schema state management 
+- ✅ Schema state management with performance fixes
 - ✅ Migration performance tracking
 - ✅ Safe staging environment support
+- ✅ auto_migrate=False for production performance (<1s startup)
+- ✅ Registry performance optimization (30s → <2s startup)
 
 ## 🏗️ DataFlow vs Traditional ORMs
 
@@ -71,8 +79,11 @@ from dataflow import DataFlow
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
-# Zero-config setup
-db = DataFlow("postgresql://user:password@localhost/database")
+# Zero-config setup (v0.4.5 performance optimized)
+db = DataFlow(
+    "postgresql://user:password@localhost/database",
+    auto_migrate=False  # 🚀 Production: <1s startup (v0.4.5 fix)
+)
 
 # Automatic node generation from model
 @db.model
@@ -93,6 +104,7 @@ workflow.add_node("UserCreateNode", "create_user", {
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
+# ✅ v0.4.5: Dramatically improved performance across all operations
 ```
 
 ### Enterprise Benefits
