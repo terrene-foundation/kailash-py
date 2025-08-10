@@ -86,7 +86,7 @@ For each component:
 4. > Use the intermediate-reviewer subagent to review [component] implementation
 
 OR chain Phase 3 for a component:
-> Use the tdd-implementer, pattern-expert, and gold-standards-validator subagents to implement and validate [component]
+> Use the tdd-implementer, pattern-expert, gold-standards-validator, nexus-specialist, and dataflow-specialist subagents, as needed, to implement and validate [component]
 
 POST Phase 3:
 > Use the intermediate-reviewer subagent to ensure that the implementation meets all requirements and standards
