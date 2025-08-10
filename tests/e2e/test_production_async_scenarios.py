@@ -17,12 +17,12 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import pytest
+from tests.utils.docker_config import DATABASE_CONFIG
 
 from kailash.nodes.api import HTTPRequestNode
 from kailash.nodes.code import AsyncPythonCodeNode
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.workflow import AsyncWorkflowBuilder
-from tests.utils.docker_config import DATABASE_CONFIG
 
 pytestmark = [
     pytest.mark.e2e,

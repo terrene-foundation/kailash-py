@@ -304,8 +304,8 @@ class TestServerInfo:
 
         assert (
             server.matches_filter(
-                capability="weather.get", transport="stdio"  # Wrong transport
-            )
+                capability="weather.get", transport="stdio"
+            )  # Wrong transport
             is False
         )
 

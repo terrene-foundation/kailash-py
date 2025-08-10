@@ -282,8 +282,8 @@ class TestEdgeIntegration:
         # Create workflow with edge configuration - use predefined location IDs
         edge_config = {
             "discovery": {
-                "locations": ["us-east-1", "eu-west-1"]  # Use predefined location IDs
-            }
+                "locations": ["us-east-1", "eu-west-1"]
+            }  # Use predefined location IDs
         }
 
         workflow = WorkflowBuilder(edge_config=edge_config)

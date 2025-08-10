@@ -227,7 +227,7 @@ class SensitiveData:
     user_id: int
     personal_info: dict
     location: str
-    
+
     __dataflow__ = {
         'multi_tenant': True,
         'soft_delete': True,
@@ -247,7 +247,7 @@ class SensitiveData:
 
 # When using generated nodes in workflows:
 workflow = WorkflowBuilder(edge_config=DataFlowEdgeIntegration.create_edge_workflow_config(
-    'SensitiveData', 
+    'SensitiveData',
     SensitiveData.__dataflow__['edge_config']
 ))
 

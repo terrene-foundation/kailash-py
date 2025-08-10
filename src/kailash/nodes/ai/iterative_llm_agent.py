@@ -1666,7 +1666,7 @@ class IterativeLLMAgentNode(LLMAgentNode):
         synthesis_messages = [
             {
                 "role": "system",
-                "content": """You are an AI assistant synthesizing results from an iterative analysis process. 
+                "content": """You are an AI assistant synthesizing results from an iterative analysis process.
                 Create a comprehensive, helpful response based on the findings from multiple iterations of analysis.""",
             },
             {
@@ -1679,7 +1679,7 @@ Results from {len(iterations)} iterations:
 Insights achieved:
 {chr(10).join(all_insights[:5]) if all_insights else "No specific insights achieved"}
 
-Please provide a comprehensive response to the original query based on these findings. If the findings are limited, 
+Please provide a comprehensive response to the original query based on these findings. If the findings are limited,
 provide your best analysis of the query directly.""",
             },
         ]

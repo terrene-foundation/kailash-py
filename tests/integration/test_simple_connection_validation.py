@@ -22,8 +22,8 @@ class TestSimpleConnectionValidation:
             PythonCodeNode,
             "source",
             {
-                "code": "result = {'count': '123', 'valid': 'true'}"  # Strings that can convert
-            },
+                "code": "result = {'count': '123', 'valid': 'true'}"
+            },  # Strings that can convert
         )
 
         # Create a node that expects specific types
@@ -154,8 +154,8 @@ result = {'received': str(data)}
 
         # Create a type mismatch scenario
         workflow.add_node(
-            PythonCodeNode, "source", {"code": "result = {'value': '123'}"}  # String
-        )
+            PythonCodeNode, "source", {"code": "result = {'value': '123'}"}
+        )  # String
 
         class NumberNode(Node):
             def get_parameters(self):

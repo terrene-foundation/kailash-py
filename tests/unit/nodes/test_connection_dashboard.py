@@ -227,8 +227,8 @@ class TestConnectionDashboardNode:
         """Test alert checking logic."""
         # Create test data
         pools = {
-            "test_pool": {"utilization": 0.95, "error_rate": 0.01}  # Above threshold
-        }
+            "test_pool": {"utilization": 0.95, "error_rate": 0.01}
+        }  # Above threshold
 
         # Check alerts
         await dashboard._check_alerts(pools)
