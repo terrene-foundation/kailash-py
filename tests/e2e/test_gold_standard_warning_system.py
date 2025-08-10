@@ -158,7 +158,7 @@ class DynamicCustomNode(Node):
         return {
             "input": NodeParameter(name="input", type=str, required=True)
         }
-    
+
     def run(self, **kwargs):
         return {"result": f"Processed: {kwargs.get('input', '')}"}
 """

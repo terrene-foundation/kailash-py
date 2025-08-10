@@ -59,8 +59,8 @@ class QueryPatternTracker:
     """Tracks and analyzes query execution patterns."""
 
     def __init__(
-        self, retention_hours: int = 168, min_pattern_frequency: int = 5  # 7 days
-    ):
+        self, retention_hours: int = 168, min_pattern_frequency: int = 5
+    ):  # 7 days
         self.retention_hours = retention_hours
         self.min_pattern_frequency = min_pattern_frequency
 

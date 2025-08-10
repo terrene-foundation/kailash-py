@@ -260,12 +260,12 @@ class EmailNotificationChannel(NotificationChannel):
         <p><strong>Status:</strong> {alert.status.value}</p>
         <p><strong>Description:</strong> {alert.description}</p>
         <p><strong>Created:</strong> {alert.created_at.isoformat()}</p>
-        
+
         <h3>Labels:</h3>
         <ul>
         {"".join(f"<li><strong>{k}:</strong> {v}</li>" for k, v in alert.labels.items())}
         </ul>
-        
+
         <h3>Context:</h3>
         <ul>
         {"".join(f"<li><strong>{k}:</strong> {v}</li>" for k, v in context.items())}

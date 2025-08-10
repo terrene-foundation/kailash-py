@@ -184,7 +184,7 @@ class TestWorkflowContextThreadSafety:
         python_node1 = PythonCodeNode(
             name="test",
             code="""
-# Access workflow context 
+# Access workflow context
 context_value = get_workflow_context('isolation_test', 'default')
 result = {'context_value': context_value}
 """,

@@ -594,8 +594,8 @@ class TestMigrationPlan:
                 pass
 
         migrations = [
-            MockMigration("002", ["001"])  # Depends on 001 which is not in plan
-        ]
+            MockMigration("002", ["001"])
+        ]  # Depends on 001 which is not in plan
 
         plan = MigrationPlan(migrations_to_apply=migrations, dependency_order=["002"])
 

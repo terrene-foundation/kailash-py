@@ -188,8 +188,8 @@ class TestSecureGovernedNodeE2E:
                     "query_type": "select",
                     "table": "users",
                     "conditions": {
-                        "username": "'; DROP TABLE users; --"  # SQL injection attempt
-                    },
+                        "username": "'; DROP TABLE users; --"
+                    },  # SQL injection attempt
                 },
             )
 

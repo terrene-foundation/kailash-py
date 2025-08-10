@@ -12,16 +12,16 @@ from typing import Any, Dict
 import asyncpg
 import pytest
 import pytest_asyncio
-
-from kailash.nodes.code.python import PythonCodeNode
-from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
 from tests.utils.docker_config import (
     REDIS_CONFIG,
     ensure_docker_services,
     get_postgres_connection_string,
 )
+
+from kailash.nodes.code.python import PythonCodeNode
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 @pytest.mark.integration

@@ -259,7 +259,7 @@ result = {
 # Get data from the source - connection maps source.result to processor_N.data
 numbers = data.get('numbers', [])
 multiplier = data.get('multiplier', 1)
-    
+
 result = {{
     'processed': [n * multiplier * {i+1} for n in numbers],
     'processor_id': {i}
