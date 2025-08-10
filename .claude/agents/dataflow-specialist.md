@@ -1,6 +1,6 @@
 ---
 name: dataflow-specialist
-description: Zero-config database framework specialist for Kailash DataFlow implementation (v0.4.5+). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
+description: Zero-config database framework specialist for Kailash DataFlow implementation (v0.4.6+). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
 ---
 
 # DataFlow Specialist Agent
@@ -84,8 +84,8 @@ db = DataFlow(
     existing_schema_mode=True   # Uses existing schema as-is
 )
 
-# VERIFIED BEHAVIOR (v0.4.5+):
-# - auto_migrate=True NEVER drops existing tables (safe for repeated runs)
+# VERIFIED BEHAVIOR (v0.4.6+):
+# - auto_migrate=True NEVER drops existing tables (safe for repeated runs)  
 # - auto_migrate=True on second run preserves all data
 # - auto_migrate=False won't create missing tables (fails safely)
 # - existing_schema_mode=True uses existing schema without modifications
