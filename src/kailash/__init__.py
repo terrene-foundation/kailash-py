@@ -6,6 +6,7 @@ that align with container-node architecture while allowing rapid prototyping.
 New in v0.9.14: Code quality improvements and updated dependencies for DataFlow v0.4.6 compatibility.
 Applied black formatting fixes and ensured CI stability. Updated dependency references to latest framework versions.
 Previous v0.9.13: Fixed WorkflowBuilder parameter validation false positives (Bug 010).
+Enhanced validation.py to recognize auto_map_from parameters, eliminating spurious warnings.
 Previous v0.9.12: SQLite Compatibility & Code Quality improvements.
 Previous v0.9.2: WebSocket Transport Support with Enterprise Connection Pooling.
 Fixed "Unsupported transport: websocket" error. Added 73% performance improvement with connection pooling.
