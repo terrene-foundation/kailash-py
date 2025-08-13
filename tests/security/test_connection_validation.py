@@ -9,8 +9,7 @@ from typing import Any, Dict
 
 import pytest
 
-from kailash.nodes.base import Node, NodeParameter
-from kailash.nodes.core.registry import get_node_registry
+from kailash.nodes.base import Node, NodeParameter, NodeRegistry
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -99,17 +98,17 @@ class TestConnectionValidation:
 
     def setup_method(self):
         """Register custom nodes for testing."""
-        registry = get_node_registry()
-        registry.register_node("MaliciousNode", MaliciousNode)
-        registry.register_node("SecureNode", SecureNode)
-        registry.register_node("DataFlowNode", DataFlowNode)
+        self.registry = NodeRegistry()
+        self.registry.register_node("MaliciousNode", MaliciousNode)
+        self.registry.register_node("SecureNode", SecureNode)
+        self.registry.register_node("DataFlowNode", DataFlowNode)
 
     def teardown_method(self):
         """Clean up custom nodes."""
-        registry = get_node_registry()
-        registry.unregister_node("MaliciousNode")
-        registry.unregister_node("SecureNode")
-        registry.unregister_node("DataFlowNode")
+        if hasattr(self, "registry"):
+            self.registry.unregister_node("MaliciousNode")
+            self.registry.unregister_node("SecureNode")
+            self.registry.unregister_node("DataFlowNode")
 
     def test_direct_parameters_are_validated(self):
         """Direct parameters should always be validated."""

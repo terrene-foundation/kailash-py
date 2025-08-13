@@ -10,6 +10,19 @@ Multi-channel platform specialist for Kailash Nexus implementation. Use proactiv
 
 ## Nexus Reference (`sdk-users/apps/nexus/`)
 
+### 🔗 Quick Links - DataFlow + Nexus Integration
+- **[Main Integration Guide](../../sdk-users/guides/dataflow-nexus-integration.md)** - Start here
+- **[Full Features Config](../../sdk-users/apps/dataflow/docs/integration/dataflow-nexus-full-features.md)** - 10-30s startup, all features
+- **[Working Examples](../../sdk-users/apps/nexus/examples/dataflow-integration/)** - Copy-paste ready code
+- **Critical Setting**: `auto_discovery=False` to prevent blocking with DataFlow
+
+### ⚡ Quick Config Reference
+| Use Case | Config | Notes |
+|----------|--------|-------|
+| **With DataFlow** | `Nexus(auto_discovery=False)` | Prevents blocking |
+| **Standalone** | `Nexus()` | Zero-config, can use auto_discovery |
+| **Full Features** | `Nexus(auto_discovery=False, enable_auth=True, enable_monitoring=True)` | All features enabled |
+
 ## Core Expertise
 
 ### Nexus Architecture & Philosophy
@@ -58,7 +71,7 @@ app = Nexus(
     enable_auth=True,       # Enable authentication
     enable_monitoring=True, # Enable monitoring
     rate_limit=100,         # Rate limit per minute
-    auto_discovery=True     # Auto-discover workflows
+    auto_discovery=False    # CRITICAL: Set to False when using DataFlow
 )
 
 # Progressive enhancement via attributes
@@ -197,6 +210,72 @@ nexus = Nexus(dataflow_integration=db)
 - Caching strategies
 
 ## Troubleshooting
+
+## DataFlow Integration (CRITICAL)
+
+### ⚠️ CRITICAL: Preventing Blocking and Slow Startup
+
+When integrating Nexus with DataFlow, you MUST use specific settings to avoid:
+1. **Infinite blocking** during Nexus initialization
+2. **5-10 second delays** per DataFlow model
+
+```python
+# ✅ CORRECT: Fast, non-blocking integration
+from nexus import Nexus
+from dataflow import DataFlow
+
+# Step 1: Create Nexus FIRST with auto_discovery=False
+app = Nexus(
+    api_port=8000,
+    mcp_port=3001,
+    auto_discovery=False  # CRITICAL: Prevents infinite blocking
+)
+
+# Step 2: Create DataFlow with optimized settings
+db = DataFlow(
+    database_url="postgresql://...",
+    skip_registry=True,  # CRITICAL: Prevents 5-10s delay per model
+    enable_model_persistence=False,  # No workflow execution during init
+    auto_migrate=False,
+    skip_migration=True
+)
+
+# Step 3: Register models (now instant!)
+@db.model
+class User:
+    id: str
+    email: str
+
+# Step 4: Register workflows manually
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create", {"email": "{{email}}"})
+app.register("create_user", workflow.build())
+```
+
+### Why This Happens
+1. **auto_discovery=True** causes Nexus to scan and import Python files
+2. Importing DataFlow models triggers workflow execution 
+3. Each model registration executes `LocalRuntime.execute()` synchronously
+4. This creates a blocking loop that prevents server startup
+
+### What You Keep with Fast Configuration
+- ✅ All CRUD operations (9 nodes per model)
+- ✅ Connection pooling, caching, metrics
+- ✅ All Nexus channels (API, CLI, MCP)
+- ✅ <2 second total startup time
+
+### What You Lose
+- ❌ Model persistence across restarts
+- ❌ Automatic migration tracking
+- ❌ Runtime model discovery
+- ❌ Auto-discovery of workflows
+
+**Integration Documentation:**
+- 📚 [Main Integration Guide](../../sdk-users/guides/dataflow-nexus-integration.md) - Comprehensive guide with 8 use cases
+- 🚀 [Full Features Configuration](../../sdk-users/apps/dataflow/docs/integration/dataflow-nexus-full-features.md) - All features enabled (10-30s startup)
+- 🔍 [Blocking Issue Analysis](../../sdk-users/apps/dataflow/docs/integration/nexus-blocking-issue-analysis.md) - Root cause analysis
+- 💡 [Technical Solution](../../sdk-users/apps/nexus/docs/technical/dataflow-integration-solution.md) - Complete solution details
+- 🧪 [Working Examples](../../sdk-users/apps/nexus/examples/dataflow-integration/) - Tested code examples
 
 ### Common Issues
 1. **Port Conflicts**: Use custom ports `Nexus(api_port=8001, mcp_port=3002)`

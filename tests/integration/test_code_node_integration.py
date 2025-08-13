@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from kailash import Workflow
-from kailash.nodes import PythonCodeNode
+from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode, JSONReaderNode
 from kailash.runtime.local import LocalRuntime
 
