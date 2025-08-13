@@ -1,0 +1,41 @@
+# Grafana datasources for performance monitoring
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://perf-prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: 5s
+      queryTimeout: 60s
+      httpMethod: GET
+    
+  - name: Elasticsearch
+    type: elasticsearch
+    access: proxy
+    url: http://perf-elasticsearch:9200
+    database: "logstash-*"
+    jsonData:
+      interval: Daily
+      timeField: "@timestamp"
+      esVersion: "8.11.0"
+      maxConcurrentShardRequests: 5
+      logMessageField: message
+      logLevelField: level
+
+  - name: PostgreSQL-Performance
+    type: postgres
+    access: proxy
+    url: perf-postgres:5432
+    database: kailash_perf
+    user: perf_user
+    secureJsonData:
+      password: perf_password
+    jsonData:
+      sslmode: disable
+      maxOpenConns: 10
+      maxIdleConns: 2
+      connMaxLifetime: 14400

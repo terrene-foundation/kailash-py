@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from tests.config_unified import REDIS_CONFIG
 
 from kailash.middleware.gateway.checkpoint_manager import (
     CheckpointManager,
@@ -16,6 +15,7 @@ from kailash.middleware.gateway.checkpoint_manager import (
 )
 from kailash.middleware.gateway.durable_request import Checkpoint, RequestState
 from kailash.middleware.gateway.storage_backends import RedisStorage
+from tests.config_unified import REDIS_CONFIG
 
 
 @pytest.fixture

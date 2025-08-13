@@ -1,0 +1,376 @@
+# Kailash SDK Performance Testing Infrastructure
+# Enhanced Docker composition for comprehensive load testing with monitoring
+
+version: '3.8'
+
+services:
+  # Enhanced PostgreSQL with performance tuning
+  perf-postgres:
+    image: postgres:15
+    container_name: kailash_perf_postgres
+    environment:
+      POSTGRES_DB: kailash_perf
+      POSTGRES_USER: perf_user
+      POSTGRES_PASSWORD: perf_password
+      # Performance tuning
+      POSTGRES_SHARED_BUFFERS: 256MB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 1GB
+      POSTGRES_MAX_CONNECTIONS: 500
+      POSTGRES_WAL_BUFFERS: 16MB
+    ports:
+      - "5435:5432"
+    volumes:
+      - perf_postgres_data:/var/lib/postgresql/data
+      - ./init-scripts/performance-schema.sql:/docker-entrypoint-initdb.d/01-performance-schema.sql
+      - ./config/postgresql.conf:/etc/postgresql/postgresql.conf
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+      -c max_connections=500
+      -c wal_buffers=16MB
+      -c checkpoint_completion_target=0.7
+      -c wal_writer_delay=200ms
+      -c commit_delay=0
+      -c commit_siblings=5
+      -c max_wal_size=2GB
+      -c min_wal_size=1GB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U perf_user -d kailash_perf"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - kailash-perf-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0' 
+          memory: 1G
+
+  # Enhanced MySQL with performance configuration
+  perf-mysql:
+    image: mysql:8.0
+    container_name: kailash_perf_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: perf_password
+      MYSQL_DATABASE: kailash_perf
+      MYSQL_USER: perf_user
+      MYSQL_PASSWORD: perf_password
+    ports:
+      - "3308:3306"
+    volumes:
+      - perf_mysql_data:/var/lib/mysql
+      - ./config/mysql.cnf:/etc/mysql/conf.d/performance.cnf
+    command: >
+      --innodb-buffer-pool-size=512M
+      --innodb-log-file-size=256M
+      --innodb-flush-log-at-trx-commit=2
+      --max-connections=500
+      --query-cache-type=1
+      --query-cache-size=64M
+      --tmp-table-size=64M
+      --max-heap-table-size=64M
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "perf_user", "-pperf_password"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - kailash-perf-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Redis with persistence disabled for performance
+  perf-redis:
+    image: redis:7-alpine
+    container_name: kailash_perf_redis
+    ports:
+      - "6381:6379"
+    command: >
+      redis-server
+      --maxmemory 2gb
+      --maxmemory-policy allkeys-lru
+      --save ""
+      --appendonly no
+      --tcp-keepalive 60
+      --timeout 0
+      --databases 16
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - kailash-perf-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  # MongoDB for document testing
+  perf-mongodb:
+    image: mongo:6
+    container_name: kailash_perf_mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: perf_user
+      MONGO_INITDB_ROOT_PASSWORD: perf_password
+      MONGO_INITDB_DATABASE: kailash_perf
+    ports:
+      - "27018:27017"
+    volumes:
+      - perf_mongodb_data:/data/db
+    command: >
+      mongod
+      --wiredTigerCacheSizeGB 1
+      --wiredTigerCollectionBlockCompressor snappy
+      --wiredTigerJournalCompressor snappy
+      --wiredTigerIndexPrefixCompression true
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kailash-perf-network
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # Prometheus for metrics collection
+  perf-prometheus:
+    image: prom/prometheus:latest
+    container_name: kailash_perf_prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - perf_prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+      - '--storage.tsdb.wal-compression'
+    networks:
+      - kailash-perf-network
+
+  # Grafana for performance visualization
+  perf-grafana:
+    image: grafana/grafana:latest
+    container_name: kailash_perf_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=performance
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - perf_grafana_data:/var/lib/grafana
+      - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+      - ./config/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml
+      - ./dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - perf-prometheus
+    networks:
+      - kailash-perf-network
+
+  # Elasticsearch for log aggregation
+  perf-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: kailash_perf_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms1g -Xmx1g"
+      - cluster.routing.allocation.disk.threshold_enabled=false
+    ports:
+      - "9201:9200"
+    volumes:
+      - perf_elasticsearch_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - kailash-perf-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+
+  # Logstash for log processing
+  perf-logstash:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    container_name: kailash_perf_logstash
+    volumes:
+      - ./config/logstash.conf:/usr/share/logstash/pipeline/logstash.conf
+    depends_on:
+      - perf-elasticsearch
+    networks:
+      - kailash-perf-network
+
+  # Kibana for log visualization
+  perf-kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: kailash_perf_kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://perf-elasticsearch:9200
+    depends_on:
+      - perf-elasticsearch
+    networks:
+      - kailash-perf-network
+
+  # Node Exporter for system metrics
+  perf-node-exporter:
+    image: prom/node-exporter:latest
+    container_name: kailash_perf_node_exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - kailash-perf-network
+
+  # cAdvisor for container metrics
+  perf-cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: kailash_perf_cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+    networks:
+      - kailash-perf-network
+
+  # Redis Exporter for Redis metrics
+  perf-redis-exporter:
+    image: oliver006/redis_exporter:latest
+    container_name: kailash_perf_redis_exporter
+    ports:
+      - "9121:9121"
+    environment:
+      - REDIS_ADDR=perf-redis:6379
+    depends_on:
+      - perf-redis
+    networks:
+      - kailash-perf-network
+
+  # PostgreSQL Exporter
+  perf-postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: kailash_perf_postgres_exporter
+    ports:
+      - "9187:9187"
+    environment:
+      - DATA_SOURCE_NAME=postgresql://perf_user:perf_password@perf-postgres:5432/kailash_perf?sslmode=disable
+    depends_on:
+      - perf-postgres
+    networks:
+      - kailash-perf-network
+
+  # MySQL Exporter
+  perf-mysql-exporter:
+    image: prom/mysqld-exporter:latest
+    container_name: kailash_perf_mysql_exporter
+    ports:
+      - "9104:9104"
+    environment:
+      - DATA_SOURCE_NAME=perf_user:perf_password@(perf-mysql:3306)/kailash_perf
+    depends_on:
+      - perf-mysql
+    networks:
+      - kailash-perf-network
+
+  # Load testing coordinator service
+  perf-coordinator:
+    build:
+      context: .
+      dockerfile: Dockerfile.perf-coordinator
+    container_name: kailash_perf_coordinator
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://perf_user:perf_password@perf-postgres:5432/kailash_perf
+      - REDIS_URL=redis://perf-redis:6379/0
+      - MYSQL_URL=mysql://perf_user:perf_password@perf-mysql:3306/kailash_perf
+      - MONGODB_URL=mongodb://perf_user:perf_password@perf-mongodb:27017/kailash_perf
+    volumes:
+      - ./results:/app/results
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - perf-postgres
+      - perf-redis
+      - perf-mysql
+      - perf-mongodb
+    networks:
+      - kailash-perf-network
+
+  # Performance dashboard
+  perf-dashboard:
+    image: nginx:alpine
+    container_name: kailash_perf_dashboard
+    ports:
+      - "8081:80"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html
+      - ./config/nginx-dashboard.conf:/etc/nginx/nginx.conf
+    networks:
+      - kailash-perf-network
+
+volumes:
+  perf_postgres_data:
+  perf_mysql_data:
+  perf_mongodb_data:
+  perf_prometheus_data:
+  perf_grafana_data:
+  perf_elasticsearch_data:
+
+networks:
+  kailash-perf-network:
+    driver: bridge
+    name: kailash_perf_network
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.20.0.0/16

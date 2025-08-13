@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pytest
 
-from kailash.nodes import PythonCodeNode
+from kailash.nodes.code import PythonCodeNode
 from kailash.testing import (
     AsyncAssertions,
     AsyncTestUtils,

@@ -11,9 +11,9 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from tests.utils.docker_config import OLLAMA_CONFIG
 
 from kailash.nodes.ai.iterative_llm_agent import IterativeLLMAgentNode
+from tests.utils.docker_config import OLLAMA_CONFIG
 
 
 @pytest.mark.integration
