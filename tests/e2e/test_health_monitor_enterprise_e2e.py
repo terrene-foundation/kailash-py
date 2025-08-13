@@ -9,6 +9,7 @@ import asyncio
 import time
 
 import pytest
+
 from src.kailash.core.resilience.bulkhead import (
     execute_with_bulkhead,
     get_bulkhead_manager,

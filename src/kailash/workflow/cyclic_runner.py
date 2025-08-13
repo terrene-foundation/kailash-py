@@ -130,6 +130,7 @@ class WorkflowState:
         self.node_outputs: dict[str, Any] = {}
         self.execution_order: list[str] = []
         self.metadata: dict[str, Any] = {}
+        self.runtime = None  # Will be set by executor for enterprise features
 
 
 class CyclicWorkflowExecutor:
@@ -151,6 +152,7 @@ class CyclicWorkflowExecutor:
         parameters: dict[str, Any] | None = None,
         task_manager: TaskManager | None = None,
         run_id: str | None = None,
+        runtime=None,
     ) -> tuple[dict[str, Any], str]:
         """Execute workflow with cycle support.
 
@@ -159,6 +161,7 @@ class CyclicWorkflowExecutor:
             parameters: Initial parameters/overrides
             task_manager: Optional task manager for tracking execution
             run_id: Optional run ID to use (if not provided, one will be generated)
+            runtime: Optional runtime instance for enterprise features (LocalRuntime)
 
         Returns:
             Tuple of (results dict, run_id)
@@ -189,7 +192,7 @@ class CyclicWorkflowExecutor:
         # Execute with cycle support
         try:
             results = self._execute_with_cycles(
-                workflow, parameters, run_id, task_manager
+                workflow, parameters, run_id, task_manager, runtime
             )
             logger.info(f"Cyclic workflow execution completed: {workflow.name}")
             return results, run_id
@@ -280,6 +283,7 @@ class CyclicWorkflowExecutor:
         parameters: dict[str, Any] | None,
         run_id: str,
         task_manager: TaskManager | None = None,
+        runtime=None,
     ) -> dict[str, Any]:
         """Execute workflow with cycle handling.
 
@@ -304,6 +308,8 @@ class CyclicWorkflowExecutor:
 
         # Store initial parameters separately (don't treat them as outputs!)
         state.initial_parameters = parameters or {}
+        # Store runtime for enterprise features
+        state.runtime = runtime
 
         # Execute the plan
         results = self._execute_plan(workflow, execution_plan, state, task_manager)
@@ -1284,7 +1290,17 @@ class CyclicWorkflowExecutor:
 
         try:
             with collector.collect(node_id=node_id) as metrics_context:
-                result = node.execute(context=context, **merged_inputs)
+                # Use enterprise node execution if runtime is available
+                if state.runtime and hasattr(
+                    state.runtime, "execute_node_with_enterprise_features_sync"
+                ):
+                    # Use sync enterprise wrapper for automatic feature integration
+                    result = state.runtime.execute_node_with_enterprise_features_sync(
+                        node, node_id, dict(context=context, **merged_inputs)
+                    )
+                else:
+                    # Standard node execution (backward compatibility)
+                    result = node.execute(context=context, **merged_inputs)
 
             # Get performance metrics
             performance_metrics = metrics_context.result()

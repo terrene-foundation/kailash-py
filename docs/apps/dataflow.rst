@@ -1,36 +1,36 @@
-DataFlow - Zero-Config Database Platform
-=========================================
+DataFlow - Database Framework for Workflow Automation
+========================================================
 
 .. image:: https://img.shields.io/badge/app-dataflow-blue.svg
    :alt: DataFlow Application
 
-.. image:: https://img.shields.io/badge/zero--config-database-green.svg
-   :alt: Zero-Config Database
+.. image:: https://img.shields.io/badge/workflow--database-integration-green.svg
+   :alt: Workflow Database Integration
 
-DataFlow is a complete zero-configuration database framework built on the Kailash SDK that provides MongoDB-style queries across any database with enterprise-grade caching and automatic API generation.
+DataFlow is a database framework built on the Kailash SDK that automatically generates workflow nodes from model definitions, providing seamless database integration for workflow automation systems.
 
 Overview
 --------
 
-DataFlow transforms database operations from complex, database-specific code into simple, intuitive queries that work across PostgreSQL, MySQL, SQLite, and more. With Redis-powered caching and automatic API generation, you can build production-ready data services in minutes.
+DataFlow transforms Python model definitions into complete database workflows with automatic schema management, CRUD operations, and enterprise-grade features. Each model automatically generates 9 workflow nodes for comprehensive database operations.
 
 Key Features
 ------------
 
-🔧 **Zero Configuration**
-   Start with a single line: ``app = DataFlow()`` - no database setup, no schema definitions, no configuration files.
+🔧 **Model-to-Node Generation**
+   Define a model with ``@db.model`` and get 9 workflow nodes automatically: Create, Read, Update, Delete, List, and bulk operations.
 
-🗄️ **Universal Database Support**
-   MongoDB-style queries work across PostgreSQL, MySQL, SQLite with automatic SQL generation and optimization.
+🗄️ **Multi-Database Support**
+   Full PostgreSQL support with SQLite compatibility. Automatic schema migrations and connection pooling.
 
-⚡ **Redis-Powered Caching**
-   Enterprise-grade caching with intelligent invalidation patterns and 99.9% hit rates.
+⚡ **Workflow Integration**
+   Generated nodes integrate seamlessly with Kailash workflows using LocalRuntime and WorkflowBuilder.
 
-🚀 **Automatic API Generation**
-   REST APIs, OpenAPI documentation, and health checks generated automatically from your queries.
+🚀 **Enterprise Features**
+   Connection pooling, transaction management, schema state management, and concurrent access protection.
 
-🏢 **Enterprise Ready**
-   Multi-tenant isolation, connection pooling, performance monitoring, and audit logging built-in.
+🏢 **Production Ready**
+   Real database operations with SQL injection protection, connection pooling for 10,000+ concurrent connections.
 
 Installation
 ------------
@@ -46,117 +46,184 @@ Installation
 Quick Start
 -----------
 
-**Basic Database Operations:**
+**Model Definition and Node Generation:**
 
 .. code-block:: python
 
    from dataflow import DataFlow
 
-   # Zero-configuration startup
-   app = DataFlow()
+   # Connect to database
+   db = DataFlow("postgresql://user:pass@localhost/dbname")
+   # For development: db = DataFlow("sqlite:///app.db")
 
-   # MongoDB-style queries across any database
-   users = app.query("users").where({"age": {"$gt": 18}}).limit(10)
+   # Define your model
+   @db.model
+   class User:
+       id: int        # Primary key (auto-generated)
+       name: str      # Required field
+       email: str     # Required field
+       active: bool = True  # Optional with default
 
-   # Complex aggregations
-   stats = app.query("users").aggregate([
-       {"$group": {"_id": "$department", "count": {"$sum": 1}}},
-       {"$sort": {"count": -1}}
-   ])
+   # DataFlow automatically generates 9 workflow nodes:
+   # UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode,
+   # UserListNode, UserBulkCreateNode, UserBulkUpdateNode, 
+   # UserBulkDeleteNode, UserBulkUpsertNode
 
-   # CRUD operations
-   app.insert("users", {"name": "John", "age": 25, "department": "engineering"})
-   app.update("users", {"name": "John"}, {"$set": {"age": 26}})
-
-**Redis Caching with Smart Invalidation:**
-
-.. code-block:: python
-
-   # Cache expensive queries
-   cached_result = app.cache().get("user_stats",
-       lambda: app.query("users").aggregate([
-           {"$group": {"_id": "$department", "count": {"$sum": 1}}}
-       ]),
-       ttl=3600  # 1 hour cache
-   )
-
-   # Pattern-based invalidation
-   app.cache().invalidate_pattern("user_*")  # Clears all user-related cache
-
-**Enterprise API Server:**
+**Using Generated Nodes in Workflows:**
 
 .. code-block:: python
 
-   # Start with automatic API generation
-   app.start()
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.runtime.local import LocalRuntime
 
-   # Now available at:
-   # GET  /api/users?age__gt=18&_limit=10
-   # POST /api/users (JSON body for inserts)
-   # PUT  /api/users/{id} (JSON body for updates)
-   # GET  /docs (OpenAPI documentation)
-   # GET  /health (Health checks)
+   # Create workflow using generated nodes
+   workflow = WorkflowBuilder()
+   
+   # Create a user
+   workflow.add_node("UserCreateNode", "create_user", {
+       "name": "John Doe", 
+       "email": "john@example.com"
+   })
+   
+   # Read the user
+   workflow.add_node("UserReadNode", "read_user", {
+       "conditions": {"name": "John Doe"}
+   })
+
+   # Execute the workflow
+   runtime = LocalRuntime()
+   results, run_id = runtime.execute(workflow.build())
+   
+   print(f"Created user: {results['create_user']}")
+   print(f"Found user: {results['read_user']}")
+
+**Bulk Operations:**
+
+.. code-block:: python
+
+   # Bulk create multiple users
+   workflow.add_node("UserBulkCreateNode", "bulk_create", {
+       "data": [
+           {"name": "Alice Smith", "email": "alice@example.com"},
+           {"name": "Bob Jones", "email": "bob@example.com"},
+           {"name": "Carol White", "email": "carol@example.com"}
+       ]
+   })
+   
+   # Bulk update with conditions
+   workflow.add_node("UserBulkUpdateNode", "bulk_update", {
+       "conditions": {"active": False},
+       "data": {"active": True}
+   })
+   
+   # Execute bulk operations
+   results, run_id = runtime.execute(workflow.build())
+   print(f"Bulk created: {results['bulk_create']}")
+
+**Query Builder Integration:**
+
+.. code-block:: python
+
+   # Use MongoDB-style query builder
+   query = User.query_builder()
+   query.filter({"age": {"$gt": 18}})
+   query.filter({"department": {"$in": ["engineering", "sales"]}})
+   query.sort({"created_at": -1})
+   query.limit(10)
+   
+   # Convert to workflow node
+   workflow.add_node("UserListNode", "filtered_users", query.to_params())
+   
+   results, run_id = runtime.execute(workflow.build())
+   users = results["filtered_users"]
 
 Advanced Features
 -----------------
 
-**Multi-Database Operations:**
+**Multi-Database Configuration:**
 
 .. code-block:: python
 
-   # Configure multiple databases
-   app = DataFlow({
-       "primary": "postgresql://user:pass@localhost/main",
-       "analytics": "postgresql://user:pass@localhost/analytics",
-       "cache": "redis://localhost:6379/0"
+   # Configure with connection string
+   db = DataFlow("postgresql://user:pass@localhost/dbname", 
+                pool_size=20, max_overflow=10)
+   
+   # Or with explicit configuration
+   from dataflow.core.config import DataFlowConfig
+   
+   config = DataFlowConfig(
+       database_url="postgresql://user:pass@localhost/dbname",
+       pool_size=20,
+       max_overflow=10,
+       auto_migrate=True,
+       existing_schema_mode=False
+   )
+   db = DataFlow(config=config)
+
+**Model Relationships:**
+
+.. code-block:: python
+
+   # Define related models
+   @db.model
+   class User:
+       id: int
+       name: str
+       email: str
+   
+   @db.model  
+   class Post:
+       id: int
+       title: str
+       content: str
+       author_id: int  # Foreign key to User
+   
+   # Use in workflows with proper relationships
+   workflow = WorkflowBuilder()
+   workflow.add_node("UserCreateNode", "create_author", {
+       "name": "John Doe", "email": "john@example.com"
+   })
+   workflow.add_node("PostCreateNode", "create_post", {
+       "title": "My First Post",
+       "content": "Hello World!",
+       "author_id": 1  # References created user
    })
 
-   # Query specific databases
-   users = app.query("users", db="primary").where({"active": True})
-   metrics = app.query("events", db="analytics").aggregate([...])
-
-**Custom Query Pipelines:**
+**Schema Management:**
 
 .. code-block:: python
 
-   # Build reusable query pipelines
-   @app.pipeline("active_users")
-   def get_active_users(days=30):
-       return app.query("users").where({
-           "last_login": {"$gte": {"$date": f"-{days}d"}},
-           "status": "active"
-       })
+   # DataFlow handles schema automatically
+   db = DataFlow("postgresql://...", auto_migrate=True)
+   
+   # Or manage schema manually
+   db = DataFlow("postgresql://...", auto_migrate=False, existing_schema_mode=True)
+   
+   # Get schema information
+   models = db.list_models()
+   model_info = db.get_model_info("User")
+   generated_nodes = db.get_generated_nodes("User")
 
-   # Use pipelines
-   recent_users = app.pipeline("active_users", days=7)
+MongoDB-Style Query Builder
+---------------------------
 
-**Real-time Data Streaming:**
-
-.. code-block:: python
-
-   # Stream data changes
-   @app.stream("users")
-   def on_user_change(event):
-       print(f"User {event['action']}: {event['data']}")
-
-   # WebSocket endpoints automatically available at /ws/users
-
-MongoDB-Style Query API
------------------------
-
-DataFlow provides a complete MongoDB-style query interface that translates to optimized SQL:
+DataFlow provides MongoDB-style query builder that generates optimized SQL:
 
 **Comparison Operators:**
 
 .. code-block:: python
 
-   # MongoDB-style operators work across all databases
-   users = app.query("users").where({
+   # Build complex queries with MongoDB-style operators
+   query = User.query_builder()
+   query.filter({
        "age": {"$gt": 18, "$lt": 65},           # age > 18 AND age < 65
-       "name": {"$regex": "^John"},             # name LIKE 'John%'
+       "name": {"$regex": "^John"},             # name LIKE 'John%'  
        "department": {"$in": ["eng", "sales"]}, # department IN ('eng', 'sales')
        "status": {"$ne": "inactive"}            # status != 'inactive'
    })
+   
+   # Use in workflow
+   workflow.add_node("UserListNode", "filtered_users", query.to_params())
 
 **Array and JSON Operations:**
 

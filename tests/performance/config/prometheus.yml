@@ -1,0 +1,90 @@
+# Prometheus configuration for Kailash performance testing
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'kailash-performance'
+    environment: 'testing'
+
+rule_files:
+  - "performance_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 5s
+
+  # Node Exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['perf-node-exporter:9100']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  # cAdvisor for container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['perf-cadvisor:8080']
+    scrape_interval: 5s
+    metrics_path: /metrics
+
+  # Redis metrics
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['perf-redis-exporter:9121']
+    scrape_interval: 5s
+
+  # PostgreSQL metrics
+  - job_name: 'postgresql'
+    static_configs:
+      - targets: ['perf-postgres-exporter:9187']
+    scrape_interval: 5s
+
+  # MySQL metrics
+  - job_name: 'mysql'
+    static_configs:
+      - targets: ['perf-mysql-exporter:9104']
+    scrape_interval: 5s
+
+  # Custom application metrics (if available)
+  - job_name: 'kailash-app'
+    static_configs:
+      - targets: ['perf-coordinator:8000']
+    scrape_interval: 5s
+    metrics_path: /metrics
+    scrape_timeout: 10s
+
+  # Database-specific monitoring
+  - job_name: 'postgres-performance'
+    static_configs:
+      - targets: ['perf-postgres-exporter:9187']
+    scrape_interval: 10s
+    params:
+      collect[]:
+        - 'pg_stat_database'
+        - 'pg_stat_activity'
+        - 'pg_locks'
+        - 'pg_stat_bgwriter'
+        - 'pg_stat_user_tables'
+
+  # Long-running scrapes for detailed analysis
+  - job_name: 'performance-analysis'
+    static_configs:
+      - targets: ['perf-coordinator:8000']
+    scrape_interval: 30s
+    scrape_timeout: 25s
+    metrics_path: /performance-metrics
+
+# Storage configuration for time series data
+storage:
+  tsdb:
+    retention.time: 7d
+    retention.size: 10GB
+    wal_compression: true

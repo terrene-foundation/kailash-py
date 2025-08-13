@@ -21,13 +21,6 @@ from typing import Any, Dict, List
 
 import pytest
 import pytest_asyncio
-from tests.utils.docker_config import (
-    OLLAMA_CONFIG,
-    REDIS_CONFIG,
-    TEST_DATABASES,
-    ensure_docker_services,
-    get_postgres_connection_string,
-)
 
 from kailash.nodes.admin import (
     PermissionCheckNode,
@@ -37,6 +30,13 @@ from kailash.nodes.admin import (
 from kailash.nodes.admin.schema_manager import AdminSchemaManager
 from kailash.nodes.ai import LLMAgentNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+from tests.utils.docker_config import (
+    OLLAMA_CONFIG,
+    REDIS_CONFIG,
+    TEST_DATABASES,
+    ensure_docker_services,
+    get_postgres_connection_string,
+)
 
 
 @pytest.mark.e2e

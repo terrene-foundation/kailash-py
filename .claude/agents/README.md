@@ -28,8 +28,16 @@ The subagents are designed around the core workflow phases identified in `CLAUDE
 
 | Agent | Purpose | When to Use |
 |-------|---------|-------------|
-| **nexus-specialist** | Nexus multi-channel platform implementation | Zero-config deployment, API/CLI/MCP orchestration |
-| **dataflow-specialist** | DataFlow database framework implementation | Database operations, bulk processing, auto node generation |
+| **nexus-specialist** | Nexus multi-channel platform implementation | Zero-config deployment, API/CLI/MCP orchestration, **DataFlow integration** |
+| **dataflow-specialist** | DataFlow database framework implementation | Database operations, bulk processing, auto node generation, **Nexus integration** |
+
+### Critical Integration Guides
+
+**⚠️ IMPORTANT: DataFlow + Nexus Integration**
+- See: `sdk-users/guides/dataflow-nexus-integration.md` for tested configurations
+- Key settings to prevent blocking: `Nexus(auto_discovery=False)` + `DataFlow(skip_registry=True)`
+- Full featured config available with 10-30s startup time
+- Both specialists updated with integration warnings
 
 ### Design Principles
 

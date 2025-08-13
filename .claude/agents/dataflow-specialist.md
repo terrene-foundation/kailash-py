@@ -10,6 +10,19 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 
 ## DataFlow Reference (`sdk-users/apps/dataflow/`)
 
+### 🔗 Quick Links - DataFlow + Nexus Integration
+- **[Main Integration Guide](../../sdk-users/guides/dataflow-nexus-integration.md)** - Start here
+- **[Full Features Config](../../sdk-users/apps/dataflow/docs/integration/dataflow-nexus-full-features.md)** - 10-30s startup, all features
+- **[Working Examples](../../sdk-users/apps/nexus/examples/dataflow-integration/)** - Copy-paste ready code
+- **Critical Settings**: `skip_registry=True, enable_model_persistence=False` for <2s startup
+
+### ⚡ Quick Config Reference
+| Use Case | Config | Startup Time |
+|----------|--------|--------------|
+| **Fast API** | `skip_registry=True, enable_model_persistence=False` | <2s |
+| **Full Features** | `skip_registry=False, enable_model_persistence=True, auto_migrate=True` | 10-30s |
+| **With Nexus** | Always use above + `Nexus(auto_discovery=False)` | Same |
+
 ## Core Expertise
 
 ### DataFlow Architecture & Philosophy
@@ -48,6 +61,15 @@ from kailash.runtime.local import LocalRuntime
 
 # Database setup - both databases fully supported
 db = DataFlow("postgresql://user:pass@localhost/db")  # Production
+
+# CRITICAL: For Nexus integration, use these settings to avoid blocking:
+# db = DataFlow(
+#     database_url="postgresql://...",
+#     skip_registry=True,  # Prevents 5-10s delay per model
+#     enable_model_persistence=False,  # No workflow execution during init
+#     auto_migrate=False,
+#     skip_migration=True
+# )
 db = DataFlow("sqlite:///app.db")  # Development/Testing
 # Environment-based
 # db = DataFlow()  # Reads DATABASE_URL
@@ -73,6 +95,29 @@ workflow.add_node("UserCreateNode", "create_user", {
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
+```
+
+### Connection Pooling Best Practices (CRITICAL)
+```python
+# ⚠️ DataFlow uses AsyncSQL with connection pooling internally
+
+# ❌ AVOID: Multiple runtime.execute() calls create separate event loops
+for i in range(10):
+    runtime = LocalRuntime()
+    results = runtime.execute(workflow.build())  # New event loop = no pool sharing
+
+# ✅ RECOMMENDED: Use persistent runtime for proper connection pooling
+runtime = LocalRuntime(persistent_mode=True)
+for i in range(10):
+    results = await runtime.execute_async(workflow.build())  # Shared pool
+
+# ✅ ALTERNATIVE: Configure DataFlow pool settings
+db = DataFlow(
+    "postgresql://...",
+    pool_size=20,           # Initial pool size
+    max_overflow=10,        # Allow 10 extra connections under load
+    pool_timeout=30         # Wait up to 30s for connection
+)
 ```
 
 ### Safe Existing Database Connection (CRITICAL)
@@ -1093,11 +1138,68 @@ async def tdd_performance_test():
 
 ### Integration Points
 
-#### With Nexus
-- Auto-generate API endpoints from models
-- CLI commands for database operations
-- MCP tools for AI agent database access
-- See: [Nexus Integration Guide](../../sdk-users/apps/nexus/docs/dataflow-integration.md)
+#### With Nexus (CRITICAL UPDATE - v0.4.6+)
+
+**⚠️ CRITICAL: Prevent blocking and slow startup when integrating with Nexus**
+
+```python
+# CORRECT: Fast, non-blocking integration pattern
+from nexus import Nexus
+from dataflow import DataFlow
+
+# Step 1: Create Nexus FIRST with auto_discovery=False
+app = Nexus(
+    api_port=8000,
+    mcp_port=3001,
+    auto_discovery=False  # CRITICAL: Prevents infinite blocking
+)
+
+# Step 2: Create DataFlow with optimized settings
+db = DataFlow(
+    database_url="postgresql://...",
+    skip_registry=True,  # CRITICAL: Prevents 5-10s delay per model
+    enable_model_persistence=False,  # No workflow execution during init
+    auto_migrate=False,
+    skip_migration=True,
+    enable_caching=True,  # Keep performance features
+    enable_metrics=True
+)
+
+# Step 3: Register models (now instant!)
+@db.model
+class User:
+    id: str
+    email: str
+
+# Step 4: Manually register workflows
+from kailash.workflow.builder import WorkflowBuilder
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create", {"email": "{{email}}"})
+app.register("create_user", workflow.build())
+```
+
+**Why These Settings Are Critical:**
+- `auto_discovery=False`: Prevents Nexus from re-importing DataFlow models (causes infinite loop)
+- `skip_registry=True`: Skips synchronous workflow execution during model registration (5-10s per model)
+- `enable_model_persistence=False`: Prevents database writes during initialization
+
+**What You Keep:**
+- ✅ All CRUD operations work normally
+- ✅ All 9 generated nodes per model
+- ✅ Connection pooling, caching, metrics
+- ✅ Multi-channel access (API, CLI, MCP)
+
+**What You Lose:**
+- ❌ Model persistence across restarts
+- ❌ Automatic migration tracking
+- ❌ Runtime model discovery
+
+**Integration Documentation:**
+- 📚 [Main Integration Guide](../../sdk-users/guides/dataflow-nexus-integration.md) - Comprehensive guide with 8 use cases
+- 🚀 [Full Features Configuration](../../sdk-users/apps/dataflow/docs/integration/dataflow-nexus-full-features.md) - All features enabled (10-30s startup)
+- 🔍 [Blocking Issue Analysis](../../sdk-users/apps/dataflow/docs/integration/nexus-blocking-issue-analysis.md) - Root cause analysis
+- 💡 [Technical Solution](../../sdk-users/apps/nexus/docs/technical/dataflow-integration-solution.md) - Complete solution details
+- 🧪 [Working Examples](../../sdk-users/apps/nexus/examples/dataflow-integration/) - Tested code examples
 
 #### With Core SDK
 - All DataFlow nodes are Kailash nodes

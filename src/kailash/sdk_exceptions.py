@@ -196,6 +196,27 @@ class RuntimeExecutionError(RuntimeException):
     """
 
 
+class ResourceLimitExceededError(RuntimeException):
+    """Raised when runtime resource limits are exceeded.
+
+    This typically occurs when:
+    - Connection pool limits are exceeded
+    - Memory usage exceeds configured limits
+    - CPU usage exceeds thresholds
+    - Too many concurrent workflows
+    """
+
+
+class CircuitBreakerOpenError(RuntimeException):
+    """Raised when circuit breaker is open.
+
+    This typically occurs when:
+    - Service has exceeded failure threshold
+    - Circuit breaker is protecting against cascading failures
+    - Service is temporarily unavailable
+    """
+
+
 # Task tracking exceptions
 class TaskException(KailashException):
     """Base exception for task tracking errors."""

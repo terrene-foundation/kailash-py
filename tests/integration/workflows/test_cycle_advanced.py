@@ -11,7 +11,6 @@ import time
 from typing import Any, Dict, List
 
 import pytest
-from tests.utils.docker_config import REDIS_CONFIG, get_postgres_connection_string
 
 from kailash import Workflow, WorkflowBuilder
 from kailash.nodes.base import Node, NodeParameter
@@ -22,6 +21,7 @@ from kailash.nodes.logic import SwitchNode
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.runtime import LocalRuntime
 from kailash.sdk_exceptions import NodeExecutionError, WorkflowExecutionError
+from tests.utils.docker_config import REDIS_CONFIG, get_postgres_connection_string
 
 
 @pytest.mark.integration
