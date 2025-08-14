@@ -2,17 +2,44 @@
 Monitoring and alerting system for Kailash SDK.
 
 Provides comprehensive monitoring for validation failures, security violations,
-performance metrics, and alerting for critical events.
+performance metrics, and alerting for critical events. Includes specialized
+AsyncSQL lock contention monitoring.
 """
 
+# Original monitoring imports
 from .alerts import AlertManager, AlertRule, AlertSeverity
 from .metrics import PerformanceMetrics, SecurityMetrics, ValidationMetrics
+
+# AsyncSQL lock monitoring imports
+from .asyncsql_metrics import (
+    AsyncSQLMetrics,
+    enable_metrics,
+    disable_metrics,
+    get_global_metrics,
+    set_global_metrics,
+    record_lock_acquisition,
+    record_pool_operation,
+    set_active_locks,
+    integrate_with_async_sql,
+    PROMETHEUS_AVAILABLE
+)
 
 __all__ = [
     "ValidationMetrics",
     "SecurityMetrics",
-    "PerformanceMetrics",
+    "PerformanceMetrics", 
     "AlertManager",
     "AlertRule",
     "AlertSeverity",
+    # AsyncSQL monitoring
+    "AsyncSQLMetrics",
+    "enable_metrics",
+    "disable_metrics", 
+    "get_global_metrics",
+    "set_global_metrics",
+    "record_lock_acquisition",
+    "record_pool_operation",
+    "set_active_locks",
+    "integrate_with_async_sql",
+    "PROMETHEUS_AVAILABLE"
 ]
