@@ -6,8 +6,8 @@ per-pool locking performance and contention patterns.
 """
 
 import time
-from typing import Optional, Dict, Any
 from contextlib import asynccontextmanager
+from typing import Any, Dict, Optional
 
 try:
     import prometheus_client

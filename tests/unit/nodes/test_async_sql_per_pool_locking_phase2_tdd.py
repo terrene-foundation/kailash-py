@@ -14,12 +14,13 @@ Tests are written first, then implementation follows.
 """
 
 import asyncio
-import pytest
 import threading
-import weakref
 import time
+import weakref
 from typing import Dict, Set
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode as AsyncSQL
 

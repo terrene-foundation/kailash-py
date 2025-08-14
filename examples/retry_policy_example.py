@@ -12,14 +12,15 @@ This example demonstrates the comprehensive retry policy engine with:
 
 import asyncio
 import logging
-from kailash.workflow.builder import WorkflowBuilder
+
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.resource_manager import (
+    AdaptiveRetryStrategy,
     ExponentialBackoffStrategy,
     LinearBackoffStrategy,
-    AdaptiveRetryStrategy,
     RetryPolicyMode,
 )
+from kailash.workflow.builder import WorkflowBuilder
 
 # Setup logging to see retry attempts
 logging.basicConfig(level=logging.INFO)
@@ -209,7 +210,7 @@ result = {{'iteration': {i}, 'learned_from_attempts': count}}
         results3, run_id3 = await runtime.execute_async(workflow3.build())
     except Exception as e:
         print(f"✅ Correctly failed without retry: {type(e).__name__}")
-        print(f"   Reason: Authentication errors are non-retriable")
+        print("   Reason: Authentication errors are non-retriable")
 
     print()
 
@@ -252,14 +253,14 @@ result = {{'iteration': {i}, 'learned_from_attempts': count}}
         )
 
         if analytics.get("most_common_exceptions"):
-            print(f"📊 Most common exceptions:")
+            print("📊 Most common exceptions:")
             for exc_name, count in analytics["most_common_exceptions"][:3]:
                 print(f"   • {exc_name}: {count} occurrences")
 
     # Get strategy effectiveness
     effectiveness = runtime.get_strategy_effectiveness()
     if effectiveness:
-        print(f"\n🎯 Strategy Effectiveness:")
+        print("\n🎯 Strategy Effectiveness:")
         for strategy_name, stats in effectiveness.items():
             print(
                 f"   • {strategy_name}: {stats['success_rate']:.1%} success rate, {stats['average_attempts']:.1f} avg attempts"
@@ -268,7 +269,7 @@ result = {{'iteration': {i}, 'learned_from_attempts': count}}
     # Get retry configuration summary
     config = runtime.get_retry_configuration()
     if config:
-        print(f"\n⚙️  Configuration Summary:")
+        print("\n⚙️  Configuration Summary:")
         print(f"   • Mode: {config['mode']}")
         print(f"   • Analytics: {config['enable_analytics']}")
         print(
@@ -293,19 +294,19 @@ result = {{'iteration': {i}, 'learned_from_attempts': count}}
         adaptive_strategy = retry_engine.strategies["adaptive_retry"]
         learning_stats = adaptive_strategy.get_learning_stats()
 
-        print(f"🧠 Learning Statistics:")
+        print("🧠 Learning Statistics:")
         print(f"   • Total attempts recorded: {learning_stats['total_attempts']}")
         print(
             f"   • Unique exception types learned: {learning_stats['unique_exceptions']}"
         )
 
         if learning_stats["learned_delays"]:
-            print(f"   • Learned optimal delays:")
+            print("   • Learned optimal delays:")
             for exc_type, delay in learning_stats["learned_delays"].items():
                 print(f"     - {exc_type}: {delay:.2f}s")
 
         if learning_stats["success_rates"]:
-            print(f"   • Exception success rates:")
+            print("   • Exception success rates:")
             for exc_type, rate in learning_stats["success_rates"].items():
                 print(f"     - {exc_type}: {rate:.1%}")
 

@@ -323,9 +323,11 @@ class TestAsyncSQLPoolSharingIntegration:
         mock_adapter = AsyncMock()
         # Mock asyncpg pool
         mock_pool = MagicMock()
+
         # Use a regular function instead of MagicMock
         def mock_size():
             return 10
+
         mock_pool.size = mock_size
         mock_pool._holders = [MagicMock() for _ in range(10)]
         # Mock in_use for first 3 holders
@@ -403,10 +405,11 @@ class TestAsyncSQLPoolSharingIntegration:
     async def test_pool_sharing_different_pool_sizes(self):
         """Test that different pool sizes create different pools."""
 
-        with patch.object(
-            AsyncSQLDatabaseNode, "_create_adapter", new_callable=AsyncMock
-        ) as mock_create, patch.object(
-            AsyncSQLDatabaseNode, "_shared_pools", {}
+        with (
+            patch.object(
+                AsyncSQLDatabaseNode, "_create_adapter", new_callable=AsyncMock
+            ) as mock_create,
+            patch.object(AsyncSQLDatabaseNode, "_shared_pools", {}),
         ):
             # Ensure different adapters for different configs
             adapter1 = AsyncMock()
