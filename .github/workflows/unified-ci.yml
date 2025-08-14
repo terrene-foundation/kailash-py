@@ -431,8 +431,10 @@ jobs:
           # Fast test execution without forking overhead
           # Smart fixtures handle test isolation efficiently
           # Tests marked with requires_isolation will automatically use forking
-          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v"
-          echo "Running Tier 1 unit tests only (fast mode) with marker-based exclusion"
+          # Fast test execution with process isolation to prevent hanging
+          # Use --forked to run each test in a subprocess (avoids fork/thread deadlocks)
+          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v --forked"
+          echo "Running Tier 1 unit tests with subprocess isolation to prevent hanging"
 
           # Run all checks in parallel with proper failure detection
           pids=()
@@ -457,8 +459,11 @@ jobs:
 
           # Run tests with the venv Python (WITHOUT coverage for speed)
           if [ -d ".venv" ]; then
-              run_check "Tests" ".venv/bin/python -m $PYTEST_CMD" "pytest.log" &
+              echo "🧪 Starting pytest execution..."
+              # Add timeout at shell level to prevent hanging (10 minutes max)
+              run_check "Tests" "timeout 600 .venv/bin/python -m $PYTEST_CMD" "pytest.log" &
               pids[2]=$!
+              echo "✓ Pytest started with PID ${pids[2]}"
           else
               echo "⚠️  No .venv found, skipping tests"
               pids[2]=""

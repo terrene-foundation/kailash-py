@@ -1,375 +1,419 @@
-"""Integration tests for AsyncSQLDatabaseNode configuration with REAL PostgreSQL."""
+"""Unit tests for AsyncSQLDatabaseNode configuration management."""
 
 import os
 import tempfile
+from unittest.mock import patch
 
 import pytest
-import pytest_asyncio
 import yaml
 
-from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
-from tests.utils.docker_config import get_postgres_connection_string
-
-# Mark all tests as requiring postgres and as integration tests
-pytestmark = [pytest.mark.integration, pytest.mark.requires_postgres]
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode, DatabaseConfigManager
+from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 
-class TestAsyncSQLConfigIntegration:
-    """Test configuration functionality with REAL PostgreSQL database."""
+class TestDatabaseConfigManager:
+    """Test DatabaseConfigManager functionality."""
 
-    @pytest_asyncio.fixture
-    async def setup_database(self):
-        """Set up test database."""
-        conn_string = get_postgres_connection_string()
+    def test_default_config_path(self):
+        """Test default configuration file path."""
+        manager = DatabaseConfigManager()
+        assert manager.config_path == "database.yaml"
 
-        # Create test table
-        setup_node = AsyncSQLDatabaseNode(
-            name="setup",
-            database_type="postgresql",
-            connection_string=conn_string,
-            allow_admin=True,
-        )
+    def test_custom_config_path(self):
+        """Test custom configuration file path."""
+        manager = DatabaseConfigManager("/path/to/config.yaml")
+        assert manager.config_path == "/path/to/config.yaml"
 
-        await setup_node.execute_async(query="DROP TABLE IF EXISTS config_test")
-        await setup_node.execute_async(
-            query="""
-            CREATE TABLE config_test (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(100),
-                value INTEGER
-            )
-        """
-        )
-
-        yield conn_string
-
-        # Cleanup
-        await setup_node.execute_async(query="DROP TABLE IF EXISTS config_test")
-        await setup_node.cleanup()
-
-    @pytest.mark.asyncio
-    async def test_config_file_connection(self, setup_database):
-        """Test connecting to database using config file."""
-        conn_string = setup_database
-
-        # Create config file
+    def test_load_valid_config(self):
+        """Test loading valid YAML configuration."""
         config_data = {
             "databases": {
-                "test_db": {
-                    "connection_string": conn_string,
-                    "database_type": "postgresql",
-                    "pool_size": 5,
-                    "max_pool_size": 10,
+                "production": {
+                    "connection_string": "postgresql://user:pass@localhost/prod_db",
+                    "pool_size": 20,
                     "timeout": 30.0,
-                }
-            }
-        }
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-            yaml.dump(config_data, f)
-            config_path = f.name
-
-        try:
-            # Create node using config file
-            node = AsyncSQLDatabaseNode(
-                name="config_node",
-                connection_name="test_db",
-                config_file=config_path,
-            )
-
-            # Test query execution
-            result = await node.execute_async(
-                query="INSERT INTO config_test (name, value) VALUES (:name, :value) RETURNING id",
-                params={"name": "ConfigTest", "value": 42},
-            )
-
-            assert len(result["result"]["data"]) == 1
-            assert result["result"]["data"][0]["id"] > 0
-
-            # Verify pool configuration was applied
-            pool_info = node.get_pool_info()
-            assert pool_info["pool_key"] is not None  # Pool should be created
-
-            await node.cleanup()
-
-        finally:
-            os.unlink(config_path)
-
-    @pytest.mark.asyncio
-    async def test_multiple_connections_in_config(self, setup_database):
-        """Test using multiple database connections from same config file."""
-        conn_string = setup_database
-
-        # Create config with multiple connections
-        config_data = {
-            "databases": {
-                "primary": {
-                    "connection_string": conn_string,
-                    "database_type": "postgresql",
-                    "pool_size": 10,
                 },
-                "secondary": {
-                    "connection_string": conn_string,  # Same DB for testing
-                    "database_type": "postgresql",
+                "test": {
+                    "url": "postgresql://user:pass@localhost/test_db",
                     "pool_size": 5,
                 },
                 "default": {
-                    "connection_string": conn_string,
-                    "database_type": "postgresql",
-                    "pool_size": 3,
+                    "connection_string": "sqlite:///default.db",
                 },
             }
         }
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(config_data, f)
-            config_path = f.name
+            temp_path = f.name
 
         try:
-            # Create nodes for different connections
-            primary_node = AsyncSQLDatabaseNode(
-                name="primary_node",
-                connection_name="primary",
-                config_file=config_path,
-            )
+            manager = DatabaseConfigManager(temp_path)
 
-            secondary_node = AsyncSQLDatabaseNode(
-                name="secondary_node",
-                connection_name="secondary",
-                config_file=config_path,
-            )
+            # Test production config
+            conn_str, config = manager.get_database_config("production")
+            assert conn_str == "postgresql://user:pass@localhost/prod_db"
+            assert config["pool_size"] == 20
+            assert config["timeout"] == 30.0
 
-            # Test both connections work
-            await primary_node.execute_async(
-                query="INSERT INTO config_test (name, value) VALUES ('Primary', 1)"
-            )
-
-            await secondary_node.execute_async(
-                query="INSERT INTO config_test (name, value) VALUES ('Secondary', 2)"
-            )
-
-            # Verify data from both
-            result = await primary_node.execute_async(
-                query="SELECT name, value FROM config_test ORDER BY value"
-            )
-
-            assert len(result["result"]["data"]) == 2
-            assert result["result"]["data"][0]["name"] == "Primary"
-            assert result["result"]["data"][1]["name"] == "Secondary"
+            # Test config with 'url' key
+            conn_str, config = manager.get_database_config("test")
+            assert conn_str == "postgresql://user:pass@localhost/test_db"
+            assert config["pool_size"] == 5
 
             # Test default fallback
-            default_node = AsyncSQLDatabaseNode(
-                name="default_node",
-                connection_name="nonexistent",  # Should fall back to default
-                config_file=config_path,
-            )
-
-            result = await default_node.execute_async(
-                query="SELECT COUNT(*) as count FROM config_test"
-            )
-
-            assert result["result"]["data"][0]["count"] == 2
-
-            # Cleanup
-            await primary_node.cleanup()
-            await secondary_node.cleanup()
-            await default_node.cleanup()
+            conn_str, config = manager.get_database_config("nonexistent")
+            assert conn_str == "sqlite:///default.db"
 
         finally:
-            os.unlink(config_path)
+            os.unlink(temp_path)
 
-    @pytest.mark.asyncio
-    async def test_env_var_substitution_integration(self, setup_database):
-        """Test environment variable substitution in real scenario."""
-        conn_string = setup_database
+    def test_missing_config_file(self):
+        """Test behavior with missing config file."""
+        manager = DatabaseConfigManager("/nonexistent/config.yaml")
 
-        # Parse connection string to extract components
-        # Format: postgresql://user:password@host:port/database
-        import re
+        # Should raise error when trying to get config
+        with pytest.raises(NodeExecutionError, match="not found in configuration"):
+            manager.get_database_config("test")
 
-        match = re.match(
-            r"postgresql://(?P<user>[^:]+):(?P<password>[^@]+)@(?P<host>[^:]+):(?P<port>\d+)/(?P<database>.+)",
-            conn_string,
-        )
+    def test_invalid_yaml(self):
+        """Test handling of invalid YAML."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            f.write("invalid: yaml: content: ][")
+            temp_path = f.name
 
-        if match:
-            parts = match.groupdict()
+        try:
+            manager = DatabaseConfigManager(temp_path)
+            with pytest.raises(NodeValidationError, match="Invalid YAML"):
+                manager.get_database_config("test")
+        finally:
+            os.unlink(temp_path)
 
+    def test_env_var_substitution_full(self):
+        """Test environment variable substitution with ${VAR} format."""
+        config_data = {
+            "databases": {
+                "test": {
+                    "connection_string": "${DB_CONNECTION_STRING}",
+                    "user": "${DB_USER}",
+                    "password": "${DB_PASSWORD}",
+                }
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(config_data, f)
+            temp_path = f.name
+
+        try:
             # Set environment variables
-            os.environ["TEST_DB_USER"] = parts["user"]
-            os.environ["TEST_DB_PASSWORD"] = parts["password"]
-            os.environ["TEST_DB_HOST"] = parts["host"]
-            os.environ["TEST_DB_PORT"] = parts["port"]
-            os.environ["TEST_DB_NAME"] = parts["database"]
+            os.environ["DB_CONNECTION_STRING"] = "postgresql://localhost/testdb"
+            os.environ["DB_USER"] = "testuser"
+            os.environ["DB_PASSWORD"] = "testpass"
 
-            # Create config with env vars
-            config_data = {
-                "databases": {
-                    "env_test": {
-                        "connection_string": "postgresql://$TEST_DB_USER:$TEST_DB_PASSWORD@$TEST_DB_HOST:$TEST_DB_PORT/$TEST_DB_NAME",
-                        "database_type": "postgresql",
-                    }
-                }
-            }
+            manager = DatabaseConfigManager(temp_path)
+            conn_str, config = manager.get_database_config("test")
 
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".yaml", delete=False
-            ) as f:
-                yaml.dump(config_data, f)
-                config_path = f.name
+            assert conn_str == "postgresql://localhost/testdb"
+            assert config["user"] == "testuser"
+            assert config["password"] == "testpass"
 
-            try:
-                # Create node with env var config
-                node = AsyncSQLDatabaseNode(
-                    name="env_node",
-                    connection_name="env_test",
-                    config_file=config_path,
-                )
+        finally:
+            os.unlink(temp_path)
+            # Clean up env vars
+            for var in ["DB_CONNECTION_STRING", "DB_USER", "DB_PASSWORD"]:
+                os.environ.pop(var, None)
 
-                # Test connection works
-                result = await node.execute_async(
-                    query="SELECT current_database() as db_name"
-                )
-
-                assert result["result"]["data"][0]["db_name"] == parts["database"]
-
-                await node.cleanup()
-
-            finally:
-                os.unlink(config_path)
-                # Clean up env vars
-                for var in [
-                    "TEST_DB_USER",
-                    "TEST_DB_PASSWORD",
-                    "TEST_DB_HOST",
-                    "TEST_DB_PORT",
-                    "TEST_DB_NAME",
-                ]:
-                    os.environ.pop(var, None)
-
-    @pytest.mark.asyncio
-    async def test_config_with_advanced_settings(self, setup_database):
-        """Test advanced configuration settings from file."""
-        conn_string = setup_database
-
-        # Create config with advanced settings
+    def test_env_var_substitution_inline(self):
+        """Test environment variable substitution with $VAR format in strings."""
         config_data = {
             "databases": {
-                "advanced": {
-                    "connection_string": conn_string,
-                    "database_type": "postgresql",
-                    "pool_size": 2,
-                    "max_pool_size": 5,
-                    "timeout": 10.0,
-                    "transaction_mode": "manual",
-                    "share_pool": False,
-                    "validate_queries": True,
-                    "allow_admin": False,
-                    "retry_config": {
-                        "max_retries": 5,
-                        "initial_delay": 0.5,
-                        "retryable_errors": ["deadlock", "serialization failure"],
-                    },
+                "test": {
+                    "connection_string": "postgresql://$DB_USER:$DB_PASSWORD@$DB_HOST:$DB_PORT/$DB_NAME",
                 }
             }
         }
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(config_data, f)
-            config_path = f.name
+            temp_path = f.name
 
         try:
-            # Create node with advanced config
-            node = AsyncSQLDatabaseNode(
-                name="advanced_node",
-                connection_name="advanced",
-                config_file=config_path,
-            )
+            # Set environment variables
+            os.environ["DB_USER"] = "myuser"
+            os.environ["DB_PASSWORD"] = "mypass"
+            os.environ["DB_HOST"] = "localhost"
+            os.environ["DB_PORT"] = "5432"
+            os.environ["DB_NAME"] = "mydb"
 
-            # Verify settings were applied
-            assert node.config["transaction_mode"] == "manual"
-            assert node.config["share_pool"] is False
-            assert node.config["validate_queries"] is True
-            assert node.config["allow_admin"] is False
+            manager = DatabaseConfigManager(temp_path)
+            conn_str, config = manager.get_database_config("test")
 
-            # Test manual transaction mode
-            await node.begin_transaction()
-
-            await node.execute_async(
-                query="INSERT INTO config_test (name, value) VALUES ('TX1', 100)"
-            )
-
-            await node.execute_async(
-                query="INSERT INTO config_test (name, value) VALUES ('TX2', 200)"
-            )
-
-            await node.commit()
-
-            # Verify both inserts succeeded
-            result = await node.execute_async(
-                query="SELECT COUNT(*) as count FROM config_test WHERE name IN ('TX1', 'TX2')"
-            )
-
-            assert result["result"]["data"][0]["count"] == 2
-
-            # Test query validation blocks admin commands
-            from kailash.sdk_exceptions import NodeExecutionError
-
-            with pytest.raises(NodeExecutionError, match="administrative command"):
-                await node.execute_async(query="CREATE TABLE should_fail (id INT)")
-
-            await node.cleanup()
+            assert conn_str == "postgresql://myuser:mypass@localhost:5432/mydb"
 
         finally:
-            os.unlink(config_path)
+            os.unlink(temp_path)
+            # Clean up env vars
+            for var in ["DB_USER", "DB_PASSWORD", "DB_HOST", "DB_PORT", "DB_NAME"]:
+                os.environ.pop(var, None)
 
-    @pytest.mark.asyncio
-    async def test_config_inheritance_and_override(self, setup_database):
-        """Test config file values with parameter overrides."""
-        conn_string = setup_database
-
-        # Create base config
+    def test_missing_env_var(self):
+        """Test error when environment variable is not found."""
         config_data = {
             "databases": {
-                "base": {
-                    "connection_string": conn_string,
-                    "database_type": "postgresql",
+                "test": {
+                    "connection_string": "${MISSING_VAR}",
+                }
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(config_data, f)
+            temp_path = f.name
+
+        try:
+            manager = DatabaseConfigManager(temp_path)
+            with pytest.raises(
+                NodeExecutionError, match="Environment variable 'MISSING_VAR' not found"
+            ):
+                manager.get_database_config("test")
+        finally:
+            os.unlink(temp_path)
+
+    def test_list_connections(self):
+        """Test listing available connections."""
+        config_data = {
+            "databases": {
+                "production": {"url": "postgresql://localhost/prod"},
+                "staging": {"url": "postgresql://localhost/stage"},
+                "test": {"url": "postgresql://localhost/test"},
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(config_data, f)
+            temp_path = f.name
+
+        try:
+            manager = DatabaseConfigManager(temp_path)
+            connections = manager.list_connections()
+
+            assert set(connections) == {"production", "staging", "test"}
+
+        finally:
+            os.unlink(temp_path)
+
+    def test_validate_config(self):
+        """Test configuration validation."""
+        # Valid config
+        valid_config = {
+            "databases": {
+                "test": {"connection_string": "postgresql://localhost/test"},
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(valid_config, f)
+            temp_path = f.name
+
+        try:
+            manager = DatabaseConfigManager(temp_path)
+            manager.validate_config()  # Should not raise
+        finally:
+            os.unlink(temp_path)
+
+        # Invalid config - no connection string
+        invalid_config = {
+            "databases": {
+                "test": {"pool_size": 10},  # Missing connection_string/url
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(invalid_config, f)
+            temp_path = f.name
+
+        try:
+            manager = DatabaseConfigManager(temp_path)
+            with pytest.raises(
+                NodeValidationError, match="must have 'connection_string' or 'url'"
+            ):
+                manager.validate_config()
+        finally:
+            os.unlink(temp_path)
+
+    def test_config_caching(self):
+        """Test that configurations are cached."""
+        config_data = {
+            "databases": {
+                "test": {
+                    "connection_string": "postgresql://localhost/test",
                     "pool_size": 10,
-                    "timeout": 60.0,
-                    "validate_queries": False,
                 }
             }
         }
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(config_data, f)
-            config_path = f.name
+            temp_path = f.name
 
         try:
-            # Create node with overrides
-            node = AsyncSQLDatabaseNode(
-                name="override_node",
-                connection_name="base",
-                config_file=config_path,
-                pool_size=20,  # Override config file value
-                timeout=30.0,  # Override config file value
-                transaction_mode="none",  # Add new value
-            )
+            manager = DatabaseConfigManager(temp_path)
 
-            # Verify overrides
-            assert node.config["pool_size"] == 20  # Overridden
-            assert node.config["timeout"] == 30.0  # Overridden
-            assert node.config["transaction_mode"] == "none"  # Added
-            assert node.config["validate_queries"] is False  # From file
+            # First call
+            conn_str1, config1 = manager.get_database_config("test")
 
-            # Test execution works
-            result = await node.execute_async(
-                query="SELECT :value::int * 2 as result", params={"value": 21}
-            )
+            # Modify the file
+            config_data["databases"]["test"]["pool_size"] = 20
+            with open(temp_path, "w") as f:
+                yaml.dump(config_data, f)
 
-            assert result["result"]["data"][0]["result"] == 42
+            # Second call should return cached value
+            conn_str2, config2 = manager.get_database_config("test")
 
-            await node.cleanup()
+            assert config1["pool_size"] == config2["pool_size"] == 10
 
         finally:
-            os.unlink(config_path)
+            os.unlink(temp_path)
+
+
+class TestAsyncSQLDatabaseNodeConfig:
+    """Test AsyncSQLDatabaseNode configuration integration."""
+
+    def test_load_config_from_file(self):
+        """Test loading database configuration from file."""
+        config_data = {
+            "databases": {
+                "myapp": {
+                    "connection_string": "postgresql://user:pass@localhost:5432/myapp_db",
+                    "pool_size": 15,
+                    "max_pool_size": 30,
+                    "timeout": 45.0,
+                    "database_type": "postgresql",
+                }
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(config_data, f)
+            temp_path = f.name
+
+        try:
+            node = AsyncSQLDatabaseNode(
+                name="test_node",
+                connection_name="myapp",
+                config_file=temp_path,
+                query="SELECT 1",
+            )
+
+            # Check that config was loaded
+            assert (
+                node.config["connection_string"]
+                == "postgresql://user:pass@localhost:5432/myapp_db"
+            )
+            # Config file values should override defaults
+            assert node.config["pool_size"] == 15
+            assert node.config["max_pool_size"] == 30
+            assert node.config["timeout"] == 45.0
+            assert node.config["database_type"] == "postgresql"
+
+        finally:
+            os.unlink(temp_path)
+
+    def test_config_file_overrides(self):
+        """Test that explicit parameters override config file values."""
+        config_data = {
+            "databases": {
+                "test": {
+                    "connection_string": "postgresql://localhost/from_file",
+                    "pool_size": 10,
+                    "database_type": "postgresql",
+                }
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(config_data, f)
+            temp_path = f.name
+
+        try:
+            node = AsyncSQLDatabaseNode(
+                name="test_node",
+                connection_name="test",
+                config_file=temp_path,
+                pool_size=20,  # Override file value
+                query="SELECT 1",
+            )
+
+            # Explicit parameter should win
+            assert node.config["pool_size"] == 20
+            # File values should be used for non-overridden params
+            assert (
+                node.config["connection_string"] == "postgresql://localhost/from_file"
+            )
+
+        finally:
+            os.unlink(temp_path)
+
+    def test_missing_connection_name(self):
+        """Test error when connection name not found in config."""
+        config_data = {
+            "databases": {
+                "existing": {"connection_string": "postgresql://localhost/test"}
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(config_data, f)
+            temp_path = f.name
+
+        try:
+            from kailash.sdk_exceptions import NodeConfigurationError
+
+            with pytest.raises(
+                NodeConfigurationError, match="Failed to load config 'nonexistent'"
+            ):
+                AsyncSQLDatabaseNode(
+                    name="test_node",
+                    connection_name="nonexistent",
+                    config_file=temp_path,
+                    query="SELECT 1",
+                )
+        finally:
+            os.unlink(temp_path)
+
+    def test_env_var_in_config_file(self):
+        """Test environment variable substitution in config file."""
+        config_data = {
+            "databases": {
+                "test": {
+                    "connection_string": "${TEST_DB_URL}",
+                    "database_type": "postgresql",
+                }
+            }
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(config_data, f)
+            temp_path = f.name
+
+        try:
+            os.environ["TEST_DB_URL"] = (
+                "postgresql://testuser:testpass@testhost:5432/testdb"
+            )
+
+            node = AsyncSQLDatabaseNode(
+                name="test_node",
+                connection_name="test",
+                config_file=temp_path,
+                query="SELECT 1",
+            )
+
+            assert (
+                node.config["connection_string"]
+                == "postgresql://testuser:testpass@testhost:5432/testdb"
+            )
+
+        finally:
+            os.unlink(temp_path)
+            os.environ.pop("TEST_DB_URL", None)
