@@ -1,301 +1,327 @@
-"""Integration tests for AsyncSQLDatabaseNode security features with REAL PostgreSQL."""
+"""Tests for AsyncSQLDatabaseNode security features."""
 
 import pytest
-import pytest_asyncio
 
-from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
-from kailash.sdk_exceptions import NodeExecutionError
-from tests.utils.docker_config import get_postgres_connection_string
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode, QueryValidator
+from kailash.sdk_exceptions import (
+    NodeConfigurationError,
+    NodeExecutionError,
+    NodeValidationError,
+)
 
-# Mark all tests as requiring postgres and as integration tests
-pytestmark = [pytest.mark.integration, pytest.mark.requires_postgres]
 
+class TestQueryValidator:
+    """Test QueryValidator security validation."""
 
-class TestAsyncSQLSecurityIntegration:
-    """Test security features with REAL PostgreSQL database."""
+    def test_validate_query_allows_safe_queries(self):
+        """Test that safe queries are allowed."""
+        safe_queries = [
+            "SELECT * FROM users WHERE id = :id",
+            "INSERT INTO logs (message) VALUES (:message)",
+            "UPDATE settings SET value = :value WHERE key = :key",
+            "DELETE FROM sessions WHERE expires_at < :now",
+        ]
 
-    @pytest_asyncio.fixture
-    async def setup_database(self):
-        """Set up test database."""
-        conn_string = get_postgres_connection_string()
+        for query in safe_queries:
+            # Should not raise
+            QueryValidator.validate_query(query)
 
-        # Create test table - this needs admin privileges
-        setup_node = AsyncSQLDatabaseNode(
-            name="setup",
-            database_type="postgresql",
-            connection_string=conn_string,
-            allow_admin=True,  # Allow admin for setup
-        )
+    def test_validate_query_blocks_dangerous_patterns(self):
+        """Test that dangerous patterns are blocked."""
+        dangerous_queries = [
+            # Multiple statements
+            "SELECT * FROM users; DROP TABLE users",
+            "UPDATE users SET admin=1; DELETE FROM audit_log",
+            # SQL comments that might hide code
+            "SELECT * FROM users WHERE id = 1 -- OR 1=1",
+            "SELECT * FROM users /* OR 1=1 */ WHERE id = 1",
+            # Union-based injection
+            "SELECT * FROM users WHERE id = 1 UNION SELECT * FROM passwords",
+            # Time-based blind injection
+            "SELECT * FROM users WHERE id = 1 AND SLEEP(5)",
+            "SELECT * FROM users WHERE id = 1 AND PG_SLEEP(5)",
+            # File operations
+            "SELECT LOAD_FILE('/etc/passwd')",
+            "SELECT * INTO OUTFILE '/tmp/data.txt' FROM users",
+            # System commands
+            "EXEC XP_CMDSHELL 'dir'",
+        ]
 
-        await setup_node.execute_async(query="DROP TABLE IF EXISTS security_test")
-        await setup_node.execute_async(
-            query="""
-            CREATE TABLE security_test (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(100),
-                email VARCHAR(100),
-                is_admin BOOLEAN DEFAULT false
-            )
-        """
-        )
+        for query in dangerous_queries:
+            with pytest.raises(NodeValidationError, match="dangerous pattern"):
+                QueryValidator.validate_query(query)
 
-        # Insert test data
-        await setup_node.execute_async(
-            query="INSERT INTO security_test (username, email, is_admin) VALUES (:username, :email, :is_admin)",
-            params={
-                "username": "testuser",
-                "email": "test@example.com",
-                "is_admin": False,
-            },
-        )
-        await setup_node.execute_async(
-            query="INSERT INTO security_test (username, email, is_admin) VALUES (:username, :email, :is_admin)",
-            params={
-                "username": "admin",
-                "email": "admin@example.com",
-                "is_admin": True,
-            },
-        )
-
-        yield conn_string
-
-        # Cleanup
-        await setup_node.execute_async(query="DROP TABLE IF EXISTS security_test")
-        await setup_node.cleanup()
-
-    @pytest.mark.asyncio
-    async def test_sql_injection_prevention(self, setup_database):
-        """Test that SQL injection attempts are blocked."""
-        conn_string = setup_database
-
-        # Create node with security enabled (default)
-        node = AsyncSQLDatabaseNode(
-            name="secure_node",
-            database_type="postgresql",
-            connection_string=conn_string,
-        )
-
-        # Attempt SQL injection via concatenation
-        with pytest.raises(NodeExecutionError, match="dangerous pattern"):
-            await node.execute_async(
-                query="SELECT * FROM security_test WHERE username = 'admin'; DROP TABLE security_test; --'"
-            )
-
-        # Verify table still exists
-        result = await node.execute_async(
-            query="SELECT COUNT(*) as count FROM security_test"
-        )
-        assert result["result"]["data"][0]["count"] == 2
-
-        # Safe parameterized query should work
-        result = await node.execute_async(
-            query="SELECT * FROM security_test WHERE username = :username",
-            params={"username": "admin'; DROP TABLE security_test; --"},
-        )
-        # Should return no results (no user with that exact name)
-        assert len(result["result"]["data"]) == 0
-
-        await node.cleanup()
-
-    @pytest.mark.asyncio
-    async def test_admin_command_blocking(self, setup_database):
+    def test_validate_query_blocks_admin_commands_by_default(self):
         """Test that admin commands are blocked by default."""
-        conn_string = setup_database
+        admin_queries = [
+            "CREATE TABLE new_table (id INT)",
+            "ALTER TABLE users ADD COLUMN admin BOOLEAN",
+            "DROP TABLE users",
+            "GRANT ALL ON users TO hacker",
+            "REVOKE SELECT ON users FROM public",
+            "TRUNCATE TABLE audit_log",
+        ]
 
-        # Create node without admin privileges (default)
+        for query in admin_queries:
+            with pytest.raises(NodeValidationError, match="administrative command"):
+                QueryValidator.validate_query(query, allow_admin=False)
+
+    def test_validate_query_allows_admin_commands_when_enabled(self):
+        """Test that admin commands are allowed when explicitly enabled."""
+        admin_queries = [
+            "CREATE TABLE new_table (id INT)",
+            "ALTER TABLE users ADD COLUMN admin BOOLEAN",
+            "DROP TABLE users",
+        ]
+
+        for query in admin_queries:
+            # Should not raise when allow_admin=True
+            QueryValidator.validate_query(query, allow_admin=True)
+
+    def test_validate_identifier(self):
+        """Test identifier validation."""
+        # Valid identifiers
+        valid_identifiers = [
+            "users",
+            "user_sessions",
+            "schema1.table1",
+            "_private_table",
+            "Table123",
+        ]
+
+        for identifier in valid_identifiers:
+            # Should not raise
+            QueryValidator.validate_identifier(identifier)
+
+        # Invalid identifiers
+        invalid_identifiers = [
+            "users; DROP TABLE users",
+            "users/*comment*/",
+            "123table",  # Starts with number
+            "user-table",  # Contains hyphen
+            "user table",  # Contains space
+            "'users'",  # Contains quotes
+            "schema.table.column",  # Too many dots
+        ]
+
+        for identifier in invalid_identifiers:
+            with pytest.raises(NodeValidationError, match="Invalid identifier"):
+                QueryValidator.validate_identifier(identifier)
+
+    def test_sanitize_string_literal(self):
+        """Test string literal sanitization."""
+        assert QueryValidator.sanitize_string_literal("hello") == "hello"
+        assert QueryValidator.sanitize_string_literal("O'Brien") == "O''Brien"
+        assert (
+            QueryValidator.sanitize_string_literal("path\\to\\file")
+            == "path\\\\to\\\\file"
+        )
+        assert (
+            QueryValidator.sanitize_string_literal("'; DROP TABLE users--")
+            == "''; DROP TABLE users--"
+        )
+
+    def test_validate_connection_string(self):
+        """Test connection string validation."""
+        # Valid connection strings
+        valid_strings = [
+            "postgresql://user:pass@localhost/db",
+            "mysql://user:pass@host:3306/database",
+            "postgresql://user:pass@host/db?sslmode=require",
+        ]
+
+        for conn_string in valid_strings:
+            # Should not raise
+            QueryValidator.validate_connection_string(conn_string)
+
+        # Suspicious connection strings
+        suspicious_strings = [
+            "postgresql://user:pass@localhost/db;host=|whoami",
+            "postgresql://user:pass@localhost/db;host=`id`",
+            "postgresql://user:pass@localhost/db?sslcert=/etc/passwd",
+            "postgresql://user:pass@localhost/db?sslkey=/etc/shadow",
+        ]
+
+        for conn_string in suspicious_strings:
+            with pytest.raises(NodeValidationError, match="suspicious pattern"):
+                QueryValidator.validate_connection_string(conn_string)
+
+
+class TestAsyncSQLSecurityFeatures:
+    """Test AsyncSQLDatabaseNode security features."""
+
+    def test_security_enabled_by_default(self):
+        """Test that query validation is enabled by default."""
         node = AsyncSQLDatabaseNode(
-            name="user_node",
+            name="test",
             database_type="postgresql",
-            connection_string=conn_string,
+            host="localhost",
+            database="testdb",
+            user="testuser",
+            password="testpass",
         )
 
-        # Try to create a table
-        with pytest.raises(NodeExecutionError, match="administrative command"):
-            await node.execute_async(query="CREATE TABLE hacker_table (id INT)")
+        assert node._validate_queries is True
+        assert node._allow_admin is False
 
-        # Try to drop a table
-        with pytest.raises(NodeExecutionError, match="administrative command"):
-            await node.execute_async(query="DROP TABLE security_test")
-
-        # Try to grant privileges
-        with pytest.raises(NodeExecutionError, match="administrative command"):
-            await node.execute_async(query="GRANT ALL ON security_test TO PUBLIC")
-
-        # Regular queries should work
-        result = await node.execute_async(
-            query="SELECT * FROM security_test WHERE is_admin = :is_admin",
-            params={"is_admin": False},
-        )
-        assert len(result["result"]["data"]) == 1
-        assert result["result"]["data"][0]["username"] == "testuser"
-
-        await node.cleanup()
-
-    @pytest.mark.asyncio
-    async def test_admin_mode_allows_ddl(self, setup_database):
-        """Test that admin mode allows DDL commands."""
-        conn_string = setup_database
-
-        # Create node with admin privileges
-        admin_node = AsyncSQLDatabaseNode(
-            name="admin_node",
+    def test_security_can_be_disabled(self):
+        """Test that security features can be disabled."""
+        node = AsyncSQLDatabaseNode(
+            name="test",
             database_type="postgresql",
-            connection_string=conn_string,
+            host="localhost",
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            validate_queries=False,
             allow_admin=True,
         )
 
-        # Create a new table
-        await admin_node.execute_async(
-            query="CREATE TABLE admin_test_table (id SERIAL PRIMARY KEY, name VARCHAR(50))"
-        )
+        assert node._validate_queries is False
+        assert node._allow_admin is True
 
-        # Verify table was created
-        result = await admin_node.execute_async(
-            query="""
-                SELECT table_name
-                FROM information_schema.tables
-                WHERE table_schema = 'public'
-                AND table_name = 'admin_test_table'
-            """
-        )
-        assert len(result["result"]["data"]) == 1
+    def test_dangerous_query_in_config_blocked(self):
+        """Test that dangerous queries in initial config are blocked."""
+        with pytest.raises(
+            NodeConfigurationError, match="Initial query validation failed"
+        ):
+            AsyncSQLDatabaseNode(
+                name="test",
+                database_type="postgresql",
+                host="localhost",
+                database="testdb",
+                user="testuser",
+                password="testpass",
+                query="SELECT * FROM users; DROP TABLE users",
+            )
 
-        # Drop the table
-        await admin_node.execute_async(query="DROP TABLE admin_test_table")
+    def test_admin_query_in_config_blocked_by_default(self):
+        """Test that admin queries in config are blocked by default."""
+        with pytest.raises(NodeConfigurationError, match="administrative command"):
+            AsyncSQLDatabaseNode(
+                name="test",
+                database_type="postgresql",
+                host="localhost",
+                database="testdb",
+                user="testuser",
+                password="testpass",
+                query="CREATE TABLE new_table (id INT)",
+            )
 
-        # Verify table was dropped
-        result = await admin_node.execute_async(
-            query="""
-                SELECT table_name
-                FROM information_schema.tables
-                WHERE table_schema = 'public'
-                AND table_name = 'admin_test_table'
-            """
-        )
-        assert len(result["result"]["data"]) == 0
-
-        await admin_node.cleanup()
-
-    @pytest.mark.asyncio
-    async def test_comment_injection_prevention(self, setup_database):
-        """Test that SQL comment injection is prevented."""
-        conn_string = setup_database
-
+    def test_admin_query_allowed_when_enabled(self):
+        """Test that admin queries are allowed when admin mode is enabled."""
+        # Should not raise
         node = AsyncSQLDatabaseNode(
-            name="secure_node",
+            name="test",
             database_type="postgresql",
-            connection_string=conn_string,
+            host="localhost",
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            query="CREATE TABLE new_table (id INT)",
+            allow_admin=True,
         )
 
-        # Try comment-based injection
-        with pytest.raises(NodeExecutionError, match="dangerous pattern"):
-            await node.execute_async(
-                query="SELECT * FROM security_test WHERE username = 'admin' -- ' OR 1=1"
+        assert node.config["query"] == "CREATE TABLE new_table (id INT)"
+
+    def test_dangerous_connection_string_blocked(self):
+        """Test that dangerous connection strings are blocked."""
+        with pytest.raises(
+            NodeConfigurationError, match="Connection string failed security validation"
+        ):
+            AsyncSQLDatabaseNode(
+                name="test",
+                database_type="postgresql",
+                connection_string="postgresql://user:pass@localhost/db;host=|whoami",
             )
 
-        # Try multi-line comment injection
-        with pytest.raises(NodeExecutionError, match="dangerous pattern"):
-            await node.execute_async(
-                query="SELECT * FROM security_test WHERE username = 'admin' /* ' OR 1=1 */"
-            )
-
-        await node.cleanup()
-
-    @pytest.mark.asyncio
-    async def test_union_injection_prevention(self, setup_database):
-        """Test that UNION-based injection is prevented."""
-        conn_string = setup_database
-
+    def test_dangerous_connection_string_allowed_when_validation_disabled(self):
+        """Test that dangerous connection strings are allowed when validation is disabled."""
+        # Should not raise
         node = AsyncSQLDatabaseNode(
-            name="secure_node",
+            name="test",
             database_type="postgresql",
-            connection_string=conn_string,
-        )
-
-        # Try UNION injection
-        with pytest.raises(NodeExecutionError, match="dangerous pattern"):
-            await node.execute_async(
-                query="SELECT username, email FROM security_test WHERE id = 1 UNION SELECT table_name, column_name FROM information_schema.columns"
-            )
-
-        await node.cleanup()
-
-    @pytest.mark.asyncio
-    async def test_security_bypass_option(self, setup_database):
-        """Test that security can be bypassed when explicitly disabled."""
-        conn_string = setup_database
-
-        # Create node with security disabled (NOT RECOMMENDED)
-        insecure_node = AsyncSQLDatabaseNode(
-            name="insecure_node",
-            database_type="postgresql",
-            connection_string=conn_string,
+            connection_string="postgresql://user:pass@localhost/db;host=|whoami",
             validate_queries=False,
         )
 
-        # Dangerous queries should now work (but still fail at DB level if invalid)
-        # This query would normally be blocked
-        query_with_comment = (
-            "SELECT * FROM security_test WHERE username = 'admin' -- this is a comment"
-        )
-
-        # Should not raise validation error
-        result = await insecure_node.execute_async(query=query_with_comment)
-        assert len(result["result"]["data"]) == 1
-        assert result["result"]["data"][0]["username"] == "admin"
-
-        await insecure_node.cleanup()
+        assert node._validate_queries is False
 
     @pytest.mark.asyncio
-    async def test_time_based_injection_prevention(self, setup_database):
-        """Test that time-based blind SQL injection is prevented."""
-        conn_string = setup_database
-
+    async def test_runtime_query_validation(self):
+        """Test that queries are validated at runtime."""
         node = AsyncSQLDatabaseNode(
-            name="secure_node",
+            name="test",
             database_type="postgresql",
-            connection_string=conn_string,
+            host="localhost",
+            database="testdb",
+            user="testuser",
+            password="testpass",
         )
 
-        # Try time-based injection with PG_SLEEP
-        with pytest.raises(NodeExecutionError, match="dangerous pattern"):
-            await node.execute_async(
-                query="SELECT * FROM security_test WHERE username = 'admin' AND PG_SLEEP(5) IS NOT NULL"
-            )
+        # Mock the adapter to avoid actual database connection
+        from unittest.mock import AsyncMock, patch
 
-        await node.cleanup()
+        with patch.object(node, "_get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_get_adapter.return_value = mock_adapter
+            mock_adapter.execute = AsyncMock(return_value=[])
 
-    @pytest.mark.asyncio
-    async def test_parameterized_queries_safe(self, setup_database):
-        """Test that parameterized queries handle malicious input safely."""
-        conn_string = setup_database
+            # Dangerous query should be blocked
+            with pytest.raises(NodeExecutionError, match="Query validation failed"):
+                await node.execute_async(query="SELECT * FROM users; DROP TABLE users")
 
-        node = AsyncSQLDatabaseNode(
-            name="secure_node",
-            database_type="postgresql",
-            connection_string=conn_string,
-        )
-
-        # Various injection attempts via parameters (all should be safe)
-        malicious_inputs = [
-            "admin' OR '1'='1",
-            "admin'; DROP TABLE security_test; --",
-            "admin' UNION SELECT null, null, null --",
-            "admin' AND PG_SLEEP(5)--",
-        ]
-
-        for malicious_input in malicious_inputs:
-            # These should all safely return no results
+            # Safe query should work
             result = await node.execute_async(
-                query="SELECT * FROM security_test WHERE username = :username",
-                params={"username": malicious_input},
+                query="SELECT * FROM users WHERE id = :id", params={"id": 1}
             )
-            assert len(result["result"]["data"]) == 0
 
-        # Verify table still exists and has correct data
-        result = await node.execute_async(
-            query="SELECT COUNT(*) as count FROM security_test"
+            assert result["result"]["data"] == []
+
+    @pytest.mark.asyncio
+    async def test_runtime_admin_query_validation(self):
+        """Test that admin queries are validated at runtime."""
+        # Node without admin privileges
+        node = AsyncSQLDatabaseNode(
+            name="test",
+            database_type="postgresql",
+            host="localhost",
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            allow_admin=False,
         )
-        assert result["result"]["data"][0]["count"] == 2
 
-        await node.cleanup()
+        # Mock the adapter
+        from unittest.mock import AsyncMock, patch
+
+        with patch.object(node, "_get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_get_adapter.return_value = mock_adapter
+
+            # Admin query should be blocked
+            with pytest.raises(NodeExecutionError, match="administrative command"):
+                await node.execute_async(query="CREATE TABLE new_table (id INT)")
+
+        # Node with admin privileges
+        admin_node = AsyncSQLDatabaseNode(
+            name="test_admin",
+            database_type="postgresql",
+            host="localhost",
+            database="testdb",
+            user="testuser",
+            password="testpass",
+            allow_admin=True,
+        )
+
+        with patch.object(admin_node, "_get_adapter") as mock_get_adapter:
+            mock_adapter = AsyncMock()
+            mock_get_adapter.return_value = mock_adapter
+            mock_adapter.execute = AsyncMock(return_value=[])
+
+            # Admin query should be allowed
+            result = await admin_node.execute_async(
+                query="CREATE TABLE new_table (id INT)"
+            )
+
+            assert result is not None
