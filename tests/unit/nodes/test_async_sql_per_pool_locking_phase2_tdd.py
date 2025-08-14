@@ -85,7 +85,7 @@ class TestTask1415PerPoolLockRegistry:
         # Run concurrent access
         threads = []
         for i in range(5):
-            thread = threading.Thread(target=thread_access, args=(i,))
+            thread = threading.Thread(target=thread_access, args=(i,), daemon=True)
             threads.append(thread)
             thread.start()
 
@@ -513,7 +513,7 @@ class TestTask1419LockCleanupMechanism:
         # Run concurrent cleanup
         threads = []
         for i in range(3):
-            thread = threading.Thread(target=thread_cleanup, args=(i,))
+            thread = threading.Thread(target=thread_cleanup, args=(i,), daemon=True)
             threads.append(thread)
             thread.start()
 
