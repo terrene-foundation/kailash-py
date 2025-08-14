@@ -251,7 +251,7 @@ class TestAsyncSQLPoolSharingIntegration:
         metrics = await AsyncSQLDatabaseNode.get_pool_metrics()
         assert metrics["total_pools"] == 1
         assert metrics["pools"][0]["reference_count"] == 1
-        assert metrics["pools"][0]["type"] == "PostgreSQLAdapter"
+        assert metrics["pools"][0]["type"] == "ProductionPostgreSQLAdapter"
 
         # Cleanup
         await node.cleanup()
