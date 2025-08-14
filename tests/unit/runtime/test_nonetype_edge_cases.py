@@ -16,20 +16,15 @@ from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 class TestNoneTypeParameterPropagation:
     """Test cases for NoneType parameter handling in cyclic workflows."""
 
-    @patch('kailash.runtime.local.LocalRuntime.execute')
+    @patch("kailash.runtime.local.LocalRuntime.execute")
     def test_switch_node_none_output_handling(self, mock_execute):
         """Test that downstream nodes handle None outputs from SwitchNode gracefully."""
         # Mock the execution to avoid slow runtime
         mock_results = {
-            "processor": {
-                "result": {
-                    "status": "skipped",
-                    "reason": "no_input"
-                }
-            }
+            "processor": {"result": {"status": "skipped", "reason": "no_input"}}
         }
         mock_execute.return_value = (mock_results, "test_run_id")
-        
+
         workflow = WorkflowBuilder()
 
         # Create a SwitchNode that will output None when condition is false
@@ -76,18 +71,11 @@ else:
         if processor_result["status"] == "skipped":
             assert processor_result["reason"] == "no_input"
 
-    @patch('kailash.runtime.local.LocalRuntime.execute')
+    @patch("kailash.runtime.local.LocalRuntime.execute")
     def test_none_parameter_mapping_in_cycles(self, mock_execute):
         """Test parameter mapping when cycle edges produce None values."""
         # Mock the execution to avoid slow runtime cycles
-        mock_results = {
-            "counter": {
-                "result": {
-                    "counter": 2,
-                    "terminated": False
-                }
-            }
-        }
+        mock_results = {"counter": {"result": {"counter": 2, "terminated": False}}}
         mock_execute.return_value = (mock_results, "test_run_id")
 
         workflow = WorkflowBuilder()
@@ -217,16 +205,13 @@ else:
         consumer_result = results["nested_consumer"]["result"]
         assert consumer_result["status"] == "handled_none"
 
-    @patch('kailash.runtime.local.LocalRuntime.execute')
+    @patch("kailash.runtime.local.LocalRuntime.execute")
     def test_cycle_with_conditional_termination_none_handling(self, mock_execute):
         """Test cycle termination scenarios that produce None values."""
         # Mock the execution to avoid slow runtime cycles
         mock_results = {
             "termination_handler": {
-                "result": {
-                    "final_value": 4,
-                    "terminated_normally": True
-                }
+                "result": {"final_value": 4, "terminated_normally": True}
             }
         }
         mock_execute.return_value = (mock_results, "test_run_id")

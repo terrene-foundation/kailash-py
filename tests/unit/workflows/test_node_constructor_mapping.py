@@ -517,7 +517,7 @@ class TestCircularImportPrevention:
                 # This might be ok if module was imported elsewhere
                 pass  # Don't fail, just document that lazy loading may not be implemented
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_import_order_independence(self, mock_subprocess):
         """Test that import order doesn't cause circular dependency issues."""
         import sys

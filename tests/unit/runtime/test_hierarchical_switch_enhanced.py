@@ -22,12 +22,12 @@ class TestHierarchicalSwitchEnhancements:
         self.workflow = Workflow("test", "Test Workflow")
 
     @pytest.mark.asyncio
-    @patch('asyncio.sleep')
+    @patch("asyncio.sleep")
     async def test_max_parallelism_limit(self, mock_sleep):
         """Test that max parallelism is respected."""
         # Mock sleep to avoid delays
         mock_sleep.return_value = None
-        
+
         # Create workflow with many parallel switches
         source = PythonCodeNode(name="source", code="result = {'data': 'test'}")
         self.workflow.add_node("source", source)
@@ -86,20 +86,21 @@ class TestHierarchicalSwitchEnhancements:
         assert metrics["max_parallelism_used"] <= 3
 
     @pytest.mark.asyncio
-    @patch('asyncio.sleep')
+    @patch("asyncio.sleep")
     async def test_layer_timeout(self, mock_sleep):
         """Test layer timeout functionality."""
         # Mock sleep to avoid delays, but track calls to simulate timeout
         call_count = 0
+
         async def mock_sleep_side_effect(duration):
             nonlocal call_count
             call_count += 1
             if call_count > 1:  # Simulate timeout on second call
                 raise asyncio.TimeoutError("Mocked timeout")
             return None
-        
+
         mock_sleep.side_effect = mock_sleep_side_effect
-        
+
         # Create simple hierarchy
         source = PythonCodeNode(name="source", code="result = {'data': 'test'}")
         switch1 = SwitchNode(
@@ -142,14 +143,18 @@ class TestHierarchicalSwitchEnhancements:
 
         # Execute - may raise TimeoutError due to mock
         try:
-            all_results, switch_results = await executor.execute_switches_hierarchically(
-                parameters={}, node_executor=slow_executor
+            all_results, switch_results = (
+                await executor.execute_switches_hierarchically(
+                    parameters={}, node_executor=slow_executor
+                )
             )
-            
+
             # If no exception, check that switch2 may have timed out
-            if "switch2" in switch_results and "error" in switch_results.get("switch2", {}):
+            if "switch2" in switch_results and "error" in switch_results.get(
+                "switch2", {}
+            ):
                 assert "Timeout" in switch_results["switch2"]["error"]
-                
+
         except asyncio.TimeoutError:
             # Expected due to mocked timeout
             pass
@@ -197,9 +202,9 @@ class TestHierarchicalSwitchEnhancements:
         executor = HierarchicalSwitchExecutor(self.workflow, debug=True)
 
         # Mock executor with timing (mocked to avoid delays)
-        with patch('asyncio.sleep') as mock_timing_sleep:
+        with patch("asyncio.sleep") as mock_timing_sleep:
             mock_timing_sleep.return_value = None
-            
+
             async def timed_executor(
                 node_id,
                 node_instance,
@@ -221,8 +226,10 @@ class TestHierarchicalSwitchEnhancements:
                     return {"true_output": {"data": "test"}, "false_output": None}
 
             # Execute
-            all_results, switch_results = await executor.execute_switches_hierarchically(
-                parameters={}, node_executor=timed_executor
+            all_results, switch_results = (
+                await executor.execute_switches_hierarchically(
+                    parameters={}, node_executor=timed_executor
+                )
             )
 
         # Get metrics

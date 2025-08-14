@@ -281,21 +281,13 @@ else:
             else:
                 raise
 
-    @patch('kailash.runtime.local.LocalRuntime.execute')
+    @patch("kailash.runtime.local.LocalRuntime.execute")
     def test_exit_node_none_result_handling(self, mock_execute):
         """Test when exit nodes produce None results during termination."""
         # Mock the execution to avoid slow runtime cycles
         mock_results = {
-            "terminator": {
-                "result": {
-                    "terminated_with_data": {"count": 2}
-                }
-            },
-            "counter": {
-                "result": {
-                    "count": 2
-                }
-            }
+            "terminator": {"result": {"terminated_with_data": {"count": 2}}},
+            "counter": {"result": {"count": 2}},
         }
         mock_execute.return_value = (mock_results, "test_run_id")
 

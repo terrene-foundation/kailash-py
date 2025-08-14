@@ -764,7 +764,7 @@ class TestRetryPolicyEngineIntegration:
         assert result.value == "success-test-kw1-kw2"
 
     @pytest.mark.asyncio
-    @patch('asyncio.sleep')
+    @patch("asyncio.sleep")
     async def test_timeout_handling(self, mock_sleep):
         """Test retry policy with timeout constraints."""
         strategy = ExponentialBackoffStrategy(

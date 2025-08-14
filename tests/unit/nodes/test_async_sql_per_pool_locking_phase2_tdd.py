@@ -693,7 +693,7 @@ class TestIntegrationPerPoolLocking:
             return time.time() - start_time
 
         # Run performance test (with mocking to avoid delays)
-        with patch('asyncio.sleep') as mock_sleep:
+        with patch("asyncio.sleep") as mock_sleep:
             mock_sleep.return_value = None
             concurrent_time = await measure_concurrent_pools()
 
@@ -734,28 +734,32 @@ class TestDeadlockPrevention:
         AsyncSQL._pool_locks_by_loop.clear()
 
         # Check if the method exists (this is a TDD test)
-        if not hasattr(AsyncSQL, '_acquire_pool_lock_with_timeout'):
+        if not hasattr(AsyncSQL, "_acquire_pool_lock_with_timeout"):
             pytest.skip("_acquire_pool_lock_with_timeout method not implemented yet")
-        
+
         # Test basic timeout functionality by creating a simple lock scenario
         pool_key = "timeout_test"
-        
+
         # Create a simple test that verifies timeout behavior without real delays
         # This test documents the expected interface
         try:
             # The method should exist and be callable
-            lock_context = AsyncSQL._acquire_pool_lock_with_timeout(pool_key, timeout=0.1)
-            
+            lock_context = AsyncSQL._acquire_pool_lock_with_timeout(
+                pool_key, timeout=0.1
+            )
+
             # For TDD, we just verify the method exists and has expected signature
             assert callable(AsyncSQL._acquire_pool_lock_with_timeout)
-            print("✓ _acquire_pool_lock_with_timeout method exists with timeout parameter")
-            
+            print(
+                "✓ _acquire_pool_lock_with_timeout method exists with timeout parameter"
+            )
+
         except AttributeError:
             pytest.skip("Method not implemented yet - this is expected in TDD")
         except Exception as e:
             # Any other exception means the method exists but has implementation issues
             print(f"Method exists but needs implementation work: {e}")
-        
+
         print("✓ Timeout prevention interface test completed")
 
     @pytest.mark.asyncio
@@ -766,7 +770,8 @@ class TestDeadlockPrevention:
         results = {"completed": 0, "timeouts": 0}
 
         # Mock asyncio.sleep to avoid delays
-        with patch('asyncio.sleep', return_value=None):
+        with patch("asyncio.sleep", return_value=None):
+
             async def operation_with_timeout(pool_key: str):
                 """Operation that should complete quickly for different pool keys."""
                 try:
@@ -779,7 +784,9 @@ class TestDeadlockPrevention:
                     results["timeouts"] += 1
 
             # Run operations on different pools - should all succeed
-            await asyncio.gather(*[operation_with_timeout(f"pool_{i}") for i in range(5)])
+            await asyncio.gather(
+                *[operation_with_timeout(f"pool_{i}") for i in range(5)]
+            )
 
             # All operations should complete successfully
             assert (

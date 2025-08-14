@@ -17,21 +17,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
 class TestCyclicWorkflowValidation:
     """Unit tests for cyclic workflow patterns."""
 
-    @patch('kailash.runtime.local.LocalRuntime.execute')
+    @patch("kailash.runtime.local.LocalRuntime.execute")
     def test_basic_counter_cycle(self, mock_execute):
         """Test basic counter cycle that converges."""
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
         # Mock the execution to avoid slow runtime
-        mock_results = {
-            "counter": {
-                "result": {
-                    "count": 3,
-                    "converged": True
-                }
-            }
-        }
+        mock_results = {"counter": {"result": {"count": 3, "converged": True}}}
         mock_execute.return_value = (mock_results, "test_run_id")
 
         workflow = WorkflowBuilder()
@@ -77,7 +70,7 @@ result = {
         assert final_count == 3
         assert converged is True
 
-    @patch('kailash.runtime.local.LocalRuntime.execute')
+    @patch("kailash.runtime.local.LocalRuntime.execute")
     def test_quality_improvement_cycle(self, mock_execute):
         """Test quality improvement cycle."""
         from kailash.runtime.local import LocalRuntime
@@ -85,13 +78,7 @@ result = {
 
         # Mock the execution to avoid slow runtime
         mock_results = {
-            "improver": {
-                "result": {
-                    "quality": 0.95,
-                    "iteration": 4,
-                    "converged": True
-                }
-            }
+            "improver": {"result": {"quality": 0.95, "iteration": 4, "converged": True}}
         }
         mock_execute.return_value = (mock_results, "test_run_id")
 
@@ -335,7 +322,7 @@ result = {
 class TestAdvancedCyclicPatterns:
     """Tests for advanced cyclic patterns including SwitchNode routing."""
 
-    @patch('kailash.runtime.local.LocalRuntime.execute')
+    @patch("kailash.runtime.local.LocalRuntime.execute")
     def test_switchnode_conditional_cycle(self, mock_execute):
         """Test actual SwitchNode conditional routing in a cycle."""
         from kailash.runtime.local import LocalRuntime
@@ -348,30 +335,18 @@ class TestAdvancedCyclicPatterns:
                     "iteration": 3,
                     "status": "complete",
                     "data": [1, 2, 3],
-                    "last_action": "validated"
+                    "last_action": "validated",
                 }
             },
             "processor": {
-                "result": {
-                    "action": "processed",
-                    "iteration": 1,
-                    "converged": False
-                }
+                "result": {"action": "processed", "iteration": 1, "converged": False}
             },
             "validator": {
-                "result": {
-                    "action": "validated",
-                    "iteration": 2,
-                    "converged": False
-                }
+                "result": {"action": "validated", "iteration": 2, "converged": False}
             },
             "completer": {
-                "result": {
-                    "action": "completed",
-                    "iteration": 3,
-                    "converged": True
-                }
-            }
+                "result": {"action": "completed", "iteration": 3, "converged": True}
+            },
         }
         mock_execute.return_value = (mock_results, "test_run_id")
 
@@ -512,7 +487,7 @@ result = {
         assert final_iteration >= 2
         assert len(executed_nodes) > 0
 
-    @patch('kailash.runtime.local.LocalRuntime.execute')
+    @patch("kailash.runtime.local.LocalRuntime.execute")
     def test_multi_node_cycle(self, mock_execute):
         """Test a simple two-node cycle (A -> B -> A)."""
         from kailash.runtime.local import LocalRuntime
@@ -521,19 +496,11 @@ result = {
         # Mock the execution to avoid slow cyclic runtime
         mock_results = {
             "node_a": {
-                "result": {
-                    "count": 3,
-                    "stage": "processed_by_a",
-                    "converged": True
-                }
+                "result": {"count": 3, "stage": "processed_by_a", "converged": True}
             },
             "node_b": {
-                "result": {
-                    "count": 3,
-                    "stage": "processed_by_b",
-                    "converged": True
-                }
-            }
+                "result": {"count": 3, "stage": "processed_by_b", "converged": True}
+            },
         }
         mock_execute.return_value = (mock_results, "test_run_id")
 
