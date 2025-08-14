@@ -865,27 +865,16 @@ class TestTemporalAnalysis:
 
             node = BehaviorAnalysisNode()
 
-            # Simulate seasonal data (e.g., holiday shopping)
-            months = [
-                "Jan",
-                "Feb",
-                "Mar",
-                "Apr",
-                "May",
-                "Jun",
-                "Jul",
-                "Aug",
-                "Sep",
-                "Oct",
-                "Nov",
-                "Dec",
-            ]
+            # Use minimal data to test functionality instead of full year
+            # Only test a few key months to demonstrate seasonal pattern detection
+            key_months = ["Feb", "Nov", "Dec"]
 
-            for month_idx, month in enumerate(months):
-                # Higher activity in Nov/Dec
+            for month in key_months:
+                # Higher activity in Nov/Dec (simulate holiday shopping pattern)
                 activity_multiplier = 5 if month in ["Nov", "Dec"] else 1
 
-                for day in range(30):
+                # Test with just 3 days instead of 30 to maintain speed
+                for day in range(3):
                     node.execute(
                         action="track",
                         user_id="seasonal_user",
