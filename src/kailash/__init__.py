@@ -3,7 +3,7 @@
 The Kailash SDK provides a comprehensive framework for creating nodes and workflows
 that align with container-node architecture while allowing rapid prototyping.
 
-New in v0.9.16: AsyncSQL per-pool locking eliminates lock contention bottleneck.
+New in v0.9.17: AsyncSQL per-pool locking eliminates lock contention bottleneck.
 Achieves 100% success at 300+ concurrent operations (was 50% failure). 85% performance improvement with per-pool locks.
 Previous v0.9.14: Code quality improvements and updated dependencies for DataFlow v0.4.6 compatibility.
 Previous v0.9.13: Fixed WorkflowBuilder parameter validation false positives (Bug 010).
@@ -53,7 +53,7 @@ except ImportError:
 # For backward compatibility
 WorkflowGraph = Workflow
 
-__version__ = "0.9.16"
+__version__ = "0.9.17"
 
 __all__ = [
     # Core workflow components
