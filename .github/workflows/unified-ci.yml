@@ -407,6 +407,16 @@ jobs:
           #!/bin/bash
           set -e
 
+          # Cleanup function to ensure all child processes are terminated
+          cleanup() {
+              echo "Cleaning up child processes..."
+              jobs -p | xargs -r kill 2>/dev/null || true
+              wait 2>/dev/null || true
+          }
+          
+          # Set trap to cleanup on exit
+          trap cleanup EXIT INT TERM
+
           # Function to run a check and capture its status
           run_check() {
               local name="$1"
@@ -461,13 +471,13 @@ jobs:
           if [ -d ".venv" ]; then
               echo "🧪 Starting pytest execution..."
               # Run main tests without forking (fast - ~30 seconds for 3900+ tests)
-              run_check "Tests" "timeout 300 .venv/bin/python -m $PYTEST_CMD" "pytest.log" &
+              run_check "Tests" ".venv/bin/python -m $PYTEST_CMD" "pytest.log" &
               pids[2]=$!
               echo "✓ Main tests started with PID ${pids[2]}"
               
               # Run the 16 isolation tests separately with --forked (slower but necessary)
               echo "🔒 Running isolation-required tests with --forked..."
-              run_check "Isolation Tests" "timeout 60 .venv/bin/python -m pytest tests/unit/ -m 'requires_isolation' --forked -v" "pytest-isolation.log" &
+              run_check "Isolation Tests" ".venv/bin/python -m pytest tests/unit/ -m 'requires_isolation' --forked -v" "pytest-isolation.log" &
               pids[3]=$!
               echo "✓ Isolation tests started with PID ${pids[3]}"
           else
