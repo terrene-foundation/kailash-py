@@ -429,10 +429,10 @@ jobs:
           # Use marker-based exclusion as per test organization policy
 
           # Fast test execution without forking overhead
-          # Smart fixtures handle test isolation efficiently
-          # Tests marked with requires_isolation will run separately with forking
-          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama or requires_isolation)' --maxfail=5 -v"
-          echo "Running Tier 1 unit tests only (fast mode) with marker-based exclusion"
+          # Explicitly disable forked plugin to prevent hanging
+          # No coverage to speed up execution
+          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v -p no:forked --no-cov"
+          echo "Running Tier 1 unit tests only (fast mode) with forked plugin disabled"
 
           # Run all checks in parallel with proper failure detection
           pids=()
@@ -457,24 +457,18 @@ jobs:
 
           # Run tests with the venv Python (WITHOUT coverage for speed)
           if [ -d ".venv" ]; then
-              # Run main tests without forking (fast - ~30 seconds for 3900+ tests)
+              # Run tests with forked plugin explicitly disabled
               run_check "Tests" ".venv/bin/python -m $PYTEST_CMD" "pytest.log" &
               pids[2]=$!
-              
-              # Run the 16 isolation tests separately with --forked (slower but necessary)
-              # These tests specifically need process isolation
-              run_check "Isolation Tests" ".venv/bin/python -m pytest tests/unit/ -m 'requires_isolation' --forked -v" "pytest-isolation.log" &
-              pids[3]=$!
           else
               echo "⚠️  No .venv found, skipping tests"
               pids[2]=""
-              pids[3]=""
           fi
 
           # Infrastructure validation (only in infrastructure or admin-nodes mode)
           if [[ "$TEST_MODE" == "infrastructure" || "$TEST_MODE" == "admin-nodes" ]]; then
             run_check "Infrastructure validation" "python tests/test_docker_infrastructure.py" "infrastructure.log" &
-            pids[4]=$!
+            pids[3]=$!
           fi
 
           # Wait for all jobs and collect results
