@@ -383,7 +383,7 @@ class TestAccessControlManagerAdditional:
         # Start multiple threads
         threads = []
         for _ in range(3):
-            thread = threading.Thread(target=add_rules)
+            thread = threading.Thread(target=add_rules, daemon=True)
             threads.append(thread)
             thread.start()
 

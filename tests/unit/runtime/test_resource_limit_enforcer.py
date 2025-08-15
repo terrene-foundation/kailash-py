@@ -299,7 +299,7 @@ class TestResourceLimitEnforcer:
                 errors.append(e)
 
         # Create 20 threads but only 10 connections allowed
-        threads = [threading.Thread(target=worker, args=(i,)) for i in range(20)]
+        threads = [threading.Thread(target=worker, args=(i,), daemon=True) for i in range(20)]
         for thread in threads:
             thread.start()
         for thread in threads:
@@ -506,7 +506,7 @@ class TestResourceLimitEnforcerPerformance:
             enforcer.check_all_limits()
 
         start_time = time.time()
-        threads = [threading.Thread(target=check_resources) for _ in range(10)]
+        threads = [threading.Thread(target=check_resources, daemon=True) for _ in range(10)]
         for thread in threads:
             thread.start()
         for thread in threads:
