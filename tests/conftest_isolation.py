@@ -42,17 +42,12 @@ def pytest_collection_modifyitems(config, items):
         pass
 
     # Add forked marker to tests that require isolation (only if forked plugin is available)
-    try:
-        # Check if forked plugin is available
-        forked_marker = pytest.mark.forked
+    # Check if forked plugin is loaded by checking if the plugin is in the plugin manager
+    if config.pluginmanager.has_plugin("pytest_forked"):
         for item in items:
             if item.get_closest_marker("requires_isolation"):
                 # Add the forked marker to run this test in isolation
-                item.add_marker(forked_marker)
-    except AttributeError:
-        # Forked plugin is not available (disabled with -p no:forked)
-        # Skip adding forked markers
-        pass
+                item.add_marker(pytest.mark.forked)
 
 
 def pytest_addoption(parser):
