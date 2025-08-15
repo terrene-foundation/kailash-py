@@ -428,10 +428,10 @@ jobs:
           # Tests are now properly organized - unit tests have no sleep calls
           # Use marker-based exclusion as per test organization policy
 
-          # Use --forked to prevent hanging from threading issues in tests
-          # This was the working configuration from v0.9.17
-          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v --forked"
-          echo "Running Tier 1 unit tests with subprocess isolation to prevent hanging"
+          # Fast test execution without forking overhead
+          # Problematic threading test moved to integration tests
+          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v"
+          echo "Running Tier 1 unit tests only (fast mode) with marker-based exclusion"
 
           # Run all checks in parallel with proper failure detection
           pids=()
@@ -456,8 +456,7 @@ jobs:
 
           # Run tests with the venv Python (WITHOUT coverage for speed)
           if [ -d ".venv" ]; then
-              # Use timeout as safety measure (10 minutes, same as v0.9.17)
-              run_check "Tests" "timeout 600 .venv/bin/python -m $PYTEST_CMD" "pytest.log" &
+              run_check "Tests" ".venv/bin/python -m $PYTEST_CMD" "pytest.log" &
               pids[2]=$!
           else
               echo "⚠️  No .venv found, skipping tests"
