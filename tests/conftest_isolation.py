@@ -41,11 +41,18 @@ def pytest_collection_modifyitems(config, items):
         # Option not registered yet
         pass
 
-    # Add forked marker to tests that require isolation
-    for item in items:
-        if item.get_closest_marker("requires_isolation"):
-            # Add the forked marker to run this test in isolation
-            item.add_marker(pytest.mark.forked)
+    # Add forked marker to tests that require isolation (only if forked plugin is available)
+    try:
+        # Check if forked plugin is available
+        forked_marker = pytest.mark.forked
+        for item in items:
+            if item.get_closest_marker("requires_isolation"):
+                # Add the forked marker to run this test in isolation
+                item.add_marker(forked_marker)
+    except AttributeError:
+        # Forked plugin is not available (disabled with -p no:forked)
+        # Skip adding forked markers
+        pass
 
 
 def pytest_addoption(parser):
