@@ -347,6 +347,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
         mock_client.call_tool = AsyncMock(side_effect=Exception("MCP server error"))
 
         tool_call = {
+            "id": "call_fail_test",
             "function": {
                 "name": "failing_mcp_tool",
                 "arguments": "{}",
@@ -373,6 +374,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
     def test_execute_mcp_tool_not_found(self):
         """Test MCP tool execution when tool not found."""
         tool_call = {
+            "id": "call_not_found",
             "function": {
                 "name": "nonexistent_tool",
                 "arguments": "{}",
