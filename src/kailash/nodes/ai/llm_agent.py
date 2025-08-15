@@ -1845,6 +1845,144 @@ class LLMAgentNode(Node):
             "efficiency_score": completion_tokens / max(total_tokens, 1),
         }
 
+    def _extract_tool_call_info(self, tool_call) -> dict[str, Any]:
+        """Extract tool call information from both Pydantic models and dictionaries.
+
+        Handles OpenAI v1.97.1+ Pydantic models and legacy dictionary formats.
+
+        Args:
+            tool_call: Tool call object (either Pydantic model or dict)
+
+        Returns:
+            Dict with normalized tool call information
+
+        Raises:
+            ValueError: If tool_call format is unrecognized or invalid
+            json.JSONDecodeError: If tool arguments contain invalid JSON
+        """
+        if tool_call is None:
+            raise ValueError("tool_call cannot be None")
+
+        # Try to detect OpenAI Pydantic model first (more specific check)
+        try:
+            # Import at runtime to avoid dependency issues
+            from openai.types.chat import ChatCompletionMessageToolCall
+
+            if isinstance(tool_call, ChatCompletionMessageToolCall):
+                # OpenAI Pydantic model format - validated type
+                tool_id = tool_call.id
+                function = tool_call.function
+
+                if not function:
+                    raise ValueError(f"Tool call {tool_id} has no function definition")
+
+                tool_name = function.name
+                arguments_str = function.arguments or "{}"
+
+                # Validate required fields
+                if not tool_name:
+                    raise ValueError(f"Tool call {tool_id} has no function name")
+
+                # Check for excessively large arguments (10MB limit)
+                if len(arguments_str) > 10 * 1024 * 1024:
+                    raise ValueError(
+                        f"Tool call {tool_id} arguments too large ({len(arguments_str)} bytes). "
+                        f"Maximum allowed is 10MB."
+                    )
+
+                # Parse arguments - let JSONDecodeError propagate if invalid
+                try:
+                    arguments_dict = json.loads(arguments_str) if arguments_str else {}
+                except json.JSONDecodeError as e:
+                    # Log the error with context but still raise it
+                    self.logger.error(
+                        f"Invalid JSON in tool arguments for {tool_name} (id: {tool_id}): {arguments_str[:100]}... Error: {e}"
+                    )
+                    raise json.JSONDecodeError(
+                        f"Invalid JSON in tool '{tool_name}' arguments: {e.msg}",
+                        e.doc,
+                        e.pos,
+                    )
+
+                self.logger.debug(
+                    f"Extracted Pydantic tool call: {tool_name} (id: {tool_id})"
+                )
+
+                return {
+                    "id": tool_id,
+                    "name": tool_name,
+                    "arguments": arguments_str,
+                    "arguments_dict": arguments_dict,
+                }
+
+        except ImportError:
+            # OpenAI not installed or old version - fall through to dict handling
+            pass
+        except TypeError:
+            # Not a Pydantic model - fall through to dict handling
+            pass
+
+        # Check if it's a dictionary format
+        if isinstance(tool_call, dict):
+            # Legacy dictionary format
+            tool_id = tool_call.get("id")
+            function = tool_call.get("function", {})
+
+            if not tool_id:
+                raise ValueError("Tool call dictionary missing required 'id' field")
+
+            if not isinstance(function, dict):
+                raise ValueError(
+                    f"Tool call {tool_id} 'function' field must be a dictionary"
+                )
+
+            tool_name = function.get("name")
+            arguments_str = function.get("arguments", "{}")
+
+            if not tool_name:
+                raise ValueError(
+                    f"Tool call {tool_id} missing required 'function.name' field"
+                )
+
+            # Check for excessively large arguments (10MB limit)
+            if len(arguments_str) > 10 * 1024 * 1024:
+                raise ValueError(
+                    f"Tool call {tool_id} arguments too large ({len(arguments_str)} bytes). "
+                    f"Maximum allowed is 10MB."
+                )
+
+            # Parse arguments - let JSONDecodeError propagate if invalid
+            try:
+                arguments_dict = json.loads(arguments_str) if arguments_str else {}
+            except json.JSONDecodeError as e:
+                # Log the error with context but still raise it
+                self.logger.error(
+                    f"Invalid JSON in tool arguments for {tool_name} (id: {tool_id}): {arguments_str[:100]}... Error: {e}"
+                )
+                raise json.JSONDecodeError(
+                    f"Invalid JSON in tool '{tool_name}' arguments: {e.msg}",
+                    e.doc,
+                    e.pos,
+                )
+
+            self.logger.debug(
+                f"Extracted dictionary tool call: {tool_name} (id: {tool_id})"
+            )
+
+            return {
+                "id": tool_id,
+                "name": tool_name,
+                "arguments": arguments_str,
+                "arguments_dict": arguments_dict,
+            }
+
+        # Unknown format - raise informative error
+        raise ValueError(
+            f"Unrecognized tool_call format: {type(tool_call)}. "
+            f"Expected OpenAI ChatCompletionMessageToolCall or dict with 'id' and 'function' fields. "
+            f"Got: {repr(tool_call)[:200]}..."
+        )
+
     async def _execute_mcp_tool_call(
         self, tool_call: dict, mcp_tools: list[dict]
     ) -> dict[str, Any]:
@@ -1857,8 +1995,10 @@ class LLMAgentNode(Node):
         Returns:
             Tool execution result
         """
-        tool_name = tool_call.get("function", {}).get("name", "")
-        tool_args = json.loads(tool_call.get("function", {}).get("arguments", "{}"))
+        # Handle both OpenAI Pydantic models and dictionary formats
+        tool_info = self._extract_tool_call_info(tool_call)
+        tool_name = tool_info["name"]
+        tool_args = tool_info["arguments_dict"]
 
         # Find the MCP tool definition
         mcp_tool = None
@@ -1922,8 +2062,10 @@ class LLMAgentNode(Node):
 
         for tool_call in tool_calls:
             try:
-                tool_name = tool_call.get("function", {}).get("name")
-                tool_id = tool_call.get("id")
+                # Handle both OpenAI Pydantic models and dictionary formats
+                tool_info = self._extract_tool_call_info(tool_call)
+                tool_name = tool_info["name"]
+                tool_id = tool_info["id"]
 
                 # Check if this is an MCP tool
                 if tool_name in mcp_tool_names:
@@ -1947,13 +2089,36 @@ class LLMAgentNode(Node):
                     }
                 )
 
+            except (ValueError, json.JSONDecodeError) as e:
+                # Handle extraction errors specifically
+                self.logger.error(f"Tool call extraction failed: {e}")
+                # Try to get minimal info for error reporting
+                if isinstance(tool_call, dict):
+                    tool_id = tool_call.get("id", "unknown")
+                    tool_name = tool_call.get("function", {}).get("name", "unknown")
+                else:
+                    tool_id = getattr(tool_call, "id", "unknown")
+                    tool_name = "unknown"
+
+                tool_results.append(
+                    {
+                        "tool_call_id": tool_id,
+                        "content": json.dumps(
+                            {
+                                "error": f"Invalid tool call format: {str(e)}",
+                                "tool": tool_name,
+                                "status": "failed",
+                            }
+                        ),
+                    }
+                )
             except Exception as e:
-                # Format error result
-                tool_name = tool_call.get("function", {}).get("name", "unknown")
+                # Handle other execution errors
+                # Tool info was already extracted successfully if we got here
                 self.logger.error(f"Tool execution failed for {tool_name}: {e}")
                 tool_results.append(
                     {
-                        "tool_call_id": tool_call.get("id", "unknown"),
+                        "tool_call_id": tool_id,
                         "content": json.dumps(
                             {"error": str(e), "tool": tool_name, "status": "failed"}
                         ),
@@ -1974,8 +2139,10 @@ class LLMAgentNode(Node):
         Returns:
             Tool execution result
         """
-        tool_name = tool_call.get("function", {}).get("name")
-        tool_args = json.loads(tool_call.get("function", {}).get("arguments", "{}"))
+        # Handle both OpenAI Pydantic models and dictionary formats
+        tool_info = self._extract_tool_call_info(tool_call)
+        tool_name = tool_info["name"]
+        tool_args = tool_info["arguments_dict"]
 
         # For now, return a mock result
         # In future, this could execute actual Python functions

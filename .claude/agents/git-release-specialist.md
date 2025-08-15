@@ -143,6 +143,7 @@ git push -u origin feature/[name]
 ## Release Preparation
 
 ### 1. Version Bump (Update ALL locations)
+vim setup.py                    # version="x.y.z"
 vim pyproject.toml              # [project] version = "x.y.z"
 vim src/kailash/__init__.py     # __version__ = "x.y.z"
 
