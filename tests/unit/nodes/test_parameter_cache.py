@@ -265,7 +265,7 @@ class TestParameterCache:
         # Run multiple threads
         threads = []
         for i in range(5):
-            t = threading.Thread(target=worker, args=(i,))
+            t = threading.Thread(target=worker, args=(i,), daemon=True)
             threads.append(t)
             t.start()
 

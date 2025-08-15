@@ -831,7 +831,7 @@ class TestRetryPolicyEngineIntegration:
         # Run multiple workers concurrently
         threads = []
         for i in range(5):
-            thread = threading.Thread(target=worker_function, args=(i,))
+            thread = threading.Thread(target=worker_function, args=(i,), daemon=True)
             threads.append(thread)
             thread.start()
 
