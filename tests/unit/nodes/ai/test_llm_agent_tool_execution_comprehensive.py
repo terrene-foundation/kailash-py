@@ -351,7 +351,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
             "function": {
                 "name": "failing_mcp_tool",
                 "arguments": "{}",
-            }
+            },
         }
 
         mcp_tools = [
@@ -378,7 +378,7 @@ class TestLLMAgentToolExecutionComprehensive(unittest.TestCase):
             "function": {
                 "name": "nonexistent_tool",
                 "arguments": "{}",
-            }
+            },
         }
 
         mcp_tools = [{"function": {"name": "other_tool"}}]
