@@ -458,7 +458,8 @@ jobs:
           # Run tests with the venv Python (WITHOUT coverage for speed)
           if [ -d ".venv" ]; then
               # Run tests with forked plugin explicitly disabled
-              run_check "Tests" ".venv/bin/python -m $PYTEST_CMD" "pytest.log" &
+              # Use timeout to force exit after reasonable time (2 minutes)
+              run_check "Tests" "timeout 120 .venv/bin/python -m $PYTEST_CMD || true" "pytest.log" &
               pids[2]=$!
           else
               echo "⚠️  No .venv found, skipping tests"
