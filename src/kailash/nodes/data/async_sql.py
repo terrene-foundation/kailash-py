@@ -1530,15 +1530,28 @@ class SQLiteAdapter(DatabaseAdapter):
 
             if fetch_mode == FetchMode.ONE:
                 row = await cursor.fetchone()
-                return self._convert_row(dict(row)) if row else None
+                result = self._convert_row(dict(row)) if row else None
             elif fetch_mode == FetchMode.ALL:
                 rows = await cursor.fetchall()
-                return [self._convert_row(dict(row)) for row in rows]
+                result = [self._convert_row(dict(row)) for row in rows]
             elif fetch_mode == FetchMode.MANY:
                 if not fetch_size:
                     raise ValueError("fetch_size required for MANY mode")
                 rows = await cursor.fetchmany(fetch_size)
-                return [self._convert_row(dict(row)) for row in rows]
+                result = [self._convert_row(dict(row)) for row in rows]
+            else:
+                result = []
+
+            # Check if this was an INSERT and capture lastrowid for SQLite
+            if query.strip().upper().startswith("INSERT") and (
+                not result or result == [] or result is None
+            ):
+                # For INSERT without RETURNING, capture lastrowid
+                lastrowid = cursor.lastrowid if hasattr(cursor, "lastrowid") else None
+                if lastrowid is not None:
+                    return {"lastrowid": lastrowid}
+
+            return result
         else:
             # Create new connection for non-transactional queries
             if self._is_memory_db:
@@ -1557,6 +1570,19 @@ class SQLiteAdapter(DatabaseAdapter):
                         raise ValueError("fetch_size required for MANY mode")
                     rows = await cursor.fetchmany(fetch_size)
                     result = [self._convert_row(dict(row)) for row in rows]
+                else:
+                    result = []
+
+                # Check if this was an INSERT and capture lastrowid for SQLite
+                if query.strip().upper().startswith("INSERT") and (
+                    not result or result == []
+                ):
+                    # For INSERT without RETURNING, capture lastrowid
+                    lastrowid = (
+                        cursor.lastrowid if hasattr(cursor, "lastrowid") else None
+                    )
+                    if lastrowid is not None:
+                        result = {"lastrowid": lastrowid}
 
                 # Commit for memory databases (needed for INSERT/UPDATE/DELETE)
                 await db.commit()
@@ -1577,9 +1603,24 @@ class SQLiteAdapter(DatabaseAdapter):
                         if not fetch_size:
                             raise ValueError("fetch_size required for MANY mode")
                         rows = await cursor.fetchmany(fetch_size)
-                        return [self._convert_row(dict(row)) for row in rows]
+                        result = [self._convert_row(dict(row)) for row in rows]
+                    else:
+                        result = []
 
-                await db.commit()
+                    # Check if this was an INSERT and capture lastrowid for SQLite
+                    if query.strip().upper().startswith("INSERT") and (
+                        not result or result == []
+                    ):
+                        # For INSERT without RETURNING, capture lastrowid
+                        lastrowid = (
+                            cursor.lastrowid if hasattr(cursor, "lastrowid") else None
+                        )
+                        if lastrowid is not None:
+                            await db.commit()  # Commit before returning
+                            return {"lastrowid": lastrowid}
+
+                    await db.commit()
+                    return result
 
     async def execute_many(
         self,
@@ -3421,28 +3462,37 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 parameter_types=parameter_types,
             )
 
-            # Ensure all data is JSON-serializable (safety net for adapter inconsistencies)
-            result = self._ensure_serializable(result)
+            # Check for special SQLite lastrowid result
+            if isinstance(result, dict) and "lastrowid" in result:
+                # This is a special SQLite INSERT result
+                formatted_data = result  # Keep as-is
+                row_count = 1  # One row was inserted
+            else:
+                # Ensure all data is JSON-serializable (safety net for adapter inconsistencies)
+                result = self._ensure_serializable(result)
 
-            # Format results based on requested format
-            formatted_data = self._format_results(result, result_format)
+                # Format results based on requested format
+                formatted_data = self._format_results(result, result_format)
+                row_count = None  # Will be calculated below
 
             # For DataFrame, we need special handling for row count
-            row_count = 0
-            if result_format == "dataframe":
-                try:
-                    row_count = len(formatted_data)
-                except:
-                    # If pandas isn't available, formatted_data is still a list
+            if row_count is None:  # Only calculate if not already set
+                if result_format == "dataframe":
+                    try:
+                        row_count = len(formatted_data)
+                    except:
+                        # If pandas isn't available, formatted_data is still a list
+                        row_count = (
+                            len(result)
+                            if isinstance(result, list)
+                            else (1 if result else 0)
+                        )
+                else:
                     row_count = (
                         len(result)
                         if isinstance(result, list)
                         else (1 if result else 0)
                     )
-            else:
-                row_count = (
-                    len(result) if isinstance(result, list) else (1 if result else 0)
-                )
 
             # Extract column names if available
             columns = []
@@ -4677,13 +4727,30 @@ class AsyncSQLDatabaseNode(AsyncNode):
             self._adapter = None
 
     def __del__(self):
-        """Ensure connections are closed."""
+        """Ensure connections are closed safely."""
         if self._adapter and self._connected:
-            # Schedule cleanup in the event loop if it exists
+            # Try to schedule cleanup, but be resilient to event loop issues
             try:
-                loop = asyncio.get_event_loop()
-                if not loop.is_closed():
-                    loop.create_task(self.cleanup())
-            except RuntimeError:
-                # No event loop, can't clean up async resources
+                import asyncio
+
+                # Check if there's a running event loop that's not closed
+                try:
+                    loop = asyncio.get_running_loop()
+                    if loop and not loop.is_closed():
+                        # Create cleanup task only if loop is healthy
+                        try:
+                            loop.create_task(self.cleanup())
+                        except RuntimeError as e:
+                            # Loop might be closing, ignore gracefully
+                            logger.debug(f"Could not schedule cleanup task: {e}")
+                    else:
+                        logger.debug("Event loop is closed, skipping async cleanup")
+                except RuntimeError:
+                    # No running event loop - this is normal during shutdown
+                    logger.debug(
+                        "No running event loop for cleanup, connections will be cleaned by GC"
+                    )
+            except Exception as e:
+                # Complete fallback - any unexpected error should not crash __del__
+                logger.debug(f"Error during connection cleanup: {e}")
                 pass

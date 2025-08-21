@@ -31,10 +31,14 @@ pip install kailash[dataflow]
 - **TIMESTAMP Defaults**: Fixed quoting of SQL functions in schema generation
 - **Schema Inspection**: Fixed bounds checking errors
 - **auto_migrate=False**: Fixed tables being created despite disabled auto-migration
+- **String ID Preservation**: No more forced integer conversion - string IDs preserved
+- **Multi-Instance Isolation**: Proper context separation between DataFlow instances
+- **Deferred Schema Operations**: Table creation deferred until workflow execution
+- **Context-Aware Table Creation**: Node-instance coupling for proper isolation
 
 **Enterprise Migration System (v0.4.5+):**
 - ✅ **Risk Assessment Engine**: Multi-dimensional risk analysis for all migration operations
-- ✅ **Mitigation Strategy Engine**: Automated risk reduction and safety recommendations  
+- ✅ **Mitigation Strategy Engine**: Automated risk reduction and safety recommendations
 - ✅ **Foreign Key Analyzer**: FK-aware operations with referential integrity protection
 - ✅ **Table Rename Analyzer**: Safe table renaming with comprehensive dependency tracking
 - ✅ **Staging Environment Manager**: Production-like testing environments for migration validation
@@ -43,6 +47,76 @@ pip install kailash[dataflow]
 - ✅ **Schema State Manager**: Complete schema evolution tracking with snapshot management
 - ✅ **NOT NULL Column Handler**: 6 strategies for safely adding NOT NULL columns to populated tables
 - ✅ **Column Removal Manager**: 100% dependency detection with 7-stage safe removal process
+
+## 🔧 String ID & Context-Aware Improvements (NEW)
+
+### String ID Support (No More Forced Conversion)
+
+DataFlow now properly handles string primary keys without forced integer conversion:
+
+```python
+from dataflow import DataFlow
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+db = DataFlow()
+
+# Models with string IDs work seamlessly
+@db.model
+class SsoSession:
+    id: str  # String IDs preserved throughout workflow
+    user_id: str
+    state: str = 'active'
+
+# Use string IDs directly
+workflow = WorkflowBuilder()
+session_id = "session-80706348-0456-468b-8851-329a756a3a93"
+
+# ✅ String ID preserved (no integer conversion)
+workflow.add_node("SsoSessionReadNode", "read_session", {
+    "id": session_id  # String preserved as-is
+})
+
+# ✅ Alternative: Use conditions for explicit type control
+workflow.add_node("SsoSessionReadNode", "read_session_alt", {
+    "conditions": {"id": session_id},
+    "raise_on_not_found": True
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
+
+### Multi-Instance DataFlow with Context Isolation
+
+Multiple DataFlow instances now maintain proper isolation:
+
+```python
+# Development instance with auto-migration
+db_dev = DataFlow(
+    database_url="sqlite:///dev.db",
+    auto_migrate=True,
+    existing_schema_mode=False
+)
+
+# Production instance with safety locks
+db_prod = DataFlow(
+    database_url="postgresql://user:pass@localhost/prod",
+    auto_migrate=False,
+    existing_schema_mode=True
+)
+
+# Models are isolated per instance
+@db_dev.model
+class DevModel:
+    id: str
+    # Only exists in dev instance
+
+@db_prod.model
+class ProdModel:
+    id: str
+    # Only exists in prod instance
+```
 
 ## 🏗️ DataFlow vs Traditional ORMs
 
@@ -93,7 +167,7 @@ class User:
 # Use in workflows
 workflow = WorkflowBuilder()
 workflow.add_node("UserCreateNode", "create_user", {
-    "name": "John Doe", 
+    "name": "John Doe",
     "email": "john@example.com"
 })
 
@@ -402,7 +476,7 @@ db_agent = DataFlow(
 
 # Agent discovers database structure
 schema = db_agent.discover_schema(use_real_inspection=True)
-interesting_tables = [t for t in schema.keys() 
+interesting_tables = [t for t in schema.keys()
                      if not t.startswith('dataflow_')]  # Skip system tables
 
 # Agent registers tables it wants to work with
@@ -413,7 +487,7 @@ workflow = WorkflowBuilder()
 
 for model_name in result['registered_models']:
     nodes = result['generated_nodes'][model_name]
-    
+
     # Sample a few records from each table
     workflow.add_node(nodes['list'], f"sample_{model_name}", {
         "limit": 3,
@@ -452,7 +526,7 @@ db_prod = DataFlow(
 )
 
 # Even if you accidentally define a new model, no tables will be created
-@db_prod.model  
+@db_prod.model
 class NewModel:
     name: str
     value: int
@@ -472,7 +546,7 @@ DataFlow provides powerful methods for dynamic database operations:
 schema = db.discover_schema(use_real_inspection=True)
 # Returns: Dict[str, Dict] - Complete table structure with columns, types, constraints
 
-# Dynamic Model Registration  
+# Dynamic Model Registration
 result = db.register_schema_as_models(tables=['users', 'orders'])
 # Returns: {
 #   'registered_models': ['User', 'Order'],
@@ -539,7 +613,7 @@ print(f"Risk Score: {risk_assessment.overall_score}/100")
 if risk_assessment.overall_risk_level in ["HIGH", "CRITICAL"]:
     mitigation_engine = MitigationStrategyEngine(risk_engine)
     strategies = await mitigation_engine.generate_mitigation_plan(risk_assessment)
-    
+
     print("Recommended mitigation strategies:")
     for strategy in strategies.recommended_strategies:
         print(f"- {strategy.description} (Effectiveness: {strategy.effectiveness_score}%)")
@@ -628,15 +702,15 @@ try:
         migration_plan=your_migration_plan,
         validation_checks=True
     )
-    
+
     print(f"Staging test result: {test_result.success}")
     print(f"Performance metrics: {test_result.performance_metrics}")
-    
+
     if test_result.success:
         print("Safe to execute in production")
     else:
         print(f"Migration issues found: {test_result.issues}")
-        
+
 finally:
     # Always cleanup staging environment
     await staging_manager.cleanup_staging_environment(staging_env)
@@ -654,12 +728,12 @@ async with lock_manager.acquire_migration_lock(
     timeout_seconds=300,
     operation_description="Add status column to users table"
 ) as migration_lock:
-    
+
     print(f"Migration lock acquired: {migration_lock.lock_id}")
-    
+
     # Execute migration safely - no other migrations can interfere
     migration_result = await execute_your_migration()
-    
+
     print("Migration completed under lock protection")
     # Lock automatically released when context exits
 ```
@@ -673,41 +747,41 @@ async def enterprise_migration_workflow(
     migration_details: dict
 ):
     """Complete enterprise migration with all safety systems."""
-    
+
     # Step 1: Risk Assessment
     risk_engine = RiskAssessmentEngine(connection_manager)
     risk_assessment = await risk_engine.assess_operation_risk(
         operation_type, table_name, **migration_details
     )
-    
-    # Step 2: Generate Mitigation Strategies  
+
+    # Step 2: Generate Mitigation Strategies
     mitigation_engine = MitigationStrategyEngine(risk_engine)
     mitigation_plan = await mitigation_engine.generate_mitigation_plan(risk_assessment)
-    
+
     # Step 3: Create Staging Environment
     staging_manager = StagingEnvironmentManager(connection_manager)
     staging_env = await staging_manager.create_staging_environment(
         f"migration_{int(time.time())}"
     )
-    
+
     try:
         # Step 4: Test in Staging
         staging_test = await staging_manager.test_migration_in_staging(
             staging_env, migration_details
         )
-        
+
         if not staging_test.success:
             return {"success": False, "reason": "Staging test failed"}
-        
+
         # Step 5: Execute with Lock Protection
         lock_manager = MigrationLockManager(connection_manager)
-        
+
         async with lock_manager.acquire_migration_lock(
             "table_modification", timeout_seconds=600
         ):
             # Step 6: Multi-stage Validation
             validator = ValidationCheckpointManager(connection_manager)
-            
+
             result = await validator.execute_with_validation(
                 migration_operation=lambda: execute_actual_migration(
                     operation_type, table_name, migration_details
@@ -718,9 +792,9 @@ async def enterprise_migration_workflow(
                 ],
                 rollback_on_failure=True
             )
-            
+
             return {"success": result.all_checkpoints_passed}
-            
+
     finally:
         # Step 7: Cleanup
         await staging_manager.cleanup_staging_environment(staging_env)
@@ -728,7 +802,7 @@ async def enterprise_migration_workflow(
 # Usage
 result = await enterprise_migration_workflow(
     operation_type="add_not_null_column",
-    table_name="users", 
+    table_name="users",
     migration_details={
         "column_name": "account_status",
         "default_value": "active"
@@ -969,7 +1043,7 @@ DataFlow supports robust database connection string parsing with full support fo
 # Supports complex passwords with special characters
 connection_examples = [
     "postgresql://admin:MySecret#123$@localhost:5432/mydb",
-    "postgresql://user:P@ssw0rd!@db.example.com:5432/production", 
+    "postgresql://user:P@ssw0rd!@db.example.com:5432/production",
     "mysql://service:Complex$ecret?@mysql.internal:3306/analytics",
     "postgresql://readonly:temp#pass@replica.host:5432/reports"
 ]
@@ -996,7 +1070,7 @@ sqlite:///path/to/database.db
 
 DataFlow now handles these special characters in passwords automatically:
 - `#` (hash/pound) - commonly used in passwords
-- `$` (dollar sign) - shell variable syntax  
+- `$` (dollar sign) - shell variable syntax
 - `@` (at symbol) - email-like passwords
 - `?` (question mark) - query parameter conflicts
 - And many more URL-sensitive characters

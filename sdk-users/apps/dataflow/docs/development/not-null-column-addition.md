@@ -4,6 +4,19 @@
 
 This guide covers the comprehensive workflow for adding NOT NULL columns to tables that already contain data, using DataFlow's advanced migration system with multiple default value strategies, constraint validation, and performance optimization.
 
+## ⚠️ IMPORTANT: String ID Preservation (v0.4.0+)
+
+DataFlow now preserves string IDs throughout all migration operations. No special handling is needed for models with string primary keys:
+
+```python
+# Models with string IDs work seamlessly in migrations
+@db.model
+class User:
+    id: str  # String IDs preserved during migrations
+    name: str
+    # Adding NOT NULL column to this table now works correctly
+```
+
 ## Overview
 
 Adding NOT NULL columns to populated tables is one of the most critical and risky migration operations in database management. DataFlow provides a sophisticated system that:
@@ -248,7 +261,7 @@ if not validation.is_safe:
     print("Constraint Issues:")
     for issue in validation.issues:
         print(f"  - {issue}")
-    
+
     print("Warnings:")
     for warning in validation.warnings:
         print(f"  - {warning}")
@@ -298,7 +311,7 @@ is_valid = await validator.validate_check_constraints(
 # Use static defaults - fastest option
 column = ColumnDefinition(
     name="status",
-    data_type="VARCHAR(20)", 
+    data_type="VARCHAR(20)",
     default_value="active",
     default_type=DefaultValueType.STATIC
 )
@@ -320,7 +333,7 @@ print(f"Execution strategy: {plan.execution_strategy}")
 ```python
 # Use batching for computed defaults
 computed_column = ColumnDefinition(
-    name="category", 
+    name="category",
     data_type="VARCHAR(20)",
     default_expression="CASE WHEN amount > 1000 THEN 'premium' ELSE 'standard' END",
     default_type=DefaultValueType.COMPUTED
@@ -329,7 +342,7 @@ computed_column = ColumnDefinition(
 plan = await handler.plan_not_null_addition(large_table, computed_column)
 
 # Plan will automatically set:
-# - execution_strategy = "batched_update" 
+# - execution_strategy = "batched_update"
 # - batch_size = 10000 (or optimized size)
 # - timeout_seconds = appropriate for data volume
 ```
@@ -360,14 +373,14 @@ if result.performance_metrics:
 ```python
 try:
     result = await handler.execute_not_null_addition(plan)
-    
+
     if result.result == AdditionResult.SUCCESS:
         print("Column added successfully")
     else:
         print(f"Addition failed: {result.error_message}")
         if result.rollback_executed:
             print("Automatic rollback completed")
-            
+
 except Exception as e:
     print(f"Unexpected error: {e}")
     # Manual rollback if needed
@@ -406,7 +419,7 @@ if validation.warnings:
     print("Migration has warnings:")
     for warning in validation.warnings:
         print(f"  WARNING: {warning}")
-    
+
     # Decide whether to proceed
     user_input = input("Proceed anyway? (y/N): ")
     if user_input.lower() != 'y':
@@ -439,7 +452,7 @@ constraint_validation = await validator.validate_all_constraints(
 
 # Check both safety validation AND constraint validation
 overall_safe = (
-    validation.is_safe and 
+    validation.is_safe and
     constraint_validation.is_safe
 )
 ```
@@ -448,7 +461,7 @@ overall_safe = (
 ```python
 # GOOD: Use static defaults for simple cases
 status_column = ColumnDefinition(
-    name="status", 
+    name="status",
     data_type="VARCHAR(20)",
     default_value="active",
     default_type=DefaultValueType.STATIC
@@ -457,7 +470,7 @@ status_column = ColumnDefinition(
 # GOOD: Use functions for system values
 created_column = ColumnDefinition(
     name="created_at",
-    data_type="TIMESTAMP", 
+    data_type="TIMESTAMP",
     default_expression="CURRENT_TIMESTAMP",
     default_type=DefaultValueType.FUNCTION
 )
@@ -479,7 +492,7 @@ test_table = "users_test_small"
 
 # Create test table with 100 rows
 await connection.execute(f"""
-    CREATE TABLE {test_table} AS 
+    CREATE TABLE {test_table} AS
     SELECT * FROM users LIMIT 100
 """)
 
@@ -497,9 +510,9 @@ if test_result.result == AdditionResult.SUCCESS:
 if plan.estimated_duration > 30:  # More than 30 seconds
     print("Long operation detected - monitoring enabled")
     plan.performance_monitoring = True
-    
+
     result = await handler.execute_not_null_addition(plan)
-    
+
     if result.performance_metrics:
         print(f"Batches processed: {result.performance_metrics['batch_count']}")
         print(f"Average batch time: {result.performance_metrics['avg_batch_time']:.2f}s")
@@ -528,12 +541,12 @@ if column.name in column_names:
 # Solution: Validate foreign key references
 if column.foreign_key_reference:
     ref_table, ref_column = column.foreign_key_reference.split('.')
-    
+
     # Check if referenced value exists
     exists = await connection.fetchval(f"""
         SELECT EXISTS(SELECT 1 FROM {ref_table} WHERE {ref_column} = $1)
     """, column.default_value)
-    
+
     if not exists:
         print(f"Referenced value {column.default_value} does not exist in {ref_table}.{ref_column}")
 ```
@@ -600,11 +613,11 @@ from dataflow.migrations.constraint_validator import ConstraintValidator
 
 async def add_user_status_column(connection_manager, table_name):
     """Complete example of adding a status column to users table."""
-    
+
     # Step 1: Initialize components
     handler = NotNullColumnHandler(connection_manager)
     validator = ConstraintValidator(connection_manager)
-    
+
     # Step 2: Define the column
     column = ColumnDefinition(
         name="account_status",
@@ -613,54 +626,54 @@ async def add_user_status_column(connection_manager, table_name):
         default_type=DefaultValueType.STATIC,
         check_constraints=["account_status IN ('active', 'inactive', 'suspended')"]
     )
-    
+
     try:
         # Step 3: Plan the addition
         print("Planning NOT NULL column addition...")
         plan = await handler.plan_not_null_addition(table_name, column)
-        
+
         print(f"Execution plan:")
         print(f"  Strategy: {plan.execution_strategy}")
         print(f"  Affected rows: {plan.affected_rows}")
         print(f"  Estimated time: {plan.estimated_duration:.2f} seconds")
         print(f"  Batch size: {plan.batch_size}")
-        
+
         # Step 4: Validate constraints
         print("Validating constraints...")
         constraint_validation = await validator.validate_all_constraints(
             table_name, column, "active"
         )
-        
+
         if not constraint_validation.is_safe:
             print("Constraint validation failed:")
             for issue in constraint_validation.issues:
                 print(f"  - {issue}")
             return False
-        
+
         if constraint_validation.warnings:
             print("Constraint warnings:")
             for warning in constraint_validation.warnings:
                 print(f"  - {warning}")
-        
+
         # Step 5: Validate safety
         print("Validating migration safety...")
         safety_validation = await handler.validate_addition_safety(plan)
-        
+
         if not safety_validation.is_safe:
             print("Safety validation failed:")
             for issue in safety_validation.issues:
                 print(f"  - {issue}")
             return False
-        
+
         if safety_validation.warnings:
             print("Safety warnings:")
             for warning in safety_validation.warnings:
                 print(f"  - {warning}")
-        
+
         # Step 6: Execute the addition
         print("Executing NOT NULL column addition...")
         result = await handler.execute_not_null_addition(plan)
-        
+
         if result.result == AdditionResult.SUCCESS:
             print(f"SUCCESS: Column added in {result.execution_time:.2f} seconds")
             print(f"  Rows affected: {result.affected_rows}")
@@ -670,10 +683,10 @@ async def add_user_status_column(connection_manager, table_name):
             if result.rollback_executed:
                 print("  Automatic rollback completed")
             return False
-            
+
     except Exception as e:
         print(f"ERROR: {e}")
-        
+
         # Attempt rollback
         try:
             rollback_result = await handler.rollback_not_null_addition(plan)
@@ -681,16 +694,16 @@ async def add_user_status_column(connection_manager, table_name):
                 print("Emergency rollback completed")
         except:
             print("Emergency rollback failed - manual intervention may be required")
-        
+
         return False
 
 # Usage
 async def main():
     # Your connection manager setup
     connection_manager = YourConnectionManager(database_url)
-    
+
     success = await add_user_status_column(connection_manager, "users")
-    
+
     if success:
         print("Migration completed successfully")
     else:

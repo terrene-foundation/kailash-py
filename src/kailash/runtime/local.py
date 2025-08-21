@@ -2333,7 +2333,10 @@ class LocalRuntime:
         else:
             # Standard node execution (backward compatibility)
             try:
-                if hasattr(node, "async_run"):
+                if hasattr(node, "execute_async"):
+                    # For AsyncNode and its subclasses, use execute_async which handles event loop properly
+                    node_result = await node.execute_async(**inputs)
+                elif hasattr(node, "async_run"):
                     node_result = await node.async_run(**inputs)
                 else:
                     node_result = node.execute(**inputs)
