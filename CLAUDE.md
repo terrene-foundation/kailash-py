@@ -38,9 +38,9 @@
 
 ### Framework Implementation
 - **nexus-specialist** → Multi-channel platform implementation (API/CLI/MCP)
-- **dataflow-specialist** → Database operations with auto-generated nodes (PostgreSQL + SQLite with full parity)
+- **dataflow-specialist** → Database operations with auto-generated nodes. String IDs preserved, multi-instance isolation, deferred schema ops (PostgreSQL + SQLite)
 
-### Core Implementation  
+### Core Implementation
 - **pattern-expert** → Workflow patterns, nodes, parameters
 - **tdd-implementer** → Test-first development
 - **intermediate-reviewer** → Review after todos and implementation
@@ -71,6 +71,8 @@ results, run_id = runtime.execute(workflow.build())  # ALWAYS .build()
 - **Parameter issues** → Use pattern-expert for 3-method parameter guide
 - **Test failures** → Use testing-specialist for real infrastructure setup
 - **DataFlow errors** → Use dataflow-specialist for database debugging (PostgreSQL + SQLite)
+- **String ID issues** → DataFlow preserves string IDs - no forced int conversion
+- **Multi-instance conflicts** → Each DataFlow instance maintains separate context
 - **Nexus platform issues** → Use nexus-specialist for multi-channel troubleshooting
 - **Framework selection** → Use framework-advisor to coordinate appropriate specialists
 

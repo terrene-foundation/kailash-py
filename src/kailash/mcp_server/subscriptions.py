@@ -1075,9 +1075,9 @@ class ResourceSubscriptionManager:
         This method should be overridden or configured to fetch actual resource data.
         For now, it returns basic resource information from the monitored state.
         """
-        async with self._resource_monitor._lock:
-            if uri in self._resource_monitor._resource_states:
-                state = self._resource_monitor._resource_states[uri]
+        async with self.resource_monitor._lock:
+            if uri in self.resource_monitor._resource_states:
+                state = self.resource_monitor._resource_states[uri]
                 return {
                     "uri": uri,
                     "content": state.get("content", {}),

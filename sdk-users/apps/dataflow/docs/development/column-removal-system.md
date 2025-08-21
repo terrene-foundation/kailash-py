@@ -2,6 +2,23 @@
 
 **Safe column removal with dependency analysis, transaction safety, and comprehensive rollback capabilities.**
 
+## ⚠️ IMPORTANT: Context-Aware Operations (v0.4.0+)
+
+DataFlow's column removal system now includes context-aware table creation and string ID preservation:
+
+- **String IDs preserved**: No forced integer conversion during column operations
+- **Multi-instance isolation**: Each DataFlow instance maintains separate context
+- **Deferred schema operations**: Table modifications are deferred until workflow execution
+
+```python
+# String ID models work seamlessly with column removal
+@db.model
+class User:
+    id: str  # Preserved throughout column operations
+    name: str
+    # deprecated_field: str  # Safe to remove
+```
+
 ## Overview
 
 The DataFlow Column Removal System provides enterprise-grade column removal functionality with:
@@ -111,7 +128,7 @@ for dep in validation.blocking_dependencies:
 # Review warnings and recommendations
 for warning in validation.warnings:
     print(f"WARNING: {warning}")
-    
+
 for rec in validation.recommendations:
     print(f"RECOMMENDATION: {rec}")
 ```
@@ -151,7 +168,7 @@ The system uses PostgreSQL savepoints for transaction safety:
 async with connection.transaction():
     savepoint = f"column_removal_{timestamp}"
     await connection.execute(f"SAVEPOINT {savepoint}")
-    
+
     try:
         # Execute removal stages
         await execute_removal_stages(plan)
@@ -170,7 +187,7 @@ The system enforces correct dependency removal ordering:
 
 1. **Backup Creation**: Data preservation before any changes
 2. **Dependent Objects**: Remove triggers, views, functions
-3. **Constraint Removal**: Drop FK constraints, check constraints  
+3. **Constraint Removal**: Drop FK constraints, check constraints
 4. **Index Removal**: Remove single and composite indexes
 5. **Column Removal**: Drop the actual column
 6. **Cleanup**: Clean up temporary resources
@@ -204,11 +221,11 @@ DROP VIEW IF EXISTS user_contacts_view CASCADE;
 #### 3. Constraint Removal
 ```sql
 -- Drop foreign key constraints
-ALTER TABLE user_profiles 
+ALTER TABLE user_profiles
 DROP CONSTRAINT IF EXISTS fk_user_profiles_user_email;
 
 -- Drop check constraints
-ALTER TABLE users 
+ALTER TABLE users
 DROP CONSTRAINT IF EXISTS chk_email_format;
 ```
 
@@ -239,7 +256,7 @@ result = await removal_manager.execute_safe_removal(plan)
 if result.rollback_executed:
     print("Removal failed - all changes rolled back")
     print(f"Error: {result.error_message}")
-    
+
     # Review what stages completed
     for stage_result in result.stages_completed:
         status = "SUCCESS" if stage_result.success else "FAILED"
@@ -253,7 +270,7 @@ if result.result != RemovalResult.SUCCESS:
     print("Recovery Instructions:")
     for instruction in result.recovery_instructions:
         print(f"  • {instruction}")
-        
+
     if result.manual_cleanup_required:
         print("Manual Cleanup Required:")
         for cleanup in result.manual_cleanup_required:
@@ -285,7 +302,7 @@ dependencies = plan.dependencies
 for dep in dependencies:
     print(f"{dep.object_name} ({dep.dependency_type.value})")
     print(f"  Risk Level: {dep.risk_level.value}")
-    
+
     if dep.details:
         for key, value in dep.details.items():
             print(f"  {key}: {value}")
@@ -294,7 +311,7 @@ for dep in dependencies:
 ### Dependency Types Handled
 
 - **Foreign Keys**: Both incoming (CRITICAL) and outgoing (HIGH)
-- **Indexes**: Single-column (LOW) and composite (MEDIUM)  
+- **Indexes**: Single-column (LOW) and composite (MEDIUM)
 - **Check Constraints**: Column-specific validation (LOW-MEDIUM)
 - **Triggers**: INSERT/UPDATE/DELETE events (MEDIUM)
 - **Views**: Dependent views dropped with CASCADE (HIGH)
@@ -335,11 +352,11 @@ result = await removal_manager.execute_safe_removal(plan)
 # Log detailed stage information
 for stage_result in result.stages_completed:
     logger.info(f"Stage {stage_result.stage.value}: {stage_result.duration:.2f}s")
-    
+
     if stage_result.warnings:
         for warning in stage_result.warnings:
             logger.warning(f"Stage warning: {warning}")
-            
+
     if stage_result.errors:
         for error in stage_result.errors:
             logger.error(f"Stage error: {error}")
@@ -366,7 +383,7 @@ for stage_result in result.stages_completed:
 ### Future Enhancements
 
 - **Multi-Column Removal**: Handle multiple columns atomically
-- **MySQL Support**: Extend to MySQL databases  
+- **MySQL Support**: Extend to MySQL databases
 - **Function Analysis**: Parse function code for column references
 - **Partition Support**: Handle partitioned table constraints
 - **Incremental Rollback**: Partial rollback to specific stages
@@ -381,26 +398,26 @@ from dataflow.migrations.column_removal_manager import ColumnRemovalManager
 
 async def safe_column_removal_migration():
     """Example integration with DataFlow migration system."""
-    
+
     # Initialize managers
     migration_system = AutoMigrationSystem(dataflow_instance)
     removal_manager = ColumnRemovalManager(migration_system.connection_manager)
-    
+
     # Plan removal
     plan = await removal_manager.plan_column_removal("users", "legacy_field")
-    
+
     # Validate safety
     validation = await removal_manager.validate_removal_safety(plan)
     if not validation.is_safe:
         raise Exception(f"Unsafe removal: {validation.blocking_dependencies}")
-    
+
     # Execute within migration transaction
     async with migration_system.get_migration_transaction() as tx:
         result = await removal_manager.execute_safe_removal(plan, tx.connection)
-        
+
         if result.result != RemovalResult.SUCCESS:
             raise Exception(f"Removal failed: {result.error_message}")
-            
+
         return result
 ```
 
@@ -412,31 +429,31 @@ from dataflow.migrations.column_removal_manager import ColumnRemovalManager
 
 class RemoveColumnCommand(NexusCommand):
     """Nexus CLI command for safe column removal."""
-    
+
     async def execute(self, table: str, column: str, confirm: bool = False):
         removal_manager = ColumnRemovalManager(self.connection_manager)
-        
+
         # Plan and validate
         plan = await removal_manager.plan_column_removal(table, column)
         validation = await removal_manager.validate_removal_safety(plan)
-        
+
         # Display safety information
         self.console.print(f"Risk Level: {validation.risk_level.value}")
-        
+
         if validation.blocking_dependencies:
             self.console.print("[red]CRITICAL Dependencies Found:[/red]")
             for dep in validation.blocking_dependencies:
                 self.console.print(f"  • {dep.object_name} ({dep.dependency_type.value})")
             return
-        
+
         # Require confirmation for risky operations
         if validation.requires_confirmation and not confirm:
             self.console.print("Use --confirm to proceed with this removal")
             return
-            
+
         # Execute removal
         result = await removal_manager.execute_safe_removal(plan)
-        
+
         if result.result == RemovalResult.SUCCESS:
             self.console.print(f"[green]✓[/green] Column removed successfully in {result.execution_time:.2f}s")
         else:

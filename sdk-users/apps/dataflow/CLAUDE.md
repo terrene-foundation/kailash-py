@@ -6,6 +6,105 @@
 - VARCHAR(255) limits removed (now TEXT with unlimited content)
 - Workflow connection parameter order fixed
 - Full PostgreSQL + SQLite parity achieved
+- **STRING ID SUPPORT**: No more forced integer conversion - string IDs preserved
+- **MULTI-INSTANCE ISOLATION**: Multiple DataFlow instances with proper context isolation
+- **DEFERRED SCHEMA OPERATIONS**: Synchronous registration, async table creation
+- **CONTEXT-AWARE TABLE CREATION**: Node-instance coupling for context preservation
+
+## 🔧 STRING ID & CONTEXT-AWARE PATTERNS (NEW)
+
+### String ID Support (No More Forced Integer Conversion)
+```python
+from dataflow import DataFlow
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+db = DataFlow()
+
+# Model with string primary key - fully supported
+@db.model
+class SsoSession:
+    id: str  # String IDs now preserved throughout workflow
+    user_id: str
+    state: str = 'active'
+
+# String IDs work seamlessly in all operations
+workflow = WorkflowBuilder()
+
+# ✅ CORRECT: String ID preserved (no integer conversion)
+session_id = "session-80706348-0456-468b-8851-329a756a3a93"
+workflow.add_node("SsoSessionReadNode", "read_session", {
+    "id": session_id  # String preserved as-is
+})
+
+# ✅ ALTERNATIVE: Use conditions for explicit type preservation
+workflow.add_node("SsoSessionReadNode", "read_session_alt", {
+    "conditions": {"id": session_id},  # Explicit type preservation
+    "raise_on_not_found": True
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
+
+### Multi-Instance DataFlow with Context Isolation
+```python
+# Instance 1: Development database with auto-migration
+db_dev = DataFlow(
+    database_url="sqlite:///dev.db",
+    auto_migrate=True,           # Allow schema changes
+    existing_schema_mode=False   # Full development mode
+)
+
+# Instance 2: Production database with safety locks
+db_prod = DataFlow(
+    database_url="postgresql://user:pass@localhost/prod",
+    auto_migrate=False,          # No automatic migrations
+    existing_schema_mode=True    # Maximum safety - no schema changes
+)
+
+# Context isolation - models registered on one instance don't affect the other
+@db_dev.model
+class DevModel:
+    id: str
+    name: str
+    # This model only exists in dev instance
+
+@db_prod.model
+class ProdModel:
+    id: str
+    name: str
+    # This model only exists in prod instance
+
+# Each instance maintains its own context and schema operations
+print(f"Dev models: {list(db_dev.models.keys())}")    # ['DevModel']
+print(f"Prod models: {list(db_prod.models.keys())}")  # ['ProdModel']
+```
+
+### Deferred Schema Operations (Synchronous Registration, Async Table Creation)
+```python
+# Schema operations are deferred until workflow execution
+db = DataFlow(auto_migrate=True)
+
+# Model registration is synchronous and immediate
+@db.model
+class User:
+    id: str
+    name: str
+    # Model registered immediately in memory
+
+# Table creation is deferred until needed
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create_user", {
+    "id": "user-001",
+    "name": "John Doe"
+})
+
+# Actual table creation happens during execution (if needed)
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+# Tables created on-demand during workflow execution
+```
 
 ## 🚀 IMMEDIATE SUCCESS PATTERNS
 
@@ -583,15 +682,15 @@ from dataflow.migrations.integrated_risk_assessment_system import IntegratedRisk
 
 async def enterprise_migration_workflow(
     operation_type: str,
-    table_name: str, 
+    table_name: str,
     migration_details: dict,
     connection_manager
 ):
     """Complete enterprise migration workflow with all safety systems."""
-    
+
     # Step 1: Comprehensive Risk Assessment
     risk_system = IntegratedRiskAssessmentSystem(connection_manager)
-    
+
     comprehensive_assessment = await risk_system.perform_complete_assessment(
         operation_type=operation_type,
         table_name=table_name,
@@ -600,11 +699,11 @@ async def enterprise_migration_workflow(
         include_dependency_analysis=True,
         include_fk_analysis=True
     )
-    
+
     print(f"Risk Assessment Complete:")
     print(f"  Overall Risk: {comprehensive_assessment.overall_risk_level}")
     print(f"  Risk Score: {comprehensive_assessment.risk_score}/100")
-    
+
     # Step 2: Generate Mitigation Strategies
     mitigation_plan = await risk_system.generate_comprehensive_mitigation_plan(
         assessment=comprehensive_assessment,
@@ -614,16 +713,16 @@ async def enterprise_migration_workflow(
             "data_consistency_critical": True
         }
     )
-    
+
     print(f"Mitigation Strategies: {len(mitigation_plan.strategies)}")
-    
+
     # Step 3: Create Staging Environment
     staging_manager = StagingEnvironmentManager(connection_manager)
     staging_env = await staging_manager.create_staging_environment(
         environment_name=f"migration_{int(time.time())}",
         data_sampling_strategy={"strategy": "representative", "sample_percentage": 5}
     )
-    
+
     try:
         # Step 4: Test Migration in Staging
         staging_test = await staging_manager.test_migration_in_staging(
@@ -635,23 +734,23 @@ async def enterprise_migration_workflow(
             },
             validation_checks=True
         )
-        
+
         if not staging_test.success:
             print(f"Staging test failed: {staging_test.failure_reason}")
             return False
-            
+
         # Step 5: Acquire Migration Lock for Production
         lock_manager = MigrationLockManager(connection_manager)
-        
+
         async with lock_manager.acquire_migration_lock(
             lock_scope="table_modification",
             timeout_seconds=600,
             operation_description=f"{operation_type} on {table_name}"
         ) as migration_lock:
-            
+
             # Step 6: Execute with Validation Checkpoints
             validation_manager = ValidationCheckpointManager(connection_manager)
-            
+
             validation_result = await validation_manager.execute_with_validation(
                 migration_operation=lambda: execute_actual_migration(
                     operation_type, table_name, migration_details
@@ -662,14 +761,14 @@ async def enterprise_migration_workflow(
                 ],
                 rollback_on_failure=True
             )
-            
+
             if validation_result.all_checkpoints_passed:
                 print("✓ Enterprise migration completed successfully")
                 return True
             else:
                 print(f"✗ Migration failed: {validation_result.failure_details}")
                 return False
-                
+
     finally:
         # Step 7: Cleanup Staging Environment
         await staging_manager.cleanup_staging_environment(staging_env)
@@ -820,7 +919,7 @@ print(f"Stored procedures affected: {len(rename_impact.procedure_dependencies)}"
 # Execute coordinated rename with dependency updates
 if rename_impact.can_rename_safely:
     rename_plan = await rename_analyzer.create_rename_plan(
-        rename_impact, 
+        rename_impact,
         include_dependency_updates=True,
         backup_strategy="full_backup"
     )
@@ -853,7 +952,7 @@ print(f"Database URL: {staging_env.connection_info.database_url}")
 
 # Test migration in staging
 test_result = await staging_manager.test_migration_in_staging(
-    staging_env, 
+    staging_env,
     migration_plan=your_migration_plan,
     validation_checks=True
 )
@@ -878,12 +977,12 @@ async with lock_manager.acquire_migration_lock(
     timeout_seconds=300,
     operation_description="Add NOT NULL column to users table"
 ) as lock:
-    
+
     print(f"Migration lock acquired: {lock.lock_id}")
-    
+
     # Execute migration safely - no other migrations can run
     migration_result = await execute_your_migration()
-    
+
     print(f"Migration completed under lock protection")
     # Lock is automatically released when context exits
 ```
@@ -902,7 +1001,7 @@ checkpoints = [
         "validators": ["schema_integrity", "foreign_key_consistency", "data_quality"]
     },
     {
-        "stage": "during_migration", 
+        "stage": "during_migration",
         "validators": ["transaction_health", "performance_monitoring"]
     },
     {
@@ -1042,6 +1141,9 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 - Implement proper error handling and retries
 - Use workflow connections for dynamic parameter passing
 - Test with TEXT fields for unlimited content (fixed VARCHAR(255) limits)
+- **STRING ID SUPPORT: Use string IDs directly in node parameters - no conversion needed**
+- **MULTI-INSTANCE: Isolate DataFlow instances for different environments (dev/prod)**
+- **DEFERRED SCHEMA: Let DataFlow handle table creation during workflow execution**
 - **NEW: Use appropriate migration safety level for your environment**
 - **NEW: Perform risk assessment for schema changes in production**
 - **NEW: Test migrations in staging environment before production**
@@ -1057,6 +1159,9 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 - Use `${}` syntax in node parameters (conflicts with PostgreSQL)
 - Use `.isoformat()` for datetime parameters (serialize before passing to workflows)
 - Assume VARCHAR(255) limits still exist (now TEXT with unlimited content)
+- **FORCE INTEGER CONVERSION on string IDs (now automatically preserved)**
+- **MIX DataFlow instances** between environments (each should be isolated)
+- **MANUALLY CREATE TABLES** before defining models (let deferred schema handle it)
 - **NEW: Skip migration risk assessment in production environments**
 - **NEW: Execute high-risk migrations without staging tests**
 - **NEW: Ignore foreign key dependencies during schema changes**
@@ -1066,7 +1171,7 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 - **✅ DateTime Serialization**: Fixed datetime objects being converted to strings
 - **✅ PostgreSQL Parameter Types**: Added explicit type casting for parameter determination
 - **✅ Content Size Limits**: Changed VARCHAR(255) to TEXT for unlimited content
-- **✅ Workflow Connections**: Fixed parameter order in workflow connections  
+- **✅ Workflow Connections**: Fixed parameter order in workflow connections
 - **✅ Parameter Naming**: Fixed conflicts with Core SDK internal fields
 - **✅ Data Access Patterns**: Corrected list node result access
 - **✅ SERIAL Column Generation**: Fixed duplicate DEFAULT clauses in PostgreSQL
@@ -1074,6 +1179,10 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 - **✅ Schema Inspection**: Fixed bounds checking errors
 - **✅ Test Fixtures**: Improved migration test configuration
 - **✅ auto_migrate=False**: Fixed tables being created despite disabled auto-migration
+- **✅ String ID Preservation**: No more forced integer conversion - IDs preserve original type**
+- **✅ Multi-Instance Isolation**: Proper context separation between DataFlow instances**
+- **✅ Deferred Schema Operations**: Table creation deferred until workflow execution**
+- **✅ Context-Aware Table Creation**: Node-instance coupling for proper isolation**
 
 ### 🎯 OPTIMIZATION CHECKLIST
 - [ ] Connection pool sized for workload
@@ -1166,14 +1275,14 @@ from dataflow.migrations.integrated_risk_assessment_system import IntegratedRisk
 # Full enterprise migration workflow with all safety systems
 async def enterprise_migration():
     risk_system = IntegratedRiskAssessmentSystem(connection_manager)
-    
+
     # Complete risk assessment with mitigation
     assessment = await risk_system.perform_complete_assessment(
         operation_type="add_not_null_column",
-        table_name="users", 
+        table_name="users",
         operation_details={"column": "status", "default": "active"}
     )
-    
+
     # Only proceed if risk is acceptable
     if assessment.overall_risk_level in ["LOW", "MEDIUM"]:
         return await execute_with_full_safety_protocol(assessment)
@@ -1203,7 +1312,7 @@ async def enterprise_migration():
 from dataflow.migrations.risk_assessment_engine import RiskAssessmentEngine, RiskLevel
 from dataflow.migrations.mitigation_strategy_engine import MitigationStrategyEngine
 
-# Specialized Analyzers  
+# Specialized Analyzers
 from dataflow.migrations.foreign_key_analyzer import ForeignKeyAnalyzer, FKOperationType
 from dataflow.migrations.table_rename_analyzer import TableRenameAnalyzer
 from dataflow.migrations.dependency_analyzer import DependencyAnalyzer, ImpactLevel

@@ -175,8 +175,8 @@ class TestMCPResourceSubscriptionsE2E:
 
     @pytest_asyncio.fixture
     async def event_store(self):
-        """Create mock event store."""
-        store = Mock()
+        """Create async mock event store for E2E testing."""
+        store = AsyncMock()
         store.append_event = AsyncMock()
         store.stream_events = AsyncMock(return_value=[])
         return store

@@ -71,7 +71,7 @@ git status                # Confirm staging area
 ```bash
 ## Before Commit Checklist
 - [ ] black . → No formatting changes needed
-- [ ] isort . → No import sorting changes needed  
+- [ ] isort . → No import sorting changes needed
 - [ ] ruff check . → No linting violations
 - [ ] pytest → All tests pass
 - [ ] examples tests → All examples work
@@ -244,7 +244,7 @@ git add . && git status && git commit -m "[type]: [description]"
 ## Quick Check (5 minutes)
 black . && isort . && ruff check .
 
-## Standard Check (10 minutes) 
+## Standard Check (10 minutes)
 black . && isort . && ruff check . && pytest
 
 ## Full Validation (20 minutes)
@@ -348,7 +348,7 @@ git rebase main     # Resolve conflicts manually
 - **CANNOT push directly to main** - must use PR workflow
 - **MUST update all version locations** together
 - **MUST follow release checklist** exactly
-- **MUST test examples and documentation** 
+- **MUST test examples and documentation**
 - **Document all changes** in changelogs
 - **Monitor CI/CD pipeline** for failures
 
@@ -357,7 +357,7 @@ git rebase main     # Resolve conflicts manually
 ```
 ✅ Pre-Commit Validation Complete
 - Code formatted with black
-- Imports sorted with isort  
+- Imports sorted with isort
 - Linting passed with ruff
 - All tests passing
 - Examples working

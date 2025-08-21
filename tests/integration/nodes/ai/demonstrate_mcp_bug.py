@@ -14,6 +14,7 @@ Run this script to see:
 """
 
 import json
+
 from openai.types.chat import ChatCompletionMessageToolCall
 
 

@@ -11,15 +11,8 @@ import pytest
 import pytest_asyncio
 
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
-from tests.infrastructure.test_harness import IntegrationTestSuite
 
-
-@pytest.fixture
-async def test_suite():
-    """Create complete integration test suite with infrastructure."""
-    suite = IntegrationTestSuite()
-    async with suite.session():
-        yield suite
+# Removed non-existent import
 
 
 @pytest.mark.integration
