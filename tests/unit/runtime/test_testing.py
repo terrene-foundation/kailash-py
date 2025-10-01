@@ -305,12 +305,6 @@ class TestSecurityTestHelper:
         assert hasattr(self.helper, "credential_mock")
         assert isinstance(self.helper.credential_mock, CredentialMockData)
 
-    def test_create_auth_test_workflow_oauth2(self):
-        """Test OAuth2 authentication workflow creation."""
-        # Skip this test as it requires complex workflow mocking
-        pytest.skip(
-            "OAuth2 workflow creation requires complex node mocking beyond scope of unit tests"
-        )
 
     def test_create_auth_test_workflow_api_key(self):
         """Test API key authentication workflow creation."""
@@ -690,43 +684,5 @@ class TestConvenienceFunctions:
         # Check internal attributes instead of name directly
         assert node._return_value == {"data": "test"}
 
-    def test_create_test_node_registry(self):
-        """Test creating a node from registry via convenience function."""
-        # Skip this test since NodeRegistry import path is not available in testing.py
-        pytest.skip("NodeRegistry not available in testing.py module")
 
-    def test_create_test_workflow_empty(self):
-        """Test creating an empty test workflow."""
-        # The function expects workflow_id parameter, need to check actual signature
-        try:
-            workflow = create_test_workflow("empty_test")
-            assert workflow.name == "empty_test"
-        except TypeError as e:
-            if "workflow_id" in str(e):
-                pytest.skip("Workflow constructor requires workflow_id parameter")
-            else:
-                raise
 
-    def test_create_test_workflow_with_nodes(self):
-        """Test creating a test workflow with specified nodes."""
-        nodes = [
-            {
-                "id": "node1",
-                "type": "MockNode",
-                "config": {"return_value": {"data": 1}},
-            },
-            {
-                "id": "node2",
-                "type": "MockNode",
-                "config": {"return_value": {"data": 2}},
-            },
-        ]
-
-        try:
-            workflow = create_test_workflow("node_test", nodes)
-            assert workflow.name == "node_test"
-        except TypeError as e:
-            if "workflow_id" in str(e):
-                pytest.skip("Workflow constructor requires workflow_id parameter")
-            else:
-                raise

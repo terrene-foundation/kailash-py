@@ -159,9 +159,11 @@ class TestW8BugReproduction:
 
         # Verify the W8Context is in the result
         assert "result" in result
-        w8_instance = result["result"]
-        assert isinstance(w8_instance, W8Context)
-        assert w8_instance.request_id == "output_test"
+        # W8Context should be converted to dict via to_dict() method and wrapped by function node
+        w8_dict = result["result"]
+        assert isinstance(w8_dict, dict)
+        assert w8_dict["request_id"] == "output_test"
+        assert w8_dict["metadata"]["source"] == "node_execution"
 
         # Verify node's validate_outputs() accepts it
         node.validate_outputs(result)  # Should not raise

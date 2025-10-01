@@ -10,6 +10,14 @@ from kailash.workflow import NodeInstance, Workflow
 from kailash.workflow.visualization import WorkflowVisualizer
 
 
+@pytest.fixture(autouse=True)
+def setup_matplotlib_backend():
+    """Ensure matplotlib backend is properly set for visualization tests."""
+    import matplotlib
+    matplotlib.use("Agg")  # Ensure non-interactive backend
+    yield
+
+
 class MockNode(Node):
     """Mock node for testing."""
 

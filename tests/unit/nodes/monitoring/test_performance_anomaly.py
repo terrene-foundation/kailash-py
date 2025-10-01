@@ -1,4 +1,8 @@
-"""Unit tests for PerformanceAnomalyNode."""
+"""Unit tests for PerformanceAnomalyNode.
+
+MOVED FROM: tests/integration/nodes/monitoring/
+REASON: This test uses mocking and belongs in unit tier.
+"""
 
 import asyncio
 import time

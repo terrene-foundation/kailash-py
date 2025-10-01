@@ -6,6 +6,7 @@ import time
 from typing import Any, Dict
 
 import pytest
+import pytest_asyncio
 from aiohttp import web
 
 from kailash.mcp_server.auth import AuthManager
@@ -27,7 +28,7 @@ def unused_tcp_port():
     return port
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def mcp_server_e2e(unused_tcp_port):
     """Create and start MCP server for E2E testing."""
     # Create server components with mock connections for now
@@ -80,17 +81,46 @@ async def mcp_server_e2e(unused_tcp_port):
     # Create web app
     app = web.Application()
 
+    # Store client connections for sampling support
+    client_connections = {}
+
+    # Create a mock transport for sampling support
+    class MockTransport:
+        """Mock transport that supports sending messages to clients."""
+
+        def __init__(self):
+            self.clients = client_connections
+
+        async def send_message(self, message, client_id=None):
+            """Send message to specific client."""
+            if client_id and client_id in self.clients:
+                # Send the message immediately
+                ws = self.clients[client_id]
+                try:
+                    await ws.send_json(message)
+                    return True
+                except Exception as e:
+                    return False
+            return False
+
+        def has_send_message(self):
+            """Check if transport supports sending messages."""
+            return True
+
+    # Set mock transport on server
+    server._transport = MockTransport()
+
     # Add WebSocket handler
     async def websocket_handler(request):
         """Handle WebSocket connections."""
         ws = web.WebSocketResponse()
         await ws.prepare(request)
 
-        # Create transport
-        transport = WebSocketServerTransport(ws)
-
         # Handle connection
         client_id = f"client_{time.time()}"
+
+        # Store connection for sampling support
+        client_connections[client_id] = ws
 
         try:
             async for msg in ws:
@@ -102,6 +132,7 @@ async def mcp_server_e2e(unused_tcp_port):
                     if response:
                         await ws.send_json(response)
 
+
                 elif msg.type == web.WSMsgType.ERROR:
                     print(f"WebSocket error: {ws.exception()}")
 
@@ -111,6 +142,8 @@ async def mcp_server_e2e(unused_tcp_port):
             # Cleanup
             if client_id in server.client_info:
                 del server.client_info[client_id]
+            if client_id in client_connections:
+                del client_connections[client_id]
 
         return ws
 

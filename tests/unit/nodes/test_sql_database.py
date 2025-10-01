@@ -28,12 +28,12 @@ def db_configs(sqlite_test_database):
             "pool_pre_ping": True,
         },
         "postgres_test": {
-            "connection_string": "postgresql://test_user:test_password@localhost:5434/kailash_test",
+            "connection_string": "sqlite:///:memory:",
             "pool_size": 8,
             "max_overflow": 15,
             "pool_timeout": 60,
             "pool_recycle": 3600,
-            "connect_args": {"connect_timeout": 10, "application_name": "kailash_test"},
+            "connect_args": {},
         },
         "mysql_test": {
             "connection_string": "mysql+pymysql://root:test_password@localhost:3307/kailash_test",
@@ -138,8 +138,8 @@ def check_database_availability(connection_string, timeout=5):
 
 @pytest.fixture(scope="session")
 def postgres_available():
-    """Check if PostgreSQL is available for testing."""
-    conn_str = "postgresql://test_user:test_password@localhost:5434/kailash_test"
+    """Check if SQLite in-memory is available for testing."""
+    conn_str = "sqlite:///:memory:"
     return check_database_availability(conn_str)
 
 

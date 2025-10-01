@@ -1,4 +1,8 @@
-"""Unit tests for PerformanceBenchmarkNode."""
+"""Unit tests for PerformanceBenchmarkNode.
+
+MOVED FROM: tests/integration/nodes/monitoring/
+REASON: This test uses extensive mocking and belongs in unit tier.
+"""
 
 from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch

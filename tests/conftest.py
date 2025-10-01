@@ -1171,3 +1171,75 @@ def isolated_workflow_builder():
 
     # Cleanup
     builder.clear()
+
+
+# ===========================
+# Infrastructure Fixtures (Consolidated)
+# ===========================
+# These fixtures eliminate duplication across integration/e2e tests
+
+
+@pytest.fixture(scope="session")
+def postgres_connection_string():
+    """Get PostgreSQL connection string from Docker config."""
+    from tests.utils.docker_config import get_postgres_connection_string
+    return get_postgres_connection_string("kailash_test")
+
+
+@pytest.fixture(scope="session")
+def redis_connection_config():
+    """Get Redis connection configuration from Docker config."""
+    return {
+        "host": REDIS_CONFIG["host"],
+        "port": REDIS_CONFIG["port"],
+        "db": 0,
+        "decode_responses": True,
+    }
+
+
+@pytest.fixture(scope="session")
+def mongodb_connection_config():
+    """Get MongoDB connection configuration from Docker config."""
+    return {
+        "host": MONGODB_CONFIG["host"],
+        "port": MONGODB_CONFIG["port"],
+        "username": MONGODB_CONFIG["username"],
+        "password": MONGODB_CONFIG["password"],
+        "database": "kailash_test",
+    }
+
+
+@pytest.fixture(scope="session")
+def ollama_connection_config():
+    """Get Ollama connection configuration from Docker config."""
+    return {
+        "base_url": f"http://{OLLAMA_CONFIG['host']}:{OLLAMA_CONFIG['port']}",
+        "model": "llama3.2:1b",  # Default test model
+    }
+
+
+@pytest.fixture(scope="function")
+def health_monitor():
+    """Create fresh health monitor for testing."""
+    from kailash.core.resilience.health_monitor import HealthMonitor
+    return HealthMonitor(check_interval=5.0, alert_threshold=2)
+
+
+@pytest.fixture(scope="function")
+def docker_services():
+    """Provide Docker services configuration for integration tests."""
+    return {
+        "postgres": DATABASE_CONFIG,
+        "redis": REDIS_CONFIG,
+        "mongodb": MONGODB_CONFIG,
+        "ollama": OLLAMA_CONFIG,
+    }
+
+
+# NOTE: These fixtures consolidate duplicate definitions from:
+# - tests/integration/core/test_health_monitor_integration.py
+# - tests/integration/core/test_bulkhead_integration.py
+# - tests/e2e/test_bulkhead_enterprise_scenarios.py
+# - tests/e2e/test_health_monitor_enterprise_e2e.py
+# - tests/integration/nodes/transaction/test_saga_persistence_integration.py
+# - tests/integration/nodes/transaction/test_two_phase_commit_integration.py

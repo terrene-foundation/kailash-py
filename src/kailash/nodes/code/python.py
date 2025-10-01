@@ -49,11 +49,14 @@ Examples:
 import ast
 import importlib.util
 import inspect
+import json
 import logging
 import os
 import resource
 import traceback
 from collections.abc import Callable
+from datetime import date, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, get_type_hints
 
@@ -617,6 +620,37 @@ class CodeExecutor:
             logger.error(error_msg)
             raise NodeExecutionError(error_msg)
 
+    def _ensure_serializable(self, data: Any) -> Any:
+        """Ensure data is JSON-serializable following AsyncSQL pattern."""
+        if data is None:
+            return None
+        elif isinstance(data, (str, int, float, bool)):
+            return data
+        elif isinstance(data, (datetime, date)):
+            return data.isoformat()
+        elif isinstance(data, Decimal):
+            return float(data)
+        elif isinstance(data, dict):
+            return {k: self._ensure_serializable(v) for k, v in data.items()}
+        elif isinstance(data, (list, tuple)):
+            return [self._ensure_serializable(item) for item in data]
+        else:
+            try:
+                json.dumps(data)
+                return data
+            except (TypeError, ValueError):
+                # Check if object has .to_dict() method for enhanced validation
+                if hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
+                    try:
+                        # Convert object to dict using its to_dict() method
+                        dict_result = data.to_dict()
+                        # Recursively ensure the dict result is also serializable
+                        return self._ensure_json_serializable(dict_result)
+                    except (TypeError, ValueError, AttributeError):
+                        # If .to_dict() exists but fails, fall back to string
+                        return str(data)
+                return str(data)
+
 
 class FunctionWrapper:
     """Wrapper for converting Python functions to nodes.
@@ -650,6 +684,37 @@ class FunctionWrapper:
         except (NameError, TypeError):
             # Handle cases where type hints can't be resolved
             self.type_hints = {}
+
+    def _ensure_serializable(self, data: Any) -> Any:
+        """Ensure data is JSON-serializable."""
+        if data is None:
+            return None
+        elif isinstance(data, (str, int, float, bool)):
+            return data
+        elif isinstance(data, (datetime, date)):
+            return data.isoformat()
+        elif isinstance(data, Decimal):
+            return float(data)
+        elif isinstance(data, dict):
+            return {k: self._ensure_serializable(v) for k, v in data.items()}
+        elif isinstance(data, (list, tuple)):
+            return [self._ensure_serializable(item) for item in data]
+        else:
+            try:
+                json.dumps(data)
+                return data
+            except (TypeError, ValueError):
+                # Check if object has .to_dict() method for enhanced validation
+                if hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
+                    try:
+                        # Convert object to dict using its to_dict() method
+                        dict_result = data.to_dict()
+                        # Recursively ensure the dict result is also serializable
+                        return self._ensure_json_serializable(dict_result)
+                    except (TypeError, ValueError, AttributeError):
+                        # If .to_dict() exists but fails, fall back to string
+                        return str(data)
+                return str(data)
 
     def get_input_types(self) -> dict[str, type]:
         """Extract input types from function signature.
@@ -710,18 +775,51 @@ class FunctionWrapper:
         return self.type_hints.get("return", Any)
 
     def execute(self, inputs: dict[str, Any]) -> dict[str, Any]:
-        """Execute the wrapped function."""
+        """Execute the wrapped function with proper serialization."""
         result = self.executor.execute_function(self.func, inputs)
 
-        # Always wrap results in "result" key for consistent validation
-        # This ensures both dict and non-dict returns have the same structure
-        if not isinstance(result, dict):
-            result = {"result": result}
-        else:
-            # For dict results, wrap the entire dict in "result" key
-            result = {"result": result}
+        # Ensure JSON serializability inline
+        result = self._ensure_json_serializable(result)
 
-        return result
+        # Smart wrapping: only wrap if result doesn't already have expected structure
+        # If function already returns {"result": value}, don't double-wrap
+        if isinstance(result, dict) and len(result) == 1 and "result" in result:
+            # Function already returned properly formatted result
+            return result
+        else:
+            # Wrap result for consistent schema validation
+            return {"result": result}
+
+    def _ensure_json_serializable(self, data: Any) -> Any:
+        """Convert data to JSON-serializable format."""
+        if data is None:
+            return None
+        elif isinstance(data, (str, int, float, bool)):
+            return data
+        elif isinstance(data, (datetime, date)):
+            return data.isoformat()
+        elif isinstance(data, Decimal):
+            return float(data)
+        elif isinstance(data, dict):
+            return {k: self._ensure_json_serializable(v) for k, v in data.items()}
+        elif isinstance(data, (list, tuple)):
+            return [self._ensure_json_serializable(item) for item in data]
+        else:
+            try:
+                json.dumps(data)
+                return data
+            except (TypeError, ValueError):
+                # Check if object has .to_dict() method for enhanced validation
+                if hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
+                    try:
+                        # Convert object to dict using its to_dict() method
+                        dict_result = data.to_dict()
+                        # Recursively ensure the dict result is also serializable
+                        return self._ensure_json_serializable(dict_result)
+                    except (TypeError, ValueError, AttributeError):
+                        # If .to_dict() exists but fails, fall back to string
+                        return str(data)
+                return str(data)
 
     def to_node(
         self,
@@ -837,6 +935,37 @@ class ClassWrapper:
             # Handle descriptor objects like properties
             self.type_hints = {}
 
+    def _ensure_serializable(self, data: Any) -> Any:
+        """Ensure data is JSON-serializable."""
+        if data is None:
+            return None
+        elif isinstance(data, (str, int, float, bool)):
+            return data
+        elif isinstance(data, (datetime, date)):
+            return data.isoformat()
+        elif isinstance(data, Decimal):
+            return float(data)
+        elif isinstance(data, dict):
+            return {k: self._ensure_serializable(v) for k, v in data.items()}
+        elif isinstance(data, (list, tuple)):
+            return [self._ensure_serializable(item) for item in data]
+        else:
+            try:
+                json.dumps(data)
+                return data
+            except (TypeError, ValueError):
+                # Check if object has .to_dict() method for enhanced validation
+                if hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
+                    try:
+                        # Convert object to dict using its to_dict() method
+                        dict_result = data.to_dict()
+                        # Recursively ensure the dict result is also serializable
+                        return self._ensure_json_serializable(dict_result)
+                    except (TypeError, ValueError, AttributeError):
+                        # If .to_dict() exists but fails, fall back to string
+                        return str(data)
+                return str(data)
+
     def get_input_types(self) -> dict[str, type]:
         """Extract input types from method signature."""
         input_types = {}
@@ -900,15 +1029,47 @@ class ClassWrapper:
         # Execute the method
         result = self.executor.execute_function(method, inputs)
 
-        # Always wrap results in "result" key for consistent validation
-        # This ensures both dict and non-dict returns have the same structure
+        # Ensure JSON serializability inline
+        result = self._ensure_json_serializable(result)
+
+        # Smart wrapping: only wrap non-dict results in "result" key
+        # Dict results are returned as-is to avoid double wrapping
         if not isinstance(result, dict):
             result = {"result": result}
-        else:
-            # For dict results, wrap the entire dict in "result" key
-            result = {"result": result}
+        # Dict results are already properly structured, no wrapping needed
 
         return result
+
+    def _ensure_json_serializable(self, data: Any) -> Any:
+        """Convert data to JSON-serializable format."""
+        if data is None:
+            return None
+        elif isinstance(data, (str, int, float, bool)):
+            return data
+        elif isinstance(data, (datetime, date)):
+            return data.isoformat()
+        elif isinstance(data, Decimal):
+            return float(data)
+        elif isinstance(data, dict):
+            return {k: self._ensure_json_serializable(v) for k, v in data.items()}
+        elif isinstance(data, (list, tuple)):
+            return [self._ensure_json_serializable(item) for item in data]
+        else:
+            try:
+                json.dumps(data)
+                return data
+            except (TypeError, ValueError):
+                # Check if object has .to_dict() method for enhanced validation
+                if hasattr(data, "to_dict") and callable(getattr(data, "to_dict")):
+                    try:
+                        # Convert object to dict using its to_dict() method
+                        dict_result = data.to_dict()
+                        # Recursively ensure the dict result is also serializable
+                        return self._ensure_json_serializable(dict_result)
+                    except (TypeError, ValueError, AttributeError):
+                        # If .to_dict() exists but fails, fall back to string
+                        return str(data)
+                return str(data)
 
     def to_node(
         self,
@@ -1272,7 +1433,9 @@ class PythonCodeNode(Node):
             elif self.function:
                 # Execute function
                 wrapper = FunctionWrapper(self.function, self.executor)
-                return wrapper.execute(kwargs)
+                result = wrapper.execute(kwargs)
+                # FunctionWrapper.execute() already handles result wrapping
+                return result
 
             elif self.class_type:
                 # Execute class method

@@ -333,7 +333,7 @@ class TestDeferredConfigNode:
     def test_has_required_config_sql_connection_string(self):
         """Test SQL node validation with connection string."""
         deferred_node = DeferredConfigNode(
-            MockSQLNode, connection_string="postgresql://user:pass@host/db"
+            MockSQLNode, connection_string="sqlite:///:memory:"
         )
         deferred_node.set_runtime_config(query="SELECT * FROM users")
 

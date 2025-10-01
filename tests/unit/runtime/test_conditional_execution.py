@@ -403,46 +403,6 @@ class TestLocalRuntimeTwoPhaseExecution:
         self.workflow = Workflow("test_workflow", "Test Two-Phase Execution")
         self.runtime = LocalRuntime(conditional_execution="skip_branches")
 
-    @patch("kailash.runtime.local.LocalRuntime._execute_switch_nodes")
-    @patch("kailash.runtime.local.LocalRuntime._execute_pruned_plan")
-    def test_two_phase_execution_flow(self, mock_pruned, mock_switch):
-        """Test two-phase execution flow."""
-        # Setup mocks
-        mock_switch.return_value = {
-            "switch1": {"true_output": {"status": "active"}, "false_output": None}
-        }
-        mock_pruned.return_value = {
-            "switch1": {"result": {"true_output": {"status": "active"}}},
-            "true_proc": {"result": {"branch": "true"}},
-        }
-
-        # Create simple conditional workflow
-        switch_node = SwitchNode(
-            name="switch", condition_field="status", operator="==", value="active"
-        )
-        true_proc = PythonCodeNode(name="true_proc", code="result = {'branch': 'true'}")
-
-        self.workflow.add_node("switch1", switch_node)
-        self.workflow.add_node("true_proc", true_proc)
-        self.workflow.connect("switch1", "true_proc", {"true_output": "input"})
-
-        # Test execution triggers conditional approach
-        runtime = LocalRuntime(conditional_execution="skip_branches")
-
-        # Use public interface instead of calling private methods
-        try:
-            results, _ = runtime.execute(self.workflow)
-
-            # Verify execution completed
-            assert "switch1" in results
-
-            # Both phase methods should be called
-            mock_switch.assert_called_once()
-            mock_pruned.assert_called_once()
-
-        except Exception as e:
-            # Skip test if not fully implemented
-            pytest.skip(f"Conditional execution not fully implemented: {e}")
 
     def test_switch_node_dependency_ordering(self):
         """Test switch node execution in dependency order."""

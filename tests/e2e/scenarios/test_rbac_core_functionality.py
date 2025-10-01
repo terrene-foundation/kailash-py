@@ -22,6 +22,21 @@ class TestRBACCoreFunctionality:
 
     def test_rbac_role_creation_and_assignment(self):
         """Test that roles can be created and assigned to users correctly."""
+        # Check if PostgreSQL is available before proceeding
+        try:
+            import psycopg2
+            conn = psycopg2.connect(
+                host="localhost",
+                port=5434,
+                database="kailash_test",
+                user="test_user",
+                password="test_password",
+                connect_timeout=3,
+            )
+            conn.close()
+        except Exception:
+            pytest.skip("PostgreSQL test database not available")
+
         print("\n🔐 Testing Core RBAC Functionality...")
 
         # Database configuration
@@ -151,6 +166,21 @@ class TestRBACCoreFunctionality:
 
     def test_rbac_workflow_integration(self):
         """Test RBAC functionality through workflow integration."""
+        # Check if PostgreSQL is available before proceeding
+        try:
+            import psycopg2
+            conn = psycopg2.connect(
+                host="localhost",
+                port=5434,
+                database="kailash_test",
+                user="test_user",
+                password="test_password",
+                connect_timeout=3,
+            )
+            conn.close()
+        except Exception:
+            pytest.skip("PostgreSQL test database not available")
+
         print("\n🔄 Testing RBAC Workflow Integration...")
 
         # Database configuration

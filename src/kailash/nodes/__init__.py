@@ -37,6 +37,7 @@ _NODE_CATEGORIES = [
     "testing",
     "transaction",
     "transform",
+    "validation",
 ]
 
 # Initialize lazy module cache

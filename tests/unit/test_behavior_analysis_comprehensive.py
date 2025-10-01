@@ -164,9 +164,6 @@ class TestAnomalyDetection:
             # Train model on normal behavior
             train_result = node.execute(action="train_model", user_id="user_normal")
             # Training may return different structure
-            # Check if action is implemented
-            if train_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: train_model")
             assert train_result.get("success", True)  # May not have success field
 
             # Test anomalous login
@@ -182,9 +179,6 @@ class TestAnomalyDetection:
             )
 
             # Anomaly detection structure may vary
-            # Check if action is implemented
-            if anomaly_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: train_model")
             assert anomaly_result.get("success", True)
             # Check for anomaly indicators in various possible fields
             assert any(
@@ -226,9 +220,6 @@ class TestAnomalyDetection:
             )
 
             # File access anomaly check
-            # Check if action is implemented
-            if anomaly_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: check_anomaly")
             assert anomaly_result.get("success", True)
             # Anomaly detection implemented differently
 
@@ -276,11 +267,8 @@ class TestMachineLearningModels:
             # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
             # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
 
-            # Verify model was trained - but action might not be implemented
-            if result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("train_model action not implemented")
-            else:
-                mock_model.fit.assert_called_once()
+            # Verify model was trained
+            mock_model.fit.assert_called_once()
 
             # Test prediction
             predict_result = node.execute(
@@ -396,13 +384,7 @@ class TestBehaviorProfiles:
                 },
             )
 
-            # Check if action is implemented
-            if update_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: create_profile")
             assert update_result["success"] is True
-            # Check if action is implemented
-            if update_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: create_profile")
             assert update_result.get("success", True)  # Profile updated
 
         except ImportError:
@@ -483,9 +465,6 @@ class TestRiskScoring:
             )
 
             # Risk scoring structure may vary
-            # Check if action is implemented
-            if low_risk_score.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: calculate_risk_score")
             assert low_risk_score.get("success", True)
             # Check for risk indicators without assuming exact structure
             if "risk_score" in low_risk_score:
@@ -514,9 +493,6 @@ class TestRiskScoring:
             )
 
             # Risk scoring structure may vary
-            # Check if action is implemented
-            if high_risk_score.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: calculate_risk_score")
             assert high_risk_score.get("success", True)
             # Check for risk indicators without assuming exact structure
             if "risk_score" in high_risk_score:
@@ -557,9 +533,6 @@ class TestRiskScoring:
                 event_data={"query": "SELECT * FROM users"},
             )
 
-            # Check if action is implemented
-            if action_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: set_context")
             assert action_result["success"] is True
             # Higher risk for privileged user
             # Contextual risk structure may vary
@@ -604,9 +577,6 @@ class TestAlertingSystem:
             )
 
             # Alert structure may vary
-            # Check if action is implemented
-            if alert_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: send_alert")
             assert alert_result.get("success", True)
             # Check for alert confirmation without assuming exact structure
             assert "alert" in str(alert_result).lower() or alert_result.get(
@@ -645,9 +615,6 @@ class TestAlertingSystem:
                 details={"user_id": "test_user", "activity": "mass_download"},
             )
 
-            # Check if action is implemented
-            if alert_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: send_alert")
             assert alert_result["success"] is True
 
             # Verify webhook was called
@@ -735,9 +702,6 @@ class TestBehaviorBaselines:
             )
 
             # Baseline comparison structure may vary
-            # Check if action is implemented
-            if normal_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: compare_to_baseline")
             assert normal_result.get("success", True)
             # Basic validation without assuming structure
             assert isinstance(normal_result, dict)
@@ -754,9 +718,6 @@ class TestBehaviorBaselines:
             )
 
             # Anomaly comparison structure may vary
-            # Check if action is implemented
-            if anomaly_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: compare_to_baseline")
             assert anomaly_result.get("success", True)
             # Basic validation without assuming structure
             assert isinstance(anomaly_result, dict)
@@ -805,9 +766,6 @@ class TestGroupBehaviorAnalysis:
             )
 
             # Outlier detection structure may vary
-            # Check if action is implemented
-            if outlier_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: detect_group_outlier")
             assert outlier_result.get("success", True)
             # Basic validation
             assert isinstance(outlier_result, dict)
@@ -844,9 +802,6 @@ class TestTemporalAnalysis:
             )
 
             # Temporal pattern structure may vary
-            # Check if action is implemented
-            if pattern_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: analyze_temporal_pattern")
             assert pattern_result.get("success", True)
             if "temporal_patterns" in pattern_result:
                 patterns = pattern_result["temporal_patterns"]
@@ -894,9 +849,6 @@ class TestTemporalAnalysis:
             )
 
             # Seasonal pattern structure may vary
-            # Check if action is implemented
-            if seasonal_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: detect_seasonal_pattern")
             assert seasonal_result.get("success", True)
             # Basic validation
             assert isinstance(seasonal_result, dict)
@@ -941,9 +893,6 @@ class TestSecurityUseCases:
             )
 
             # Threat assessment structure may vary
-            # Check if action is implemented
-            if threat_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: assess_insider_threat")
             assert threat_result.get("success", True)
             # Basic threat indicators
             assert isinstance(threat_result, dict)
@@ -1065,9 +1014,6 @@ class TestDataPrivacy:
                 retention_days=1,  # Only keep recent data
             )
 
-            # Check if action is implemented
-            if purge_result.get("error", "").startswith("Unknown action:"):
-                pytest.skip("Action not implemented: enforce_retention_policy")
             assert purge_result["success"] is True
             assert purge_result["events_purged"] > 0
 
