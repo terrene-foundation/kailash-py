@@ -1,378 +1,331 @@
-# Quickstart Tutorial
+# Kaizen Quickstart Guide
 
-**Create your first Kaizen agent in 5 minutes**
+Get started with Kaizen in 5 minutes - from installation to your first working agent.
 
-This tutorial gets you up and running with Kaizen's signature-based AI programming. You'll create a working agent, execute it with the Core SDK runtime, and see results.
-
-## 🎯 What You'll Build
-
-A text analysis agent that takes any text input and returns:
-- A concise summary
-- Sentiment analysis (positive/negative/neutral)
-- Key topics extracted from the text
-
-**Time required:** 5-10 minutes
-
-## 🚀 Step 1: Basic Setup
-
-Create a new Python file called `quickstart.py`:
-
-```python
-import kaizen
-from kailash.runtime.local import LocalRuntime
-
-print("🚀 Kaizen Quickstart Tutorial")
-print("Creating your first signature-based AI agent...\n")
-```
-
-## 🧠 Step 2: Initialize Framework
-
-Add framework initialization with signature programming enabled:
-
-```python
-# Initialize Kaizen framework
-framework = kaizen.Kaizen(signature_programming_enabled=True)
-
-print("✅ Framework initialized with signature programming")
-```
-
-**What this does:**
-- Creates a Kaizen framework instance
-- Enables signature-based programming features
-- Sets up lazy loading for optimal performance
-
-## 🤖 Step 3: Create Your First Agent
-
-Add a signature-based agent that processes text:
-
-```python
-# Create signature-based agent
-agent = framework.create_agent(
-    agent_id="text_analyzer",
-    signature="text -> summary, sentiment, key_topics"
-)
-
-print("✅ Created text analyzer agent with signature")
-print("   Input: text")
-print("   Outputs: summary, sentiment, key_topics\n")
-```
-
-**Understanding the signature:**
-- `"text -> summary, sentiment, key_topics"` defines inputs and outputs
-- Framework automatically handles the AI logic
-- No need to write prompts or manage model interactions
-
-## ⚡ Step 4: Execute with Core SDK
-
-Add execution using Kailash Core SDK runtime:
-
-```python
-# Initialize Core SDK runtime
-runtime = LocalRuntime()
-
-# Convert agent to workflow and execute
-workflow = agent.to_workflow()
-built_workflow = workflow.build()
-
-print("✅ Agent converted to Core SDK workflow")
-print("⚡ Executing with LocalRuntime...\n")
-
-# Execute with sample text
-sample_text = """
-Artificial intelligence is transforming how businesses operate.
-Companies are using AI for customer service, data analysis, and
-automation. This technology offers incredible opportunities but
-also presents challenges in ethics and employment.
-"""
-
-# Execute the workflow
-results, run_id = runtime.execute(
-    built_workflow,
-    parameters={"text": sample_text.strip()}
-)
-
-print(f"✅ Execution completed (Run ID: {run_id})")
-```
-
-**Key Patterns:**
-- Always use `runtime.execute(workflow.build())`
-- Pass inputs as parameters dictionary
-- Runtime returns results and execution ID
-
-## 📊 Step 5: Access Results
-
-Add result processing and display:
-
-```python
-# Display results
-print("\n📊 Analysis Results:")
-print("=" * 50)
-
-if 'summary' in results:
-    print(f"📝 Summary:")
-    print(f"   {results['summary']}\n")
-
-if 'sentiment' in results:
-    print(f"😊 Sentiment: {results['sentiment']}\n")
-
-if 'key_topics' in results:
-    print(f"🔑 Key Topics:")
-    topics = results['key_topics']
-    if isinstance(topics, list):
-        for topic in topics:
-            print(f"   • {topic}")
-    else:
-        print(f"   {topics}")
-
-print("\n🎉 Quickstart completed successfully!")
-```
-
-## 🏃‍♂️ Complete Code
-
-Here's your complete `quickstart.py` file:
-
-```python
-import kaizen
-from kailash.runtime.local import LocalRuntime
-
-print("🚀 Kaizen Quickstart Tutorial")
-print("Creating your first signature-based AI agent...\n")
-
-# Step 1: Initialize Kaizen framework
-framework = kaizen.Kaizen(signature_programming_enabled=True)
-print("✅ Framework initialized with signature programming")
-
-# Step 2: Create signature-based agent
-agent = framework.create_agent(
-    agent_id="text_analyzer",
-    signature="text -> summary, sentiment, key_topics"
-)
-print("✅ Created text analyzer agent with signature")
-print("   Input: text")
-print("   Outputs: summary, sentiment, key_topics\n")
-
-# Step 3: Execute with Core SDK
-runtime = LocalRuntime()
-workflow = agent.to_workflow()
-built_workflow = workflow.build()
-
-print("✅ Agent converted to Core SDK workflow")
-print("⚡ Executing with LocalRuntime...\n")
-
-# Sample text for analysis
-sample_text = """
-Artificial intelligence is transforming how businesses operate.
-Companies are using AI for customer service, data analysis, and
-automation. This technology offers incredible opportunities but
-also presents challenges in ethics and employment.
-"""
-
-# Execute the workflow
-results, run_id = runtime.execute(
-    built_workflow,
-    parameters={"text": sample_text.strip()}
-)
-
-print(f"✅ Execution completed (Run ID: {run_id})")
-
-# Display results
-print("\n📊 Analysis Results:")
-print("=" * 50)
-
-if 'summary' in results:
-    print(f"📝 Summary:")
-    print(f"   {results['summary']}\n")
-
-if 'sentiment' in results:
-    print(f"😊 Sentiment: {results['sentiment']}\n")
-
-if 'key_topics' in results:
-    print(f"🔑 Key Topics:")
-    topics = results['key_topics']
-    if isinstance(topics, list):
-        for topic in topics:
-            print(f"   • {topic}")
-    else:
-        print(f"   {topics}")
-
-print("\n🎉 Quickstart completed successfully!")
-```
-
-## 🏃‍♂️ Run Your Agent
-
-Execute your first Kaizen agent:
+## 📦 Installation
 
 ```bash
-python quickstart.py
-```
+# Install Kaizen
+pip install kailash-kaizen
 
-**Expected output:**
-```
-🚀 Kaizen Quickstart Tutorial
-Creating your first signature-based AI agent...
-
-✅ Framework initialized with signature programming
-✅ Created text analyzer agent with signature
-   Input: text
-   Outputs: summary, sentiment, key_topics
-
-✅ Agent converted to Core SDK workflow
-⚡ Executing with LocalRuntime...
-
-✅ Execution completed (Run ID: run_abc123)
-
-📊 Analysis Results:
-==================================================
-📝 Summary:
-   AI is revolutionizing business operations through automation,
-   customer service, and analytics, creating opportunities while
-   raising ethical and employment concerns.
-
-😊 Sentiment: neutral
-
-🔑 Key Topics:
-   • artificial intelligence
-   • business transformation
-   • automation
-   • ethics
-   • employment
-
-🎉 Quickstart completed successfully!
-```
-
-## 🔧 Try Different Inputs
-
-Experiment with different text inputs:
-
-```python
-# Try different examples
-examples = [
-    "I love this new restaurant! The food is amazing and the service is excellent.",
-    "The quarterly financial report shows significant losses across all departments.",
-    "Climate change requires immediate action from governments and businesses worldwide."
-]
-
-for i, text in enumerate(examples, 1):
-    print(f"\n--- Example {i} ---")
-    results, _ = runtime.execute(
-        built_workflow,
-        parameters={"text": text}
-    )
-    print(f"Text: {text[:50]}...")
-    print(f"Sentiment: {results.get('sentiment', 'N/A')}")
-```
-
-## 🎯 Understanding What Happened
-
-### Signature-Based Programming
-- **Declarative**: You defined WHAT you wanted (`"text -> summary, sentiment, key_topics"`)
-- **Automatic**: Framework figured out HOW to implement it
-- **Optimized**: Framework handles prompt engineering, error handling, and optimization
-
-### Core SDK Integration
-- **Workflow Conversion**: Agent becomes a Core SDK workflow node
-- **Runtime Execution**: Uses LocalRuntime for actual execution
-- **Result Handling**: Structured outputs matching your signature
-
-### Key Benefits
-- **No Prompt Engineering**: Framework handles AI interactions
-- **Structured Outputs**: Results match your signature specification
-- **Enterprise Ready**: Built-in error handling and optimization
-- **Ecosystem Integration**: Works seamlessly with Kailash Core SDK
-
-## 🚨 Common Issues
-
-**1. Module Import Errors**
-```python
-# Error: No module named 'kaizen'
-# Solution: Check installation
+# Or install with Kailash SDK
 pip install kailash[kaizen]
 ```
 
-**2. API Key Issues**
-```python
-# Error: Authentication failed
-# Solution: Set API key
-import os
-os.environ["OPENAI_API_KEY"] = "your-key-here"
+## 🔑 API Key Setup
+
+Create a `.env` file in your project root:
+
+```bash
+# .env
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-**3. Empty Results**
+## 🚀 Your First Agent (3 Steps)
+
+### Step 1: Import and Load Environment
+
 ```python
-# Issue: Results contain empty values
-# Solution: Check agent configuration
-agent = framework.create_agent(
-    agent_id="text_analyzer",
-    config={"model": "gpt-4"},  # Specify model explicitly
-    signature="text -> summary, sentiment, key_topics"
+from kaizen.agents import SimpleQAAgent
+from kaizen.agents.specialized.simple_qa import QAConfig
+from dotenv import load_dotenv
+
+# Load API keys from .env
+load_dotenv()
+```
+
+### Step 2: Create Agent
+
+```python
+# Create configuration
+config = QAConfig(
+    llm_provider="openai",
+    model="gpt-4"
+)
+
+# Create agent
+agent = SimpleQAAgent(config)
+```
+
+### Step 3: Execute
+
+```python
+# Ask a question
+result = agent.ask("What is quantum computing?")
+
+# Print results
+print(result["answer"])
+print(f"Confidence: {result['confidence']}")
+```
+
+**Complete Example:**
+```python
+from kaizen.agents import SimpleQAAgent
+from kaizen.agents.specialized.simple_qa import QAConfig
+from dotenv import load_dotenv
+
+# Load environment
+load_dotenv()
+
+# Create agent
+config = QAConfig(llm_provider="openai", model="gpt-4")
+agent = SimpleQAAgent(config)
+
+# Execute
+result = agent.ask("What is quantum computing?")
+print(result["answer"])
+```
+
+## 🎯 Common Agent Patterns
+
+### Question Answering
+
+```python
+from kaizen.agents import SimpleQAAgent
+from kaizen.agents.specialized.simple_qa import QAConfig
+
+config = QAConfig(llm_provider="openai", model="gpt-4")
+agent = SimpleQAAgent(config)
+result = agent.ask("What is the capital of France?")
+```
+
+### Memory-Enabled Agent
+
+```python
+from kaizen.agents import SimpleQAAgent
+from kaizen.agents.specialized.simple_qa import QAConfig
+
+# Enable memory with max_turns parameter
+config = QAConfig(
+    llm_provider="openai",
+    model="gpt-4",
+    max_turns=10  # Enable BufferMemory
+)
+agent = SimpleQAAgent(config)
+
+# Use session_id for continuity
+result1 = agent.ask("My name is Alice", session_id="user123")
+result2 = agent.ask("What's my name?", session_id="user123")
+print(result2["answer"])  # "Your name is Alice"
+```
+
+### Vision Processing
+
+```python
+from kaizen.agents import VisionAgent, VisionAgentConfig
+
+# Ollama (free, local)
+config = VisionAgentConfig(llm_provider="ollama", model="bakllava")
+agent = VisionAgent(config=config)
+
+result = agent.analyze(
+    image="/path/to/image.png",
+    question="What is in this image?"
+)
+print(result['answer'])
+```
+
+### Chain-of-Thought Reasoning
+
+```python
+from kaizen.agents import ChainOfThoughtAgent
+from kaizen.agents.specialized.chain_of_thought import ChainOfThoughtConfig
+
+config = ChainOfThoughtConfig(llm_provider="openai", model="gpt-4")
+agent = ChainOfThoughtAgent(config)
+
+result = agent.think("If John has 3 apples and Mary gives him 5 more, how many does he have?")
+print(result["reasoning_steps"])
+print(result["final_answer"])
+```
+
+## 🔧 Configuration Options
+
+### Basic Configuration
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class QAConfig:
+    llm_provider: str = "openai"     # "openai", "anthropic", "ollama"
+    model: str = "gpt-4"             # Model name
+    temperature: float = 0.7         # Creativity (0.0-1.0)
+    max_tokens: int = 500            # Maximum response length
+    timeout: int = 30                # Request timeout (seconds)
+```
+
+### Progressive Configuration
+
+```python
+# Start with defaults
+config = QAConfig()
+
+# Override specific fields
+config = QAConfig(
+    model="gpt-3.5-turbo",  # Use cheaper model
+    temperature=0.2         # Lower creativity
+)
+
+# Full customization
+config = QAConfig(
+    llm_provider="anthropic",
+    model="claude-3-opus",
+    temperature=0.1,
+    max_tokens=1000,
+    timeout=60,
+    max_turns=20  # Enable memory
 )
 ```
 
-## 🏗️ Next Steps
+## 📚 Available Agents
 
-### Immediate Next Steps
-1. **[First Agent Deep Dive](first-agent.md)** - Learn detailed agent configuration
-2. **Try Different Signatures** - Experiment with different input/output patterns
-3. **Add Error Handling** - Make your agents more robust
-
-### Explore More Features
-1. **[Enterprise Features](../guides/enterprise-features.md)** - Memory, audit trails, compliance
-2. **[Multi-Agent Workflows](../guides/multi-agent-workflows.md)** - Coordinate multiple agents
-3. **[MCP Integration](../guides/mcp-integration.md)** - Connect external tools
-
-### Example Extensions
-
-**Add Configuration:**
 ```python
-# More sophisticated agent
-agent = framework.create_agent(
-    agent_id="advanced_analyzer",
-    config={
-        "model": "gpt-4",
-        "temperature": 0.3,
-        "max_tokens": 500
-    },
-    signature="text -> summary, sentiment, key_topics, readability_score"
+from kaizen.agents import (
+    # Single-Agent Patterns
+    SimpleQAAgent,           # Question answering
+    ChainOfThoughtAgent,     # Step-by-step reasoning
+    ReActAgent,              # Reasoning + action cycles
+    RAGResearchAgent,        # Research with retrieval
+    CodeGenerationAgent,     # Code generation
+    MemoryAgent,             # Memory-enhanced conversations
+
+    # Multi-Modal Agents
+    VisionAgent,             # Image analysis
+    TranscriptionAgent,      # Audio transcription
 )
 ```
 
-**Add Memory:**
-```python
-# Enterprise features
-enterprise_framework = kaizen.Kaizen(
-    memory_enabled=True,
-    audit_trail_enabled=True
-)
+## ⚠️ Common Issues
 
-memory = enterprise_framework.create_memory_system(tier="standard")
-agent = enterprise_framework.create_agent(
-    "memory_analyzer",
-    config={"memory_system": memory},
-    signature="text -> summary, sentiment, similar_texts"
-)
+### Issue 1: Missing API Key
+
+**Error:**
+```
+AuthenticationError: No API key provided
 ```
 
-**Multiple Agents:**
-```python
-# Create specialized agents
-summarizer = framework.create_agent("summarizer", signature="text -> summary")
-sentiment_analyzer = framework.create_agent("sentiment", signature="text -> sentiment")
-topic_extractor = framework.create_agent("topics", signature="text -> key_topics")
-
-# Use them in sequence or parallel
+**Solution:**
+```bash
+# Create .env file
+echo "OPENAI_API_KEY=sk-..." > .env
 ```
 
-## 📚 What You Learned
+```python
+from dotenv import load_dotenv
+load_dotenv()  # Load before creating agent
+```
 
-✅ **Framework Initialization** - How to set up Kaizen with signature programming
-✅ **Signature Syntax** - Declarative input/output definitions
-✅ **Agent Creation** - Building AI agents without prompt engineering
-✅ **Core SDK Integration** - Executing agents with LocalRuntime
-✅ **Result Handling** - Accessing structured outputs
-✅ **Essential Pattern** - Always use `runtime.execute(workflow.build())`
+### Issue 2: Ollama Not Running
 
-## 🎉 Congratulations!
+**Error:**
+```
+ConnectionError: Could not connect to Ollama
+```
 
-You've successfully created and executed your first Kaizen agent using signature-based programming! You now understand the core concepts of declarative AI development.
+**Solution:**
+```bash
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
 
-**Ready for more?** Continue to the **[First Agent Deep Dive](first-agent.md)** for detailed configuration options and advanced patterns.
+# Start Ollama
+ollama serve
+
+# Pull model
+ollama pull bakllava
+```
+
+### Issue 3: Wrong Import Path
+
+**Error:**
+```
+ImportError: cannot import name 'SimpleQAAgent'
+```
+
+**Solution:**
+```python
+# ✅ CORRECT
+from kaizen.agents import SimpleQAAgent
+from kaizen.agents.specialized.simple_qa import QAConfig
+
+# ❌ WRONG
+from kaizen import SimpleQAAgent  # This doesn't work
+```
+
+## 🎓 Next Steps
+
+### Learn More
+
+1. **[Complete API Reference](../reference/api-reference.md)** - All available methods
+2. **[Multi-Modal Guide](../reference/multi-modal-api-reference.md)** - Vision and audio processing
+3. **[Integration Patterns](../guides/integration-patterns.md)** - DataFlow, Nexus, MCP
+4. **[Troubleshooting](../reference/troubleshooting.md)** - Common errors and solutions
+
+### Try Examples
+
+Explore 35+ working examples:
+```bash
+# Clone repository
+git clone https://github.com/terrene-foundation/kailash-py
+
+# Navigate to examples
+cd kailash_python_sdk/apps/kailash-kaizen/examples
+
+# Try simple Q&A
+python 1-single-agent/simple-qa/workflow.py
+```
+
+### Create Custom Agent
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.signatures import Signature, InputField, OutputField
+from dataclasses import dataclass
+
+# 1. Define configuration
+@dataclass
+class SentimentConfig:
+    llm_provider: str = "openai"
+    model: str = "gpt-4"
+    temperature: float = 0.2
+
+# 2. Define signature
+class SentimentSignature(Signature):
+    text: str = InputField(desc="Text to analyze")
+    sentiment: str = OutputField(desc="Sentiment category")
+    confidence: float = OutputField(desc="Confidence 0.0-1.0")
+
+# 3. Extend BaseAgent
+class SentimentAgent(BaseAgent):
+    def __init__(self, config: SentimentConfig):
+        super().__init__(config=config, signature=SentimentSignature())
+
+    def analyze(self, text: str):
+        return self.run(text=text)
+
+# Usage
+config = SentimentConfig()
+agent = SentimentAgent(config)
+result = agent.analyze("This product is amazing!")
+print(result["sentiment"])  # "positive"
+```
+
+## 💡 Quick Tips
+
+1. **Always load .env first**: Use `load_dotenv()` before creating agents
+2. **Start simple**: Use SimpleQAAgent to understand the pattern
+3. **Enable memory**: Set `max_turns` parameter to enable BufferMemory
+4. **Use Ollama for testing**: Free local inference for development
+5. **Check examples**: 35+ working examples in the repository
+
+## 🔗 Related Documentation
+
+- **[README.md](../../README.md)** - Complete Kaizen guide
+- **[Multi-Modal API](../reference/multi-modal-api-reference.md)** - Vision and audio
+- **[Troubleshooting](../reference/troubleshooting.md)** - Error solutions
+- **[Examples](../../../../apps/kailash-kaizen/examples/)** - Working code
+
+---
+
+**Ready to build?** Check out the **[Complete Examples](../../../../apps/kailash-kaizen/examples/)** or read the **[Full Documentation](../../README.md)**.

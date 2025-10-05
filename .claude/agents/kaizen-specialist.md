@@ -9,27 +9,26 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 
 ## Documentation Navigation
 
-### Primary References
-- **[docs/CLAUDE.md](../apps/kailash-kaizen/docs/CLAUDE.md)** - Task-based navigation, quick lookups
-- **[docs/README.md](../apps/kailash-kaizen/docs/README.md)** - Comprehensive index
+### Primary References (SDK Users)
+- **[CLAUDE.md](../sdk-users/apps/kaizen/CLAUDE.md)** - Quick reference for using Kaizen
+- **[README.md](../sdk-users/apps/kaizen/README.md)** - Complete Kaizen user guide
 - **[Examples](../apps/kailash-kaizen/examples/)** - 35+ working implementations
 
 ### Critical API References
-- **[Multi-Modal API](../apps/kailash-kaizen/docs/reference/multi-modal-api-reference.md)** - Vision, audio, multi-modal APIs with common pitfalls
-- **[Integration Testing](../apps/kailash-kaizen/docs/development/integration-testing-guide.md)** - Real inference validation requirements
-- **[UX Improvements](../apps/kailash-kaizen/docs/developer-experience/)** - Config auto-extraction, shared memory, result parsing
+- **[Multi-Modal API](../sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md)** - Vision, audio APIs with common pitfalls
+- **[Quickstart](../sdk-users/apps/kaizen/docs/getting-started/quickstart.md)** - 5-minute tutorial
+- **[Troubleshooting](../sdk-users/apps/kaizen/docs/reference/troubleshooting.md)** - Common errors and solutions
+- **[Integration Patterns](../sdk-users/apps/kaizen/docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP integration
 
 ### By Use Case
 | Need | Documentation |
 |------|---------------|
-| Getting started | `docs/getting-started/quickstart.md` |
-| Multi-modal (vision/audio) | `docs/reference/multi-modal-api-reference.md` |
-| Testing strategy | `docs/development/testing.md` |
-| Troubleshooting | `docs/reference/troubleshooting.md` |
-| MCP integration | `docs/integrations/mcp/README.md` |
-| DataFlow patterns | `docs/integrations/dataflow/best-practices.md` |
-| Deployment | `docs/deployment/README.md` |
-| Architecture decisions | `docs/architecture/adr/README.md` |
+| Getting started | `sdk-users/apps/kaizen/docs/getting-started/quickstart.md` |
+| Multi-modal (vision/audio) | `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` |
+| Integration patterns | `sdk-users/apps/kaizen/docs/guides/integration-patterns.md` |
+| Troubleshooting | `sdk-users/apps/kaizen/docs/reference/troubleshooting.md` |
+| Complete guide | `sdk-users/apps/kaizen/README.md` |
+| Working examples | `apps/kailash-kaizen/examples/` |
 
 ## Core Architecture
 
@@ -40,9 +39,10 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 
 ### Key Concepts
 - **Signature-Based Programming**: Type-safe I/O with InputField/OutputField
-- **BaseAgent**: Unified agent system with lazy initialization
+- **BaseAgent**: Unified agent system with lazy initialization, auto-generates A2A capability cards
 - **Strategy Pattern**: Pluggable execution (AsyncSingleShotStrategy is default)
 - **SharedMemoryPool**: Multi-agent coordination
+- **A2A Protocol**: Google Agent-to-Agent protocol for semantic capability matching (NEW)
 - **Multi-Modal**: Vision (Ollama/OpenAI), audio (Whisper), unified orchestration
 - **UX Improvements**: Config auto-extraction, concise API, defensive parsing
 
@@ -112,7 +112,59 @@ insights = shared_pool.read_relevant(
 analysis = analyst.analyze(insights)
 ```
 
-### 3. Multi-Modal Vision Processing
+### 3. A2A Capability Matching (Google A2A Protocol)
+
+**NEW**: BaseAgent automatically generates A2A capability cards for semantic agent matching
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.signatures import Signature, InputField, OutputField
+from dataclasses import dataclass
+
+# Any Kaizen agent automatically supports A2A
+class DataAnalystAgent(BaseAgent):
+    def __init__(self, config):
+        super().__init__(config=config, signature=AnalysisSignature())
+
+# Automatic A2A card generation (no additional code needed!)
+agent = DataAnalystAgent(config)
+card = agent.to_a2a_card()
+
+print(card.agent_name)  # "DataAnalystAgent"
+print(card.primary_capabilities)  # Extracted from signature inputs/outputs
+print(card.domain)  # Auto-inferred: "data_analysis"
+
+# Coordination patterns use A2A for semantic matching
+from kaizen.agents.coordination.supervisor_worker import SupervisorWorkerPattern
+
+pattern = SupervisorWorkerPattern(supervisor, workers, coordinator, shared_pool)
+
+# NO HARDCODED IF/ELSE - semantic capability matching!
+best_worker = pattern.supervisor.select_worker_for_task(
+    task="Analyze sales data and create visualization",
+    available_workers=[code_expert, data_expert, writing_expert],
+    return_score=True
+)
+# Returns: {"worker": <DataAnalystAgent>, "score": 0.9}
+# Automatically selected based on semantic match:
+# - "data" keyword → data_analysis capability (0.9 score)
+# - "analyze" keyword → data_analysis domain (0.7 score)
+# - "visualization" → data_visualization capability (0.85 score)
+```
+
+**Key Benefits**:
+- ✅ **Automatic Capability Discovery**: BaseAgent extracts capabilities from signature fields
+- ✅ **Semantic Matching**: 0.0-1.0 scores based on keyword/domain matching
+- ✅ **Zero Configuration**: Works out of the box, no manual A2A card creation
+- ✅ **No Hardcoded Logic**: Eliminates if/else agent selection statements
+- ✅ **Google A2A Compliant**: 100% spec compliance (validated against Kailash SDK)
+
+**Implementation Status**:
+- ✅ BaseAgent has `to_a2a_card()` method
+- ✅ SupervisorWorkerPattern uses A2A (14/14 tests passing)
+- ⏳ 4 remaining coordination patterns: implementation pattern established
+
+### 4. Multi-Modal Vision Processing
 
 **CRITICAL API PATTERNS**:
 
@@ -401,17 +453,20 @@ data = self.extract_list(result, "actual_key_name", default=[])
 ```
 
 ### Multi-Modal API Errors
-**See**: `docs/reference/multi-modal-api-reference.md` - Common Pitfalls section
+**See**: `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` - Common Pitfalls section
 
 ## Examples Directory
 
 **Location**: `apps/kailash-kaizen/examples/`
+
+**Note**: SDK users can access these examples by installing the kailash-kaizen package or cloning the repository.
 
 - **1-single-agent/** (10): simple-qa, chain-of-thought, rag-research, code-generation, memory-agent, react-agent, self-reflection, human-approval, resilient-fallback, streaming-chat
 - **2-multi-agent/** (6): consensus-building, debate-decision, domain-specialists, producer-consumer, shared-insights, supervisor-worker
 - **3-enterprise-workflows/** (5): compliance-monitoring, content-generation, customer-service, data-reporting, document-analysis
 - **4-advanced-rag/** (5): agentic-rag, federated-rag, graph-rag, multi-hop-rag, self-correcting-rag
 - **5-mcp-integration/** (3): agent-as-client, agent-as-server, auto-discovery-routing
+- **8-multi-modal/** (3): image-analysis, audio-transcription, document-understanding
 
 ## Use This Specialist For
 
