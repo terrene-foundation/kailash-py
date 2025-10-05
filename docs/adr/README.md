@@ -26,8 +26,12 @@ An Architecture Decision Record captures a significant architectural decision ma
 
 ### Integration and APIs
 - [ADR-0015: API Integration Architecture](0015-api-integration-architecture.md) - **Accepted**
-- [ADR-0017: Multi-Workflow API Architecture](0017-multi-workflow-api-architecture.md) - **Accepted** ⭐ NEW
+- [ADR-0017: Multi-Workflow API Architecture](0017-multi-workflow-api-architecture.md) - **Accepted**
 - [ADR-0018: HTTP REST Client Architecture](0018-http-rest-client-architecture.md) - **Accepted**
+
+### Visual Workflow Platform
+- [ADR-0050: Kailash Studio Visual Workflow Platform](0050-kailash-studio-visual-workflow-platform.md) - **Proposed**
+- [ADR-0051: VS Code TypeScript Bridge Architecture](0051-vscode-typescript-bridge.md) - **Proposed** ⭐ NEW
 
 ### Workflow Management
 - [ADR-0006: Task Tracking Architecture](0006-task-tracking-architecture.md) - **Accepted**
@@ -35,6 +39,27 @@ An Architecture Decision Record captures a significant architectural decision ma
 - [ADR-0011: Workflow Execution Improvements](0011-workflow-execution-improvements.md) - **Accepted**
 
 ## Recent Decisions
+
+### ADR-0051: VS Code TypeScript Bridge Architecture (October 2025) ⭐ NEW
+Defines the TypeScript bridge layer for VS Code extension integration with Python GLSP server:
+- Language Server Protocol (LSP) for TypeScript-Python IPC
+- Custom editor provider for visual .kailash workflow editing
+- Webview providers for node palette (113 SDK nodes) and property panel
+- Command implementations bridging VS Code to Python backend
+- .vsix packaging strategy with bundled Python components
+- Error translation from Python to VS Code diagnostics
+
+This enables native VS Code integration for visual workflow editing, leveraging the complete Python GLSP server (2,117 lines, 31 tests passing) while providing developer-first experience.
+
+### ADR-0050: Kailash Studio Visual Workflow Platform (October 2025)
+Comprehensive visual workflow platform architecture with:
+- DataFlow-first progressive integration strategy
+- AI-powered workflow generation and assistance
+- Enterprise security (SSO, multi-tenancy, RBAC)
+- Real-time collaborative editing via WebSocket
+- Integration with all SDK frameworks (Core, DataFlow, Nexus, Kaizen)
+
+Strategic decision to expand Kailash ecosystem to non-technical users while enhancing developer productivity.
 
 ### ADR-0017: Multi-Workflow API Architecture (December 2024)
 Introduces the `WorkflowAPIGateway` for managing multiple workflows through a unified API with:
