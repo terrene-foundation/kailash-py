@@ -92,6 +92,7 @@ results, run_id = runtime.execute(workflow.build())  # ALWAYS .build()
 - **Multi-instance conflicts** → Each DataFlow instance maintains separate context
 - **Nexus platform issues** → Use nexus-specialist for multi-channel troubleshooting
 - **Framework selection** → Use framework-advisor to coordinate appropriate specialists
+- **Mock provider issues** → ✅ FIXED (2025-10-03): All providers use registry consistently, no hardcoded paths
 
 ## ⚠️ Critical Rules
 - ALWAYS: `runtime.execute(workflow.build())`

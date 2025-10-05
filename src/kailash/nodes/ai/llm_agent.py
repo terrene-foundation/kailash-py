@@ -598,6 +598,7 @@ class LLMAgentNode(Node):
         provider = kwargs["provider"]
         model = kwargs["model"]
         messages = kwargs["messages"]
+
         system_prompt = kwargs.get("system_prompt")
         tools = kwargs.get("tools", [])
         conversation_id = kwargs.get("conversation_id")
@@ -662,12 +663,7 @@ class LLMAgentNode(Node):
             )
 
             # Generate response using selected provider
-            if provider == "mock":
-                print(f"DEBUG: Using _mock_llm_response path for provider={provider}")
-                response = self._mock_llm_response(
-                    enriched_messages, tools, generation_config, system_prompt
-                )
-            elif langchain_available and provider in ["langchain"]:
+            if langchain_available and provider in ["langchain"]:
                 response = self._langchain_llm_response(
                     provider,
                     model,
@@ -679,8 +675,7 @@ class LLMAgentNode(Node):
                     max_retries,
                 )
             else:
-                # Use the new provider architecture
-                print(f"DEBUG: Using _provider_llm_response path for provider={provider}")
+                # Use the provider architecture (works for all providers including mock)
                 response = self._provider_llm_response(
                     provider, model, enriched_messages, tools, generation_config
                 )
@@ -721,14 +716,9 @@ class LLMAgentNode(Node):
                         )
 
                     # Get next response from LLM with tool results
-                    if provider == "mock":
-                        response = self._mock_llm_response(
-                            enriched_messages, tools, generation_config, system_prompt
-                        )
-                    else:
-                        response = self._provider_llm_response(
-                            provider, model, enriched_messages, tools, generation_config
-                        )
+                    response = self._provider_llm_response(
+                        provider, model, enriched_messages, tools, generation_config
+                    )
 
                 # Update final response metadata
                 response["tool_execution_rounds"] = tool_execution_rounds
