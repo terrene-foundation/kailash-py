@@ -33,8 +33,8 @@ from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 
-class TestNode(Node):
-    """Concrete test node for testing serialization methods."""
+class SampleNode(Node):
+    """Concrete sample node for testing serialization methods."""
 
     def get_parameters(self) -> Dict[str, Any]:
         return {}
@@ -103,7 +103,7 @@ class TestW8BugReproduction:
         )
 
         # Test the enhanced _is_json_serializable method
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
 
         # This should now return True (was False before the fix)
         assert test_node._is_json_serializable(w8_context) is True
@@ -130,7 +130,7 @@ class TestW8BugReproduction:
             processing_steps=["init", "validate", "process", "finalize"],
         )
 
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
 
         # Should recognize complex nested structure with .to_dict()
         assert test_node._is_json_serializable(complex_context) is True
@@ -191,7 +191,7 @@ class TestEnhancedSerializationLogic:
             def __init__(self, data):
                 self.data = data
 
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
 
         # Should recognize objects with .to_dict()
         serializable_obj = CustomSerializable("test_data")
@@ -212,7 +212,7 @@ class TestEnhancedSerializationLogic:
             def to_dict(self):
                 return {"real": True}
 
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
 
         # Non-callable .to_dict should not be recognized
         fake_obj = FakeToDict()
@@ -224,7 +224,7 @@ class TestEnhancedSerializationLogic:
 
     def test_standard_json_types_unchanged(self):
         """Test that standard JSON types behavior is unchanged."""
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
 
         # All standard JSON types should still work
         test_cases = [
@@ -243,7 +243,7 @@ class TestEnhancedSerializationLogic:
 
     def test_non_serializable_types_unchanged(self):
         """Test that non-serializable types behavior is unchanged."""
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
 
         # These should still be non-serializable
         test_cases = [
@@ -276,7 +276,7 @@ class TestEdgeCases:
             def to_dict(self):
                 return "not_a_dict"  # Returns string, not dict
 
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
 
         # Should handle exceptions gracefully
         malformed_obj = MalformedToDict()
@@ -301,7 +301,7 @@ class TestEdgeCases:
             def to_dict(self):
                 return self.data  # Contains circular reference
 
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
         circular_obj = CircularToDict()
 
         # Should return False due to JSON serialization test failure
@@ -321,7 +321,7 @@ class TestEdgeCases:
                 current["final_value"] = "deep_data"
                 return result
 
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
         deep_obj = DeepNestedToDict()
 
         # Should handle deep nesting (within JSON limits)
@@ -341,7 +341,7 @@ class TestEdgeCases:
                     },
                 }
 
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
         large_obj = LargeDataToDict()
 
         # Should handle large structures (may be slow but should work)
@@ -364,7 +364,7 @@ class TestPerformanceRegression:
 
     def test_performance_overhead_standard_types(self):
         """Test that performance overhead for standard types is minimal."""
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
 
         # Test standard types performance
         test_data = [
@@ -396,7 +396,7 @@ class TestPerformanceRegression:
                 time.sleep(0.001)  # 1ms delay
                 return {"processed": "data"}
 
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
 
         # Fast .to_dict() should be very quick
         fast_obj = FastToDict()
@@ -418,7 +418,7 @@ class TestPerformanceRegression:
 
     def test_backward_compatibility_comprehensive(self):
         """Comprehensive backward compatibility test."""
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
 
         # Test all scenarios that should behave exactly as before
         backward_compatibility_cases = [
@@ -465,7 +465,7 @@ class TestNodeOutputValidationIntegration:
             request_id="validation_test", metadata={"validated": True}
         )
 
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
 
         # Create output dict with W8Context
         outputs = {
@@ -496,7 +496,7 @@ class TestNodeOutputValidationIntegration:
             status="completed", data={"processed_items": 150, "errors": 0}
         )
 
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
 
         outputs = {
             "result": result_obj,
@@ -526,7 +526,7 @@ class TestNodeOutputValidationIntegration:
 
         bad_obj = bad_function
 
-        test_node = TestNode(name="test_node")
+        test_node = SampleNode(name="test_node")
 
         outputs = {
             "good": good_obj,  # Should pass

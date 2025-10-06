@@ -1,7 +1,7 @@
 """Unit tests for server-side transformation pipeline in MCP resource subscriptions."""
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -648,7 +648,7 @@ class TestSubscriptionManagerIntegration:
         change = ResourceChange(
             type=ResourceChangeType.UPDATED,
             uri="file:///test.txt",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         await subscription_manager.process_resource_change(change)
