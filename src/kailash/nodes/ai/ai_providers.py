@@ -1525,14 +1525,38 @@ class MockProvider(UnifiedAIProvider):
             message_lower, conversation_text, has_images, last_user_message
         )
 
+        # Generate tool calls if tools are provided and message suggests action
+        tool_calls = []
+        tools = kwargs.get("tools", [])
+        if tools and any(
+            keyword in message_lower
+            for keyword in ["create", "send", "execute", "run", "generate", "build"]
+        ):
+            # Simulate tool calls for action-oriented messages
+            import json
+            for tool in tools[:2]:  # Limit to first 2 tools
+                tool_name = tool.get("function", {}).get(
+                    "name", tool.get("name", "unknown")
+                )
+                tool_calls.append(
+                    {
+                        "id": f"call_{hash(tool_name) % 10000}",
+                        "type": "function",
+                        "function": {
+                            "name": tool_name,
+                            "arguments": json.dumps({"mock": "arguments"}),
+                        },
+                    }
+                )
+
         return {
             "id": f"mock_{hash(last_user_message)}",
             "content": response_content,
             "role": "assistant",
-            "model": kwargs.get("model", "mock-model"),
+            "model": "mock-model",  # Always return mock-model to indicate mocked response
             "created": 1701234567,
-            "tool_calls": [],
-            "finish_reason": "stop",
+            "tool_calls": tool_calls,
+            "finish_reason": "stop" if not tool_calls else "tool_calls",
             "usage": {
                 "prompt_tokens": 100,  # Mock value
                 "completion_tokens": len(response_content) // 4,

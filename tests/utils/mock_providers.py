@@ -51,7 +51,7 @@ class MockLLMProvider:
             "timestamp": call_time,
             "prompt": prompt,
             "response": response,
-            "kwargs": kwargs
+            "kwargs": kwargs,
         }
         self.call_history.append(call_record)
 
@@ -62,8 +62,8 @@ class MockLLMProvider:
                 "call_id": self.call_count,
                 "timestamp": call_time,
                 "prompt_length": len(prompt),
-                "response_length": len(response)
-            }
+                "response_length": len(response),
+            },
         }
 
     def stream_complete(self, prompt: str, **kwargs):
@@ -83,13 +83,13 @@ class MockLLMProvider:
         # Simulate streaming by yielding chunks
         chunk_size = 10
         for i in range(0, len(full_response), chunk_size):
-            chunk = full_response[i:i + chunk_size]
+            chunk = full_response[i : i + chunk_size]
             yield {
                 "chunk": chunk,
                 "metadata": {
                     "chunk_index": i // chunk_size,
-                    "is_final": i + chunk_size >= len(full_response)
-                }
+                    "is_final": i + chunk_size >= len(full_response),
+                },
             }
 
     def get_call_history(self) -> List[Dict[str, Any]]:
@@ -107,10 +107,10 @@ class MockDatabaseProvider:
 
     def __init__(self):
         """Initialize mock database provider."""
-        self.connections: Dict[str, 'MockConnection'] = {}
+        self.connections: Dict[str, "MockConnection"] = {}
         self.data_store: Dict[str, Any] = {}
 
-    def get_connection(self, connection_id: Optional[str] = None) -> 'MockConnection':
+    def get_connection(self, connection_id: Optional[str] = None) -> "MockConnection":
         """
         Get a mock database connection.
 
@@ -151,7 +151,9 @@ class MockConnection:
         self.transaction_active = False
         self.query_history: List[Dict[str, Any]] = []
 
-    def execute(self, query: str, parameters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def execute(
+        self, query: str, parameters: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
         Mock query execution.
 
@@ -169,40 +171,30 @@ class MockConnection:
             "query": query,
             "parameters": parameters or {},
             "timestamp": time.time(),
-            "transaction_active": self.transaction_active
+            "transaction_active": self.transaction_active,
         }
         self.query_history.append(query_record)
 
         # Generate mock result based on query type
         query_lower = query.lower().strip()
 
-        if query_lower.startswith('select'):
+        if query_lower.startswith("select"):
             return {
                 "rows": [
                     {"id": 1, "name": "Mock Record 1", "value": 100},
-                    {"id": 2, "name": "Mock Record 2", "value": 200}
+                    {"id": 2, "name": "Mock Record 2", "value": 200},
                 ],
                 "row_count": 2,
-                "columns": ["id", "name", "value"]
+                "columns": ["id", "name", "value"],
             }
-        elif query_lower.startswith('insert'):
-            return {
-                "affected_rows": 1,
-                "last_insert_id": 123
-            }
-        elif query_lower.startswith('update'):
-            return {
-                "affected_rows": 2
-            }
-        elif query_lower.startswith('delete'):
-            return {
-                "affected_rows": 1
-            }
+        elif query_lower.startswith("insert"):
+            return {"affected_rows": 1, "last_insert_id": 123}
+        elif query_lower.startswith("update"):
+            return {"affected_rows": 2}
+        elif query_lower.startswith("delete"):
+            return {"affected_rows": 1}
         else:
-            return {
-                "status": "success",
-                "message": "Query executed successfully"
-            }
+            return {"status": "success", "message": "Query executed successfully"}
 
     def begin_transaction(self) -> None:
         """Begin a mock transaction."""
@@ -247,7 +239,12 @@ class MockServiceRegistry:
         self.service_configs: Dict[str, Dict[str, Any]] = {}
         self.registration_history: List[Dict[str, Any]] = []
 
-    def register(self, service_name: str, service_instance: Any, config: Optional[Dict[str, Any]] = None) -> None:
+    def register(
+        self,
+        service_name: str,
+        service_instance: Any,
+        config: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """
         Register a mock service.
 
@@ -262,7 +259,7 @@ class MockServiceRegistry:
         registration_record = {
             "service_name": service_name,
             "registered_at": time.time(),
-            "config": config
+            "config": config,
         }
         self.registration_history.append(registration_record)
 
@@ -357,7 +354,7 @@ class MockWorkflowExecutor:
                 "start_time": start_time,
                 "end_time": time.time(),
                 "status": "failed",
-                "error": self.failure_message
+                "error": self.failure_message,
             }
             self.execution_history.append(execution_record)
             raise RuntimeError(self.failure_message)
@@ -376,9 +373,9 @@ class MockWorkflowExecutor:
                 "result": {
                     "message": f"Mock execution result for {node_id}",
                     "node_type": node.get("type", "unknown"),
-                    "executed_at": time.time()
+                    "executed_at": time.time(),
                 },
-                "execution_time": 0.001
+                "execution_time": 0.001,
             }
 
         end_time = time.time()
@@ -388,7 +385,7 @@ class MockWorkflowExecutor:
             "start_time": start_time,
             "end_time": end_time,
             "status": "completed",
-            "results": results
+            "results": results,
         }
         self.execution_history.append(execution_record)
 
@@ -396,10 +393,12 @@ class MockWorkflowExecutor:
             "execution_id": execution_id,
             "results": results,
             "execution_time": end_time - start_time,
-            "status": "completed"
+            "status": "completed",
         }
 
-    def set_failure_mode(self, should_fail: bool, failure_message: str = "Mock execution failure") -> None:
+    def set_failure_mode(
+        self, should_fail: bool, failure_message: str = "Mock execution failure"
+    ) -> None:
         """
         Configure the mock to fail executions.
 

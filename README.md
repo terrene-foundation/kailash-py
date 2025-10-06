@@ -22,28 +22,28 @@
 
 ---
 
-## 🔥 Latest Release: v0.9.10 (August 1, 2025)
+## 🔥 Latest Release: v0.9.20 (October 6, 2025)
 
-**License Update & IterativeLLMAgentNode API Simplification**
+**Provider Registry Fix & Multi-Modal Support**
 
-### 📄 License Changed to Apache 2.0 with Additional Terms
-- **Changed**: From MIT to Apache License 2.0 with Additional Terms
-- **Protection**: Prevents standalone commercial distribution of the SDK
-- **Freedom**: Allows commercial use of derivatives and integration into larger systems
-- **Patent Grant**: Includes Apache 2.0 patent protection clauses
+### 🐛 Critical Bug Fixes
+- **Mock Provider Bypass**: Removed hardcoded `if provider == "mock"` logic from LLMAgentNode
+- **Tool Execution Flow**: Unified provider response generation for all providers
+- **Provider Registry**: All providers now use consistent registry path
 
-### 🤖 IterativeLLMAgentNode Improvements (v0.9.9)
-- **Removed**: Mock mode entirely - real MCP execution always enabled
-- **Simplified**: API by removing confusing `use_real_mcp` parameter
-- **Enhanced**: Graceful fallback when MCP tools unavailable
-- **Updated**: All documentation and examples with simplified API
+### ✨ Enhancements
+- **Custom Mock Providers**: Enables signature-aware mock providers (e.g., KaizenMockProvider)
+- **Multi-Modal Foundation**: Foundation for vision/audio processing in Kaizen AI framework
+- **Tool Call Generation**: MockProvider generates mock tool_calls for action-oriented messages
+- **Enhanced Testing**: 510+ tests passing with custom mock providers
 
 ### 📦 Package Updates
-- **kailash**: v0.9.10 - License update
-- **kailash-nexus**: v1.0.6 - License update 
-- **kailash-dataflow**: v0.3.7 - License update
+- **kailash**: v0.9.20 - Provider registry fix & multi-modal support
+- **kailash-kaizen**: v0.1.1 - AI agent framework (NEW!)
+- **kailash-nexus**: v1.0.6 - Multi-channel platform
+- **kailash-dataflow**: v0.5.0 - Database framework
 
-[Full Changelog](sdk-users/6-reference/changelogs/releases/v0.9.10-2025-08-01.md) | [Core SDK 0.9.10](https://pypi.org/project/kailash/0.9.10/) | [Nexus 1.0.6](https://pypi.org/project/kailash-nexus/1.0.6/) | [DataFlow 0.3.7](https://pypi.org/project/kailash-dataflow/0.3.7/)
+[Full Changelog](sdk-users/6-reference/changelogs/releases/v0.9.20-provider-registry-fix.md) | [Core SDK 0.9.20](https://pypi.org/project/kailash/0.9.20/) | [Kaizen 0.1.1](https://pypi.org/project/kailash-kaizen/0.1.1/) | [Nexus 1.0.6](https://pypi.org/project/kailash-nexus/1.0.6/) | [DataFlow 0.5.0](https://pypi.org/project/kailash-dataflow/0.5.0/)
 
 ## 🎯 What Makes Kailash Different
 

@@ -36,7 +36,7 @@ from tests.utils.performance_tracker import PerformanceTracker, PerformanceRepor
 from tests.utils.test_fixtures import (
     test_environment_config,
     docker_service_health_check,
-    load_test_scenarios
+    load_test_scenarios,
 )
 
 # Test markers
@@ -60,36 +60,34 @@ class TestDockerInfrastructureSetup:
 
                 # Check test environment status
                 result = subprocess.run(
-                    ['./test-env', 'status'],
-                    capture_output=True,
-                    text=True,
-                    timeout=20
+                    ["./test-env", "status"], capture_output=True, text=True, timeout=20
                 )
 
                 if result.returncode != 0:
                     # Try to start the environment if it's not running
                     start_result = subprocess.run(
-                        ['./test-env', 'up'],
-                        capture_output=True,
-                        text=True,
-                        timeout=60
+                        ["./test-env", "up"], capture_output=True, text=True, timeout=60
                     )
 
                     if start_result.returncode != 0:
-                        pytest.skip(f"Could not start Docker test environment: {start_result.stderr}")
+                        pytest.skip(
+                            f"Could not start Docker test environment: {start_result.stderr}"
+                        )
 
                     # Wait for services to be ready
                     time.sleep(5)
 
                     # Check status again
                     result = subprocess.run(
-                        ['./test-env', 'status'],
+                        ["./test-env", "status"],
                         capture_output=True,
                         text=True,
-                        timeout=10
+                        timeout=10,
                     )
 
-                assert result.returncode == 0, f"Docker test environment not available: {result.stderr}"
+                assert (
+                    result.returncode == 0
+                ), f"Docker test environment not available: {result.stderr}"
 
             except (subprocess.TimeoutExpired, FileNotFoundError) as e:
                 pytest.skip(f"Docker test environment check failed: {e}")
@@ -111,7 +109,9 @@ class TestDockerInfrastructureSetup:
                 service_health[service_type] = is_healthy
 
             # Verify core services are healthy
-            assert service_health.get("postgresql", False), "PostgreSQL service not healthy"
+            assert service_health.get(
+                "postgresql", False
+            ), "PostgreSQL service not healthy"
             assert service_health.get("redis", False), "Redis service not healthy"
 
             # Note: Ollama might not be running, that's ok for basic tests
@@ -126,12 +126,13 @@ class TestDockerInfrastructureSetup:
             db_config = config["database"]
             try:
                 import psycopg2
+
                 conn = psycopg2.connect(
                     host=db_config["host"],
                     port=db_config["port"],
                     database=db_config["database"],
                     user=db_config["user"],
-                    password=db_config["password"]
+                    password=db_config["password"],
                 )
 
                 cursor = conn.cursor()
@@ -143,7 +144,9 @@ class TestDockerInfrastructureSetup:
                 conn.close()
 
             except ImportError:
-                pytest.skip("psycopg2 not installed, skipping PostgreSQL connectivity test")
+                pytest.skip(
+                    "psycopg2 not installed, skipping PostgreSQL connectivity test"
+                )
             except Exception as e:
                 pytest.fail(f"PostgreSQL connectivity failed: {e}")
 
@@ -151,10 +154,11 @@ class TestDockerInfrastructureSetup:
             redis_config = config["redis"]
             try:
                 import redis
+
                 r = redis.Redis(
                     host=redis_config["host"],
                     port=redis_config["port"],
-                    database=redis_config["database"]
+                    database=redis_config["database"],
                 )
 
                 # Test Redis ping
@@ -178,7 +182,9 @@ class TestInfrastructureUtilitiesIntegration:
             workflow.add_node(
                 "PythonCodeNode",
                 "infrastructure_test",
-                {"code": "result = {'message': 'Infrastructure test with real Core SDK'}"}
+                {
+                    "code": "result = {'message': 'Infrastructure test with real Core SDK'}"
+                },
             )
 
             # Execute with real LocalRuntime
@@ -197,7 +203,10 @@ class TestInfrastructureUtilitiesIntegration:
 
     def test_test_fixtures_with_real_kaizen_framework(self):
         """Test fixtures must work with real Kaizen framework components."""
-        from tests.utils.test_fixtures import integration_test_config, test_agent_configs
+        from tests.utils.test_fixtures import (
+            integration_test_config,
+            test_agent_configs,
+        )
 
         with PerformanceTracker("fixtures_integration", threshold=3.0) as tracker:
             # Use test fixtures
@@ -206,6 +215,7 @@ class TestInfrastructureUtilitiesIntegration:
 
             # Test with real Kaizen framework
             import kaizen
+
             framework = kaizen.Framework(config=framework_config["framework"])
 
             # Create agents using test configurations
@@ -224,7 +234,9 @@ class TestInfrastructureUtilitiesIntegration:
             workflow.add_node(
                 "PythonCodeNode",
                 "fixture_test",
-                {"code": "result = {'fixture_test': True, 'agent_name': 'basic_test_agent'}"}
+                {
+                    "code": "result = {'fixture_test': True, 'agent_name': 'basic_test_agent'}"
+                },
             )
 
             results, run_id = test_agent.execute(workflow)
@@ -251,6 +263,7 @@ class TestInfrastructureUtilitiesIntegration:
 
             # Test real Kaizen framework still works
             import kaizen
+
             framework = kaizen.Framework()
 
             # Real framework should work independently of mocks
@@ -258,7 +271,7 @@ class TestInfrastructureUtilitiesIntegration:
             workflow.add_node(
                 "PythonCodeNode",
                 "mock_isolation_test",
-                {"code": "result = {'real_framework': True}"}
+                {"code": "result = {'real_framework': True}"},
             )
 
             results, run_id = framework.execute(workflow.build())
@@ -282,7 +295,9 @@ class TestRealCoreSDKIntegrationInfrastructure:
                 workflow.add_node(
                     "PythonCodeNode",
                     f"infra_test_{i}",
-                    {"code": f"result = {{'iteration': {i}, 'timestamp': str(time.time()), 'infrastructure_test': True}}"}
+                    {
+                        "code": f"result = {{'iteration': {i}, 'timestamp': str(time.time()), 'infrastructure_test': True}}"
+                    },
                 )
 
                 results, run_id = runtime.execute(workflow.build())
@@ -305,12 +320,17 @@ class TestRealCoreSDKIntegrationInfrastructure:
             workflow = WorkflowBuilder()
 
             # Build complex workflow with infrastructure testing
-            workflow.add_node("PythonCodeNode", "start", {
-                "code": "result = {'stage': 'started', 'infrastructure': 'test'}"
-            })
+            workflow.add_node(
+                "PythonCodeNode",
+                "start",
+                {"code": "result = {'stage': 'started', 'infrastructure': 'test'}"},
+            )
 
-            workflow.add_node("PythonCodeNode", "process", {
-                "code": """
+            workflow.add_node(
+                "PythonCodeNode",
+                "process",
+                {
+                    "code": """
 result = {
     'stage': 'processing',
     'input_received': bool(input_data),
@@ -318,11 +338,15 @@ result = {
     'processed_at': str(time.time())
 }
 """,
-                "input_data": {"from_start": True}
-            })
+                    "input_data": {"from_start": True},
+                },
+            )
 
-            workflow.add_node("PythonCodeNode", "complete", {
-                "code": """
+            workflow.add_node(
+                "PythonCodeNode",
+                "complete",
+                {
+                    "code": """
 result = {
     'stage': 'completed',
     'infrastructure': 'test',
@@ -330,7 +354,8 @@ result = {
     'completed_at': str(time.time())
 }
 """
-            })
+                },
+            )
 
             # Add edges for workflow flow
             workflow.add_edge("start", "process")
@@ -360,16 +385,21 @@ class TestEnterpriseInfrastructureTesting:
             import kaizen
 
             # Create framework with enterprise config
-            framework = kaizen.Framework(config={
-                'name': 'enterprise_infrastructure_test',
-                'audit_trail_enabled': True,
-                'compliance_mode': 'enterprise'
-            })
+            framework = kaizen.Framework(
+                config={
+                    "name": "enterprise_infrastructure_test",
+                    "audit_trail_enabled": True,
+                    "compliance_mode": "enterprise",
+                }
+            )
 
             # Create workflow that would generate audit trail
             workflow = framework.create_workflow()
-            workflow.add_node("PythonCodeNode", "audit_test", {
-                "code": """
+            workflow.add_node(
+                "PythonCodeNode",
+                "audit_test",
+                {
+                    "code": """
 result = {
     'audit_event': 'enterprise_test_executed',
     'compliance_data': {
@@ -379,13 +409,17 @@ result = {
     'timestamp': str(time.time())
 }
 """
-            })
+                },
+            )
 
             # Execute workflow (should generate audit trail)
             results, run_id = framework.execute(workflow.build())
 
             # Verify audit trail functionality (basic check)
-            assert results["audit_test"]["result"]["audit_event"] == "enterprise_test_executed"
+            assert (
+                results["audit_test"]["result"]["audit_event"]
+                == "enterprise_test_executed"
+            )
             assert "compliance_data" in results["audit_test"]["result"]
 
     def test_multi_agent_coordination_with_real_infrastructure(self):
@@ -393,18 +427,22 @@ result = {
         with PerformanceTracker("multi_agent_coordination", threshold=20.0) as tracker:
             import kaizen
 
-            framework = kaizen.Framework(config={
-                'name': 'multi_agent_infrastructure_test',
-                'multi_agent_enabled': True
-            })
+            framework = kaizen.Framework(
+                config={
+                    "name": "multi_agent_infrastructure_test",
+                    "multi_agent_enabled": True,
+                }
+            )
 
             # Create multiple agents for coordination test
             agents = []
             for i in range(3):
-                agent = framework.create_agent(config={
-                    'name': f'infrastructure_agent_{i}',
-                    'capabilities': [f'capability_{i}']
-                })
+                agent = framework.create_agent(
+                    config={
+                        "name": f"infrastructure_agent_{i}",
+                        "capabilities": [f"capability_{i}"],
+                    }
+                )
                 agents.append(agent)
 
             # Test concurrent agent execution (simulating A2A)
@@ -414,8 +452,11 @@ result = {
 
                 for i, agent in enumerate(agents):
                     workflow = agent.create_workflow()
-                    workflow.add_node("PythonCodeNode", f"agent_task_{i}", {
-                        "code": f"""
+                    workflow.add_node(
+                        "PythonCodeNode",
+                        f"agent_task_{i}",
+                        {
+                            "code": f"""
 result = {{
     'agent_id': '{agent.config["name"]}',
     'task_completed': True,
@@ -424,7 +465,8 @@ result = {{
     'execution_timestamp': str(time.time())
 }}
 """
-                    })
+                        },
+                    )
 
                     future = executor.submit(agent.execute, workflow)
                     futures.append((agent, future))
@@ -456,23 +498,29 @@ class TestPerformanceAndLoadInfrastructure:
         scenarios = load_test_scenarios()
         light_scenario = scenarios[0]  # Use light load for integration test
 
-        with PerformanceTracker("load_test", threshold=light_scenario["expected_max_time"]) as tracker:
+        with PerformanceTracker(
+            "load_test", threshold=light_scenario["expected_max_time"]
+        ) as tracker:
             import kaizen
 
-            framework = kaizen.Framework(config={'name': 'load_test_framework'})
+            framework = kaizen.Framework(config={"name": "load_test_framework"})
 
             # Create agents for load test
             agents = []
             for i in range(light_scenario["agents"]):
-                agent = framework.create_agent(config={
-                    'name': f'load_test_agent_{i}',
-                    'capabilities': ['load_testing']
-                })
+                agent = framework.create_agent(
+                    config={
+                        "name": f"load_test_agent_{i}",
+                        "capabilities": ["load_testing"],
+                    }
+                )
                 agents.append(agent)
 
             # Execute workflows concurrently
             all_results = []
-            with concurrent.futures.ThreadPoolExecutor(max_workers=light_scenario["agents"]) as executor:
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=light_scenario["agents"]
+            ) as executor:
                 futures = []
 
                 for agent in agents:
@@ -482,8 +530,11 @@ class TestPerformanceAndLoadInfrastructure:
                         # Add nodes per workflow
                         for node_idx in range(light_scenario["nodes_per_workflow"]):
                             node_id = f"load_node_{workflow_idx}_{node_idx}"
-                            workflow.add_node("PythonCodeNode", node_id, {
-                                "code": f"""
+                            workflow.add_node(
+                                "PythonCodeNode",
+                                node_id,
+                                {
+                                    "code": f"""
 result = {{
     'agent': '{agent.config["name"]}',
     'workflow': {workflow_idx},
@@ -492,7 +543,8 @@ result = {{
     'timestamp': str(time.time())
 }}
 """
-                            })
+                                },
+                            )
 
                             # Connect nodes sequentially
                             if node_idx > 0:
@@ -508,7 +560,9 @@ result = {{
                     all_results.append((results, run_id))
 
             # Verify load test results
-            expected_workflows = light_scenario["agents"] * light_scenario["workflows_per_agent"]
+            expected_workflows = (
+                light_scenario["agents"] * light_scenario["workflows_per_agent"]
+            )
             assert len(all_results) == expected_workflows
 
             # Verify all workflows completed successfully
@@ -518,7 +572,9 @@ result = {{
                 assert len(results) == light_scenario["nodes_per_workflow"]
 
         # Performance assertion
-        tracker.assert_under_threshold(f"Load test exceeded {light_scenario['expected_max_time']}s threshold")
+        tracker.assert_under_threshold(
+            f"Load test exceeded {light_scenario['expected_max_time']}s threshold"
+        )
 
     def test_infrastructure_memory_and_resource_usage(self):
         """Infrastructure must maintain reasonable resource usage."""
@@ -533,16 +589,20 @@ result = {{
             # Create multiple frameworks to test resource management
             frameworks = []
             for i in range(5):
-                framework = kaizen.Framework(config={'name': f'resource_test_{i}'})
+                framework = kaizen.Framework(config={"name": f"resource_test_{i}"})
                 frameworks.append(framework)
 
             # Create agents and execute workflows
             for framework in frameworks:
-                agent = framework.create_agent(config={'name': 'resource_test_agent'})
+                agent = framework.create_agent(config={"name": "resource_test_agent"})
                 workflow = agent.create_workflow()
-                workflow.add_node("PythonCodeNode", "resource_test", {
-                    "code": "result = {'memory_test': True, 'framework': 'resource_test'}"
-                })
+                workflow.add_node(
+                    "PythonCodeNode",
+                    "resource_test",
+                    {
+                        "code": "result = {'memory_test': True, 'framework': 'resource_test'}"
+                    },
+                )
 
                 results, run_id = agent.execute(workflow)
                 assert results["resource_test"]["result"]["memory_test"] is True
@@ -552,7 +612,9 @@ result = {{
             memory_increase = current_memory - baseline_memory
 
             # Memory increase should be reasonable (less than 100MB for this test)
-            assert memory_increase < 100, f"Memory usage increased by {memory_increase:.1f}MB"
+            assert (
+                memory_increase < 100
+            ), f"Memory usage increased by {memory_increase:.1f}MB"
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -574,35 +636,30 @@ def setup_integration_infrastructure():
 
             # Start Docker test environment
             result = subprocess.run(
-                ["./test-env", "up"],
-                capture_output=True,
-                text=True,
-                timeout=90
+                ["./test-env", "up"], capture_output=True, text=True, timeout=90
             )
 
             if result.returncode != 0:
                 # Try to get more information about the failure
                 status_result = subprocess.run(
-                    ["./test-env", "status"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
+                    ["./test-env", "status"], capture_output=True, text=True, timeout=10
                 )
 
-                pytest.skip(f"Failed to start integration test environment. Status: {status_result.stdout}, Error: {result.stderr}")
+                pytest.skip(
+                    f"Failed to start integration test environment. Status: {status_result.stdout}, Error: {result.stderr}"
+                )
 
             # Verify services are ready
             time.sleep(10)  # Allow time for services to fully initialize
 
             status_result = subprocess.run(
-                ["./test-env", "status"],
-                capture_output=True,
-                text=True,
-                timeout=20
+                ["./test-env", "status"], capture_output=True, text=True, timeout=20
             )
 
             if status_result.returncode != 0:
-                pytest.skip(f"Integration test environment not ready: {status_result.stderr}")
+                pytest.skip(
+                    f"Integration test environment not ready: {status_result.stderr}"
+                )
 
         except subprocess.TimeoutExpired:
             pytest.skip("Integration test environment setup timed out")
@@ -613,7 +670,9 @@ def setup_integration_infrastructure():
 
     # Verify setup performance
     try:
-        setup_tracker.assert_under_threshold("Integration infrastructure setup took too long")
+        setup_tracker.assert_under_threshold(
+            "Integration infrastructure setup took too long"
+        )
     except AssertionError as e:
         # Log warning but don't fail - setup can be slow on first run
         print(f"Warning: {e}")

@@ -74,6 +74,7 @@ from kailash.nodes.base import Node
 # Test Fixtures and Mock Classes
 # ==============================================================================
 
+
 @dataclass
 class BaseAgentConfig:
     """
@@ -82,6 +83,7 @@ class BaseAgentConfig:
     Full implementation should match ADR-006 specification.
     This minimal version contains only fields needed for workflow generation.
     """
+
     # LLM Provider Configuration
     llm_provider: Optional[str] = None
     model: Optional[str] = None
@@ -106,6 +108,7 @@ class BaseAgentConfig:
 @dataclass
 class InputField:
     """Mock InputField for signature testing."""
+
     name: str
     field_type: type
     description: str = ""
@@ -116,6 +119,7 @@ class InputField:
 @dataclass
 class OutputField:
     """Mock OutputField for signature testing."""
+
     name: str
     field_type: type
     description: str = ""
@@ -139,7 +143,7 @@ class MockSignature:
         self,
         input_fields: Optional[List[InputField]] = None,
         output_fields: Optional[List[OutputField]] = None,
-        name: str = "MockSignature"
+        name: str = "MockSignature",
     ):
         self.name = name
         self.input_fields = input_fields or []
@@ -155,12 +159,16 @@ class SimpleQASignature(MockSignature):
     def __init__(self):
         super().__init__(
             input_fields=[
-                InputField(name="question", field_type=str, description="Question to answer")
+                InputField(
+                    name="question", field_type=str, description="Question to answer"
+                )
             ],
             output_fields=[
-                OutputField(name="answer", field_type=str, description="Answer to question")
+                OutputField(
+                    name="answer", field_type=str, description="Answer to question"
+                )
             ],
-            name="SimpleQASignature"
+            name="SimpleQASignature",
         )
 
 
@@ -170,16 +178,34 @@ class ComplexSignature(MockSignature):
     def __init__(self):
         super().__init__(
             input_fields=[
-                InputField(name="question", field_type=str, description="Main question"),
-                InputField(name="context", field_type=str, description="Additional context", required=False),
-                InputField(name="max_length", field_type=int, description="Max answer length", default=100)
+                InputField(
+                    name="question", field_type=str, description="Main question"
+                ),
+                InputField(
+                    name="context",
+                    field_type=str,
+                    description="Additional context",
+                    required=False,
+                ),
+                InputField(
+                    name="max_length",
+                    field_type=int,
+                    description="Max answer length",
+                    default=100,
+                ),
             ],
             output_fields=[
                 OutputField(name="answer", field_type=str, description="Main answer"),
-                OutputField(name="confidence", field_type=float, description="Confidence score"),
-                OutputField(name="reasoning", field_type=str, description="Step-by-step reasoning")
+                OutputField(
+                    name="confidence", field_type=float, description="Confidence score"
+                ),
+                OutputField(
+                    name="reasoning",
+                    field_type=str,
+                    description="Step-by-step reasoning",
+                ),
             ],
-            name="ComplexSignature"
+            name="ComplexSignature",
         )
 
 
@@ -197,6 +223,7 @@ class MockExecutionStrategy:
 # ==============================================================================
 # Category 1: Basic Workflow Generation Tests (5 tests)
 # ==============================================================================
+
 
 class TestBasicWorkflowGeneration:
     """Test BaseAgent.to_workflow() returns valid WorkflowBuilder instances."""
@@ -410,6 +437,7 @@ class TestBasicWorkflowGeneration:
 # ==============================================================================
 # Category 2: Signature → Workflow Conversion Tests (6 tests)
 # ==============================================================================
+
 
 class TestSignatureWorkflowConversion:
     """Test signature-based workflow generation and field mapping."""
@@ -676,6 +704,7 @@ class TestSignatureWorkflowConversion:
 # Category 3: LLMAgentNode Configuration Tests (5 tests)
 # ==============================================================================
 
+
 class TestLLMAgentNodeConfiguration:
     """Test LLMAgentNode configuration propagation from agent config."""
 
@@ -883,6 +912,7 @@ class TestLLMAgentNodeConfiguration:
 # Category 4: Workflow Composition Tests (4 tests)
 # ==============================================================================
 
+
 class TestWorkflowComposition:
     """Test agent workflow composition with other workflows."""
 
@@ -1066,6 +1096,7 @@ class TestWorkflowComposition:
 # Category 5: Workflow Execution Tests (3 tests)
 # ==============================================================================
 
+
 class TestWorkflowExecution:
     """Test generated workflows are executable with LocalRuntime."""
 
@@ -1195,6 +1226,7 @@ class TestWorkflowExecution:
 # ==============================================================================
 # Category 6: Edge Cases Tests (3 tests)
 # ==============================================================================
+
 
 class TestWorkflowEdgeCases:
     """Test edge cases in workflow generation."""

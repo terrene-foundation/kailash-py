@@ -130,6 +130,7 @@ import logging
 # Test Fixtures and Mock Classes
 # ==============================================================================
 
+
 @dataclass
 class BaseAgentConfig:
     """
@@ -138,6 +139,7 @@ class BaseAgentConfig:
     Full implementation should match ADR-006 specification.
     This minimal version contains only fields needed for extension point testing.
     """
+
     # LLM Provider Configuration
     llm_provider: Optional[str] = None
     model: Optional[str] = None
@@ -162,7 +164,10 @@ class BaseAgentConfig:
 
 class InputField:
     """Mock InputField for signature definition."""
-    def __init__(self, name: str, type: type = str, desc: str = "", default: Any = None):
+
+    def __init__(
+        self, name: str, type: type = str, desc: str = "", default: Any = None
+    ):
         self.name = name
         self.type = type
         self.desc = desc
@@ -174,6 +179,7 @@ class InputField:
 
 class OutputField:
     """Mock OutputField for signature definition."""
+
     def __init__(self, name: str, type: type = str, desc: str = ""):
         self.name = name
         self.type = type
@@ -190,6 +196,7 @@ class Signature:
 
     Full implementation should match Kaizen signature programming specification.
     """
+
     name: str = "default_signature"
     description: str = ""
     input_fields: List[InputField] = field(default_factory=list)
@@ -197,9 +204,13 @@ class Signature:
 
     def __post_init__(self):
         if not self.input_fields:
-            self.input_fields = [InputField(name="input", type=str, desc="Default input")]
+            self.input_fields = [
+                InputField(name="input", type=str, desc="Default input")
+            ]
         if not self.output_fields:
-            self.output_fields = [OutputField(name="output", type=str, desc="Default output")]
+            self.output_fields = [
+                OutputField(name="output", type=str, desc="Default output")
+            ]
 
 
 class ExecutionStrategy(Protocol):
@@ -208,6 +219,7 @@ class ExecutionStrategy(Protocol):
 
     Using Protocol (structural typing) instead of ABC for flexibility.
     """
+
     def execute(self, agent: Any, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the agent with given inputs."""
         ...
@@ -215,12 +227,18 @@ class ExecutionStrategy(Protocol):
 
 class SingleShotStrategy:
     """Mock single-shot execution strategy for QA and CoT agents."""
+
     def __init__(self):
         self.name = "single_shot"
 
     def execute(self, agent: Any, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Execute agent once and return result."""
-        return {"output": "single_shot_result", "strategy": self.name}
+        # Generate output matching agent's signature
+        result = {}
+        for output_field in agent.signature.output_fields:
+            result[output_field.name] = f"mock_{output_field.name}_value"
+        result["strategy"] = self.name
+        return result
 
     def __repr__(self):
         return f"SingleShotStrategy()"
@@ -228,17 +246,20 @@ class SingleShotStrategy:
 
 class MultiCycleStrategy:
     """Mock multi-cycle execution strategy for ReAct agents."""
+
     def __init__(self, max_cycles: int = 5):
         self.max_cycles = max_cycles
         self.name = "multi_cycle"
 
     def execute(self, agent: Any, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Execute agent with multi-cycle reasoning loop."""
-        return {
-            "output": "multi_cycle_result",
-            "strategy": self.name,
-            "cycles": self.max_cycles
-        }
+        # Generate output matching agent's signature
+        result = {}
+        for output_field in agent.signature.output_fields:
+            result[output_field.name] = f"mock_{output_field.name}_value"
+        result["strategy"] = self.name
+        result["cycles"] = self.max_cycles
+        return result
 
     def __repr__(self):
         return f"MultiCycleStrategy(max_cycles={self.max_cycles})"
@@ -259,7 +280,7 @@ class BaseAgent:
         config: BaseAgentConfig,
         signature: Optional[Signature] = None,
         strategy: Optional[ExecutionStrategy] = None,
-        **kwargs
+        **kwargs,
     ):
         self.config = config
         self.signature = signature or self._default_signature()
@@ -289,7 +310,7 @@ class BaseAgent:
         return Signature(
             name="default",
             input_fields=[InputField(name="input", type=str, desc="Default input")],
-            output_fields=[OutputField(name="output", type=str, desc="Default output")]
+            output_fields=[OutputField(name="output", type=str, desc="Default output")],
         )
 
     # ============================================
@@ -403,7 +424,9 @@ class BaseAgent:
     # Extension Point 7: Error Handling
     # ============================================
 
-    def _handle_error(self, error: Exception, context: Dict[str, Any]) -> Dict[str, Any]:
+    def _handle_error(
+        self, error: Exception, context: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """
         Handle errors during execution.
 
@@ -419,7 +442,11 @@ class BaseAgent:
         self._error_handled = True
         if self.config.error_handling_enabled:
             self.logger.error(f"Error during execution: {error}")
-            return {"error": str(error), "type": type(error).__name__, "context": context}
+            return {
+                "error": str(error),
+                "type": type(error).__name__,
+                "context": context,
+            }
         else:
             raise error
 
@@ -454,12 +481,15 @@ class BaseAgent:
             return result
 
         except Exception as e:
-            return self._handle_error(e, {"inputs": inputs, "signature": self.signature.name})
+            return self._handle_error(
+                e, {"inputs": inputs, "signature": self.signature.name}
+            )
 
 
 # ==============================================================================
 # Extension Point 1: _default_signature() Tests (3 tests)
 # ==============================================================================
+
 
 class TestExtensionPoint1_DefaultSignature:
     """Test Extension Point 1: _default_signature() override patterns."""
@@ -493,18 +523,26 @@ class TestExtensionPoint1_DefaultSignature:
         - CustomAgent uses custom signature instead of default
         - Override signature has custom fields
         """
+
         class CustomAgent(BaseAgent):
             def _default_signature(self) -> Signature:
                 return Signature(
                     name="custom_signature",
                     input_fields=[
                         InputField(name="question", type=str, desc="User question"),
-                        InputField(name="context", type=str, desc="Additional context", default="")
+                        InputField(
+                            name="context",
+                            type=str,
+                            desc="Additional context",
+                            default="",
+                        ),
                     ],
                     output_fields=[
                         OutputField(name="answer", type=str, desc="Agent answer"),
-                        OutputField(name="confidence", type=float, desc="Confidence score")
-                    ]
+                        OutputField(
+                            name="confidence", type=float, desc="Confidence score"
+                        ),
+                    ],
                 )
 
         config = BaseAgentConfig()
@@ -531,7 +569,7 @@ class TestExtensionPoint1_DefaultSignature:
         custom_signature = Signature(
             name="explicit_signature",
             input_fields=[InputField(name="task", type=str)],
-            output_fields=[OutputField(name="result", type=str)]
+            output_fields=[OutputField(name="result", type=str)],
         )
 
         config = BaseAgentConfig()
@@ -546,6 +584,7 @@ class TestExtensionPoint1_DefaultSignature:
 # ==============================================================================
 # Extension Point 2: _default_strategy() Tests (3 tests)
 # ==============================================================================
+
 
 class TestExtensionPoint2_DefaultStrategy:
     """Test Extension Point 2: _default_strategy() override patterns."""
@@ -603,7 +642,9 @@ class TestExtensionPoint2_DefaultStrategy:
         """
         custom_strategy = MultiCycleStrategy(max_cycles=15)
 
-        config = BaseAgentConfig(strategy_type="single_shot")  # Would normally use SingleShotStrategy
+        config = BaseAgentConfig(
+            strategy_type="single_shot"
+        )  # Would normally use SingleShotStrategy
         agent = BaseAgent(config=config, strategy=custom_strategy)
 
         # Verify explicit strategy was used (not default single_shot)
@@ -614,6 +655,7 @@ class TestExtensionPoint2_DefaultStrategy:
 # ==============================================================================
 # Extension Point 3: _generate_system_prompt() Tests (3 tests)
 # ==============================================================================
+
 
 class TestExtensionPoint3_GenerateSystemPrompt:
     """Test Extension Point 3: _generate_system_prompt() override patterns."""
@@ -652,13 +694,13 @@ class TestExtensionPoint3_GenerateSystemPrompt:
             name="qa_signature",
             input_fields=[
                 InputField(name="question", type=str),
-                InputField(name="context", type=str)
+                InputField(name="context", type=str),
             ],
             output_fields=[
                 OutputField(name="answer", type=str),
                 OutputField(name="confidence", type=float),
-                OutputField(name="reasoning", type=str)
-            ]
+                OutputField(name="reasoning", type=str),
+            ],
         )
 
         config = BaseAgentConfig()
@@ -684,6 +726,7 @@ class TestExtensionPoint3_GenerateSystemPrompt:
         - Custom prompt is used instead of default template
         - Custom prompt can include domain-specific instructions
         """
+
         class QAAgent(BaseAgent):
             def _generate_system_prompt(self) -> str:
                 return (
@@ -708,6 +751,7 @@ class TestExtensionPoint3_GenerateSystemPrompt:
 # Extension Point 4: _validate_signature_output() Tests (4 tests)
 # ==============================================================================
 
+
 class TestExtensionPoint4_ValidateSignatureOutput:
     """Test Extension Point 4: _validate_signature_output() override patterns."""
 
@@ -723,9 +767,7 @@ class TestExtensionPoint4_ValidateSignatureOutput:
         config = BaseAgentConfig()
         agent = BaseAgent(config=config)
 
-        valid_output = {
-            "output": "This is the output"
-        }
+        valid_output = {"output": "This is the output"}
 
         # Validation should succeed
         result = agent._validate_signature_output(valid_output)
@@ -745,20 +787,19 @@ class TestExtensionPoint4_ValidateSignatureOutput:
             output_fields=[
                 OutputField(name="answer", type=str),
                 OutputField(name="confidence", type=float),
-                OutputField(name="reasoning", type=str)
-            ]
+                OutputField(name="reasoning", type=str),
+            ],
         )
 
         config = BaseAgentConfig()
         agent = BaseAgent(config=config, signature=custom_signature)
 
         # Missing "reasoning" field
-        invalid_output = {
-            "answer": "Test answer",
-            "confidence": 0.9
-        }
+        invalid_output = {"answer": "Test answer", "confidence": 0.9}
 
-        with pytest.raises(ValueError, match="Missing required output field: reasoning"):
+        with pytest.raises(
+            ValueError, match="Missing required output field: reasoning"
+        ):
             agent._validate_signature_output(invalid_output)
 
     def test_validation_can_be_extended_with_custom_logic(self):
@@ -770,14 +811,15 @@ class TestExtensionPoint4_ValidateSignatureOutput:
         - Custom validation enforces domain-specific constraints
         - super()._validate_signature_output() is called first
         """
+
         class QAAgent(BaseAgent):
             def _default_signature(self) -> Signature:
                 return Signature(
                     name="qa_signature",
                     output_fields=[
                         OutputField(name="answer", type=str),
-                        OutputField(name="confidence", type=float)
-                    ]
+                        OutputField(name="confidence", type=float),
+                    ],
                 )
 
             def _validate_signature_output(self, output: Dict[str, Any]) -> bool:
@@ -785,7 +827,7 @@ class TestExtensionPoint4_ValidateSignatureOutput:
                 super()._validate_signature_output(output)
 
                 # Additional QA-specific validation
-                confidence = output.get('confidence', 0)
+                confidence = output.get("confidence", 0)
                 if not 0 <= confidence <= 1:
                     raise ValueError("Confidence must be between 0 and 1")
 
@@ -817,8 +859,8 @@ class TestExtensionPoint4_ValidateSignatureOutput:
             output_fields=[
                 OutputField(name="result1", type=str),
                 OutputField(name="result2", type=str),
-                OutputField(name="result3", type=str)
-            ]
+                OutputField(name="result3", type=str),
+            ],
         )
 
         config = BaseAgentConfig()
@@ -837,6 +879,7 @@ class TestExtensionPoint4_ValidateSignatureOutput:
 # ==============================================================================
 # Extension Point 5: _pre_execution_hook() Tests (3 tests)
 # ==============================================================================
+
 
 class TestExtensionPoint5_PreExecutionHook:
     """Test Extension Point 5: _pre_execution_hook() override patterns."""
@@ -868,12 +911,13 @@ class TestExtensionPoint5_PreExecutionHook:
         - Hook returns modified inputs
         - Modified inputs are used for execution
         """
+
         class PreprocessingAgent(BaseAgent):
             def _pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
                 # Add preprocessing
                 inputs = super()._pre_execution_hook(inputs)
-                inputs['preprocessed'] = True
-                inputs['input'] = inputs['input'].upper()  # Example preprocessing
+                inputs["preprocessed"] = True
+                inputs["input"] = inputs["input"].upper()  # Example preprocessing
                 return inputs
 
         config = BaseAgentConfig()
@@ -918,6 +962,7 @@ class TestExtensionPoint5_PreExecutionHook:
 # Extension Point 6: _post_execution_hook() Tests (3 tests)
 # ==============================================================================
 
+
 class TestExtensionPoint6_PostExecutionHook:
     """Test Extension Point 6: _post_execution_hook() override patterns."""
 
@@ -948,12 +993,13 @@ class TestExtensionPoint6_PostExecutionHook:
         - Hook returns modified result
         - Modified result is returned to caller
         """
+
         class PostprocessingAgent(BaseAgent):
             def _post_execution_hook(self, result: Dict[str, Any]) -> Dict[str, Any]:
                 # Add postprocessing
                 result = super()._post_execution_hook(result)
-                result['postprocessed'] = True
-                result['metadata'] = {'framework': 'kaizen'}
+                result["postprocessed"] = True
+                result["metadata"] = {"framework": "kaizen"}
                 return result
 
         config = BaseAgentConfig()
@@ -963,9 +1009,9 @@ class TestExtensionPoint6_PostExecutionHook:
         result = agent.execute(**inputs)
 
         # Verify postprocessing occurred
-        assert result.get('postprocessed') is True
-        assert 'metadata' in result
-        assert result['metadata']['framework'] == 'kaizen'
+        assert result.get("postprocessed") is True
+        assert "metadata" in result
+        assert result["metadata"]["framework"] == "kaizen"
 
     def test_hook_respects_config_logging_enabled(self):
         """
@@ -1000,6 +1046,7 @@ class TestExtensionPoint6_PostExecutionHook:
 # Extension Point 7: _handle_error() Tests (4 tests)
 # ==============================================================================
 
+
 class TestExtensionPoint7_HandleError:
     """Test Extension Point 7: _handle_error() override patterns."""
 
@@ -1013,6 +1060,7 @@ class TestExtensionPoint7_HandleError:
         - Error is caught and converted to error response
         - Exception is NOT re-raised
         """
+
         class ErrorAgent(BaseAgent):
             def _pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
                 raise ValueError("Test error")
@@ -1039,6 +1087,7 @@ class TestExtensionPoint7_HandleError:
         - Error is re-raised (not caught)
         - Exception propagates to caller
         """
+
         class ErrorAgent(BaseAgent):
             def _pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
                 raise ValueError("Test error")
@@ -1061,6 +1110,7 @@ class TestExtensionPoint7_HandleError:
         - Context includes inputs, signature name, etc.
         - Error response includes context for debugging
         """
+
         class ErrorAgent(BaseAgent):
             def _validate_signature_output(self, output: Dict[str, Any]) -> bool:
                 raise ValueError("Validation failed")
@@ -1087,19 +1137,22 @@ class TestExtensionPoint7_HandleError:
         - Custom error handling logic is used
         - Different error types handled differently
         """
+
         class CustomErrorAgent(BaseAgent):
-            def _handle_error(self, error: Exception, context: Dict[str, Any]) -> Dict[str, Any]:
+            def _handle_error(
+                self, error: Exception, context: Dict[str, Any]
+            ) -> Dict[str, Any]:
                 if isinstance(error, TimeoutError):
                     return {
                         "answer": "Request timed out. Please try again.",
                         "confidence": 0.0,
-                        "error_type": "timeout"
+                        "error_type": "timeout",
                     }
                 elif isinstance(error, ValueError):
                     return {
                         "answer": "Invalid input provided.",
                         "confidence": 0.0,
-                        "error_type": "validation"
+                        "error_type": "validation",
                     }
                 else:
                     # Fallback to base error handling
@@ -1130,6 +1183,7 @@ class TestExtensionPoint7_HandleError:
 # Extension Pattern Integration Tests (5 tests)
 # ==============================================================================
 
+
 class TestExtensionPatternIntegration:
     """Test integration of multiple extension points in real-world patterns."""
 
@@ -1142,18 +1196,28 @@ class TestExtensionPatternIntegration:
         - Overrides signature, prompt, validation
         - All extension points work together
         """
+
         class SimpleQAAgent(BaseAgent):
             def _default_signature(self) -> Signature:
                 return Signature(
                     name="qa_signature",
                     input_fields=[
-                        InputField(name="question", type=str, desc="Question to answer"),
-                        InputField(name="context", type=str, desc="Optional context", default="")
+                        InputField(
+                            name="question", type=str, desc="Question to answer"
+                        ),
+                        InputField(
+                            name="context",
+                            type=str,
+                            desc="Optional context",
+                            default="",
+                        ),
                     ],
                     output_fields=[
                         OutputField(name="answer", type=str, desc="Answer to question"),
-                        OutputField(name="confidence", type=float, desc="Confidence score")
-                    ]
+                        OutputField(
+                            name="confidence", type=float, desc="Confidence score"
+                        ),
+                    ],
                 )
 
             def _generate_system_prompt(self) -> str:
@@ -1161,7 +1225,7 @@ class TestExtensionPatternIntegration:
 
             def _validate_signature_output(self, output: Dict[str, Any]) -> bool:
                 super()._validate_signature_output(output)
-                if not 0 <= output.get('confidence', 0) <= 1:
+                if not 0 <= output.get("confidence", 0) <= 1:
                     raise ValueError("Confidence must be between 0 and 1")
                 return True
 
@@ -1194,18 +1258,19 @@ class TestExtensionPatternIntegration:
         - All overrides work together correctly
         - No interference between extension points
         """
+
         class ReActAgent(BaseAgent):
             def _default_signature(self) -> Signature:
                 return Signature(
                     name="react_signature",
                     input_fields=[
                         InputField(name="task", type=str),
-                        InputField(name="context", type=str, default="")
+                        InputField(name="context", type=str, default=""),
                     ],
                     output_fields=[
                         OutputField(name="thought", type=str),
-                        OutputField(name="action", type=str)
-                    ]
+                        OutputField(name="action", type=str),
+                    ],
                 )
 
             def _default_strategy(self) -> ExecutionStrategy:
@@ -1213,12 +1278,12 @@ class TestExtensionPatternIntegration:
 
             def _pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
                 inputs = super()._pre_execution_hook(inputs)
-                inputs['available_tools'] = ['search', 'calculate']
+                inputs["available_tools"] = ["search", "calculate"]
                 return inputs
 
             def _post_execution_hook(self, result: Dict[str, Any]) -> Dict[str, Any]:
                 result = super()._post_execution_hook(result)
-                result['metadata'] = {'tools_used': 2}
+                result["metadata"] = {"tools_used": 2}
                 return result
 
         config = BaseAgentConfig(strategy_type="multi_cycle")
@@ -1235,7 +1300,7 @@ class TestExtensionPatternIntegration:
         # Verify hooks executed
         assert agent._pre_execution_called is True
         assert agent._post_execution_called is True
-        assert 'metadata' in result
+        assert "metadata" in result
 
     def test_super_calls_work_correctly_in_extensions(self):
         """
@@ -1246,19 +1311,20 @@ class TestExtensionPatternIntegration:
         - super()._method() executes base implementation
         - Custom behavior is added on top of base behavior
         """
+
         class ExtendedAgent(BaseAgent):
             def _pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
                 # Call base implementation
                 inputs = super()._pre_execution_hook(inputs)
                 # Add custom behavior
-                inputs['extended'] = True
+                inputs["extended"] = True
                 return inputs
 
             def _post_execution_hook(self, result: Dict[str, Any]) -> Dict[str, Any]:
                 # Call base implementation
                 result = super()._post_execution_hook(result)
                 # Add custom behavior
-                result['extended_result'] = True
+                result["extended_result"] = True
                 return result
 
         config = BaseAgentConfig()
@@ -1270,7 +1336,7 @@ class TestExtensionPatternIntegration:
         # Verify both base and custom behavior occurred
         assert agent._pre_execution_called is True  # Base behavior
         assert agent._post_execution_called is True  # Base behavior
-        assert result.get('extended_result') is True  # Custom behavior
+        assert result.get("extended_result") is True  # Custom behavior
 
     def test_extension_points_compose_well(self):
         """
@@ -1281,6 +1347,7 @@ class TestExtensionPatternIntegration:
         - No conflicts or interference
         - All extensions work independently and together
         """
+
         class ComposedAgent(BaseAgent):
             def __init__(self, *args, **kwargs):
                 super().__init__(*args, **kwargs)
@@ -1290,7 +1357,7 @@ class TestExtensionPatternIntegration:
             def _default_signature(self) -> Signature:
                 return Signature(
                     name="composed_sig",
-                    output_fields=[OutputField(name="result", type=str)]
+                    output_fields=[OutputField(name="result", type=str)],
                 )
 
             def _generate_system_prompt(self) -> str:
@@ -1301,11 +1368,11 @@ class TestExtensionPatternIntegration:
                 return super()._validate_signature_output(output)
 
             def _pre_execution_hook(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
-                self.hook_calls.append('pre')
+                self.hook_calls.append("pre")
                 return super()._pre_execution_hook(inputs)
 
             def _post_execution_hook(self, result: Dict[str, Any]) -> Dict[str, Any]:
-                self.hook_calls.append('post')
+                self.hook_calls.append("post")
                 return super()._post_execution_hook(result)
 
         config = BaseAgentConfig()
@@ -1317,7 +1384,7 @@ class TestExtensionPatternIntegration:
         assert agent.signature.name == "composed_sig"
         assert agent._generate_system_prompt() == "Custom prompt for composed agent"
         assert agent.validation_count == 1
-        assert agent.hook_calls == ['pre', 'post']
+        assert agent.hook_calls == ["pre", "post"]
 
     def test_real_world_extension_pattern_simpleqa_agent(self):
         """
@@ -1329,6 +1396,7 @@ class TestExtensionPatternIntegration:
         - Custom validation for confidence range
         - Error handling for low confidence
         """
+
         class SimpleQAAgent(BaseAgent):
             def _default_signature(self) -> Signature:
                 """QA-specific signature."""
@@ -1336,14 +1404,31 @@ class TestExtensionPatternIntegration:
                     name="qa_signature",
                     description="Answer questions accurately and concisely with confidence scoring",
                     input_fields=[
-                        InputField(name="question", type=str, desc="The question to answer"),
-                        InputField(name="context", type=str, desc="Additional context if available", default="")
+                        InputField(
+                            name="question", type=str, desc="The question to answer"
+                        ),
+                        InputField(
+                            name="context",
+                            type=str,
+                            desc="Additional context if available",
+                            default="",
+                        ),
                     ],
                     output_fields=[
-                        OutputField(name="answer", type=str, desc="Clear, accurate answer"),
-                        OutputField(name="confidence", type=float, desc="Confidence score 0.0-1.0"),
-                        OutputField(name="reasoning", type=str, desc="Brief explanation of reasoning")
-                    ]
+                        OutputField(
+                            name="answer", type=str, desc="Clear, accurate answer"
+                        ),
+                        OutputField(
+                            name="confidence",
+                            type=float,
+                            desc="Confidence score 0.0-1.0",
+                        ),
+                        OutputField(
+                            name="reasoning",
+                            type=str,
+                            desc="Brief explanation of reasoning",
+                        ),
+                    ],
                 )
 
             def _generate_system_prompt(self) -> str:
@@ -1361,7 +1446,7 @@ class TestExtensionPatternIntegration:
                 super()._validate_signature_output(output)
 
                 # Additional validation: confidence range
-                confidence = output.get('confidence', 0)
+                confidence = output.get("confidence", 0)
                 if not 0 <= confidence <= 1:
                     raise ValueError("Confidence must be between 0 and 1")
 
@@ -1372,10 +1457,7 @@ class TestExtensionPatternIntegration:
                 result = super()._post_execution_hook(result)
 
                 # Add metadata
-                result['metadata'] = {
-                    'agent_type': 'qa',
-                    'framework': 'kaizen'
-                }
+                result["metadata"] = {"agent_type": "qa", "framework": "kaizen"}
 
                 return result
 
@@ -1397,7 +1479,7 @@ class TestExtensionPatternIntegration:
         valid_output = {
             "answer": "Test answer",
             "confidence": 0.9,
-            "reasoning": "Based on available information"
+            "reasoning": "Based on available information",
         }
         assert agent._validate_signature_output(valid_output) is True
 
@@ -1405,7 +1487,7 @@ class TestExtensionPatternIntegration:
         invalid_output = {
             "answer": "Test",
             "confidence": 1.5,
-            "reasoning": "Invalid confidence"
+            "reasoning": "Invalid confidence",
         }
         with pytest.raises(ValueError, match="Confidence must be between 0 and 1"):
             agent._validate_signature_output(invalid_output)

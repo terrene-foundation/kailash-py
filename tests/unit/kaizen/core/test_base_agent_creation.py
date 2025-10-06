@@ -50,6 +50,7 @@ from typing import Any, Dict, Optional
 # Test Fixtures and Mock Classes
 # ==============================================================================
 
+
 @dataclass
 class BaseAgentConfig:
     """
@@ -62,6 +63,7 @@ class BaseAgentConfig:
     - Advanced Features (memory_enabled, transparency_enabled, mcp_enabled)
     - Strategy Configuration (strategy_type, max_cycles)
     """
+
     # LLM Provider Configuration
     llm_provider: Optional[str] = None
     model: Optional[str] = None
@@ -91,6 +93,7 @@ class BaseAgentConfig:
 
 class MockSignature:
     """Mock signature for testing signature injection."""
+
     def __init__(self, name="test_signature"):
         self.name = name
 
@@ -100,6 +103,7 @@ class MockSignature:
 
 class MockExecutionStrategy:
     """Mock execution strategy for testing strategy injection."""
+
     def __init__(self, strategy_type="custom"):
         self.strategy_type = strategy_type
 
@@ -114,6 +118,7 @@ class MockExecutionStrategy:
 # ==============================================================================
 # Category 1: Basic Creation Tests (5 tests)
 # ==============================================================================
+
 
 class TestBaseAgentBasicCreation:
     """Test BaseAgent creation with various configuration patterns."""
@@ -179,7 +184,7 @@ class TestBaseAgentBasicCreation:
             transparency_enabled=True,
             mcp_enabled=True,
             strategy_type="multi_cycle",
-            max_cycles=10
+            max_cycles=10,
         )
 
         with pytest.raises(ImportError):
@@ -298,6 +303,7 @@ class TestBaseAgentBasicCreation:
 # Category 2: Lazy Initialization Tests (3 tests)
 # ==============================================================================
 
+
 class TestBaseAgentLazyInitialization:
     """
     Test BaseAgent lazy initialization pattern.
@@ -402,6 +408,7 @@ class TestBaseAgentLazyInitialization:
 # Category 3: Configuration Tests (4 tests)
 # ==============================================================================
 
+
 class TestBaseAgentConfiguration:
     """Test BaseAgentConfig storage, defaults, and validation."""
 
@@ -421,10 +428,7 @@ class TestBaseAgentConfiguration:
         """
         # This test will FAIL until BaseAgent is implemented
 
-        config = BaseAgentConfig(
-            llm_provider="openai",
-            temperature=0.5
-        )
+        config = BaseAgentConfig(llm_provider="openai", temperature=0.5)
 
         with pytest.raises(ImportError):
             from kaizen.core.base_agent import BaseAgent
@@ -551,6 +555,7 @@ class TestBaseAgentConfiguration:
 # Category 4: Signature and Strategy Tests (3 tests)
 # ==============================================================================
 
+
 class TestBaseAgentSignatureAndStrategy:
     """Test signature and strategy default creation and custom injection."""
 
@@ -661,6 +666,7 @@ class TestBaseAgentSignatureAndStrategy:
 # Category 5: Mixin Application Tests (3+ tests)
 # ==============================================================================
 
+
 class TestBaseAgentMixinApplication:
     """
     Test mixin application based on feature flags.
@@ -757,7 +763,7 @@ class TestBaseAgentMixinApplication:
             logging_enabled=False,
             performance_enabled=False,
             error_handling_enabled=False,
-            batch_processing_enabled=False
+            batch_processing_enabled=False,
         )
 
         with pytest.raises(ImportError):
@@ -776,6 +782,7 @@ class TestBaseAgentMixinApplication:
 # ==============================================================================
 # Performance and Integration Smoke Tests
 # ==============================================================================
+
 
 class TestBaseAgentPerformance:
     """Test performance characteristics of BaseAgent creation."""

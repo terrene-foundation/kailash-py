@@ -36,7 +36,7 @@ from tests.utils import test_fixtures
 from tests.utils.mock_providers import (
     MockLLMProvider,
     MockServiceRegistry,
-    create_mock_framework
+    create_mock_framework,
 )
 
 # Test markers
@@ -51,7 +51,9 @@ class TestCompleteInfrastructureValidation:
         main_report = PerformanceReport()
 
         # Requirement 1: Test utilities must be available and functional
-        with PerformanceTracker("utilities_validation", threshold=5.0) as utilities_tracker:
+        with PerformanceTracker(
+            "utilities_validation", threshold=5.0
+        ) as utilities_tracker:
             # Performance tracker validation
             perf_tracker = PerformanceTracker("nested_test", threshold=1.0)
             with perf_tracker:
@@ -95,8 +97,11 @@ class TestCompleteInfrastructureValidation:
             all_results = []
             for agent in agents:
                 workflow = agent.create_workflow()
-                workflow.add_node("PythonCodeNode", "sdk_integration_test", {
-                    "code": """
+                workflow.add_node(
+                    "PythonCodeNode",
+                    "sdk_integration_test",
+                    {
+                        "code": """
 result = {
     'agent_name': agent_config['name'],
     'sdk_integration': True,
@@ -104,9 +109,10 @@ result = {
     'timestamp': str(time.time())
 }
 """,
-                    "agent_config": agent.config,
-                    "test_data": data_samples
-                })
+                        "agent_config": agent.config,
+                        "test_data": data_samples,
+                    },
+                )
 
                 results, run_id = agent.execute(workflow)
                 all_results.append((agent, results, run_id))
@@ -114,12 +120,16 @@ result = {
             # Verify all SDK integrations worked
             assert len(all_results) == len(agents_config)
             for agent, results, run_id in all_results:
-                assert results["sdk_integration_test"]["result"]["sdk_integration"] is True
+                assert (
+                    results["sdk_integration_test"]["result"]["sdk_integration"] is True
+                )
 
         main_report.add_tracker(sdk_tracker)
 
         # Requirement 3: Performance tracking must work under load
-        with PerformanceTracker("performance_under_load", threshold=15.0) as load_tracker:
+        with PerformanceTracker(
+            "performance_under_load", threshold=15.0
+        ) as load_tracker:
             load_scenarios = test_fixtures.load_test_scenarios()
             light_scenario = load_scenarios[0]  # Use light scenario for E2E
 
@@ -129,10 +139,15 @@ result = {
             runtime = LocalRuntime()
 
             def execute_test_workflow(workflow_id):
-                with PerformanceTracker(f"workflow_{workflow_id}", threshold=3.0) as w_tracker:
+                with PerformanceTracker(
+                    f"workflow_{workflow_id}", threshold=3.0
+                ) as w_tracker:
                     workflow = WorkflowBuilder()
-                    workflow.add_node("PythonCodeNode", f"load_test_{workflow_id}", {
-                        "code": f"""
+                    workflow.add_node(
+                        "PythonCodeNode",
+                        f"load_test_{workflow_id}",
+                        {
+                            "code": f"""
 result = {{
     'workflow_id': {workflow_id},
     'load_test': True,
@@ -140,7 +155,8 @@ result = {{
     'timestamp': str(time.time())
 }}
 """
-                    })
+                        },
+                    )
 
                     results, run_id = runtime.execute(workflow.build())
                     return w_tracker, results, run_id
@@ -149,7 +165,9 @@ result = {{
             with ThreadPoolExecutor(max_workers=light_scenario["agents"]) as executor:
                 futures = [
                     executor.submit(execute_test_workflow, i)
-                    for i in range(light_scenario["agents"] * light_scenario["workflows_per_agent"])
+                    for i in range(
+                        light_scenario["agents"] * light_scenario["workflows_per_agent"]
+                    )
                 ]
 
                 all_workflow_results = []
@@ -161,7 +179,10 @@ result = {{
             # Verify performance under load
             summary = performance_report.get_summary()
             assert summary["passed_thresholds"] == summary["threshold_checks"]
-            assert len(all_workflow_results) == light_scenario["agents"] * light_scenario["workflows_per_agent"]
+            assert (
+                len(all_workflow_results)
+                == light_scenario["agents"] * light_scenario["workflows_per_agent"]
+            )
 
         main_report.add_tracker(load_tracker)
 
@@ -169,14 +190,22 @@ result = {{
         with PerformanceTracker("error_handling", threshold=8.0) as error_tracker:
             # Test error handling in workflows
             error_workflow = WorkflowBuilder()
-            error_workflow.add_node("PythonCodeNode", "intentional_error", {
-                "code": "raise ValueError('Intentional test error for infrastructure validation')"
-            })
+            error_workflow.add_node(
+                "PythonCodeNode",
+                "intentional_error",
+                {
+                    "code": "raise ValueError('Intentional test error for infrastructure validation')"
+                },
+            )
 
             recovery_workflow = WorkflowBuilder()
-            recovery_workflow.add_node("PythonCodeNode", "recovery_test", {
-                "code": "result = {'recovery_successful': True, 'error_handling_validated': True}"
-            })
+            recovery_workflow.add_node(
+                "PythonCodeNode",
+                "recovery_test",
+                {
+                    "code": "result = {'recovery_successful': True, 'error_handling_validated': True}"
+                },
+            )
 
             # Execute error workflow (should handle gracefully)
             error_results, error_run_id = runtime.execute(error_workflow.build())
@@ -188,15 +217,22 @@ result = {{
                 assert error_node_result["status"] == "failed"
             else:
                 # Alternative: check for exception or error field
-                assert ("exception" in error_node_result or
-                        "error" in error_node_result or
-                        not error_node_result.get("result", {}).get("success", True))
+                assert (
+                    "exception" in error_node_result
+                    or "error" in error_node_result
+                    or not error_node_result.get("result", {}).get("success", True)
+                )
 
             # Execute recovery workflow (should work normally)
-            recovery_results, recovery_run_id = runtime.execute(recovery_workflow.build())
+            recovery_results, recovery_run_id = runtime.execute(
+                recovery_workflow.build()
+            )
 
             # Verify recovery worked
-            assert recovery_results["recovery_test"]["result"]["recovery_successful"] is True
+            assert (
+                recovery_results["recovery_test"]["result"]["recovery_successful"]
+                is True
+            )
 
             # Verify different run IDs
             assert error_run_id != recovery_run_id
@@ -214,10 +250,9 @@ result = {{
             import kaizen
 
             # Create framework for scaling test
-            framework = kaizen.Framework(config={
-                'name': 'scaling_reliability_test',
-                'version': '1.0.0'
-            })
+            framework = kaizen.Framework(
+                config={"name": "scaling_reliability_test", "version": "1.0.0"}
+            )
 
             # Test parameters for reliability
             num_frameworks = 3
@@ -229,26 +264,33 @@ result = {{
 
             # Create multiple frameworks (simulate multi-tenant)
             for f_idx in range(num_frameworks):
-                fw = kaizen.Framework(config={
-                    'name': f'reliability_framework_{f_idx}',
-                    'version': '1.0.0'
-                })
+                fw = kaizen.Framework(
+                    config={
+                        "name": f"reliability_framework_{f_idx}",
+                        "version": "1.0.0",
+                    }
+                )
                 frameworks.append(fw)
 
                 # Create agents per framework
                 for a_idx in range(agents_per_framework):
-                    agent = fw.create_agent(config={
-                        'name': f'reliability_agent_{f_idx}_{a_idx}',
-                        'framework_id': f_idx,
-                        'agent_id': a_idx
-                    })
+                    agent = fw.create_agent(
+                        config={
+                            "name": f"reliability_agent_{f_idx}_{a_idx}",
+                            "framework_id": f_idx,
+                            "agent_id": a_idx,
+                        }
+                    )
                     all_agents.append((fw, agent, f_idx, a_idx))
 
             # Execute workflows concurrently across all frameworks
             def execute_reliability_workflow(fw, agent, f_idx, a_idx, w_idx):
                 workflow = agent.create_workflow()
-                workflow.add_node("PythonCodeNode", "reliability_test", {
-                    "code": f"""
+                workflow.add_node(
+                    "PythonCodeNode",
+                    "reliability_test",
+                    {
+                        "code": f"""
 result = {{
     'framework_id': {f_idx},
     'agent_id': {a_idx},
@@ -258,20 +300,22 @@ result = {{
     'execution_timestamp': str(time.time())
 }}
 """
-                })
+                    },
+                )
 
                 return agent.execute(workflow)
 
             # Execute all workflows concurrently
             all_executions = []
-            with ThreadPoolExecutor(max_workers=num_frameworks * agents_per_framework) as executor:
+            with ThreadPoolExecutor(
+                max_workers=num_frameworks * agents_per_framework
+            ) as executor:
                 futures = []
 
                 for fw, agent, f_idx, a_idx in all_agents:
                     for w_idx in range(workflows_per_agent):
                         future = executor.submit(
-                            execute_reliability_workflow,
-                            fw, agent, f_idx, a_idx, w_idx
+                            execute_reliability_workflow, fw, agent, f_idx, a_idx, w_idx
                         )
                         futures.append((future, f_idx, a_idx, w_idx))
 
@@ -281,14 +325,18 @@ result = {{
                     all_executions.append((results, run_id, f_idx, a_idx, w_idx))
 
             # Verify scaling and reliability
-            expected_executions = num_frameworks * agents_per_framework * workflows_per_agent
+            expected_executions = (
+                num_frameworks * agents_per_framework * workflows_per_agent
+            )
             assert len(all_executions) == expected_executions
 
             # Verify all executions succeeded
             framework_results = {}
             for results, run_id, f_idx, a_idx, w_idx in all_executions:
                 assert results["reliability_test"]["result"]["reliability_test"] is True
-                assert results["reliability_test"]["result"]["scaling_validated"] is True
+                assert (
+                    results["reliability_test"]["result"]["scaling_validated"] is True
+                )
 
                 if f_idx not in framework_results:
                     framework_results[f_idx] = []
@@ -305,7 +353,9 @@ result = {{
                 assert len(set(run_ids)) == len(run_ids)  # All unique
 
         # Verify scaling performance
-        main_tracker.assert_under_threshold("Infrastructure scaling test exceeded threshold")
+        main_tracker.assert_under_threshold(
+            "Infrastructure scaling test exceeded threshold"
+        )
 
     def test_infrastructure_integration_with_existing_tests(self):
         """Test infrastructure integrates properly with existing test patterns."""
@@ -317,19 +367,23 @@ result = {{
             framework = kaizen.Framework()
 
             # Test 1: Framework initialization (existing pattern)
-            assert hasattr(framework, 'runtime')
-            assert hasattr(framework, 'create_agent')
-            assert hasattr(framework, 'create_workflow')
+            assert hasattr(framework, "runtime")
+            assert hasattr(framework, "create_agent")
+            assert hasattr(framework, "create_workflow")
 
             # Test 2: Agent creation (existing pattern)
-            agent = framework.create_agent(config={'name': 'integration_test_agent'})
-            assert agent.config['name'] == 'integration_test_agent'
+            agent = framework.create_agent(config={"name": "integration_test_agent"})
+            assert agent.config["name"] == "integration_test_agent"
 
             # Test 3: Workflow execution (existing pattern)
             workflow = agent.create_workflow()
-            workflow.add_node("PythonCodeNode", "integration_node", {
-                "code": "result = {'integration_test': True, 'existing_pattern': True}"
-            })
+            workflow.add_node(
+                "PythonCodeNode",
+                "integration_node",
+                {
+                    "code": "result = {'integration_test': True, 'existing_pattern': True}"
+                },
+            )
 
             results, run_id = agent.execute(workflow)
 
@@ -342,9 +396,11 @@ result = {{
             with perf_tracker:
                 # Execute another workflow to test performance integration
                 workflow2 = agent.create_workflow()
-                workflow2.add_node("PythonCodeNode", "perf_test", {
-                    "code": "result = {'performance_integration': True}"
-                })
+                workflow2.add_node(
+                    "PythonCodeNode",
+                    "perf_test",
+                    {"code": "result = {'performance_integration': True}"},
+                )
 
                 results2, run_id2 = agent.execute(workflow2)
 
@@ -363,13 +419,17 @@ result = {{
                 test_workflow.add_node(
                     node_config["node_type"],
                     f"fixture_{node_config['node_id']}",
-                    node_config["parameters"]
+                    node_config["parameters"],
                 )
 
-                fixture_results, fixture_run_id = framework.execute(test_workflow.build())
+                fixture_results, fixture_run_id = framework.execute(
+                    test_workflow.build()
+                )
                 assert "result" in fixture_results[f"fixture_{node_config['node_id']}"]
 
-        tracker.assert_under_threshold("Infrastructure integration compatibility test too slow")
+        tracker.assert_under_threshold(
+            "Infrastructure integration compatibility test too slow"
+        )
 
     def test_complete_infrastructure_documentation_validation(self):
         """Validate infrastructure provides complete testing capabilities."""
@@ -381,7 +441,7 @@ result = {{
             "kaizen_framework_integration": False,
             "error_handling": False,
             "scaling_support": False,
-            "concurrent_execution": False
+            "concurrent_execution": False,
         }
 
         with PerformanceTracker("capabilities_validation", threshold=15.0):
@@ -426,9 +486,11 @@ result = {{
             # Validate Core SDK integration capability
             try:
                 workflow = WorkflowBuilder()
-                workflow.add_node("PythonCodeNode", "sdk_test", {
-                    "code": "result = {'sdk_integration': True}"
-                })
+                workflow.add_node(
+                    "PythonCodeNode",
+                    "sdk_test",
+                    {"code": "result = {'sdk_integration': True}"},
+                )
 
                 runtime = LocalRuntime()
                 results, run_id = runtime.execute(workflow.build())
@@ -441,16 +503,21 @@ result = {{
             # Validate Kaizen framework integration capability
             try:
                 import kaizen
+
                 framework = kaizen.Framework()
-                agent = framework.create_agent(config={'name': 'capability_test'})
+                agent = framework.create_agent(config={"name": "capability_test"})
 
                 workflow = agent.create_workflow()
-                workflow.add_node("PythonCodeNode", "framework_test", {
-                    "code": "result = {'framework_integration': True}"
-                })
+                workflow.add_node(
+                    "PythonCodeNode",
+                    "framework_test",
+                    {"code": "result = {'framework_integration': True}"},
+                )
 
                 results, run_id = agent.execute(workflow)
-                assert results["framework_test"]["result"]["framework_integration"] is True
+                assert (
+                    results["framework_test"]["result"]["framework_integration"] is True
+                )
                 capabilities_report["kaizen_framework_integration"] = True
             except Exception:
                 pass
@@ -458,9 +525,11 @@ result = {{
             # Validate error handling capability
             try:
                 error_workflow = WorkflowBuilder()
-                error_workflow.add_node("PythonCodeNode", "error_test", {
-                    "code": "raise ValueError('Test error')"
-                })
+                error_workflow.add_node(
+                    "PythonCodeNode",
+                    "error_test",
+                    {"code": "raise ValueError('Test error')"},
+                )
 
                 runtime = LocalRuntime()
                 error_results, error_run_id = runtime.execute(error_workflow.build())
@@ -468,10 +537,12 @@ result = {{
                 # Should handle error gracefully
                 error_node = error_results["error_test"]
                 # Check for error handling (status field or exception presence)
-                error_handled = ("status" in error_node and error_node["status"] == "failed") or \
-                               ("exception" in error_node) or \
-                               ("error" in error_node) or \
-                               (not error_node.get("result", {}).get("success", True))
+                error_handled = (
+                    ("status" in error_node and error_node["status"] == "failed")
+                    or ("exception" in error_node)
+                    or ("error" in error_node)
+                    or (not error_node.get("result", {}).get("success", True))
+                )
                 assert error_handled, "Error not handled properly"
                 capabilities_report["error_handling"] = True
             except Exception:
@@ -485,9 +556,13 @@ result = {{
                 # Create multiple workflows
                 for i in range(5):
                     workflow = WorkflowBuilder()
-                    workflow.add_node("PythonCodeNode", f"scale_test_{i}", {
-                        "code": f"result = {{'workflow_id': {i}, 'scaling_test': True}}"
-                    })
+                    workflow.add_node(
+                        "PythonCodeNode",
+                        f"scale_test_{i}",
+                        {
+                            "code": f"result = {{'workflow_id': {i}, 'scaling_test': True}}"
+                        },
+                    )
                     workflows.append(workflow)
 
                 # Execute all workflows
@@ -503,17 +578,25 @@ result = {{
 
             # Validate concurrent execution capability
             try:
+
                 def execute_concurrent_workflow(workflow_id):
                     workflow = WorkflowBuilder()
-                    workflow.add_node("PythonCodeNode", f"concurrent_{workflow_id}", {
-                        "code": f"result = {{'workflow_id': {workflow_id}, 'concurrent': True}}"
-                    })
+                    workflow.add_node(
+                        "PythonCodeNode",
+                        f"concurrent_{workflow_id}",
+                        {
+                            "code": f"result = {{'workflow_id': {workflow_id}, 'concurrent': True}}"
+                        },
+                    )
 
                     runtime = LocalRuntime()
                     return runtime.execute(workflow.build())
 
                 with ThreadPoolExecutor(max_workers=3) as executor:
-                    futures = [executor.submit(execute_concurrent_workflow, i) for i in range(3)]
+                    futures = [
+                        executor.submit(execute_concurrent_workflow, i)
+                        for i in range(3)
+                    ]
                     concurrent_results = [future.result() for future in futures]
 
                 assert len(concurrent_results) == 3
@@ -522,13 +605,17 @@ result = {{
                 pass
 
         # Verify all capabilities are available
-        failed_capabilities = [cap for cap, status in capabilities_report.items() if not status]
+        failed_capabilities = [
+            cap for cap, status in capabilities_report.items() if not status
+        ]
 
         if failed_capabilities:
             pytest.fail(f"Infrastructure missing capabilities: {failed_capabilities}")
 
         # All capabilities should be available
-        assert all(capabilities_report.values()), f"Missing capabilities: {failed_capabilities}"
+        assert all(
+            capabilities_report.values()
+        ), f"Missing capabilities: {failed_capabilities}"
 
 
 if __name__ == "__main__":

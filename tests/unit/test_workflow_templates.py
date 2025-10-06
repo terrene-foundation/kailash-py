@@ -77,8 +77,14 @@ class TestCycleTemplatesOptimization:
         workflow = Workflow("test_opt", "Test Optimization")
 
         # Add required nodes
-        workflow.add_node("processor", PythonCodeNode(name="processor", code="result = {'data': 'processed'}"))
-        workflow.add_node("evaluator", PythonCodeNode(name="evaluator", code="result = {'quality': 0.8}"))
+        workflow.add_node(
+            "processor",
+            PythonCodeNode(name="processor", code="result = {'data': 'processed'}"),
+        )
+        workflow.add_node(
+            "evaluator",
+            PythonCodeNode(name="evaluator", code="result = {'quality': 0.8}"),
+        )
 
         # Mock the workflow methods to verify calls
         workflow.connect = MagicMock()
@@ -107,7 +113,9 @@ class TestCycleTemplatesOptimization:
         # Verify cycle builder chain was called correctly
         mock_cycle_builder.connect.assert_called_once_with("evaluator", "processor")
         mock_cycle_builder.max_iterations.assert_called_once_with(50)  # default
-        mock_cycle_builder.converge_when.assert_called_once_with("quality > 0.9")  # default
+        mock_cycle_builder.converge_when.assert_called_once_with(
+            "quality > 0.9"
+        )  # default
         mock_cycle_builder.build.assert_called_once()
 
         # Verify cycle_id is returned
@@ -118,8 +126,16 @@ class TestCycleTemplatesOptimization:
         workflow = Workflow("test_opt", "Test Optimization")
 
         # Add required nodes
-        workflow.add_node("custom_processor", PythonCodeNode(name="custom_processor", code="result = {'data': 'processed'}"))
-        workflow.add_node("custom_evaluator", PythonCodeNode(name="custom_evaluator", code="result = {'quality': 0.95}"))
+        workflow.add_node(
+            "custom_processor",
+            PythonCodeNode(
+                name="custom_processor", code="result = {'data': 'processed'}"
+            ),
+        )
+        workflow.add_node(
+            "custom_evaluator",
+            PythonCodeNode(name="custom_evaluator", code="result = {'quality': 0.95}"),
+        )
 
         # Mock the workflow methods
         workflow.connect = MagicMock()
@@ -154,8 +170,12 @@ class TestCycleTemplatesOptimization:
         workflow = Workflow("test_opt", "Test Optimization")
 
         # Add required nodes
-        workflow.add_node("processor", PythonCodeNode(name="processor", code="result = {}"))
-        workflow.add_node("evaluator", PythonCodeNode(name="evaluator", code="result = {}"))
+        workflow.add_node(
+            "processor", PythonCodeNode(name="processor", code="result = {}")
+        )
+        workflow.add_node(
+            "evaluator", PythonCodeNode(name="evaluator", code="result = {}")
+        )
 
         # Mock workflow methods
         workflow.connect = MagicMock()
@@ -168,7 +188,7 @@ class TestCycleTemplatesOptimization:
         workflow.create_cycle.return_value = mock_cycle_builder
 
         # Mock time to ensure consistent ID generation
-        with patch('kailash.workflow.templates.time.time', return_value=1234567890):
+        with patch("kailash.workflow.templates.time.time", return_value=1234567890):
             cycle_id = CycleTemplates.optimization_cycle(
                 workflow=workflow,
                 processor_node="processor",
@@ -186,7 +206,10 @@ class TestCycleTemplatesRetry:
         workflow = Workflow("test_retry", "Test Retry")
 
         # Add target node
-        workflow.add_node("api_call", PythonCodeNode(name="api_call", code="result = {'success': True}"))
+        workflow.add_node(
+            "api_call",
+            PythonCodeNode(name="api_call", code="result = {'success': True}"),
+        )
 
         # Mock workflow methods
         workflow.add_node = MagicMock()
@@ -214,7 +237,9 @@ class TestCycleTemplatesRetry:
         workflow = Workflow("test_retry", "Test Retry")
 
         # Add target node
-        workflow.add_node("custom_api", PythonCodeNode(name="custom_api", code="result = {}"))
+        workflow.add_node(
+            "custom_api", PythonCodeNode(name="custom_api", code="result = {}")
+        )
 
         # Mock workflow methods
         workflow.add_node = MagicMock()
@@ -328,8 +353,13 @@ class TestCycleTemplatesDataQuality:
         workflow = Workflow("test_quality", "Test Data Quality")
 
         # Add required nodes
-        workflow.add_node("cleaner", PythonCodeNode(name="cleaner", code="result = {'cleaned': True}"))
-        workflow.add_node("validator", PythonCodeNode(name="validator", code="result = {'quality': 0.96}"))
+        workflow.add_node(
+            "cleaner", PythonCodeNode(name="cleaner", code="result = {'cleaned': True}")
+        )
+        workflow.add_node(
+            "validator",
+            PythonCodeNode(name="validator", code="result = {'quality': 0.96}"),
+        )
 
         # Mock workflow methods to check for call without actual implementation
         workflow.connect = MagicMock()
@@ -348,8 +378,14 @@ class TestCycleTemplatesDataQuality:
         workflow = Workflow("test_quality", "Test Data Quality")
 
         # Add required nodes
-        workflow.add_node("advanced_cleaner", PythonCodeNode(name="advanced_cleaner", code="result = {}"))
-        workflow.add_node("advanced_validator", PythonCodeNode(name="advanced_validator", code="result = {}"))
+        workflow.add_node(
+            "advanced_cleaner",
+            PythonCodeNode(name="advanced_cleaner", code="result = {}"),
+        )
+        workflow.add_node(
+            "advanced_validator",
+            PythonCodeNode(name="advanced_validator", code="result = {}"),
+        )
 
         # Mock workflow methods
         workflow.connect = MagicMock()

@@ -139,6 +139,7 @@ class TestUserBehaviorTracking:
 class TestAnomalyDetection:
     """Test anomaly detection functionality."""
 
+    @pytest.mark.slow
     def test_detect_login_anomaly(self):
         """Test detecting anomalous login behavior."""
         try:

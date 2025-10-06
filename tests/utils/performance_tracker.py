@@ -69,7 +69,7 @@ class PerformanceTracker:
             "elapsed_time": self.elapsed_time,
             "threshold": self.threshold,
             "is_under_threshold": self.is_under_threshold() if self.threshold else None,
-            "is_over_threshold": self.is_over_threshold() if self.threshold else None
+            "is_over_threshold": self.is_over_threshold() if self.threshold else None,
         }
 
     def is_under_threshold(self) -> bool:
@@ -170,7 +170,8 @@ class PerformanceReport:
             return {"total_operations": 0, "operations": []}
 
         completed_trackers = [
-            tracker for tracker in self.trackers.values()
+            tracker
+            for tracker in self.trackers.values()
             if tracker.elapsed_time is not None
         ]
 
@@ -178,12 +179,10 @@ class PerformanceReport:
         avg_time = total_time / len(completed_trackers) if completed_trackers else 0
 
         threshold_checks = [
-            tracker for tracker in completed_trackers
-            if tracker.threshold is not None
+            tracker for tracker in completed_trackers if tracker.threshold is not None
         ]
         passed_thresholds = sum(
-            1 for tracker in threshold_checks
-            if tracker.is_under_threshold()
+            1 for tracker in threshold_checks if tracker.is_under_threshold()
         )
 
         return {
@@ -194,7 +193,7 @@ class PerformanceReport:
             "threshold_checks": len(threshold_checks),
             "passed_thresholds": passed_thresholds,
             "failed_thresholds": len(threshold_checks) - passed_thresholds,
-            "operations": [tracker.get_metrics() for tracker in completed_trackers]
+            "operations": [tracker.get_metrics() for tracker in completed_trackers],
         }
 
     def generate_report(self) -> str:
@@ -216,16 +215,18 @@ class PerformanceReport:
             f"Completed Operations: {summary['completed_operations']}",
             f"Total Time: {summary['total_time']:.3f}s",
             f"Average Time: {summary['average_time']:.3f}s",
-            ""
+            "",
         ]
 
         if summary["threshold_checks"] > 0:
-            lines.extend([
-                f"Threshold Checks: {summary['threshold_checks']}",
-                f"Passed: {summary['passed_thresholds']}",
-                f"Failed: {summary['failed_thresholds']}",
-                ""
-            ])
+            lines.extend(
+                [
+                    f"Threshold Checks: {summary['threshold_checks']}",
+                    f"Passed: {summary['passed_thresholds']}",
+                    f"Failed: {summary['failed_thresholds']}",
+                    "",
+                ]
+            )
 
         lines.append("Individual Operations:")
         lines.append("-" * 30)

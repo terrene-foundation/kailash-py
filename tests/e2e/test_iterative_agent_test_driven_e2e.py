@@ -10,7 +10,11 @@ from typing import Any, Dict
 import pytest
 
 from kailash.nodes.ai.iterative_llm_agent import ConvergenceMode, IterativeLLMAgentNode
-from kailash.nodes.validation import CodeValidationNode, WorkflowValidationNode, ValidationTestSuiteExecutorNode  # Force import validation nodes
+from kailash.nodes.validation import (
+    CodeValidationNode,
+    WorkflowValidationNode,
+    ValidationTestSuiteExecutorNode,
+)  # Force import validation nodes
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from tests.utils.docker_config import requires_docker, requires_ollama
@@ -322,7 +326,7 @@ result = {"workflow_code": workflow_code}
             {
                 "workflow_code": "",  # Will be populated from connection
                 "validate_execution": False,
-                "expected_nodes": ["step1", "step2"]
+                "expected_nodes": ["step1", "step2"],
             },
         )
 
@@ -361,15 +365,20 @@ result = {"test_suite": test_suite}
             "test_runner",
             {
                 "code": "",  # Will be populated from connection
-                "test_suite": []  # Will be populated from connection
-            }
+                "test_suite": [],  # Will be populated from connection
+            },
         )
 
         # Connect all nodes
         workflow.add_connection(
-            "workflow_generator", "result.workflow_code", "workflow_validator", "workflow_code"
+            "workflow_generator",
+            "result.workflow_code",
+            "workflow_validator",
+            "workflow_code",
         )
-        workflow.add_connection("test_generator", "result.test_code", "test_runner", "code")
+        workflow.add_connection(
+            "test_generator", "result.test_code", "test_runner", "code"
+        )
         workflow.add_connection(
             "suite_creator", "result.test_suite", "test_runner", "test_suite"
         )

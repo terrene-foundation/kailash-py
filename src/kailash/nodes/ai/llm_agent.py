@@ -1588,10 +1588,16 @@ class LLMAgentNode(Node):
         return enriched_messages
 
     def _mock_llm_response(
-        self, messages: list[dict], tools: list[dict], generation_config: dict, system_prompt: str = None
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        generation_config: dict,
+        system_prompt: str = None,
     ) -> dict[str, Any]:
         """Generate mock LLM response for testing."""
-        print(f"DEBUG: _mock_llm_response called with system_prompt: {system_prompt[:100] if system_prompt else 'None'}...")
+        print(
+            f"DEBUG: _mock_llm_response called with system_prompt: {system_prompt[:100] if system_prompt else 'None'}..."
+        )
         print(f"DEBUG: messages length: {len(messages)}")
         last_user_message = ""
         system_content = ""
@@ -1636,8 +1642,12 @@ class LLMAgentNode(Node):
         # DEBUG: Print what we're working with
         print(f"DEBUG MOCK: last_user_message='{last_user_message[:100]}...'")
         print(f"DEBUG MOCK: system_content='{system_content[:100]}...'")
-        print(f"DEBUG MOCK: combined_content contains 'train': {'train' in combined_content}")
-        print(f"DEBUG MOCK: combined_content contains 'travels': {'travels' in combined_content}")
+        print(
+            f"DEBUG MOCK: combined_content contains 'train': {'train' in combined_content}"
+        )
+        print(
+            f"DEBUG MOCK: combined_content contains 'travels': {'travels' in combined_content}"
+        )
 
         # Generate contextual mock response
         if has_tool_results:
@@ -1679,7 +1689,22 @@ class LLMAgentNode(Node):
                             },
                         }
                     )
-        elif any(keyword in combined_content for keyword in ["travels", "speed", "distance", "time", "calculate", "math", "problem", "solve", "km", "hours", "minutes"]):
+        elif any(
+            keyword in combined_content
+            for keyword in [
+                "travels",
+                "speed",
+                "distance",
+                "time",
+                "calculate",
+                "math",
+                "problem",
+                "solve",
+                "km",
+                "hours",
+                "minutes",
+            ]
+        ):
             # Handle mathematical word problems
             if "train" in combined_content and "travels" in combined_content:
                 response_content = """Step 1: Calculate the train's speed

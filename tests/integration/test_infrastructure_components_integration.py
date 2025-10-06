@@ -34,7 +34,7 @@ from tests.utils.mock_providers import (
     MockLLMProvider,
     MockServiceRegistry,
     create_mock_framework,
-    create_mock_agent
+    create_mock_agent,
 )
 
 # Test markers
@@ -46,19 +46,27 @@ class TestPerformanceTrackerIntegration:
 
     def test_performance_tracker_with_real_workflow_builder(self):
         """Performance tracker must accurately measure real WorkflowBuilder operations."""
-        with PerformanceTracker("workflow_builder_operations", threshold=2.0) as tracker:
+        with PerformanceTracker(
+            "workflow_builder_operations", threshold=2.0
+        ) as tracker:
             # Create real WorkflowBuilder
             workflow = WorkflowBuilder()
 
             # Add multiple nodes (real operations)
             for i in range(5):
-                workflow.add_node("PythonCodeNode", f"test_node_{i}", {
-                    "code": f"result = {{'node_id': {i}, 'message': 'Performance test node {i}'}}"
-                })
+                workflow.add_node(
+                    "PythonCodeNode",
+                    f"test_node_{i}",
+                    {
+                        "code": f"result = {{'node_id': {i}, 'message': 'Performance test node {i}'}}"
+                    },
+                )
 
             # Add connections between nodes (WorkflowBuilder uses add_connection)
             for i in range(4):
-                workflow.add_connection(f"test_node_{i}", "result", f"test_node_{i+1}", "input_data")
+                workflow.add_connection(
+                    f"test_node_{i}", "result", f"test_node_{i+1}", "input_data"
+                )
 
             # Build workflow
             built_workflow = workflow.build()
@@ -75,9 +83,13 @@ class TestPerformanceTrackerIntegration:
         """Performance tracker must measure real LocalRuntime execution accurately."""
         # Create workflow first
         workflow = WorkflowBuilder()
-        workflow.add_node("PythonCodeNode", "perf_test", {
-            "code": "import time; time.sleep(0.01); result = {'performance_test': True, 'timestamp': str(time.time())}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "perf_test",
+            {
+                "code": "import time; time.sleep(0.01); result = {'performance_test': True, 'timestamp': str(time.time())}"
+            },
+        )
 
         # Track runtime execution
         with PerformanceTracker("runtime_execution", threshold=3.0) as tracker:
@@ -102,9 +114,11 @@ class TestPerformanceTrackerIntegration:
             with PerformanceTracker(f"operation_{i}", threshold=1.0) as tracker:
                 # Real workflow operation
                 workflow = WorkflowBuilder()
-                workflow.add_node("PythonCodeNode", f"report_test_{i}", {
-                    "code": f"result = {{'operation': {i}, 'completed': True}}"
-                })
+                workflow.add_node(
+                    "PythonCodeNode",
+                    f"report_test_{i}",
+                    {"code": f"result = {{'operation': {i}, 'completed': True}}"},
+                )
 
                 runtime = LocalRuntime()
                 results, run_id = runtime.execute(workflow.build())
@@ -135,15 +149,19 @@ class TestTestFixturesIntegration:
         framework = kaizen.Framework(config=framework_config)
 
         # Verify framework initialization (Kaizen framework structure)
-        assert hasattr(framework, 'config')
-        assert hasattr(framework, 'runtime')
-        assert hasattr(framework, 'create_agent')
+        assert hasattr(framework, "config")
+        assert hasattr(framework, "runtime")
+        assert hasattr(framework, "create_agent")
 
         # Test framework functionality
         workflow = framework.create_workflow()
-        workflow.add_node("PythonCodeNode", "config_test", {
-            "code": "result = {'config_integration': True, 'framework_name': 'integration_test_framework'}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "config_test",
+            {
+                "code": "result = {'config_integration': True, 'framework_name': 'integration_test_framework'}"
+            },
+        )
 
         results, run_id = framework.execute(workflow.build())
         assert results["config_test"]["result"]["config_integration"] is True
@@ -162,9 +180,13 @@ class TestTestFixturesIntegration:
 
             # Test agent functionality
             workflow = agent.create_workflow()
-            workflow.add_node("PythonCodeNode", "agent_test", {
-                "code": f"result = {{'agent_name': '{agent_config['name']}', 'agent_type': '{agent_config['type']}', 'working': True}}"
-            })
+            workflow.add_node(
+                "PythonCodeNode",
+                "agent_test",
+                {
+                    "code": f"result = {{'agent_name': '{agent_config['name']}', 'agent_type': '{agent_config['type']}', 'working': True}}"
+                },
+            )
 
             results, run_id = agent.execute(workflow)
             agent_result = results["agent_test"]["result"]
@@ -187,7 +209,7 @@ class TestTestFixturesIntegration:
             workflow.add_node(
                 node_config["node_type"],
                 node_config["node_id"],
-                node_config["parameters"]
+                node_config["parameters"],
             )
 
             # Execute workflow
@@ -214,8 +236,11 @@ class TestTestFixturesIntegration:
 
         for sample_name, sample_data in data_samples.items():
             workflow = WorkflowBuilder()
-            workflow.add_node("PythonCodeNode", f"process_{sample_name}", {
-                "code": """
+            workflow.add_node(
+                "PythonCodeNode",
+                f"process_{sample_name}",
+                {
+                    "code": """
 processed_data = {
     'input_type': type(input_data).__name__,
     'input_keys': list(input_data.keys()) if isinstance(input_data, dict) else None,
@@ -224,9 +249,10 @@ processed_data = {
 }
 result = processed_data
 """,
-                "input_data": sample_data,
-                "sample_name": sample_name
-            })
+                    "input_data": sample_data,
+                    "sample_name": sample_name,
+                },
+            )
 
             results, run_id = runtime.execute(workflow.build())
             processed_result = results[f"process_{sample_name}"]["result"]
@@ -244,9 +270,9 @@ class TestMockProvidersIsolation:
     def test_mock_llm_provider_isolation(self):
         """Mock LLM provider must not interfere with real workflow execution."""
         # Set up mock provider
-        mock_llm = MockLLMProvider(custom_responses={
-            "test_prompt": "Mock response for testing"
-        })
+        mock_llm = MockLLMProvider(
+            custom_responses={"test_prompt": "Mock response for testing"}
+        )
 
         # Use mock provider
         mock_response = mock_llm.complete("test_prompt")
@@ -254,12 +280,15 @@ class TestMockProvidersIsolation:
 
         # Verify real Kaizen framework still works independently
         import kaizen
+
         framework = kaizen.Framework()
 
         workflow = framework.create_workflow()
-        workflow.add_node("PythonCodeNode", "isolation_test", {
-            "code": "result = {'real_framework': True, 'mock_unaffected': True}"
-        })
+        workflow.add_node(
+            "PythonCodeNode",
+            "isolation_test",
+            {"code": "result = {'real_framework': True, 'mock_unaffected': True}"},
+        )
 
         results, run_id = framework.execute(workflow.build())
         real_result = results["isolation_test"]["result"]
@@ -285,20 +314,25 @@ class TestMockProvidersIsolation:
 
         # Real framework operations should be unaffected
         import kaizen
+
         framework = kaizen.Framework()
 
         # Create multiple agents (real service management)
         agents = []
         for i in range(3):
-            agent = framework.create_agent(config={'name': f'real_agent_{i}'})
+            agent = framework.create_agent(config={"name": f"real_agent_{i}"})
             agents.append(agent)
 
         # Verify real agents work correctly
         for i, agent in enumerate(agents):
             workflow = agent.create_workflow()
-            workflow.add_node("PythonCodeNode", "registry_isolation", {
-                "code": f"result = {{'agent_index': {i}, 'real_agent': True, 'registry_test': True}}"
-            })
+            workflow.add_node(
+                "PythonCodeNode",
+                "registry_isolation",
+                {
+                    "code": f"result = {{'agent_index': {i}, 'real_agent': True, 'registry_test': True}}"
+                },
+            )
 
             results, run_id = agent.execute(workflow)
             agent_result = results["registry_isolation"]["result"]
@@ -325,6 +359,7 @@ class TestInfrastructureWorkflowIntegration:
 
             # Real framework
             import kaizen
+
             framework = kaizen.Framework(config=config["framework"])
 
             # Create agents using test configurations
@@ -338,12 +373,17 @@ class TestInfrastructureWorkflowIntegration:
             performance_report = PerformanceReport()
 
             for agent_name, agent in agents.items():
-                with PerformanceTracker(f"agent_{agent_name}_execution", threshold=3.0) as agent_tracker:
+                with PerformanceTracker(
+                    f"agent_{agent_name}_execution", threshold=3.0
+                ) as agent_tracker:
                     workflow = agent.create_workflow()
 
                     # Use test data in workflow
-                    workflow.add_node("PythonCodeNode", f"{agent_name}_task", {
-                        "code": """
+                    workflow.add_node(
+                        "PythonCodeNode",
+                        f"{agent_name}_task",
+                        {
+                            "code": """
 result = {
     'agent_name': agent_config['name'],
     'agent_type': agent_config['type'],
@@ -353,9 +393,10 @@ result = {
     'execution_timestamp': str(time.time())
 }
 """,
-                        "agent_config": agent.config,
-                        "test_data": test_data
-                    })
+                            "agent_config": agent.config,
+                            "test_data": test_data,
+                        },
+                    )
 
                     results, run_id = agent.execute(workflow)
                     all_results[agent_name] = (results, run_id)
@@ -386,7 +427,9 @@ result = {
         """Test infrastructure can handle scaling requirements."""
         light_scenario = test_fixtures.load_test_scenarios()[0]  # Light load scenario
 
-        with PerformanceTracker("scaling_test", threshold=light_scenario["expected_max_time"]) as tracker:
+        with PerformanceTracker(
+            "scaling_test", threshold=light_scenario["expected_max_time"]
+        ) as tracker:
             import kaizen
 
             framework = kaizen.Framework()
@@ -395,24 +438,31 @@ result = {
             # Create agents according to scenario
             agents = []
             for i in range(light_scenario["agents"]):
-                agent = framework.create_agent(config={
-                    'name': f'scale_test_agent_{i}',
-                    'capabilities': ['scaling_test']
-                })
+                agent = framework.create_agent(
+                    config={
+                        "name": f"scale_test_agent_{i}",
+                        "capabilities": ["scaling_test"],
+                    }
+                )
                 agents.append(agent)
 
             # Execute workflows per agent
             all_executions = []
             for agent in agents:
                 for workflow_idx in range(light_scenario["workflows_per_agent"]):
-                    with PerformanceTracker(f"workflow_{agent.config['name']}_{workflow_idx}", threshold=2.0) as workflow_tracker:
+                    with PerformanceTracker(
+                        f"workflow_{agent.config['name']}_{workflow_idx}", threshold=2.0
+                    ) as workflow_tracker:
                         workflow = agent.create_workflow()
 
                         # Add nodes per workflow
                         for node_idx in range(light_scenario["nodes_per_workflow"]):
                             node_id = f"scale_node_{workflow_idx}_{node_idx}"
-                            workflow.add_node("PythonCodeNode", node_id, {
-                                "code": f"""
+                            workflow.add_node(
+                                "PythonCodeNode",
+                                node_id,
+                                {
+                                    "code": f"""
 result = {{
     'agent': '{agent.config["name"]}',
     'workflow': {workflow_idx},
@@ -421,7 +471,8 @@ result = {{
     'timestamp': str(time.time())
 }}
 """
-                            })
+                                },
+                            )
 
                         results, run_id = agent.execute(workflow)
                         all_executions.append((agent, results, run_id))
@@ -429,7 +480,9 @@ result = {{
                     performance_report.add_tracker(workflow_tracker)
 
             # Verify scaling results
-            expected_executions = light_scenario["agents"] * light_scenario["workflows_per_agent"]
+            expected_executions = (
+                light_scenario["agents"] * light_scenario["workflows_per_agent"]
+            )
             assert len(all_executions) == expected_executions
 
             # Verify all executions succeeded

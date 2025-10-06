@@ -27,6 +27,7 @@ except ImportError:
 # Test Fixtures
 # ============================================
 
+
 @pytest.fixture
 def default_config():
     """Create BaseAgentConfig with all defaults."""
@@ -47,7 +48,7 @@ def custom_config():
         max_tokens=1000,
         signature_programming_enabled=True,
         optimization_enabled=True,
-        logging_enabled=True
+        logging_enabled=True,
     )
 
 
@@ -56,15 +57,13 @@ def minimal_config():
     """Create BaseAgentConfig with minimal required parameters."""
     if BaseAgentConfig is None:
         pytest.skip("BaseAgentConfig not yet implemented")
-    return BaseAgentConfig(
-        llm_provider="ollama",
-        model="llama3.2"
-    )
+    return BaseAgentConfig(llm_provider="ollama", model="llama3.2")
 
 
 # ============================================
 # 1. Default Values Tests (5 tests)
 # ============================================
+
 
 class TestDefaultValues:
     """Test all default values are applied correctly."""
@@ -117,6 +116,7 @@ class TestDefaultValues:
 # ============================================
 # 2. Parameter Validation Tests (10 tests)
 # ============================================
+
 
 class TestParameterValidation:
     """Test parameter validation and type checking."""
@@ -238,9 +238,7 @@ class TestParameterValidation:
 
         # Valid boolean values
         config = BaseAgentConfig(
-            logging_enabled=True,
-            performance_enabled=False,
-            memory_enabled=True
+            logging_enabled=True, performance_enabled=False, memory_enabled=True
         )
         assert config.logging_enabled is True
         assert config.performance_enabled is False
@@ -250,6 +248,7 @@ class TestParameterValidation:
 # ============================================
 # 3. Configuration Immutability Tests (4 tests)
 # ============================================
+
 
 class TestConfigurationImmutability:
     """Test configuration immutability if frozen dataclass."""
@@ -277,6 +276,7 @@ class TestConfigurationImmutability:
 
         # Create modified copy
         from dataclasses import replace
+
         modified = replace(original, temperature=0.5)
 
         assert modified.temperature == 0.5
@@ -302,7 +302,7 @@ class TestConfigurationImmutability:
             "llm_provider": "ollama",
             "model": "llama3.2",
             "temperature": 0.3,
-            "logging_enabled": True
+            "logging_enabled": True,
         }
 
         config = BaseAgentConfig(**config_dict)
@@ -316,6 +316,7 @@ class TestConfigurationImmutability:
 # 4. Provider Configuration Tests (6 tests)
 # ============================================
 
+
 class TestProviderConfiguration:
     """Test provider-specific configuration."""
 
@@ -327,10 +328,7 @@ class TestProviderConfiguration:
         config = BaseAgentConfig(
             llm_provider="ollama",
             model="llama3.2",
-            provider_config={
-                "base_url": "http://localhost:11434",
-                "timeout": 30
-            }
+            provider_config={"base_url": "http://localhost:11434", "timeout": 30},
         )
 
         assert config.llm_provider == "ollama"
@@ -345,10 +343,7 @@ class TestProviderConfiguration:
         config = BaseAgentConfig(
             llm_provider="openai",
             model="gpt-4",
-            provider_config={
-                "api_key": "test-key",
-                "organization": "test-org"
-            }
+            provider_config={"api_key": "test-key", "organization": "test-org"},
         )
 
         assert config.llm_provider == "openai"
@@ -365,8 +360,8 @@ class TestProviderConfiguration:
             model="custom-model",
             provider_config={
                 "endpoint": "https://custom.api/v1",
-                "headers": {"Authorization": "Bearer token"}
-            }
+                "headers": {"Authorization": "Bearer token"},
+            },
         )
 
         assert config.llm_provider == "custom"
@@ -399,10 +394,7 @@ class TestProviderConfiguration:
         if BaseAgentConfig is None:
             pytest.skip("BaseAgentConfig not yet implemented")
 
-        config = BaseAgentConfig(
-            llm_provider="openai",
-            provider_config={}
-        )
+        config = BaseAgentConfig(llm_provider="openai", provider_config={})
 
         assert config.provider_config == {}
 
@@ -410,6 +402,7 @@ class TestProviderConfiguration:
 # ============================================
 # 5. Feature Flag Tests (6 tests)
 # ============================================
+
 
 class TestFeatureFlags:
     """Test feature flag configurations."""
@@ -429,7 +422,7 @@ class TestFeatureFlags:
             batch_processing_enabled=True,
             memory_enabled=True,
             transparency_enabled=True,
-            mcp_enabled=True
+            mcp_enabled=True,
         )
 
         assert config.signature_programming_enabled is True
@@ -458,7 +451,7 @@ class TestFeatureFlags:
             batch_processing_enabled=False,
             memory_enabled=False,
             transparency_enabled=False,
-            mcp_enabled=False
+            mcp_enabled=False,
         )
 
         assert config.signature_programming_enabled is False
@@ -480,7 +473,7 @@ class TestFeatureFlags:
         config = BaseAgentConfig(
             signature_programming_enabled=True,
             optimization_enabled=False,
-            monitoring_enabled=True
+            monitoring_enabled=True,
         )
 
         assert config.signature_programming_enabled is True
@@ -496,7 +489,7 @@ class TestFeatureFlags:
             logging_enabled=True,
             performance_enabled=False,
             error_handling_enabled=True,
-            batch_processing_enabled=False
+            batch_processing_enabled=False,
         )
 
         assert config.logging_enabled is True
@@ -526,19 +519,14 @@ class TestFeatureFlags:
 
         # Enterprise features: logging + performance + error handling
         enterprise_config = BaseAgentConfig(
-            logging_enabled=True,
-            performance_enabled=True,
-            error_handling_enabled=True
+            logging_enabled=True, performance_enabled=True, error_handling_enabled=True
         )
         assert enterprise_config.logging_enabled is True
         assert enterprise_config.performance_enabled is True
         assert enterprise_config.error_handling_enabled is True
 
         # Development features: monitoring + transparency
-        dev_config = BaseAgentConfig(
-            monitoring_enabled=True,
-            transparency_enabled=True
-        )
+        dev_config = BaseAgentConfig(monitoring_enabled=True, transparency_enabled=True)
         assert dev_config.monitoring_enabled is True
         assert dev_config.transparency_enabled is True
 
@@ -546,6 +534,7 @@ class TestFeatureFlags:
 # ============================================
 # 6. Strategy Configuration Tests (4 tests)
 # ============================================
+
 
 class TestStrategyConfiguration:
     """Test strategy-specific configuration."""
@@ -566,10 +555,7 @@ class TestStrategyConfiguration:
         if BaseAgentConfig is None:
             pytest.skip("BaseAgentConfig not yet implemented")
 
-        config = BaseAgentConfig(
-            strategy_type="multi_cycle",
-            max_cycles=10
-        )
+        config = BaseAgentConfig(strategy_type="multi_cycle", max_cycles=10)
 
         assert config.strategy_type == "multi_cycle"
         assert config.max_cycles == 10
@@ -603,6 +589,7 @@ class TestStrategyConfiguration:
 # 7. Comprehensive Integration Tests (3 tests)
 # ============================================
 
+
 class TestConfigurationIntegration:
     """Test complete configuration scenarios."""
 
@@ -620,7 +607,7 @@ class TestConfigurationIntegration:
             strategy_type="single_shot",
             logging_enabled=True,
             performance_enabled=True,
-            error_handling_enabled=True
+            error_handling_enabled=True,
         )
 
         assert config.llm_provider is None
@@ -641,7 +628,7 @@ class TestConfigurationIntegration:
             max_cycles=10,
             strategy_type="multi_cycle",
             mcp_enabled=True,
-            logging_enabled=True
+            logging_enabled=True,
         )
 
         assert config.llm_provider == "openai"
@@ -659,7 +646,7 @@ class TestConfigurationIntegration:
             llm_provider="ollama",
             model="llama3.2",
             logging_enabled=True,
-            error_handling_enabled=True
+            error_handling_enabled=True,
         )
 
         # Verify essential production features
@@ -672,6 +659,7 @@ class TestConfigurationIntegration:
 # 8. Edge Cases and Error Handling (3 tests)
 # ============================================
 
+
 class TestEdgeCases:
     """Test edge cases and error conditions."""
 
@@ -681,10 +669,7 @@ class TestEdgeCases:
             pytest.skip("BaseAgentConfig not yet implemented")
 
         config = BaseAgentConfig(
-            llm_provider=None,
-            model=None,
-            max_tokens=None,
-            provider_config=None
+            llm_provider=None, model=None, max_tokens=None, provider_config=None
         )
 
         assert config.llm_provider is None
@@ -707,20 +692,11 @@ class TestEdgeCases:
         if BaseAgentConfig is None:
             pytest.skip("BaseAgentConfig not yet implemented")
 
-        config1 = BaseAgentConfig(
-            llm_provider="openai",
-            temperature=0.1
-        )
+        config1 = BaseAgentConfig(llm_provider="openai", temperature=0.1)
 
-        config2 = BaseAgentConfig(
-            llm_provider="openai",
-            temperature=0.1
-        )
+        config2 = BaseAgentConfig(llm_provider="openai", temperature=0.1)
 
-        config3 = BaseAgentConfig(
-            llm_provider="ollama",
-            temperature=0.1
-        )
+        config3 = BaseAgentConfig(llm_provider="ollama", temperature=0.1)
 
         # Same values should be equal
         assert config1 == config2

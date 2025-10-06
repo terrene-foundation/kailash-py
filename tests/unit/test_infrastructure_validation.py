@@ -210,10 +210,7 @@ class TestMockProviders:
         """Mock LLM provider must support custom response mapping."""
         from tests.utils.mock_providers import MockLLMProvider
 
-        custom_responses = {
-            "hello": "Hi there!",
-            "test": "This is a test response"
-        }
+        custom_responses = {"hello": "Hi there!", "test": "This is a test response"}
 
         provider = MockLLMProvider(custom_responses=custom_responses)
 
@@ -271,7 +268,7 @@ class TestMockProviders:
 class TestDockerEnvironmentValidation:
     """Test Docker environment validation utilities."""
 
-    @patch('subprocess.run')
+    @patch("subprocess.run")
     def test_docker_service_health_check(self, mock_subprocess):
         """Docker health check must validate service availability."""
         from tests.utils.test_fixtures import docker_service_health_check
@@ -376,7 +373,10 @@ class TestTestUtilitiesIntegration:
     def test_complete_test_utilities_workflow(self):
         """Test complete workflow using all test utilities."""
         from tests.utils.performance_tracker import PerformanceTracker
-        from tests.utils.test_fixtures import integration_test_config, test_agent_configs
+        from tests.utils.test_fixtures import (
+            integration_test_config,
+            test_agent_configs,
+        )
         from tests.utils.mock_providers import MockLLMProvider, MockServiceRegistry
 
         # Setup complete test environment
@@ -400,7 +400,7 @@ class TestTestUtilitiesIntegration:
                 agent = {
                     "name": agent_config["name"],
                     "llm": registry.get("llm"),
-                    "config": agent_config
+                    "config": agent_config,
                 }
                 agents.append(agent)
 
