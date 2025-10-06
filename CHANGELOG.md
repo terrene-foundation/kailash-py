@@ -36,6 +36,28 @@ The changelog has been reorganized into individual files for better management. 
 
 ### Core SDK Releases
 
+### [0.9.19] - 2025-10-06
+
+**Provider Registry Fix & Multi-Modal Support Release**
+
+Critical bug fix enabling custom mock providers and Kaizen AI framework integration.
+
+#### Fixed
+- 🐛 **Mock Provider Bypass**: Removed hardcoded `if provider == "mock"` logic from LLMAgentNode
+- 🐛 **Tool Execution Flow**: Unified provider response generation for all providers
+- 🐛 **Provider Registry**: All providers now use consistent registry path
+
+#### Added
+- ✅ **Custom Mock Provider Support**: Enables signature-aware mock providers (e.g., KaizenMockProvider)
+- ✅ **Multi-Modal Foundation**: Foundation for vision/audio processing in Kaizen framework
+- ✅ **Enhanced Testing**: 510+ tests passing with custom mock providers
+
+#### Changed
+- ⚡ **Consistent Registry Usage**: All providers use `_provider_llm_response()` method
+- 🧹 **Code Cleanup**: Removed obsolete a2a_backup.py (1,807 lines)
+
+**Full Details**: [v0.9.19 Changelog](sdk-users/6-reference/changelogs/releases/v0.9.19-provider-registry-fix.md)
+
 ### [0.9.11] - 2025-08-04
 
 **Testing Excellence & DataFlow Integration Enhancement Release**
