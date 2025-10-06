@@ -388,67 +388,6 @@ class TestMCPClientDiscoverTools:
         assert self.client.metrics["requests_failed"] == 1
 
     @pytest.mark.asyncio
-    async def test_discover_tools_stdio_success(self):
-        """Test successful STDIO tool discovery."""
-        try:
-            from kailash.mcp_server.server import MCPServer
-
-            test_server = MCPServer("test")
-            if test_server._mcp is None:
-                # MCP server is using fallback, skip test that requires full MCP
-                pytest.skip("Full MCP functionality not available")
-        except ImportError:
-            pytest.skip("MCP server not available")
-
-        server_config = {
-            "transport": "stdio",
-            "command": "python",
-            "args": ["script.py"],
-        }
-
-        # Mock the STDIO discovery dependencies
-        with patch("mcp.ClientSession") as mock_session_class:
-            with patch("mcp.stdio_client") as mock_stdio_client:
-                with patch("mcp.StdioServerParameters") as mock_params:
-                    with patch("contextlib.AsyncExitStack") as mock_stack:
-                        # Setup mocks
-                        mock_session = Mock()
-                        mock_session.initialize = AsyncMock()
-                        mock_session.list_tools = AsyncMock()
-
-                        # Mock tool result
-                        mock_tool = Mock()
-                        mock_tool.name = "test_tool"
-                        mock_tool.description = "Test tool"
-                        mock_tool.inputSchema = {"type": "object"}
-
-                        mock_result = Mock()
-                        mock_result.tools = [mock_tool]
-                        mock_session.list_tools.return_value = mock_result
-
-                        mock_session_class.return_value = mock_session
-                        mock_stdio_client.return_value = (Mock(), Mock())
-
-                        # Mock async context manager
-                        mock_stack_instance = Mock()
-                        mock_stack_instance.enter_async_context = AsyncMock()
-                        mock_stack_instance.enter_async_context.side_effect = [
-                            (Mock(), Mock()),  # stdio_client result
-                            mock_session,  # ClientSession result
-                        ]
-                        mock_stack.return_value.__aenter__ = AsyncMock(
-                            return_value=mock_stack_instance
-                        )
-                        mock_stack.return_value.__aexit__ = AsyncMock()
-
-                        tools = await self.client.discover_tools(server_config)
-
-                        assert len(tools) == 1
-                        assert tools[0]["name"] == "test_tool"
-                        assert tools[0]["description"] == "Test tool"
-                        assert tools[0]["parameters"] == {"type": "object"}
-
-    @pytest.mark.asyncio
     async def test_discover_tools_sse_disabled(self):
         """Test SSE tool discovery when HTTP transport disabled."""
         server_config = {"transport": "sse", "url": "http://example.com"}

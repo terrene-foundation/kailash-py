@@ -25,8 +25,8 @@ class TestRoleManagementNode:
     def setup_method(self):
         """Setup for each test method."""
         self.db_config = {
-            "connection_string": "postgresql://test:test@localhost/test",
-            "database_type": "postgresql",
+            "connection_string": "sqlite:///:memory:",
+            "database_type": "sqlite",
         }
         self.node = RoleManagementNode(database_config=self.db_config)
         self.mock_db = Mock()

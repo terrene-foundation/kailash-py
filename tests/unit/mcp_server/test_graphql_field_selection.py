@@ -1,6 +1,6 @@
 """Unit tests for GraphQL-style field selection in MCP resource subscriptions."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -298,7 +298,7 @@ class TestGraphQLFieldSelection:
         change = ResourceChange(
             type=ResourceChangeType.UPDATED,
             uri="file:///document.json",
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(UTC),
         )
 
         await subscription_manager.process_resource_change(change)

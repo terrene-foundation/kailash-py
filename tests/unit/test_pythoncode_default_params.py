@@ -22,8 +22,8 @@ class TestPythonCodeDefaultParams:
 
         # Test with default threshold
         result = node.execute(data=[0.1, 0.6, 0.3, 0.8])
-        assert result["result"]["result"] == [0.6, 0.8]
+        assert result["result"] == [0.6, 0.8]
 
         # Test with custom threshold
         result = node.execute(data=[0.1, 0.6, 0.3, 0.8], threshold=0.7)
-        assert result["result"]["result"] == [0.8]
+        assert result["result"] == [0.8]

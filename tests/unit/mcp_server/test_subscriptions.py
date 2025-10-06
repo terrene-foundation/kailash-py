@@ -1,7 +1,7 @@
 """Unit tests for MCP server resource subscription functionality."""
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Dict, Optional, Set
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -371,7 +371,7 @@ class TestResourceSubscriptionManager:
             change = ResourceChange(
                 type=ResourceChangeType.UPDATED,
                 uri="file:///data.json",
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(UTC),
             )
             await manager.process_resource_change(change)
 

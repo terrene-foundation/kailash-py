@@ -114,10 +114,18 @@ class MCPTestClient:
         start_time = time.time()
 
         while time.time() - start_time < timeout:
-            # Check notifications for sampling request
+            # Check notifications for sampling request (server-to-client notifications)
             for notif in self.notifications:
                 if notif.get("method") == "sampling/createMessage":
                     return notif
+
+            # Check responses for sampling request (server-to-client requests)
+            for resp in list(self.responses.values()):
+                if resp.get("method") == "sampling/createMessage":
+                    # Remove from responses since we're handling it
+                    if "id" in resp:
+                        self.responses.pop(resp["id"], None)
+                    return resp
 
             await asyncio.sleep(0.1)
 
@@ -404,6 +412,9 @@ class TestSamplingCreateMessageE2E:
             assert "result" in result
             assert result["result"]["status"] == "sampling_requested"
             assert "sampling_id" in result["result"]
+
+            # Give the server time to send the sampling request
+            await asyncio.sleep(0.1)
 
             # Sampling client should receive the request
             sampling_req = await sampling_client.wait_for_sampling_request()

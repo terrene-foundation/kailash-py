@@ -242,7 +242,7 @@ class TestWorkflowInputHandler:
         user_fetcher.config = {}
         mock_workflow._nodes = {"user_fetcher": user_fetcher}
 
-        config = {"DATABASE_URL": "postgresql://test"}
+        config = {"DATABASE_URL": "sqlite:///:memory:"}
 
         fix_login_workflow(mock_workflow, config)
 
@@ -255,7 +255,7 @@ class TestWorkflowInputHandler:
         assert user_fetcher.config["tenant_id"] == "default"
         assert (
             user_fetcher.config["database_config"]["connection_string"]
-            == "postgresql://test"
+            == "sqlite:///:memory:"
         )
         assert user_fetcher.config["database_config"]["database_type"] == "postgresql"
 

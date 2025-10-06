@@ -11,8 +11,8 @@ from kailash.security import SecurityError
 from kailash.workflow.validation import IssueSeverity, ValidationIssue
 
 
-class TestSecureGovernedNode(SecureGovernedNode):
-    """Test implementation of SecureGovernedNode."""
+class SampleSecureGovernedNode(SecureGovernedNode):
+    """Sample implementation of SecureGovernedNode for testing."""
 
     def get_parameters(self):
         return {
@@ -48,11 +48,11 @@ class TestGovernanceNodes:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.test_node = TestSecureGovernedNode(enforce_validation=True)
+        self.test_node = SampleSecureGovernedNode(enforce_validation=True)
 
     def test_secure_governed_node_initialization(self):
         """Test SecureGovernedNode proper initialization."""
-        node = TestSecureGovernedNode(
+        node = SampleSecureGovernedNode(
             enforce_validation=True, security_level="high", audit_enabled=True
         )
 
@@ -151,7 +151,7 @@ class TestGovernanceNodes:
     def test_security_mixin_integration(self):
         """Test integration with SecurityMixin."""
         # Test with security enabled
-        node = TestSecureGovernedNode(security_level="high")
+        node = SampleSecureGovernedNode(security_level="high")
 
         # Check that security methods are available
         assert hasattr(node, "validate_and_sanitize_inputs")
@@ -167,7 +167,7 @@ class TestGovernanceNodes:
         """Test audit logging integration."""
         # Create node with mocked audit_log from the start
         with patch("kailash.nodes.governance.logger") as mock_logger:
-            node = TestSecureGovernedNode(audit_enabled=True)
+            node = SampleSecureGovernedNode(audit_enabled=True)
 
             # Just check that audit logging is enabled and accessible
             assert node.audit_enabled is True
@@ -180,7 +180,7 @@ class TestGovernanceNodes:
     def test_governance_compliance_validation_on_init(self):
         """Test governance compliance validation during initialization."""
         # This should succeed for properly implemented nodes
-        node = TestSecureGovernedNode(enforce_validation=True)
+        node = SampleSecureGovernedNode(enforce_validation=True)
         assert node.enforce_validation is True
 
     def test_governance_compliance_failure_on_init(self):
@@ -198,7 +198,7 @@ class TestGovernanceNodes:
     def test_validation_enforcement_can_be_disabled(self):
         """Test that validation enforcement can be disabled."""
         # Create node with validation disabled
-        node = TestSecureGovernedNode(enforce_validation=False)
+        node = SampleSecureGovernedNode(enforce_validation=False)
 
         # Should execute successfully even with parameter issues
         # (though security validation may still apply)
@@ -255,7 +255,7 @@ class TestGovernanceNodes:
 
     def test_error_handling_with_audit_logging(self):
         """Test error handling includes audit logging."""
-        node = TestSecureGovernedNode(audit_enabled=True)
+        node = SampleSecureGovernedNode(audit_enabled=True)
 
         # Since LoggingMixin might not have log_error_with_traceback,
         # just test that errors are properly raised
@@ -286,7 +286,7 @@ class TestGovernanceNodes:
     def test_performance_stats_integration(self):
         """Test performance stats are included in governance status."""
         # Create node with performance tracking
-        node = TestSecureGovernedNode()
+        node = SampleSecureGovernedNode()
 
         # Execute to generate some performance data
         node.execute(input_text="test")
@@ -297,11 +297,11 @@ class TestGovernanceNodes:
     def test_security_level_enforcement(self):
         """Test different security levels affect behavior."""
         # High security node
-        high_security = TestSecureGovernedNode(security_level="high")
+        high_security = SampleSecureGovernedNode(security_level="high")
         assert high_security.security_level == "high"
 
         # Medium security node
-        medium_security = TestSecureGovernedNode(security_level="medium")
+        medium_security = SampleSecureGovernedNode(security_level="medium")
         assert medium_security.security_level == "medium"
 
         # Both should work but with different security configs

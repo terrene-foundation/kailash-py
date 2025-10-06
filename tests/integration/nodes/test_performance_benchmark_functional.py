@@ -1,4 +1,9 @@
-"""Functional tests for nodes/monitoring/performance_benchmark.py that verify actual performance monitoring."""
+"""Functional tests for nodes/monitoring/performance_benchmark.py that verify actual performance monitoring.
+
+NOTE: This test currently uses some mocking and could be enhanced to use real WorkflowBuilder
+and LocalRuntime for true integration testing. Consider refactoring to follow pure integration
+testing patterns with real infrastructure.
+"""
 
 import gc
 import random

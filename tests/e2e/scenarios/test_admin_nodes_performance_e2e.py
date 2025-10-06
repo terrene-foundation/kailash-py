@@ -37,6 +37,22 @@ class TestAdminNodesPerformanceE2E:
     @classmethod
     def setup_class(cls):
         """Set up performance test environment."""
+        # Check if PostgreSQL is available before proceeding
+        try:
+            import psycopg2
+
+            conn = psycopg2.connect(
+                host="localhost",
+                port=5434,
+                database="kailash_test",
+                user="test_user",
+                password="test_password",
+                connect_timeout=3,
+            )
+            conn.close()
+        except Exception:
+            pytest.skip("PostgreSQL test database not available")
+
         cls.db_config = {
             "connection_string": os.getenv(
                 "TEST_DB_URL",
