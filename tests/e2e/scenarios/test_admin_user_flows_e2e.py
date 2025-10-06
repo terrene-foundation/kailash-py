@@ -143,6 +143,22 @@ class TestAdminUserFlowsE2E:
 
     def setup_method(self):
         """Set up test environment."""
+        # Check if PostgreSQL is available before proceeding
+        try:
+            import psycopg2
+
+            conn = psycopg2.connect(
+                host="localhost",
+                port=5434,
+                database="kailash_test",
+                user="test_user",
+                password="test_password",
+                connect_timeout=3,
+            )
+            conn.close()
+        except Exception:
+            pytest.skip("PostgreSQL test database not available")
+
         self.db_config = {
             "connection_string": get_postgres_connection_string(),
             "database_type": "postgresql",

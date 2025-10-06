@@ -9,7 +9,7 @@ import uuid
 import weakref
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Union
 
 # Optional Redis support
@@ -103,7 +103,7 @@ class DataEnrichmentTransformer(ResourceTransformer):
 
         # Add transformation metadata
         enriched_data["__transformation"] = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "enriched_fields": list(self.enrichment_functions.keys()),
             "transformer": "DataEnrichmentTransformer",
         }
@@ -133,7 +133,7 @@ class FormatConverterTransformer(ResourceTransformer):
 
         # Add transformation metadata
         converted_data["__transformation"] = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "conversions_applied": list(self.conversions.keys()),
             "transformer": "FormatConverterTransformer",
         }
@@ -213,7 +213,7 @@ class AggregationTransformer(ResourceTransformer):
 
         # Add transformation metadata
         aggregated_data["__transformation"] = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "sources": list(self.data_sources.keys()),
             "transformer": "AggregationTransformer",
         }
@@ -285,7 +285,7 @@ class TransformationPipeline:
             "uri_pattern": subscription.uri_pattern,
             "fields": subscription.fields,
             "fragments": subscription.fragments,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         transformed_data = resource_data
@@ -332,7 +332,7 @@ class TransformationPipeline:
                     transformation_error = {
                         "transformer": transformer.__class__.__name__,
                         "error": str(e),
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                     }
                     pipeline_metadata["errors"].append(transformation_error)
 
@@ -477,7 +477,7 @@ class CursorManager:
     def generate_cursor(self) -> str:
         """Generate a unique cursor."""
         cursor_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow()
+        timestamp = datetime.now(UTC)
 
         cursor_data = f"{cursor_id}:{timestamp.isoformat()}"
         cursor = hashlib.sha256(cursor_data.encode()).hexdigest()[:16]
@@ -501,7 +501,7 @@ class CursorManager:
             return False
 
         cursor_data = self._cursors[cursor]
-        age = datetime.utcnow() - cursor_data["created_at"]
+        age = datetime.now(UTC) - cursor_data["created_at"]
 
         if age > timedelta(seconds=self.ttl_seconds):
             # Clean up expired cursor
@@ -520,7 +520,7 @@ class CursorManager:
     async def cleanup_expired(self):
         """Remove expired cursors."""
         async with self._lock:
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             expired = []
 
             for cursor, data in self._cursors.items():
@@ -551,7 +551,7 @@ class ResourceMonitor:
             self._resource_states[uri] = {
                 "hash": self._compute_hash(content),
                 "content": content,
-                "last_checked": datetime.utcnow(),
+                "last_checked": datetime.now(UTC),
             }
 
     def is_monitored(self, uri: str) -> bool:
@@ -570,12 +570,12 @@ class ResourceMonitor:
                 self._resource_states[uri] = {
                     "hash": new_hash,
                     "content": content,
-                    "last_checked": datetime.utcnow(),
+                    "last_checked": datetime.now(UTC),
                 }
                 return ResourceChange(
                     type=ResourceChangeType.CREATED,
                     uri=uri,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                 )
 
             old_hash = self._resource_states[uri]["hash"]
@@ -585,16 +585,16 @@ class ResourceMonitor:
                 self._resource_states[uri] = {
                     "hash": new_hash,
                     "content": content,
-                    "last_checked": datetime.utcnow(),
+                    "last_checked": datetime.now(UTC),
                 }
                 return ResourceChange(
                     type=ResourceChangeType.UPDATED,
                     uri=uri,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                 )
 
             # No change
-            self._resource_states[uri]["last_checked"] = datetime.utcnow()
+            self._resource_states[uri]["last_checked"] = datetime.now(UTC)
             return None
 
     async def check_for_deletion(self, uri: str) -> Optional[ResourceChange]:
@@ -605,7 +605,7 @@ class ResourceMonitor:
                 return ResourceChange(
                     type=ResourceChangeType.DELETED,
                     uri=uri,
-                    timestamp=datetime.utcnow(),
+                    timestamp=datetime.now(UTC),
                 )
             return None
 
@@ -1279,8 +1279,8 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
         instance_key = f"mcp:instances:{self.server_instance_id}"
         instance_data = {
             "id": self.server_instance_id,
-            "registered_at": datetime.utcnow().isoformat(),
-            "last_heartbeat": datetime.utcnow().isoformat(),
+            "registered_at": datetime.now(UTC).isoformat(),
+            "last_heartbeat": datetime.now(UTC).isoformat(),
             "subscriptions": 0,
         }
 
@@ -1308,7 +1308,7 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
 
                 instance_key = f"mcp:instances:{self.server_instance_id}"
                 await self.redis_client.hset(
-                    instance_key, "last_heartbeat", datetime.utcnow().isoformat()
+                    instance_key, "last_heartbeat", datetime.now(UTC).isoformat()
                 )
                 await self.redis_client.expire(instance_key, self.instance_timeout)
 
@@ -1348,7 +1348,7 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
                     if last_heartbeat:
                         try:
                             heartbeat_time = datetime.fromisoformat(last_heartbeat)
-                            age = (datetime.utcnow() - heartbeat_time).total_seconds()
+                            age = (datetime.now(UTC) - heartbeat_time).total_seconds()
 
                             if age < self.instance_timeout:
                                 current_instances.add(instance_id)

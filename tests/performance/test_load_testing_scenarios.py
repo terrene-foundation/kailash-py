@@ -12,6 +12,10 @@ Test Scenarios:
 - Failure injection and recovery testing
 - Long-running endurance testing
 - Performance regression detection
+- Async workflow stress testing (high-concurrency async operations)
+
+Note: This framework consolidates all performance testing. Previous scattered
+performance tests from e2e/ have been moved here to eliminate duplication.
 """
 
 import asyncio

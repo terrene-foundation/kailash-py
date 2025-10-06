@@ -41,11 +41,8 @@ class TestAsyncSQLParameterConversion:
         """Test conversion of PostgreSQL-style $1, $2 placeholders."""
         node = AsyncSQLDatabaseNode(
             name="test",
-            database_type="postgresql",
-            host="localhost",
-            database="testdb",
-            user="testuser",
-            password="testpass",
+            database_type="sqlite",
+            database="test.db",
         )
 
         query = "UPDATE users SET name = $1, age = $2 WHERE id = $3"
@@ -60,11 +57,8 @@ class TestAsyncSQLParameterConversion:
         """Test conversion of MySQL-style %s placeholders."""
         node = AsyncSQLDatabaseNode(
             name="test",
-            database_type="mysql",
-            host="localhost",
-            database="testdb",
-            user="testuser",
-            password="testpass",
+            database_type="sqlite",
+            database="test.db",
         )
 
         query = "INSERT INTO logs (message, level, timestamp) VALUES (%s, %s, %s)"
@@ -84,11 +78,8 @@ class TestAsyncSQLParameterConversion:
         """Test that mixed styles are handled correctly."""
         node = AsyncSQLDatabaseNode(
             name="test",
-            database_type="postgresql",
-            host="localhost",
-            database="testdb",
-            user="testuser",
-            password="testpass",
+            database_type="sqlite",
+            database="test.db",
         )
 
         # Should not mix styles, but test that each is converted properly
@@ -151,16 +142,13 @@ class TestAsyncSQLTypeSerializer:
 
     def test_serialize_decimal(self):
         """Test Decimal serialization."""
-        from kailash.nodes.data.async_sql import DatabaseConfig, PostgreSQLAdapter
+        from kailash.nodes.data.async_sql import DatabaseConfig, SQLiteAdapter
 
         config = DatabaseConfig(
-            type=DatabaseType.POSTGRESQL,
-            host="localhost",
-            database="test",
-            user="test",
-            password="test",
+            type=DatabaseType.SQLITE,
+            database="test.db",
         )
-        adapter = PostgreSQLAdapter(config)
+        adapter = SQLiteAdapter(config)
 
         value = Decimal("123.45")
         result = adapter._serialize_value(value)
@@ -170,16 +158,13 @@ class TestAsyncSQLTypeSerializer:
 
     def test_serialize_datetime(self):
         """Test datetime serialization."""
-        from kailash.nodes.data.async_sql import DatabaseConfig, PostgreSQLAdapter
+        from kailash.nodes.data.async_sql import DatabaseConfig, SQLiteAdapter
 
         config = DatabaseConfig(
-            type=DatabaseType.POSTGRESQL,
-            host="localhost",
-            database="test",
-            user="test",
-            password="test",
+            type=DatabaseType.SQLITE,
+            database="test.db",
         )
-        adapter = PostgreSQLAdapter(config)
+        adapter = SQLiteAdapter(config)
 
         dt = datetime(2024, 1, 15, 10, 30, 45)
         result = adapter._serialize_value(dt)
@@ -189,16 +174,13 @@ class TestAsyncSQLTypeSerializer:
 
     def test_serialize_date(self):
         """Test date serialization."""
-        from kailash.nodes.data.async_sql import DatabaseConfig, PostgreSQLAdapter
+        from kailash.nodes.data.async_sql import DatabaseConfig, SQLiteAdapter
 
         config = DatabaseConfig(
-            type=DatabaseType.POSTGRESQL,
-            host="localhost",
-            database="test",
-            user="test",
-            password="test",
+            type=DatabaseType.SQLITE,
+            database="test.db",
         )
-        adapter = PostgreSQLAdapter(config)
+        adapter = SQLiteAdapter(config)
 
         d = date(2024, 1, 15)
         result = adapter._serialize_value(d)
@@ -208,16 +190,13 @@ class TestAsyncSQLTypeSerializer:
 
     def test_serialize_timedelta(self):
         """Test timedelta serialization."""
-        from kailash.nodes.data.async_sql import DatabaseConfig, PostgreSQLAdapter
+        from kailash.nodes.data.async_sql import DatabaseConfig, SQLiteAdapter
 
         config = DatabaseConfig(
-            type=DatabaseType.POSTGRESQL,
-            host="localhost",
-            database="test",
-            user="test",
-            password="test",
+            type=DatabaseType.SQLITE,
+            database="test.db",
         )
-        adapter = PostgreSQLAdapter(config)
+        adapter = SQLiteAdapter(config)
 
         td = timedelta(hours=2, minutes=30, seconds=45)
         result = adapter._serialize_value(td)
@@ -339,11 +318,8 @@ class TestAsyncSQLParameterIntegration:
         """Test that positional parameters are converted during execution."""
         node = AsyncSQLDatabaseNode(
             name="test",
-            database_type="postgresql",
-            host="localhost",
-            database="testdb",
-            user="testuser",
-            password="testpass",
+            database_type="sqlite",
+            database="test.db",
         )
 
         # Mock the adapter
@@ -406,11 +382,8 @@ class TestAsyncSQLParameterIntegration:
         """Test that named parameters are passed through unchanged."""
         node = AsyncSQLDatabaseNode(
             name="test",
-            database_type="postgresql",
-            host="localhost",
-            database="testdb",
-            user="testuser",
-            password="testpass",
+            database_type="sqlite",
+            database="test.db",
         )
 
         # Mock the adapter

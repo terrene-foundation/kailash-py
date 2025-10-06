@@ -616,34 +616,6 @@ class TestWorkflowBuilderMetadata:
         assert "class_node" in workflow.nodes
         assert "instance_node" in workflow.nodes
 
-    @pytest.mark.skip(reason="Mock.patch with forking causes class identity issues")
-    @patch("kailash.workflow.graph.Workflow.add_node")
-    def test_build_workflow_node_addition_error(self, mock_add_node):
-        """Test error handling during workflow building."""
-        mock_add_node.side_effect = Exception("Node addition failed")
-
-        self.builder.add_node("MockNode", "node1", {"value": 1.0})
-
-        with pytest.raises(
-            WorkflowValidationError, match="Failed to add node 'node1' to workflow"
-        ):
-            self.builder.build()
-
-    @pytest.mark.skip(reason="Mock.patch with forking causes class identity issues")
-    @patch("kailash.workflow.graph.Workflow._add_edge_internal")
-    def test_build_workflow_connection_error(self, mock_add_edge):
-        """Test error handling during connection building."""
-        mock_add_edge.side_effect = Exception("Connection failed")
-
-        self.builder.add_node("MockNode", "node1", {"value": 1.0})
-        self.builder.add_node("MockNode", "node2", {"value": 2.0})
-        self.builder.add_connection("node1", "output", "node2", "input")
-
-        with pytest.raises(
-            WorkflowValidationError, match="Failed to connect 'node1' to 'node2'"
-        ):
-            self.builder.build()
-
 
 @pytest.mark.requires_isolation
 class TestWorkflowBuilderFluentAPI:

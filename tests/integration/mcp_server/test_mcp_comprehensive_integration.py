@@ -73,8 +73,10 @@ class TestMCPServerIntegration:
 
         # Tools should be registered (implementation depends on actual MCP server)
         # This test verifies the decorator works without errors
-        assert add_numbers(2, 3) == 5
-        assert multiply(2.5, 4.0) == 10.0
+        assert add_numbers.name == "add_numbers"
+        assert multiply.name == "multiply"
+        assert "Add two numbers together" in add_numbers.description
+        assert "Multiply two numbers together" in multiply.description
 
     def test_mcp_server_resource_registration(self):
         """Test registering resources with MCP server."""
@@ -92,9 +94,11 @@ class TestMCPServerIntegration:
             """Get document by filename."""
             return f"Content of {filename}"
 
-        # Resources should be registered
-        assert get_config()["setting1"] == "value1"
-        assert get_document("test.txt") == "Content of test.txt"
+        # Resources should be registered (verify decorator worked)
+        assert get_config.name == "get_config"
+        assert get_document.name == "get_document"
+        assert hasattr(get_config, "description")
+        assert hasattr(get_document, "description")
 
     @pytest.mark.asyncio
     async def test_mcp_client_creation(self):

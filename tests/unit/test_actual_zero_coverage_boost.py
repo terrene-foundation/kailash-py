@@ -262,16 +262,14 @@ class TestMockedZeroCoverageModules:
             mock_instance.host = "localhost"
             mock_instance.port = 5432
             mock_instance.database = "test_db"
-            mock_instance.get_connection_string.return_value = (
-                "postgresql://localhost:5432/test_db"
-            )
+            mock_instance.get_connection_string.return_value = "sqlite:///:memory:"
 
             # Test database configuration
             config = mock_config()
             # # # # assert config.host == "localhost"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             # # # # assert config.port == 5432  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
             # # # # assert config.database == "test_db"  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly  # Node attributes not accessible directly
-            assert "postgresql" in config.get_connection_string()
+            assert "sqlite" in config.get_connection_string()
 
     def test_mock_pipeline_execution(self):
         """Test pipeline execution with mocks."""

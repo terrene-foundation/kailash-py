@@ -1,7 +1,7 @@
 ---
 name: mcp-specialist
 description: "MCP (Model Context Protocol) specialist for Kailash SDK's production-ready MCP server implementation. Use proactively for AI agent and MCP integration tasks."
-tools: Read, Glob, Grep, LS, Edit, MultiEdit
+tools: "*"
 ---
 
 # MCP (Model Context Protocol) Specialist

@@ -205,17 +205,17 @@ class TestDatabaseHealthCheck:
 
     def test_database_health_check_initialization(self):
         """Test database health check initialization."""
-        check = DatabaseHealthCheck("postgres", "postgresql://user:pass@host/db")
+        check = DatabaseHealthCheck("postgres", "sqlite:///:memory:")
 
         assert check.name == "postgres"
-        assert check.connection_string == "postgresql://user:pass@host/db"
+        assert check.connection_string == "sqlite:///:memory:"
         assert check.timeout == 5.0
         assert check.critical
 
     @pytest.mark.asyncio
     async def test_database_health_check_success(self):
         """Test successful database health check."""
-        check = DatabaseHealthCheck("postgres", "postgresql://user:pass@host/db")
+        check = DatabaseHealthCheck("postgres", "sqlite:///:memory:")
 
         # Mock SQLDatabaseNode
         mock_sql_node = Mock()
@@ -241,9 +241,7 @@ class TestDatabaseHealthCheck:
     @pytest.mark.asyncio
     async def test_database_health_check_timeout(self):
         """Test database health check timeout."""
-        check = DatabaseHealthCheck(
-            "postgres", "postgresql://user:pass@host/db", timeout=0.1
-        )
+        check = DatabaseHealthCheck("postgres", "sqlite:///:memory:", timeout=0.1)
 
         with patch("asyncio.to_thread", side_effect=asyncio.TimeoutError):
             result = await check.check_health()
@@ -256,7 +254,7 @@ class TestDatabaseHealthCheck:
     @pytest.mark.asyncio
     async def test_database_health_check_error(self):
         """Test database health check with error."""
-        check = DatabaseHealthCheck("postgres", "postgresql://user:pass@host/db")
+        check = DatabaseHealthCheck("postgres", "sqlite:///:memory:")
 
         with patch(
             "src.kailash.nodes.data.sql.SQLDatabaseNode",

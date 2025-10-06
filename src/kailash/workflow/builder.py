@@ -558,7 +558,7 @@ class WorkflowBuilder:
         Raises:
             WorkflowValidationError: If node_id is already used or instance is invalid
         """
-        return self.add_node(node_instance, node_id)
+        return self._add_node_instance(node_instance, node_id)
 
     def add_node_type(
         self,

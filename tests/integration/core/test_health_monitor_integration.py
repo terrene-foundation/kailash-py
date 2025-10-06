@@ -30,15 +30,8 @@ from tests.utils.docker_config import (
 class TestHealthMonitorPostgreSQLIntegration:
     """Test health monitor integration with real PostgreSQL database."""
 
-    @pytest.fixture
-    def postgres_connection_string(self):
-        """Get PostgreSQL connection string from Docker config."""
-        return get_postgres_connection_string("kailash_test")
-
-    @pytest.fixture
-    def health_monitor(self):
-        """Create fresh health monitor for testing."""
-        return HealthMonitor(check_interval=5.0, alert_threshold=2)
+    # NOTE: postgres_connection_string and health_monitor fixtures
+    # are now consolidated in tests/conftest.py to eliminate duplication
 
     @pytest.mark.asyncio
     async def test_database_health_check_real_postgres(

@@ -25,8 +25,8 @@ class TestPermissionCheckNode:
     def setup_method(self):
         """Setup for each test method."""
         self.db_config = {
-            "connection_string": "postgresql://test:test@localhost/test",
-            "database_type": "postgresql",
+            "connection_string": "sqlite:///:memory:",
+            "database_type": "sqlite",
         }
         self.cache_config = {"host": "localhost", "port": 6379, "ttl": 300}
         self.node = PermissionCheckNode(

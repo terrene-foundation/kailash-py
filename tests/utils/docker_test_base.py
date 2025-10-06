@@ -128,16 +128,18 @@ class DockerIntegrationTestBase:
 
     @pytest_asyncio.fixture
     async def ollama_client(self):
-        """Provide Ollama client for AI testing."""
+        """Provide Ollama client for AI testing - returns None if unavailable."""
         base_url = f"http://{OLLAMA_CONFIG['host']}:{OLLAMA_CONFIG['port']}"
         async with httpx.AsyncClient(base_url=base_url) as client:
             # Verify Ollama is available
             try:
                 response = await client.get("/api/tags")
                 if response.status_code != 200:
-                    pytest.skip("Ollama service not available")
+                    yield None
+                    return
             except Exception:
-                pytest.skip("Ollama service not available")
+                yield None
+                return
             yield client
 
     @pytest_asyncio.fixture
@@ -240,15 +242,16 @@ class DockerIntegrationTestBase:
     async def verify_ollama_model(
         self, client: httpx.AsyncClient, model: str = "llama3.2:1b"
     ):
-        """Verify an Ollama model is available."""
+        """Verify an Ollama model is available - returns False if unavailable."""
+        if client is None:
+            return False
         response = await client.get("/api/tags")
         if response.status_code == 200:
             models = response.json().get("models", [])
             model_names = [m.get("name", "") for m in models]
-            if model not in model_names:
-                pytest.skip(f"Ollama model '{model}' not available")
+            return model in model_names
         else:
-            pytest.skip("Cannot verify Ollama models")
+            return False
 
 
 class AsyncDockerTestBase(DockerIntegrationTestBase):

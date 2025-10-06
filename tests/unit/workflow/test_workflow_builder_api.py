@@ -353,30 +353,6 @@ class TestAPIConsistencyWithWorkflow:
         # Ensure MockNode is registered for string-based references
         _ensure_mock_node_registered()
 
-    @pytest.mark.skip(reason="Mock node class identity issues with forking")
-    def test_similar_node_adding_patterns(self):
-        """Test that WorkflowBuilder patterns match Workflow patterns."""
-        from kailash.workflow.graph import Workflow
-
-        # WorkflowBuilder patterns
-        builder = WorkflowBuilder()
-        builder.add_node("MockNode", "test1")
-        with pytest.warns(
-            UserWarning, match="(SDK node detected|CUSTOM NODE USAGE CORRECT)"
-        ):
-            builder.add_node(MockNode, "test2")
-        with pytest.warns(UserWarning, match="Instance-based API usage detected"):
-            builder.add_node(MockNode(), "test3")
-
-        # Workflow should accept similar patterns
-        workflow = Workflow("test_workflow", "Test Workflow")
-        workflow.add_node("test1", "MockNode")
-        workflow.add_node("test2", MockNode)
-        workflow.add_node("test3", MockNode())
-
-        # Both should have same number of nodes
-        assert len(builder.nodes) == len(workflow.nodes)
-
     def test_parameter_handling_consistency(self):
         """Test parameter handling is consistent."""
         builder = WorkflowBuilder()

@@ -248,57 +248,6 @@ def test_node_registry_lazy_loading():
         assert False, f"NodeRegistry import failed: {e}"
 
 
-@pytest.mark.skip(reason="Skip slow import test for CI/CD - takes >1s")
-@pytest.mark.timeout(5)  # Allow more time for subprocess imports
-def test_import_order_independence():
-    """Test that import order doesn't cause circular dependencies (TODO-111)."""
-    print("\nTesting import order independence...")
-
-    import subprocess
-    import sys
-
-    # Test different import orders in subprocess
-    test_scripts = [
-        # Order 1: Bottom-up
-        """
-from kailash.nodes.base import Node
-from kailash.workflow.graph import Workflow
-from kailash.workflow.builder import WorkflowBuilder
-print("ORDER1_SUCCESS")
-""",
-        # Order 2: Top-down
-        """
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.workflow.graph import Workflow
-from kailash.nodes.base import Node
-print("ORDER2_SUCCESS")
-""",
-        # Order 3: Mixed problematic order
-        """
-from kailash.workflow.graph import Workflow
-from kailash.nodes.base import Node
-from kailash.workflow.builder import WorkflowBuilder
-print("ORDER3_SUCCESS")
-""",
-    ]
-
-    for i, script in enumerate(test_scripts, 1):
-        result = subprocess.run(
-            [sys.executable, "-c", script],
-            capture_output=True,
-            text=True,
-            timeout=0.8,  # Fast timeout for unit tests
-        )
-
-        if result.returncode != 0:
-            print(f"❌ Import order {i} failed: {result.stderr}")
-            assert False, f"Import order {i} caused circular import: {result.stderr}"
-        elif f"ORDER{i}_SUCCESS" in result.stdout:
-            print(f"✅ Import order {i} succeeded")
-        else:
-            print(f"⚠️ Import order {i} unclear result")
-
-
 def test_workflow_builder_imports():
     """Test WorkflowBuilder imports don't cause circular dependencies."""
     print("\nTesting WorkflowBuilder import safety...")

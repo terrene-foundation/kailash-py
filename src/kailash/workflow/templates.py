@@ -171,7 +171,8 @@ class CycleTemplates:
             ... )
         """
         if cycle_id is None:
-            cycle_id = f"optimization_cycle_{int(time.time())}"
+            # Use timestamp with milliseconds for ID generation to ensure uniqueness
+            cycle_id = f"optimization_cycle_{int(time.time() * 1000)}"
 
         # Connect processor to evaluator
         workflow.connect(processor_node, evaluator_node)
