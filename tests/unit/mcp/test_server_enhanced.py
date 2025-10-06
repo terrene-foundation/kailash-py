@@ -65,6 +65,7 @@ class TestMCPServer:
         # Should have MCP interface regardless of implementation
         assert server._mcp is not None
 
+    @pytest.mark.slow
     def test_init_mcp_idempotent(self):
         """Test that _init_mcp can be called multiple times safely."""
         server = MCPServer("idempotent-test")
@@ -79,6 +80,7 @@ class TestMCPServer:
         # Should be the same instance
         assert first_mcp is second_mcp
 
+    @pytest.mark.slow
     def test_tool_decorator_functionality(self):
         """Test that tool decorator works functionally."""
         server = MCPServer("tool-test")
