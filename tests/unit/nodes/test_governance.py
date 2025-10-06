@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.governance import DevelopmentNode, EnterpriseNode, SecureGovernedNode
 from kailash.sdk_exceptions import NodeConfigurationError

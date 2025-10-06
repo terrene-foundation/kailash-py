@@ -12,7 +12,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskMetrics, TaskRun, TaskStatus
 from kailash.tracking.storage.filesystem import FileSystemStorage

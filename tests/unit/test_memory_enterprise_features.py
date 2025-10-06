@@ -12,7 +12,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import numpy as np
 import pytest
-
 from kailash.nodes.ai.semantic_memory import (
     EmbeddingResult,
     InMemoryVectorStore,

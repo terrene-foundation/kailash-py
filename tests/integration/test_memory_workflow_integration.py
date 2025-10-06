@@ -10,11 +10,7 @@ import time
 from datetime import UTC, datetime
 
 import pytest
-
-from kailash.nodes.ai.semantic_memory import (
-    SemanticMemorySearchNode,
-    SemanticMemoryStoreNode,
-)
+from kailash.nodes.ai.semantic_memory import SemanticMemorySearchNode, SemanticMemoryStoreNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow

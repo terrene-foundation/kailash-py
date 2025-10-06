@@ -15,7 +15,6 @@ from unittest.mock import Mock
 import pytest
 import requests
 import yaml
-
 from kailash.access_control import (
     AccessControlManager,
     NodePermission,
@@ -25,13 +24,7 @@ from kailash.access_control import (
     WorkflowPermission,
 )
 from kailash.manifest import KailashManifest
-from kailash.nodes.base import (
-    Node,
-    NodeMetadata,
-    NodeParameter,
-    NodeRegistry,
-    register_node,
-)
+from kailash.nodes.base import Node, NodeMetadata, NodeParameter, NodeRegistry, register_node
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskRun, TaskStatus
 from kailash.tracking.storage.filesystem import FileSystemStorage

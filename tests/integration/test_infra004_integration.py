@@ -20,23 +20,24 @@ INFRA-004 Requirements Tested:
 6. Performance validation under realistic infrastructure loads
 """
 
-import pytest
-import time
-import subprocess
-import os
 import concurrent.futures
-from typing import Dict, Any, List
+import os
+import subprocess
+import time
+from typing import Any, Dict, List
+
+import pytest
+from kailash.runtime.local import LocalRuntime
 
 # Import Core SDK components for real integration testing
 from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
 
 # Import test infrastructure utilities
-from tests.utils.performance_tracker import PerformanceTracker, PerformanceReport
+from tests.utils.performance_tracker import PerformanceReport, PerformanceTracker
 from tests.utils.test_fixtures import (
-    test_environment_config,
     docker_service_health_check,
     load_test_scenarios,
+    test_environment_config,
 )
 
 # Test markers
@@ -203,10 +204,7 @@ class TestInfrastructureUtilitiesIntegration:
 
     def test_test_fixtures_with_real_kaizen_framework(self):
         """Test fixtures must work with real Kaizen framework components."""
-        from tests.utils.test_fixtures import (
-            integration_test_config,
-            test_agent_configs,
-        )
+        from tests.utils.test_fixtures import integration_test_config, test_agent_configs
 
         with PerformanceTracker("fixtures_integration", threshold=3.0) as tracker:
             # Use test fixtures
@@ -580,6 +578,7 @@ result = {{
         """Infrastructure must maintain reasonable resource usage."""
         with PerformanceTracker("resource_usage", threshold=10.0):
             import psutil
+
             import kaizen
 
             # Get baseline memory usage
@@ -620,8 +619,8 @@ result = {{
 @pytest.fixture(scope="module", autouse=True)
 def setup_integration_infrastructure():
     """Setup integration test infrastructure before running tests."""
-    import subprocess
     import os
+    import subprocess
 
     # Track setup performance
     with PerformanceTracker("integration_setup", threshold=120.0) as setup_tracker:
