@@ -34,7 +34,10 @@ class TestMemoryWorkflowIntegration:
         workflow.add_node(
             "store_docs",
             SemanticMemoryStoreNode(name="store_docs"),
-            content=["Technical documentation about Python", "User guide for API integration"],
+            content=[
+                "Technical documentation about Python",
+                "User guide for API integration",
+            ],
             collection="integration_docs",
         )
 
@@ -360,9 +363,15 @@ result = {
 """
 
         # Add tier nodes
-        workflow.add_node("hot_storage", PythonCodeNode(name="hot_storage", code=hot_storage_code))
-        workflow.add_node("warm_storage", PythonCodeNode(name="warm_storage", code=warm_storage_code))
-        workflow.add_node("cold_storage", PythonCodeNode(name="cold_storage", code=cold_storage_code))
+        workflow.add_node(
+            "hot_storage", PythonCodeNode(name="hot_storage", code=hot_storage_code)
+        )
+        workflow.add_node(
+            "warm_storage", PythonCodeNode(name="warm_storage", code=warm_storage_code)
+        )
+        workflow.add_node(
+            "cold_storage", PythonCodeNode(name="cold_storage", code=cold_storage_code)
+        )
 
         # Add tier coordinator
         coordinator_code = """
@@ -386,7 +395,10 @@ result = {
 }
 """
 
-        workflow.add_node("tier_coordinator", PythonCodeNode(name="tier_coordinator", code=coordinator_code))
+        workflow.add_node(
+            "tier_coordinator",
+            PythonCodeNode(name="tier_coordinator", code=coordinator_code),
+        )
 
         # Connect tiers to coordinator (parallel processing)
         workflow.connect("hot_storage", "tier_coordinator")
@@ -468,8 +480,14 @@ result = {
 }
 """
 
-        workflow.add_node("access_logger", PythonCodeNode(name="access_logger", code=access_logger_code))
-        workflow.add_node("pattern_analytics", PythonCodeNode(name="pattern_analytics", code=analytics_code))
+        workflow.add_node(
+            "access_logger",
+            PythonCodeNode(name="access_logger", code=access_logger_code),
+        )
+        workflow.add_node(
+            "pattern_analytics",
+            PythonCodeNode(name="pattern_analytics", code=analytics_code),
+        )
 
         # Connect nodes
         workflow.connect("access_logger", "pattern_analytics")
@@ -590,8 +608,12 @@ result = {
 }
 """
 
-        workflow.add_node("data_cleaner", PythonCodeNode(name="data_cleaner", code=cleaner_code))
-        workflow.add_node("data_validator", PythonCodeNode(name="data_validator", code=validator_code))
+        workflow.add_node(
+            "data_cleaner", PythonCodeNode(name="data_cleaner", code=cleaner_code)
+        )
+        workflow.add_node(
+            "data_validator", PythonCodeNode(name="data_validator", code=validator_code)
+        )
 
         # Create data quality cycle
         cycle_id = CycleTemplates.data_quality_cycle(
@@ -673,8 +695,12 @@ result = {
 }
 """
 
-        workflow.add_node("optimizer", PythonCodeNode(name="optimizer", code=optimizer_code))
-        workflow.add_node("evaluator", PythonCodeNode(name="evaluator", code=evaluator_code))
+        workflow.add_node(
+            "optimizer", PythonCodeNode(name="optimizer", code=optimizer_code)
+        )
+        workflow.add_node(
+            "evaluator", PythonCodeNode(name="evaluator", code=evaluator_code)
+        )
 
         # Create optimization cycle
         cycle_id = CycleTemplates.optimization_cycle(

@@ -577,7 +577,9 @@ class TestMCPDeployment:
         """Set up test class"""
         cls.validator = MCPDeploymentValidator()
 
-    @pytest.mark.parametrize("test", MCPDeploymentValidator().deployment_tests or [None])
+    @pytest.mark.parametrize(
+        "test", MCPDeploymentValidator().deployment_tests or [None]
+    )
     def test_deployment_configuration(self, test):
         """Test individual deployment configuration"""
         if test is None:

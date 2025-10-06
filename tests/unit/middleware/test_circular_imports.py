@@ -248,8 +248,6 @@ def test_node_registry_lazy_loading():
         assert False, f"NodeRegistry import failed: {e}"
 
 
-
-
 def test_workflow_builder_imports():
     """Test WorkflowBuilder imports don't cause circular dependencies."""
     print("\nTesting WorkflowBuilder import safety...")

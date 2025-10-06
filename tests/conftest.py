@@ -1183,6 +1183,7 @@ def isolated_workflow_builder():
 def postgres_connection_string():
     """Get PostgreSQL connection string from Docker config."""
     from tests.utils.docker_config import get_postgres_connection_string
+
     return get_postgres_connection_string("kailash_test")
 
 
@@ -1222,6 +1223,7 @@ def ollama_connection_config():
 def health_monitor():
     """Create fresh health monitor for testing."""
     from kailash.core.resilience.health_monitor import HealthMonitor
+
     return HealthMonitor(check_interval=5.0, alert_threshold=2)
 
 

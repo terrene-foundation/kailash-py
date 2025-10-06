@@ -51,7 +51,7 @@ class TestLiveMetrics:
             total_cpu_usage=75.5,
             total_memory_usage=1024.0,
             throughput=12.5,
-            avg_task_duration=2.34
+            avg_task_duration=2.34,
         )
 
         assert metrics.timestamp == timestamp
@@ -86,7 +86,7 @@ class TestDashboardConfig:
             auto_refresh=False,
             show_completed=False,
             show_failed=False,
-            theme="dark"
+            theme="dark",
         )
 
         assert config.update_interval == 0.5
@@ -129,9 +129,7 @@ class TestRealTimeDashboard:
     def dashboard_with_config(self, task_manager):
         """Create a RealTimeDashboard with custom config."""
         config = DashboardConfig(
-            update_interval=0.1,
-            max_history_points=50,
-            theme="dark"
+            update_interval=0.1, max_history_points=50, theme="dark"
         )
         return RealTimeDashboard(task_manager, config)
 
@@ -159,7 +157,7 @@ class TestRealTimeDashboard:
 
     def test_start_monitoring_basic(self, dashboard):
         """Test basic start_monitoring functionality."""
-        with patch.object(dashboard, '_monitor_loop') as mock_loop:
+        with patch.object(dashboard, "_monitor_loop") as mock_loop:
             dashboard.start_monitoring("test-run-id")
 
             assert dashboard._monitoring is True
@@ -172,10 +170,10 @@ class TestRealTimeDashboard:
 
     def test_start_monitoring_already_active_warning(self, dashboard):
         """Test warning when starting monitoring that's already active."""
-        with patch.object(dashboard, '_monitor_loop') as mock_loop:
+        with patch.object(dashboard, "_monitor_loop") as mock_loop:
             dashboard.start_monitoring("test-run-id")
 
-            with patch.object(dashboard.logger, 'warning') as mock_warning:
+            with patch.object(dashboard.logger, "warning") as mock_warning:
                 dashboard.start_monitoring("another-run-id")
                 mock_warning.assert_called_once_with("Monitoring already active")
 
@@ -187,7 +185,7 @@ class TestRealTimeDashboard:
 
     def test_stop_monitoring(self, dashboard):
         """Test stop_monitoring functionality."""
-        with patch.object(dashboard, '_monitor_loop') as mock_loop:
+        with patch.object(dashboard, "_monitor_loop") as mock_loop:
             dashboard.start_monitoring("test-run-id")
             assert dashboard._monitoring is True
 
@@ -222,7 +220,7 @@ class TestRealTimeDashboard:
             run_id=run_id,
             node_id="node1",
             node_type="TestNode",
-            status=TaskStatus.RUNNING
+            status=TaskStatus.RUNNING,
         )
         task2 = TaskRun(
             task_id="task2",
@@ -230,22 +228,18 @@ class TestRealTimeDashboard:
             node_id="node2",
             node_type="TestNode",
             status=TaskStatus.COMPLETED,
-            metrics=TaskMetrics(
-                cpu_usage=50.0,
-                memory_usage_mb=256.0,
-                duration=1.5
-            )
+            metrics=TaskMetrics(cpu_usage=50.0, memory_usage_mb=256.0, duration=1.5),
         )
         task3 = TaskRun(
             task_id="task3",
             run_id=run_id,
             node_id="node3",
             node_type="TestNode",
-            status=TaskStatus.FAILED
+            status=TaskStatus.FAILED,
         )
 
         # Mock the task retrieval
-        with patch.object(task_manager, 'get_run_tasks') as mock_get_tasks:
+        with patch.object(task_manager, "get_run_tasks") as mock_get_tasks:
             mock_get_tasks.return_value = [task1, task2, task3]
 
             metrics = dashboard._collect_live_metrics()
@@ -265,12 +259,12 @@ class TestRealTimeDashboard:
         # Don't set current_run_id - should use recent
         dashboard._current_run_id = None
 
-        with patch.object(task_manager, 'list_runs') as mock_list_runs:
+        with patch.object(task_manager, "list_runs") as mock_list_runs:
             mock_run = Mock()
             mock_run.run_id = run_id
             mock_list_runs.return_value = [mock_run]
 
-            with patch.object(task_manager, 'get_run_tasks') as mock_get_tasks:
+            with patch.object(task_manager, "get_run_tasks") as mock_get_tasks:
                 mock_get_tasks.return_value = []
 
                 metrics = dashboard._collect_live_metrics()
@@ -283,7 +277,7 @@ class TestRealTimeDashboard:
         """Test _collect_live_metrics when no runs exist."""
         dashboard._current_run_id = None
 
-        with patch.object(task_manager, 'list_runs') as mock_list_runs:
+        with patch.object(task_manager, "list_runs") as mock_list_runs:
             mock_list_runs.return_value = []
 
             metrics = dashboard._collect_live_metrics()
@@ -296,24 +290,20 @@ class TestRealTimeDashboard:
         """Test throughput calculation in _collect_live_metrics."""
         # Add some history to calculate throughput
         earlier_time = datetime.now() - timedelta(minutes=1)
-        dashboard._metrics_history.append(LiveMetrics(
-            timestamp=earlier_time,
-            completed_tasks=5
-        ))
+        dashboard._metrics_history.append(
+            LiveMetrics(timestamp=earlier_time, completed_tasks=5)
+        )
 
-        with patch.object(dashboard, '_collect_live_metrics') as mock_collect:
+        with patch.object(dashboard, "_collect_live_metrics") as mock_collect:
             # Create mock metrics with more completed tasks
-            new_metrics = LiveMetrics(
-                timestamp=datetime.now(),
-                completed_tasks=10
-            )
+            new_metrics = LiveMetrics(timestamp=datetime.now(), completed_tasks=10)
             mock_collect.return_value = new_metrics
 
             # Call the real method to test throughput calculation
             mock_collect.side_effect = None
             dashboard._current_run_id = None
 
-            with patch.object(dashboard.task_manager, 'list_runs', return_value=[]):
+            with patch.object(dashboard.task_manager, "list_runs", return_value=[]):
                 metrics = dashboard._collect_live_metrics()
 
                 # Throughput should be calculated based on time difference
@@ -371,7 +361,7 @@ class TestRealTimeDashboard:
 
         dashboard.add_status_callback(failing_callback)
 
-        with patch.object(dashboard.logger, 'warning') as mock_warning:
+        with patch.object(dashboard.logger, "warning") as mock_warning:
             dashboard._check_status_changes()
             mock_warning.assert_called_once()
 
@@ -416,14 +406,8 @@ class TestRealTimeDashboard:
     def test_get_metrics_history_with_time_limit(self, dashboard):
         """Test get_metrics_history with time limit."""
         now = datetime.now()
-        old_metrics = LiveMetrics(
-            timestamp=now - timedelta(minutes=10),
-            active_tasks=1
-        )
-        recent_metrics = LiveMetrics(
-            timestamp=now,
-            active_tasks=2
-        )
+        old_metrics = LiveMetrics(timestamp=now - timedelta(minutes=10), active_tasks=1)
+        recent_metrics = LiveMetrics(timestamp=now, active_tasks=2)
         dashboard._metrics_history.extend([old_metrics, recent_metrics])
 
         result = dashboard.get_metrics_history(minutes=5)
@@ -437,16 +421,17 @@ class TestRealTimeDashboard:
         dashboard.config.update_interval = 0.01  # Very fast for testing
 
         collected_metrics = []
+
         def metrics_callback(metrics):
             collected_metrics.append(metrics)
 
         dashboard.add_metrics_callback(metrics_callback)
 
-        with patch.object(dashboard, '_collect_live_metrics') as mock_collect:
+        with patch.object(dashboard, "_collect_live_metrics") as mock_collect:
             mock_metrics = LiveMetrics(active_tasks=5)
             mock_collect.return_value = mock_metrics
 
-            with patch.object(dashboard, '_check_status_changes') as mock_check:
+            with patch.object(dashboard, "_check_status_changes") as mock_check:
                 # Start monitoring in thread and let it run briefly
                 thread = threading.Thread(target=dashboard._monitor_loop)
                 thread.start()
@@ -486,10 +471,10 @@ class TestRealTimeDashboard:
         dashboard._monitoring = True
         dashboard.config.update_interval = 0.01
 
-        with patch.object(dashboard, '_collect_live_metrics') as mock_collect:
+        with patch.object(dashboard, "_collect_live_metrics") as mock_collect:
             mock_collect.side_effect = Exception("Test exception")
 
-            with patch.object(dashboard.logger, 'error') as mock_error:
+            with patch.object(dashboard.logger, "error") as mock_error:
                 # Run loop briefly
                 thread = threading.Thread(target=dashboard._monitor_loop)
                 thread.start()
@@ -511,10 +496,10 @@ class TestRealTimeDashboard:
 
         dashboard.add_metrics_callback(failing_callback)
 
-        with patch.object(dashboard, '_collect_live_metrics') as mock_collect:
+        with patch.object(dashboard, "_collect_live_metrics") as mock_collect:
             mock_collect.return_value = LiveMetrics()
 
-            with patch.object(dashboard.logger, 'warning') as mock_warning:
+            with patch.object(dashboard.logger, "warning") as mock_warning:
                 thread = threading.Thread(target=dashboard._monitor_loop)
                 thread.start()
 
@@ -540,7 +525,7 @@ class TestDashboardHTMLGeneration:
         """Test generate_live_report functionality."""
         output_path = tmp_path / "dashboard.html"
 
-        with patch.object(dashboard, '_generate_dashboard_html') as mock_generate:
+        with patch.object(dashboard, "_generate_dashboard_html") as mock_generate:
             mock_generate.return_value = "<html>Test</html>"
 
             result = dashboard.generate_live_report(str(output_path))
@@ -554,7 +539,7 @@ class TestDashboardHTMLGeneration:
         """Test generate_live_report without charts."""
         output_path = tmp_path / "dashboard.html"
 
-        with patch.object(dashboard, '_generate_dashboard_html') as mock_generate:
+        with patch.object(dashboard, "_generate_dashboard_html") as mock_generate:
             mock_generate.return_value = "<html>No Charts</html>"
 
             dashboard.generate_live_report(str(output_path), include_charts=False)
@@ -576,7 +561,7 @@ class TestDashboardHTMLGeneration:
             failed_tasks=2,
             throughput=12.5,
             total_cpu_usage=75.0,
-            total_memory_usage=1024.0
+            total_memory_usage=1024.0,
         )
 
         result = dashboard._generate_status_section(metrics)
@@ -603,7 +588,7 @@ class TestDashboardHTMLGeneration:
                 timestamp=datetime.now(),
                 total_cpu_usage=50.0,
                 total_memory_usage=512.0,
-                throughput=10.0
+                throughput=10.0,
             )
         ]
 
@@ -657,11 +642,11 @@ class TestDashboardHTMLGeneration:
             node_type="TestNode",
             status=TaskStatus.COMPLETED,
             started_at=datetime.now(),
-            metrics=TaskMetrics(duration=1.5)
+            metrics=TaskMetrics(duration=1.5),
         )
 
         # Mock the task retrieval on the dashboard's task manager
-        with patch.object(dashboard.task_manager, 'get_run_tasks') as mock_get_tasks:
+        with patch.object(dashboard.task_manager, "get_run_tasks") as mock_get_tasks:
             mock_get_tasks.return_value = [task1]
 
             result = dashboard._generate_task_list_section()
@@ -732,7 +717,7 @@ class TestDashboardExporter:
             total_cpu_usage=75.5,
             total_memory_usage=1024.0,
             throughput=12.5,
-            avg_task_duration=2.34
+            avg_task_duration=2.34,
         )
 
         result = dashboard_exporter._metrics_to_dict(metrics)
@@ -760,7 +745,7 @@ class TestDashboardExporter:
         assert output_path.exists()
 
         # Verify JSON content
-        with open(output_path, 'r') as f:
+        with open(output_path, "r") as f:
             data = json.load(f)
 
         assert "timestamp" in data
@@ -778,7 +763,7 @@ class TestDashboardExporter:
 
         assert result == output_path
 
-        with open(output_path, 'r') as f:
+        with open(output_path, "r") as f:
             data = json.load(f)
 
         assert data["current_metrics"] is None
@@ -788,8 +773,10 @@ class TestDashboardExporter:
         """Test create_dashboard_snapshot functionality."""
         output_dir = tmp_path / "snapshot"
 
-        with patch.object(dashboard_exporter.dashboard, 'generate_live_report') as mock_generate:
-            with patch.object(dashboard_exporter, 'export_metrics_json') as mock_export:
+        with patch.object(
+            dashboard_exporter.dashboard, "generate_live_report"
+        ) as mock_generate:
+            with patch.object(dashboard_exporter, "export_metrics_json") as mock_export:
                 mock_generate.return_value = output_dir / "dashboard.html"
                 mock_export.return_value = output_dir / "metrics.json"
 
@@ -805,10 +792,12 @@ class TestDashboardExporter:
         output_dir = tmp_path / "snapshot"
         dashboard_exporter.dashboard._current_run_id = "test-run-123"
 
-        with patch.object(dashboard_exporter.dashboard, 'generate_live_report'):
-            with patch.object(dashboard_exporter, 'export_metrics_json'):
-                with patch.object(dashboard_exporter.dashboard.performance_viz,
-                                'create_run_performance_summary') as mock_perf:
+        with patch.object(dashboard_exporter.dashboard, "generate_live_report"):
+            with patch.object(dashboard_exporter, "export_metrics_json"):
+                with patch.object(
+                    dashboard_exporter.dashboard.performance_viz,
+                    "create_run_performance_summary",
+                ) as mock_perf:
                     mock_perf.return_value = {"chart1": "path1", "chart2": "path2"}
 
                     result = dashboard_exporter.create_dashboard_snapshot(
@@ -825,13 +814,17 @@ class TestDashboardExporter:
         output_dir = tmp_path / "snapshot"
         dashboard_exporter.dashboard._current_run_id = "test-run-123"
 
-        with patch.object(dashboard_exporter.dashboard, 'generate_live_report'):
-            with patch.object(dashboard_exporter, 'export_metrics_json'):
-                with patch.object(dashboard_exporter.dashboard.performance_viz,
-                                'create_run_performance_summary') as mock_perf:
+        with patch.object(dashboard_exporter.dashboard, "generate_live_report"):
+            with patch.object(dashboard_exporter, "export_metrics_json"):
+                with patch.object(
+                    dashboard_exporter.dashboard.performance_viz,
+                    "create_run_performance_summary",
+                ) as mock_perf:
                     mock_perf.side_effect = Exception("Chart generation failed")
 
-                    with patch.object(dashboard_exporter.logger, 'warning') as mock_warning:
+                    with patch.object(
+                        dashboard_exporter.logger, "warning"
+                    ) as mock_warning:
                         result = dashboard_exporter.create_dashboard_snapshot(
                             str(output_dir), include_static_charts=True
                         )

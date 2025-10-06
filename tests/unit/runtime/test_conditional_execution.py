@@ -403,7 +403,6 @@ class TestLocalRuntimeTwoPhaseExecution:
         self.workflow = Workflow("test_workflow", "Test Two-Phase Execution")
         self.runtime = LocalRuntime(conditional_execution="skip_branches")
 
-
     def test_switch_node_dependency_ordering(self):
         """Test switch node execution in dependency order."""
         # Create cascading switches

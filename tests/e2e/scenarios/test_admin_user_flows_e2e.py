@@ -146,6 +146,7 @@ class TestAdminUserFlowsE2E:
         # Check if PostgreSQL is available before proceeding
         try:
             import psycopg2
+
             conn = psycopg2.connect(
                 host="localhost",
                 port=5434,

@@ -353,7 +353,6 @@ class TestAPIConsistencyWithWorkflow:
         # Ensure MockNode is registered for string-based references
         _ensure_mock_node_registered()
 
-
     def test_parameter_handling_consistency(self):
         """Test parameter handling is consistent."""
         builder = WorkflowBuilder()

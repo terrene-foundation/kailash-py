@@ -558,7 +558,9 @@ result = {
         print(f"Cycle overhead: {overhead_percent:.1f}%")
 
         # Cycle overhead should be reasonable
-        assert overhead_ratio < 3.5  # Less than 250% overhead (generous for CI variability)
+        assert (
+            overhead_ratio < 3.5
+        )  # Less than 250% overhead (generous for CI variability)
 
 
 class TestScalabilityBenchmarks:

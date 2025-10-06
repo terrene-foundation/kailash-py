@@ -84,7 +84,6 @@ class TestWebSocketConnectionPoolUnit:
                 await client.call_tool(ws_url, "test_tool", {"arg": "value"})
                 assert connection_count == 1  # Should still be 1
 
-
     @pytest.mark.asyncio
     async def test_connection_pool_thread_safety(self, client):
         """Test that connection pool is thread-safe for concurrent access."""

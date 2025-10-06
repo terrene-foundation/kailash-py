@@ -387,7 +387,6 @@ class TestMCPClientDiscoverTools:
         # Should have recorded failure in metrics
         assert self.client.metrics["requests_failed"] == 1
 
-
     @pytest.mark.asyncio
     async def test_discover_tools_sse_disabled(self):
         """Test SSE tool discovery when HTTP transport disabled."""

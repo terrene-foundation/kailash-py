@@ -617,7 +617,6 @@ class TestWorkflowBuilderMetadata:
         assert "instance_node" in workflow.nodes
 
 
-
 @pytest.mark.requires_isolation
 class TestWorkflowBuilderFluentAPI:
     """Test fluent API methods and backward compatibility."""

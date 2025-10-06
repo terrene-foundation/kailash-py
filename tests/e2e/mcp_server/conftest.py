@@ -132,7 +132,6 @@ async def mcp_server_e2e(unused_tcp_port):
                     if response:
                         await ws.send_json(response)
 
-
                 elif msg.type == web.WSMsgType.ERROR:
                     print(f"WebSocket error: {ws.exception()}")
 

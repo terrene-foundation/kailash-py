@@ -262,9 +262,7 @@ class TestMockedZeroCoverageModules:
             mock_instance.host = "localhost"
             mock_instance.port = 5432
             mock_instance.database = "test_db"
-            mock_instance.get_connection_string.return_value = (
-                "sqlite:///:memory:"
-            )
+            mock_instance.get_connection_string.return_value = "sqlite:///:memory:"
 
             # Test database configuration
             config = mock_config()

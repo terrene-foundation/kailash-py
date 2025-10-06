@@ -43,7 +43,7 @@ class TestLLMAgentToolExecutionUserFlows:
         db_node = SQLDatabaseNode(
             name="sales_db",
             connection_string="sqlite:///:memory:",
-            query="SELECT 1 as placeholder"  # Default query, overridden at runtime
+            query="SELECT 1 as placeholder",  # Default query, overridden at runtime
         )
         workflow.add_node("database", db_node)
 
@@ -163,7 +163,7 @@ class TestLLMAgentToolExecutionUserFlows:
             {
                 "name": "customer_db",
                 "connection_string": "sqlite:///:memory:",
-                "query": "SELECT 'customer_123' as customer_id, 'John Doe' as name"
+                "query": "SELECT 'customer_123' as customer_id, 'John Doe' as name",
             },
         )
 
@@ -404,7 +404,7 @@ for action in actions:
         # Create gateway
         gateway = create_gateway(
             title="Tool Execution Gateway",
-            database_url="postgresql://test_user:test_password@localhost:5434/kailash_test"
+            database_url="postgresql://test_user:test_password@localhost:5434/kailash_test",
         )
 
         # Create workflow with tool-enabled agent

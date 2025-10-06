@@ -146,7 +146,11 @@ class TestMemoryTierOperations:
         items_by_tier = {"hot": [], "warm": [], "cold": []}
 
         # Create items for each tier
-        for tier, delta in [("hot", timedelta(minutes=30)), ("warm", timedelta(hours=6)), ("cold", timedelta(days=7))]:
+        for tier, delta in [
+            ("hot", timedelta(minutes=30)),
+            ("warm", timedelta(hours=6)),
+            ("cold", timedelta(days=7)),
+        ]:
             for i in range(5):
                 item = SemanticMemoryItem(
                     id=f"{tier}_{i}",
@@ -196,7 +200,9 @@ class TestEnterpriseMemoryPersistence:
 
         # Simulate backup by extracting data
         backup_data = {
-            "items": {item_id: item.to_dict() for item_id, item in store1.items.items()},
+            "items": {
+                item_id: item.to_dict() for item_id, item in store1.items.items()
+            },
             "collections": dict(store1.collections),
         }
 
@@ -506,7 +512,11 @@ class TestEnterpriseSemanticNodes:
 
         # Store content with enterprise metadata
         result = await node.run(
-            content=["Enterprise document 1", "Enterprise document 2", "Enterprise document 3"],
+            content=[
+                "Enterprise document 1",
+                "Enterprise document 2",
+                "Enterprise document 3",
+            ],
             metadata={
                 "enterprise_features": True,
                 "security_level": "confidential",

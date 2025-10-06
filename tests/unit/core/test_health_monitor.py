@@ -241,9 +241,7 @@ class TestDatabaseHealthCheck:
     @pytest.mark.asyncio
     async def test_database_health_check_timeout(self):
         """Test database health check timeout."""
-        check = DatabaseHealthCheck(
-            "postgres", "sqlite:///:memory:", timeout=0.1
-        )
+        check = DatabaseHealthCheck("postgres", "sqlite:///:memory:", timeout=0.1)
 
         with patch("asyncio.to_thread", side_effect=asyncio.TimeoutError):
             result = await check.check_health()

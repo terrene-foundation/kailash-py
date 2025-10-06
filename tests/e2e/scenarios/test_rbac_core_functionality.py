@@ -25,6 +25,7 @@ class TestRBACCoreFunctionality:
         # Check if PostgreSQL is available before proceeding
         try:
             import psycopg2
+
             conn = psycopg2.connect(
                 host="localhost",
                 port=5434,
@@ -169,6 +170,7 @@ class TestRBACCoreFunctionality:
         # Check if PostgreSQL is available before proceeding
         try:
             import psycopg2
+
             conn = psycopg2.connect(
                 host="localhost",
                 port=5434,

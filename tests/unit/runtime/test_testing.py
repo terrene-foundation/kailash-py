@@ -305,7 +305,6 @@ class TestSecurityTestHelper:
         assert hasattr(self.helper, "credential_mock")
         assert isinstance(self.helper.credential_mock, CredentialMockData)
 
-
     def test_create_auth_test_workflow_api_key(self):
         """Test API key authentication workflow creation."""
         try:
@@ -683,6 +682,3 @@ class TestConvenienceFunctions:
         assert isinstance(node, MockNode)
         # Check internal attributes instead of name directly
         assert node._return_value == {"data": "test"}
-
-
-
