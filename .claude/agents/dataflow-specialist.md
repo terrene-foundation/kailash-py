@@ -130,7 +130,7 @@ class User:
 
 # DataFlow automatically generates 9 nodes:
 # UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode,
-# UserListNode, UserBulkCreateNode, UserBulkUpdateNode, 
+# UserListNode, UserBulkCreateNode, UserBulkUpdateNode,
 # UserBulkDeleteNode, UserBulkUpsertNode
 
 # Use in workflows immediately
@@ -189,7 +189,7 @@ db = DataFlow(
 )
 
 # VERIFIED BEHAVIOR (v0.4.6+):
-# - auto_migrate=True NEVER drops existing tables (safe for repeated runs)  
+# - auto_migrate=True NEVER drops existing tables (safe for repeated runs)
 # - auto_migrate=True on second run preserves all data
 # - auto_migrate=False won't create missing tables (fails safely)
 # - existing_schema_mode=True uses existing schema without modifications
@@ -436,7 +436,7 @@ print(f"Potential cascade operations: {len(fk_impact.cascade_operations)}")
 # FK-safe migration execution
 if fk_impact.is_safe_to_proceed:
     fk_safe_plan = await fk_analyzer.generate_fk_safe_migration_plan(
-        fk_impact, 
+        fk_impact,
         preferred_strategy="minimal_downtime"
     )
     result = await fk_analyzer.execute_fk_safe_migration(fk_safe_plan)
@@ -508,11 +508,11 @@ try:
         validation_checks=True,
         performance_monitoring=True
     )
-    
+
     print(f"Staging test: {test_result.success}")
     print(f"Performance impact: {test_result.performance_metrics}")
     print(f"Data integrity: {test_result.data_integrity_check}")
-    
+
 finally:
     # Always cleanup (automatic timeout protection)
     await staging_manager.cleanup_staging_environment(staging_env)
@@ -532,13 +532,13 @@ async with lock_manager.acquire_migration_lock(
     operation_description="Add NOT NULL column to users table",
     lock_metadata={"table": "users", "operation": "add_column"}
 ) as migration_lock:
-    
+
     print(f"🔒 Migration lock acquired: {migration_lock.lock_id}")
     print(f"Lock scope: {migration_lock.scope}")
-    
+
     # Execute migration safely - no other migrations can interfere
     migration_result = await execute_your_migration()
-    
+
     print("✅ Migration completed under lock protection")
     # Lock automatically released when context exits
 
@@ -562,7 +562,7 @@ checkpoints = [
         "stage": "pre_migration",
         "validators": [
             "schema_integrity",
-            "foreign_key_consistency", 
+            "foreign_key_consistency",
             "data_quality",
             "performance_baseline"
         ],
@@ -763,10 +763,10 @@ async def enterprise_migration_workflow(
     connection_manager
 ) -> bool:
     """Complete enterprise migration with all safety systems."""
-    
+
     # Step 1: Integrated Risk Assessment
     risk_system = IntegratedRiskAssessmentSystem(connection_manager)
-    
+
     comprehensive_assessment = await risk_system.perform_complete_assessment(
         operation_type=operation_type,
         table_name=table_name,
@@ -775,11 +775,11 @@ async def enterprise_migration_workflow(
         include_dependency_analysis=True,
         include_fk_analysis=True
     )
-    
+
     print(f"🎯 Risk Assessment:")
     print(f"  Overall Risk: {comprehensive_assessment.overall_risk_level}")
     print(f"  Risk Score: {comprehensive_assessment.risk_score}/100")
-    
+
     # Step 2: Generate Comprehensive Mitigation Plan
     mitigation_plan = await risk_system.generate_comprehensive_mitigation_plan(
         assessment=comprehensive_assessment,
@@ -790,16 +790,16 @@ async def enterprise_migration_workflow(
             "performance_degradation_acceptable": 5  # 5% max
         }
     )
-    
+
     print(f"🛡️ Mitigation strategies: {len(mitigation_plan.strategies)}")
-    
+
     # Step 3: Create and Test in Staging Environment
     staging_manager = StagingEnvironmentManager(connection_manager)
     staging_env = await staging_manager.create_staging_environment(
         environment_name=f"migration_{int(time.time())}",
         data_sampling_strategy={"strategy": "representative", "sample_percentage": 5}
     )
-    
+
     try:
         # Test migration in staging
         staging_test = await staging_manager.test_migration_in_staging(
@@ -812,28 +812,28 @@ async def enterprise_migration_workflow(
             validation_checks=True,
             performance_monitoring=True
         )
-        
+
         if not staging_test.success:
             print(f"❌ Staging test failed: {staging_test.failure_reason}")
             return False
-        
+
         print(f"✅ Staging test passed - safe to proceed")
         print(f"📊 Performance impact: {staging_test.performance_metrics}")
-        
+
         # Step 4: Acquire Migration Lock for Production
         lock_manager = MigrationLockManager(connection_manager)
-        
+
         async with lock_manager.acquire_migration_lock(
             lock_scope="table_modification",
             timeout_seconds=600,
             operation_description=f"{operation_type} on {table_name}"
         ) as migration_lock:
-            
+
             print(f"🔒 Migration lock acquired: {migration_lock.lock_id}")
-            
+
             # Step 5: Execute with Multi-Stage Validation
             validation_manager = ValidationCheckpointManager(connection_manager)
-            
+
             validation_result = await validation_manager.execute_with_validation(
                 migration_operation=lambda: execute_actual_migration(
                     operation_type, table_name, migration_details
@@ -844,7 +844,7 @@ async def enterprise_migration_workflow(
                         "validators": ["schema_integrity", "fk_consistency", "data_quality"]
                     },
                     {
-                        "stage": "during_migration", 
+                        "stage": "during_migration",
                         "validators": ["transaction_health", "performance_monitoring"]
                     },
                     {
@@ -854,7 +854,7 @@ async def enterprise_migration_workflow(
                 ],
                 rollback_on_failure=True
             )
-            
+
             if validation_result.all_checkpoints_passed:
                 print("✅ Enterprise migration completed successfully")
                 return True
@@ -862,7 +862,7 @@ async def enterprise_migration_workflow(
                 print(f"❌ Migration failed: {validation_result.failure_details}")
                 print(f"🔄 Rollback executed: {validation_result.rollback_completed}")
                 return False
-                
+
     finally:
         # Step 6: Cleanup Staging Environment
         await staging_manager.cleanup_staging_environment(staging_env)
@@ -910,17 +910,17 @@ async def test_user_operations(tdd_dataflow):
     class User:
         name: str
         email: str
-    
+
     # All operations use savepoint isolation
     workflow = WorkflowBuilder()
     workflow.add_node("UserCreateNode", "create", {
         "name": "Test User",
         "email": "test@example.com"
     })
-    
+
     runtime = LocalRuntime()
     results, _ = runtime.execute(workflow.build())
-    
+
     # Automatic rollback - no cleanup needed!
     # Next test gets clean database state
 ```
@@ -931,8 +931,8 @@ async def test_user_operations(tdd_dataflow):
 def test_old_way():
     # ... test code ...
     # Manual cleanup with DROP SCHEMA CASCADE
-    
-# NEW: Fast isolation (<100ms)  
+
+# NEW: Fast isolation (<100ms)
 async def test_new_way(tdd_dataflow):
     # ... test code ...
     # Automatic savepoint rollback
@@ -960,28 +960,28 @@ workflow.add_connection("create", "id", "add_items", "order_id")
 
 ### PostgreSQL Array Types (Still Limited)
 ```python
-# ❌ AVOID - PostgreSQL List[str] fields cause parameter type issues  
+# ❌ AVOID - PostgreSQL List[str] fields cause parameter type issues
 @db.model
 class BlogPost:
     title: str
     tags: List[str] = []  # CAUSES ERRORS - avoid array types
 
 # ✅ WORKAROUND - Use JSON field or separate table
-@db.model  
+@db.model
 class BlogPost:
     title: str
     content: str  # v0.4.0: Now unlimited with TEXT fix!
     tags_json: Dict[str, Any] = {}  # Store as JSON object
 ```
 
-### JSON Field Behavior  
+### JSON Field Behavior
 ```python
 # ❌ WRONG - JSON fields are returned as strings, not parsed objects
 result = results["create_config"]
 config = result["config"]["database"]["host"]  # FAILS - config is a string
 
 # ✅ CORRECT - Handle JSON as string or parse if needed
-result = results["create_config"] 
+result = results["create_config"]
 config_str = result["config"]  # This is a string representation
 if isinstance(config_str, str):
     import json
@@ -996,7 +996,7 @@ result = results[node_id]
 # Check both patterns:
 if isinstance(result, dict) and "output" in result:
     data = result["output"]  # Wrapper format
-else:  
+else:
     data = result  # Direct format
 ```
 
@@ -1216,15 +1216,15 @@ DataFlow(
 @pytest.fixture
 async def tdd_dataflow():
     """DataFlow with transaction isolation (<100ms)."""
-    
+
 @pytest.fixture
 async def tdd_test_context():
     """Test context with savepoint management."""
-    
+
 @pytest.fixture
 async def tdd_models():
     """Pre-defined test models for common scenarios."""
-    
+
 @pytest.fixture
 async def tdd_performance_test():
     """Performance monitoring and validation."""
