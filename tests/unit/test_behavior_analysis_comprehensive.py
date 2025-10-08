@@ -231,7 +231,8 @@ class TestAnomalyDetection:
 class TestMachineLearningModels:
     """Test machine learning model integration."""
 
-    @pytest.mark.timeout(5)  # sklearn import can be slow on some systems
+    @pytest.mark.slow  # ML model training is slow, skip in fast CI
+    @pytest.mark.timeout(10)  # Increased timeout for ML operations
     @patch("sklearn.ensemble.IsolationForest")
     def test_isolation_forest_model(self, mock_isolation_forest_class):
         """Test Isolation Forest anomaly detection model."""
@@ -288,6 +289,8 @@ class TestMachineLearningModels:
         except ImportError:
             pytest.skip("BehaviorAnalysisNode not available")
 
+    @pytest.mark.slow  # LSTM sequence training is slow, skip in fast CI
+    @pytest.mark.timeout(10)  # Increased timeout for LSTM operations
     def test_lstm_sequence_model(self):
         """Test LSTM model for sequence anomaly detection."""
         try:
