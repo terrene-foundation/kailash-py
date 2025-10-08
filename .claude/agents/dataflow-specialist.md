@@ -23,6 +23,53 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 | **Full Features** | `skip_registry=False, enable_model_persistence=True, auto_migrate=True` | 10-30s |
 | **With Nexus** | Always use above + `Nexus(auto_discovery=False)` | Same |
 
+## ⚠️ CRITICAL LEARNINGS - Read First
+
+### Common Misunderstandings (VERIFIED v0.5.0)
+
+**1. Template Syntax**
+- ❌ WRONG: `{{}}` template syntax (causes validation errors)
+- ✅ CORRECT: `${}` template syntax (verified in kailash/nodes/base.py:595)
+- **Impact**: Using `{{}}` will cause "invalid literal for int()" errors during node validation
+
+**2. Bulk Operations**
+- ❌ MISUNDERSTANDING: "Bulk operations are limited in alpha"
+- ✅ REALITY: ALL bulk operations work perfectly (ContactBulkCreateNode, ContactBulkUpdateNode, ContactBulkDeleteNode, ContactBulkUpsertNode all exist and function)
+- **Impact**: Don't avoid bulk operations - they're production-ready and performant (10k+ ops/sec)
+
+**3. ListNode Result Structure**
+- ❌ MISUNDERSTANDING: "ListNode returns weird nested structure - might be a bug"
+- ✅ REALITY: Nested structure is intentional design for pagination metadata
+- **Pattern**: `result["records"]` contains data, `result["total"]` contains count
+- **Impact**: This is correct behavior, not a workaround
+
+**4. Runtime Reuse**
+- ❌ MISUNDERSTANDING: "Can't reuse LocalRuntime() - it's a limitation"
+- ✅ REALITY: Fresh runtime per workflow is the recommended pattern for event loop isolation
+- **Pattern**: Create new `LocalRuntime()` for each `workflow.build()` execution
+- **Impact**: This prevents event loop conflicts, especially with async operations
+
+**5. Performance Expectations**
+- ❌ MISUNDERSTANDING: "DataFlow is slow - queries take 400-500ms"
+- ✅ REALITY: Performance is network-dependent, not DataFlow limitation
+- **Evidence**: Local PostgreSQL: ~170ms, SSH tunnel: ~450ms, Direct connection: <50ms
+- **Impact**: Blame the network, not the framework
+
+**6. Parameter Validation Warnings**
+- ❌ MISUNDERSTANDING: "Parameter validation warnings mean it's broken"
+- ✅ REALITY: Warnings like "filters not declared in get_parameters()" are non-blocking
+- **Pattern**: Workflow still builds and executes successfully despite warnings
+- **Impact**: These are informational, not errors
+
+### Investigation Protocol
+
+When encountering apparent "limitations":
+1. **Verify with source code** - Check SDK source at `./`
+2. **Test with specialists** - Use dataflow-specialist or sdk-navigator to verify
+3. **Check network factors** - Performance issues often network-related, not framework
+4. **Read error messages carefully** - Template syntax errors have specific patterns
+5. **Consult verified docs** - Don't assume behaviors without verification
+
 ## Core Expertise
 
 ### DataFlow Architecture & Philosophy
@@ -96,6 +143,18 @@ workflow.add_node("UserCreateNode", "create_user", {
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 ```
+
+### Event Loop Isolation (v0.9.20+)
+
+AsyncSQLDatabaseNode now automatically isolates connection pools per event loop, preventing "Event loop is closed" errors in sequential workflows and FastAPI applications.
+
+**Benefits** (automatic, no code changes):
+- Stronger isolation between DataFlow instances
+- Sequential operations work reliably
+- FastAPI requests properly isolated
+- <5% performance overhead
+
+**What Changed**: Pool keys now include event loop ID (`{loop_id}|{db}|...`) ensuring different event loops get separate pools. Stale pools from closed loops are automatically cleaned up.
 
 ### Connection Pooling Best Practices (CRITICAL)
 ```python
@@ -180,21 +239,56 @@ workflow.add_node("UserListNode", "search", {
 
 ### ✅ CORRECT
 ```python
-# Use connections for dynamic values
+# Use connections for dynamic values between nodes
 workflow.add_connection("create_customer", "id", "create_order", "customer_id")
 
-# Native types
+# Use template syntax ${} for referencing outputs within node config
+workflow.add_node("ContactListNode", "search", {
+    "filters": "${prepare_filters.filters}",  # ✅ CORRECT syntax
+    "limit": "${prepare_filters.limit}"
+})
+
+# Native types for direct values
 {"due_date": datetime.now(), "total": 250.0}
 ```
 
 ### ❌ WRONG
 ```python
-# No template strings
-{"customer_id": "${create_customer.id}"}  # FAILS
+# Wrong template syntax - Kailash uses ${} not {{}}
+{"customer_id": "{{create_customer.id}}"}  # ❌ FAILS - wrong syntax
 
 # No string dates
-{"due_date": datetime.now().isoformat()}  # FAILS
+{"due_date": datetime.now().isoformat()}  # ❌ FAILS
+
+# Template in wrong place - use connections instead
+workflow.add_node("OrderNode", "create", {
+    "customer_id": "${create_customer.id}"  # ❌ WRONG - use add_connection()
+})
 ```
+
+### 🔑 CRITICAL: Template Syntax
+**Kailash template expression syntax is `${}` NOT `{{}}`**
+
+```python
+# From kailash/nodes/base.py:595
+def _is_template_expression(self, value: str) -> bool:
+    return bool(re.match(r"^\$\{[^}]+\}$", value))
+
+# ✅ VALID template expressions:
+"${node.output}"
+"${prepare_filters.filters}"
+"${create_customer.id}"
+
+# ❌ INVALID (will cause validation errors):
+"{{node.output}}"  # Wrong syntax
+"{{ node.output }}"  # Wrong syntax
+"{node.output}"  # Missing $
+```
+
+**Usage Pattern**:
+- **Between nodes**: Use `add_connection()` for passing data
+- **Within node config**: Use `${}` template syntax when node supports it (like PythonCodeNode output references)
+- **Static values**: Use native Python types directly
 
 ## Enterprise Features
 
