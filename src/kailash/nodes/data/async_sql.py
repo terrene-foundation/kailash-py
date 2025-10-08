@@ -3255,8 +3255,17 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
     def _generate_pool_key(self) -> str:
         """Generate a unique key for connection pool sharing."""
-        # Create a unique key based on connection parameters
+        # Get event loop ID for isolation
+        try:
+            loop = asyncio.get_running_loop()
+            loop_id = str(id(loop))
+        except RuntimeError:
+            # No running loop (initialization phase)
+            loop_id = "no_loop"
+
+        # Create a unique key based on event loop and connection parameters
         key_parts = [
+            loop_id,  # Event loop isolation
             self.config.get("database_type", ""),
             self.config.get("connection_string", "")
             or (
@@ -3295,16 +3304,30 @@ class AsyncSQLDatabaseNode(AsyncNode):
                     ):
 
                         if self._pool_key in self._shared_pools:
-                            # Reuse existing pool
+                            # Validate pool's event loop is still running before reuse
                             adapter, ref_count = self._shared_pools[self._pool_key]
-                            self._shared_pools[self._pool_key] = (
-                                adapter,
-                                ref_count + 1,
-                            )
-                            self._adapter = adapter
-                            self._connected = True
-                            logger.debug(f"Using class-level shared pool for {self.id}")
-                            return self._adapter
+
+                            try:
+                                # Check if we have a running event loop
+                                pool_loop = asyncio.get_running_loop()
+                                # If we got here, loop is running - safe to reuse
+                                self._shared_pools[self._pool_key] = (
+                                    adapter,
+                                    ref_count + 1,
+                                )
+                                self._adapter = adapter
+                                self._connected = True
+                                logger.debug(
+                                    f"Using class-level shared pool for {self.id}"
+                                )
+                                return self._adapter
+                            except RuntimeError:
+                                # Loop is closed - remove stale pool
+                                logger.warning(
+                                    f"Removing stale pool for {self._pool_key} - event loop closed"
+                                )
+                                del self._shared_pools[self._pool_key]
+                                # Fall through to create new pool
 
                         # Create new shared pool
                         self._adapter = await self._create_adapter()
@@ -4000,7 +4023,50 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
                 metrics["pools"].append(pool_info)
 
+            # Clean up stale pools from closed event loops
+            cleaned_pools = cls._cleanup_closed_loop_pools()
+            if cleaned_pools > 0:
+                metrics["cleaned_stale_pools"] = cleaned_pools
+
             return metrics
+
+    @classmethod
+    def _cleanup_closed_loop_pools(cls) -> int:
+        """
+        Clean up pools from closed event loops.
+
+        Returns:
+            Number of pools removed
+        """
+        removed_count = 0
+        keys_to_remove = []
+
+        for pool_key in list(cls._shared_pools.keys()):
+            # Extract loop ID from pool key (first part before "|")
+            parts = pool_key.split("|")
+            if len(parts) > 0:
+                loop_id_str = parts[0]
+
+                # Check if this pool's event loop is still running
+                try:
+                    current_loop = asyncio.get_running_loop()
+                    current_loop_id = str(id(current_loop))
+
+                    # If loop IDs don't match and pool is stale, mark for removal
+                    if loop_id_str != current_loop_id and loop_id_str != "no_loop":
+                        keys_to_remove.append(pool_key)
+                except RuntimeError:
+                    # No current loop - mark old pools for removal
+                    if loop_id_str != "no_loop":
+                        keys_to_remove.append(pool_key)
+
+        # Remove stale pools
+        for key in keys_to_remove:
+            if key in cls._shared_pools:
+                del cls._shared_pools[key]
+                removed_count += 1
+
+        return removed_count
 
     @classmethod
     async def clear_shared_pools(cls) -> None:
