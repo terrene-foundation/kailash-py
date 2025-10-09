@@ -67,7 +67,7 @@ app.start()
 ```python
 app = Nexus(
     api_port=8000,          # API server port (default: 8000)
-    mcp_port=3001,          # MCP server port (default: 3001) 
+    mcp_port=3001,          # MCP server port (default: 3001)
     enable_auth=True,       # Enable authentication
     enable_monitoring=True, # Enable monitoring
     rate_limit=100,         # Rate limit per minute
@@ -107,13 +107,13 @@ app.register("workflow_name", workflow.build())
 # ❌ WRONG: Register without building
 app.register("workflow_name", workflow)
 
-# ❌ WRONG: Wrong parameter order  
+# ❌ WRONG: Wrong parameter order
 app.register(workflow, "workflow_name")
 ```
 
 ### Auto-Discovery Patterns
 - `workflows/*.py`
-- `*.workflow.py` 
+- `*.workflow.py`
 - `workflow_*.py`
 - `*_workflow.py`
 
@@ -133,6 +133,112 @@ nexus execute data_processor --input-data "[1,2,3]" --threshold 0.5 --user-id us
 # MCP Integration
 client.call_tool("data_processor", {"input_data": [1, 2, 3], "threshold": 0.5, "user_id": "user123"})
 ```
+
+### API Input Mapping (CRITICAL)
+
+**Understanding How API Inputs Map to Node Parameters:**
+
+```
+API Request: {"inputs": {"sector": "Tech", "limit": 10}}
+     ↓
+Nexus receives as WorkflowRequest.inputs
+     ↓
+Runtime executes: runtime.execute(workflow, parameters={...})
+     ↓
+ALL nodes receive the FULL inputs dict as parameters
+     ↓
+PythonCodeNode accesses via try/except pattern
+```
+
+**Complete Example:**
+```python
+# 1. Workflow Definition
+workflow = WorkflowBuilder()
+
+workflow.add_node(
+    "PythonCodeNode",
+    "prepare_filters",
+    {
+        "code": """
+# Access API inputs via try/except (inputs are injected as variables)
+try:
+    s = sector  # From API {"inputs": {"sector": "Tech"}}
+except NameError:
+    s = None
+
+try:
+    lim = limit
+except NameError:
+    lim = 100
+
+# Build output
+result = {'filters': {'sector': s} if s else {}, 'limit': lim}
+"""
+    }
+)
+
+workflow.add_node(
+    "ContactListNode",
+    "search",
+    {
+        "filter": {},  # Will be populated via connection
+        "limit": 100
+    }
+)
+
+# Connect outputs to next node's inputs
+workflow.add_connection(
+    "prepare_filters", "result.filters",  # From output
+    "search", "filter"  # To input
+)
+
+workflow.add_connection(
+    "prepare_filters", "result.limit",
+    "search", "limit"
+)
+
+# 2. Register with Nexus
+app.register("contact_search", workflow.build())
+
+# 3. API Usage
+# POST /workflows/contact_search/execute
+# {"inputs": {"sector": "Technology", "limit": 5}}
+```
+
+**Common Pitfalls:**
+```python
+# ❌ WRONG: inputs variable doesn't exist
+sector = inputs.get('sector')
+
+# ❌ WRONG: locals() is restricted
+sector = locals().get('sector')
+
+# ❌ WRONG: Template syntax in config
+workflow.add_node("ContactListNode", "search", {
+    "filter": "${prepare_filters.result.filters}"  # Not evaluated!
+})
+
+# ✅ CORRECT: Use try/except for parameters
+try:
+    s = sector
+except NameError:
+    s = None
+
+# ✅ CORRECT: Use explicit connections
+workflow.add_connection(
+    "prepare_filters", "result.filters",
+    "search", "filter"
+)
+```
+
+**Key Rules:**
+1. API `{"inputs": {...}}` → Runtime `parameters={...}` → Node variables
+2. ALL nodes receive the FULL inputs dict (broadcast behavior)
+3. Use try/except to access optional parameters in PythonCodeNode
+4. Use explicit connections, NOT template syntax `${...}` in node config
+5. Access nested outputs with dot notation: `"result.filters"`
+
+**📚 Detailed Guide**: See [Input Mapping Guide](../../sdk-users/apps/nexus/docs/troubleshooting/input-mapping-guide.md)
 
 ## Common Patterns & Solutions
 
@@ -254,7 +360,7 @@ app.register("create_user", workflow.build())
 
 ### Why This Happens
 1. **auto_discovery=True** causes Nexus to scan and import Python files
-2. Importing DataFlow models triggers workflow execution 
+2. Importing DataFlow models triggers workflow execution
 3. Each model registration executes `LocalRuntime.execute()` synchronously
 4. This creates a blocking loop that prevents server startup
 
@@ -288,7 +394,7 @@ app.register("create_user", workflow.build())
 # API Channel Testing
 response = requests.post("http://localhost:8000/api/workflows/test/execute", json={"param": "value"})
 
-# CLI Channel Testing  
+# CLI Channel Testing
 subprocess.run(["nexus", "execute", "test", "--param", "value"])
 
 # MCP Channel Testing
@@ -307,7 +413,7 @@ result = client.call_tool("test", {"param": "value"})
 
 ### Production Deployment
 1. Configure authentication and monitoring
-2. Set appropriate rate limits  
+2. Set appropriate rate limits
 3. Use environment variables for configuration
 4. Implement proper logging and alerts
 5. Test failover and recovery scenarios

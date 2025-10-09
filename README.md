@@ -22,11 +22,18 @@
 
 ---
 
-## 🔥 Latest Release: v0.9.20 (October 6, 2025)
+## 🔥 Latest Release: v0.9.21 (October 8, 2025)
 
-**Provider Registry Fix & Multi-Modal Support**
+**AsyncSQL Event Loop Isolation Fix**
 
 ### 🐛 Critical Bug Fixes
+- **Event Loop Isolation**: Fixed "Event loop is closed" errors in AsyncSQLDatabaseNode
+  - Automatic connection pool isolation per event loop
+  - Prevents pool sharing across different event loops (FastAPI, sequential workflows)
+  - Backward compatible - no code changes required
+  - <5% performance overhead
+
+### Previous Release: v0.9.20 (October 6, 2025)
 - **Mock Provider Bypass**: Removed hardcoded `if provider == "mock"` logic from LLMAgentNode
 - **Tool Execution Flow**: Unified provider response generation for all providers
 - **Provider Registry**: All providers now use consistent registry path

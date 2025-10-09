@@ -154,19 +154,19 @@ class Workflow:
 
         try:
             # Handle different constructor patterns
-            if "name" in params and "id" not in params:
+            if "name" in params and "_node_id" not in params:
                 # Node expects 'name' parameter (like PythonCodeNode)
                 if "name" not in config:
                     config = config.copy()  # Don't modify original
                     config["name"] = node_id
                 return node_class(**config)
-            elif "id" in params:
-                # Node expects 'id' parameter (traditional pattern)
-                return node_class(id=node_id, **config)
+            elif "_node_id" in params:
+                # Node expects '_node_id' parameter (namespace-separated metadata)
+                return node_class(_node_id=node_id, **config)
             else:
                 # Fallback: try both patterns
                 try:
-                    return node_class(id=node_id, **config)
+                    return node_class(_node_id=node_id, **config)
                 except TypeError:
                     # Try with name parameter
                     config = config.copy()

@@ -29,7 +29,7 @@ class TestPerformanceAnomalyNode:
 
     def test_node_initialization(self):
         """Test that PerformanceAnomalyNode initializes correctly."""
-        node = PerformanceAnomalyNode(id="test_anomaly_detector")
+        node = PerformanceAnomalyNode(_node_id="test_anomaly_detector")
         assert node.id == "test_anomaly_detector"
         assert node._baselines == {}
         assert node._metrics_buffer == {}

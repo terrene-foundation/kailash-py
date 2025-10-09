@@ -12,7 +12,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from kailash.runtime.local import LocalRuntime
@@ -128,6 +128,38 @@ class WorkflowAPI:
 
     def _setup_routes(self):
         """Setup API routes dynamically based on workflow."""
+
+        # Custom 404 handler for helpful error messages
+        @self.app.exception_handler(404)
+        async def custom_404_handler(request: Request, exc):
+            """Provide helpful 404 error with available endpoints."""
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": "Endpoint not found",
+                    "path": request.url.path,
+                    "message": "The requested endpoint does not exist for this workflow.",
+                    "available_endpoints": [
+                        {
+                            "method": "POST",
+                            "path": "/execute",
+                            "description": "Execute the workflow with input parameters",
+                        },
+                        {
+                            "method": "GET",
+                            "path": "/workflow/info",
+                            "description": "Get workflow metadata and structure",
+                        },
+                        {
+                            "method": "GET",
+                            "path": "/health",
+                            "description": "Check workflow API health status",
+                        },
+                    ],
+                    "hint": "Most common: POST to /execute endpoint with JSON body containing 'inputs' field",
+                    "documentation": "/docs",
+                },
+            )
 
         # Root execution endpoint (convenience for direct workflow execution)
         @self.app.post("/")

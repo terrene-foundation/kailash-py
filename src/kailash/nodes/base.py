@@ -202,11 +202,13 @@ class Node(ABC):
             - Validates parameters are correctly specified
         """
         try:
-            self.id = kwargs.get("id", self.__class__.__name__)
+            # Use _node_id for internal node identifier (namespace separation)
+            # This prevents collision with user's 'id' parameter
+            self._node_id = kwargs.get("_node_id", self.__class__.__name__)
             self.metadata = kwargs.get(
                 "metadata",
                 NodeMetadata(
-                    id=self.id,
+                    id=self._node_id,  # NodeMetadata still uses 'id' internally
                     name=kwargs.get("name", self.__class__.__name__),
                     description=kwargs.get("description", self.__doc__ or ""),
                     version=kwargs.get("version", "1.0.0"),
@@ -214,7 +216,7 @@ class Node(ABC):
                     tags=kwargs.get("tags", set()),
                 ),
             )
-            self.logger = logging.getLogger(f"kailash.nodes.{self.id}")
+            self.logger = logging.getLogger(f"kailash.nodes.{self._node_id}")
 
             # Filter out internal fields from config with comprehensive parameter handling
             # Get parameter definitions once and cache for both filtering and validation
@@ -232,11 +234,12 @@ class Node(ABC):
 
             # Comprehensive parameter filtering: handle ALL potential conflicts
             # Fields that are always internal (never user parameters)
-            always_internal = {"metadata"}
+            always_internal = {"metadata", "_node_id"}
 
             # Fields that can be either internal or user parameters
+            # Note: 'id' removed from this list - users can now use 'id' freely
+            # since node identifier is now '_node_id'
             potentially_user_params = {
-                "id",
                 "name",
                 "description",
                 "version",
@@ -343,6 +346,32 @@ class Node(ABC):
         if not hasattr(self, "_workflow_context"):
             self._workflow_context = {}
         self._workflow_context[key] = value
+
+    @property
+    def id(self) -> str:
+        """
+        Backward compatibility property for node identifier.
+
+        Returns the node's identifier (_node_id). This property maintains
+        backward compatibility for code that accesses node.id.
+
+        The internal identifier is now _node_id to prevent namespace collision
+        with user's 'id' parameter.
+        """
+        return self._node_id
+
+    @id.setter
+    def id(self, value: str):
+        """
+        Setter for backward compatibility with code that sets node.id.
+
+        This allows graph.py and other code to set the node identifier
+        while internally using _node_id for namespace separation.
+
+        Args:
+            value: The node identifier to set
+        """
+        self._node_id = value
 
     @abstractmethod
     def get_parameters(self) -> dict[str, NodeParameter]:

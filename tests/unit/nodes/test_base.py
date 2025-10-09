@@ -296,7 +296,7 @@ class TestBaseNode:
         assert node1.id == "SimpleNode"
 
         # Custom ID
-        node2 = SimpleNode(id="custom_id", name="Test", x=1.0)
+        node2 = SimpleNode(_node_id="custom_id", name="Test", x=1.0)
         assert node2.id == "custom_id"
 
 

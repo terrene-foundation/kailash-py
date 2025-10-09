@@ -91,17 +91,17 @@ class NodeWithNameConstructor(Node):
 
 
 class NodeWithIdConstructor(Node):
-    """Node that requires 'id' parameter in constructor."""
+    """Node that requires '_node_id' parameter in constructor (updated for namespace separation)."""
 
-    def __init__(self, id, **kwargs):
-        self.id = id
+    def __init__(self, _node_id, **kwargs):
+        self._node_id = _node_id
         self.config = kwargs
 
     def get_parameters(self):
         return {}
 
     def execute(self, **inputs):
-        return {"result": f"executed_{self.id}"}
+        return {"result": f"executed_{self._node_id}"}
 
 
 class NodeWithInvalidConstructor(Node):
