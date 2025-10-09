@@ -42,11 +42,11 @@ class MockNode(Node):
         return {"value": data.get("value", 0) * 2}
 
 
-# Mock the NodeRegistry.get for testing
-original_get = NodeRegistry.get
+# Store original NodeRegistry.get for cleanup
+_original_get = NodeRegistry.get
 
 
-def mock_get(node_type: str):
+def _mock_get(node_type: str):
     """Mock node registry getter."""
     if node_type == "MockNode" or node_type in [
         "DataReader",
@@ -57,14 +57,18 @@ def mock_get(node_type: str):
         return MockNode
     # For other nodes, try to get from registry, but return MockNode if not found
     try:
-        return original_get(node_type)
+        return _original_get(node_type)
     except:
         # If node not found, return MockNode for testing
         return MockNode
 
 
-# Replace NodeRegistry.get with our mock
-NodeRegistry.get = mock_get
+@pytest.fixture(autouse=True, scope="module")
+def mock_node_registry():
+    """Mock NodeRegistry.get for this module and restore it after tests."""
+    NodeRegistry.get = _mock_get
+    yield
+    NodeRegistry.get = _original_get
 
 
 @pytest.mark.requires_isolation
