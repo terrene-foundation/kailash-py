@@ -10,9 +10,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from kailash.nodes.code import PythonCodeNode
 from kailash.workflow import Workflow
 from kailash.workflow.templates import CycleTemplate, CycleTemplates
-from kailash.nodes.code import PythonCodeNode
 
 
 class TestCycleTemplate:

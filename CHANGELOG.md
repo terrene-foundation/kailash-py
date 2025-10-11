@@ -180,7 +180,7 @@ This release addresses developer experience issues identified in comprehensive S
 
 #### Added
 - ✅ **DataFlow CLAUDE.md**: Comprehensive usage patterns guide (412 lines) for Claude Code integration
-- ✅ **Nexus CLAUDE.md**: Multi-channel platform patterns guide (542 lines) for Claude Code integration  
+- ✅ **Nexus CLAUDE.md**: Multi-channel platform patterns guide (542 lines) for Claude Code integration
 - ✅ **Enhanced Connection Error Messages**: Improved validation with helpful suggestions and port discovery
 - ✅ **hashlib Support**: Added to PythonCodeNode ALLOWED_MODULES for cryptographic operations
 - ✅ **Documentation Structure**: Migrated 90+ missing files from apps/*/docs/ to sdk-users/4-apps/

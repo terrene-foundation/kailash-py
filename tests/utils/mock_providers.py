@@ -5,10 +5,10 @@ Provides mock services for unit testing without external dependencies.
 Includes LLM providers, database connections, and service registries.
 """
 
-import uuid
 import time
-from typing import Dict, Any, List, Optional, Callable
-from unittest.mock import Mock, MagicMock
+import uuid
+from typing import Any, Callable, Dict, List, Optional
+from unittest.mock import MagicMock, Mock
 
 
 class MockLLMProvider:

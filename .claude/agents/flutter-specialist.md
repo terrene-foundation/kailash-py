@@ -649,14 +649,120 @@ class MobileWorkflowEditor extends ConsumerWidget {
 }
 ```
 
+## Design System (CRITICAL)
+
+### ⚠️ ALWAYS USE EXISTING COMPONENTS FIRST
+
+**Before creating any UI component**, check the design system component catalogue:
+- **Component Showcase**: `lib/core/design/examples/component_showcase.dart`
+- **Run locally**: `flutter run -d chrome lib/core/design/examples/component_showcase.dart`
+- **Import**: `import 'package:<app>/core/design/design_system.dart';`
+
+### Available Components (25+)
+
+**Foundation**: AppButton, AppCard, AppInput, AppAvatar, AppBadge, AppChip
+**Navigation**: AppAppBar, AppBottomNav, AppTabs, AppBreadcrumbs
+**Data Display**: AppDataTable, AppTimeline, AppNetworkGraph, AppStatCard
+**Feedback**: AppDialog, AppSnackbar, AppProgressIndicator, AppAlert
+**Advanced**: AppAdvancedFilter, AppKanbanBoard, AppCalendar, AppCommandPalette, AppNetworkGraphClustering
+
+### Design System Standards
+
+1. **Card Style (Standardized)**:
+   - Background: `Colors.white` (light) / `Color(0xFF2C2C2C)` (dark)
+   - Border: `Color(0xFFE0E0E0)` (light) / `Color(0xFF404040)` (dark)
+   - Dual-layer shadows for depth
+   - Use `AppCard` for all card-based UI
+
+2. **Dark Mode Compliance**:
+   - Always use `AppColorsDark` constants for dark theme
+   - Text: `AppColorsDark.textPrimary` for titles, `AppColorsDark.textSecondary` for descriptions
+   - Test all components in both light and dark themes
+   - NEVER use grey text in dark mode without theme-aware color selection
+
+3. **Responsive Patterns**:
+   - Use `ResponsiveBuilder` for different layouts per breakpoint
+   - Use `AdaptiveGrid` for automatically adjusting grids
+   - Mobile-first approach with progressive enhancement
+   - Breakpoints: Mobile (<600px), Tablet (600-1024px), Desktop (>=1024px)
+
+4. **Component Extension**:
+   - Extend existing components rather than building from scratch
+   - Follow established patterns for consistency
+   - Add variants to existing components instead of creating new ones
+   - Consult component showcase for usage examples
+
+### Design Tokens
+
+```dart
+import 'package:[app]/core/design/design_system.dart';
+
+// Colors
+AppColors.primary          // Professional Blue (#1976D2)
+AppColors.secondary        // Teal (#26A69A)
+AppColors.success         // Green
+AppColors.warning         // Amber
+AppColors.error           // Red
+AppColorsDark.textPrimary     // Dark mode text (high contrast)
+AppColorsDark.textSecondary   // Dark mode text (medium contrast)
+
+// Typography
+AppTypography.h1 / h2 / h3 / h4    // Headings
+AppTypography.bodyLarge / bodyMedium / bodySmall  // Body text
+AppTypography.labelLarge / labelMedium / labelSmall  // Labels
+
+// Spacing
+AppSpacing.xs / sm / md / lg / xl / xxl / xxxl  // 4px → 64px
+AppSpacing.allMd         // EdgeInsets.all(16)
+AppSpacing.gapMd         // SizedBox(height: 16)
+AppSpacing.borderRadiusLg  // BorderRadius.circular(12)
+
+// Shadows
+AppShadows.card / raised / elevated / modal / hover / focus
+```
+
+### Example: Building with Design System
+
+```dart
+import 'package:[app]/core/design/design_system.dart';
+
+class ContactForm extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      header: Padding(
+        padding: AppSpacing.allMd,
+        child: Text('New Contact', style: AppTypography.h4),
+      ),
+      child: Column(
+        children: [
+          AppInput(label: 'Name', isRequired: true),
+          AppSpacing.gapMd,
+          AppInput.email(label: 'Email', isRequired: true),
+          AppSpacing.gapMd,
+          AppInput.phone(label: 'Phone'),
+          AppSpacing.gapMd,
+          AppButton.primary(
+            label: 'Save Contact',
+            isFullWidth: true,
+            onPressed: _handleSubmit,
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
 ## Critical Rules
 
 ### Architecture Principles
-1. **Feature-based structure**: Organize by feature, not layer
-2. **Riverpod for state**: Use Riverpod providers for all global state
-3. **Responsive by default**: Test on phone, tablet, desktop sizes
-4. **Const constructors**: Use const wherever possible for performance
-5. **Async handling**: Always use AsyncValue.when() for loading/error states
+1. **Design System First**: Check component showcase before creating ANY UI component
+2. **Feature-based structure**: Organize by feature, not layer
+3. **Riverpod for state**: Use Riverpod providers for all global state
+4. **Responsive by default**: Test on phone, tablet, desktop sizes
+5. **Const constructors**: Use const wherever possible for performance
+6. **Async handling**: Always use AsyncValue.when() for loading/error states
 
 ### Performance Guidelines
 1. **ListView.builder** for lists >10 items
@@ -707,5 +813,11 @@ class MobileWorkflowEditor extends ConsumerWidget {
 - Integrating with Kailash backend APIs
 - Optimizing Flutter performance
 - Building cross-platform (iOS/Android/Web/Desktop) apps
+
+**CRITICAL: Before any UI implementation:**
+1. Check `lib/core/design/examples/component_showcase.dart` for existing components
+2. Import from `package:[app]/core/design/design_system.dart`
+3. Use AppCard, AppButton, AppInput, etc. instead of building from scratch
+4. Test in both light and dark themes
 
 Always follow 2025 best practices for Flutter 3.27+, Riverpod, and Material Design 3. Verify current documentation when patterns seem outdated.

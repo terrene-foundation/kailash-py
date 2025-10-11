@@ -5,9 +5,9 @@ Provides consistent test data, configurations, and utilities for test validation
 Used across all test tiers to ensure consistent testing environments.
 """
 
-import subprocess
 import os
-from typing import Dict, Any, List, Optional
+import subprocess
+from typing import Any, Dict, List, Optional
 
 
 def integration_test_config() -> Dict[str, Any]:
