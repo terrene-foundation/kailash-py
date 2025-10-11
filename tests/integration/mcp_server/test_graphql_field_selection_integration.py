@@ -6,6 +6,7 @@ from typing import Any, Dict
 
 import pytest
 import pytest_asyncio
+from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 from kailash.mcp_server.auth import AuthManager
 from kailash.mcp_server.server import MCPServer
@@ -15,7 +16,6 @@ from kailash.mcp_server.subscriptions import (
     ResourceSubscriptionManager,
 )
 from kailash.middleware.gateway.event_store import EventStore
-from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 
 class TestGraphQLFieldSelectionIntegration(DockerIntegrationTestBase):

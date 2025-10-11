@@ -20,24 +20,26 @@ INFRA-004 Requirements Tested:
 6. Performance validation under realistic infrastructure loads
 """
 
-import pytest
-import time
-import subprocess
-import os
 import concurrent.futures
-from typing import Dict, Any, List
+import os
+import subprocess
+import time
+from typing import Any, Dict, List
+
+import pytest
+
+# Import test infrastructure utilities
+from tests.utils.performance_tracker import PerformanceReport, PerformanceTracker
+from tests.utils.test_fixtures import (
+    docker_service_health_check,
+    load_test_scenarios,
+    test_environment_config,
+)
+
+from kailash.runtime.local import LocalRuntime
 
 # Import Core SDK components for real integration testing
 from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
-
-# Import test infrastructure utilities
-from tests.utils.performance_tracker import PerformanceTracker, PerformanceReport
-from tests.utils.test_fixtures import (
-    test_environment_config,
-    docker_service_health_check,
-    load_test_scenarios,
-)
 
 # Test markers
 pytestmark = pytest.mark.integration
@@ -579,8 +581,8 @@ result = {{
     def test_infrastructure_memory_and_resource_usage(self):
         """Infrastructure must maintain reasonable resource usage."""
         with PerformanceTracker("resource_usage", threshold=10.0):
-            import psutil
             import kaizen
+            import psutil
 
             # Get baseline memory usage
             process = psutil.Process()
@@ -620,8 +622,8 @@ result = {{
 @pytest.fixture(scope="module", autouse=True)
 def setup_integration_infrastructure():
     """Setup integration test infrastructure before running tests."""
-    import subprocess
     import os
+    import subprocess
 
     # Track setup performance
     with PerformanceTracker("integration_setup", threshold=120.0) as setup_tracker:

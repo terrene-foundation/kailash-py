@@ -475,6 +475,7 @@ def sanitize_input(
     max_length: int = 10000,
     allowed_types: list[type] | None = None,
     config: SecurityConfig | None = None,
+    context: str = "generic",
 ) -> Any:
     """
     Sanitize input values to prevent injection attacks.
@@ -484,12 +485,22 @@ def sanitize_input(
         max_length: Maximum string length
         allowed_types: List of allowed types
         config: Security configuration
+        context: Execution context for context-aware sanitization.
+            - "generic": Default moderate sanitization (backward compatible)
+            - "python_exec": Python code execution (preserves shell metacharacters)
+            - "shell_exec": Shell command execution (removes all dangerous characters)
 
     Returns:
         Sanitized value
 
     Raises:
         SecurityError: If input fails validation
+
+    Note:
+        The context parameter allows for appropriate security measures based on
+        how the data will be used. Python code execution via exec() does not
+        need shell metacharacter sanitization since characters like $, ;, &, |
+        are regular Python string characters and not executed by a shell.
     """
     if config is None:
         config = get_security_config()
@@ -751,32 +762,59 @@ def sanitize_input(
         if len(value) > max_length:
             raise SecurityError(f"Input too long: {len(value)} > {max_length}")
 
-        # Remove potentially dangerous characters and patterns
-        sanitized = re.sub(r"[<>;&|`$()]", "", value)
-        # Remove script tags and javascript
-        sanitized = re.sub(
-            r"<script.*?</script>", "", sanitized, flags=re.IGNORECASE | re.DOTALL
-        )
-        sanitized = re.sub(r"javascript:", "", sanitized, flags=re.IGNORECASE)
+        # Context-aware sanitization
+        if context == "python_exec":
+            # Python execution context: Only remove XSS patterns, preserve shell metacharacters
+            # Python exec() does not execute shell commands, so $, ;, &, |, `, (, ) are safe
+            sanitized = re.sub(
+                r"<script.*?</script>", "", value, flags=re.IGNORECASE | re.DOTALL
+            )
+            sanitized = re.sub(r"javascript:", "", sanitized, flags=re.IGNORECASE)
+            # Remove only the most dangerous HTML tags for XSS prevention
+            sanitized = re.sub(
+                r"</?(?:script|iframe|object|embed).*?>",
+                "",
+                sanitized,
+                flags=re.IGNORECASE,
+            )
+        elif context == "shell_exec":
+            # Shell execution context: Remove all shell metacharacters
+            sanitized = re.sub(r"[<>;&|`$()]", "", value)
+            sanitized = re.sub(
+                r"<script.*?</script>", "", sanitized, flags=re.IGNORECASE | re.DOTALL
+            )
+            sanitized = re.sub(r"javascript:", "", sanitized, flags=re.IGNORECASE)
+        else:
+            # Generic context: Moderate sanitization (backward compatible)
+            # Remove only basic XSS patterns, preserve most characters
+            sanitized = re.sub(
+                r"<script.*?</script>", "", value, flags=re.IGNORECASE | re.DOTALL
+            )
+            sanitized = re.sub(r"javascript:", "", sanitized, flags=re.IGNORECASE)
+            # Remove angle brackets for basic XSS protection
+            sanitized = re.sub(r"[<>]", "", sanitized)
 
         if sanitized != value and config.enable_audit_logging:
-            logger.warning(f"Input sanitized: {value[:50]}... -> {sanitized[:50]}...")
+            logger.warning(
+                f"Input sanitized ({context}): {value[:50]}... -> {sanitized[:50]}..."
+            )
 
         return sanitized
 
     # Dictionary sanitization (recursive)
     if isinstance(value, dict):
         return {
-            sanitize_input(k, max_length, allowed_types, config): sanitize_input(
-                v, max_length, allowed_types, config
-            )
+            sanitize_input(
+                k, max_length, allowed_types, config, context
+            ): sanitize_input(v, max_length, allowed_types, config, context)
             for k, v in value.items()
         }
 
     # List sanitization (recursive)
     if isinstance(value, list):
         return [
-            sanitize_input(item, max_length, allowed_types, config) for item in value
+            sanitize_input(item, max_length, allowed_types, config, context)
+            for item in value
         ]
 
     return value
@@ -811,7 +849,9 @@ def create_secure_temp_dir(
 
 
 def validate_node_parameters(
-    parameters: dict[str, Any], config: SecurityConfig | None = None
+    parameters: dict[str, Any],
+    config: SecurityConfig | None = None,
+    context: str = "generic",
 ) -> dict[str, Any]:
     """
     Validate and sanitize node parameters.
@@ -819,6 +859,10 @@ def validate_node_parameters(
     Args:
         parameters: Node parameters to validate
         config: Security configuration
+        context: Execution context for context-aware sanitization
+            - "generic": Default moderate sanitization
+            - "python_exec": Python code execution (preserves shell metacharacters)
+            - "shell_exec": Shell command execution (removes all dangerous characters)
 
     Returns:
         Validated and sanitized parameters
@@ -833,20 +877,22 @@ def validate_node_parameters(
 
     for key, value in parameters.items():
         # Sanitize parameter key
-        clean_key = sanitize_input(key, config=config)
+        clean_key = sanitize_input(key, config=config, context=context)
 
         # Special handling for file paths
         if "path" in key.lower() or "file" in key.lower():
             if isinstance(value, (str, Path)):
                 validated_value = validate_file_path(value, config, f"parameter {key}")
             else:
-                validated_value = sanitize_input(value, config=config)
+                validated_value = sanitize_input(value, config=config, context=context)
         else:
-            validated_value = sanitize_input(value, config=config)
+            validated_value = sanitize_input(value, config=config, context=context)
 
         validated_params[clean_key] = validated_value
 
     if config.enable_audit_logging:
-        logger.info(f"Node parameters validated: {list(validated_params.keys())}")
+        logger.info(
+            f"Node parameters validated ({context}): {list(validated_params.keys())}"
+        )
 
     return validated_params

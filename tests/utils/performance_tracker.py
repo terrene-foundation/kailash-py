@@ -6,7 +6,7 @@ Used to ensure test execution meets performance requirements.
 """
 
 import time
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 
 class PerformanceTracker:

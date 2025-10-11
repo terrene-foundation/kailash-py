@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 
 import psutil
 import pytest
-
 from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 

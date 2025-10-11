@@ -20,24 +20,26 @@ INFRA-004 E2E Validation:
 6. Infrastructure scaling and reliability testing
 """
 
-import pytest
-import time
 import asyncio
-from typing import Dict, Any, List
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Dict, List
 
-# Import Core SDK components
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
-
-# Import complete test infrastructure
-from tests.utils.performance_tracker import PerformanceTracker, PerformanceReport
+import pytest
 from tests.utils import test_fixtures
 from tests.utils.mock_providers import (
     MockLLMProvider,
     MockServiceRegistry,
     create_mock_framework,
 )
+
+# Import complete test infrastructure
+from tests.utils.performance_tracker import PerformanceReport, PerformanceTracker
+
+from kailash.runtime.local import LocalRuntime
+
+# Import Core SDK components
+from kailash.workflow.builder import WorkflowBuilder
 
 # Test markers
 pytestmark = pytest.mark.e2e

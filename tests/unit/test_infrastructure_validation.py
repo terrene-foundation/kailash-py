@@ -11,13 +11,14 @@ Test Requirements:
 - Mock external services if needed for testing utilities
 """
 
-import pytest
-import time
-import tempfile
-import os
 import json
-from typing import Dict, Any, List
-from unittest.mock import Mock, patch, MagicMock
+import os
+import tempfile
+import time
+from typing import Any, Dict, List
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 
 class TestPerformanceTracker:
@@ -372,12 +373,12 @@ class TestTestUtilitiesIntegration:
 
     def test_complete_test_utilities_workflow(self):
         """Test complete workflow using all test utilities."""
+        from tests.utils.mock_providers import MockLLMProvider, MockServiceRegistry
         from tests.utils.performance_tracker import PerformanceTracker
         from tests.utils.test_fixtures import (
             integration_test_config,
             test_agent_configs,
         )
-        from tests.utils.mock_providers import MockLLMProvider, MockServiceRegistry
 
         # Setup complete test environment
         registry = MockServiceRegistry()
