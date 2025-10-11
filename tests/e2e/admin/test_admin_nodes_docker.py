@@ -18,6 +18,7 @@ import asyncpg
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+from tests.utils.docker_config import DATABASE_CONFIG, get_postgres_connection_string
 
 from kailash import Workflow
 from kailash.nodes.admin import (
@@ -31,7 +32,6 @@ from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode, SQLDatabaseNode
 from kailash.runtime.local import LocalRuntime
-from tests.utils.docker_config import DATABASE_CONFIG, get_postgres_connection_string
 
 # Skip if Docker infrastructure is not available
 pytestmark = [pytest.mark.requires_docker, pytest.mark.integration]

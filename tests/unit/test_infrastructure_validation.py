@@ -375,7 +375,10 @@ class TestTestUtilitiesIntegration:
         """Test complete workflow using all test utilities."""
         from tests.utils.mock_providers import MockLLMProvider, MockServiceRegistry
         from tests.utils.performance_tracker import PerformanceTracker
-        from tests.utils.test_fixtures import integration_test_config, test_agent_configs
+        from tests.utils.test_fixtures import (
+            integration_test_config,
+            test_agent_configs,
+        )
 
         # Setup complete test environment
         registry = MockServiceRegistry()

@@ -261,10 +261,17 @@ This focused architecture maintains the essential workflow while dramatically re
 ```
 1. > Use the flutter-specialist subagent for:
    - Flutter 3.27+ Material Design 3 patterns
+   - **CRITICAL**: Check Example-Project design system component catalogue FIRST
+   - Use existing components from lib/core/design/design_system.dart
    - Riverpod state management
    - Responsive design (mobile/tablet/desktop)
    - Kailash SDK API integration
    - Cross-platform deployment
+
+⚠️ BEFORE creating any UI component:
+1. Run: flutter run -d chrome lib/core/design/examples/component_showcase.dart
+2. Check if component exists (25+ available)
+3. Import: import 'package:example_project_app/core/design/design_system.dart';
 ```
 
 ### Combined Framework Applications

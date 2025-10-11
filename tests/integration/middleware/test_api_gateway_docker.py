@@ -8,6 +8,7 @@ from datetime import datetime
 import pytest
 import requests
 from fastapi.testclient import TestClient
+from tests.config_unified import POSTGRES_CONFIG, REDIS_CONFIG
 
 from kailash.middleware.communication.api_gateway import APIGateway
 from kailash.middleware.core.agent_ui import AgentUIMiddleware
@@ -15,7 +16,6 @@ from kailash.middleware.gateway.checkpoint_manager import CheckpointManager
 from kailash.middleware.gateway.event_store import EventStore
 from kailash.middleware.gateway.storage_backends import RedisEventStorage, RedisStorage
 from kailash.nodes.transform import DataTransformer
-from tests.config_unified import POSTGRES_CONFIG, REDIS_CONFIG
 
 
 @pytest.fixture

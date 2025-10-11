@@ -4,6 +4,7 @@ import tempfile
 from unittest.mock import patch
 
 import pytest
+
 from kailash.nodes.base import Node
 from kailash.workflow import NodeInstance, Workflow
 from kailash.workflow.visualization import WorkflowVisualizer
