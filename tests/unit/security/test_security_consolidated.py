@@ -61,11 +61,23 @@ class TestSecuritySuite:
             result = sanitize_input(inp, config=config)
             assert result is not None
 
-        # Dangerous strings should be sanitized
+        # Test context-aware sanitization
         dangerous = "alert('xss'); rm -rf /"
-        sanitized = sanitize_input(dangerous, config=config)
-        assert ";" not in sanitized  # Semicolons removed
-        assert "rm -rf /" in sanitized  # But content preserved
+
+        # Generic context (default): Only removes <> for XSS, preserves shell metacharacters
+        sanitized_generic = sanitize_input(dangerous, config=config, context="generic")
+        assert ";" in sanitized_generic  # Shell metacharacters preserved
+        assert "rm -rf /" in sanitized_generic
+
+        # Shell exec context: Removes all shell metacharacters
+        sanitized_shell = sanitize_input(dangerous, config=config, context="shell_exec")
+        assert ";" not in sanitized_shell  # Semicolons removed
+
+        # Python exec context: Preserves shell metacharacters (they're safe in Python)
+        sanitized_python = sanitize_input(
+            dangerous, config=config, context="python_exec"
+        )
+        assert ";" in sanitized_python  # Shell metacharacters preserved
 
         # Invalid types should be rejected
         with pytest.raises(SecurityError):
@@ -193,14 +205,19 @@ result = sum([1, 2, 3, 4, 5])
         config = SecurityConfig()
 
         for cmd in dangerous_commands:
-            # Commands should be sanitized or rejected
-            try:
-                sanitized = sanitize_input(cmd, config=config)
-                # Should remove dangerous characters
-                assert "&&" not in sanitized or ";" not in sanitized
-            except SecurityError:
-                # Or should be completely rejected
-                pass
+            # Generic context preserves shell metacharacters (safe for non-shell use)
+            sanitized_generic = sanitize_input(cmd, config=config, context="generic")
+            # In generic context, shell chars are preserved
+            assert isinstance(sanitized_generic, str)
+
+            # Shell exec context removes dangerous characters
+            sanitized_shell = sanitize_input(cmd, config=config, context="shell_exec")
+            # Should remove dangerous shell metacharacters
+            assert (
+                "&&" not in sanitized_shell
+                and ";" not in sanitized_shell
+                and "$" not in sanitized_shell
+            )
 
     def test_memory_and_resource_limits(self):
         """Test memory and resource limit enforcement."""

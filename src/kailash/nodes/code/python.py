@@ -412,8 +412,11 @@ class CodeExecutor:
         # Check code safety first
         is_safe, violations, imports_found = self.check_code_safety(code)
 
-        # Sanitize inputs
-        sanitized_inputs = validate_node_parameters(inputs, self.security_config)
+        # Sanitize inputs with python_exec context
+        # Python code execution via exec() does not need shell metacharacter sanitization
+        sanitized_inputs = validate_node_parameters(
+            inputs, self.security_config, context="python_exec"
+        )
 
         # Create isolated namespace
         import builtins
@@ -572,8 +575,11 @@ class CodeExecutor:
         Raises:
             NodeExecutionError: If function execution fails
         """
-        # Sanitize inputs for security
-        sanitized_inputs = validate_node_parameters(inputs, self.security_config)
+        # Sanitize inputs for security with python_exec context
+        # Python function execution does not need shell metacharacter sanitization
+        sanitized_inputs = validate_node_parameters(
+            inputs, self.security_config, context="python_exec"
+        )
 
         try:
             # Get function signature
