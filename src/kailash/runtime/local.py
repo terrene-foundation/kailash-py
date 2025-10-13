@@ -1296,9 +1296,11 @@ class LocalRuntime:
                     parameters=parameters.get(node_id, {}),
                 )
 
-                # Update node config with parameters (Session 061: direct config update)
-                {**node_instance.config, **parameters.get(node_id, {})}
-                node_instance.config.update(parameters.get(node_id, {}))
+                # CRITICAL FIX: DO NOT modify node_instance.config with runtime parameters!
+                # The node instance is reused across executions (especially in Nexus deployments).
+                # Modifying config causes parameter persistence across requests, leading to data leakage.
+                # Runtime parameters are already properly merged in inputs and passed to execute().
+                # Bug report: PythonCodeNode Variable Persistence (P0)
 
                 # ENTERPRISE PARAMETER INJECTION FIX: Injected parameters should override connection inputs
                 # This ensures workflow parameters take precedence over connection inputs for the same parameter names
