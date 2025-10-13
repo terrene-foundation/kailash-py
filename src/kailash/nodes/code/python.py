@@ -521,8 +521,8 @@ class CodeExecutor:
             namespace["get_workflow_context"] = _get_workflow_context
             namespace["set_workflow_context"] = _set_workflow_context
 
-        # Add sanitized inputs
-        namespace.update(sanitized_inputs)
+        # NOTE: Inputs are NOT added to global namespace
+        # They are added to local_namespace below to prevent variable persistence
 
         try:
             # Set memory limit if supported (Unix systems)
@@ -540,19 +540,22 @@ class CodeExecutor:
                         "Could not set memory limit - continuing without limit"
                     )
 
-            # Execute with timeout
+            # Execute with timeout using separate global and local namespaces
+            # This prevents variable persistence across executions (CRITICAL FIX)
+            # See: SDK Bug Report - PythonCodeNode Variable Persistence
+            local_namespace = {}
+            local_namespace.update(sanitized_inputs)
+
             with execution_timeout(
                 self.security_config.execution_timeout, self.security_config
             ):
-                exec(code, namespace)
-            # Return all non-private variables that weren't in inputs
-            return {
-                k: v
-                for k, v in namespace.items()
-                if not k.startswith("_")
-                and k not in sanitized_inputs
-                and k not in self.allowed_modules
-            }
+                # Use separate globals (namespace) and locals (local_namespace)
+                # This ensures complete variable isolation between executions
+                exec(code, namespace, local_namespace)
+
+            # Return all non-private variables from LOCAL namespace only
+            # Variables from previous executions cannot leak through
+            return {k: v for k, v in local_namespace.items() if not k.startswith("_")}
         except ExecutionTimeoutError:
             raise
         except MemoryLimitError:
