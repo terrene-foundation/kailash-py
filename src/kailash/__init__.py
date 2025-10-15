@@ -3,7 +3,10 @@
 The Kailash SDK provides a comprehensive framework for creating nodes and workflows
 that align with container-node architecture while allowing rapid prototyping.
 
-New in v0.9.24: CRITICAL FIX - Docker threading deadlock resolved. WorkflowAPI now defaults to AsyncLocalRuntime
+New in v0.9.25: CRITICAL FIX - Multi-node workflow threading bug resolved. AsyncLocalRuntime now overrides execute()
+and execute_async() methods to prevent thread creation in Docker. Fixes 100% failure rate of multi-node workflows with
+connections in Docker/FastAPI deployments. All nodes now execute in proper async context with no thread creation.
+Previous v0.9.24: CRITICAL FIX - Docker threading deadlock resolved. WorkflowAPI now defaults to AsyncLocalRuntime
 eliminating double-threading anti-pattern in Docker/FastAPI deployments. 300x performance improvement (<100ms vs 30s timeout).
 Previous v0.9.23: CRITICAL FIX - Resolved P0 variable persistence bug in PythonCodeNode and workflow parameter caching.
 Fixed two-layer data leakage issue preventing variable/parameter persistence across workflow executions in Nexus deployments.
@@ -11,7 +14,6 @@ Previous v0.9.17: AsyncSQL per-pool locking eliminates lock contention bottlenec
 Achieves 100% success at 300+ concurrent operations (was 50% failure). 85% performance improvement with per-pool locks.
 Previous v0.9.13: Fixed WorkflowBuilder parameter validation false positives (Bug 010).
 Enhanced validation.py to recognize auto_map_from parameters, eliminating spurious warnings.
-Previous v0.9.12: SQLite Compatibility & Code Quality improvements.
 """
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
@@ -54,7 +56,7 @@ except ImportError:
 # For backward compatibility
 WorkflowGraph = Workflow
 
-__version__ = "0.9.24"
+__version__ = "0.9.25"
 
 __all__ = [
     # Core workflow components
