@@ -371,6 +371,86 @@ class AsyncLocalRuntime(LocalRuntime):
             f"AsyncLocalRuntime initialized with max_concurrent_nodes={max_concurrent_nodes}"
         )
 
+    def execute(
+        self,
+        workflow,
+        task_manager: Optional[TaskManager] = None,
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Dict[str, Any], Optional[str]]:
+        """
+        Execute workflow without creating threads (Docker-safe).
+
+        This override prevents the parent's threading-based execution that causes
+        Docker file descriptor issues. Uses pure async execution via asyncio.run
+        or returns the async task if already in an event loop.
+
+        Args:
+            workflow: Workflow to execute
+            task_manager: Optional task manager for tracking
+            parameters: Input parameters for the workflow
+
+        Returns:
+            Tuple of (results dict, run_id)
+
+        Raises:
+            RuntimeError: If called from async context (use execute_workflow_async instead)
+        """
+        # Check if we're already in an event loop
+        try:
+            loop = asyncio.get_running_loop()
+            # If we get here, we're in an event loop - can't use asyncio.run()
+            # User should call execute_workflow_async() instead
+            raise RuntimeError(
+                "AsyncLocalRuntime.execute() called from async context. "
+                "Use 'await runtime.execute_workflow_async(workflow, inputs)' instead. "
+                "This prevents thread creation which causes Docker/FastAPI deadlocks."
+            )
+        except RuntimeError as e:
+            # Check if this is the error we just raised or no-loop error
+            if "async context" in str(e):
+                # Our error - re-raise it
+                raise
+            # Otherwise it's the "no running loop" error - proceed with asyncio.run()
+            inputs = parameters if parameters else {}
+            result_dict = asyncio.run(
+                self.execute_workflow_async(workflow, inputs=inputs)
+            )
+
+            # Extract results and generate run_id for compatibility
+            results = result_dict.get("results", result_dict)
+            run_id = result_dict.get("run_id", None)
+
+            return (results, run_id)
+
+    async def execute_async(
+        self,
+        workflow,
+        task_manager: Optional[TaskManager] = None,
+        parameters: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Dict[str, Any], Optional[str]]:
+        """
+        Execute workflow asynchronously (for LocalRuntime compatibility).
+
+        This method provides compatibility with LocalRuntime's execute_async()
+        interface while using AsyncLocalRuntime's execution engine.
+
+        Args:
+            workflow: Workflow to execute
+            task_manager: Optional task manager for tracking
+            parameters: Input parameters for the workflow
+
+        Returns:
+            Tuple of (results dict, run_id)
+        """
+        inputs = parameters if parameters else {}
+        result_dict = await self.execute_workflow_async(workflow, inputs=inputs)
+
+        # Extract results and generate run_id for compatibility
+        results = result_dict.get("results", result_dict)
+        run_id = result_dict.get("run_id", None)
+
+        return (results, run_id)
+
     async def execute_workflow_async(
         self,
         workflow,
