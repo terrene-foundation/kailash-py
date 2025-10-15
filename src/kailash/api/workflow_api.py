@@ -81,6 +81,7 @@ class WorkflowAPI:
         app_name: str = "Kailash Workflow API",
         version: str = "1.0.0",
         description: str = "API wrapper for Kailash workflow execution",
+        runtime=None,
     ):
         """
         Initialize the API wrapper.
@@ -90,6 +91,9 @@ class WorkflowAPI:
             app_name: Name of the API application
             version: API version
             description: API description
+            runtime: Optional runtime instance. If None, defaults to AsyncLocalRuntime
+                    for optimal Docker/FastAPI performance. Pass LocalRuntime() for
+                    backward compatibility or CLI contexts.
         """
         if isinstance(workflow, WorkflowBuilder):
             self.workflow = workflow
@@ -102,7 +106,31 @@ class WorkflowAPI:
             self.workflow_id = workflow.workflow_id
             self.version = workflow.version
 
-        self.runtime = LocalRuntime()
+        # Use AsyncLocalRuntime by default for FastAPI/Docker deployment
+        # Users can explicitly pass LocalRuntime() for backward compatibility
+        if runtime is None:
+            from kailash.runtime.async_local import AsyncLocalRuntime
+
+            self.runtime = AsyncLocalRuntime()
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.info(
+                "WorkflowAPI using AsyncLocalRuntime (Docker-optimized, no thread creation)"
+            )
+        else:
+            # Validate that custom runtime has required interface
+            if not hasattr(runtime, "execute"):
+                raise TypeError(
+                    f"Runtime must have 'execute' method. "
+                    f"Got {type(runtime).__name__} which doesn't implement the runtime interface. "
+                    f"Use LocalRuntime or AsyncLocalRuntime."
+                )
+            self.runtime = runtime
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.info(f"WorkflowAPI using {type(runtime).__name__}")
 
         # Create FastAPI app with lifespan management
         self.app = FastAPI(
@@ -254,12 +282,25 @@ class WorkflowAPI:
                     # dynamic config updates
                     pass
 
-            # Execute workflow with inputs
-            results = await asyncio.to_thread(
-                self.runtime.execute,
-                self.workflow_graph,
-                parameters=request.get_inputs(),
-            )
+            # Use appropriate execution method based on runtime type
+            from kailash.runtime.async_local import AsyncLocalRuntime
+
+            if isinstance(self.runtime, AsyncLocalRuntime):
+                # Use native async execution - no thread creation, no deadlock
+                results = await self.runtime.execute_workflow_async(
+                    self.workflow_graph,
+                    inputs=request.get_inputs(),
+                )
+                # AsyncLocalRuntime returns dict with 'results' key
+                if isinstance(results, dict) and "results" in results:
+                    results = results["results"]
+            else:
+                # Fallback to sync runtime with threading (backward compatibility)
+                results = await asyncio.to_thread(
+                    self.runtime.execute,
+                    self.workflow_graph,
+                    parameters=request.get_inputs(),
+                )
 
             # Handle tuple return from runtime
             if isinstance(results, tuple):

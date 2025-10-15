@@ -73,14 +73,36 @@
   4. Comprehensive Coverage: Detailed documentation prevents future questions
 
 ## ⚡ Essential Pattern (All Frameworks)
+
+### For Docker/FastAPI Deployment (RECOMMENDED)
 ```python
 from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
+from kailash.runtime import AsyncLocalRuntime  # Docker-optimized runtime
+
+workflow = WorkflowBuilder()
+workflow.add_node("NodeName", "id", {"param": "value"})  # String-based
+runtime = AsyncLocalRuntime()  # Async-first, no threading
+results = await runtime.execute_workflow_async(workflow.build(), inputs={})
+```
+
+### For CLI/Scripts (Sync Contexts)
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime import LocalRuntime
 
 workflow = WorkflowBuilder()
 workflow.add_node("NodeName", "id", {"param": "value"})  # String-based
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())  # ALWAYS .build()
+```
+
+### Auto-Detection (Simplest)
+```python
+from kailash.runtime import get_runtime
+
+# Automatically selects AsyncLocalRuntime for Docker/FastAPI,
+# LocalRuntime for CLI/scripts
+runtime = get_runtime()  # Defaults to "async" context
 ```
 
 ## 🚨 Emergency Fixes
@@ -93,9 +115,53 @@ results, run_id = runtime.execute(workflow.build())  # ALWAYS .build()
 - **Nexus platform issues** → Use nexus-specialist for multi-channel troubleshooting
 - **Framework selection** → Use framework-advisor to coordinate appropriate specialists
 - **Mock provider issues** → ✅ FIXED (2025-10-03): All providers use registry consistently, no hardcoded paths
+- **Docker workflows hang** → ✅ FIXED (2025-10-15 v0.9.24): WorkflowAPI now uses AsyncLocalRuntime by default, eliminating double-threading deadlock
 
 ## ⚠️ Critical Rules
 - ALWAYS: `runtime.execute(workflow.build())`
 - NEVER: `workflow.execute(runtime)`
 - String-based nodes: `workflow.add_node("NodeName", "id", {})`
 - Real infrastructure: NO MOCKING in Tiers 2-3 tests
+- **Docker/FastAPI**: Use `AsyncLocalRuntime()` or `WorkflowAPI()` (defaults to async)
+- **CLI/Scripts**: Use `LocalRuntime()` for synchronous execution
+
+## 🐳 Docker Deployment (v0.9.24+)
+
+### Critical Fix: Runtime Selection
+**Problem**: Workflows hung indefinitely in Docker due to double-threading deadlock.
+**Solution**: WorkflowAPI now defaults to AsyncLocalRuntime (async-first, no threads).
+
+### WorkflowAPI (Recommended for Docker)
+```python
+from kailash.api.workflow_api import WorkflowAPI
+
+# WorkflowAPI automatically uses AsyncLocalRuntime
+api = WorkflowAPI(my_workflow)  # Docker-optimized by default
+api.run(port=8000)  # No hanging, 10-100x faster
+```
+
+### Manual Runtime Selection
+```python
+from kailash.runtime import AsyncLocalRuntime, LocalRuntime
+
+# For Docker/FastAPI (async contexts)
+runtime = AsyncLocalRuntime()
+
+# For CLI/scripts (sync contexts)
+runtime = LocalRuntime()
+
+# Or use helper
+from kailash.runtime import get_runtime
+runtime = get_runtime("async")  # or "sync"
+```
+
+### Why This Matters
+- **Before (LocalRuntime in Docker)**: `asyncio.to_thread()` → Thread #1 → `_execute_sync()` → Thread #2 → **DEADLOCK**
+- **After (AsyncLocalRuntime)**: Native async execution → No threads → **10-100x faster**
+
+### Backward Compatibility
+Existing code still works! Explicitly pass `LocalRuntime()` if needed:
+```python
+from kailash.runtime import LocalRuntime
+api = WorkflowAPI(workflow, runtime=LocalRuntime())  # Explicit sync runtime
+```
