@@ -36,6 +36,43 @@ The changelog has been reorganized into individual files for better management. 
 
 ### Core SDK Releases
 
+### [0.9.25] - 2025-10-15
+
+**CRITICAL: Multi-Node Workflow Threading Fix**
+
+This release resolves a P0 critical bug where all multi-node workflows with connections failed in Docker deployments due to threading issues.
+
+#### Fixed
+- 🐛 **CRITICAL: Multi-Node Workflow Threading Bug**: AsyncLocalRuntime now properly overrides `execute()` and `execute_async()` methods to prevent thread creation in async contexts
+- 🐛 **Docker Deployment Failures**: Fixed 100% failure rate for multi-node workflows in Docker/FastAPI environments
+- 🐛 **Thread Creation in Async Contexts**: Eliminated problematic thread creation when LocalRuntime.execute() was called in async contexts
+- 🐛 **MemoryError in Docker**: Resolved file descriptor issues causing MemoryError in containerized deployments
+
+#### Changed
+- ⚡ **Performance Improvement**: Multi-node workflow execution time reduced from timeout (>2min) to ~1.4 seconds
+- ⚡ **Async Context Detection**: Added helpful error message when execute() called from async context, guiding users to execute_workflow_async()
+- ⚡ **DataFlow Version**: Bumped to 0.5.4 for consistency with release cycle
+
+#### Added
+- ✅ **Method Overrides**: AsyncLocalRuntime.execute() and execute_async() now properly override parent methods
+- ✅ **CLI Context Support**: execute() uses asyncio.run() in CLI contexts (no event loop)
+- ✅ **Comprehensive Testing**: 84/84 tests passing (8 custom tests + 76 regression tests)
+
+#### Impact
+- 🚀 **Success Rate**: Multi-node workflows - 0% → 100% success rate in Docker
+- 🚀 **Execution Speed**: 99%+ faster execution (~1.4s vs >2min timeout)
+- 🚀 **Production Ready**: All Example-Project workflows now functional
+- 🚀 **Backward Compatible**: Fully compatible with existing code patterns
+
+#### Technical Details
+**Root Cause**: AsyncLocalRuntime inherited execute() from LocalRuntime without overriding it, causing thread creation (line 808 in local.py) when called in Docker/FastAPI async contexts.
+
+**Solution**: Added two method overrides in AsyncLocalRuntime (src/kailash/runtime/async_local.py:374-452):
+1. `execute()` - Uses asyncio.run() in CLI context, raises helpful error in async context
+2. `execute_async()` - Delegates to execute_workflow_async() (pure async, no threads)
+
+**Full Details**: [PR #411](https://github.com/terrene-foundation/kailash-py/pull/411)
+
 ### [0.9.20] - 2025-10-06
 
 **Provider Registry Fix & Multi-Modal Support Release**

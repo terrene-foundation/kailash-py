@@ -7,9 +7,6 @@ DataFlow is a **zero-config database framework** built on Core SDK that automati
 ```bash
 # Install DataFlow directly
 pip install kailash-dataflow
-
-# Or as part of Kailash SDK
-pip install kailash[dataflow]
 ```
 
 ## Current Status: v0.4.0 Release Ready

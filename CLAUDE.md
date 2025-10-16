@@ -1,8 +1,15 @@
-# Kailash SDK
+# Important Directives 📜
+1. Always use kailash SDK with its frameworks to implement.
+2. Always use the specialist subagents (nexus-specialist, dataflow-specialist, mcp-specialist, kaizen-specialist) when working with the frameworks.
+3. Never attempt to write codes from scratch before checking the frameworks with the specialist subagents.
+   - Instead of using direct SQL, SQLAlchemy, Django ORM, always check with the dataflow-specialist on how to do it with the dataflow framework
+   - Instead of building your own API gateway or use FastAPI, always check with the nexus-specialist on how to do it with the nexus framework
+   - Instead of building your own MCP server/client, always check with the mcp-specialist on how to do it with the mcp_server module inside the core SDK
+   - Instead of building your own agentic platform, always check with the kaizen-specialist on how to do it with the kaizen framework
 
-## 🏗️ Architecture Overview
+## 🏗️ Documentation
 
-### Core SDK (`src/kailash/`)
+### Core SDK (`sdk-users/`)
 **Foundational building blocks** for workflow automation:
 - **Purpose**: Custom workflows, fine-grained control, integrations
 - **Components**: WorkflowBuilder, LocalRuntime, 110+ nodes, MCP integration
@@ -14,17 +21,27 @@
 - **Purpose**: Database operations with automatic model-to-node generation
 - **Features**: @db.model decorator generates 9 nodes per model automatically. DataFlow IS NOT AN ORM!
 - **Usage**: Database-first applications with enterprise features
-- **Install**: `pip install kailash[dataflow]` or `pip install kailash-dataflow`
+- **Install**: `pip install kailash-dataflow`
+- **Import**: `from dataflow import DataFlow`
 
 ### Nexus (`sdk-users/apps/nexus/`)
 **Multi-channel platform** built on Core SDK:
 - **Purpose**: Deploy workflows as API + CLI + MCP simultaneously
 - **Features**: Unified sessions, zero-config platform deployment
 - **Usage**: Platform applications requiring multiple access methods
-- **Install**: `pip install kailash[nexus]` or `pip install kailash-nexus`
+- **Install**: `pip install kailash-nexus`
+- **Import**: `from nexus import Nexus`
+
+### Kaizen ('sdk-users/apps/kaizen/')
+**AI agent framework** built on Core SDK:
+- **Purpose**: Production-ready AI agents with multi-modal processing, multi-agent coordination, and enterprise features built on Kailash SDK
+- **Features**: Signature-based programming, BaseAgent architecture, automatic optimization, error handling, audit trails
+- **Usage**: Agentic applications requiring robust AI capabilities
+- **Install**: `pip install kailash-kaizen`
+- **Import**: `from kaizen.* import ...`
 
 ### Critical Relationships
-- **DataFlow and Nexus are built ON Core SDK** - they don't replace it
+- **DataFlow, Nexus, and Kaizen are built ON Core SDK** - they don't replace it
 - **Framework choice affects development patterns** - different approaches for each
 - **All use the same underlying workflow execution** - `runtime.execute(workflow.build())`
 
@@ -65,12 +82,26 @@
   6. Comprehensive Documentation: Guides provide clear path for users and prevent future support questions
   7. Subagent Specialization - Right agent for each task type
   8. Manual Verification: Running all examples caught integration issues
+  9. Design System Foundation: Creating comprehensive design system FIRST prevented inconsistencies
+  10. Institutional Directives: Documented design patterns as mandatory guides for future work
+  11. Component Reusability: Building 16 reusable components eliminated redundant work
+  12. Responsive-First Design: Building responsive patterns from the start prevented mobile/desktop divergence
+  13. Dark Mode Built-In: Supporting dark mode in all components from day 1 avoided retrofitting
+  14. Design Token System: Using centralized tokens (colors, spacing, typography) enabled easy theme changes
 
 - **Lessons Learned** 🎓
   1. Documentation Early: Writing guides after implementation is easier
   2. Pattern Consistency: Following same structure across examples reduces errors
   3. Incremental Validation: Verifying tests pass immediately prevents compounding issues
   4. Comprehensive Coverage: Detailed documentation prevents future questions
+  5. Design System as Foundation: Create design system BEFORE features to enforce consistency
+  6. Mandatory Guides: Institutionalizing design patterns as "must follow" directives prevents drift
+  7. Single Import Pattern: Consolidating all design system exports into one file (design_system.dart) simplifies usage
+  8. Component Showcase: Building live demo app while developing components catches UX issues early
+  9. Deprecation Fixes: Address all deprecations immediately to prevent tech debt accumulation
+  10. Real Device Testing: Testing on actual trackpad/touch reveals issues that simulators miss
+  11. Pointer Events for Touch: Low-level pointer events (PointerDownEvent, PointerMoveEvent) handle trackpad/touch better than high-level gestures alone
+  12. Responsive Testing: Test at all three breakpoints (mobile/tablet/desktop) for every feature
 
 ## ⚡ Essential Pattern (All Frameworks)
 
@@ -105,18 +136,6 @@ from kailash.runtime import get_runtime
 runtime = get_runtime()  # Defaults to "async" context
 ```
 
-## 🚨 Emergency Fixes
-- **"Missing required inputs"** → Use sdk-navigator for common-mistakes.md solutions
-- **Parameter issues** → Use pattern-expert for 3-method parameter guide
-- **Test failures** → Use testing-specialist for real infrastructure setup
-- **DataFlow errors** → Use dataflow-specialist for database debugging (PostgreSQL + SQLite)
-- **String ID issues** → DataFlow preserves string IDs - no forced int conversion
-- **Multi-instance conflicts** → Each DataFlow instance maintains separate context
-- **Nexus platform issues** → Use nexus-specialist for multi-channel troubleshooting
-- **Framework selection** → Use framework-advisor to coordinate appropriate specialists
-- **Mock provider issues** → ✅ FIXED (2025-10-03): All providers use registry consistently, no hardcoded paths
-- **Docker workflows hang** → ✅ FIXED (2025-10-15 v0.9.24): WorkflowAPI now uses AsyncLocalRuntime by default, eliminating double-threading deadlock
-
 ## ⚠️ Critical Rules
 - ALWAYS: `runtime.execute(workflow.build())`
 - NEVER: `workflow.execute(runtime)`
@@ -125,11 +144,8 @@ runtime = get_runtime()  # Defaults to "async" context
 - **Docker/FastAPI**: Use `AsyncLocalRuntime()` or `WorkflowAPI()` (defaults to async)
 - **CLI/Scripts**: Use `LocalRuntime()` for synchronous execution
 
-## 🐳 Docker Deployment (v0.9.24+)
-
-### Critical Fix: Runtime Selection
-**Problem**: Workflows hung indefinitely in Docker due to double-threading deadlock.
-**Solution**: WorkflowAPI now defaults to AsyncLocalRuntime (async-first, no threads).
+## 🐳 Docker Deployment
+- WorkflowAPI now defaults to AsyncLocalRuntime (async-first, no threads).
 
 ### WorkflowAPI (Recommended for Docker)
 ```python
@@ -153,15 +169,4 @@ runtime = LocalRuntime()
 # Or use helper
 from kailash.runtime import get_runtime
 runtime = get_runtime("async")  # or "sync"
-```
-
-### Why This Matters
-- **Before (LocalRuntime in Docker)**: `asyncio.to_thread()` → Thread #1 → `_execute_sync()` → Thread #2 → **DEADLOCK**
-- **After (AsyncLocalRuntime)**: Native async execution → No threads → **10-100x faster**
-
-### Backward Compatibility
-Existing code still works! Explicitly pass `LocalRuntime()` if needed:
-```python
-from kailash.runtime import LocalRuntime
-api = WorkflowAPI(workflow, runtime=LocalRuntime())  # Explicit sync runtime
 ```

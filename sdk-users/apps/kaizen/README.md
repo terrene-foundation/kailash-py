@@ -68,9 +68,6 @@ class MyAgent(BaseAgent):
 ```bash
 # Install Kaizen framework
 pip install kailash-kaizen
-
-# Or install with Kailash SDK
-pip install kailash[kaizen]
 ```
 
 ### Your First Agent (3 Steps)
