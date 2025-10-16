@@ -59,28 +59,28 @@ nexus = Nexus(
     api_port=8000,
     cli_port=8001,
     mcp_port=3001,
-    
+
     # Enterprise security
     enable_auth=True,
     auth_strategy="oauth2",
     enable_rate_limiting=True,
     rate_limit_per_minute=1000,
-    
+
     # Performance optimization
     enable_caching=True,
     cache_backend="redis",
     cache_ttl=300,
-    
+
     # Monitoring & observability
     enable_monitoring=True,
     metrics_backend="prometheus",
     enable_tracing=True,
-    
+
     # Reliability patterns
     enable_circuit_breaker=True,
     circuit_breaker_failure_threshold=5,
     max_concurrent_workflows=100,
-    
+
     # Session management
     enable_sessions=True,
     session_backend="redis",
@@ -118,7 +118,7 @@ class CustomEventHandler(EventHandler):
     def handle_workflow_start(self, event: ChannelEvent):
         """Handle workflow start events across all channels"""
         self.logger.info(f"Workflow {event.workflow_name} started via {event.channel}")
-        
+
         # Channel-specific handling
         if event.channel == "api":
             self.record_api_metric(event)
@@ -126,21 +126,21 @@ class CustomEventHandler(EventHandler):
             self.log_cli_usage(event)
         elif event.channel == "mcp":
             self.track_ai_interaction(event)
-    
+
     def handle_workflow_complete(self, event: ChannelEvent):
         """Handle workflow completion with cross-channel notification"""
         result = event.result
-        
+
         # Notify all active sessions
         self.notify_sessions(f"Workflow {event.workflow_name} completed")
-        
+
         # Update metrics
         self.update_workflow_metrics(event.workflow_name, event.duration)
-    
+
     def handle_error(self, event: ChannelEvent):
         """Handle errors with channel-specific responses"""
         error = event.error
-        
+
         if event.channel == "api":
             # Return structured error response
             return {
@@ -225,10 +225,10 @@ from nexus.parameters import ParameterResolver, ParameterSource
 class CustomParameterResolver(ParameterResolver):
     def resolve_parameters(self, workflow_name: str, channel: str, raw_params: dict) -> dict:
         """Custom parameter resolution with cross-channel consistency"""
-        
+
         # Base parameter resolution
         resolved = super().resolve_parameters(workflow_name, channel, raw_params)
-        
+
         # Channel-specific parameter handling
         if channel == "api":
             # Extract from HTTP headers, query params, body
@@ -239,16 +239,16 @@ class CustomParameterResolver(ParameterResolver):
         elif channel == "mcp":
             # Extract from MCP tool parameters
             resolved.update(self.extract_mcp_parameters(raw_params))
-        
+
         # Apply workflow-specific transformations
         if workflow_name == "data_processor":
             resolved = self.transform_data_processor_params(resolved)
-        
+
         # Validate parameters
         self.validate_parameters(workflow_name, resolved)
-        
+
         return resolved
-    
+
     def extract_api_parameters(self, raw_params: dict) -> dict:
         """Extract parameters from API request"""
         return {
@@ -256,18 +256,18 @@ class CustomParameterResolver(ParameterResolver):
             "user_id": raw_params.get("headers", {}).get("x-user-id"),
             "data": raw_params.get("body", {})
         }
-    
+
     def parse_cli_arguments(self, raw_params: dict) -> dict:
         """Parse CLI arguments into structured parameters"""
         args = raw_params.get("args", [])
         kwargs = raw_params.get("kwargs", {})
-        
+
         return {
             "cli_args": args,
             "cli_options": kwargs,
             "data": kwargs.get("data") or (args[0] if args else {})
         }
-    
+
     def extract_mcp_parameters(self, raw_params: dict) -> dict:
         """Extract parameters from MCP tool call"""
         return {
@@ -291,7 +291,7 @@ class EnterpriseSessionManager(SessionManager):
     def create_session(self, channel: str, user_id: str = None) -> Session:
         """Create session with enhanced metadata"""
         session = super().create_session(channel, user_id)
-        
+
         # Add enterprise metadata
         session.metadata.update({
             "tenant_id": self.get_tenant_id(user_id),
@@ -300,24 +300,24 @@ class EnterpriseSessionManager(SessionManager):
             "created_at": datetime.now().isoformat(),
             "channel": channel
         })
-        
+
         return session
-    
+
     def sync_session_state(self, session_id: str, state: dict):
         """Sync session state across all channels"""
         session = self.get_session(session_id)
-        
+
         # Update session state
         session.state.update(state)
-        
+
         # Notify all channels for this session
         for channel in session.active_channels:
             self.notify_channel(channel, session_id, state)
-    
+
     def cleanup_expired_sessions(self):
         """Enhanced session cleanup with logging"""
         expired_sessions = self.get_expired_sessions()
-        
+
         for session in expired_sessions:
             self.logger.info(f"Cleaning up expired session: {session.id}")
             self.cleanup_session_resources(session)
@@ -347,13 +347,13 @@ config = ProductionConfig(
     max_concurrent_workflows=1000,
     workflow_timeout=300,
     enable_async_execution=True,
-    
+
     # Security hardening
     enable_https=True,
     ssl_cert_path="/etc/ssl/certs/nexus.crt",
     ssl_key_path="/etc/ssl/private/nexus.key",
     enable_csrf_protection=True,
-    
+
     # Monitoring & logging
     log_level="INFO",
     log_format="json",
@@ -361,11 +361,11 @@ config = ProductionConfig(
     metrics_port=9090,
     enable_health_checks=True,
     health_check_interval=30,
-    
+
     # Database connections
     redis_url="redis://redis-cluster:6379/0",
     postgres_url="postgresql://user:pass@postgres:5432/nexus",
-    
+
     # External services
     auth_service_url="https://auth.example.com",
     monitoring_service_url="https://monitoring.example.com"
@@ -448,52 +448,52 @@ class TestNexusWorkflows:
             enable_rate_limiting=False
         )
         self.client = NexusTestClient(self.nexus)
-    
+
     def test_workflow_registration(self):
         """Test workflow registration"""
         workflow = self.create_test_workflow()
-        
+
         # Register workflow
         self.nexus.register("test_workflow", workflow)
-        
+
         # Verify registration
         workflows = self.nexus.list_workflows()
         assert "test_workflow" in workflows
-    
+
     def test_api_channel_execution(self):
         """Test workflow execution via API channel"""
         workflow = self.create_test_workflow()
         self.nexus.register("test_workflow", workflow)
-        
+
         # Execute via API
         response = self.client.post("/api/workflows/test_workflow/execute", {
             "data": {"test": "value"}
         })
-        
+
         assert response.status_code == 200
         assert "result" in response.json()
-    
+
     def test_cli_channel_execution(self):
         """Test workflow execution via CLI channel"""
         workflow = self.create_test_workflow()
         self.nexus.register("test_workflow", workflow)
-        
+
         # Execute via CLI
         result = self.client.cli("execute test_workflow --data '{\"test\": \"value\"}'")
-        
+
         assert result.exit_code == 0
         assert "result" in result.output
-    
+
     def test_mcp_channel_execution(self):
         """Test workflow execution via MCP channel"""
         workflow = self.create_test_workflow()
         self.nexus.register("test_workflow", workflow)
-        
+
         # Execute via MCP
         result = self.client.mcp_call("test_workflow", {
             "data": {"test": "value"}
         })
-        
+
         assert result["success"] is True
         assert "result" in result
 ```
@@ -511,18 +511,18 @@ class TestNexusIntegration(NexusIntegrationTest):
         # Create session via API
         api_session = self.create_api_session()
         session_id = api_session["session_id"]
-        
+
         # Update session state
         self.update_session_state(session_id, {"user_data": "test"})
-        
+
         # Verify state is synced to CLI
         cli_session = self.get_cli_session(session_id)
         assert cli_session["state"]["user_data"] == "test"
-        
+
         # Verify state is synced to MCP
         mcp_session = self.get_mcp_session(session_id)
         assert mcp_session["state"]["user_data"] == "test"
-    
+
     def test_enterprise_features(self):
         """Test enterprise features integration"""
         nexus = Nexus(
@@ -530,13 +530,13 @@ class TestNexusIntegration(NexusIntegrationTest):
             enable_rate_limiting=True,
             enable_monitoring=True
         )
-        
+
         # Test auth integration
         assert nexus.auth_manager is not None
-        
+
         # Test rate limiting
         assert nexus.rate_limiter is not None
-        
+
         # Test monitoring
         assert nexus.metrics_collector is not None
 ```
@@ -557,18 +557,18 @@ class CustomMetricsCollector(MetricsCollector):
             "workflow": workflow_name,
             "success": str(success).lower()
         })
-        
+
         # Record duration histogram
         self.record_histogram(f"workflow_duration_seconds", duration, {
             "workflow": workflow_name
         })
-    
+
     def collect_channel_metrics(self, channel: str, request_count: int, error_count: int):
         """Collect channel-specific metrics"""
         self.set_gauge(f"channel_active_requests", request_count, {
             "channel": channel
         })
-        
+
         self.increment_counter(f"channel_errors_total", {
             "channel": channel
         }, value=error_count)
@@ -597,11 +597,11 @@ class CustomHealthChecker(HealthChecker):
             return {"status": "healthy", "latency": "5ms"}
         except Exception as e:
             return {"status": "unhealthy", "error": str(e)}
-    
+
     def check_external_services(self) -> dict:
         """Check external service dependencies"""
         services = {}
-        
+
         for service_name, service_url in self.external_services.items():
             try:
                 response = requests.get(f"{service_url}/health", timeout=5)
@@ -614,7 +614,7 @@ class CustomHealthChecker(HealthChecker):
                     "status": "unhealthy",
                     "error": str(e)
                 }
-        
+
         return services
 
 # Configure health checks
@@ -635,7 +635,7 @@ class CustomAuthProvider(AuthProvider):
         """Custom authentication logic"""
         # Validate credentials against your auth service
         user = self.validate_user(credentials)
-        
+
         if user:
             return {
                 "user_id": user["id"],
@@ -645,7 +645,7 @@ class CustomAuthProvider(AuthProvider):
             }
         else:
             raise AuthenticationError("Invalid credentials")
-    
+
     def authorize(self, user: dict, resource: str, action: str) -> bool:
         """Custom authorization logic"""
         required_permission = f"{resource}:{action}"
@@ -673,12 +673,12 @@ nexus = Nexus(
     db_pool_size=20,
     db_pool_max_connections=100,
     db_pool_timeout=30,
-    
+
     # HTTP client pool
     http_pool_size=50,
     http_pool_max_connections=200,
     http_pool_timeout=15,
-    
+
     # Redis connection pool
     redis_pool_size=10,
     redis_pool_max_connections=50
@@ -696,13 +696,13 @@ class CustomCacheManager(CacheManager):
         """Generate cache key for workflow results"""
         param_hash = hashlib.md5(json.dumps(parameters, sort_keys=True).encode()).hexdigest()
         return f"workflow:{workflow_name}:{param_hash}"
-    
+
     def should_cache(self, workflow_name: str, parameters: dict) -> bool:
         """Determine if workflow result should be cached"""
         # Don't cache workflows with user-specific data
         if "user_id" in parameters:
             return False
-        
+
         # Cache expensive workflows
         expensive_workflows = ["data_analysis", "ml_training", "report_generation"]
         return workflow_name in expensive_workflows
