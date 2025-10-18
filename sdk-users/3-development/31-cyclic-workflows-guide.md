@@ -72,7 +72,13 @@ built_workflow = workflow.build()
 
 # Create optimization cycle using the working CycleBuilder API
 optimization_cycle = built_workflow.create_cycle("parameter_optimization")
-optimization_cycle.connect("optimizer", "optimizer", mapping={"result": "input_data"}) \
+# CRITICAL: Use "result." prefix for PythonCodeNode in mapping
+optimization_cycle.connect("optimizer", "optimizer", mapping={
+    "result.parameters": "input_data",
+    "result.quality": "quality",
+    "result.best_quality": "best_quality",
+    "result.iteration": "iteration"
+}) \
                   .max_iterations(50) \
                   .converge_when("converged == True") \
                   .timeout(300) \
@@ -604,7 +610,12 @@ built_workflow = workflow.build()
 
 # Create optimization cycle
 optimization_cycle = built_workflow.create_cycle("ml_optimization")
-optimization_cycle.connect("evaluator", "data_preprocessor", mapping={"result": "input_data"}) \
+# CRITICAL: Use "result." prefix for PythonCodeNode in mapping
+optimization_cycle.connect("evaluator", "data_preprocessor", mapping={
+    "result.model": "input_data",
+    "result.metrics": "metrics",
+    "result.iteration": "iteration"
+}) \
                   .max_iterations(50) \
                   .converge_when("converged == True") \
                   .timeout(600) \
@@ -860,7 +871,11 @@ if safety_status['violations']:
     # Build and create cycle
     built_workflow = workflow.build()
     cycle = built_workflow.create_cycle("monitored_cycle")
-    cycle.connect("monitored_processor", "monitored_processor", mapping={"result": "input_data"}) \
+    # CRITICAL: Use "result." prefix for PythonCodeNode in mapping
+    cycle.connect("monitored_processor", "monitored_processor", mapping={
+        "result.processing_result": "input_data",
+        "result.monitoring": "monitoring"
+    }) \
          .max_iterations(100) \
          .converge_when("converged == True") \
          .timeout(300) \

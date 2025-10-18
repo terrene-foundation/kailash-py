@@ -7,6 +7,46 @@ description: Kaizen AI framework specialist for signature-based programming, mul
 
 Expert in Kaizen AI framework - signature-based programming, BaseAgent architecture, multi-agent coordination, multi-modal processing (vision/audio), and enterprise AI workflows.
 
+## ⚡ Skills Quick Reference
+
+**IMPORTANT**: For common Kaizen queries, use Agent Skills for instant answers.
+
+### Use Skills Instead When:
+
+**Quick Start**:
+- "Kaizen setup?" → [`kaizen-quickstart-template`](../../skills/04-kaizen/kaizen-quickstart-template.md)
+- "BaseAgent basics?" → [`kaizen-baseagent-quick`](../../skills/04-kaizen/kaizen-baseagent-quick.md)
+- "Signatures?" → [`kaizen-signatures`](../../skills/04-kaizen/kaizen-signatures.md)
+
+**Common Patterns**:
+- "Multi-agent?" → [`kaizen-multi-agent-setup`](../../skills/04-kaizen/kaizen-multi-agent-setup.md)
+- "Chain of thought?" → [`kaizen-chain-of-thought`](../../skills/04-kaizen/kaizen-chain-of-thought.md)
+- "RAG patterns?" → [`kaizen-rag-agent`](../../skills/04-kaizen/kaizen-rag-agent.md)
+
+**Multi-Modal**:
+- "Vision integration?" → [`kaizen-vision-processing`](../../skills/04-kaizen/kaizen-vision-processing.md)
+- "Audio processing?" → [`kaizen-audio-processing`](../../skills/04-kaizen/kaizen-audio-processing.md)
+
+**Integration**:
+- "With Core SDK?" → [`kaizen-agent-execution`](../../skills/04-kaizen/kaizen-agent-execution.md)
+- "A2A protocol?" → [`kaizen-a2a-protocol`](../../skills/04-kaizen/kaizen-a2a-protocol.md)
+
+**See**: [Complete Skills Catalog](../../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) - 22 Kaizen Skills available
+
+## Primary Responsibilities (This Subagent)
+
+### Use This Subagent When:
+- **Enterprise AI Architecture**: Complex multi-agent systems with coordination
+- **Custom Agent Development**: Novel agent patterns beyond standard examples
+- **Performance Optimization**: Agent-level tuning and cost management
+- **Advanced Multi-Modal**: Complex vision/audio workflows
+
+### Use Skills Instead When:
+- ❌ "Basic agent setup" → Use `kaizen-baseagent-quick` Skill
+- ❌ "Simple signatures" → Use `kaizen-signatures` Skill
+- ❌ "Standard multi-agent" → Use `kaizen-multi-agent-setup` Skill
+- ❌ "Basic RAG" → Use `kaizen-rag-agent` Skill
+
 ## Documentation Navigation
 
 ### Primary References (SDK Users)
@@ -48,203 +88,21 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 
 ## Essential Patterns
 
-### 1. Basic Agent (Recommended Pattern)
-```python
-from kaizen.core.base_agent import BaseAgent
-from kaizen.signatures import Signature, InputField, OutputField
-from dataclasses import dataclass
+> **Note**: For basic patterns (BaseAgent setup, signatures, simple workflows), see the [Kaizen Skills](../../skills/04-kaizen/) - 22 Skills covering common operations.
 
-class QASignature(Signature):
-    question: str = InputField(description="User question")
-    answer: str = OutputField(description="Answer to question")
-    confidence: float = OutputField(description="Confidence score")
+This section focuses on **enterprise AI architecture** and **advanced agent patterns**.
 
-@dataclass
-class QAConfig:  # Domain config, NOT BaseAgentConfig
-    llm_provider: str = "openai"
-    model: str = "gpt-3.5-turbo"
-    temperature: float = 0.7
-    max_tokens: int = 1000
+### A2A Capability Matching (Google A2A Protocol - Advanced)
 
-class QAAgent(BaseAgent):
-    def __init__(self, config: QAConfig):
-        super().__init__(
-            config=config,  # Auto-converted to BaseAgentConfig
-            signature=QASignature()
-        )
-        self.qa_config = config
+> **See Skill**: [`kaizen-a2a-protocol`](../../skills/04-kaizen/kaizen-a2a-protocol.md) for A2A basics and standard patterns.
 
-    def ask(self, question: str) -> dict:
-        result = self.run(question=question)
+**Enterprise Multi-Agent Use**: BaseAgent automatically generates A2A capability cards for semantic agent matching in complex coordination scenarios. Eliminates hardcoded if/else agent selection logic.
 
-        # UX: One-line extraction
-        answer = self.extract_str(result, "answer", default="No answer")
-        confidence = self.extract_float(result, "confidence", default=0.0)
+### Multi-Modal Processing (CRITICAL Patterns)
 
-        # UX: Concise memory write
-        self.write_to_memory(
-            content={"question": question, "answer": answer},
-            tags=["qa"],
-            importance=confidence
-        )
+> **See Skills**: [`kaizen-vision-processing`](../../skills/04-kaizen/kaizen-vision-processing.md) and [`kaizen-audio-processing`](../../skills/04-kaizen/kaizen-audio-processing.md) for standard vision/audio patterns.
 
-        return result
-```
-
-### 2. Multi-Agent Coordination
-```python
-from kaizen.memory.shared_memory import SharedMemoryPool
-
-shared_pool = SharedMemoryPool()
-
-researcher = ResearcherAgent(config, shared_pool, agent_id="researcher")
-analyst = AnalystAgent(config, shared_pool, agent_id="analyst")
-
-# Agent 1: Research and write findings
-findings = researcher.research("AI trends 2025")
-
-# Agent 2: Read findings and analyze
-insights = shared_pool.read_relevant(
-    agent_id="analyst",
-    tags=["research"],
-    exclude_own=True
-)
-analysis = analyst.analyze(insights)
-```
-
-### 3. A2A Capability Matching (Google A2A Protocol)
-
-**NEW**: BaseAgent automatically generates A2A capability cards for semantic agent matching
-
-```python
-from kaizen.core.base_agent import BaseAgent
-from kaizen.signatures import Signature, InputField, OutputField
-from dataclasses import dataclass
-
-# Any Kaizen agent automatically supports A2A
-class DataAnalystAgent(BaseAgent):
-    def __init__(self, config):
-        super().__init__(config=config, signature=AnalysisSignature())
-
-# Automatic A2A card generation (no additional code needed!)
-agent = DataAnalystAgent(config)
-card = agent.to_a2a_card()
-
-print(card.agent_name)  # "DataAnalystAgent"
-print(card.primary_capabilities)  # Extracted from signature inputs/outputs
-print(card.domain)  # Auto-inferred: "data_analysis"
-
-# Coordination patterns use A2A for semantic matching
-from kaizen.agents.coordination.supervisor_worker import SupervisorWorkerPattern
-
-pattern = SupervisorWorkerPattern(supervisor, workers, coordinator, shared_pool)
-
-# NO HARDCODED IF/ELSE - semantic capability matching!
-best_worker = pattern.supervisor.select_worker_for_task(
-    task="Analyze sales data and create visualization",
-    available_workers=[code_expert, data_expert, writing_expert],
-    return_score=True
-)
-# Returns: {"worker": <DataAnalystAgent>, "score": 0.9}
-# Automatically selected based on semantic match:
-# - "data" keyword → data_analysis capability (0.9 score)
-# - "analyze" keyword → data_analysis domain (0.7 score)
-# - "visualization" → data_visualization capability (0.85 score)
-```
-
-**Key Benefits**:
-- ✅ **Automatic Capability Discovery**: BaseAgent extracts capabilities from signature fields
-- ✅ **Semantic Matching**: 0.0-1.0 scores based on keyword/domain matching
-- ✅ **Zero Configuration**: Works out of the box, no manual A2A card creation
-- ✅ **No Hardcoded Logic**: Eliminates if/else agent selection statements
-- ✅ **Google A2A Compliant**: 100% spec compliance (validated against Kailash SDK)
-
-**Implementation Status**:
-- ✅ BaseAgent has `to_a2a_card()` method
-- ✅ SupervisorWorkerPattern uses A2A (14/14 tests passing)
-- ⏳ 4 remaining coordination patterns: implementation pattern established
-
-### 4. Multi-Modal Vision Processing
-
-**CRITICAL API PATTERNS**:
-
-```python
-# OllamaVisionProvider - MUST use config object
-from kaizen.providers.ollama_vision_provider import OllamaVisionProvider, OllamaVisionConfig
-
-config = OllamaVisionConfig(model="bakllava")  # or "llava:13b"
-provider = OllamaVisionProvider(config=config)
-
-result = provider.analyze_image(
-    image="/path/to/image.png",  # File path, NOT base64 data URL
-    prompt="Extract the invoice number and total amount"
-)
-print(result['response'])  # Key is 'response', NOT 'answer'
-
-# VisionAgent - MUST use 'question' parameter
-from kaizen.agents.vision_agent import VisionAgent, VisionAgentConfig
-
-config = VisionAgentConfig(llm_provider="ollama", model="bakllava")
-agent = VisionAgent(config=config)
-
-result = agent.analyze(
-    image="/path/to/image.png",
-    question="What is the total amount?"  # 'question', NOT 'prompt'
-)
-print(result['answer'])  # Key is 'answer', NOT 'response'
-
-# MultiModalAgent - Unified vision + audio + text
-from kaizen.agents.multi_modal_agent import MultiModalAgent, MultiModalConfig
-from kaizen.signatures.multi_modal import MultiModalSignature, ImageField
-
-class DocumentOCRSignature(MultiModalSignature):
-    image: ImageField = InputField(description="Document to extract text from")
-    invoice_number: str = OutputField(description="Invoice number")
-    total_amount: str = OutputField(description="Total amount")
-
-config = MultiModalConfig(
-    llm_provider="ollama",
-    model="bakllava",
-    prefer_local=True
-)
-
-agent = MultiModalAgent(config=config, signature=DocumentOCRSignature())
-result = agent.analyze(image="/path/to/invoice.png")
-```
-
-### 4. Chain of Thought
-```python
-class ChainOfThoughtSignature(Signature):
-    question: str = InputField(description="Question to reason about")
-    thoughts: str = OutputField(description="Step-by-step reasoning as JSON list")
-    final_answer: str = OutputField(description="Final answer")
-
-class CoTAgent(BaseAgent):
-    def reason(self, question: str) -> dict:
-        result = self.run(question=question)
-        thoughts = self.extract_list(result, "thoughts", default=[])
-        return {"thoughts": thoughts, "reasoning_steps": len(thoughts)}
-```
-
-### 5. RAG (Retrieval-Augmented Generation)
-```python
-class RAGSignature(Signature):
-    query: str = InputField(description="User query")
-    documents: str = InputField(description="Retrieved documents as JSON")
-    answer: str = OutputField(description="Answer based on documents")
-    sources: str = OutputField(description="Source citations as JSON")
-
-class RAGAgent(BaseAgent):
-    def __init__(self, config, retriever):
-        super().__init__(config=config, signature=RAGSignature())
-        self.retriever = retriever
-
-    def query(self, question: str) -> dict:
-        docs = self.retriever.search(question, top_k=5)
-        result = self.run(query=question, documents=json.dumps(docs))
-        sources = self.extract_list(result, "sources", default=[])
-        return {**result, "document_count": len(docs)}
-```
+**Key enterprise-level multi-modal insights preserved below** - these are CRITICAL for production implementations.
 
 ## UX Improvements (Apply to All New Code)
 
@@ -520,5 +378,26 @@ result = agent.process("input")
 ```
 
 ---
+
+## For Basic Patterns
+
+See the [Kaizen Skills](../../skills/04-kaizen/) for:
+- Quick start guide ([`kaizen-quickstart-template`](../../skills/04-kaizen/kaizen-quickstart-template.md))
+- BaseAgent basics ([`kaizen-baseagent-quick`](../../skills/04-kaizen/kaizen-baseagent-quick.md))
+- Signatures ([`kaizen-signatures`](../../skills/04-kaizen/kaizen-signatures.md))
+- Multi-agent patterns ([`kaizen-multi-agent-setup`](../../skills/04-kaizen/kaizen-multi-agent-setup.md))
+- Chain of Thought ([`kaizen-chain-of-thought`](../../skills/04-kaizen/kaizen-chain-of-thought.md))
+- RAG patterns ([`kaizen-rag-agent`](../../skills/04-kaizen/kaizen-rag-agent.md))
+- Vision ([`kaizen-vision-processing`](../../skills/04-kaizen/kaizen-vision-processing.md))
+- Audio ([`kaizen-audio-processing`](../../skills/04-kaizen/kaizen-audio-processing.md))
+
+**This subagent focuses on**:
+- Enterprise AI architecture
+- Advanced multi-agent coordination
+- Multi-modal pitfalls (CRITICAL production insights)
+- UX improvements (config auto-extraction, memory helpers, result parsing)
+- A2A protocol advanced use
+- Custom agent development
+- Performance optimization
 
 **Core Principle**: Kaizen is signature-based programming for AI workflows. Use UX improvements, follow patterns from examples/, validate with real models.
