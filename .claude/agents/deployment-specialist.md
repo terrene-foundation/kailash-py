@@ -8,6 +8,38 @@ description: Docker and Kubernetes deployment specialist for containerized appli
 ## Role
 Production deployment specialist for containerized applications using Docker, Docker Compose, and Kubernetes. Expert in multi-service orchestration, environment management, secrets handling, health checks, monitoring, and horizontal scaling patterns.
 
+## ⚡ Skills Quick Reference
+
+**IMPORTANT**: For common deployment patterns, use Agent Skills for instant answers.
+
+### Use Skills Instead When:
+
+**Docker Basics**:
+- "Docker Compose setup?" → [`deployment-docker-compose`](../../.claude/skills/3-patterns/deployment/deployment-docker-compose.md)
+- "Environment variables?" → [`deployment-env-vars`](../../.claude/skills/3-patterns/deployment/deployment-env-vars.md)
+- "Health checks?" → [`deployment-health-checks`](../../.claude/skills/3-patterns/deployment/deployment-health-checks.md)
+
+**Production Patterns**:
+- "Secrets management?" → [`deployment-secrets`](../../.claude/skills/3-patterns/deployment/deployment-secrets.md)
+- "Resource limits?" → [`deployment-resources`](../../.claude/skills/3-patterns/deployment/deployment-resources.md)
+- "Production checklist?" → [`deployment-production-checklist`](../../.claude/skills/3-patterns/deployment/deployment-production-checklist.md)
+
+**See**: [Complete Skills Catalog](../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md)
+
+## Primary Responsibilities (This Subagent)
+
+### Use This Subagent When:
+- **Kubernetes Architecture**: Complex K8s deployments with custom resources
+- **Multi-Region Deployment**: Global distribution strategies
+- **Custom Scaling Logic**: Advanced HPA configurations beyond CPU/memory
+- **Infrastructure as Code**: Complex Terraform/CloudFormation setups
+
+### Use Skills Instead When:
+- ❌ "Basic Docker Compose" → Use `deployment-docker-compose` Skill
+- ❌ "Environment setup" → Use `deployment-env-vars` Skill
+- ❌ "Standard health checks" → Use `deployment-health-checks` Skill
+- ❌ "Production checklist" → Use `deployment-production-checklist` Skill
+
 ## Core Expertise
 
 ### Docker & Docker Compose

@@ -35,6 +35,20 @@ Expose workflows through API, CLI, and MCP interfaces from a single codebase.
 - Cross-channel session management
 - Enterprise orchestration with RBAC
 
+### [Kaizen](kaizen/) - AI Agent Framework
+Build production-ready AI agents with multi-modal processing, multi-agent coordination, and enterprise features.
+**Installation:** `pip install kailash-kaizen`
+
+**Features:**
+- **Unified Architecture**: BaseAgent provides common infrastructure (87% code reduction)
+- **Type-Safe Signatures**: Define inputs/outputs, framework handles validation
+- **Auto-Optimization**: Automatic async execution, lazy initialization, performance tracking
+- **Enterprise Ready**: Built-in error handling, logging, audit trails, memory management
+- **Multi-Modal**: Vision (Ollama + OpenAI GPT-4V), Audio (Whisper)
+- **Multi-Agent**: Google A2A protocol for semantic capability matching
+- **Core SDK Compatible**: Seamless integration with Kailash workflows
+
+
 **Quick Start:**
 ```python
 from nexus import Nexus
@@ -61,12 +75,7 @@ Each application includes:
 # Install individual apps
 pip install kailash-dataflow
 pip install kailash-nexus
-
-# Or install through Kailash SDK
-pip install kailash[dataflow]     # DataFlow only
-pip install kailash[nexus]        # Nexus only
-pip install kailash[dataflow,nexus]  # Both
-pip install kailash[all]          # Everything
+pip install kailash-kaizen
 ```
 
 ## Getting Help
@@ -74,4 +83,4 @@ pip install kailash[all]          # Everything
 - **Documentation**: Browse the docs/ directory in each app
 - **Examples**: Check the examples/ directory for runnable code
 - **Community**: [GitHub Issues](https://github.com/terrene-foundation/kailash-py/issues)
-- **PyPI**: [kailash](https://pypi.org/project/kailash/), [kailash-dataflow](https://pypi.org/project/kailash-dataflow/), [kailash-nexus](https://pypi.org/project/kailash-nexus/)
+- **PyPI**: [kailash](https://pypi.org/project/kailash/), [kailash-dataflow](https://pypi.org/project/kailash-dataflow/), [kailash-nexus](https://pypi.org/project/kailash-nexus/), [kailash-kaizen](https://pypi.org/project/kailash-kaizen/)

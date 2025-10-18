@@ -30,18 +30,46 @@ from kailash.nodes.code import PythonCodeNode
 workflow = WorkflowBuilder()
 
 # Cycle-aware processor
-workflow.add_node("PythonCodeNode", "processor", {}) else 1
-}
-''',
-    input_types={"current_value": float, "target": float, "iteration": int}
-))
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": """
+try:
+    current_value = input_data.get('current_value', 0)
+    target = input_data.get('target', 100)
+    iteration = input_data.get('iteration', 0)
+except NameError:
+    current_value = 0
+    target = 100
+    iteration = 0
 
-# Create cycle connection
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+new_value = current_value + (target - current_value) / 10
+converged = abs(new_value - target) < 1
+
+result = {
+    'current_value': new_value,
+    'target': target,
+    'iteration': iteration + 1,
+    'converged': converged
+}
+"""
+})
+
+# Build BEFORE creating cycle
+built_workflow = workflow.build()
+
+# Create cycle - CRITICAL: Use "result." prefix for PythonCodeNode
+cycle = built_workflow.create_cycle("processor_cycle")
+cycle.connect("processor", "processor", mapping={
+    "result.current_value": "input_data",
+    "result.target": "target",
+    "result.iteration": "iteration"
+}) \
+     .max_iterations(50) \
+     .converge_when("converged == True") \
+     .build()
 
 # Execute with initial parameters
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(built_workflow, parameters={
     "processor": {
         "current_value": 0,
         "target": 100,
@@ -54,48 +82,67 @@ results, run_id = runtime.execute(workflow, parameters={
 ### **Complex State Management**
 ```python
 # Advanced cycle with complex state
-workflow.add_node("PythonCodeNode", "state_processor", {}),
-        "iterations": 0,
-        "average": 0
-    }
+workflow.add_node("PythonCodeNode", "state_processor", {
+    "code": """
+# Complex state management with accumulation
+class StateManager:
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.values = []
+            cls._instance.sum = 0
+            cls._instance.best_value = float('-inf')
+            cls._instance.iterations = 0
+            cls._instance.average = 0
+        return cls._instance
+
+state_mgr = StateManager()
 
 try:
-    new_data = new_data
-except:
+    new_data = input_data.get('new_data', [])
+except NameError:
     new_data = []
 
 # Process new data
 for item in new_data:
-    state["values"].append(item)
-    state["sum"] += item
-    if item > state["best_value"]:
-        state["best_value"] = item
+    state_mgr.values.append(item)
+    state_mgr.sum += item
+    if item > state_mgr.best_value:
+        state_mgr.best_value = item
 
-state["iterations"] += 1
-state["average"] = state["sum"] / len(state["values"]) if state["values"] else 0
+state_mgr.iterations += 1
+state_mgr.average = state_mgr.sum / len(state_mgr.values) if state_mgr.values else 0
 
 # Check convergence conditions
 converged = (
-    state["iterations"] >= 5 and
-    len(state["values"]) >= 20 and
-    state["average"] > 50
+    state_mgr.iterations >= 5 and
+    len(state_mgr.values) >= 20 and
+    state_mgr.average > 50
 )
 
 result = {
-    "state": state,
-    "converged": converged,
-    "summary": {
-        "total_items": len(state["values"]),
-        "average": state["average"],
-        "best": state["best_value"],
-        "iterations": state["iterations"]
+    'converged': converged,
+    'summary': {
+        'total_items': len(state_mgr.values),
+        'average': state_mgr.average,
+        'best': state_mgr.best_value,
+        'iterations': state_mgr.iterations
     }
 }
-''',
-    input_types={"state": dict, "new_data": list}
-))
+"""
+})
 
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+# Build BEFORE creating cycle
+built_workflow = workflow.build()
+
+# Create cycle - CRITICAL: Use "result." prefix for PythonCodeNode
+cycle = built_workflow.create_cycle("state_processing_cycle")
+cycle.connect("state_processor", "state_processor", mapping={"result.summary": "input_data"}) \
+     .max_iterations(20) \
+     .converge_when("converged == True") \
+     .build()
 
 ```
 

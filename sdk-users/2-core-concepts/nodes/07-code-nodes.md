@@ -223,11 +223,19 @@ result = {
 
 workflow.add_node("PythonCodeNode", "improver", {"code": python_code})
 
-# ✅ ESSENTIAL: Include mapping for data flow between iterations
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()       # Direct field name
+# Build workflow FIRST, then create cycle
+built_workflow = workflow.build()
+
+# ✅ CRITICAL: Include mapping for data flow between iterations with "result." prefix
+cycle_builder = built_workflow.create_cycle("improvement_cycle")
+cycle_builder.connect("improver", "improver", mapping={
+    "result.current_value": "current_value",
+    "result.target": "target",
+    "result.converged": "converged"
+}).max_iterations(10).converge_when("converged == True").build()
 
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build(), parameters={
+results, run_id = runtime.execute(built_workflow, parameters={
     "improver": {"current_value": 10, "target": 50}
 })
 
