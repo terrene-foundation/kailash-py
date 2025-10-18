@@ -97,7 +97,16 @@ from kailash.nodes.code import PythonCodeNode
 
 # ❌ Problem: Convergence never satisfied
 workflow = WorkflowBuilder()
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()  # 'done' never becomes True
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = {'done': False}"})
+
+# Build BEFORE creating cycle
+built_workflow = workflow.build()
+cycle = built_workflow.create_cycle("debug_cycle")
+cycle.connect("processor", "processor", mapping={"result.done": "input_data"}) \
+     .max_iterations(10) \
+     .converge_when("done == True") \
+     .build()
+# Problem: 'done' field never becomes True
 
 # ✅ Solution: Debug convergence field
 class DebugNode(Node):
@@ -108,10 +117,18 @@ class DebugNode(Node):
 
 # Insert debug node before convergence check
 workflow = WorkflowBuilder()
-workflow.add_node("PythonCodeNode", "processor", {"code": "result = {"done": input_data.get("count", 0) >= 5}"})
-workflow.add_node("PythonCodeNode", "debug", {"code": "print(f\"Debug: {input_data}\"); result = input_data"})
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = {'done': input_data.get('count', 0) >= 5, 'count': input_data.get('count', 0) + 1}"})
+workflow.add_node("PythonCodeNode", "debug", {"code": "print(f'Debug: {input_data}'); result = input_data"})
 workflow.add_connection("processor", "result", "debug", "input")
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+
+# Build BEFORE creating cycle
+built_workflow = workflow.build()
+cycle = built_workflow.create_cycle("debug_cycle")
+# CRITICAL: Use "result." prefix for PythonCodeNode outputs
+cycle.connect("debug", "processor", mapping={"result.count": "input_data", "result.done": "done"}) \
+     .max_iterations(10) \
+     .converge_when("done == True") \
+     .build()
 
 ```
 
@@ -121,20 +138,39 @@ from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.code import PythonCodeNode
 
 # ❌ Problem: Middle nodes not detected in A → B → C → A
+# Complex multi-node cycles (A → B → C → A) are difficult to manage
+# The closing edge (C → A) creates the cycle, but middle nodes can be treated as separate
 workflow = WorkflowBuilder()
-workflow.add_connection("A", "result", "B", "input")           # Regular
-workflow.add_connection("B", "result", "C", "input")           # Regular
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build() # Only closing edge marked
-# Result: B is treated as separate DAG node
+workflow.add_node("PythonCodeNode", "A", {"code": "result = {'data': input_data.get('data', 0) + 1}"})
+workflow.add_node("PythonCodeNode", "B", {"code": "result = {'data': input_data.get('data', 0) * 2}"})
+workflow.add_node("PythonCodeNode", "C", {"code": "result = {'data': input_data.get('data', 0) ** 2, 'done': input_data.get('data', 0) > 100}"})
+workflow.add_connection("A", "result", "B", "input")
+workflow.add_connection("B", "result", "C", "input")
+
+# This creates a complex 3-node cycle
+built_workflow = workflow.build()
+cycle = built_workflow.create_cycle("three_node_cycle")
+cycle.connect("C", "A", mapping={"result.data": "input_data"}) \
+     .max_iterations(15) \
+     .converge_when("done == True") \
+     .build()
+# Result: Complex to debug - prefer simpler 2-node cycles
 
 # ✅ Solution: Use direct cycles when possible
-workflow_fixed = Workflow("two-node-cycle")
-workflow_fixed.add_node("A", "PythonCodeNode")
-workflow_fixed.add_node("B", "PythonCodeNode")
-workflow_fixed.connect("A", "B")
-workflow_fixed.connect("B", "A", # Use CycleBuilder API instead)  # Simple 2-node cycle
+workflow_fixed = WorkflowBuilder()
+workflow_fixed.add_node("PythonCodeNode", "A", {"code": "result = {'data': input_data.get('data', 0) + 1}"})
+workflow_fixed.add_node("PythonCodeNode", "B", {"code": "result = {'data': input_data.get('data', 0) * 2, 'done': input_data.get('data', 0) > 10}"})
+workflow_fixed.add_connection("A", "result", "B", "input")
 
-# Note: cycle detection is internal to the runtime
+# Build BEFORE creating cycle
+built_workflow = workflow_fixed.build()
+cycle = built_workflow.create_cycle("two_node_cycle")
+# CRITICAL: Use "result." prefix for PythonCodeNode
+cycle.connect("B", "A", mapping={"result.data": "input_data"}) \
+     .max_iterations(10) \
+     .converge_when("done == True") \
+     .build()
+
 print("Workflow configured with 2-node cycle")
 
 ```
@@ -160,10 +196,18 @@ class CycleLoggerNode(Node):
 
 # Insert into cycle for debugging
 workflow = WorkflowBuilder()
-workflow.add_node("PythonCodeNode", "processor", {"code": "result = {"iteration": input_data.get("iteration", 0) + 1}"})
-workflow.add_node("PythonCodeNode", "logger", {"code": "print(f\"Cycle Debug: {input_data}\"); result = input_data"})
+workflow.add_node("PythonCodeNode", "processor", {"code": "result = {'iteration': input_data.get('iteration', 0) + 1, 'done': input_data.get('iteration', 0) >= 3}"})
+workflow.add_node("PythonCodeNode", "logger", {"code": "print(f'Cycle Debug: {input_data}'); result = input_data"})
 workflow.add_connection("processor", "result", "logger", "input")
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+
+# Build BEFORE creating cycle
+built_workflow = workflow.build()
+cycle = built_workflow.create_cycle("logging_cycle")
+# CRITICAL: Use "result." prefix for PythonCodeNode outputs
+cycle.connect("logger", "processor", mapping={"result.iteration": "input_data"}) \
+     .max_iterations(5) \
+     .converge_when("done == True") \
+     .build()
 
 ```
 
@@ -214,14 +258,33 @@ def test_cycle_execution():
     workflow = WorkflowBuilder()
 
     # Simple counter node
-    workflow.add_node("PythonCodeNode", "counter", {"code": "result = {"count": input_data.get("count", 0) + 1, "done": input_data.get("count", 0) >= 2}"})
+    workflow.add_node("PythonCodeNode", "counter", {
+        "code": """
+try:
+    count = input_data.get('count', 0)
+except NameError:
+    count = 0
 
-    # Self-cycle
-    # Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+result = {
+    'count': count + 1,
+    'done': count >= 2
+}
+"""
+    })
+
+    # Build BEFORE creating cycle
+    built_workflow = workflow.build()
+
+    # Create cycle - CRITICAL: Use "result." prefix for PythonCodeNode
+    cycle = built_workflow.create_cycle("counter_cycle")
+    cycle.connect("counter", "counter", mapping={"result.count": "input_data"}) \
+         .max_iterations(5) \
+         .converge_when("done == True") \
+         .build()
 
     # Execute and verify
     runtime = LocalRuntime()
-    results, run_id = runtime.execute(workflow.build())
+    results, run_id = runtime.execute(built_workflow)
 
     final_result = results.get("counter", {})
     assert final_result.get("result", {}).get("count") == 3

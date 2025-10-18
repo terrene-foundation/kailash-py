@@ -144,9 +144,9 @@ result = {
 
         # Validate results
         assert "processor" in results
-        assert results["processor"]["count"] == 5
-        assert results["processor"]["sum"] == 15
-        assert results["processor"]["average"] == 3.0
+        assert results["processor"]["result"]["count"] == 5  # PythonCodeNode wraps in 'result'
+        assert results["processor"]["result"]["sum"] == 15
+        assert results["processor"]["result"]["average"] == 3.0
 ```
 
 ### 3. End-to-End Tests - Complete Business Scenarios
@@ -190,8 +190,8 @@ result = {'filtered_data': processed, 'count': len(processed)}
         results, run_id = runtime.execute(workflow.build())
 
         # Validate business rules
-        assert results["processor"]["count"] > 0
-        assert all(float(row['value']) > 100 for row in results["processor"]["filtered_data"])
+        assert results["processor"]["result"]["count"] > 0  # Access via nested 'result' key
+        assert all(float(row['value']) > 100 for row in results["processor"]["result"]["filtered_data"])
 ```
 
 ## Docker Infrastructure Testing
@@ -353,8 +353,8 @@ result = {'newsletter_subscribers': filtered, 'count': len(filtered)}
     })
 
     # Validate business logic
-    assert results["processor"]["count"] > 0
-    assert all(c['preferences']['newsletter'] for c in results["processor"]["newsletter_subscribers"])
+    assert results["processor"]["result"]["count"] > 0  # PythonCodeNode result nesting
+    assert all(c['preferences']['newsletter'] for c in results["processor"]["result"]["newsletter_subscribers"])
 ```
 
 ## Test Utilities and Fixtures
@@ -390,7 +390,7 @@ def test_workflow_execution(sample_workflow, runtime):
     """Test workflow execution with fixtures."""
     results, run_id = runtime.execute(sample_workflow.build())
 
-    assert results["processor"]["processed"] == [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
+    assert results["processor"]["result"]["processed"] == [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]  # Nested result access
     assert run_id is not None
 ```
 

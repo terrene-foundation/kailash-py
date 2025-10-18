@@ -150,8 +150,34 @@ class SelfConvergingNode(CycleAwareNode):
 
 # Usage
 workflow = WorkflowBuilder()
-workflow.add_node("PythonCodeNode", "self_converging", {"code": "result = {"quality": min(1.0, input_data.get("quality", 0.0) + 0.1), "converged": True}"})
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+workflow.add_node("PythonCodeNode", "self_converging", {
+    "code": """
+try:
+    quality = input_data.get('quality', 0.0)
+    target = input_data.get('target', 0.8)
+except NameError:
+    quality = 0.0
+    target = 0.8
+
+new_quality = min(1.0, quality + 0.1)
+converged = new_quality >= target
+
+result = {
+    'quality': new_quality,
+    'converged': converged
+}
+"""
+})
+
+# Build BEFORE creating cycle
+built_workflow = workflow.build()
+
+# Create cycle - CRITICAL: Use "result." prefix for PythonCodeNode
+cycle = built_workflow.create_cycle("self_converging_cycle")
+cycle.connect("self_converging", "self_converging", mapping={"result.quality": "input_data"}) \
+     .max_iterations(15) \
+     .converge_when("converged == True") \
+     .build()
 
 ```
 
@@ -221,16 +247,51 @@ def run(self, **kwargs):
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
-# Create cycle-aware node (assuming OptimizerNode is defined above)
+# Create cycle-aware node using PythonCodeNode with state management
 workflow = WorkflowBuilder()
-workflow.add_node("OptimizerNode", "optimizer", {}))
+workflow.add_node("PythonCodeNode", "optimizer", {
+    "code": """
+# Cycle-aware state management
+class OptimizerState:
+    _instance = None
 
-# Connect to itself
-# Use CycleBuilder API: workflow.build().create_cycle("name").connect(...).build()
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.quality = 0.0
+        return cls._instance
+
+state = OptimizerState()
+
+try:
+    target = input_data.get('target', 0.9)
+except NameError:
+    target = 0.9
+
+state.quality = min(1.0, state.quality + 0.1)
+converged = state.quality >= target
+
+result = {
+    'quality': state.quality,
+    'target': target,
+    'converged': converged
+}
+"""
+})
+
+# Build BEFORE creating cycle
+built_workflow = workflow.build()
+
+# Create cycle - CRITICAL: Use "result." prefix for PythonCodeNode
+cycle = built_workflow.create_cycle("optimizer_cycle")
+cycle.connect("optimizer", "optimizer", mapping={"result.quality": "input_data", "result.target": "target"}) \
+     .max_iterations(20) \
+     .converge_when("converged == True") \
+     .build()
 
 # Execute
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow, parameters={
+results, run_id = runtime.execute(built_workflow, parameters={
     "optimizer": {"target": 0.9}
 })
 

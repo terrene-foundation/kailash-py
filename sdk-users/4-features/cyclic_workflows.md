@@ -75,9 +75,10 @@ workflow.add_connection("processor", "result", "evaluator", "input_data")
 # Build workflow first, then create cycle
 built_workflow = workflow.build()
 
-# Create cycle using modern CycleBuilder API
+# CRITICAL: Create cycle using modern CycleBuilder API
+# IMPORTANT: Use "result." prefix for PythonCodeNode outputs in mappings
 cycle_builder = built_workflow.create_cycle("quality_improvement")
-cycle_builder.connect("evaluator", "processor", mapping={"result": "input_data"}) \
+cycle_builder.connect("evaluator", "processor", mapping={"result.current_value": "input_data"}) \
              .max_iterations(10) \
              .converge_when("converged == True") \
              .timeout(300) \
@@ -235,7 +236,8 @@ workflow.add_connection("processor", "result", "validator", "input_data")
 # Build workflow and create cycle
 built_workflow = workflow.build()
 cycle_builder = built_workflow.create_cycle("refinement_cycle")
-cycle_builder.connect("validator", "processor", mapping={"result": "input_data"}) \
+# CRITICAL: Use "result." prefix for PythonCodeNode outputs
+cycle_builder.connect("validator", "processor", mapping={"result.data": "input_data"}) \
              .max_iterations(15) \
              .converge_when("converged == True") \
              .timeout(300) \

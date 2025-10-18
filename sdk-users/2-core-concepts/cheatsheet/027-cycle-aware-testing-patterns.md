@@ -61,7 +61,11 @@ result = {
 # Build workflow and create cycle
 built_workflow = workflow.build()
 cycle_builder = built_workflow.create_cycle("quality_improvement")
-cycle_builder.connect("improver", "improver", mapping={"result": "input_data"}) \
+# CRITICAL: Use "result." prefix for PythonCodeNode in mapping
+cycle_builder.connect("improver", "improver", mapping={
+    "result.quality": "input_data",
+    "result.target": "target"
+}) \
              .max_iterations(10) \
              .converge_when("converged == True") \
              .timeout(300) \
@@ -101,7 +105,8 @@ result = x * x
 # Connect in cycle with proper mapping
 built_workflow = workflow.build()
 cycle_builder = built_workflow.create_cycle("calculation_cycle")
-cycle_builder.connect("calculator", "calculator", mapping={"result": "input_data"}) \
+# CRITICAL: Use "result." prefix for PythonCodeNode in mapping
+cycle_builder.connect("calculator", "calculator", mapping={"result.result": "input_data"}) \
              .max_iterations(3) \
              .converge_when("result >= 16") \
              .timeout(300) \
@@ -142,7 +147,11 @@ result = {
     # Build workflow and create cycle
     built_workflow = workflow.build()
     cycle_builder = built_workflow.create_cycle("counter_cycle")
-    cycle_builder.connect("counter", "counter", mapping={"result": "input_data"}) \
+    # CRITICAL: Use "result." prefix for PythonCodeNode in mapping
+    cycle_builder.connect("counter", "counter", mapping={
+        "result.count": "input_data",
+        "result.done": "done"
+    }) \
                  .max_iterations(5) \
                  .converge_when("done == True") \
                  .timeout(300) \
@@ -222,7 +231,11 @@ result = {
     # Build workflow and create cycle
     built_workflow = workflow.build()
     cycle_builder = built_workflow.create_cycle("conditional_cycle")
-    cycle_builder.connect("switch", "processor", mapping={"true_output": "input_data"}) \
+    # CRITICAL: Use "result." prefix for PythonCodeNode outputs in mapping
+    cycle_builder.connect("switch", "processor", mapping={
+        "result.data": "input_data",
+        "result.iteration": "iteration"
+    }) \
                  .max_iterations(10) \
                  .converge_when("should_exit == True") \
                  .timeout(300) \

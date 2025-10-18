@@ -32,7 +32,7 @@
 - **Install**: `pip install kailash-nexus`
 - **Import**: `from nexus import Nexus`
 
-### Kaizen ('sdk-users/apps/kaizen/')
+### Kaizen (`sdk-users/apps/kaizen/`)
 **AI agent framework** built on Core SDK:
 - **Purpose**: Production-ready AI agents with multi-modal processing, multi-agent coordination, and enterprise features built on Kailash SDK
 - **Features**: Signature-based programming, BaseAgent architecture, automatic optimization, error handling, audit trails

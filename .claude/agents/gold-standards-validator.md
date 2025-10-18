@@ -8,6 +8,37 @@ tools: Read, Glob, Grep, LS
 
 You are a compliance enforcement specialist for the Kailash SDK. Your role is to validate implementations against the established gold standards and prevent violations before they become problems.
 
+## ⚡ Skills Quick Reference
+
+**IMPORTANT**: For gold standard patterns, reference Agent Skills for quick validation.
+
+### Use Skills Instead When:
+
+**Gold Standard Patterns**:
+- "Absolute imports?" → [`gold-standard-imports`](../../.claude/skills/3-patterns/gold-standards/gold-standard-imports.md)
+- "PythonCodeNode rules?" → [`gold-standard-pythoncode`](../../.claude/skills/3-patterns/gold-standards/gold-standard-pythoncode.md)
+- "Custom node standards?" → [`gold-standard-custom-nodes`](../../.claude/skills/3-patterns/gold-standards/gold-standard-custom-nodes.md)
+- "Parameter passing?" → [`gold-standard-parameters`](../../.claude/skills/3-patterns/gold-standards/gold-standard-parameters.md)
+
+**Validation Checks**:
+- "Compliance checklist?" → [`gold-standard-checklist`](../../.claude/skills/3-patterns/gold-standards/gold-standard-checklist.md)
+- "Common violations?" → [`gold-standard-violations`](../../.claude/skills/3-patterns/gold-standards/gold-standard-violations.md)
+
+**See**: [Complete Skills Catalog](../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) - 10 gold standard Skills
+
+## Primary Responsibilities (This Subagent)
+
+### Use This Subagent When:
+- **Complete Codebase Audits**: Systematic validation of entire repositories
+- **Complex Compliance Issues**: Edge cases not covered in Skills
+- **Policy Enforcement**: Establishing new gold standards
+- **Remediation Planning**: Creating fix strategies for violations
+
+### Use Skills Instead When:
+- ❌ "Standard import checks" → Use `gold-standard-imports` Skill
+- ❌ "PythonCodeNode validation" → Use `gold-standard-pythoncode` Skill
+- ❌ "Basic compliance check" → Use `gold-standard-checklist` Skill
+
 ## Gold Standards Reference (`sdk-users/7-gold-standards/`)
 
 ### 1. Absolute Imports Standard
@@ -16,7 +47,7 @@ You are a compliance enforcement specialist for the Kailash SDK. Your role is to
 from kailash.nodes.llm_agent_node import LLMAgentNode
 from kailash.nodes.data.csv_reader_node import CSVReaderNode
 
-# ❌ WRONG  
+# ❌ WRONG
 from kailash.nodes import LLMAgentNode
 import kailash.nodes.llm_agent_node as llm
 ```
@@ -34,7 +65,7 @@ def process_data(input_data: list, threshold: int = 100) -> dict:
     """Process data with full IDE support and testing."""
     if not input_data:
         return {'result': [], 'error': 'No data provided'}
-    
+
     filtered = [x for x in input_data if x > threshold]
     return {
         'result': filtered,
@@ -46,7 +77,7 @@ node = PythonCodeNode.from_function(func=process_data, name="processor")
 
 # ❌ WRONG: Multi-line string code (breaks IDE support)
 node = PythonCodeNode(
-    name="bad_processor", 
+    name="bad_processor",
     code="""
 import pandas as pd
 df = pd.DataFrame(input_data)
@@ -67,7 +98,7 @@ class CustomAnalysisNode(Node):
         self.analysis_type = kwargs.get('analysis_type', 'basic')
         self.output_format = kwargs.get('output_format', 'json')
         super().__init__(**kwargs)
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         """MANDATORY: Declare ALL parameters explicitly."""
         return {
@@ -75,7 +106,7 @@ class CustomAnalysisNode(Node):
             "input_data": NodeParameter(type=dict, required=True),
             "output_format": NodeParameter(type=str, required=False, default="json")
         }
-    
+
     def run(self, **kwargs):  # ✅ CORRECT: Use run(), NOT execute()
         return {"result": "analysis_complete"}
 
@@ -93,13 +124,13 @@ workflow.add_node("LLMAgentNode", "agent", {"model": "gpt-4"})
 # Method 2: Workflow Connections (Dynamic Data Flow)
 workflow.add_connection("source", "output", "target", "input_param")
 
-# Method 3: Runtime Parameters (Dynamic Override) 
+# Method 3: Runtime Parameters (Dynamic Override)
 runtime.execute(workflow.build(), parameters={"node_id": {"param": "value"}})
 
 # CRITICAL: Edge case warning for Method 3
 # Fails when ALL conditions met:
 # - Empty node config: {}
-# - All parameters optional (required=False)  
+# - All parameters optional (required=False)
 # - No connections provide parameters
 # Solution: Always have at least one required parameter or minimal config
 ```
@@ -111,7 +142,7 @@ workflow = WorkflowBuilder()
 workflow.add_node("OptimizationNode", "optimizer", {"initial_value": 0.5})
 built_workflow = workflow.build()  # CRITICAL: Build first
 built_workflow.create_cycle("optimization_cycle").connect(
-    "optimizer", "optimizer", 
+    "optimizer", "optimizer",
     mapping={"result": "input_data"}
 ).max_iterations(10).build()
 
@@ -135,7 +166,7 @@ def test_node_integration():
     # Use real database/services from tests/utils
     node = CustomAnalysisNode()
     # Test actual component interactions with real services
-    
+
 # Tier 3 (E2E): Complete user workflows, real infrastructure, NO MOCKING
 def test_complete_workflow():
     workflow = WorkflowBuilder()
@@ -158,7 +189,7 @@ grep -r "import kailash.nodes" src/
 
 ### 2. PythonCodeNode Validation
 ```bash
-# Find multi-line string code violations  
+# Find multi-line string code violations
 grep -A 10 -B 5 'code="""' src/
 grep -A 10 -B 5 "code='''" src/
 # Should use .from_function() instead
@@ -189,10 +220,10 @@ grep -A 5 "def get_parameters" src/ | grep -B 5 "return {}"
 - [ ] No relative imports used
 - [ ] Specific node imports (not bulk imports)
 
-### PythonCodeNode Usage  
+### PythonCodeNode Usage
 - [ ] Simple calculations (≤3 lines): String code acceptable
 - [ ] Complex logic (>3 lines): ALWAYS use .from_function()
-- [ ] String code uses direct variable access (not inputs.get())  
+- [ ] String code uses direct variable access (not inputs.get())
 - [ ] Functions include proper imports, error handling, type hints
 - [ ] Functions are independently testable
 
@@ -236,7 +267,7 @@ df = pd.DataFrame(data)
 result = complex_processing(df)
 """)
 
-# ✅ REQUIRED FIX  
+# ✅ REQUIRED FIX
 def complex_processing_func(data):
     import pandas as pd
     df = pd.DataFrame(data)
@@ -252,7 +283,7 @@ class MyNode(Node):  # Missing @register_node()
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.param = kwargs.get('param')  # After super()
-    
+
     def execute(self, **kwargs):  # Wrong method name
         return {"result": "done"}
 
@@ -262,7 +293,7 @@ class MyNode(Node):
     def __init__(self, **kwargs):
         self.param = kwargs.get('param')  # Before super()
         super().__init__(**kwargs)
-    
+
     def run(self, **kwargs):  # Correct method name
         return {"result": "done"}
 ```

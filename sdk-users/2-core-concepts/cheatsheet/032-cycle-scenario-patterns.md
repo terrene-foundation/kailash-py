@@ -68,7 +68,20 @@ workflow.add_node("PythonCodeNode", "retry_evaluator", {
     "code": "result = {'should_retry': not input_data.get('converged', False)}"
 })
 workflow.add_connection("etl_retry", "result", "retry_evaluator", "input")
-workflow.add_connection("retry_evaluator", "result", "etl_retry", "input")
+
+# Build BEFORE creating cycle
+built_workflow = workflow.build()
+
+# Create cycle - CRITICAL: Use "result." prefix for PythonCodeNode
+cycle = built_workflow.create_cycle("etl_retry_cycle")
+cycle.connect("retry_evaluator", "etl_retry", mapping={
+    "result.should_retry": "input_data",
+    "result.retry_count": "retry_count",
+    "result.max_retries": "max_retries"
+}) \
+     .max_iterations(10) \
+     .converge_when("converged == True") \
+     .build()
 
 ```
 
@@ -223,7 +236,20 @@ workflow.add_node("PythonCodeNode", "batch_evaluator", {
     "code": "result = {'continue_processing': not input_data.get('converged', False)}"
 })
 workflow.add_connection("batch_processor", "result", "batch_evaluator", "input")
-workflow.add_connection("batch_evaluator", "result", "batch_processor", "input")
+
+# Build BEFORE creating cycle
+built_workflow = workflow.build()
+
+# Create cycle - CRITICAL: Use "result." prefix and map all state fields
+cycle = built_workflow.create_cycle("batch_processing_cycle")
+cycle.connect("batch_evaluator", "batch_processor", mapping={
+    "result.processed_count": "input_data",
+    "result.total_items": "total_items",
+    "result.batch_size": "batch_size"
+}) \
+     .max_iterations(100) \
+     .converge_when("converged == True") \
+     .build()
 
 ```
 
@@ -278,10 +304,24 @@ result = {
 Always map state variables explicitly:
 ```python
 # Example field mapping for cycle connections
-workflow.add_connection("source", "output", "target", "input", mapping={
-    "state_var": "state_var",
-    "config": "config"
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'state_var': input_data.get('state_var', 0) + 1, 'config': input_data.get('config', {}), 'done': input_data.get('state_var', 0) >= 5}"
 })
+
+# Build BEFORE creating cycle
+built_workflow = workflow.build()
+
+# Create cycle with explicit field mapping
+cycle = built_workflow.create_cycle("state_preservation_cycle")
+# CRITICAL: Use "result." prefix for PythonCodeNode
+cycle.connect("processor", "processor", mapping={
+    "result.state_var": "input_data",
+    "result.config": "config"
+}) \
+     .max_iterations(10) \
+     .converge_when("done == True") \
+     .build()
 
 ```
 

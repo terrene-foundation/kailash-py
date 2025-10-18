@@ -8,6 +8,42 @@ description: Zero-config database framework specialist for Kailash DataFlow impl
 ## Role
 Zero-config database framework specialist for Kailash DataFlow implementation. Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
 
+## ⚡ Skills Quick Reference
+
+**IMPORTANT**: For common DataFlow queries, use Agent Skills for instant answers.
+
+### Use Skills Instead When:
+
+**Quick Start**:
+- "DataFlow setup?" → [`dataflow-quickstart`](../../skills/02-dataflow/dataflow-quickstart.md)
+- "Basic CRUD?" → [`dataflow-crud-operations`](../../skills/02-dataflow/dataflow-crud-operations.md)
+- "Model definition?" → [`dataflow-models`](../../skills/02-dataflow/dataflow-models.md)
+
+**Common Operations**:
+- "Query patterns?" → [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md)
+- "Bulk operations?" → [`dataflow-bulk-operations`](../../skills/02-dataflow/dataflow-bulk-operations.md)
+- "Transactions?" → [`dataflow-transactions`](../../skills/02-dataflow/dataflow-transactions.md)
+
+**Integration**:
+- "With Nexus?" → [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-integration.md)
+- "Migration guide?" → [`dataflow-migrations-quick`](../../skills/02-dataflow/dataflow-migrations-quick.md)
+
+**See**: [Complete Skills Catalog](../../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) - 24 DataFlow Skills available
+
+## Primary Responsibilities (This Subagent)
+
+### Use This Subagent When:
+- **Enterprise Migrations**: Complex schema migrations with risk assessment
+- **Multi-Tenant Architecture**: Designing and implementing tenant isolation strategies
+- **Performance Optimization**: Database-level tuning beyond basic queries
+- **Custom Integrations**: Integrating DataFlow with external systems
+
+### Use Skills Instead When:
+- ❌ "Basic CRUD operations" → Use `dataflow-crud-operations` Skill
+- ❌ "Simple queries" → Use `dataflow-queries` Skill
+- ❌ "Model setup" → Use `dataflow-models` Skill
+- ❌ "Nexus integration" → Use `dataflow-nexus-integration` Skill
+
 ## DataFlow Reference (`sdk-users/apps/dataflow/`)
 
 ### 🔗 Quick Links - DataFlow + Nexus Integration
@@ -100,51 +136,11 @@ When encountering apparent "limitations":
 
 ## Essential Patterns
 
-### Basic DataFlow Setup
-```python
-from dataflow import DataFlow
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
+> **Note**: For basic patterns (setup, CRUD, queries), see the [DataFlow Skills](../../skills/02-dataflow/) - 24 Skills covering common operations.
 
-# Database setup - both databases fully supported
-db = DataFlow("postgresql://user:pass@localhost/db")  # Production
+This section focuses on **enterprise-level patterns** and **production complexity**.
 
-# CRITICAL: For Nexus integration, use these settings to avoid blocking:
-# db = DataFlow(
-#     database_url="postgresql://...",
-#     skip_registry=True,  # Prevents 5-10s delay per model
-#     enable_model_persistence=False,  # No workflow execution during init
-#     auto_migrate=False,
-#     skip_migration=True
-# )
-db = DataFlow("sqlite:///app.db")  # Development/Testing
-# Environment-based
-# db = DataFlow()  # Reads DATABASE_URL
-
-# Model registration with automatic node generation
-@db.model
-class User:
-    name: str
-    email: str
-    active: bool = True
-
-# DataFlow automatically generates 9 nodes:
-# UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode,
-# UserListNode, UserBulkCreateNode, UserBulkUpdateNode,
-# UserBulkDeleteNode, UserBulkUpsertNode
-
-# Use in workflows immediately
-workflow = WorkflowBuilder()
-workflow.add_node("UserCreateNode", "create_user", {
-    "name": "Alice Smith",
-    "email": "alice@example.com"
-})
-
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
-```
-
-### Event Loop Isolation (v0.9.20+)
+### Event Loop Isolation
 
 AsyncSQLDatabaseNode now automatically isolates connection pools per event loop, preventing "Event loop is closed" errors in sequential workflows and FastAPI applications.
 
@@ -156,7 +152,7 @@ AsyncSQLDatabaseNode now automatically isolates connection pools per event loop,
 
 **What Changed**: Pool keys now include event loop ID (`{loop_id}|{db}|...`) ensuring different event loops get separate pools. Stale pools from closed loops are automatically cleaned up.
 
-### Connection Pooling Best Practices (CRITICAL)
+### Connection Pooling Best Practices
 ```python
 # ⚠️ DataFlow uses AsyncSQL with connection pooling internally
 
@@ -179,7 +175,7 @@ db = DataFlow(
 )
 ```
 
-### Safe Existing Database Connection (CRITICAL)
+### Safe Existing Database Connection
 ```python
 # Connect to existing database without schema changes
 db = DataFlow(
@@ -195,7 +191,7 @@ db = DataFlow(
 # - existing_schema_mode=True uses existing schema without modifications
 ```
 
-### Dynamic Model Registration (NEW)
+### Dynamic Model Registration
 ```python
 # Option 1: Register discovered tables as models
 schema = db.discover_schema(use_real_inspection=True)
@@ -208,161 +204,26 @@ models = db.reconstruct_models_from_registry()
 workflow.add_node(result['generated_nodes']['User']['create'], 'create_user', {...})
 ```
 
-## Generated Nodes (9 per model)
+## Generated Nodes & Query Patterns
 
-| Node | Pattern | Performance |
-|------|---------|-------------|
-| **{Model}CreateNode** | `{"name": "John", "email": "john@example.com"}` | <1ms |
-| **{Model}ReadNode** | `{"record_id": 123}` | <1ms |
-| **{Model}UpdateNode** | `{"record_id": 123, "name": "Jane"}` | <1ms |
-| **{Model}DeleteNode** | `{"record_id": 123}` | <1ms |
-| **{Model}ListNode** | `{"filter": {"active": true}, "limit": 10}` | <10ms |
-| **{Model}BulkCreateNode** | `{"data": [...], "batch_size": 1000}` | 10k/sec |
-| **{Model}BulkUpdateNode** | `{"filter": {...}, "update": {...}}` | 50k/sec |
-| **{Model}BulkDeleteNode** | `{"filter": {...}}` | 100k/sec |
-| **{Model}BulkUpsertNode** | `{"data": [...], "key_fields": ["email"]}` | 30k/sec |
+> **See Skills**: [`dataflow-crud-operations`](../../skills/02-dataflow/dataflow-crud-operations.md) and [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md) for complete CRUD and query examples.
 
-## MongoDB-Style Queries
-```python
-workflow.add_node("UserListNode", "search", {
-    "filter": {
-        "age": {"$gt": 18, "$lt": 65},
-        "department": {"$in": ["eng", "sales"]},
-        "name": {"$regex": "^John"}
-    },
-    "order_by": ["-created_at"],
-    "limit": 10
-})
-```
-
-## Parameter Rules
-
-### ✅ CORRECT
-```python
-# Use connections for dynamic values between nodes
-workflow.add_connection("create_customer", "id", "create_order", "customer_id")
-
-# Use template syntax ${} for referencing outputs within node config
-workflow.add_node("ContactListNode", "search", {
-    "filters": "${prepare_filters.filters}",  # ✅ CORRECT syntax
-    "limit": "${prepare_filters.limit}"
-})
-
-# Native types for direct values
-{"due_date": datetime.now(), "total": 250.0}
-```
-
-### ❌ WRONG
-```python
-# Wrong template syntax - Kailash uses ${} not {{}}
-{"customer_id": "{{create_customer.id}}"}  # ❌ FAILS - wrong syntax
-
-# No string dates
-{"due_date": datetime.now().isoformat()}  # ❌ FAILS
-
-# Template in wrong place - use connections instead
-workflow.add_node("OrderNode", "create", {
-    "customer_id": "${create_customer.id}"  # ❌ WRONG - use add_connection()
-})
-```
+Quick reference: 9 nodes auto-generated per model (Create, Read, Update, Delete, List, BulkCreate, BulkUpdate, BulkDelete, BulkUpsert).
 
 ### 🔑 CRITICAL: Template Syntax
-**Kailash template expression syntax is `${}` NOT `{{}}`**
+**Kailash uses `${}` NOT `{{}}`** - See [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md) for examples.
 
-```python
-# From kailash/nodes/base.py:595
-def _is_template_expression(self, value: str) -> bool:
-    return bool(re.match(r"^\$\{[^}]+\}$", value))
+## Enterprise Features Overview
 
-# ✅ VALID template expressions:
-"${node.output}"
-"${prepare_filters.filters}"
-"${create_customer.id}"
+> **See Skills**: [`dataflow-bulk-operations`](../../skills/02-dataflow/dataflow-bulk-operations.md) and [`dataflow-transactions`](../../skills/02-dataflow/dataflow-transactions.md) for standard patterns.
 
-# ❌ INVALID (will cause validation errors):
-"{{node.output}}"  # Wrong syntax
-"{{ node.output }}"  # Wrong syntax
-"{node.output}"  # Missing $
-```
+This section focuses on **advanced enterprise features** unique to production scenarios.
 
-**Usage Pattern**:
-- **Between nodes**: Use `add_connection()` for passing data
-- **Within node config**: Use `${}` template syntax when node supports it (like PythonCodeNode output references)
-- **Static values**: Use native Python types directly
-
-## Enterprise Features
-
-### Multi-Tenancy
-```python
-@db.model
-class TenantData:
-    name: str
-    __dataflow__ = {'multi_tenant': True}
-
-# Automatic tenant isolation
-{"name": "data", "tenant_id": "tenant_123"}
-```
-
-### Bulk Operations
-```python
-workflow.add_node("ProductBulkCreateNode", "import", {
-    "data": [{"name": "A", "price": 100}, {"name": "B", "price": 200}],
-    "conflict_resolution": "upsert",
-    "return_ids": True
-})
-```
-
-## Auto-Migration System
-
-### Critical Behavior (VERIFIED)
-```python
-# IMPORTANT: auto_migrate=True behavior
-# First run: Creates tables automatically
-# Second+ runs: PRESERVES existing data, does NOT drop tables
-# This is SAFE for repeated execution
-
-db = DataFlow(auto_migrate=True)  # Default, safe for development
-
-# Production recommendation
-db = DataFlow(
-    auto_migrate=False,         # Don't modify schema in production
-    existing_schema_mode=True    # Use existing schema as-is
-)
-```
-
-### Basic Pattern
-```python
-# Model evolution triggers migration
-@db.model
-class User:
-    name: str
-    email: str
-    phone: str = None  # NEW - triggers migration
-
-# auto_migrate=True handles this automatically
-# Or manually:
-await db.auto_migrate()  # Shows preview + confirmation
-```
-
-### Production Safety
-```python
-# Dry run
-success, migrations = await db.auto_migrate(dry_run=True)
-
-# Production mode
-await db.auto_migrate(
-    auto_confirm=True,
-    max_risk_level="MEDIUM",
-    backup_before_migration=True,
-    rollback_on_error=True
-)
-```
-
-## Enterprise Migration System (v0.4.5+)
+## Enterprise Migration System
 
 DataFlow includes a comprehensive 8-component enterprise migration system for production-grade schema operations:
 
-### 1. Risk Assessment Engine (NEW)
+### 1. Risk Assessment Engine
 ```python
 from dataflow.migrations.risk_assessment_engine import RiskAssessmentEngine, RiskLevel
 
@@ -387,7 +248,7 @@ for category, risk in risk_assessment.category_risks.items():
         print(f"  - {factor.description} (Impact: {factor.impact_score})")
 ```
 
-### 2. Mitigation Strategy Engine (NEW)
+### 2. Mitigation Strategy Engine
 ```python
 from dataflow.migrations.mitigation_strategy_engine import MitigationStrategyEngine
 
@@ -414,7 +275,7 @@ for strategy in strategy_plan.recommended_strategies:
 print(f"Estimated risk reduction: {strategy_plan.estimated_risk_reduction}%")
 ```
 
-### 3. Foreign Key Analyzer (NEW)
+### 3. Foreign Key Analyzer
 ```python
 from dataflow.migrations.foreign_key_analyzer import ForeignKeyAnalyzer, FKOperationType
 
@@ -445,7 +306,7 @@ else:
     print("⚠️ Operation blocked by FK dependencies - manual intervention required")
 ```
 
-### 4. Table Rename Analyzer (NEW)
+### 4. Table Rename Analyzer
 ```python
 from dataflow.migrations.table_rename_analyzer import TableRenameAnalyzer
 
@@ -475,7 +336,7 @@ if rename_impact.can_rename_safely:
     print(f"Coordinated rename: {result.success}")
 ```
 
-### 5. Staging Environment Manager (NEW)
+### 5. Staging Environment Manager
 ```python
 from dataflow.migrations.staging_environment_manager import StagingEnvironmentManager
 
@@ -549,7 +410,7 @@ for lock in active_locks:
     print(f"  - {lock.operation_description} (acquired: {lock.acquired_at})")
 ```
 
-### 7. Validation Checkpoint Manager (NEW)
+### 7. Validation Checkpoint Manager
 ```python
 from dataflow.migrations.validation_checkpoints import ValidationCheckpointManager
 
@@ -606,7 +467,7 @@ else:
     print(f"Rollback executed: {validation_result.rollback_completed}")
 ```
 
-### 8. Schema State Manager (NEW)
+### 8. Schema State Manager
 ```python
 from dataflow.migrations.schema_state_manager import SchemaStateManager
 
@@ -655,7 +516,7 @@ if need_rollback:
     print(f"Schema rollback: {rollback_result.success}")
 ```
 
-### NOT NULL Column Addition (Enhanced)
+### NOT NULL Column Addition
 ```python
 from dataflow.migrations.not_null_handler import NotNullColumnHandler, ColumnDefinition, DefaultValueType
 
@@ -704,7 +565,7 @@ else:
         print(f"  Suggestion: {mitigation}")
 ```
 
-### Column Removal (Enhanced)
+### Column Removal
 ```python
 from dataflow.migrations.column_removal_manager import ColumnRemovalManager, BackupStrategy
 
@@ -882,79 +743,11 @@ success = await enterprise_migration_workflow(
 print(f"Migration result: {'SUCCESS' if success else 'FAILED'}")
 ```
 
-## Schema Discovery
-```python
-# Real inspection (not mock data)
-schema = db.discover_schema(use_real_inspection=True)
-tables = db.show_tables(use_real_inspection=True)
-```
+## TDD Mode & Testing
 
-## Test-Driven Development (TDD)
+> **See Skill**: [`dataflow-testing`](../../skills/02-dataflow/dataflow-testing.md) for TDD patterns and test fixtures.
 
-### Enable TDD Mode (<100ms test execution)
-```python
-# Environment variable
-export DATAFLOW_TDD_MODE=true
-
-# Or in code
-db = DataFlow("postgresql://...", tdd_mode=True)
-```
-
-### TDD Test Pattern (20x faster than traditional)
-```python
-@pytest.mark.asyncio
-@pytest.mark.tdd
-async def test_user_operations(tdd_dataflow):
-    """Test executes in <100ms with automatic rollback."""
-    @tdd_dataflow.model
-    class User:
-        name: str
-        email: str
-
-    # All operations use savepoint isolation
-    workflow = WorkflowBuilder()
-    workflow.add_node("UserCreateNode", "create", {
-        "name": "Test User",
-        "email": "test@example.com"
-    })
-
-    runtime = LocalRuntime()
-    results, _ = runtime.execute(workflow.build())
-
-    # Automatic rollback - no cleanup needed!
-    # Next test gets clean database state
-```
-
-### Migration from Traditional Testing
-```python
-# OLD: Slow cleanup (>2000ms)
-def test_old_way():
-    # ... test code ...
-    # Manual cleanup with DROP SCHEMA CASCADE
-
-# NEW: Fast isolation (<100ms)
-async def test_new_way(tdd_dataflow):
-    # ... test code ...
-    # Automatic savepoint rollback
-```
-
-## Common Patterns
-
-### E-commerce Workflow
-```python
-@db.model
-class Order:
-    customer_id: int
-    total: float = 0.0
-    status: str = "pending"
-
-workflow = WorkflowBuilder()
-workflow.add_node("OrderCreateNode", "create", {"customer_id": 123})
-workflow.add_node("OrderItemBulkCreateNode", "add_items", {
-    "data": [{"product_id": 1, "quantity": 2, "price": 50.00}]
-})
-workflow.add_connection("create", "id", "add_items", "order_id")
-```
+Quick note: TDD mode enables <100ms test execution with automatic rollback via savepoints.
 
 ## Critical Limitations & Workarounds
 
@@ -1000,51 +793,17 @@ else:
     data = result  # Direct format
 ```
 
-### Manual Table Creation
+## Production Configuration Patterns
+
+### Development vs Production Setup
 ```python
-# Auto-migration may not work - create tables manually in tests
-setup_workflow = WorkflowBuilder()
-setup_workflow.add_node("AsyncSQLDatabaseNode", "create_table", {
-    "connection_string": database_url,
-    "query": """
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            email VARCHAR(255) UNIQUE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """,
-    "validate_queries": False
-})
-```
+# Development (auto-migration safe)
+db = DataFlow(auto_migrate=True)  # Default, preserves existing data
 
-## Verified Critical Behaviors (v0.4.5+)
-
-### auto_migrate=True Behavior
-| Scenario | Behavior | Data Loss Risk |
-|----------|----------|----------------|
-| First run, no tables | Creates tables automatically | None |
-| **Second run, tables exist** | **Preserves all data** | **None** |
-| Third+ runs | Continues to preserve data | None |
-| Schema changes | Handles gracefully with migrations | None |
-
-**Key Finding**: auto_migrate=True NEVER drops existing tables. It's safe for repeated execution.
-
-### Configuration Scenarios
-```python
-# Development (convenient, safe)
-db = DataFlow(auto_migrate=True)  # Default
-
-# Production (maximum control)
+# Production (explicit control)
 db = DataFlow(
-    auto_migrate=False,         # No schema modifications
-    existing_schema_mode=True    # Use existing schema
-)
-
-# Legacy database integration
-db = DataFlow(
-    auto_migrate=False,         # Never modify legacy schema
-    existing_schema_mode=True    # Map to existing tables
+    auto_migrate=False,
+    existing_schema_mode=True  # Use existing schema
 )
 ```
 
@@ -1117,118 +876,9 @@ db = DataFlow(
 | **FK operations** | **ForeignKeyAnalyzer** |
 | **Table restructuring** | **TableRenameAnalyzer + staging** |
 
-## Detailed Capabilities & Documentation
+## Documentation Quick Links
 
-### Core Capabilities
-
-#### 🔧 Database Operations
-- **Model Definition**: `@db.model` decorator → [README.md#quick-start](../../sdk-users/apps/dataflow/README.md#quick-start)
-- **Dynamic Model Registration**: `register_schema_as_models()` → [README.md#dynamic-model-registration](../../sdk-users/apps/dataflow/README.md#dynamic-model-registration-new)
-- **Schema Discovery**: `discover_schema()` → [README.md#working-with-existing-databases](../../sdk-users/apps/dataflow/README.md#working-with-existing-databases)
-- **Cross-Session Models**: `reconstruct_models_from_registry()` → [README.md#cross-session-model-sharing](../../sdk-users/apps/dataflow/README.md#cross-session-model-sharing)
-
-#### ⚡ Generated Node Types (9 per model)
-- **CRUD Operations**: Create, Read, Update, Delete → [README.md#basic-crud-nodes](../../sdk-users/apps/dataflow/README.md#basic-crud-nodes)
-- **Query Operations**: List with MongoDB-style filters → [README.md#list-and-query-nodes](../../sdk-users/apps/dataflow/README.md#list-and-query-nodes)
-- **Bulk Operations**: BulkCreate, BulkUpdate, BulkDelete, BulkUpsert → [README.md#bulk-operations](../../sdk-users/apps/dataflow/README.md#bulk-operations)
-
-#### 🏢 Enterprise Features
-- **Multi-Tenancy**: Automatic tenant isolation → [README.md#enterprise-features](../../sdk-users/apps/dataflow/README.md#enterprise-features)
-- **Transaction Management**: Distributed & ACID → [README.md#transaction-management](../../sdk-users/apps/dataflow/README.md#transaction-management)
-- **Audit & Compliance**: GDPR/CCPA built-in → [README.md#security--compliance](../../sdk-users/apps/dataflow/README.md#security--compliance)
-- **Performance Monitoring**: Built-in metrics → [README.md#health-monitoring](../../sdk-users/apps/dataflow/README.md#health-monitoring)
-
-#### 🚀 Advanced Features
-- **Multi-Database Support**: Primary/replica/analytics → [README.md#multi-database-operations](../../sdk-users/apps/dataflow/README.md#multi-database-operations)
-- **Connection String Parsing**: Special char support → [README.md#database-connection](../../sdk-users/apps/dataflow/README.md#database-connection)
-- **Auto-Migration System**: Safe schema evolution → [docs/migration-system.md](../../sdk-users/apps/dataflow/docs/migration-system.md)
-- **MongoDB Query Syntax**: Cross-DB compatibility → [docs/query-patterns.md](../../sdk-users/apps/dataflow/docs/query-patterns.md)
-
-### Key Documentation Resources
-
-#### Getting Started
-- **Installation**: [docs/getting-started/installation.md](../../sdk-users/apps/dataflow/docs/getting-started/installation.md)
-- **Quick Start**: [docs/quickstart.md](../../sdk-users/apps/dataflow/docs/quickstart.md)
-- **Core Concepts**: [docs/USER_GUIDE.md](../../sdk-users/apps/dataflow/docs/USER_GUIDE.md)
-
-#### Test-Driven Development (NEW)
-- **TDD Quick Start**: [docs/tdd/quick-start.md](../../sdk-users/apps/dataflow/docs/tdd/quick-start.md) - 5-minute setup
-- **Migration Guide**: [docs/tdd/migration-guide.md](../../sdk-users/apps/dataflow/docs/tdd/migration-guide.md) - Traditional → TDD
-- **API Reference**: [docs/tdd/api-reference.md](../../sdk-users/apps/dataflow/docs/tdd/api-reference.md) - All TDD fixtures
-- **Best Practices**: [docs/tdd/best-practices.md](../../sdk-users/apps/dataflow/docs/tdd/best-practices.md) - Enterprise patterns
-- **Real Examples**: [docs/tdd/real-world-examples.md](../../sdk-users/apps/dataflow/docs/tdd/real-world-examples.md) - Production scenarios
-- **Performance Guide**: [docs/tdd/performance-guide.md](../../sdk-users/apps/dataflow/docs/tdd/performance-guide.md) - Optimization
-- **Troubleshooting**: [docs/tdd/troubleshooting.md](../../sdk-users/apps/dataflow/docs/tdd/troubleshooting.md) - Common issues
-
-#### Development Guides
-- **Query Patterns**: [docs/query-patterns.md](../../sdk-users/apps/dataflow/docs/query-patterns.md)
-- **Database Optimization**: [docs/database-optimization.md](../../sdk-users/apps/dataflow/docs/database-optimization.md)
-- **Multi-Tenant Architecture**: [docs/multi-tenant.md](../../sdk-users/apps/dataflow/docs/multi-tenant.md)
-- **Migration System**: [docs/migration-system.md](../../sdk-users/apps/dataflow/docs/migration-system.md)
-
-#### Production Deployment
-- **Deployment Guide**: [docs/deployment.md](../../sdk-users/apps/dataflow/docs/deployment.md)
-- **Performance Tuning**: [docs/database-optimization.md](../../sdk-users/apps/dataflow/docs/database-optimization.md)
-- **Monitoring**: [docs/monitoring.md](../../sdk-users/apps/dataflow/docs/monitoring.md)
-
-#### Examples
-- **Basic CRUD**: [examples/01_basic_crud.py](../../sdk-users/apps/dataflow/examples/01_basic_crud.py)
-- **Advanced Features**: [examples/02_advanced_features.py](../../sdk-users/apps/dataflow/examples/02_advanced_features.py)
-- **Enterprise Integration**: [examples/03_enterprise_integration.py](../../sdk-users/apps/dataflow/examples/03_enterprise_integration.py)
-
-### API Reference
-
-#### Core Methods
-```python
-# Schema Discovery
-db.discover_schema(use_real_inspection=True) → Dict[str, Dict]
-db.show_tables(use_real_inspection=True) → List[str]
-
-# Dynamic Model Registration
-db.register_schema_as_models(tables=['users']) → Dict
-db.reconstruct_models_from_registry() → Dict
-
-# Model Management
-db.list_models() → List[str]
-db.get_model(name: str) → Type
-
-# Migration Control
-await db.auto_migrate(dry_run=True) → Tuple[bool, List]
-await db.initialize() → bool
-```
-
-#### Configuration Parameters
-```python
-DataFlow(
-    database_url: str = None,        # Connection string
-    auto_migrate: bool = True,       # Auto-run migrations
-    existing_schema_mode: bool = False,  # Safe existing DB mode
-    enable_model_persistence: bool = True,  # Save to registry
-    pool_size: int = 20,            # Connection pool size
-    echo: bool = False,             # SQL logging
-    tdd_mode: bool = False          # Enable TDD optimizations (NEW)
-)
-```
-
-#### TDD Test Fixtures
-```python
-# conftest.py fixtures
-@pytest.fixture
-async def tdd_dataflow():
-    """DataFlow with transaction isolation (<100ms)."""
-
-@pytest.fixture
-async def tdd_test_context():
-    """Test context with savepoint management."""
-
-@pytest.fixture
-async def tdd_models():
-    """Pre-defined test models for common scenarios."""
-
-@pytest.fixture
-async def tdd_performance_test():
-    """Performance monitoring and validation."""
-```
+> **For detailed capabilities, API reference, and examples**: See [DataFlow README](../../sdk-users/apps/dataflow/README.md) and [complete documentation](../../sdk-users/apps/dataflow/docs/).
 
 ### Integration Points
 
@@ -1327,3 +977,16 @@ app.register("create_user", workflow.build())
 - [ ] **Documentation Update**: Update schema documentation and migration history
 - [ ] **Resource Cleanup**: Release migration locks and cleanup staging environments
 - [ ] **Monitoring Setup**: Enhanced monitoring for post-migration performance tracking
+
+---
+
+## For Basic Patterns
+
+See the [DataFlow Skills](../../skills/02-dataflow/) for:
+- Quick start guides ([`dataflow-quickstart`](../../skills/02-dataflow/dataflow-quickstart.md))
+- Basic CRUD operations ([`dataflow-crud-operations`](../../skills/02-dataflow/dataflow-crud-operations.md))
+- Simple queries ([`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md))
+- Standard configurations ([`dataflow-models`](../../skills/02-dataflow/dataflow-models.md))
+- Common patterns ([`dataflow-bulk-operations`](../../skills/02-dataflow/dataflow-bulk-operations.md), [`dataflow-transactions`](../../skills/02-dataflow/dataflow-transactions.md))
+- Nexus integration ([`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-integration.md))
+does

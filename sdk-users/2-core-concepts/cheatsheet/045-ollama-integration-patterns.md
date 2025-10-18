@@ -208,8 +208,10 @@ result = iterative_improver(text, iteration, target_length)
 """
 })
 
-# Create cycle with proper parameter passing
-cycle_builder = workflow.create_cycle("improvement_cycle")
+# Build workflow FIRST, then create cycle with proper parameter passing
+built_workflow = workflow.build()
+cycle_builder = built_workflow.create_cycle("improvement_cycle")
+# CRITICAL: Use "result." prefix for PythonCodeNode outputs
 cycle_builder.connect("improve", "improve", mapping={
     "result.text": "text",
     "result.iteration": "iteration",
@@ -221,7 +223,7 @@ cycle_builder.connect("improve", "improve", mapping={
 
 # Execute with initial parameters
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build(), parameters={
+results, run_id = runtime.execute(built_workflow, parameters={
     "improve": {"text": "", "iteration": 0, "target_length": 30}
 })
 

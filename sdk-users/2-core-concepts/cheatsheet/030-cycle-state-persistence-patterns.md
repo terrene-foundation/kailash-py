@@ -7,7 +7,25 @@
 ### ❌ Wrong: Generic Mapping (Causes State Loss)
 ```python
 # This fails - state variables reset each iteration
-# Use CycleBuilder API: built_workflow.create_cycle("name").connect(...).build()
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "counter", {
+    "code": """
+try:
+    counter = input_data.get('counter', 0)
+except NameError:
+    counter = 0
+
+result = {'counter': counter + 1, 'done': counter >= 5}
+"""
+})
+
+built_workflow = workflow.build()
+cycle = built_workflow.create_cycle("bad_cycle")
+# ❌ WRONG: Generic mapping loses field values
+cycle.connect("counter", "counter", mapping={"output": "input"}) \
+     .max_iterations(10) \
+     .converge_when("done == True") \
+     .build()
 # Result: counter = 1, 1, 1... (never increments)
 
 ```
@@ -15,7 +33,29 @@
 ### ✅ Correct: Specific Field Mapping (Preserves State)
 ```python
 # This works - explicitly map each field that needs to persist
-# Use CycleBuilder API: built_workflow.create_cycle("name").connect(...).build()
+workflow = WorkflowBuilder()
+workflow.add_node("PythonCodeNode", "counter", {
+    "code": """
+try:
+    counter = input_data.get('counter', 0)
+except NameError:
+    counter = 0
+
+result = {'counter': counter + 1, 'done': counter >= 5}
+"""
+})
+
+# 1. Build FIRST
+built_workflow = workflow.build()
+
+# 2. Create cycle
+cycle = built_workflow.create_cycle("good_cycle")
+
+# 3. CRITICAL: Use "result." prefix for PythonCodeNode + specific field mapping
+cycle.connect("counter", "counter", mapping={"result.counter": "input_data"}) \
+     .max_iterations(10) \
+     .converge_when("done == True") \
+     .build()
 # Result: counter = 1, 2, 3... (increments correctly)
 
 ```
@@ -229,9 +269,16 @@ result = {
 
 workflow.add_node("PythonCodeNode", "data_flow", {"code": data_flow_code})
 
-# Use mapping to pass accumulated data between iterations
-workflow = WorkflowBuilder()
-# Workflow setup goes here  # Method signature
+# Build workflow and create cycle with proper mapping
+built_workflow = workflow.build()
+
+# Create cycle with field-specific mapping
+cycle = built_workflow.create_cycle("data_flow_cycle")
+# CRITICAL: Use "result." prefix for PythonCodeNode outputs
+cycle.connect("data_flow", "data_flow", mapping={"result.accumulated_data": "input_data"}) \
+     .max_iterations(10) \
+     .converge_when("converged == True") \
+     .build()
 
 ```
 

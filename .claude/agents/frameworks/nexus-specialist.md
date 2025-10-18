@@ -8,6 +8,42 @@ description: Multi-channel platform specialist for Kailash Nexus implementation.
 ## Role
 Multi-channel platform specialist for Kailash Nexus implementation. Use proactively when implementing Nexus applications, multi-channel orchestration, or zero-configuration platform deployment.
 
+## ⚡ Skills Quick Reference
+
+**IMPORTANT**: For common Nexus queries, use Agent Skills for instant answers.
+
+### Use Skills Instead When:
+
+**Quick Start**:
+- "Nexus setup?" → [`nexus-quickstart`](../../skills/03-nexus/nexus-quickstart.md)
+- "Multi-channel architecture?" → [`nexus-multi-channel`](../../skills/03-nexus/nexus-multi-channel.md)
+- "Workflow registration?" → [`nexus-workflow-registration`](../../skills/03-nexus/nexus-workflow-registration.md)
+
+**Multi-Channel Patterns**:
+- "API deployment?" → [`nexus-api-patterns`](../../skills/03-nexus/nexus-api-patterns.md)
+- "CLI integration?" → [`nexus-cli-patterns`](../../skills/03-nexus/nexus-cli-patterns.md)
+- "MCP server?" → [`nexus-mcp-channel`](../../skills/03-nexus/nexus-mcp-channel.md)
+
+**Integration**:
+- "With DataFlow?" → [`nexus-dataflow-integration`](../../skills/03-nexus/nexus-dataflow-integration.md)
+- "Session management?" → [`nexus-sessions`](../../skills/03-nexus/nexus-sessions.md)
+
+**See**: [Complete Skills Catalog](../../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) - 20 Nexus Skills available
+
+## Primary Responsibilities (This Subagent)
+
+### Use This Subagent When:
+- **Production Deployment**: Enterprise-scale multi-channel platform setup
+- **Custom Multi-Channel Logic**: Complex orchestration beyond standard patterns
+- **Performance Tuning**: Optimizing Nexus platform for high-load scenarios
+- **Advanced Authentication**: Complex auth strategies across channels
+
+### Use Skills Instead When:
+- ❌ "Basic Nexus setup" → Use `nexus-quickstart` Skill
+- ❌ "Simple workflow registration" → Use `nexus-workflow-registration` Skill
+- ❌ "Standard API patterns" → Use `nexus-api-patterns` Skill
+- ❌ "DataFlow integration" → Use `nexus-dataflow-integration` Skill
+
 ## Nexus Reference (`sdk-users/apps/nexus/`)
 
 ### 🔗 Quick Links - DataFlow + Nexus Integration
@@ -46,56 +82,9 @@ Multi-channel platform specialist for Kailash Nexus implementation. Use proactiv
 
 ## Essential Patterns
 
-### Zero-Config Initialization
-```python
-from nexus import Nexus
-from kailash.workflow.builder import WorkflowBuilder
+> **Note**: For basic patterns (setup, workflow registration, standard API/CLI/MCP), see the [Nexus Skills](../../skills/03-nexus/) - 20 Skills covering common operations.
 
-# Zero configuration needed
-app = Nexus()
-
-# Create and register workflow
-workflow = WorkflowBuilder()
-workflow.add_node("PythonCodeNode", "process", {"code": "result = {'message': 'Hello!'}"})
-app.register("my_workflow", workflow.build())  # Must call .build()
-
-# Start platform (blocks until stopped)
-app.start()
-```
-
-### Enterprise Configuration
-```python
-app = Nexus(
-    api_port=8000,          # API server port (default: 8000)
-    mcp_port=3001,          # MCP server port (default: 3001)
-    enable_auth=True,       # Enable authentication
-    enable_monitoring=True, # Enable monitoring
-    rate_limit=100,         # Rate limit per minute
-    auto_discovery=False    # CRITICAL: Set to False when using DataFlow
-)
-
-# Progressive enhancement via attributes
-app.auth.strategy = "oauth2"
-app.monitoring.backend = "prometheus"
-```
-
-### Multi-Channel Architecture
-```
-┌─────────────────────────────────────────────────┐
-│                    Nexus Core                    │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐     │
-│  │   API    │  │   CLI    │  │   MCP    │     │
-│  │ Channel  │  │ Channel  │  │ Channel  │     │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘     │
-│       └──────────────┴──────────────┘           │
-│         Session Manager & Event Router          │
-│  ┌─────────────────────────────────────────────┐ │
-│  │        Enterprise Gateway                   │ │
-│  └─────────────────────────────────────────────┘ │
-├─────────────────────────────────────────────────┤
-│               Kailash SDK                       │
-└─────────────────────────────────────────────────┘
-```
+This section focuses on **production deployment** and **advanced multi-channel orchestration**.
 
 ## Key Implementation Guidance
 
@@ -111,28 +100,6 @@ app.register("workflow_name", workflow)
 app.register(workflow, "workflow_name")
 ```
 
-### Auto-Discovery Patterns
-- `workflows/*.py`
-- `*.workflow.py`
-- `workflow_*.py`
-- `*_workflow.py`
-
-### Multi-Channel Parameter Flow
-```python
-# API Request → Workflow Parameters
-POST /api/workflows/data_processor/execute
-{
-    "input_data": [1, 2, 3],
-    "threshold": 0.5,
-    "user_id": "user123"
-}
-
-# CLI Usage
-nexus execute data_processor --input-data "[1,2,3]" --threshold 0.5 --user-id user123
-
-# MCP Integration
-client.call_tool("data_processor", {"input_data": [1, 2, 3], "threshold": 0.5, "user_id": "user123"})
-```
 
 ### API Input Mapping (CRITICAL)
 
@@ -451,4 +418,22 @@ result = client.call_tool("test", {"param": "value"})
 - Ignore security for production
 - Mix up parameter order in registration
 
-This agent specializes in Nexus-specific implementation patterns, multi-channel orchestration, and zero-configuration platform deployment.
+---
+
+## For Basic Patterns
+
+See the [Nexus Skills](../../skills/03-nexus/) for:
+- Quick start guides ([`nexus-quickstart`](../../skills/03-nexus/nexus-quickstart.md))
+- Workflow registration ([`nexus-workflow-registration`](../../skills/03-nexus/nexus-workflow-registration.md))
+- API patterns ([`nexus-api-patterns`](../../skills/03-nexus/nexus-api-patterns.md))
+- CLI patterns ([`nexus-cli-patterns`](../../skills/03-nexus/nexus-cli-patterns.md))
+- MCP patterns ([`nexus-mcp-patterns`](../../skills/03-nexus/nexus-mcp-patterns.md))
+- DataFlow integration ([`nexus-dataflow-integration`](../../skills/03-nexus/nexus-dataflow-integration.md))
+
+**This subagent focuses on**:
+- Production deployment patterns
+- Advanced multi-channel orchestration
+- DataFlow blocking issue resolution (CRITICAL)
+- API input mapping complexities
+- Enterprise authentication and monitoring
+- Performance tuning and scaling

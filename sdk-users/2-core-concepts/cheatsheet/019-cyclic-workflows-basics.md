@@ -22,16 +22,20 @@ result = {
 """
 })
 
-# Create cycle using CycleBuilder API
-cycle_builder = workflow.create_cycle("counter_cycle")
-cycle_builder.connect("counter", "result", "counter", "input_data") \
+# CRITICAL: Build workflow FIRST (WorkflowBuilder doesn't have create_cycle)
+built_workflow = workflow.build()
+
+# Create cycle using CycleBuilder API on BUILT workflow
+cycle_builder = built_workflow.create_cycle("counter_cycle")
+# CRITICAL: Use "result." prefix for PythonCodeNode outputs in mapping
+cycle_builder.connect("counter", "counter", mapping={"result.count": "count"}) \
              .max_iterations(10) \
              .converge_when("done == True") \
              .timeout(300) \
              .build()
 
 runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
+results, run_id = runtime.execute(built_workflow)
 
 ```
 
@@ -79,9 +83,12 @@ workflow.add_connection("counter", "result.count", "processor", "count")  # Acce
 workflow.add_connection("A", "result", "B", "input")  # Regular
 workflow.add_connection("B", "result", "C", "input")  # Regular
 
-# Create cycle for closing edge using CycleBuilder API
-cycle_builder = workflow.create_cycle("multi_node_cycle")
-cycle_builder.connect("C", "result", "A", "input") \
+# CRITICAL: Build workflow first
+built_workflow = workflow.build()
+
+# Create cycle for closing edge using CycleBuilder API on built workflow
+cycle_builder = built_workflow.create_cycle("multi_node_cycle")
+cycle_builder.connect("C", "A", mapping={"result": "input"}) \
              .max_iterations(20) \
              .converge_when("converged == True") \
              .timeout(600) \

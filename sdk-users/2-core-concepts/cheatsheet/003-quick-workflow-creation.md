@@ -61,7 +61,7 @@ workflow.add_connection("processor", "result", "output", "input_data")
 # 4. Execute with runtime
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
-print(f"Result: {results['output']['result']['processed']}")
+print(f"Result: {results['output']['result']['processed']}")  # PythonCodeNode wraps outputs in 'result' key
 ```
 
 ## Common Patterns
@@ -101,7 +101,7 @@ workflow.add_connection("transform", "result", "load", "input_data")
 # Execute
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
-print(f"Processed {results['load']['result']['saved']} items")
+print(f"Processed {results['load']['result']['saved']} items")  # Access via nested 'result' key
 ```
 
 ### AI Integration Pipeline
@@ -140,7 +140,7 @@ workflow.add_connection("analyze", "result", "save", "input_data")
 # Execute
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
-print(f"Analyzed {results['save']['result']['saved_count']} reviews")
+print(f"Analyzed {results['save']['result']['saved_count']} reviews")  # PythonCodeNode outputs wrapped in 'result'
 ```
 
 ## Key Points

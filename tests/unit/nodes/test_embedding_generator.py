@@ -150,8 +150,8 @@ class TestEmbeddingGeneratorNode:
         """Test different embedding providers."""
         node = EmbeddingGeneratorNode()
 
+        # Only test mock provider in unit tests to avoid external dependencies
         providers = [
-            ("ollama", "nomic-embed-text", 768),  # Ollama embedding model
             ("mock", "default", 1536),
         ]
 
@@ -162,22 +162,8 @@ class TestEmbeddingGeneratorNode:
                 model=model,
                 input_text="Test text for different providers",
             )
-
-            # For Ollama, we check result without connecting
-            if provider == "ollama":
-                # For unit tests, we don't actually connect to Ollama
-                if result["success"]:
-                    # Ollama dimensions may vary, so we just check it's positive
-                    assert result["dimensions"] > 0
-                else:
-                    # If Ollama is not available, the test should fail gracefully
-                    assert (
-                        "Ollama" in result.get("error", "")
-                        or "ollama" in result.get("error", "").lower()
-                    )
-            else:
-                assert result["success"] is True
-                assert result["dimensions"] == expected_dims
+            assert result["success"] is True
+            assert result["dimensions"] == expected_dims
 
     def test_custom_dimensions(self):
         """Test custom embedding dimensions."""

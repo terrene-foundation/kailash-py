@@ -507,15 +507,17 @@ def iterative_text_improver(text="", iteration=0, target_length=50):
 workflow = WorkflowBuilder()
 workflow.add_node("PythonCodeNode", "write", PythonCodeNode.from_function(iterative_text_improver).config)
 
-# Create improvement cycle
-cycle_builder = workflow.create_cycle("writing_cycle")
+# Build workflow FIRST, then create improvement cycle
+built_workflow = workflow.build()
+cycle_builder = built_workflow.create_cycle("writing_cycle")
+# CRITICAL: Use "result." prefix for PythonCodeNode outputs
 cycle_builder.connect("write", "write", mapping={
-    "text": "text",
-    "iteration": "iteration",
-    "target_length": "target_length"
+    "result.text": "text",
+    "result.iteration": "iteration",
+    "result.target_length": "target_length"
 }).max_iterations(5).converge_when("converged == True").build()
 
-results, run_id = runtime.execute(workflow.build(), parameters={
+results, run_id = runtime.execute(built_workflow, parameters={
     "write": {"text": "", "iteration": 0, "target_length": 50}
 })
 result = results
