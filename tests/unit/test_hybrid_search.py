@@ -250,6 +250,7 @@ class TestHybridSearchNode:
     """Test HybridSearchNode functionality."""
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_basic_search(self):
         """Test basic hybrid search functionality."""
         node = HybridSearchNode(name="test_search")
@@ -289,6 +290,7 @@ class TestHybridSearchNode:
             assert "explanation" in first_result
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_search_with_agent_cards(self):
         """Test search with A2A agent cards."""
         node = HybridSearchNode(name="test_search")
@@ -320,6 +322,7 @@ class TestHybridSearchNode:
         assert result["count"] >= 0
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_search_with_context(self):
         """Test search with context information."""
         node = HybridSearchNode(name="test_search")
@@ -444,6 +447,7 @@ class TestAdaptiveSearchNode:
     """Test AdaptiveSearchNode functionality."""
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_adaptive_search_basic(self):
         """Test basic adaptive search functionality."""
         node = AdaptiveSearchNode(name="adaptive_search")
@@ -469,6 +473,7 @@ class TestAdaptiveSearchNode:
         assert "performance" in weights
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_adaptive_search_with_feedback(self):
         """Test adaptive search with feedback learning."""
         node = AdaptiveSearchNode(name="adaptive_search")

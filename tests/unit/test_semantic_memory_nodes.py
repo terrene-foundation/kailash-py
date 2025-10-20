@@ -135,6 +135,7 @@ class TestInMemoryVectorStore:
     """Test InMemoryVectorStore functionality."""
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_add_item(self):
         """Test adding item to store."""
         store = InMemoryVectorStore()
@@ -156,6 +157,7 @@ class TestInMemoryVectorStore:
         assert "test-id" in store.collections["test"]
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_search_similar(self):
         """Test searching for similar items."""
         store = InMemoryVectorStore()
@@ -193,6 +195,7 @@ class TestInMemoryVectorStore:
         assert results[0][1] > 0.5  # Similarity score
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_get_collections(self):
         """Test getting collection names."""
         store = InMemoryVectorStore()
@@ -227,6 +230,7 @@ class TestSemanticMemoryStoreNode:
     """Test SemanticMemoryStoreNode functionality."""
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_store_single_content(self):
         """Test storing single content."""
         node = SemanticMemoryStoreNode(name="test_store")
@@ -244,6 +248,7 @@ class TestSemanticMemoryStoreNode:
         assert "embedding_model" in result
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_store_multiple_content(self):
         """Test storing multiple contents."""
         node = SemanticMemoryStoreNode(name="test_store")
@@ -260,6 +265,7 @@ class TestSemanticMemoryStoreNode:
         assert result["collection"] == "test_collection"
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_store_missing_content(self):
         """Test error when content is missing."""
         node = SemanticMemoryStoreNode(name="test_store")
@@ -284,6 +290,7 @@ class TestSemanticMemorySearchNode:
     """Test SemanticMemorySearchNode functionality."""
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_search_with_results(self):
         """Test searching with results."""
         # Create nodes that share the same store
@@ -316,6 +323,7 @@ class TestSemanticMemorySearchNode:
             assert "collection" in first_result
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_search_missing_query(self):
         """Test error when query is missing."""
         node = SemanticMemorySearchNode(name="test_search")
@@ -339,6 +347,7 @@ class TestSemanticAgentMatchingNode:
     """Test SemanticAgentMatchingNode functionality."""
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_agent_matching(self):
         """Test agent matching with requirements."""
         node = SemanticAgentMatchingNode(name="test_matching")
@@ -372,6 +381,7 @@ class TestSemanticAgentMatchingNode:
         assert scores == sorted(scores, reverse=True)
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_agent_matching_string_requirements(self):
         """Test agent matching with string requirements."""
         node = SemanticAgentMatchingNode(name="test_matching")
@@ -388,6 +398,7 @@ class TestSemanticAgentMatchingNode:
         assert result["count"] > 0
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_agent_matching_missing_params(self):
         """Test error when required parameters are missing."""
         node = SemanticAgentMatchingNode(name="test_matching")
