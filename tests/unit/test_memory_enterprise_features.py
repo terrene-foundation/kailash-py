@@ -506,6 +506,7 @@ class TestEnterpriseSemanticNodes:
     """Test enterprise-level semantic memory nodes."""
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_semantic_memory_store_with_enterprise_features(self):
         """Test semantic memory store with enterprise-level features."""
         node = SemanticMemoryStoreNode(name="enterprise_store")
@@ -535,6 +536,7 @@ class TestEnterpriseSemanticNodes:
         # (In a real implementation, we'd verify the metadata was properly stored)
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_semantic_search_with_enterprise_filters(self):
         """Test semantic search with enterprise-level filtering."""
         # First store some enterprise content
@@ -569,6 +571,7 @@ class TestEnterpriseSemanticNodes:
         # In an enterprise implementation, we would filter by security level here
 
     @pytest.mark.asyncio
+    @pytest.mark.slow
     async def test_semantic_agent_matching_enterprise(self):
         """Test semantic agent matching with enterprise agent pools."""
         node = SemanticAgentMatchingNode(name="enterprise_matching")
