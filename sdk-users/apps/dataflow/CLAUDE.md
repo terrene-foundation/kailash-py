@@ -1,11 +1,12 @@
-# Kailash DataFlow - Complete Function Access Guide (v0.4.0 Release Ready)
+# Kailash DataFlow - Complete Function Access Guide (v0.5.6 Release Ready)
 
-**🎉 Major Release: v0.4.0 with 11+ Critical Bug Fixes**
+**🎉 Major Release: v0.5.6 with Complete Database Support**
+- **MYSQL SUPPORT**: Full MySQL support with 100% feature parity (aiomysql driver)
+- **THREE DATABASES**: PostgreSQL, MySQL, and SQLite with identical 9 nodes per model
 - DateTime serialization issues resolved
 - PostgreSQL parameter type casting improved
 - VARCHAR(255) limits removed (now TEXT with unlimited content)
 - Workflow connection parameter order fixed
-- Full PostgreSQL + SQLite parity achieved
 - **STRING ID SUPPORT**: No more forced integer conversion - string IDs preserved
 - **MULTI-INSTANCE ISOLATION**: Multiple DataFlow instances with proper context isolation
 - **DEFERRED SCHEMA OPERATIONS**: Synchronous registration, async table creation
@@ -106,17 +107,126 @@ results, run_id = runtime.execute(workflow.build())
 # Tables created on-demand during workflow execution
 ```
 
+## 🗄️ DATABASE SUPPORT (ALL DATABASES 100% FEATURE PARITY)
+
+DataFlow supports **PostgreSQL, MySQL, and SQLite** with identical functionality. All databases provide:
+- ✅ **9 nodes per model** - Full CRUD + bulk operations
+- ✅ **Async operations** - All database operations are async-first
+- ✅ **Connection pooling** - Efficient connection management
+- ✅ **Transaction support** - Full ACID compliance
+- ✅ **Enterprise features** - Multi-tenancy, soft deletes, audit logging
+
+### PostgreSQL (asyncpg driver)
+```python
+# Production-grade database with advanced features
+db = DataFlow("postgresql://user:password@localhost:5432/mydb")
+
+# With SSL/TLS
+db = DataFlow("postgresql://user:password@localhost:5432/mydb?sslmode=require")
+
+# With connection pool configuration
+db = DataFlow(
+    "postgresql://user:password@localhost:5432/mydb",
+    pool_size=20,
+    max_overflow=30,
+    pool_recycle=3600
+)
+```
+
+**Best for:** Enterprise production, PostGIS spatial data, complex analytics, JSONB operations
+
+### MySQL (aiomysql driver)
+```python
+# Web hosting and MySQL ecosystem
+db = DataFlow("mysql://user:password@localhost:3306/mydb")
+
+# With charset and collation
+db = DataFlow("mysql://user:password@localhost:3306/mydb?charset=utf8mb4&collation=utf8mb4_unicode_ci")
+
+# With SSL/TLS and connection pool
+db = DataFlow(
+    "mysql://user:password@localhost:3306/mydb",
+    ssl_ca="/path/to/ca.pem",
+    ssl_cert="/path/to/cert.pem",
+    ssl_key="/path/to/key.pem",
+    pool_size=15,
+    max_overflow=25,
+    charset="utf8mb4"
+)
+```
+
+**Best for:** Web hosting environments, existing MySQL infrastructure, read-heavy workloads
+
+### SQLite (aiosqlite + custom pooling)
+```python
+# Fast local development and testing
+db = DataFlow(":memory:")  # In-memory database
+
+# File-based database
+db = DataFlow("sqlite:///path/to/database.db")
+
+# With WAL mode for better concurrency
+db = DataFlow(
+    "sqlite:///path/to/database.db",
+    enable_wal=True,
+    cache_size_mb=64,
+    pool_size=5
+)
+```
+
+**Best for:** Development/testing, mobile apps, edge computing, serverless functions
+
+### Database Feature Comparison
+
+| Feature | PostgreSQL | MySQL | SQLite |
+|---------|------------|-------|--------|
+| **Driver** | asyncpg | aiomysql | aiosqlite + custom pooling |
+| **ACID Transactions** | ✅ | ✅ InnoDB | ✅ |
+| **Connection Pooling** | ✅ Native | ✅ Native | ✅ Custom |
+| **DataFlow Nodes** | ✅ All 9 | ✅ All 9 | ✅ All 9 |
+| **JSON Support** | ✅ JSONB | ✅ 5.7+ | ✅ JSON1 |
+| **Full-Text Search** | ✅ | ✅ | ✅ FTS5 |
+| **Window Functions** | ✅ | ✅ 8.0+ | ✅ 3.25+ |
+| **Spatial Data** | ✅ PostGIS | ✅ Native | ✅ R-Tree |
+| **Best For** | Production | Web apps | Development, Mobile |
+
+### Multi-Database Workflows
+```python
+# Development: Fast SQLite
+dev_db = DataFlow(":memory:")
+
+# Staging: MySQL for web hosting
+staging_db = DataFlow("mysql://user:pass@staging:3306/staging_db")
+
+# Production: PostgreSQL for enterprise
+prod_db = DataFlow("postgresql://user:pass@prod:5432/prod_db")
+
+# Same models work across ALL databases
+@dev_db.model
+@staging_db.model
+@prod_db.model
+class User:
+    name: str
+    email: str
+    active: bool = True
+
+# Identical 9 nodes generated for each database:
+# UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode,
+# UserListNode, UserBulkCreateNode, UserBulkUpdateNode,
+# UserBulkDeleteNode, UserBulkUpsertNode
+```
+
 ## 🚀 IMMEDIATE SUCCESS PATTERNS
 
-### Zero-Config Basic Pattern (30 seconds) - Alpha Ready
+### Zero-Config Basic Pattern (30 seconds)
 ```python
 from dataflow import DataFlow
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
-# 1. Zero-config initialization - ALPHA RELEASE APPROVED
-db = DataFlow()  # Development: SQLite automatic, Production: PostgreSQL
-# NOTE: SQLite has full parity with PostgreSQL - all features supported (v0.4.0+)
+# 1. Zero-config initialization
+db = DataFlow()  # Development: SQLite automatic, Production: PostgreSQL or MySQL
+# NOTE: All three databases (PostgreSQL, MySQL, SQLite) have 100% feature parity (v0.5.6+)
 # RECENT FIXES: DateTime handling, parameter types, content limits, connection order
 
 # 2. Define model - generates 9 nodes automatically
@@ -143,18 +253,38 @@ results, run_id = runtime.execute(workflow.build())
 
 ### Production Pattern (Database Connection)
 ```python
-# Environment-based (recommended)
+# Environment-based (recommended) - works with any database
 # DATABASE_URL=postgresql://user:pass@localhost/db
+# DATABASE_URL=mysql://user:pass@localhost/db
+# DATABASE_URL=sqlite:///path/to/db.db
 db = DataFlow()
 
-# Direct configuration
+# PostgreSQL production
 db = DataFlow(
-    database_url="postgresql://user:pass@localhost/db",
+    database_url="postgresql://user:pass@localhost:5432/db",
     pool_size=20,
     pool_max_overflow=30,
     pool_recycle=3600,
     monitoring=True,
-    echo=False  # No SQL logging in production
+    echo=False
+)
+
+# MySQL production
+db = DataFlow(
+    database_url="mysql://user:pass@localhost:3306/db",
+    pool_size=15,
+    max_overflow=25,
+    pool_recycle=3600,
+    charset="utf8mb4",
+    echo=False
+)
+
+# SQLite production (edge/mobile)
+db = DataFlow(
+    database_url="sqlite:///app/data/production.db",
+    enable_wal=True,
+    cache_size_mb=128,
+    pool_size=10
 )
 ```
 
@@ -410,19 +540,28 @@ workflow.add_node("EventTriggerNode", "order_processor", {
 
 ### Multi-Database Support
 ```python
-# Primary database
+# Primary database - PostgreSQL for production
 db_primary = DataFlow("postgresql://primary/db")
 
-# Analytics database
-db_analytics = DataFlow("clickhouse://analytics/db")
+# MySQL for web hosting
+db_mysql = DataFlow("mysql://web-host/db")
+
+# SQLite for edge computing
+db_sqlite = DataFlow("sqlite:///local/data.db")
 
 # Use different databases in same workflow
 workflow.add_node("OrderCreateNode", "create", {
-    "database": "primary"
+    "database": "primary"  # Uses PostgreSQL
 })
 workflow.add_node("OrderAnalyticsNode", "analytics", {
-    "database": "analytics"
+    "database": "mysql"  # Uses MySQL
 })
+workflow.add_node("OrderCacheNode", "cache", {
+    "database": "sqlite"  # Uses SQLite
+})
+
+# All three databases support identical operations
+# Same 9 nodes available across all databases
 ```
 
 ### Security & Compliance
@@ -1084,7 +1223,7 @@ workflow.add_node("PerformanceTunerNode", "tune", {
 ### Testing Patterns
 ```python
 # Test database setup
-test_db = DataFlow(":memory:")  # In-memory SQLite with full PostgreSQL parity
+test_db = DataFlow(":memory:")  # In-memory SQLite (100% feature parity with PostgreSQL and MySQL)
 
 # Test data generation
 workflow.add_node("TestDataGeneratorNode", "generate", {
@@ -1167,7 +1306,8 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 - **NEW: Ignore foreign key dependencies during schema changes**
 - **NEW: Run concurrent migrations without lock coordination**
 
-### 🔧 MAJOR BUG FIXES COMPLETED (v0.9.11 & v0.4.0)
+### 🔧 MAJOR BUG FIXES COMPLETED (v0.9.11 & v0.4.0 → v0.5.6)
+- **✅ MySQL Support**: Full MySQL support with 100% feature parity (v0.5.6)
 - **✅ DateTime Serialization**: Fixed datetime objects being converted to strings
 - **✅ PostgreSQL Parameter Types**: Added explicit type casting for parameter determination
 - **✅ Content Size Limits**: Changed VARCHAR(255) to TEXT for unlimited content

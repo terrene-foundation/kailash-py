@@ -9,13 +9,13 @@ DataFlow is a **zero-config database framework** built on Core SDK that automati
 pip install kailash-dataflow
 ```
 
-## Current Status: v0.4.0 Release Ready
+## Current Status: v0.5.6 Release Ready
 
 **Database Support:**
-- ✅ **PostgreSQL**: Full support with all enterprise features
-- ✅ **SQLite**: Full parity with PostgreSQL - all features supported (file-based and in-memory)
+- ✅ **PostgreSQL**: Full support with all enterprise features (asyncpg driver)
+- ✅ **MySQL**: Full support with all enterprise features (aiomysql driver, 100% feature parity)
+- ✅ **SQLite**: Full parity with PostgreSQL and MySQL - all features supported (file-based and in-memory)
   - Recent fixes: Path extraction and connection isolation for memory databases
-- ❌ **MySQL**: Not yet supported (coming in future release)
 
 **🎉 Major Bug Fixes in v0.4.0:**
 - **DateTime Serialization**: Fixed datetime objects being converted to strings
@@ -1037,12 +1037,21 @@ health = results["health_monitor"]["result"]
 DataFlow supports robust database connection string parsing with full support for special characters in passwords (enhanced in v0.9.4 and v0.4.0 with improved parameter type casting):
 
 ```python
-# Supports complex passwords with special characters
+# Supports complex passwords with special characters across all databases
 connection_examples = [
+    # PostgreSQL
     "postgresql://admin:MySecret#123$@localhost:5432/mydb",
     "postgresql://user:P@ssw0rd!@db.example.com:5432/production",
+    "postgresql://readonly:temp#pass@replica.host:5432/reports",
+
+    # MySQL
     "mysql://service:Complex$ecret?@mysql.internal:3306/analytics",
-    "postgresql://readonly:temp#pass@replica.host:5432/reports"
+    "mysql://admin:MySecret#123$@localhost:3306/production",
+    "mysql://user:P@ssw0rd!@db.example.com:3306/ecommerce",
+
+    # SQLite
+    "sqlite:///path/to/database.db",
+    ":memory:"  # In-memory SQLite for testing
 ]
 
 # All these connection strings work seamlessly
@@ -1054,13 +1063,194 @@ for conn_str in connection_examples:
 ### Connection String Format
 
 ```python
-# Standard format
+# Standard format for all databases
 scheme://[username[:password]@]host[:port]/database[?param1=value1&param2=value2]
 
-# Examples
+# PostgreSQL examples
 postgresql://username:password@localhost:5432/database_name
-mysql://user:pass@host:3306/db_name?charset=utf8mb4
+postgresql://user:pass@host:5432/db?sslmode=require
+
+# MySQL examples
+mysql://username:password@localhost:3306/database_name
+mysql://user:pass@host:3306/db?charset=utf8mb4&collation=utf8mb4_unicode_ci
+
+# SQLite examples
 sqlite:///path/to/database.db
+sqlite:///absolute/path/to/file.db
+:memory:  # In-memory database
+```
+
+### Database-Specific Connection Examples
+
+#### PostgreSQL (asyncpg driver)
+```python
+# Basic PostgreSQL connection
+db = DataFlow("postgresql://user:password@localhost:5432/mydb")
+
+# With SSL/TLS
+db = DataFlow("postgresql://user:password@localhost:5432/mydb?sslmode=require")
+
+# With custom connection pool
+db = DataFlow(
+    "postgresql://user:password@localhost:5432/mydb",
+    pool_size=20,
+    max_overflow=30,
+    pool_recycle=3600,
+    pool_pre_ping=True
+)
+
+# Read replica configuration
+db = DataFlow(
+    database_url="postgresql://user:password@primary:5432/mydb",
+    read_replica="postgresql://readonly:password@replica:5432/mydb"
+)
+```
+
+#### MySQL (aiomysql driver)
+```python
+# Basic MySQL connection
+db = DataFlow("mysql://user:password@localhost:3306/mydb")
+
+# With charset and collation
+db = DataFlow("mysql://user:password@localhost:3306/mydb?charset=utf8mb4&collation=utf8mb4_unicode_ci")
+
+# With SSL/TLS certificates
+db = DataFlow(
+    "mysql://user:password@localhost:3306/mydb",
+    ssl_ca="/path/to/ca.pem",
+    ssl_cert="/path/to/client-cert.pem",
+    ssl_key="/path/to/client-key.pem"
+)
+
+# With custom connection pool and timeout
+db = DataFlow(
+    "mysql://user:password@localhost:3306/mydb",
+    pool_size=15,
+    max_overflow=25,
+    pool_recycle=3600,
+    connect_timeout=10,
+    charset="utf8mb4"
+)
+
+# Production configuration
+db = DataFlow(
+    "mysql://app_user:SecurePass123!@db.production.com:3306/ecommerce",
+    pool_size=50,
+    max_overflow=100,
+    pool_recycle=1800,
+    pool_pre_ping=True,
+    echo=False,  # No SQL logging
+    charset="utf8mb4",
+    collation="utf8mb4_unicode_ci"
+)
+```
+
+#### SQLite (aiosqlite driver with custom pooling)
+```python
+# In-memory database (fast, for testing)
+db = DataFlow(":memory:")
+
+# File-based database
+db = DataFlow("sqlite:///path/to/database.db")
+
+# With WAL mode for better concurrency
+db = DataFlow(
+    "sqlite:///path/to/database.db",
+    enable_wal=True,
+    cache_size_mb=64,
+    pool_size=5
+)
+
+# Production SQLite with optimizations
+db = DataFlow(
+    "sqlite:///app/data/production.db",
+    enable_wal=True,
+    cache_size_mb=128,
+    pool_size=10,
+    journal_mode="WAL",
+    synchronous="NORMAL"
+)
+```
+
+### Database Feature Comparison
+
+All three databases have **100% feature parity** in DataFlow operations. Choose based on your deployment needs:
+
+| Feature | PostgreSQL | MySQL | SQLite | Notes |
+|---------|------------|-------|--------|-------|
+| **Driver** | asyncpg | aiomysql | aiosqlite + custom pooling | All async, high performance |
+| **ACID Transactions** | ✅ Full | ✅ Full (InnoDB) | ✅ Full | Complete transaction support |
+| **Connection Pooling** | ✅ Native | ✅ Native | ✅ Custom | Efficient connection reuse |
+| **Async Operations** | ✅ | ✅ | ✅ | All operations async-first |
+| **JSON Support** | ✅ Native JSONB | ✅ 5.7+ | ✅ JSON1 extension | Full JSON query support |
+| **Full-Text Search** | ✅ ts_vector | ✅ FULLTEXT | ✅ FTS5 | Built-in search capabilities |
+| **Window Functions** | ✅ | ✅ 8.0+ | ✅ 3.25+ | Advanced analytics |
+| **CTEs (WITH)** | ✅ | ✅ 8.0+ | ✅ | Recursive queries supported |
+| **Arrays** | ✅ Native | ❌ Use JSON | ❌ Use JSON | PostgreSQL advantage |
+| **Spatial Data** | ✅ PostGIS | ✅ Native | ✅ R-Tree | Geographic data support |
+| **Stored Procedures** | ✅ PL/pgSQL | ✅ | ❌ | Complex business logic |
+| **Triggers** | ✅ | ✅ | ✅ | Event-driven operations |
+| **Bulk Operations** | ✅ COPY | ✅ LOAD DATA | ✅ executemany | High-throughput imports |
+| **Schema Operations** | ✅ Real DDL | ✅ Real DDL | ✅ Real DDL | All support table creation |
+| **Multi-tenancy** | ✅ | ✅ | ✅ | Automatic tenant isolation |
+| **Soft Deletes** | ✅ | ✅ | ✅ | Audit trail support |
+| **DataFlow Nodes** | ✅ All 9 types | ✅ All 9 types | ✅ All 9 types | Full CRUD + bulk ops |
+| **SSL/TLS** | ✅ | ✅ | N/A | Secure connections |
+| **Best For** | Production, PostGIS | Web apps, MySQL ecosystem | Development, Mobile, Edge | Deployment guidance |
+
+### Database Selection Guide
+
+#### Choose PostgreSQL When:
+- **Production enterprise applications** - Maximum reliability and features
+- **Geographic data** - PostGIS for spatial queries
+- **Complex analytics** - Advanced window functions and materialized views
+- **JSONB queries** - High-performance JSON operations
+- **Array operations** - Native array type support
+- **Large scale** - Proven for high-traffic applications
+
+#### Choose MySQL When:
+- **Existing MySQL infrastructure** - Leverage current expertise
+- **Web hosting environments** - Widely available on hosting platforms
+- **Read-heavy workloads** - Excellent read replica support
+- **MySQL ecosystem tools** - Integration with MySQL-specific tools
+- **Cost optimization** - Lower resource requirements than PostgreSQL
+- **InnoDB requirements** - Need InnoDB-specific features
+
+#### Choose SQLite When:
+- **Development and testing** - Fast, zero-config local development
+- **Mobile applications** - Embedded database for iOS/Android
+- **Edge computing** - Lightweight deployment on edge devices
+- **Serverless functions** - Quick cold starts with file-based DB
+- **Desktop applications** - Single-file database simplicity
+- **Prototyping** - Rapid application development
+
+### Multi-Database Workflows
+
+You can use different databases in the same application:
+
+```python
+# Development: Fast SQLite
+dev_db = DataFlow(":memory:")
+
+# Staging: MySQL for web hosting compatibility
+staging_db = DataFlow("mysql://user:pass@staging-host:3306/staging_db")
+
+# Production: PostgreSQL for enterprise features
+prod_db = DataFlow("postgresql://user:pass@prod-host:5432/prod_db")
+
+# Same model definitions work across all databases
+@dev_db.model
+@staging_db.model
+@prod_db.model
+class User:
+    name: str
+    email: str
+    active: bool = True
+
+# All databases get identical 9 nodes per model
+# UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode,
+# UserListNode, UserBulkCreateNode, UserBulkUpdateNode,
+# UserBulkDeleteNode, UserBulkUpsertNode
 ```
 
 ### Password Special Characters

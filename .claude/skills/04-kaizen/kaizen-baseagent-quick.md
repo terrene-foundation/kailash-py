@@ -71,6 +71,8 @@ class MyAgent(BaseAgent):
 - ✅ Memory management (optional, via BufferMemory)
 - ✅ A2A capability cards (`to_a2a_card()`)
 - ✅ Workflow generation (`to_workflow()`)
+- ✅ **Autonomous tool calling (v0.2.0)** - opt-in via `tool_registry`
+- ✅ **Bidirectional communication (v0.2.0)** - opt-in via `control_protocol`
 
 **Code Reduction:**
 - Traditional agent: ~496 lines
@@ -132,6 +134,84 @@ insights = shared_pool.read_relevant(
 )
 analysis = analyst.analyze(insights)
 ```
+
+## v0.2.0: Autonomous Tool Calling (Opt-In)
+
+```python
+from kaizen.tools import ToolRegistry
+from kaizen.tools.builtin import register_builtin_tools
+
+# Enable tool calling
+registry = ToolRegistry()
+register_builtin_tools(registry)  # 12 builtin tools
+
+class FileAgent(BaseAgent):
+    def __init__(self, config: MyConfig):
+        super().__init__(
+            config=config,
+            signature=MySignature(),
+            tool_registry=registry  # Enable tools
+        )
+
+    async def process_file(self, path: str) -> dict:
+        # Execute tool with automatic approval workflow
+        result = await self.execute_tool(
+            tool_name="read_file",
+            params={"path": path},
+            store_in_memory=True
+        )
+        return result
+
+agent = FileAgent(config)
+result = await agent.process_file("/tmp/data.txt")
+```
+
+**12 Builtin Tools**: File (5), HTTP (4), Bash (1), Web (2)
+**Approval Workflows**: SAFE (auto-approved) → LOW → MEDIUM → HIGH → CRITICAL
+
+## v0.2.0: Interactive Agents with Control Protocol (Opt-In)
+
+```python
+from kaizen.core.autonomy.control.protocol import ControlProtocol
+from kaizen.core.autonomy.control.transports import CLITransport
+
+# Enable bidirectional communication
+transport = CLITransport()
+await transport.connect()
+protocol = ControlProtocol(transport)
+
+class InteractiveAgent(BaseAgent):
+    def __init__(self, config: MyConfig):
+        super().__init__(
+            config=config,
+            signature=MySignature(),
+            control_protocol=protocol  # Enable interaction
+        )
+
+    async def process_interactive(self, task: str) -> dict:
+        # Ask user for clarification
+        approach = await self.ask_user_question(
+            question="Which approach to use?",
+            options=["Fast", "Accurate", "Balanced"]
+        )
+
+        # Request approval for risky operation
+        approved = await self.request_approval(
+            action="delete_temp_files",
+            details={"count": 150, "size_mb": 2.3}
+        )
+
+        # Report progress
+        await self.report_progress(
+            message="Processing...",
+            percentage=50.0
+        )
+
+        return self.run(task=task, approach=approach)
+```
+
+**4 Transports**: CLI, HTTP/SSE, stdio, memory
+**<20ms latency** for real-time interaction
 
 ## CRITICAL RULES
 
