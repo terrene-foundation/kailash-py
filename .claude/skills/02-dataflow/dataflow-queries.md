@@ -10,7 +10,7 @@ Use MongoDB-style query operators for filtering, searching, and aggregating Data
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0+`
 > Related Skills: [`dataflow-crud-operations`](#), [`dataflow-models`](#), [`dataflow-bulk-operations`](#)
 > Related Subagents: `dataflow-specialist` (complex queries, optimization)
 
@@ -18,7 +18,7 @@ Use MongoDB-style query operators for filtering, searching, and aggregating Data
 
 - **Operators**: `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$in`, `$nin`, `$regex`, `$or`, `$and`, `$not`
 - **Performance**: <10ms for most queries, <100ms for aggregations
-- **Database Agnostic**: Works across PostgreSQL, SQLite
+- **SQL Database Agnostic**: Works across PostgreSQL, MySQL, SQLite (MongoDB has native query language)
 - **Pattern**: Use in `filter` parameter of ListNode
 
 ```python

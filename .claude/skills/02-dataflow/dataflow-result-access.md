@@ -10,7 +10,7 @@ Correct patterns for accessing DataFlow node results in workflows.
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `MEDIUM`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-crud-operations`](#), [`param-passing-quick`](#)
 > Related Subagents: `dataflow-specialist` (troubleshooting), `pattern-expert` (workflow design)
 

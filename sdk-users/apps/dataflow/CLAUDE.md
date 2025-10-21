@@ -12,6 +12,12 @@
 - **DEFERRED SCHEMA OPERATIONS**: Synchronous registration, async table creation
 - **CONTEXT-AWARE TABLE CREATION**: Node-instance coupling for context preservation
 
+**🔮 Coming Soon: Vector & Document Database Support**
+- **pgvector** (Next release): PostgreSQL vector similarity search for RAG/AI applications
+- **MongoDB**: Document database with PyMongo Async API for flexible schema applications
+- **Qdrant**: Dedicated vector database for billion-scale semantic search
+- **Neo4j**: Graph database for relationship-heavy data models
+
 ## 🔧 STRING ID & CONTEXT-AWARE PATTERNS (NEW)
 
 ### String ID Support (No More Forced Integer Conversion)

@@ -10,7 +10,7 @@ Run multiple isolated DataFlow instances (dev/prod) with proper context separati
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `MEDIUM`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-models`](#), [`dataflow-connection-config`](#)
 > Related Subagents: `dataflow-specialist`
 
