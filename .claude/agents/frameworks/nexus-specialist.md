@@ -103,109 +103,43 @@ app.register(workflow, "workflow_name")
 
 ### API Input Mapping (CRITICAL)
 
-**Understanding How API Inputs Map to Node Parameters:**
+**Flow**: `API {"inputs": {}}` → `Runtime parameters={}` → Node variables (broadcast to ALL nodes)
 
-```
-API Request: {"inputs": {"sector": "Tech", "limit": 10}}
-     ↓
-Nexus receives as WorkflowRequest.inputs
-     ↓
-Runtime executes: runtime.execute(workflow, parameters={...})
-     ↓
-ALL nodes receive the FULL inputs dict as parameters
-     ↓
-PythonCodeNode accesses via try/except pattern
-```
-
-**Complete Example:**
+**Example:**
 ```python
-# 1. Workflow Definition
+# 1. Workflow with parameter access
 workflow = WorkflowBuilder()
-
-workflow.add_node(
-    "PythonCodeNode",
-    "prepare_filters",
-    {
-        "code": """
-# Access API inputs via try/except (inputs are injected as variables)
+workflow.add_node("PythonCodeNode", "prepare", {
+    "code": """
 try:
-    s = sector  # From API {"inputs": {"sector": "Tech"}}
+    sector = sector  # From API inputs
 except NameError:
-    s = None
-
-try:
-    lim = limit
-except NameError:
-    lim = 100
-
-# Build output
-result = {'filters': {'sector': s} if s else {}, 'limit': lim}
+    sector = None
+result = {'filters': {'sector': sector} if sector else {}}
 """
-    }
-)
-
-workflow.add_node(
-    "ContactListNode",
-    "search",
-    {
-        "filter": {},  # Will be populated via connection
-        "limit": 100
-    }
-)
-
-# Connect outputs to next node's inputs
-workflow.add_connection(
-    "prepare_filters", "result.filters",  # From output
-    "search", "filter"  # To input
-)
-
-workflow.add_connection(
-    "prepare_filters", "result.limit",
-    "search", "limit"
-)
-
-# 2. Register with Nexus
-app.register("contact_search", workflow.build())
-
-# 3. API Usage
-# POST /workflows/contact_search/execute
-# {"inputs": {"sector": "Technology", "limit": 5}}
-```
-
-**Common Pitfalls:**
-```python
-# ❌ WRONG: inputs variable doesn't exist
-sector = inputs.get('sector')
-
-# ❌ WRONG: locals() is restricted
-sector = locals().get('sector')
-
-# ❌ WRONG: Template syntax in config
-workflow.add_node("ContactListNode", "search", {
-    "filter": "${prepare_filters.result.filters}"  # Not evaluated!
 })
 
-# ✅ CORRECT: Use try/except for parameters
-try:
-    s = sector
-except NameError:
-    s = None
+workflow.add_node("ContactListNode", "search", {"filter": {}, "limit": 100})
 
-# ✅ CORRECT: Use explicit connections
-workflow.add_connection(
-    "prepare_filters", "result.filters",
-    "search", "filter"
-)
+# Connect outputs to inputs
+workflow.add_connection("prepare", "result.filters", "search", "filter")
+
+# 2. Register and use
+app.register("contact_search", workflow.build())
+# API: POST /workflows/contact_search/execute {"inputs": {"sector": "Tech"}}
 ```
 
 **Key Rules:**
-1. API `{"inputs": {...}}` → Runtime `parameters={...}` → Node variables
-2. ALL nodes receive the FULL inputs dict (broadcast behavior)
-3. Use try/except to access optional parameters in PythonCodeNode
-4. Use explicit connections, NOT template syntax `${...}` in node config
-5. Access nested outputs with dot notation: `"result.filters"`
+1. Use `try/except` to access optional parameters in PythonCodeNode
+2. Use explicit `add_connection()`, NOT template syntax `${...}`
+3. Access nested outputs with dot notation: `"result.filters"`
 
-**📚 Detailed Guide**: See [Input Mapping Guide](../../sdk-users/apps/nexus/docs/troubleshooting/input-mapping-guide.md)
+**Common Mistakes:**
+- ❌ `inputs.get('sector')` (inputs variable doesn't exist)
+- ❌ `"filter": "${prepare.result}"` (template syntax not supported)
+- ✅ Use try/except + explicit connections
+
+**📚 Details**: [Input Mapping Guide](../../sdk-users/apps/nexus/docs/troubleshooting/input-mapping-guide.md)
 
 ## Common Patterns & Solutions
 
@@ -228,7 +162,7 @@ app.monitoring.interval = 30
 app.start()
 ```
 
-### Custom REST Endpoints (NEW in v1.0.9)
+### Custom REST Endpoints
 ```python
 from nexus import Nexus
 
@@ -265,17 +199,15 @@ async def manage_message(msg_id: str, request: Request):
         return await app._execute_workflow("delete_message", {"id": msg_id})
 ```
 
-**Key Features:**
+**Key Features (v1.1.0):**
 - ✅ **Path Parameters**: `/api/users/{user_id}` automatically validated
-- ✅ **Query Parameters**: Type coercion, defaults, validation (FastAPI)
-- ✅ **Rate Limiting**: Per-endpoint configuration (default 100 req/min)
-- ✅ **Security**: Input validation (10MB max, dangerous key blocking)
+- ✅ **Query Parameters**: Type coercion, defaults, `pattern` validation
+- ✅ **Rate Limiting**: Per-endpoint with automatic cleanup (default 100 req/min)
+- ✅ **Security**: Input size (10MB max), dangerous key blocking, key length (256 chars)
 - ✅ **Multiple Methods**: GET, POST, PUT, DELETE, PATCH support
 - ✅ **Workflow Integration**: Use `_execute_workflow()` helper
 
-**📚 Complete Guide**: See [Custom Endpoints](../../apps/kailash-nexus/docs/technical/custom_endpoints.md)
-
-### SSE Streaming for Real-Time Chat (NEW in v1.0.9)
+### SSE Streaming for Real-Time Chat
 ```python
 # POST /execute with {"mode": "stream"}
 # Returns Server-Sent Events (SSE) format
@@ -310,10 +242,6 @@ eventSource.addEventListener('error', (e) => {
 2. **complete** - Workflow finished (includes result, execution_time)
 3. **error** - Execution failed (includes error message, error_type)
 4. **keepalive** - Connection maintenance (comment format `:keepalive`)
-
-**📚 Complete Guide**: See [SSE Streaming](../../apps/kailash-nexus/docs/technical/sse_streaming.md)
-
-**Query Parameters Guide**: See [Query Parameters](../../apps/kailash-nexus/docs/technical/query_parameters.md)
 
 ### Health Monitoring
 ```python

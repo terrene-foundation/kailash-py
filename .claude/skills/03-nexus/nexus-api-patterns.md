@@ -30,7 +30,7 @@ GET /health
 GET /docs
 ```
 
-## Custom REST Endpoints (NEW in v1.0.9)
+## Custom REST Endpoints
 
 Create custom FastAPI-style endpoints with path parameters, query parameters, and rate limiting:
 
@@ -71,15 +71,13 @@ async def manage_message(msg_id: str, request: Request):
         return await app._execute_workflow("delete_message", {"id": msg_id})
 ```
 
-### Key Features:
+### Key Features (v1.1.0):
 - ✅ **Path Parameters**: Automatically validated by FastAPI
-- ✅ **Query Parameters**: Type coercion and defaults
-- ✅ **Rate Limiting**: Per-endpoint (default 100 req/min)
-- ✅ **Security**: Input validation (10MB max, dangerous key blocking)
+- ✅ **Query Parameters**: Type coercion, defaults, `pattern` validation
+- ✅ **Rate Limiting**: Per-endpoint with automatic cleanup (default 100 req/min)
+- ✅ **Security**: Input size (10MB max), dangerous key blocking, key length (256 chars)
 - ✅ **HTTP Methods**: GET, POST, PUT, DELETE, PATCH
 - ✅ **Workflow Integration**: Use `_execute_workflow()` helper
-
-**📚 Full Guide**: See [Custom Endpoints](../../apps/kailash-nexus/docs/technical/custom_endpoints.md)
 
 ## Basic Workflow Execution
 
@@ -208,7 +206,7 @@ curl -X POST http://localhost:8000/workflows/my-workflow/execute \
   -d '{"inputs": {"param": "value"}}'
 ```
 
-## SSE Streaming for Real-Time Chat (NEW in v1.0.9)
+## SSE Streaming for Real-Time Chat
 
 ```python
 # Execute workflow in streaming mode

@@ -73,20 +73,20 @@ class AnthropicChannelType(ChannelType):
 class AnthropicProxyChannel(Channel):
     """
     Anthropic-compatible API proxy channel.
-    
+
     Translates Anthropic API requests to local/cloud LLM providers.
     Enables Claude Code to use Ollama, OpenAI, Gemini, etc.
     """
-    
+
     def __init__(self, config: ChannelConfig):
         super().__init__(config)
         self.provider_registry = ProviderRegistry()
         self.router = ContextAwareRouter()
         self.translator = RequestTranslator()
-        
+
     async def start(self) -> None:
         """Start FastAPI server on configured port"""
-        
+
     async def handle_request(self, request: Dict[str, Any]) -> ChannelResponse:
         """
         Handle Anthropic API request:
@@ -110,25 +110,25 @@ class ProviderRegistry:
     Manages multiple AI providers for the proxy.
     Built on existing Kailash AI provider infrastructure.
     """
-    
+
     def __init__(self):
         self.providers = {}
         self._load_available_providers()
-    
+
     def _load_available_providers(self):
         """Auto-discover available providers from Kailash"""
         from kailash.nodes.ai.ai_providers import (
             OllamaProvider,
-            OpenAIProvider, 
+            OpenAIProvider,
             GeminiProvider,
             AnthropicProvider
         )
-        
+
         # Register all available providers
         if OllamaProvider().is_available():
             self.register("ollama", OllamaProvider())
         # ... etc
-    
+
     def route_request(self, model_name: str, context: str) -> BaseAIProvider:
         """Route request to appropriate provider based on model and context"""
 ```
@@ -141,32 +141,32 @@ class ProviderRegistry:
 class AnthropicRequestTranslator:
     """
     Translates Anthropic API format to provider-specific format.
-    
+
     Anthropic → OpenAI/Ollama/Gemini format conversion
     """
-    
+
     def translate_messages(self, messages: List[Dict]) -> List[Dict]:
         """Convert Anthropic message format to target format"""
-        
+
     def translate_tools(self, tools: List[Dict]) -> List[Dict]:
         """Convert Anthropic tool format to target format"""
-        
+
     def translate_parameters(self, params: Dict) -> Dict:
         """Convert Anthropic parameters to target parameters"""
 
 class AnthropicResponseTranslator:
     """
     Translates provider responses back to Anthropic format.
-    
+
     OpenAI/Ollama/Gemini → Anthropic format conversion
     """
-    
+
     def translate_completion(self, response: Dict) -> Dict:
         """Convert completion response to Anthropic format"""
-        
+
     def translate_streaming(self, chunk: Dict) -> Dict:
         """Convert streaming chunk to Anthropic SSE format"""
-        
+
     def translate_tool_calls(self, tool_calls: List[Dict]) -> List[Dict]:
         """Convert tool calls to Anthropic format"""
 ```
@@ -184,7 +184,7 @@ class ContextAwareRouter:
     - Provider availability
     - Cost optimization
     """
-    
+
     def __init__(self, routing_config: Dict):
         self.routing_rules = {
             "coding": {"provider": "ollama", "model": "qwen2.5-coder:32b"},
@@ -194,22 +194,22 @@ class ContextAwareRouter:
             "syntaxCheck": {"provider": "ollama", "model": "phi3:mini"},
             "quickRefactor": {"provider": "ollama", "model": "gemma2:9b"}
         }
-    
+
     def route(self, model: str, messages: List[Dict], context: str = None) -> tuple:
         """
         Route request to provider.
-        
+
         Returns: (provider, actual_model)
         """
         # Check for explicit model switching (/model command)
         if model.startswith("ollama/"):
             return "ollama", model.replace("ollama/", "")
-            
+
         # Use context-aware routing
         if context in self.routing_rules:
             rule = self.routing_rules[context]
             return rule["provider"], rule["model"]
-            
+
         # Map Anthropic model tiers to local models
         if "haiku" in model.lower():
             return self.routing_rules["fileSearch"]["provider"], \
@@ -219,7 +219,7 @@ class ContextAwareRouter:
                    self.routing_rules["coding"]["model"]
         elif "opus" in model.lower():
             return "ollama", "llama3.1:70b"
-            
+
         # Default fallback
         return "ollama", "llama3.1"
 ```
@@ -232,26 +232,26 @@ class ContextAwareRouter:
 class AnthropicWorkflowExecutor:
     """
     Executes AI requests via Kailash workflows.
-    
+
     Wraps provider calls in Kailash workflow infrastructure
     for monitoring, logging, and enterprise features.
     """
-    
+
     def __init__(self):
         self.runtime = AsyncLocalRuntime()
-    
-    async def execute_chat(self, provider: str, model: str, 
+
+    async def execute_chat(self, provider: str, model: str,
                           messages: List[Dict], **kwargs) -> Dict:
         """
         Execute chat via Kailash workflow:
-        
+
         1. Build workflow with LLMAgentNode
         2. Configure with provider/model
         3. Execute via AsyncLocalRuntime
         4. Return standardized response
         """
         from kailash.workflow.builder import WorkflowBuilder
-        
+
         workflow = WorkflowBuilder()
         workflow.add_node("LLMAgentNode", "agent", {
             "provider": provider,
@@ -259,12 +259,12 @@ class AnthropicWorkflowExecutor:
             "messages": messages,
             **kwargs
         })
-        
+
         results = await self.runtime.execute_workflow_async(
             workflow.build(),
             inputs={}
         )
-        
+
         return results.get("agent", {})
 ```
 
@@ -456,14 +456,14 @@ providers:
       - llama3.1:70b
       - llama3.1
       - phi3:mini
-  
+
   openai:
     enabled: false
     api_key: ${OPENAI_API_KEY}
     models:
       - gpt-4o
       - gpt-4o-mini
-  
+
   gemini:
     enabled: false
     api_key: ${GEMINI_API_KEY}
@@ -475,20 +475,20 @@ routing:
   default:
     provider: ollama
     model: llama3.1
-  
+
   context_rules:
     coding:
       provider: ollama
       model: qwen2.5-coder:32b
-    
+
     debugging:
       provider: ollama
       model: qwen2.5-coder:32b
-    
+
     fileSearch:
       provider: ollama
       model: phi3:mini
-    
+
     syntaxCheck:
       provider: ollama
       model: phi3:mini
