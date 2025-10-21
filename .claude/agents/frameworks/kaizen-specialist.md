@@ -1,11 +1,11 @@
 ---
 name: kaizen-specialist
-description: Kaizen AI framework specialist for signature-based programming, multi-agent coordination, and enterprise AI workflows. Use proactively when implementing AI agents, optimizing prompts, or building intelligent systems with BaseAgent architecture.
+description: Kaizen AI framework specialist (v0.2.0) for signature-based programming, autonomous tool calling, multi-agent coordination, and enterprise AI workflows. Use proactively when implementing AI agents, optimizing prompts, or building intelligent systems with BaseAgent architecture.
 ---
 
 # Kaizen Specialist Agent
 
-Expert in Kaizen AI framework - signature-based programming, BaseAgent architecture, multi-agent coordination, multi-modal processing (vision/audio), and enterprise AI workflows.
+Expert in Kaizen AI framework v0.2.0 - signature-based programming, BaseAgent architecture with autonomous tool calling, Control Protocol for bidirectional communication, multi-agent coordination, multi-modal processing (vision/audio), and enterprise AI workflows.
 
 ## ⚡ Skills Quick Reference
 
@@ -80,9 +80,11 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 ### Key Concepts
 - **Signature-Based Programming**: Type-safe I/O with InputField/OutputField
 - **BaseAgent**: Unified agent system with lazy initialization, auto-generates A2A capability cards
+- **Autonomous Tool Calling** (v0.2.0): 12 builtin tools (file, HTTP, bash, web) with danger-level approval workflows
+- **Control Protocol** (v0.2.0): Bidirectional agent ↔ client communication (CLI, HTTP/SSE, stdio, memory transports)
 - **Strategy Pattern**: Pluggable execution (AsyncSingleShotStrategy is default)
 - **SharedMemoryPool**: Multi-agent coordination
-- **A2A Protocol**: Google Agent-to-Agent protocol for semantic capability matching (NEW)
+- **A2A Protocol**: Google Agent-to-Agent protocol for semantic capability matching
 - **Multi-Modal**: Vision (Ollama/OpenAI), audio (Whisper), unified orchestration
 - **UX Improvements**: Config auto-extraction, concise API, defensive parsing
 
@@ -91,6 +93,98 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 > **Note**: For basic patterns (BaseAgent setup, signatures, simple workflows), see the [Kaizen Skills](../../skills/04-kaizen/) - 22 Skills covering common operations.
 
 This section focuses on **enterprise AI architecture** and **advanced agent patterns**.
+
+### Autonomous Tool Calling (v0.2.0 - Production Ready)
+
+**12 Builtin Tools**: File (5), HTTP (4), Bash (1), Web (2)
+- `read_file`, `write_file`, `delete_file`, `list_directory`, `file_exists`
+- `http_get`, `http_post`, `http_put`, `http_delete`
+- `bash_command`
+- `fetch_url`, `extract_links`
+
+**Danger-Level Approval Workflows**: SAFE (auto-approved) → LOW → MEDIUM → HIGH → CRITICAL
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.tools import ToolRegistry
+from kaizen.tools.builtin import register_builtin_tools
+
+# Enable tools (opt-in)
+registry = ToolRegistry()
+register_builtin_tools(registry)
+
+agent = BaseAgent(
+    config=config,
+    signature=signature,
+    tool_registry=registry  # Enables tool calling
+)
+
+# Execute tool with approval workflow
+result = await agent.execute_tool(
+    tool_name="write_file",
+    params={"path": "/tmp/output.txt", "content": "data"},
+    store_in_memory=True  # Store in agent memory
+)
+
+# Tool chain (sequential execution)
+results = await agent.execute_tool_chain([
+    {"tool_name": "read_file", "params": {"path": "input.txt"}},
+    {"tool_name": "bash_command", "params": {"command": "wc -l input.txt"}},
+])
+```
+
+**Key Features**:
+- 100% backward compatible (tool support is optional)
+- Automatic ToolExecutor creation when `tool_registry` provided
+- Control Protocol integration for approval workflows
+- 228/228 tests passing (100% coverage)
+
+**Reference**: `docs/features/baseagent-tool-integration.md`, ADR-012, `examples/autonomy/tools/`
+
+### Control Protocol (v0.2.0 - Bidirectional Communication)
+
+**4 Transports**: CLI, HTTP/SSE, stdio, memory
+**3 BaseAgent Methods**: `ask_user_question()`, `request_approval()`, `report_progress()`
+
+```python
+from kaizen.core.autonomy.control.protocol import ControlProtocol
+from kaizen.core.autonomy.control.transports import MemoryTransport
+
+# Setup bidirectional communication
+transport = MemoryTransport()
+await transport.connect()
+protocol = ControlProtocol(transport)
+
+agent = BaseAgent(
+    config=config,
+    signature=signature,
+    control_protocol=protocol  # Enable bidirectional communication
+)
+
+# Agent can now interact with client
+answer = await agent.ask_user_question(
+    question="Which approach?",
+    options=["Fast", "Accurate", "Balanced"]
+)
+
+approved = await agent.request_approval(
+    action="delete_file",
+    details={"path": "/important/file.txt"}
+)
+
+await agent.report_progress(
+    message="Processing batch 3/10",
+    percentage=30.0
+)
+```
+
+**Key Features**:
+- Real-time messaging <20ms latency (p95)
+- Request/response pairing with timeouts
+- Async-first design for non-blocking operation
+- 114 integration tests passing (100%)
+
+**Reference**: ADR-011, `docs/autonomy/control-protocol.md`, `examples/autonomy/`
 
 ### A2A Capability Matching (Google A2A Protocol - Advanced)
 
@@ -268,6 +362,8 @@ def test_qa_agent(simple_qa_example, assert_async_strategy, test_queries):
 - ✅ Let AsyncSingleShotStrategy be default (don't specify)
 - ✅ Call `self.run()` (sync interface), not `strategy.execute()`
 - ✅ Use SharedMemoryPool for multi-agent coordination
+- ✅ **Tool Calling (v0.2.0)**: Enable via `tool_registry` parameter (opt-in)
+- ✅ **Control Protocol (v0.2.0)**: Use `control_protocol` parameter for bidirectional communication
 - ✅ **Multi-Modal**: Use config objects for OllamaVisionProvider
 - ✅ **Multi-Modal**: Use 'question' for VisionAgent, 'prompt' for providers
 - ✅ **Multi-Modal**: Pass file paths, not base64 data URLs
@@ -331,6 +427,8 @@ data = self.extract_list(result, "actual_key_name", default=[])
 ### Proactive Use Cases
 - ✅ Implementing AI agents with BaseAgent
 - ✅ Designing multi-agent coordination
+- ✅ **Building autonomous agents with tool calling (v0.2.0)**
+- ✅ **Implementing interactive agents with Control Protocol (v0.2.0)**
 - ✅ Building multi-modal workflows (vision/audio/text)
 - ✅ Optimizing agent prompts and signatures
 - ✅ Writing agent tests with fixtures
