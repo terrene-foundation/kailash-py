@@ -92,7 +92,7 @@ Your workflows are automatically available via:
 - **CLI**: `nexus run {name}`
 - **MCP**: Model Context Protocol integration
 
-### 5. Custom REST Endpoints (NEW in v1.0.9)
+### 5. Custom REST Endpoints
 Create FastAPI-style custom endpoints with path parameters, query parameters, and rate limiting:
 
 ```python
@@ -122,19 +122,16 @@ async def search(q: str, limit: int = 10, offset: int = 0):
 app.start()
 ```
 
-**Key Features:**
+**Key Features (v1.1.0):**
 - ✅ Path Parameters: `/api/users/{user_id}` automatically validated
-- ✅ Query Parameters: Type coercion and defaults
-- ✅ Rate Limiting: Per-endpoint (default 100 req/min)
-- ✅ Security: Input validation (10MB max, dangerous key blocking)
+- ✅ Query Parameters: Type coercion, defaults, `pattern` validation
+- ✅ Rate Limiting: Per-endpoint with automatic cleanup (default 100 req/min)
+- ✅ Security: Input size (10MB max), dangerous key blocking, key length (256 chars)
 - ✅ HTTP Methods: GET, POST, PUT, DELETE, PATCH
 
-**📚 Complete Guides:**
-- [Custom Endpoints Guide](docs/technical/custom_endpoints.md)
-- [Query Parameters Guide](docs/technical/query_parameters.md)
-- [SSE Streaming Guide](docs/technical/sse_streaming.md)
+**📚 Complete Guide:** [SSE Streaming Guide](docs/technical/sse_streaming.md)
 
-### 6. SSE Streaming for Real-Time Chat (NEW in v1.0.9)
+### 6. SSE Streaming for Real-Time Chat
 Execute workflows with Server-Sent Events for real-time updates:
 
 ```python
@@ -159,6 +156,15 @@ eventSource.addEventListener('complete', (e) => {
 - Health endpoint at `/health`
 - Auto CORS and documentation enabled
 - Graceful error handling and isolation
+
+## What's New in v1.1.0
+
+- **Enhanced Security**: Input size validation (10MB), dangerous key blocking, key length limits (256 chars)
+- **Rate Limiting Improvements**: Automatic cleanup of expired rate limit entries
+- **Query Parameter Validation**: Use `pattern` parameter for regex validation
+- **MCP Transport Modes**: WebSocket-only and HTTP+WebSocket modes with improved architecture
+- **WebSocket API**: Updated to websockets 14.0+ (ServerConnection API)
+- **Bug Fixes**: 48 test fixes including MCP protocol, E2E workflows, and production scenarios
 
 ## 🏗️ Multi-Channel Architecture
 
