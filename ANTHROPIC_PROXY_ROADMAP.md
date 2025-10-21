@@ -27,13 +27,13 @@ src/kailash/channels/
 # anthropic_channel.py
 class AnthropicProxyChannel(Channel):
     """Main proxy channel implementation"""
-    
+
     async def start(self) -> None:
         """Start FastAPI server"""
-        
+
     async def handle_request(self, request: Dict) -> ChannelResponse:
         """Route /v1/messages requests"""
-        
+
     async def _handle_messages_endpoint(self, request: AnthropicRequest):
         """Core message handling logic"""
 ```
@@ -101,10 +101,10 @@ logger = logging.getLogger(__name__)
 class AnthropicProxyChannel(Channel):
     """
     Anthropic-compatible API proxy channel.
-    
+
     Translates Claude Code requests to local/cloud LLM providers.
     """
-    
+
     def __init__(self, config: ChannelConfig):
         super().__init__(config)
         self.app = FastAPI(title="Anthropic Proxy")
@@ -112,10 +112,10 @@ class AnthropicProxyChannel(Channel):
         self.provider = None
         self._server = None
         self._setup_routes()
-        
+
     def _setup_routes(self):
         """Setup FastAPI routes"""
-        
+
         @self.app.post("/v1/messages")
         async def messages_endpoint(request: Dict[str, Any]):
             """Anthropic messages endpoint"""
@@ -124,7 +124,7 @@ class AnthropicProxyChannel(Channel):
             except Exception as e:
                 logger.error(f"Error handling request: {e}")
                 raise HTTPException(status_code=500, detail=str(e))
-        
+
         @self.app.get("/health")
         async def health_check():
             """Health check endpoint"""
@@ -132,17 +132,17 @@ class AnthropicProxyChannel(Channel):
                 "status": "healthy",
                 "provider": "ollama" if self.provider else "none"
             }
-    
+
     async def start(self) -> None:
         """Start the proxy server"""
         try:
             self.status = ChannelStatus.STARTING
-            
+
             # Initialize provider
             self.provider = OllamaProvider()
             if not self.provider.is_available():
                 raise RuntimeError("Ollama provider not available")
-            
+
             # Start server
             port = self.config.port or 8082
             config = uvicorn.Config(
@@ -152,18 +152,18 @@ class AnthropicProxyChannel(Channel):
                 log_level="info"
             )
             self._server = uvicorn.Server(config)
-            
+
             self.status = ChannelStatus.RUNNING
             logger.info(f"Anthropic proxy started on {self.config.host}:{port}")
-            
+
             # Run server
             await self._server.serve()
-            
+
         except Exception as e:
             self.status = ChannelStatus.ERROR
             logger.error(f"Failed to start proxy: {e}")
             raise
-    
+
     async def stop(self) -> None:
         """Stop the proxy server"""
         self.status = ChannelStatus.STOPPING
@@ -171,18 +171,18 @@ class AnthropicProxyChannel(Channel):
             self._server.should_exit = True
         self.status = ChannelStatus.STOPPED
         logger.info("Anthropic proxy stopped")
-    
+
     async def handle_request(self, request: Dict[str, Any]) -> ChannelResponse:
         """Handle generic channel request"""
         return ChannelResponse(
             success=True,
             data={"message": "Use /v1/messages endpoint"}
         )
-    
+
     async def _handle_messages(self, request: Dict[str, Any]) -> Dict:
         """
         Handle Anthropic messages request.
-        
+
         Workflow:
         1. Parse request (model, messages, parameters)
         2. Translate to provider format
@@ -195,10 +195,10 @@ class AnthropicProxyChannel(Channel):
         messages = request.get("messages", [])
         max_tokens = request.get("max_tokens", 4096)
         temperature = request.get("temperature", 0.7)
-        
+
         # Map Anthropic model to Ollama model
         ollama_model = self._map_model(model)
-        
+
         # Build workflow
         workflow = WorkflowBuilder()
         workflow.add_node("LLMAgentNode", "agent", {
@@ -208,16 +208,16 @@ class AnthropicProxyChannel(Channel):
             "max_tokens": max_tokens,
             "temperature": temperature
         })
-        
+
         # Execute
         results = await self.runtime.execute_workflow_async(
             workflow.build(),
             inputs={}
         )
-        
+
         # Get response
         agent_output = results.get("agent", {})
-        
+
         # Format as Anthropic response
         return {
             "id": f"msg_{asyncio.current_task().get_name()}",
@@ -236,7 +236,7 @@ class AnthropicProxyChannel(Channel):
                 "output_tokens": agent_output.get("usage", {}).get("completion_tokens", 0)
             }
         }
-    
+
     def _map_model(self, anthropic_model: str) -> str:
         """Map Anthropic model name to Ollama model"""
         mapping = {
@@ -261,36 +261,36 @@ from typing import Dict, Any, Optional
 @dataclass
 class AnthropicProxyConfig:
     """Configuration for Anthropic proxy"""
-    
+
     # Server settings
     host: str = "localhost"
     port: int = 8082
-    
+
     # Provider settings
     preferred_provider: str = "ollama"
     ollama_base_url: str = "http://localhost:11434"
-    
+
     # Model mapping
     model_mapping: Dict[str, str] = field(default_factory=lambda: {
         "claude-haiku": "phi3:mini",
-        "claude-sonnet": "qwen2.5-coder:32b", 
+        "claude-sonnet": "qwen2.5-coder:32b",
         "claude-opus": "llama3.1:70b"
     })
-    
+
     # Routing rules
     context_routing: Dict[str, Dict[str, str]] = field(default_factory=lambda: {
         "coding": {"provider": "ollama", "model": "qwen2.5-coder:32b"},
         "fileSearch": {"provider": "ollama", "model": "phi3:mini"}
     })
-    
+
     # Timeouts
     request_timeout_ms: int = 600000  # 10 minutes
-    
+
     # Features
     enable_streaming: bool = True
     enable_tool_calling: bool = True
     enable_monitoring: bool = True
-    
+
     # Enterprise
     enable_auth: bool = False
     enable_rate_limiting: bool = False
@@ -324,16 +324,16 @@ async def main():
         host="localhost",
         port=8082
     )
-    
+
     # Create and start proxy
     proxy = AnthropicProxyChannel(config)
-    
+
     print("Starting Anthropic proxy on http://localhost:8082")
     print("Configure Claude Code:")
     print("  export ANTHROPIC_BASE_URL=http://localhost:8082")
     print("  export ANTHROPIC_API_KEY=dummy")
     print("  claude")
-    
+
     await proxy.start()
 
 
@@ -414,9 +414,9 @@ async def test_messages_endpoint(proxy_channel):
         ],
         "max_tokens": 100
     }
-    
+
     response = await proxy_channel._handle_messages(request)
-    
+
     assert response["type"] == "message"
     assert response["role"] == "assistant"
     assert "content" in response
@@ -439,7 +439,7 @@ async def test_full_request_flow():
     # Start proxy
     proxy = AnthropicProxyChannel(...)
     await proxy.start()
-    
+
     # Send request
     async with httpx.AsyncClient() as client:
         response = await client.post(
@@ -449,11 +449,11 @@ async def test_full_request_flow():
                 "messages": [{"role": "user", "content": "Hello"}]
             }
         )
-    
+
     assert response.status_code == 200
     data = response.json()
     assert data["type"] == "message"
-    
+
     await proxy.stop()
 ```
 
