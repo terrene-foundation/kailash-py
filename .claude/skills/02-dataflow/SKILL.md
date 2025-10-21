@@ -1,6 +1,6 @@
 ---
 name: dataflow
-description: "Kailash DataFlow - zero-config database framework with automatic model-to-node generation. Use when asking about 'database operations', 'DataFlow', 'database models', 'CRUD operations', 'bulk operations', 'database queries', 'database migrations', 'multi-tenancy', 'multi-instance', 'database transactions', 'PostgreSQL', 'SQLite', 'existing database', 'database performance', 'database deployment', 'database testing', or 'TDD with databases'. DataFlow is NOT an ORM - it generates 9 workflow nodes per model automatically."
+description: "Kailash DataFlow - zero-config database framework with automatic model-to-node generation. Use when asking about 'database operations', 'DataFlow', 'database models', 'CRUD operations', 'bulk operations', 'database queries', 'database migrations', 'multi-tenancy', 'multi-instance', 'database transactions', 'PostgreSQL', 'MySQL', 'SQLite', 'existing database', 'database performance', 'database deployment', 'database testing', or 'TDD with databases'. DataFlow is NOT an ORM - it generates 9 workflow nodes per model automatically."
 ---
 
 # Kailash DataFlow - Zero-Config Database Framework
@@ -12,7 +12,7 @@ DataFlow is a zero-config database framework built on Kailash Core SDK that auto
 DataFlow transforms database models into workflow nodes automatically, providing:
 
 - **Automatic Node Generation**: 9 nodes per model (@db.model decorator)
-- **Multi-Database Support**: PostgreSQL, SQLite, and more dialects
+- **Multi-Database Support**: PostgreSQL, MySQL, and SQLite with 100% feature parity
 - **Enterprise Features**: Multi-tenancy, multi-instance isolation, transactions
 - **Zero Configuration**: String IDs preserved, deferred schema operations
 - **Integration Ready**: Works with Nexus for multi-channel deployment
@@ -113,11 +113,11 @@ Each `@db.model` class generates **9 nodes**:
 - ❌ NEVER use direct SQL when DataFlow nodes exist
 - ❌ NEVER use SQLAlchemy/Django ORM alongside DataFlow
 
-### Database Support
-- **PostgreSQL**: Full support with advanced features
-- **SQLite**: Full support for development/testing
-- **MySQL**: Supported via dialects
-- **Other**: Check dialect compatibility
+### Database Support (100% Feature Parity)
+- **PostgreSQL**: Full support with advanced features (asyncpg driver)
+- **MySQL**: Full support with 100% feature parity (aiomysql driver)
+- **SQLite**: Full support for development/testing/mobile (aiosqlite + custom pooling)
+- **All databases**: Identical 9 nodes per model, same workflows work everywhere
 
 ## When to Use This Skill
 
@@ -161,9 +161,10 @@ workflow.add_node("User_Create", "user1", {...})
 
 ## Version Compatibility
 
-- **Current Version**: 0.5.4+
+- **Current Version**: 0.5.6 (with MySQL support)
 - **Core SDK Version**: 0.9.25+
 - **Python**: 3.8+
+- **New in 0.5.6**: Full MySQL support with 100% feature parity
 
 ## Related Skills
 
