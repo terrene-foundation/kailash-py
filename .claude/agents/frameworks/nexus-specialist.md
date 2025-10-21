@@ -228,6 +228,93 @@ app.monitoring.interval = 30
 app.start()
 ```
 
+### Custom REST Endpoints (NEW in v1.0.9)
+```python
+from nexus import Nexus
+
+app = Nexus()
+
+# Register custom REST endpoints with path parameters
+@app.endpoint("/api/conversations/{conversation_id}", methods=["GET"], rate_limit=50)
+async def get_conversation(conversation_id: str):
+    """Get conversation by ID with rate limiting."""
+    result = await app._execute_workflow("chat_workflow", {"id": conversation_id})
+    return {"conversation_id": conversation_id, "data": result}
+
+# Query parameters (built-in FastAPI support)
+@app.endpoint("/api/search")
+async def search(q: str, limit: int = 10, offset: int = 0):
+    """Search with pagination."""
+    result = await app._execute_workflow("search_workflow", {
+        "query": q,
+        "limit": limit,
+        "offset": offset
+    })
+    return result
+
+# Multiple HTTP methods
+@app.endpoint("/api/messages/{msg_id}", methods=["GET", "PUT", "DELETE"])
+async def manage_message(msg_id: str, request: Request):
+    """CRUD operations on messages."""
+    if request.method == "GET":
+        return await app._execute_workflow("get_message", {"id": msg_id})
+    elif request.method == "PUT":
+        body = await request.json()
+        return await app._execute_workflow("update_message", {"id": msg_id, **body})
+    elif request.method == "DELETE":
+        return await app._execute_workflow("delete_message", {"id": msg_id})
+```
+
+**Key Features:**
+- ✅ **Path Parameters**: `/api/users/{user_id}` automatically validated
+- ✅ **Query Parameters**: Type coercion, defaults, validation (FastAPI)
+- ✅ **Rate Limiting**: Per-endpoint configuration (default 100 req/min)
+- ✅ **Security**: Input validation (10MB max, dangerous key blocking)
+- ✅ **Multiple Methods**: GET, POST, PUT, DELETE, PATCH support
+- ✅ **Workflow Integration**: Use `_execute_workflow()` helper
+
+**📚 Complete Guide**: See [Custom Endpoints](../../apps/kailash-nexus/docs/technical/custom_endpoints.md)
+
+### SSE Streaming for Real-Time Chat (NEW in v1.0.9)
+```python
+# POST /execute with {"mode": "stream"}
+# Returns Server-Sent Events (SSE) format
+
+# Browser JavaScript client
+const eventSource = new EventSource('/workflows/chat/execute?mode=stream');
+
+eventSource.addEventListener('start', (e) => {
+    const data = JSON.parse(e.data);
+    console.log('Workflow started:', data.workflow_id);
+});
+
+eventSource.addEventListener('complete', (e) => {
+    const data = JSON.parse(e.data);
+    console.log('Result:', data.result);
+});
+
+eventSource.addEventListener('error', (e) => {
+    const data = JSON.parse(e.data);
+    console.error('Error:', data.error);
+});
+```
+
+**SSE Format Specification:**
+- `id: <event-id>` - For reconnection support
+- `event: <type>` - Event types: start, complete, error, keepalive
+- `data: <json>` - JSON payload
+- `\n\n` - Event terminator
+
+**Event Types:**
+1. **start** - Workflow execution started (includes workflow_id, version)
+2. **complete** - Workflow finished (includes result, execution_time)
+3. **error** - Execution failed (includes error message, error_type)
+4. **keepalive** - Connection maintenance (comment format `:keepalive`)
+
+**📚 Complete Guide**: See [SSE Streaming](../../apps/kailash-nexus/docs/technical/sse_streaming.md)
+
+**Query Parameters Guide**: See [Query Parameters](../../apps/kailash-nexus/docs/technical/query_parameters.md)
+
 ### Health Monitoring
 ```python
 # Check platform health
