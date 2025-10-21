@@ -92,7 +92,68 @@ Your workflows are automatically available via:
 - **CLI**: `nexus run {name}`
 - **MCP**: Model Context Protocol integration
 
-### 5. Smart Defaults
+### 5. Custom REST Endpoints (NEW in v1.0.9)
+Create FastAPI-style custom endpoints with path parameters, query parameters, and rate limiting:
+
+```python
+from nexus import Nexus
+from fastapi import Request
+
+app = Nexus()
+
+# Custom endpoint with path parameters
+@app.endpoint("/api/conversations/{conversation_id}", methods=["GET"], rate_limit=50)
+async def get_conversation(conversation_id: str):
+    """Get conversation by ID."""
+    result = await app._execute_workflow("chat_workflow", {"id": conversation_id})
+    return {"conversation_id": conversation_id, "data": result}
+
+# Query parameters (built-in FastAPI support)
+@app.endpoint("/api/search")
+async def search(q: str, limit: int = 10, offset: int = 0):
+    """Search with pagination."""
+    result = await app._execute_workflow("search_workflow", {
+        "query": q,
+        "limit": limit,
+        "offset": offset
+    })
+    return result
+
+app.start()
+```
+
+**Key Features:**
+- ✅ Path Parameters: `/api/users/{user_id}` automatically validated
+- ✅ Query Parameters: Type coercion and defaults
+- ✅ Rate Limiting: Per-endpoint (default 100 req/min)
+- ✅ Security: Input validation (10MB max, dangerous key blocking)
+- ✅ HTTP Methods: GET, POST, PUT, DELETE, PATCH
+
+**📚 Complete Guides:**
+- [Custom Endpoints Guide](docs/technical/custom_endpoints.md)
+- [Query Parameters Guide](docs/technical/query_parameters.md)
+- [SSE Streaming Guide](docs/technical/sse_streaming.md)
+
+### 6. SSE Streaming for Real-Time Chat (NEW in v1.0.9)
+Execute workflows with Server-Sent Events for real-time updates:
+
+```python
+# Execute workflow in streaming mode
+# POST /execute with {"mode": "stream"}
+
+# Browser JavaScript client
+const eventSource = new EventSource('/workflows/chat/execute?mode=stream');
+
+eventSource.addEventListener('complete', (e) => {
+    const data = JSON.parse(e.data);
+    console.log('Result:', data.result);
+});
+```
+
+**Event Types:** start, complete, error, keepalive
+**Format:** Proper SSE specification with `id:`, `event:`, `data:` fields
+
+### 7. Smart Defaults
 - API server on port 8000 (auto-finds available port)
 - MCP server on port 3001 (auto-finds available port)
 - Health endpoint at `/health`
@@ -191,17 +252,17 @@ nexus = Nexus(
     api_port=8000,
     cli_port=8001,
     mcp_port=3001,
-    
+
     # Security
     enable_auth=True,
     auth_providers=["oauth2", "saml"],
     enable_rate_limiting=True,
-    
+
     # Performance
     enable_caching=True,
     cache_backend="redis",
     enable_monitoring=True,
-    
+
     # Reliability
     enable_circuit_breaker=True,
     max_concurrent_workflows=100

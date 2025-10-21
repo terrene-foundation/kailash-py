@@ -30,6 +30,57 @@ GET /health
 GET /docs
 ```
 
+## Custom REST Endpoints (NEW in v1.0.9)
+
+Create custom FastAPI-style endpoints with path parameters, query parameters, and rate limiting:
+
+```python
+from nexus import Nexus
+from fastapi import Request
+
+app = Nexus()
+
+# Custom endpoint with path parameters
+@app.endpoint("/api/conversations/{conversation_id}", methods=["GET"], rate_limit=50)
+async def get_conversation(conversation_id: str):
+    """Get conversation by ID."""
+    result = await app._execute_workflow("chat_workflow", {"id": conversation_id})
+    return {"conversation_id": conversation_id, "data": result}
+
+# Query parameters (built-in FastAPI support)
+@app.endpoint("/api/search")
+async def search(q: str, limit: int = 10, offset: int = 0):
+    """Search with pagination."""
+    result = await app._execute_workflow("search_workflow", {
+        "query": q,
+        "limit": limit,
+        "offset": offset
+    })
+    return result
+
+# Multiple HTTP methods (CRUD)
+@app.endpoint("/api/messages/{msg_id}", methods=["GET", "PUT", "DELETE"])
+async def manage_message(msg_id: str, request: Request):
+    """Full CRUD on messages."""
+    if request.method == "GET":
+        return await app._execute_workflow("get_message", {"id": msg_id})
+    elif request.method == "PUT":
+        body = await request.json()
+        return await app._execute_workflow("update_message", {"id": msg_id, **body})
+    elif request.method == "DELETE":
+        return await app._execute_workflow("delete_message", {"id": msg_id})
+```
+
+### Key Features:
+- ✅ **Path Parameters**: Automatically validated by FastAPI
+- ✅ **Query Parameters**: Type coercion and defaults
+- ✅ **Rate Limiting**: Per-endpoint (default 100 req/min)
+- ✅ **Security**: Input validation (10MB max, dangerous key blocking)
+- ✅ **HTTP Methods**: GET, POST, PUT, DELETE, PATCH
+- ✅ **Workflow Integration**: Use `_execute_workflow()` helper
+
+**📚 Full Guide**: See [Custom Endpoints](../../apps/kailash-nexus/docs/technical/custom_endpoints.md)
+
 ## Basic Workflow Execution
 
 ```bash
@@ -157,20 +208,56 @@ curl -X POST http://localhost:8000/workflows/my-workflow/execute \
   -d '{"inputs": {"param": "value"}}'
 ```
 
-## Streaming Responses
+## SSE Streaming for Real-Time Chat (NEW in v1.0.9)
 
 ```python
-# Enable streaming for long-running workflows
-app.api.enable_streaming = True
+# Execute workflow in streaming mode
+# POST /execute with {"mode": "stream"}
 
-# Client receives updates in real-time
+# Browser JavaScript client
+const eventSource = new EventSource('/workflows/chat/execute?mode=stream');
+
+eventSource.addEventListener('start', (e) => {
+    const data = JSON.parse(e.data);
+    console.log('Workflow started:', data.workflow_id);
+});
+
+eventSource.addEventListener('complete', (e) => {
+    const data = JSON.parse(e.data);
+    console.log('Result:', data.result);
+});
+
+eventSource.addEventListener('error', (e) => {
+    const data = JSON.parse(e.data);
+    console.error('Error:', data.error);
+});
 ```
 
 ```bash
-# Use Server-Sent Events
-curl -N http://localhost:8000/workflows/long-process/stream \
-  -H "Accept: text/event-stream"
+# Python client with httpx
+import httpx
+
+with httpx.stream("POST", "http://localhost:8000/execute",
+                  json={"inputs": {}, "mode": "stream"}) as response:
+    for line in response.iter_lines():
+        if line.startswith('data:'):
+            data = json.loads(line[5:])  # Remove 'data:' prefix
+            print(data)
 ```
+
+**SSE Format Specification:**
+- `id: <event-id>` - For reconnection support
+- `event: <type>` - Event types: start, complete, error, keepalive
+- `data: <json>` - JSON payload
+- `\n\n` - Event terminator
+
+**Event Types:**
+1. **start** - Workflow execution started
+2. **complete** - Workflow finished successfully
+3. **error** - Execution failed
+4. **keepalive** - Connection maintenance
+
+**📚 Complete SSE Guide**: See [SSE Streaming](../../apps/kailash-nexus/docs/technical/sse_streaming.md)
 
 ## Batch Operations
 

@@ -1,6 +1,6 @@
 ---
 name: dataflow-connection-config
-description: "DataFlow database connection configuration. Use when DataFlow connection, database URL, connection string, special characters in password, or PostgreSQL SQLite connection setup."
+description: "DataFlow database connection configuration for SQL (PostgreSQL, MySQL, SQLite), MongoDB, and pgvector. Use when DataFlow connection, database URL, connection string, special characters in password, or connection setup."
 ---
 
 # DataFlow Connection Configuration
@@ -10,7 +10,7 @@ Configure database connections with full support for special characters in passw
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0+`
 > Related Skills: [`dataflow-quickstart`](#), [`dataflow-models`](#), [`dataflow-existing-database`](#)
 > Related Subagents: `dataflow-specialist` (connection troubleshooting, pooling optimization)
 
@@ -18,7 +18,9 @@ Configure database connections with full support for special characters in passw
 
 - **Format**: `scheme://[user[:pass]@]host[:port]/database`
 - **Special Chars**: Fully supported in passwords (v0.9.4+)
-- **Databases**: PostgreSQL (production), SQLite (dev/testing)
+- **SQL Databases**: PostgreSQL, MySQL, SQLite (9 nodes per @db.model)
+- **Document Database**: MongoDB (8 specialized nodes, flexible schema)
+- **Vector Search**: PostgreSQL pgvector (3 vector nodes for RAG/semantic search)
 - **Pooling**: Automatic, configurable
 
 ## Core Pattern

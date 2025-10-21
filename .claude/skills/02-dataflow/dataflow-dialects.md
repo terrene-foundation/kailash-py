@@ -1,19 +1,20 @@
 ---
 name: dataflow-dialects
-description: "PostgreSQL, MySQL, and SQLite support in DataFlow with 100% feature parity. Use when asking 'dataflow postgres', 'dataflow mysql', 'dataflow sqlite', or 'database dialects'."
+description: "SQL database support in DataFlow - PostgreSQL, MySQL, and SQLite with 100% feature parity. Use when asking 'dataflow postgres', 'dataflow mysql', 'dataflow sqlite', or 'database dialects'. For MongoDB or pgvector, see Multi-Database Support Matrix in SKILL.md."
 ---
 
-# DataFlow Database Dialects
+# DataFlow SQL Database Dialects
 
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `MEDIUM`
 > SDK Version: `0.9.25+`
-> DataFlow Version: `0.5.6+`
+> DataFlow Version: `0.6.0+`
+> **Note**: This guide covers SQL databases. For MongoDB (document database) or pgvector (vector search), see SKILL.md Multi-Database Support Matrix.
 
-## 100% Feature Parity
+## 100% SQL Feature Parity
 
-**All three databases support identical operations:**
+**All three SQL databases support identical operations:**
 - ✅ Same 9 nodes per model (Create, Read, Update, Delete, List, BulkCreate, BulkUpdate, BulkDelete, Count)
 - ✅ Identical workflows work across all databases
 - ✅ Same query syntax and filtering

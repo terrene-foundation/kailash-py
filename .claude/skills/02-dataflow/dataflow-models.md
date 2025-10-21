@@ -10,7 +10,7 @@ Define database models using the `@db.model` decorator that automatically genera
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `CRITICAL`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-quickstart`](#), [`dataflow-crud-operations`](#), [`dataflow-queries`](#), [`dataflow-bulk-operations`](#)
 > Related Subagents: `dataflow-specialist` (complex models, enterprise features)
 
@@ -345,7 +345,7 @@ workflow.add_node("SsoSessionReadNode", "read_session_alt", {
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | `AttributeError: 'User' object has no attribute...` | Missing type hint | Add type hint to field: `name: str` |
-| `ValueError: String ID cannot be converted to int` | Pre-v0.4.0 limitation | Upgrade to DataFlow 0.4.0+ for string ID support |
+| `ValueError: String ID cannot be converted to int` | Pre-v0.4.0 limitation | Upgrade to DataFlow 0.6.0 for string ID support |
 | `DataError: value too long for type character varying(255)` | Pre-v0.4.0 VARCHAR limits | Fixed in v0.4.0 - now uses TEXT type automatically |
 | `Model not found in registry` | Model defined after initialization | Define models before using in workflows |
 | `TypeError: Field() missing required positional argument` | Incorrect Field syntax | Use `Field(...)` not `field(...)` |

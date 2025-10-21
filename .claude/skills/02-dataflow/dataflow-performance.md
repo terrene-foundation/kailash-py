@@ -10,7 +10,7 @@ Performance tuning for DataFlow applications with connection pooling, caching, a
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `MEDIUM`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-bulk-operations`](#), [`dataflow-queries`](#), [`dataflow-connection-config`](#)
 > Related Subagents: `dataflow-specialist` (advanced optimization)
 

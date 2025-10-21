@@ -10,7 +10,7 @@ Use the 9 automatically generated workflow nodes for Create, Read, Update, Delet
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-models`](#), [`dataflow-queries`](#), [`dataflow-bulk-operations`](#), [`workflow-quickstart`](#)
 > Related Subagents: `dataflow-specialist` (complex operations, troubleshooting)
 

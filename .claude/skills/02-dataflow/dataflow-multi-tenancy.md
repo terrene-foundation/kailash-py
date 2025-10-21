@@ -10,7 +10,7 @@ Automatic tenant isolation for SaaS applications using DataFlow enterprise featu
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `MEDIUM`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-models`](#), [`dataflow-crud-operations`](#)
 > Related Subagents: `dataflow-specialist` (enterprise architecture)
 

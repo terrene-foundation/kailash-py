@@ -10,7 +10,7 @@ Common misunderstandings and mistakes when using DataFlow, with solutions.
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-models`](#), [`dataflow-crud-operations`](#), [`dataflow-nexus-integration`](#)
 > Related Subagents: `dataflow-specialist` (complex troubleshooting)
 
