@@ -48,16 +48,66 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - **[Main Integration Guide](../../sdk-users/guides/dataflow-nexus-integration.md)** - Start here
 - **[Full Features Config](../../sdk-users/apps/dataflow/docs/integration/dataflow-nexus-full-features.md)** - 10-30s startup, all features
 - **[Working Examples](../../sdk-users/apps/nexus/examples/dataflow-integration/)** - Copy-paste ready code
-- **Critical Settings**: `skip_registry=True, enable_model_persistence=False` for <2s startup
+- **Critical Settings**: `enable_model_persistence=False, auto_migrate=False` for <2s startup
 
 ### ⚡ Quick Config Reference
 | Use Case | Config | Startup Time |
 |----------|--------|--------------|
-| **Fast API** | `skip_registry=True, enable_model_persistence=False` | <2s |
-| **Full Features** | `skip_registry=False, enable_model_persistence=True, auto_migrate=True` | 10-30s |
+| **Fast API** | `enable_model_persistence=False, auto_migrate=False` | <2s |
+| **Full Features** | `enable_model_persistence=True, auto_migrate=True` | 10-30s |
 | **With Nexus** | Always use above + `Nexus(auto_discovery=False)` | Same |
 
 ## ⚠️ CRITICAL LEARNINGS - Read First
+
+### ⚠️ Common Mistakes (HIGH IMPACT - Prevents 1-4 Hour Debugging)
+
+**CRITICAL**: These mistakes cause the most debugging time for new developers. **READ THIS FIRST** before implementing DataFlow.
+
+| Mistake | Impact | Correct Approach |
+|---------|--------|------------------|
+| **Using `user_id` or `model_id` instead of `id`** | 10-20 min debugging | **PRIMARY KEY MUST BE `id`** (not `user_id`, `agent_id`, etc.) |
+| **Applying CreateNode pattern to UpdateNode** | 1-2 hours debugging | CreateNode = flat fields, UpdateNode = `{"filter": {...}, "fields": {...}}` |
+| **Including `created_at`/`updated_at` in updates** | Validation errors | Auto-managed by DataFlow - **NEVER** set manually |
+| **Wrong node naming** (e.g., `User_Create`) | Node not found | Use `ModelOperationNode` pattern (e.g., `UserCreateNode`) |
+| **Missing `db_instance` parameter** | Generic validation errors | ALL DataFlow nodes require `db_instance` and `model_name` |
+
+**Critical Rules**:
+1. **Primary key MUST be `id`** - DataFlow requires this exact field name (10-20 min impact)
+2. **CreateNode ≠ UpdateNode** - Completely different parameter patterns (1-2 hour impact)
+3. **Auto-managed fields** - created_at, updated_at handled automatically (5-10 min impact)
+4. **Node naming v0.6.0+** - Always `ModelOperationNode` pattern (5 min impact)
+
+**Examples**:
+```python
+# ✅ CORRECT: Primary key MUST be 'id'
+@db.model
+class User:
+    id: str  # ✅ REQUIRED - must be exactly 'id'
+    name: str
+
+# ❌ WRONG: Custom primary key names FAIL
+@db.model
+class User:
+    user_id: str  # ❌ FAILS - DataFlow requires 'id'
+
+# ✅ CORRECT: CreateNode uses flat fields
+workflow.add_node("UserCreateNode", "create", {
+    "db_instance": "my_db",
+    "model_name": "User",
+    "id": "user_001",  # Individual fields at top level
+    "name": "Alice",
+    "email": "alice@example.com"
+})
+
+# ✅ CORRECT: UpdateNode uses nested filter + fields
+workflow.add_node("UserUpdateNode", "update", {
+    "db_instance": "my_db",
+    "model_name": "User",
+    "filter": {"id": "user_001"},  # Which records to update
+    "fields": {"name": "Alice Updated"}  # What to change
+    # ⚠️ Do NOT include created_at or updated_at - auto-managed!
+})
+```
 
 ### Common Misunderstandings (VERIFIED v0.5.0)
 
@@ -899,10 +949,8 @@ app = Nexus(
 # Step 2: Create DataFlow with optimized settings
 db = DataFlow(
     database_url="postgresql://...",
-    skip_registry=True,  # CRITICAL: Prevents 5-10s delay per model
     enable_model_persistence=False,  # No workflow execution during init
     auto_migrate=False,
-    skip_migration=True,
     enable_caching=True,  # Keep performance features
     enable_metrics=True
 )
@@ -922,8 +970,8 @@ app.register("create_user", workflow.build())
 
 **Why These Settings Are Critical:**
 - `auto_discovery=False`: Prevents Nexus from re-importing DataFlow models (causes infinite loop)
-- `skip_registry=True`: Skips synchronous workflow execution during model registration (5-10s per model)
 - `enable_model_persistence=False`: Prevents database writes during initialization
+- `auto_migrate=False`: Skips migration checks during startup
 
 **What You Keep:**
 - ✅ All CRUD operations work normally

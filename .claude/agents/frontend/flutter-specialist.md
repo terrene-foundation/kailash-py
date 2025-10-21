@@ -804,6 +804,16 @@ class ContactForm extends StatelessWidget {
 
 ## Reference Documentation
 
+### Essential Guides (Start Here)
+- `.claude/guides/flutter-design-system.md` - Design system usage and component library
+- `.claude/guides/creating-flutter-design-system.md` - Creating and extending design systems
+- `.claude/guides/flutter-testing-patterns.md` - Testing strategies and patterns
+- `.claude/guides/interactive-widget-implementation-guide.md` - Interactive widget patterns
+- `.claude/guides/widget-system-overview.md` - Widget architecture and organization
+- `.claude/guides/widget-response-technical-spec.md` - Widget technical specifications
+- `.claude/guides/enterprise-ai-hub-uiux-design.md` - Overall UX/UI design principles
+- `.claude/guides/multi-conversation-ux-lark-style.md` - Conversation UI patterns
+
 ### Official Docs (2025)
 - Flutter: https://docs.flutter.dev/
 - Riverpod: https://riverpod.dev/

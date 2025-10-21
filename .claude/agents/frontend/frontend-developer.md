@@ -150,4 +150,17 @@ When fixing existing code:
 - Add new elements following the standard pattern
 - Don't refactor unless explicitly requested
 
-Always ensure the UI is intuitive, responsive, and follows the established architectural patterns. Reference docs/guides/fe-guidance.md for the complete frontend development guidelines.
+Always ensure the UI is intuitive, responsive, and follows the established architectural patterns.
+
+## Reference Documentation
+
+### Essential Guides (Start Here)
+- `.claude/guides/enterprise-ai-hub-uiux-design.md` - Overall UX/UI design principles
+- `.claude/guides/interactive-widget-implementation-guide.md` - Interactive widget patterns
+- `.claude/guides/widget-system-overview.md` - Widget architecture and organization
+- `.claude/guides/widget-response-technical-spec.md` - Widget technical specifications
+- `.claude/guides/multi-conversation-ux-lark-style.md` - Conversation UI patterns
+- `.claude/guides/uiux-design-principles.md` - Design principles and patterns
+
+### Additional Resources
+- `docs/guides/fe-guidance.md` - Complete frontend development guidelines (if exists)

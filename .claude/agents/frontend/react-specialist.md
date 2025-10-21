@@ -498,6 +498,14 @@ function useWorkflowExecution(executionId: string) {
 
 ## Reference Documentation
 
+### Essential Guides (Start Here)
+- `.claude/guides/enterprise-ai-hub-uiux-design.md` - Overall UX/UI design principles
+- `.claude/guides/interactive-widget-implementation-guide.md` - Interactive widget patterns
+- `.claude/guides/widget-system-overview.md` - Widget architecture and organization
+- `.claude/guides/widget-response-technical-spec.md` - Widget technical specifications
+- `.claude/guides/multi-conversation-ux-lark-style.md` - Conversation UI patterns
+- `.claude/guides/uiux-design-principles.md` - Design principles and patterns
+
 ### Official Docs (2025)
 - React 19: https://react.dev/blog/2024/12/05/react-19
 - Next.js 15: https://nextjs.org/docs/app
