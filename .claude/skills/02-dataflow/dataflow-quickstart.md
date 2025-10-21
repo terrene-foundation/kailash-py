@@ -10,7 +10,7 @@ Zero-config database framework built on Core SDK with automatic node generation 
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `CRITICAL`
-> SDK Version: `0.9.25+` (DataFlow v0.5.4+)
+> SDK Version: `0.9.25+` (DataFlow v0.6.0+)
 > Related Skills: [`workflow-quickstart`](../../01-core-sdk/workflow-quickstart.md), [`dataflow-models`](dataflow-models.md), [`dataflow-queries`](dataflow-queries.md)
 > Related Subagents: `dataflow-specialist` (enterprise features, migrations), `nexus-specialist` (DataFlow+Nexus integration)
 
@@ -20,8 +20,10 @@ Zero-config database framework built on Core SDK with automatic node generation 
 - **Import**: `from dataflow import DataFlow`
 - **Pattern**: `DataFlow() → @db.model → 9 nodes generated automatically`
 - **NOT an ORM**: Workflow-native database framework
-- **Databases**: PostgreSQL (full), SQLite (full parity)
-- **Key Feature**: `@db.model` decorator generates 9 CRUD + bulk nodes per model
+- **SQL Databases**: PostgreSQL, MySQL, SQLite (100% feature parity, 9 nodes per @db.model)
+- **Document Database**: MongoDB (flexible schema, 8 specialized nodes)
+- **Vector Search**: PostgreSQL pgvector (semantic search, 3 vector nodes)
+- **Key Feature**: Automatic node generation from models or schema
 
 ## 30-Second Quick Start
 
@@ -106,9 +108,13 @@ db = DataFlow()  # Defaults to SQLite in-memory
 db = DataFlow("sqlite:///app.db")
 ```
 
-### Option 3: PostgreSQL (Production)
+### Option 3: PostgreSQL or MySQL (Production)
 ```python
+# PostgreSQL (recommended for production)
 db = DataFlow("postgresql://user:password@localhost:5432/database")
+
+# MySQL (web hosting, existing infrastructure)
+db = DataFlow("mysql://user:password@localhost:3306/database")
 
 # Special characters in passwords supported (v0.9.4+)
 db = DataFlow("postgresql://admin:MySecret#123$@localhost/db")
@@ -126,7 +132,7 @@ db = DataFlow()
 
 ## MongoDB-Style Queries
 
-DataFlow uses MongoDB query syntax that works across PostgreSQL and SQLite:
+DataFlow uses MongoDB query syntax that works across all SQL databases (PostgreSQL, MySQL, SQLite):
 
 ```python
 workflow.add_node("UserListNode", "search", {
@@ -309,16 +315,18 @@ Use `nexus-specialist` when:
 
 - 💡 **Zero-config first**: Start with `DataFlow()` - no configuration needed
 - 💡 **9 nodes per model**: Remember - Create, Read, Update, Delete, List, Bulk(Create/Update/Delete/Upsert)
-- 💡 **MongoDB queries**: Use familiar syntax that works across PostgreSQL/SQLite
+- 💡 **MongoDB queries**: Use familiar syntax that works across all SQL databases (PostgreSQL/MySQL/SQLite)
 - 💡 **String IDs**: Fully supported - no forced integer conversion (v0.5.0+)
 - 💡 **Existing databases**: Use `existing_schema_mode=True` for safety
 - 💡 **Nexus integration**: Set `skip_registry=True` + `auto_discovery=False` to avoid blocking
 
 ## Version Notes
 
-- **v0.5.4+**: Multi-node workflow threading bug fixed
-- **v0.5.0+**: String ID support, multi-instance isolation
-- **v0.4.6+**: TEXT fields (unlimited content), improved parameter types
-- **v0.4.5+**: Enterprise migration system with 8 safety components
+- **v0.6.0**: MongoDB document database + PostgreSQL pgvector support
+- **v0.5.6**: MySQL support with 100% feature parity, BaseAdapter hierarchy
+- **v0.5.4**: Multi-node workflow threading bug fixed
+- **v0.5.0**: String ID support, multi-instance isolation
+- **v0.4.6**: TEXT fields (unlimited content), improved parameter types
+- **v0.4.5**: Enterprise migration system with 8 safety components
 
 <!-- Trigger Keywords: DataFlow tutorial, DataFlow quick start, @db.model, DataFlow setup, database framework, how to use DataFlow, DataFlow installation, DataFlow guide, zero-config database, automatic node generation, DataFlow example, start with DataFlow -->

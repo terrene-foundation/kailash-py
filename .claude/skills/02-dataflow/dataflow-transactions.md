@@ -10,7 +10,7 @@ Distributed transaction patterns with saga and two-phase commit support.
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `MEDIUM`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-crud-operations`](#), [`cycle-workflows-basics`](#)
 > Related Subagents: `dataflow-specialist` (complex transactions)
 

@@ -17,6 +17,13 @@ pip install kailash-dataflow
 - ✅ **SQLite**: Full parity with PostgreSQL and MySQL - all features supported (file-based and in-memory)
   - Recent fixes: Path extraction and connection isolation for memory databases
 
+**🔮 Coming Soon:**
+- 🚀 **pgvector** (Next release): PostgreSQL vector similarity search for RAG/AI applications
+- 🚀 **MongoDB**: Document database with PyMongo Async API
+- 🚀 **Qdrant**: Dedicated vector database for billion-scale semantic search
+- 🚀 **Neo4j**: Graph database for relationship-heavy data models
+- 🚀 **TimescaleDB**: Time-series data optimization
+
 **🎉 Major Bug Fixes in v0.4.0:**
 - **DateTime Serialization**: Fixed datetime objects being converted to strings
 - **PostgreSQL Parameter Types**: Added explicit type casting for parameter determination
