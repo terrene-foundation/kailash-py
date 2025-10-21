@@ -50,6 +50,120 @@ AuthenticationError: Invalid API key
    - OpenAI: https://platform.openai.com/api-keys
    - Anthropic: https://console.anthropic.com/
 
+## 🛠️ Tool Calling Issues (v0.2.0)
+
+### Error: Agent does not have tool calling support enabled
+
+**Error Message:**
+```
+ValueError: Agent does not have tool calling support enabled
+```
+
+**Cause:** Forgot to pass `tool_registry` during initialization.
+
+**Solution:**
+```python
+# ❌ WRONG - No tool registry
+agent = BaseAgent(config=config, signature=signature)
+
+# ✅ CORRECT - Add tool registry
+from kaizen.tools import ToolRegistry
+from kaizen.tools.builtin import register_builtin_tools
+
+registry = ToolRegistry()
+register_builtin_tools(registry)
+
+agent = BaseAgent(
+    config=config,
+    signature=signature,
+    tool_registry=registry  # Enable tools
+)
+```
+
+### Error: Tool execution timed out waiting for approval
+
+**Error Message:**
+```
+TimeoutError: Tool execution timed out waiting for approval
+```
+
+**Cause:** No approval responder is running, or control protocol not started.
+
+**Solution:**
+```python
+from kaizen.core.autonomy.control import ControlProtocol
+from kaizen.core.autonomy.control.transports import MemoryTransport
+
+# Create and start protocol
+transport = MemoryTransport()
+await transport.connect()
+protocol = ControlProtocol(transport)
+
+# Create agent with protocol
+agent = BaseAgent(
+    config=config,
+    signature=signature,
+    tool_registry=registry,
+    control_protocol=protocol  # Add protocol
+)
+
+# Start protocol with task group
+import anyio
+async with anyio.create_task_group() as tg:
+    await protocol.start(tg)
+    # Now tool executions can request approval
+    result = await agent.execute_tool("write_file", {...})
+```
+
+### Error: Required parameter missing
+
+**Error Message:**
+```
+ValueError: Required parameter 'path' missing
+```
+
+**Cause:** Missing required parameters in tool call.
+
+**Solution:**
+```python
+# ❌ WRONG - Missing required parameter
+result = await agent.execute_tool("read_file", {})
+
+# ✅ CORRECT - Provide all required parameters
+result = await agent.execute_tool(
+    "read_file",
+    {"path": "/tmp/file.txt"}  # path is required
+)
+
+# Check tool definition for required parameters
+tools = await agent.discover_tools(keyword="read_file")
+tool = tools[0]
+for param in tool.parameters:
+    if param.required:
+        print(f"Required: {param.name} ({param.type})")
+```
+
+### Error: Tool not found
+
+**Error Message:**
+```
+ValueError: Tool 'invalid_tool' not found in registry
+```
+
+**Cause:** Tool name is incorrect or not registered.
+
+**Solution:**
+```python
+# List available tools
+tools = await agent.discover_tools()
+for tool in tools:
+    print(f"Tool: {tool.name}")
+
+# Use correct tool name
+result = await agent.execute_tool("read_file", {"path": "..."})  # Correct
+# NOT: "readfile", "ReadFile", "read-file", etc.
+```
+
 ## 🖼️ Multi-Modal Issues
 
 ### Error: Wrong Vision API Parameters

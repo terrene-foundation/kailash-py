@@ -5,11 +5,14 @@ Get started with Kaizen in 5 minutes - from installation to your first working a
 ## 📦 Installation
 
 ```bash
-# Install Kaizen
+# Install Kaizen (v0.2.0)
 pip install kailash-kaizen
 
 # Or install with Kailash SDK
 pip install kailash[kaizen]
+
+# Specific version
+pip install kailash-kaizen==0.2.0
 ```
 
 ## 🔑 API Key Setup
@@ -139,6 +142,41 @@ result = agent.think("If John has 3 apples and Mary gives him 5 more, how many d
 print(result["reasoning_steps"])
 print(result["final_answer"])
 ```
+
+### Tool Calling (NEW in v0.2.0)
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.tools import ToolRegistry
+from kaizen.tools.builtin import register_builtin_tools
+
+# Enable tool calling
+registry = ToolRegistry()
+register_builtin_tools(registry)
+
+agent = BaseAgent(
+    config=config,
+    signature=signature,
+    tool_registry=registry  # Add tool support
+)
+
+# Execute a tool
+result = await agent.execute_tool("read_file", {"path": "/tmp/data.txt"})
+if result.success:
+    print(result.result['content'])
+
+# Chain multiple tools
+results = await agent.execute_tool_chain([
+    {"tool_name": "read_file", "params": {"path": "input.txt"}},
+    {"tool_name": "write_file", "params": {"path": "output.txt", "content": "processed"}}
+])
+```
+
+**12 Builtin Tools Available:**
+- **File**: read_file, write_file, delete_file, list_directory, file_exists
+- **HTTP**: http_get, http_post, http_put, http_delete
+- **Bash**: bash_command
+- **Web**: fetch_url, extract_links
 
 ## 🔧 Configuration Options
 

@@ -68,7 +68,7 @@ best_worker = pattern.supervisor.select_worker_for_task(
 
 ### Available Specialized Agents
 
-**Implemented and Production-Ready:**
+**Implemented and Production-Ready (v0.2.0):**
 ```python
 from kaizen.agents import (
     # Single-Agent Patterns (8 agents)
@@ -84,6 +84,67 @@ from kaizen.agents import (
     TranscriptionAgent,      # Audio transcription (Whisper)
 )
 ```
+
+### Tool Calling (NEW in v0.2.0)
+
+**Autonomous tool execution with approval workflows:**
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.tools import ToolRegistry
+from kaizen.tools.builtin import register_builtin_tools
+
+# Setup tool registry
+registry = ToolRegistry()
+register_builtin_tools(registry)  # 12 builtin tools
+
+# Create agent with tool support
+agent = BaseAgent(
+    config=config,
+    signature=signature,
+    tool_registry=registry  # Enable tool calling
+)
+
+# Discover tools
+tools = await agent.discover_tools(category="file")
+
+# Execute single tool
+result = await agent.execute_tool("read_file", {"path": "data.txt"})
+
+# Chain multiple tools
+results = await agent.execute_tool_chain([
+    {"tool_name": "read_file", "params": {"path": "input.txt"}},
+    {"tool_name": "write_file", "params": {"path": "output.txt", "content": "..."}}
+])
+```
+
+**12 Builtin Tools:**
+- **File (5)**: read_file, write_file, delete_file, list_directory, file_exists
+- **HTTP (4)**: http_get, http_post, http_put, http_delete
+- **Bash (1)**: bash_command
+- **Web (2)**: fetch_url, extract_links
+
+### Control Protocol (NEW in v0.2.0)
+
+**Bidirectional agent ↔ client communication:**
+```python
+from kaizen.core.autonomy.control import ControlProtocol
+from kaizen.core.autonomy.control.transports import CLITransport
+
+# Create bidirectional protocol
+protocol = ControlProtocol(CLITransport())
+await protocol.start()
+
+# Agent asks questions during execution
+answer = await agent.ask_user_question("Which option?", ["A", "B", "C"])
+
+# Agent requests approval for dangerous operations
+approved = await agent.request_approval("Delete files?", details)
+
+# Agent reports progress
+await agent.report_progress("Processing...", percentage=50)
+```
+
+**4 Transports:** CLI, HTTP/SSE, stdio, memory
 
 ### Agent Architecture Pattern
 
