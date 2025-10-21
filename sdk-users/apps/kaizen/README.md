@@ -59,6 +59,8 @@ class MyAgent(BaseAgent):
 - **Enterprise Ready**: Built-in error handling, logging, audit trails, memory management
 - **Multi-Modal**: Vision (Ollama + OpenAI GPT-4V), Audio (Whisper)
 - **Multi-Agent**: Google A2A protocol for semantic capability matching
+- **Autonomous Tool Calling (v0.2.0)**: 12 builtin tools with approval workflows
+- **Bidirectional Control Protocol (v0.2.0)**: Agent ↔ client communication (questions, approvals, progress)
 - **Core SDK Compatible**: Seamless integration with Kailash workflows
 
 ## 🚀 Quick Start
@@ -66,8 +68,11 @@ class MyAgent(BaseAgent):
 ### Installation
 
 ```bash
-# Install Kaizen framework
+# Install Kaizen framework (latest v0.2.0)
 pip install kailash-kaizen
+
+# Or specific version
+pip install kailash-kaizen==0.2.0
 ```
 
 ### Your First Agent (3 Steps)
@@ -360,6 +365,124 @@ best_worker = pattern.supervisor.select_worker_for_task(
 3. **DebatePattern** - Adversarial reasoning
 4. **SequentialPattern** - Step-by-step processing
 5. **HandoffPattern** - Dynamic agent handoff
+
+## 🛠️ Autonomous Tool Calling (v0.2.0)
+
+### Overview
+
+BaseAgent now supports autonomous tool calling with built-in safety controls and approval workflows. Agents can discover, execute, and chain tools to accomplish complex tasks.
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.tools import ToolRegistry
+from kaizen.tools.builtin import register_builtin_tools
+
+# Enable tool calling
+registry = ToolRegistry()
+register_builtin_tools(registry)  # 12 builtin tools
+
+agent = BaseAgent(
+    config=config,
+    signature=signature,
+    tool_registry=registry  # Opt-in tool support
+)
+```
+
+### 12 Builtin Tools
+
+**File Operations (5 tools):**
+- `read_file`, `write_file`, `delete_file`, `list_directory`, `file_exists`
+
+**HTTP Requests (4 tools):**
+- `http_get`, `http_post`, `http_put`, `http_delete`
+
+**System Operations (1 tool):**
+- `bash_command`
+
+**Web Scraping (2 tools):**
+- `fetch_url`, `extract_links`
+
+### Tool Discovery and Execution
+
+```python
+# Discover available tools
+tools = await agent.discover_tools(category="file", safe_only=True)
+
+# Execute single tool (with approval workflow)
+result = await agent.execute_tool(
+    tool_name="read_file",
+    params={"path": "/tmp/data.txt"}
+)
+
+if result.success and result.approved:
+    print(f"Content: {result.result['content']}")
+
+# Chain multiple tools
+results = await agent.execute_tool_chain([
+    {"tool_name": "read_file", "params": {"path": "input.txt"}},
+    {"tool_name": "bash_command", "params": {"command": "wc -l input.txt"}},
+    {"tool_name": "write_file", "params": {"path": "output.txt", "content": "..."}}
+])
+```
+
+### Approval Workflows
+
+Tools are classified by danger level:
+- **SAFE**: Auto-approved (no side effects) - `list_directory`, `file_exists`
+- **LOW**: Read-only operations - `read_file`, `http_get`
+- **MEDIUM**: Data modification - `write_file`, `http_post`
+- **HIGH**: Destructive operations - `delete_file`, `bash_command`
+
+Non-SAFE tools require explicit approval via the Control Protocol.
+
+## 🔄 Control Protocol (v0.2.0)
+
+### Bidirectional Communication
+
+The Control Protocol enables bidirectional communication between agents and clients for interactive workflows.
+
+```python
+from kaizen.core.autonomy.control import ControlProtocol
+from kaizen.core.autonomy.control.transports import CLITransport
+
+# Create protocol with CLI transport
+protocol = ControlProtocol(CLITransport())
+
+# Use with agent
+agent = BaseAgent(
+    config=config,
+    signature=signature,
+    tool_registry=registry,
+    control_protocol=protocol  # Enable bidirectional communication
+)
+
+# Start protocol
+import anyio
+async with anyio.create_task_group() as tg:
+    await protocol.start(tg)
+
+    # Agent can now ask questions during execution
+    answer = await agent.ask_user_question(
+        "Which environment?",
+        ["dev", "staging", "production"]
+    )
+
+    # Request approval for dangerous operations
+    approved = await agent.request_approval(
+        "Delete old files?",
+        {"files": ["old1.txt", "old2.txt"], "count": 2}
+    )
+
+    # Report progress
+    await agent.report_progress("Processing files", percentage=50)
+```
+
+### Available Transports
+
+- **CLITransport**: Interactive command-line interface
+- **HTTPTransport (SSE)**: Server-sent events for web UIs
+- **StdioTransport**: Standard I/O for MCP integration
+- **MemoryTransport**: In-memory for testing
 
 ## 🔧 Creating Custom Agents
 
