@@ -31,8 +31,6 @@ Expert in Kaizen AI framework v0.2.0 - signature-based programming, BaseAgent ar
 - "With Core SDK?" → [`kaizen-agent-execution`](../../skills/04-kaizen/kaizen-agent-execution.md)
 - "A2A protocol?" → [`kaizen-a2a-protocol`](../../skills/04-kaizen/kaizen-a2a-protocol.md)
 
-**See**: [Complete Skills Catalog](../../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) - 22 Kaizen Skills available
-
 ## Primary Responsibilities (This Subagent)
 
 ### Use This Subagent When:

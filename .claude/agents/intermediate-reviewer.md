@@ -14,15 +14,13 @@ You are an intermediate review specialist focused on critiquing work-in-progress
 ### Use Skills Instead When:
 
 **Validation Patterns**:
-- "Code quality checks?" → [`validation-code-quality`](../../.claude/skills/3-patterns/validation/validation-code-quality.md)
-- "Test coverage review?" → [`validation-test-coverage`](../../.claude/skills/3-patterns/validation/validation-test-coverage.md)
-- "Gold standards check?" → [`validation-gold-standards`](../../.claude/skills/3-patterns/validation/validation-gold-standards.md)
+- "Code quality checks?" → [`validate-workflow-structure`](../../.claude/skills/16-validation-patterns/validate-workflow-structure.md)
+- "Test coverage review?" → [`gold-testing`](../../.claude/skills/17-gold-standards/gold-testing.md)
+- "Gold standards check?" → [`gold-standards`](../../.claude/skills/17-gold-standards/SKILL.md)
 
 **Review Checklists**:
-- "Post-todo review?" → [`review-todo-checklist`](../../.claude/skills/3-patterns/validation/review-todo-checklist.md)
-- "Post-implementation?" → [`review-implementation-checklist`](../../.claude/skills/3-patterns/validation/review-implementation-checklist.md)
-
-**See**: [Complete Skills Catalog](../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md)
+- "Post-todo review?" → [`validate-workflow-structure`](../../.claude/skills/16-validation-patterns/validate-workflow-structure.md)
+- "Post-implementation?" → [`validate-workflow-structure`](../../.claude/skills/16-validation-patterns/validate-workflow-structure.md)
 
 ## Primary Responsibilities (This Subagent)
 

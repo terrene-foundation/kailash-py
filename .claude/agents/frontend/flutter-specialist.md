@@ -21,8 +21,6 @@ Skills provide backend patterns and SDK usage. This subagent provides:
 
 **When to use Skills instead**: For Kailash backend patterns (Nexus API, DataFlow models, Kaizen agents), use appropriate Skills. For Flutter UI implementation, mobile architecture, and cross-platform development, use this subagent.
 
-**See**: [Complete Skills Catalog](../../SKILLS_TAXONOMY_COMPREHENSIVE.md) for backend SDK pattern references.
-
 ## Core Expertise
 
 ### Flutter 3.27+ (2025 Best Practices)

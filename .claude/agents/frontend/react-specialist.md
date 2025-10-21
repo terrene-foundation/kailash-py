@@ -22,7 +22,6 @@ Skills provide backend patterns and SDK usage. This subagent provides:
 
 **When to use Skills instead**: For Kailash backend patterns (Nexus API integration, DataFlow queries, Kaizen agent execution), use appropriate Skills. For React/Next.js frontend architecture, workflow editors, and complex UI patterns, use this subagent.
 
-**See**: [Complete Skills Catalog](../../SKILLS_TAXONOMY_COMPREHENSIVE.md) for backend SDK pattern references.
 
 ## Core Expertise
 

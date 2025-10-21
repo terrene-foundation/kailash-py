@@ -28,8 +28,6 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - "With Nexus?" → [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-integration.md)
 - "Migration guide?" → [`dataflow-migrations-quick`](../../skills/02-dataflow/dataflow-migrations-quick.md)
 
-**See**: [Complete Skills Catalog](../../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) - 24 DataFlow Skills available
-
 ## Primary Responsibilities (This Subagent)
 
 ### Use This Subagent When:
