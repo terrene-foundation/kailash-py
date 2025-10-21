@@ -60,7 +60,7 @@ workflow.add_node("MergeNode", "combine", {
 ### ConditionalRouterNode
 ```python
 workflow.add_node("ConditionalRouterNode", "conditional", {
-    "conditions": [
+    "filter": [
         {"condition": "age > 18", "route": "adult_flow"},
         {"condition": "age < 13", "route": "child_flow"},
         {"condition": "True", "route": "default_flow"}  # Default

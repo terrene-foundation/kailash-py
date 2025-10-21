@@ -13,10 +13,10 @@ This example demonstrates:
 import asyncio
 from datetime import datetime, timedelta
 
-from dataflow import DataFlow, DataFlowConfig, Environment
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow, DataFlowConfig, Environment
 
 # Configure with advanced features
 config = DataFlowConfig(
@@ -135,11 +135,11 @@ def demo_optimistic_locking():
         "ProductUpdateNode",
         "update_1",
         {
-            "conditions": {
+            "filter": {
                 "id": product["id"],
                 "version": product["version"],  # Version check
             },
-            "updates": {"stock": 90, "version": product["version"] + 1},
+            "fields": {"stock": 90, "version": product["version"] + 1},
         },
     )
 
@@ -148,11 +148,11 @@ def demo_optimistic_locking():
         "ProductUpdateNode",
         "update_2",
         {
-            "conditions": {
+            "filter": {
                 "id": product["id"],
                 "version": product["version"],  # Same version - conflict!
             },
-            "updates": {"price": 89.99, "version": product["version"] + 1},
+            "fields": {"price": 89.99, "version": product["version"] + 1},
         },
     )
 
@@ -191,19 +191,17 @@ def demo_soft_delete():
     # Soft delete the product
     workflow = WorkflowBuilder()
     workflow.add_node(
-        "ProductDeleteNode", "soft_delete", {"conditions": {"id": product_id}}
+        "ProductDeleteNode", "soft_delete", {"filter": {"id": product_id}}
     )
 
     # Try to read it normally (won't find it)
-    workflow.add_node(
-        "ProductReadNode", "read_deleted", {"conditions": {"id": product_id}}
-    )
+    workflow.add_node("ProductReadNode", "read_deleted", {"filter": {"id": product_id}})
 
     # Read including soft deleted
     workflow.add_node(
         "ProductReadNode",
         "read_with_deleted",
-        {"conditions": {"id": product_id}, "include_deleted": True},
+        {"filter": {"id": product_id}, "include_deleted": True},
     )
 
     results, run_id = runtime.execute(workflow.build())
@@ -222,8 +220,8 @@ def demo_soft_delete():
         "ProductUpdateNode",
         "restore",
         {
-            "conditions": {"id": product_id},
-            "updates": {"deleted_at": None},
+            "filter": {"id": product_id},
+            "fields": {"deleted_at": None},
             "include_deleted": True,
         },
     )
@@ -255,7 +253,7 @@ def demo_bulk_operations():
     workflow.add_node(
         "ProductBulkUpdateNode",
         "bulk_update",
-        {"filter": {"category": "Category 5"}, "updates": {"price": "price * 0.9"}},
+        {"filter": {"category": "Category 5"}, "fields": {"price": "price * 0.9"}},
     )
 
     # Bulk delete old stock
@@ -300,7 +298,7 @@ def demo_transactions():
     workflow.add_node(
         "ProductUpdateNode",
         "update_inventory",
-        {"conditions": {"name": "Laptop Pro"}, "updates": {"stock": "stock - 1"}},
+        {"filter": {"name": "Laptop Pro"}, "fields": {"stock": "stock - 1"}},
     )
 
     # Commit if all successful

@@ -335,7 +335,7 @@ workflow.add_node("SsoSessionReadNode", "read_session", {
 
 # Alternative: Use conditions for explicit control
 workflow.add_node("SsoSessionReadNode", "read_session_alt", {
-    "conditions": {"id": session_id},
+    "filter": {"id": session_id},
     "raise_on_not_found": True
 })
 ```

@@ -12,11 +12,11 @@ This example demonstrates:
 
 from datetime import datetime
 
-from dataflow import DataFlow
-
 from kailash.middleware.gateway import create_gateway
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 
 # Production-ready configuration
 db = DataFlow(
@@ -117,7 +117,7 @@ def create_order_saga_workflow(customer_email: str, items: list):
 
     # Step 1: Validate customer and credit
     workflow.add_node(
-        "CustomerReadNode", "get_customer", {"conditions": {"email": customer_email}}
+        "CustomerReadNode", "get_customer", {"filter": {"email": customer_email}}
     )
 
     workflow.add_node(
@@ -156,11 +156,11 @@ def create_order_saga_workflow(customer_email: str, items: list):
             "InventoryUpdateNode",
             f"reserve_inventory_{i}",
             {
-                "conditions": {
+                "filter": {
                     "product_id": item["product_id"],
                     "available_stock": {"$gte": item["quantity"]},
                 },
-                "updates": {
+                "fields": {
                     "available_stock": f"available_stock - {item['quantity']}",
                     "reserved_stock": f"reserved_stock + {item['quantity']}",
                 },
@@ -172,8 +172,8 @@ def create_order_saga_workflow(customer_email: str, items: list):
             "InventoryUpdateNode",
             f"release_inventory_{i}",
             {
-                "conditions": {"product_id": item["product_id"]},
-                "updates": {
+                "filter": {"product_id": item["product_id"]},
+                "fields": {
                     "available_stock": f"available_stock + {item['quantity']}",
                     "reserved_stock": f"reserved_stock - {item['quantity']}",
                 },
@@ -203,8 +203,8 @@ def create_order_saga_workflow(customer_email: str, items: list):
         "CustomerUpdateNode",
         "update_spending",
         {
-            "conditions": {"id": ":customer_id"},
-            "updates": {"total_spent": "total_spent + :order_total"},
+            "filter": {"id": ":customer_id"},
+            "fields": {"total_spent": "total_spent + :order_total"},
         },
     )
 
@@ -213,8 +213,8 @@ def create_order_saga_workflow(customer_email: str, items: list):
         "CustomerUpdateNode",
         "revert_spending",
         {
-            "conditions": {"id": ":customer_id"},
-            "updates": {"total_spent": "total_spent - :order_total"},
+            "filter": {"id": ":customer_id"},
+            "fields": {"total_spent": "total_spent - :order_total"},
         },
     )
 
@@ -371,8 +371,8 @@ def demo_event_driven_workflow():
         "CustomerUpdateNode",
         "upgrade_customer",
         {
-            "conditions": {"id": ":customer_id"},
-            "updates": {
+            "filter": {"id": ":customer_id"},
+            "fields": {
                 "tier": """
             CASE
                 WHEN total_spent >= 10000 THEN 'platinum'

@@ -9,7 +9,7 @@ DataFlow is a **zero-config database framework** built on Core SDK that automati
 pip install kailash-dataflow
 ```
 
-## Current Status: v0.5.6 Release Ready
+## Current Status: v0.6.0 Release Ready
 
 **Database Support:**
 - ✅ **PostgreSQL**: Full support with all enterprise features (asyncpg driver)
@@ -81,9 +81,9 @@ workflow.add_node("SsoSessionReadNode", "read_session", {
     "id": session_id  # String preserved as-is
 })
 
-# ✅ Alternative: Use conditions for explicit type control
+# ✅ Alternative: Use filter for explicit type control (v0.6.0+ API)
 workflow.add_node("SsoSessionReadNode", "read_session_alt", {
-    "conditions": {"id": session_id},
+    "filter": {"id": session_id},  # v0.6.0+ API
     "raise_on_not_found": True
 })
 
@@ -323,18 +323,18 @@ workflow.add_node("UserCreateNode", "create", {
 
 # Read a single record
 workflow.add_node("UserReadNode", "read", {
-    "conditions": {"id": 123}
+    "id": 123
 })
 
-# Update a record
+# Update a record (v0.6.0+ API)
 workflow.add_node("UserUpdateNode", "update", {
-    "conditions": {"id": 123},
-    "updates": {"age": 26}
+    "filter": {"id": 123},
+    "fields": {"age": 26}
 })
 
-# Delete a record
+# Delete a record (v0.6.0+ API)
 workflow.add_node("UserDeleteNode", "delete", {
-    "conditions": {"id": 123}
+    "filter": {"id": 123}
 })
 ```
 
@@ -365,10 +365,10 @@ workflow.add_node("UserBulkCreateNode", "bulk_create", {
     "batch_size": 1000
 })
 
-# Bulk update
+# Bulk update (v0.6.0+ API)
 workflow.add_node("UserBulkUpdateNode", "bulk_update", {
     "filter": {"department": "engineering"},
-    "update": {"$inc": {"age": 1}}  # Increment age by 1
+    "fields": {"$inc": {"age": 1}}  # Increment age by 1
 })
 
 # Bulk delete
@@ -921,9 +921,9 @@ workflow.add_node("OrderItemBulkCreateNode", "add_items", {
     ]
 })
 
-# Calculate and update total
+# Calculate and update total (v0.6.0+ API)
 workflow.add_node("OrderUpdateNode", "update_total", {
-    "updates": {"total": 200.00, "status": "confirmed"}
+    "fields": {"total": 200.00, "status": "confirmed"}
 })
 
 # Connect nodes
