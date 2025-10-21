@@ -217,7 +217,13 @@ class WorkflowAPI:
                 return await self._execute_async(request, background_tasks)
             else:  # STREAM
                 return StreamingResponse(
-                    self._execute_stream(request), media_type="application/json"
+                    self._execute_stream(request),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                        "X-Accel-Buffering": "no",  # Disable nginx buffering
+                    },
                 )
 
         # Status endpoint for async executions
@@ -359,33 +365,77 @@ class WorkflowAPI:
             )
 
     async def _execute_stream(self, request: WorkflowRequest):
-        """Execute workflow with streaming response."""
+        """Execute workflow with Server-Sent Events streaming.
+
+        SSE Format Specification:
+            id: <event-id>\n
+            event: <event-type>\n
+            data: <json-data>\n
+            \n
+
+        Returns:
+            Async generator yielding SSE-formatted strings
+        """
+        import asyncio
         import json
         import time
 
+        event_id = 1  # Event ID counter for reconnection support
+
         try:
-            # For streaming, we'd need workflow runner enhancement
-            # to support progress callbacks. For now, simulate with
-            # start/end events
+            # ========================================
+            # START EVENT
+            # ========================================
+            yield f"id: {event_id}\n"
+            yield "event: start\n"
+            start_data = {
+                "workflow_id": self.workflow_id,
+                "version": self.version,
+                "timestamp": time.time(),
+            }
+            yield f"data: {json.dumps(start_data)}\n\n"
+            event_id += 1
 
-            yield json.dumps(
-                {
-                    "event": "start",
-                    "workflow_id": self.workflow_id,
-                    "timestamp": time.time(),
-                }
-            ) + "\n"
+            # Small delay to ensure client receives start event
+            await asyncio.sleep(0.001)
 
+            # ========================================
+            # EXECUTE WORKFLOW
+            # ========================================
+            # For now, execute synchronously
+            # Future enhancement: Stream intermediate results
             result = await self._execute_sync(request)
 
-            yield json.dumps(
-                {"event": "complete", "result": result.dict(), "timestamp": time.time()}
-            ) + "\n"
+            # ========================================
+            # COMPLETE EVENT
+            # ========================================
+            yield f"id: {event_id}\n"
+            yield "event: complete\n"
+            complete_data = {
+                "result": result.model_dump(),
+                "timestamp": time.time(),
+            }
+            yield f"data: {json.dumps(complete_data)}\n\n"
+            event_id += 1
+
+            # ========================================
+            # KEEPALIVE COMMENT (optional)
+            # ========================================
+            await asyncio.sleep(0.001)
+            yield ":keepalive\n\n"
 
         except Exception as e:
-            yield json.dumps(
-                {"event": "error", "error": str(e), "timestamp": time.time()}
-            ) + "\n"
+            # ========================================
+            # ERROR EVENT
+            # ========================================
+            yield f"id: {event_id}\n"
+            yield "event: error\n"
+            error_data = {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": time.time(),
+            }
+            yield f"data: {json.dumps(error_data)}\n\n"
 
     def run(self, host: str = "0.0.0.0", port: int = 8000, **kwargs):
         """Run the API server."""
