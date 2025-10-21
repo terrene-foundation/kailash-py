@@ -10,7 +10,7 @@ Lightning-fast isolated tests (<100ms) using savepoint-based rollback for DataFl
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`test-3tier-strategy`](#), [`dataflow-models`](#)
 > Related Subagents: `dataflow-specialist`, `testing-specialist`
 

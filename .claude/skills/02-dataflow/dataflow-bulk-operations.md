@@ -10,7 +10,7 @@ High-performance bulk nodes for processing thousands of records efficiently with
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-crud-operations`](#), [`dataflow-models`](#), [`dataflow-queries`](#)
 > Related Subagents: `dataflow-specialist` (performance optimization, troubleshooting)
 

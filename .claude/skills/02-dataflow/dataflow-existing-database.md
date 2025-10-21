@@ -10,7 +10,7 @@ Connect DataFlow to existing databases without @db.model decorators using dynami
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-models`](#), [`dataflow-connection-config`](#), [`dataflow-nexus-integration`](#)
 > Related Subagents: `dataflow-specialist` (complex schemas, migration planning)
 

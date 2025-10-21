@@ -10,7 +10,7 @@ Critical configuration patterns to prevent startup blocking when integrating Dat
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `CRITICAL`
-> SDK Version: `0.9.25+ / DataFlow 0.4.0+ / Nexus 0.1.5+`
+> SDK Version: `0.9.25+ / DataFlow 0.6.0 / Nexus 0.1.5+`
 > Related Skills: [`nexus-quickstart`](#), [`dataflow-models`](#), [`dataflow-existing-database`](#)
 > Related Subagents: `dataflow-specialist`, `nexus-specialist`
 
