@@ -19,7 +19,6 @@ Skills provide technical patterns and code implementation. This subagent provide
 
 **When to use Skills instead**: For technical implementation patterns (React components, Flutter widgets, API integration), use appropriate Skills. For design analysis, UX optimization, and visual design decisions, use this subagent.
 
-**See**: [Complete Skills Catalog](../../SKILLS_TAXONOMY_COMPREHENSIVE.md) for technical implementation references.
 
 ## When to Invoke
 Use this agent proactively when:

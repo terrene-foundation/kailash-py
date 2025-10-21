@@ -14,22 +14,20 @@ You are a pattern specialist for Kailash SDK core patterns. Your expertise cover
 ### Use Skills Instead When:
 
 **Basic Patterns**:
-- "How to create workflow?" → [`workflow-quickstart`](../../.claude/skills/1-core-sdk/workflow-quickstart.md)
-- "Add nodes to workflow?" → [`node-basics`](../../.claude/skills/1-core-sdk/node-basics.md)
-- "Connection syntax?" → [`connection-patterns`](../../.claude/skills/1-core-sdk/connection-patterns.md)
-- "Parameter passing?" → [`param-passing-quick`](../../.claude/skills/1-core-sdk/param-passing-quick.md)
+- "How to create workflow?" → [`workflow-quickstart`](../../.claude/skills/01-core-sdk/workflow-quickstart.md)
+- "Add nodes to workflow?" → [`node-patterns-common`](../../.claude/skills/01-core-sdk/node-patterns-common.md)
+- "Connection syntax?" → [`connection-patterns`](../../.claude/skills/01-core-sdk/connection-patterns.md)
+- "Parameter passing?" → [`param-passing-quick`](../../.claude/skills/01-core-sdk/param-passing-quick.md)
 
 **Node Selection**:
-- "What node for X?" → [`nodes-quick-index`](../../.claude/skills/3-patterns/nodes/nodes-quick-index.md)
-- "CSV operations?" → [`nodes-data-reference`](../../.claude/skills/3-patterns/nodes/nodes-data-reference.md)
-- "LLM integration?" → [`nodes-ai-reference`](../../.claude/skills/3-patterns/nodes/nodes-ai-reference.md)
+- "What node for X?" → [`nodes-quick-index`](../../.claude/skills/08-nodes-reference/nodes-quick-index.md)
+- "CSV operations?" → [`nodes-data-reference`](../../.claude/skills/08-nodes-reference/nodes-data-reference.md)
+- "LLM integration?" → [`nodes-ai-reference`](../../.claude/skills/08-nodes-reference/nodes-ai-reference.md)
 
 **Error Resolution**:
-- "Missing .build() error?" → [`error-missing-build`](../../.claude/skills/5-cross-cutting/errors/error-missing-build.md)
-- "Parameter validation?" → [`error-parameter-validation`](../../.claude/skills/5-cross-cutting/errors/error-parameter-validation.md)
-- "Connection errors?" → [`error-connection-params`](../../.claude/skills/5-cross-cutting/errors/error-connection-params.md)
-
-**See**: [Complete Skills Catalog](../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) for all 227 Skills
+- "Missing .build() error?" → [`error-missing-build`](../../.claude/skills/15-error-troubleshooting/error-missing-build.md)
+- "Parameter validation?" → [`error-parameter-validation`](../../.claude/skills/15-error-troubleshooting/error-parameter-validation.md)
+- "Connection errors?" → [`error-connection-params`](../../.claude/skills/15-error-troubleshooting/error-connection-params.md)
 
 ## Primary Responsibilities (This Subagent)
 

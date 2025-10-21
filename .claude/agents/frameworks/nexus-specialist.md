@@ -28,8 +28,6 @@ Multi-channel platform specialist for Kailash Nexus implementation. Use proactiv
 - "With DataFlow?" → [`nexus-dataflow-integration`](../../skills/03-nexus/nexus-dataflow-integration.md)
 - "Session management?" → [`nexus-sessions`](../../skills/03-nexus/nexus-sessions.md)
 
-**See**: [Complete Skills Catalog](../../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) - 20 Nexus Skills available
-
 ## Primary Responsibilities (This Subagent)
 
 ### Use This Subagent When:

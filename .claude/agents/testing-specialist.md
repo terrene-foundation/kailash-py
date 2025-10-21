@@ -16,20 +16,18 @@ Your role is to guide test-first development and ensure proper test coverage.
 ### Use Skills Instead When:
 
 **Testing Basics**:
-- "3-tier strategy?" → [`testing-3-tier-strategy`](../../.claude/skills/3-patterns/testing/testing-3-tier-strategy.md)
-- "Unit test patterns?" → [`testing-unit-patterns`](../../.claude/skills/3-patterns/testing/testing-unit-patterns.md)
-- "Integration setup?" → [`testing-integration-setup`](../../.claude/skills/3-patterns/testing/testing-integration-setup.md)
+- "3-tier strategy?" → [`test-3tier-strategy`](../../.claude/skills/12-testing-strategies/test-3tier-strategy.md)
+- "Unit test patterns?" → [`test-3tier-strategy`](../../.claude/skills/12-testing-strategies/test-3tier-strategy.md) - See Tier 1 section
+- "Integration setup?" → [`test-3tier-strategy`](../../.claude/skills/12-testing-strategies/test-3tier-strategy.md) - See Tier 2 section
 
 **Infrastructure**:
-- "Docker setup?" → [`testing-docker-setup`](../../.claude/skills/3-patterns/testing/testing-docker-setup.md)
-- "NO MOCKING policy?" → [`testing-no-mocking`](../../.claude/skills/3-patterns/testing/testing-no-mocking.md)
+- "Docker setup?" → [`test-3tier-strategy`](../../.claude/skills/12-testing-strategies/test-3tier-strategy.md) - See Tier 2 section
+- "NO MOCKING policy?" → [`gold-mocking-policy`](../../.claude/skills/17-gold-standards/gold-mocking-policy.md)
 
 **Framework Testing**:
-- "DataFlow tests?" → [`testing-dataflow`](../../.claude/skills/3-patterns/testing/testing-dataflow.md)
-- "Nexus tests?" → [`testing-nexus`](../../.claude/skills/3-patterns/testing/testing-nexus.md)
-- "Workflow tests?" → [`testing-workflows`](../../.claude/skills/3-patterns/testing/testing-workflows.md)
-
-**See**: [Complete Skills Catalog](../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md)
+- "DataFlow tests?" → [`test-3tier-strategy`](../../.claude/skills/12-testing-strategies/test-3tier-strategy.md)
+- "Nexus tests?" → [`test-3tier-strategy`](../../.claude/skills/12-testing-strategies/test-3tier-strategy.md)
+- "Workflow tests?" → [`test-3tier-strategy`](../../.claude/skills/12-testing-strategies/test-3tier-strategy.md)
 
 ## Primary Responsibilities (This Subagent)
 
@@ -40,7 +38,7 @@ Your role is to guide test-first development and ensure proper test coverage.
 - **Test Infrastructure Design**: Setting up custom test environments
 
 ### Use Skills Instead When:
-- ❌ "Basic 3-tier strategy" → Use `testing-3-tier-strategy` Skill
+- ❌ "Basic 3-tier strategy" → Use `test-3tier-strategy` Skill
 - ❌ "Docker test setup" → Use `testing-docker-setup` Skill
 - ❌ "Standard unit tests" → Use `testing-unit-patterns` Skill
 - ❌ "Framework-specific tests" → Use framework testing Skills

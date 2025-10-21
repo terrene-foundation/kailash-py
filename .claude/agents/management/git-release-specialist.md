@@ -174,7 +174,14 @@ vim src/kailash/__init__.py     # __version__ = "x.y.z"
 
 # For bundled packages:
 vim apps/kailash-dataflow/setup.py  # version="x.y.z"
+vim apps/kailash-dataflow/pyproject.toml  # [project] version = "x.y.z"
+vim apps/kailash-dataflow/src/dataflow/__init__.py  # __version__ = "x.y.z"
 vim apps/kailash-nexus/setup.py     # version="x.y.z"
+vim apps/kailash-nexus/pyproject.toml     # [project] version = "x.y.z"
+vim apps/kailash-nexus/src/nexus/__init__.py     # __version__ = "x.y.z"
+vim apps/kailash-kaizen/setup.py     # version="x.y.z"
+vim apps/kailash-kaizen/pyproject.toml     # [project] version = "x.y.z"
+vim apps/kailash-kaizen/src/kaizen/__init__.py
 
 ### 2. Changelog Management
 # Create new changelog file:
@@ -207,6 +214,7 @@ rm -rf dist/ build/ *.egg-info
 python -m build                          # Main SDK
 cd apps/kailash-dataflow && python -m build  # DataFlow
 cd apps/kailash-nexus && python -m build     # Nexus
+cd apps/kailash-kaizen && python -m build     # Kaizen
 
 # Test installation
 python -m venv test-release
@@ -247,6 +255,7 @@ git push origin v[version]
 # Upload to PyPI (order matters for bundled packages)
 cd apps/kailash-dataflow && twine upload dist/*  # DataFlow first
 cd apps/kailash-nexus && twine upload dist/*     # Nexus second
+cd apps/kailash-kaizen && twine upload dist/*     # Kaizen third
 cd ../.. && twine upload dist/*                  # Main SDK last
 ```
 
