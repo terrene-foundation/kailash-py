@@ -1,6 +1,6 @@
-# Kailash DataFlow - Complete Function Access Guide (v0.5.6 Release Ready)
+# Kailash DataFlow - Complete Function Access Guide (v0.6.0 Release Ready)
 
-**🎉 Major Release: v0.5.6 with Complete Database Support**
+**🎉 Major Release: v0.6.0 with Complete Database Support + New CRUD API**
 - **MYSQL SUPPORT**: Full MySQL support with 100% feature parity (aiomysql driver)
 - **THREE DATABASES**: PostgreSQL, MySQL, and SQLite with identical 9 nodes per model
 - DateTime serialization issues resolved
@@ -44,9 +44,9 @@ workflow.add_node("SsoSessionReadNode", "read_session", {
     "id": session_id  # String preserved as-is
 })
 
-# ✅ ALTERNATIVE: Use conditions for explicit type preservation
+# ✅ ALTERNATIVE: Use filter for explicit type preservation (v0.6.0+ API)
 workflow.add_node("SsoSessionReadNode", "read_session_alt", {
-    "conditions": {"id": session_id},  # Explicit type preservation
+    "filter": {"id": session_id},  # v0.6.0+ API - explicit type preservation
     "raise_on_not_found": True
 })
 

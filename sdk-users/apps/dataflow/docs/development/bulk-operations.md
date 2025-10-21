@@ -129,19 +129,19 @@ workflow.add_node("UserBulkCreateNode", "create_users", {
 ### Conditional Bulk Updates
 
 ```python
-# Update all electronics products with a discount
+# Update all electronics products with a discount (v0.6.0+ API)
 workflow.add_node("ProductBulkUpdateNode", "discount_electronics", {
     "filter": {"category": "electronics"},
-    "updates": {
+    "fields": {  # v0.6.0+ API
         "price": "price * 0.9",    # 10% discount
         "updated_at": ":current_timestamp"
     },
     "batch_size": 2000
 })
 
-# Update specific products by ID
+# Update specific products by ID (v0.6.0+ API)
 workflow.add_node("ProductBulkUpdateNode", "update_specific_products", {
-    "updates": [
+    "fields": [  # v0.6.0+ API
         {"id": 1, "price": 15.99, "stock": 200},
         {"id": 2, "price": 25.99, "stock": 150},
         {"id": 3, "stock": 0}  # Out of stock
@@ -153,14 +153,14 @@ workflow.add_node("ProductBulkUpdateNode", "update_specific_products", {
 ### Bulk Update with Conditions
 
 ```python
-# Complex conditional updates
+# Complex conditional updates (v0.6.0+ API)
 workflow.add_node("ProductBulkUpdateNode", "restock_products", {
     "filter": {
         "stock": {"$lt": 10},        # Low stock
         "active": True,              # Only active products
         "category": {"$in": ["electronics", "clothing"]}
     },
-    "updates": {
+    "fields": {  # v0.6.0+ API
         "stock": "stock + 100",      # Add 100 units
         "restock_date": ":current_date",
         "status": "restocked"
@@ -173,9 +173,9 @@ workflow.add_node("ProductBulkUpdateNode", "restock_products", {
 ### Atomic Bulk Updates
 
 ```python
-# Atomic operations for concurrent safety
+# Atomic operations for concurrent safety (v0.6.0+ API)
 workflow.add_node("ProductBulkUpdateNode", "atomic_stock_update", {
-    "updates": [
+    "fields": [  # v0.6.0+ API
         {"id": 1, "atomic_ops": {"stock": {"$inc": -5}}},  # Decrement by 5
         {"id": 2, "atomic_ops": {"stock": {"$inc": -3}}},  # Decrement by 3
         {"id": 3, "atomic_ops": {"views": {"$inc": 1}}}   # Increment views

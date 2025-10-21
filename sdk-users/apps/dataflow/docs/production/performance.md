@@ -303,7 +303,7 @@ workflow.add_node("ProductBulkCreateNode", "bulk_insert", {
 ```python
 workflow.add_node("BulkUpdateNode", "update_prices", {
     "model": "Product",
-    "updates": [
+    "fields": [
         {
             "filter": {"category": "electronics"},
             "data": {"discount": 0.1}

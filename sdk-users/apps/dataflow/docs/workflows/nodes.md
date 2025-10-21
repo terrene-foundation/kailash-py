@@ -541,7 +541,7 @@ result = {"user_stats": user_stats}
 
 # Update user statistics
 workflow.add_node("UserBulkUpdateNode", "update_user_stats", {
-    "updates": ":user_updates",
+    "fields": ":user_updates",
     "batch_size": 100
 })
 

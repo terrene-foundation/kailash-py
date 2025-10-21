@@ -31,7 +31,7 @@ workflow.add_node("ProductBulkCreateNode", "import", {
 # Bulk update
 workflow.add_node("ProductBulkUpdateNode", "update_prices", {
     "filter": {"category": "electronics"},
-    "updates": {"price": {"$multiply": 0.9}}
+    "fields": {"price": {"$multiply": 0.9}}
 })
 
 # Bulk delete
@@ -143,7 +143,7 @@ workflow.add_node("ProductBulkUpdateNode", "update", {
     },
 
     # Updates to apply
-    "updates": {
+    "fields": {
         "price": {"$multiply": 0.9},  # 10% discount
         "updated_at": ":current_timestamp"
     },
@@ -329,7 +329,7 @@ workflow.add_node("ProductBulkUpdateNode", "discount_electronics", {
         "category": "electronics",
         "active": True
     },
-    "updates": {
+    "fields": {
         "price": {"$multiply": 0.9},  # 10% off
         "discount_applied": True,
         "updated_at": ":current_timestamp"

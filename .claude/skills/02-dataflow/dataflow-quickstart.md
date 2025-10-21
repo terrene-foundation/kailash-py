@@ -87,12 +87,12 @@ Each `@db.model` automatically creates:
 | Node | Purpose | Example Config |
 |------|---------|----------------|
 | **{Model}CreateNode** | Single insert | `{"name": "John", "email": "john@example.com"}` |
-| **{Model}ReadNode** | Single select | `{"id": 123}` or `{"conditions": {"email": "alice@example.com"}}` |
+| **{Model}ReadNode** | Single select | `{"id": 123}` or `{"filter": {"email": "alice@example.com"}}` |
 | **{Model}UpdateNode** | Single update | `{"id": 123, "name": "Jane"}` |
 | **{Model}DeleteNode** | Single delete | `{"id": 123}` or `{"soft_delete": True}` |
 | **{Model}ListNode** | Query with filters | `{"filter": {"age": {"$gt": 18}}, "limit": 10}` |
 | **{Model}BulkCreateNode** | Bulk insert | `{"data": [...], "batch_size": 1000}` |
-| **{Model}BulkUpdateNode** | Bulk update | `{"filter": {...}, "update": {...}}` |
+| **{Model}BulkUpdateNode** | Bulk update | `{"filter": {...}, "fields": {...}}` |
 | **{Model}BulkDeleteNode** | Bulk delete | `{"filter": {...}}` |
 | **{Model}BulkUpsertNode** | Insert or update | `{"data": [...], "match_fields": ["email"]}` |
 

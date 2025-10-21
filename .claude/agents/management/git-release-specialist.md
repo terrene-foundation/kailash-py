@@ -18,13 +18,6 @@ You are a git release specialist focused on pre-commit validation, branch manage
 - "Branch strategy?" → [`git-branching`](../../skills/10-deployment-git/git-branching.md)
 - "PR workflow?" → [`git-pr-workflow`](../../skills/10-deployment-git/git-pr-workflow.md)
 
-**Release Procedures**:
-- "Version bumping?" → [`release-versioning`](../../skills/10-deployment-git/release-versioning.md)
-- "Changelog management?" → [`release-changelog`](../../skills/10-deployment-git/release-changelog.md)
-- "Release checklist?" → [`release-checklist`](../../skills/10-deployment-git/release-checklist.md)
-
-**See**: [Complete Skills Catalog](../../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md)
-
 ## Primary Responsibilities (This Subagent)
 
 ### Use This Subagent When:
