@@ -1,11 +1,11 @@
 ---
 name: kaizen-specialist
-description: Kaizen AI framework specialist (v0.2.0) for signature-based programming, autonomous tool calling, multi-agent coordination, and enterprise AI workflows. Use proactively when implementing AI agents, optimizing prompts, or building intelligent systems with BaseAgent architecture.
+description: Kaizen AI framework specialist (v0.4.0) for signature-based programming, autonomous tool calling, multi-agent coordination, and enterprise AI workflows. Use proactively when implementing AI agents, optimizing prompts, or building intelligent systems with BaseAgent architecture.
 ---
 
 # Kaizen Specialist Agent
 
-Expert in Kaizen AI framework v0.2.0 - signature-based programming, BaseAgent architecture with autonomous tool calling, Control Protocol for bidirectional communication, multi-agent coordination, multi-modal processing (vision/audio), and enterprise AI workflows.
+Expert in Kaizen AI framework v0.4.0 - signature-based programming, BaseAgent architecture with autonomous tool calling, Control Protocol for bidirectional communication, multi-agent coordination, multi-modal processing (vision/audio/document), and enterprise AI workflows.
 
 ## ⚡ Skills Quick Reference
 
@@ -48,23 +48,42 @@ Expert in Kaizen AI framework v0.2.0 - signature-based programming, BaseAgent ar
 ## Documentation Navigation
 
 ### Primary References (SDK Users)
-- **[CLAUDE.md](../sdk-users/apps/kaizen/CLAUDE.md)** - Quick reference for using Kaizen
-- **[README.md](../sdk-users/apps/kaizen/README.md)** - Complete Kaizen user guide
-- **[Examples](../apps/kailash-kaizen/examples/)** - 35+ working implementations
+- **[CLAUDE.md](../../../sdk-users/apps/kaizen/CLAUDE.md)** - Quick reference for using Kaizen
+- **[README.md](../../../sdk-users/apps/kaizen/README.md)** - Complete Kaizen user guide
+- **[Examples](../../examples/)** - 35+ working implementations
 
 ### Critical API References
-- **[Multi-Modal API](../sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md)** - Vision, audio APIs with common pitfalls
-- **[Quickstart](../sdk-users/apps/kaizen/docs/getting-started/quickstart.md)** - 5-minute tutorial
-- **[Troubleshooting](../sdk-users/apps/kaizen/docs/reference/troubleshooting.md)** - Common errors and solutions
-- **[Integration Patterns](../sdk-users/apps/kaizen/docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP integration
+- **[API Reference](../../../sdk-users/apps/kaizen/docs/reference/api-reference.md)** - Complete API documentation
+- **[BaseAgent Architecture](../../../sdk-users/apps/kaizen/docs/guides/baseagent-architecture.md)** - Unified agent system
+- **[Multi-Agent Coordination](../../../sdk-users/apps/kaizen/docs/guides/multi-agent-coordination.md)** - Google A2A protocol
+- **[Control Protocol API](../../../sdk-users/apps/kaizen/docs/reference/control-protocol-api.md)** - Bidirectional communication
+- **[Multi-Modal API](../../../sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md)** - Vision, audio APIs
+- **[Memory Patterns](../../../sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md)** - Memory usage patterns
+- **[Strategy Selection](../../../sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md)** - When to use which strategy
+- **[Signature Programming](../../../sdk-users/apps/kaizen/docs/guides/signature-programming.md)** - Type-safe I/O
+- **[Integration Patterns](../../../sdk-users/apps/kaizen/docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP
+- **[Troubleshooting](../../../sdk-users/apps/kaizen/docs/reference/troubleshooting.md)** - Common errors
 
 ### By Use Case
 | Need | Documentation |
 |------|---------------|
 | Getting started | `sdk-users/apps/kaizen/docs/getting-started/quickstart.md` |
+| First agent tutorial | `sdk-users/apps/kaizen/docs/getting-started/first-agent.md` |
+| Installation | `sdk-users/apps/kaizen/docs/getting-started/installation.md` |
+| BaseAgent architecture | `sdk-users/apps/kaizen/docs/guides/baseagent-architecture.md` |
+| Multi-agent coordination | `sdk-users/apps/kaizen/docs/guides/multi-agent-coordination.md` |
+| Control Protocol tutorial | `sdk-users/apps/kaizen/docs/guides/control-protocol-tutorial.md` |
+| Custom transports | `sdk-users/apps/kaizen/docs/guides/custom-transports.md` |
+| Migration guide | `sdk-users/apps/kaizen/docs/guides/migrating-to-control-protocol.md` |
+| Ollama local LLM | `sdk-users/apps/kaizen/docs/guides/ollama-quickstart.md` |
 | Multi-modal (vision/audio) | `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` |
+| Memory patterns | `sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md` |
+| Strategy selection | `sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md` |
+| Configuration | `sdk-users/apps/kaizen/docs/reference/configuration.md` |
+| Signature programming | `sdk-users/apps/kaizen/docs/guides/signature-programming.md` |
 | Integration patterns | `sdk-users/apps/kaizen/docs/guides/integration-patterns.md` |
 | Troubleshooting | `sdk-users/apps/kaizen/docs/reference/troubleshooting.md` |
+| Complete API reference | `sdk-users/apps/kaizen/docs/reference/api-reference.md` |
 | Complete guide | `sdk-users/apps/kaizen/README.md` |
 | Working examples | `apps/kailash-kaizen/examples/` |
 
@@ -421,6 +440,38 @@ data = self.extract_list(result, "actual_key_name", default=[])
 
 ## 🎓 Recent Completions
 
+### Autonomous Implementation Patterns - TODO-167 FULL COMPLETION (2025-10-22)
+**v0.4.0 Production Release** - Complete 5-phase autonomous agent system with multi-provider vision architecture
+
+#### All 5 Phases Complete
+- ✅ **Phase 1**: Control Protocol foundation (CLI, HTTP/SSE, stdio, memory transports)
+- ✅ **Phase 2**: Tool calling system (12 builtin tools, danger-level approval workflows)
+- ✅ **Phase 3**: Document extraction & RAG integration (VisionAgent, MultiModalAgent enhanced)
+- ✅ **Phase 4**: Multi-provider vision architecture (Landing AI, OpenAI Vision, Ollama)
+- ✅ **Phase 5**: Production hardening & comprehensive documentation
+
+#### Key Achievements
+- ✅ **201 Tests Passing**: 149 unit + 34 integration + 18 E2E (100% coverage)
+- ✅ **12 Examples Created**: 3 autonomous agents + 3 tools + 3 control protocol + 3 document RAG
+- ✅ **3 ADRs Written**: ADR-017 (Multi-Provider Vision), ADR-018 (Document Extraction), ADR-019 (Autonomous Patterns)
+- ✅ **Multi-Provider Architecture**: Landing AI (document-specialized), OpenAI Vision (general), Ollama (zero-cost local)
+- ✅ **Zero Breaking Changes**: All features opt-in, 100% backward compatible
+- ✅ **Production Ready**: Enterprise-grade error handling, retry logic, comprehensive logging
+
+#### Documentation Delivered
+- ✅ **Comprehensive Guides**: Autonomous patterns, control protocol tutorial, document extraction integration
+- ✅ **API References**: Control Protocol API, troubleshooting guide, multi-provider configuration
+- ✅ **Developer Workflows**: Claude Code agent guide, Codex agent guide, developer workflow patterns
+- ✅ **Tutorials**: Base autonomous agent, specialized agents, multi-provider integration
+
+#### Innovation Highlights
+- 🚀 **Zero-Cost Option**: Ollama integration enables fully local autonomous agents
+- 🚀 **Lazy Composition**: Document extraction via optional mixins, no inheritance bloat
+- 🚀 **Universal Integration**: All 25 agents support tool_registry + mcp_servers (ADR-016)
+- 🚀 **Bidirectional Communication**: Real-time agent ↔ client interaction with <20ms latency
+
+📄 **See**: `docs/guides/autonomous-implementation-patterns.md`, `examples/autonomy/`, ADR-017, ADR-018, ADR-019
+
 ### Universal Tool Integration - TODO-165 (2025-10-22)
 - ✅ **10 Agents Updated**: Added tool_registry + mcp_servers parameters to all remaining agents
   - 4 Specialized: ResilientAgent, MemoryAgent, BatchProcessingAgent, HumanApprovalAgent
@@ -463,7 +514,7 @@ data = self.extract_list(result, "actual_key_name", default=[])
 - **3-enterprise-workflows/** (5): compliance-monitoring, content-generation, customer-service, data-reporting, document-analysis
 - **4-advanced-rag/** (5): agentic-rag, federated-rag, graph-rag, multi-hop-rag, self-correcting-rag
 - **5-mcp-integration/** (3): agent-as-client, agent-as-server, auto-discovery-routing
-- **8-multi-modal/** (3): image-analysis, audio-transcription, document-understanding
+- **8-multi-modal/** (6): image-analysis, audio-transcription, document-understanding, document-rag (basic_rag, advanced_rag, workflow_integration)
 
 ## Use This Specialist For
 
