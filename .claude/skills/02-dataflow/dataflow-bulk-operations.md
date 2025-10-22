@@ -20,6 +20,7 @@ High-performance bulk nodes for processing thousands of records efficiently with
 - **Performance**: 1,000-100,000 records/sec depending on operation
 - **Auto-Optimization**: Database-specific optimizations (PostgreSQL COPY, etc.)
 - **Pattern**: Use for >100 records
+- **Datetime Auto-Conversion**: ISO 8601 strings → datetime objects (v0.6.4+)
 
 ```python
 # Bulk create
@@ -255,6 +256,248 @@ workflow.add_node("ProductBulkCreateNode", "import", {
     "error_strategy": "continue",
     "max_errors": 1000,
     "failed_records_file": "/tmp/failed.json"
+})
+```
+
+## Automatic Datetime Conversion in Bulk Operations (v0.6.4+)
+
+DataFlow automatically converts ISO 8601 datetime strings to Python datetime objects in ALL bulk operations. This is especially powerful for data imports from external sources.
+
+### Supported ISO 8601 Formats
+
+- **Basic**: `2024-01-01T12:00:00`
+- **With microseconds**: `2024-01-01T12:00:00.123456`
+- **With timezone Z**: `2024-01-01T12:00:00Z`
+- **With timezone offset**: `2024-01-01T12:00:00+05:30`
+
+### Example: BulkCreateNode with PythonCodeNode
+
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+
+# PythonCodeNode generates bulk data with ISO strings
+workflow.add_node("PythonCodeNode", "generate_bulk_data", {
+    "code": """
+from datetime import datetime, timedelta
+
+users = []
+for i in range(1000):
+    users.append({
+        "name": f"User {i}",
+        "email": f"user{i}@example.com",
+        "registered_at": (datetime.now() - timedelta(days=i)).isoformat(),
+        "last_login": datetime.now().isoformat()
+    })
+
+result = {"users": users}
+    """
+})
+
+# BulkCreateNode automatically converts all ISO strings to datetime
+workflow.add_node("UserBulkCreateNode", "bulk_import", {
+    "data": "{{generate_bulk_data.users}}",  # All ISO strings → datetime
+    "batch_size": 1000
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+
+# All datetime fields stored as proper datetime types
+imported = results["bulk_import"]["data"]
+print(f"Imported {imported['success_count']} users with converted timestamps")
+```
+
+### Example: BulkUpdateNode with Datetime
+
+```python
+# Update last_login timestamps in bulk
+workflow.add_node("PythonCodeNode", "generate_timestamps", {
+    "code": """
+from datetime import datetime
+
+updates = []
+for user_id in range(1, 101):
+    updates.append({
+        "id": user_id,
+        "last_login": datetime.now().isoformat()
+    })
+
+result = {"updates": updates}
+    """
+})
+
+# BulkUpdateNode auto-converts ISO strings
+workflow.add_node("UserBulkUpdateNode", "update_logins", {
+    "fields": "{{generate_timestamps.updates}}",  # ISO strings → datetime
+    "batch_size": 100
+})
+```
+
+### Example: BulkUpsertNode with Datetime
+
+```python
+# Sync external data with timestamps
+workflow.add_node("PythonCodeNode", "fetch_external_data", {
+    "code": """
+import requests
+from datetime import datetime
+
+# Fetch from external API
+response = requests.get("https://api.example.com/products")
+products = response.json()
+
+# Add sync timestamp
+for product in products:
+    product["last_synced"] = datetime.now().isoformat()
+
+result = {"products": products}
+    """
+})
+
+# BulkUpsertNode converts all datetime strings
+workflow.add_node("ProductBulkUpsertNode", "sync_products", {
+    "data": "{{fetch_external_data.products}}",  # ISO strings → datetime
+    "unique_fields": ["external_id"],
+    "batch_size": 500
+})
+```
+
+### Example: CSV Import with Datetime Conversion
+
+```python
+# Import CSV with date columns
+workflow.add_node("PythonCodeNode", "parse_csv_with_dates", {
+    "code": """
+import csv
+from datetime import datetime
+
+products = []
+with open('products.csv') as f:
+    for row in csv.DictReader(f):
+        products.append({
+            "name": row["name"],
+            "price": float(row["price"]),
+            "created_at": datetime.fromisoformat(row["created_date"]).isoformat(),
+            "updated_at": datetime.fromisoformat(row["updated_date"]).isoformat()
+        })
+
+result = {"products": products}
+    """
+})
+
+# BulkCreateNode handles datetime conversion
+workflow.add_node("ProductBulkCreateNode", "import_csv", {
+    "data": "{{parse_csv_with_dates.products}}",  # All timestamps auto-converted
+    "batch_size": 5000
+})
+```
+
+### Backward Compatibility
+
+Existing code with datetime objects continues to work:
+
+```python
+from datetime import datetime
+
+# Direct datetime objects still work
+products = [
+    {
+        "name": "Product 1",
+        "price": 19.99,
+        "created_at": datetime.now()  # Direct datetime object
+    },
+    {
+        "name": "Product 2",
+        "price": 29.99,
+        "created_at": "2024-01-15T10:30:00"  # ISO string also works
+    }
+]
+
+workflow.add_node("ProductBulkCreateNode", "import", {
+    "data": products,
+    "batch_size": 1000
+})
+```
+
+### Applies To All Bulk Nodes
+
+Datetime auto-conversion works on:
+- ✅ `ProductBulkCreateNode` - Bulk inserts
+- ✅ `ProductBulkUpdateNode` - Bulk updates
+- ✅ `ProductBulkUpsertNode` - Bulk upserts
+- ✅ `ProductBulkDeleteNode` - Bulk deletes (for timestamp filters)
+
+### Common Use Cases
+
+**API Data Synchronization:**
+```python
+# External API returns ISO timestamps
+workflow.add_node("PythonCodeNode", "sync_api", {
+    "code": """
+import requests
+response = requests.get("https://api.partner.com/inventory")
+result = {"inventory": response.json()}  # Contains ISO datetime strings
+    """
+})
+
+workflow.add_node("InventoryBulkUpsertNode", "sync", {
+    "data": "{{sync_api.inventory}}",  # Timestamps auto-converted
+    "unique_fields": ["sku"],
+    "batch_size": 1000
+})
+```
+
+**Historical Data Import:**
+```python
+# Import historical records with date ranges
+workflow.add_node("PythonCodeNode", "generate_historical", {
+    "code": """
+from datetime import datetime, timedelta
+
+records = []
+start_date = datetime(2020, 1, 1)
+for i in range(1000):
+    records.append({
+        "date": (start_date + timedelta(days=i)).isoformat(),
+        "value": i * 10.0
+    })
+
+result = {"records": records}
+    """
+})
+
+workflow.add_node("RecordBulkCreateNode", "import_historical", {
+    "data": "{{generate_historical.records}}",  # All dates converted
+    "batch_size": 5000,
+    "use_copy": True  # PostgreSQL optimization
+})
+```
+
+**Real-Time Event Processing:**
+```python
+# Process events with timestamps
+workflow.add_node("PythonCodeNode", "process_events", {
+    "code": """
+from datetime import datetime
+
+events = []
+for event in incoming_events:
+    events.append({
+        "user_id": event["user_id"],
+        "action": event["action"],
+        "timestamp": datetime.now().isoformat()
+    })
+
+result = {"events": events}
+    """
+})
+
+workflow.add_node("EventBulkCreateNode", "log_events", {
+    "data": "{{process_events.events}}",  # Timestamps auto-converted
+    "batch_size": 100
 })
 ```
 

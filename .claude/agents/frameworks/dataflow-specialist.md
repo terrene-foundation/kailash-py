@@ -160,6 +160,7 @@ When encountering apparent "limitations":
 - **Not an ORM**: Workflow-native database framework, not traditional ORM
 - **PostgreSQL + SQLite Full Parity**: Both databases fully supported with identical functionality
 - **Automatic Node Generation**: Each `@db.model` creates 9 node types automatically
+- **Datetime Auto-Conversion (v0.6.4+)**: ISO 8601 strings automatically converted to datetime objects
 - **6-Level Write Protection**: Comprehensive protection system (Global, Connection, Model, Operation, Field, Runtime)
 - **Migration System**: Auto-migration with schema state management and performance tracking
 - **Enterprise-Grade**: Built-in caching, multi-tenancy, distributed transactions
@@ -187,6 +188,46 @@ When encountering apparent "limitations":
 > **Note**: For basic patterns (setup, CRUD, queries), see the [DataFlow Skills](../../skills/02-dataflow/) - 24 Skills covering common operations.
 
 This section focuses on **enterprise-level patterns** and **production complexity**.
+
+### Automatic Datetime Conversion (v0.6.4+)
+
+DataFlow automatically converts ISO 8601 datetime strings to Python datetime objects across ALL CRUD nodes. This enables seamless integration with PythonCodeNode and external data sources.
+
+**Supported ISO 8601 Formats:**
+- Basic: `2024-01-01T12:00:00`
+- With microseconds: `2024-01-01T12:00:00.123456`
+- With timezone Z: `2024-01-01T12:00:00Z`
+- With timezone offset: `2024-01-01T12:00:00+05:30`
+
+**Example: PythonCodeNode → CreateNode**
+```python
+# PythonCodeNode outputs ISO string
+workflow.add_node("PythonCodeNode", "generate_timestamp", {
+    "code": """
+from datetime import datetime
+result = {"created_at": datetime.now().isoformat()}
+    """
+})
+
+# CreateNode automatically converts to datetime
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Alice",
+    "created_at": "{{generate_timestamp.created_at}}"  # ISO string → datetime
+})
+```
+
+**Backward Compatibility:**
+```python
+from datetime import datetime
+
+# Existing code with datetime objects still works
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Bob",
+    "created_at": datetime.now()  # Still works!
+})
+```
+
+**Applies To:** CreateNode, UpdateNode, BulkCreateNode, BulkUpdateNode, BulkUpsertNode
 
 ### Event Loop Isolation
 
@@ -877,7 +918,7 @@ db = DataFlow(
 ### Never
 - Instantiate models directly (`User()`)
 - Use `${}` template syntax
-- Use string datetime values
+- Worry about datetime conversion - now automatic (v0.6.4+)
 - Skip safety checks in production
 - Expect MySQL execution in alpha (SQLite works fine!)
 - Use mocking in Tier 2-3 tests (NO MOCKING policy enforced)

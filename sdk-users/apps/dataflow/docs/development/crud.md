@@ -79,6 +79,228 @@ fields = {
 }
 ```
 
+## Working with Datetime Fields (v0.6.4+)
+
+DataFlow automatically converts ISO 8601 datetime strings to Python datetime objects for all datetime fields. This enables seamless integration with PythonCodeNode, external APIs, and data import workflows.
+
+### Supported ISO 8601 Formats
+
+DataFlow recognizes and converts these ISO 8601 datetime formats:
+
+- **Basic**: `2024-01-01T12:00:00`
+- **With microseconds**: `2024-01-01T12:00:00.123456`
+- **With timezone Z (UTC)**: `2024-01-01T12:00:00Z`
+- **With timezone offset**: `2024-01-01T12:00:00+05:30`
+
+### Example: PythonCodeNode Integration
+
+The most common use case is integrating with PythonCodeNode for dynamic timestamp generation:
+
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+
+# PythonCodeNode generates ISO 8601 timestamp
+workflow.add_node("PythonCodeNode", "generate_timestamp", {
+    "code": """
+from datetime import datetime
+result = {"registration_date": datetime.now().isoformat()}
+    """
+})
+
+# CreateNode automatically converts ISO string to datetime
+workflow.add_node("UserCreateNode", "create_user", {
+    "name": "Alice",
+    "email": "alice@example.com",
+    "registration_date": "{{generate_timestamp.registration_date}}"  # ISO string → datetime
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+
+# Database stores as proper TIMESTAMP type
+user = results["create_user"]["data"]
+print(f"User registered at: {user['registration_date']}")  # datetime object
+```
+
+### Example: UpdateNode with Dynamic Timestamps
+
+```python
+# Generate current timestamp in PythonCodeNode
+workflow.add_node("PythonCodeNode", "generate_last_login", {
+    "code": """
+from datetime import datetime
+result = {"last_login": datetime.now().isoformat()}
+    """
+})
+
+# UpdateNode automatically converts the ISO string
+workflow.add_node("UserUpdateNode", "update_last_login", {
+    "filter": {"id": 1},
+    "fields": {
+        "last_login": "{{generate_last_login.last_login}}"  # ISO string → datetime
+        # updated_at is automatic - don't include it!
+    }
+})
+```
+
+### Example: External API Integration
+
+```python
+# Fetch data from external API that returns ISO timestamps
+workflow.add_node("PythonCodeNode", "fetch_api_data", {
+    "code": """
+import requests
+
+response = requests.get("https://api.example.com/users")
+users = response.json()  # Contains ISO datetime strings
+
+# API response example:
+# [{"name": "Bob", "email": "bob@example.com", "joined_at": "2024-01-15T10:30:00Z"}]
+
+result = {"users": users}
+    """
+})
+
+# CreateNode automatically converts all datetime strings
+workflow.add_node("UserBulkCreateNode", "import_users", {
+    "data": "{{fetch_api_data.users}}",  # All ISO strings → datetime
+    "batch_size": 100
+})
+```
+
+### Example: CSV Import with Dates
+
+```python
+# Parse CSV file with date columns
+workflow.add_node("PythonCodeNode", "parse_csv", {
+    "code": """
+import csv
+from datetime import datetime
+
+users = []
+with open('users.csv') as f:
+    for row in csv.DictReader(f):
+        users.append({
+            "name": row["name"],
+            "email": row["email"],
+            "joined_at": datetime.fromisoformat(row["joined_date"]).isoformat()
+        })
+
+result = {"users": users}
+    """
+})
+
+# BulkCreateNode converts all datetime strings
+workflow.add_node("UserBulkCreateNode", "import_csv", {
+    "data": "{{parse_csv.users}}",  # ISO strings → datetime
+    "batch_size": 1000
+})
+```
+
+### Backward Compatibility
+
+Existing code passing datetime objects continues to work without any changes:
+
+```python
+from datetime import datetime
+
+# Method 1: Direct datetime object (still works)
+workflow.add_node("UserCreateNode", "create_user_1", {
+    "name": "Bob",
+    "email": "bob@example.com",
+    "registration_date": datetime.now()  # datetime object
+})
+
+# Method 2: ISO 8601 string (now also works)
+workflow.add_node("UserCreateNode", "create_user_2", {
+    "name": "Charlie",
+    "email": "charlie@example.com",
+    "registration_date": "2024-01-15T10:30:00"  # ISO string → datetime
+})
+
+# Method 3: From PythonCodeNode (recommended)
+workflow.add_node("PythonCodeNode", "gen_timestamp", {
+    "code": "from datetime import datetime; result = {'ts': datetime.now().isoformat()}"
+})
+workflow.add_node("UserCreateNode", "create_user_3", {
+    "name": "Diana",
+    "email": "diana@example.com",
+    "registration_date": "{{gen_timestamp.ts}}"  # ISO string → datetime
+})
+```
+
+### Applies To All CRUD Nodes
+
+Datetime auto-conversion works across all CRUD operations:
+
+- ✅ **CreateNode** - Single record creation
+- ✅ **UpdateNode** - Single record updates
+- ✅ **BulkCreateNode** - Bulk record creation
+- ✅ **BulkUpdateNode** - Bulk record updates
+- ✅ **BulkUpsertNode** - Bulk upsert operations
+
+### How It Works
+
+The datetime conversion happens automatically during node execution:
+
+1. **Detection**: DataFlow inspects your model's type annotations to identify `datetime` and `Optional[datetime]` fields
+2. **Conversion**: For each datetime field, if the value is a string matching ISO 8601 format, it's converted to a Python `datetime` object
+3. **Validation**: Invalid datetime strings raise clear validation errors
+4. **Storage**: Converted datetime objects are stored as proper TIMESTAMP types in the database
+
+### Error Handling
+
+If an invalid datetime string is provided:
+
+```python
+# Invalid datetime format
+workflow.add_node("UserCreateNode", "create_user", {
+    "name": "Test",
+    "registration_date": "invalid-date"  # ❌ Will raise validation error
+})
+# Error: "Invalid datetime format for field 'registration_date'"
+```
+
+### Best Practices
+
+1. **Use PythonCodeNode for Dynamic Timestamps**
+   ```python
+   # ✅ Recommended - clear and maintainable
+   workflow.add_node("PythonCodeNode", "gen_ts", {
+       "code": "from datetime import datetime; result = {'ts': datetime.now().isoformat()}"
+   })
+   workflow.add_node("UserCreateNode", "create", {
+       "created_at": "{{gen_ts.ts}}"
+   })
+   ```
+
+2. **Convert External Data to ISO 8601**
+   ```python
+   # ✅ Convert to ISO format for automatic handling
+   workflow.add_node("PythonCodeNode", "normalize_data", {
+       "code": """
+   from datetime import datetime
+
+   # Parse various date formats and convert to ISO
+   result = {"normalized_date": datetime.strptime(input_date, '%m/%d/%Y').isoformat()}
+       """
+   })
+   ```
+
+3. **Use Timezone-Aware Timestamps**
+   ```python
+   # ✅ Include timezone information for clarity
+   workflow.add_node("PythonCodeNode", "gen_ts_tz", {
+       "code": """
+   from datetime import datetime, timezone
+   result = {"ts": datetime.now(timezone.utc).isoformat()}  # Includes 'Z'
+       """
+   })
+   ```
+
 ---
 
 ## Overview

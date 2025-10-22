@@ -45,7 +45,26 @@ print(result.summary)
 
 ## Reference Documentation
 
-### Getting Started
+### Comprehensive Guides (sdk-users/)
+
+For in-depth documentation, see `sdk-users/apps/kaizen/docs/`:
+
+**Core Guides:**
+- **[BaseAgent Architecture](../../../sdk-users/apps/kaizen/docs/guides/baseagent-architecture.md)** - Complete unified agent system guide
+- **[Multi-Agent Coordination](../../../sdk-users/apps/kaizen/docs/guides/multi-agent-coordination.md)** - Google A2A protocol, 5 coordination patterns
+- **[Signature Programming](../../../sdk-users/apps/kaizen/docs/guides/signature-programming.md)** - Complete signature system guide
+- **[Control Protocol Tutorial](../../../sdk-users/apps/kaizen/docs/guides/control-protocol-tutorial.md)** - Bidirectional agent ↔ client communication
+- **[Integration Patterns](../../../sdk-users/apps/kaizen/docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP integration
+
+**Reference Documentation:**
+- **[API Reference](../../../sdk-users/apps/kaizen/docs/reference/api-reference.md)** - Complete API documentation
+- **[Control Protocol API](../../../sdk-users/apps/kaizen/docs/reference/control-protocol-api.md)** - Full control protocol reference
+- **[Memory Patterns Guide](../../../sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md)** - Memory usage patterns
+- **[Strategy Selection Guide](../../../sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md)** - When to use which strategy
+- **[Configuration Guide](../../../sdk-users/apps/kaizen/docs/reference/configuration.md)** - All configuration options
+- **[Troubleshooting](../../../sdk-users/apps/kaizen/docs/reference/troubleshooting.md)** - Common issues and solutions
+
+### Quick Start (Skills)
 - **[kaizen-quickstart-template](kaizen-quickstart-template.md)** - Quick start guide with templates
 - **[kaizen-baseagent-quick](kaizen-baseagent-quick.md)** - BaseAgent fundamentals
 - **[kaizen-signatures](kaizen-signatures.md)** - Signature-based programming
@@ -71,7 +90,9 @@ print(result.summary)
 - **[kaizen-audio-processing](kaizen-audio-processing.md)** - Audio processing agents
 - **[kaizen-multimodal-pitfalls](kaizen-multimodal-pitfalls.md)** - Common pitfalls and solutions
 
-### Advanced Features
+### Advanced Features (v0.2.0+)
+- **[kaizen-control-protocol](kaizen-control-protocol.md)** - **NEW** Bidirectional agent ↔ client communication
+- **[kaizen-tool-calling](kaizen-tool-calling.md)** - **NEW** Autonomous tool execution with approval workflows
 - **[kaizen-streaming](kaizen-streaming.md)** - Streaming agent responses
 - **[kaizen-cost-tracking](kaizen-cost-tracking.md)** - Cost monitoring and optimization
 - **[kaizen-ux-helpers](kaizen-ux-helpers.md)** - UX enhancement utilities
