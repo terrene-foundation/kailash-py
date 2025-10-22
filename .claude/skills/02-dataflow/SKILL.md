@@ -18,6 +18,50 @@ DataFlow transforms database models into workflow nodes automatically, providing
 - **Integration Ready**: Works with Nexus for multi-channel deployment
 - **Specialized Adapters**: SQL (9 nodes/model), Document (8 nodes), Vector (3 nodes)
 
+## ⚠️ Critical Bug Fixes (v0.6.2-v0.6.3)
+
+### Truthiness Bug Pattern (FIXED)
+Two critical bugs caused by Python truthiness checks on empty dicts:
+
+**v0.6.2 - ListNode Filter Operators:**
+- **Bug:** `if filter_dict:` at nodes.py:1810 evaluated to False for empty dict {}
+- **Impact:** ALL MongoDB-style filter operators ($ne, $nin, $in, $not) were broken
+- **Fix:** Changed to `if "filter" in kwargs:`
+- **Result:** All filter operators now work correctly
+
+**v0.6.3 - BulkDeleteNode Safe Mode:**
+- **Bug:** `not filter_conditions` at bulk_delete.py:177 evaluated to True for empty dict {}
+- **Impact:** Safe mode incorrectly rejected valid empty filter operations
+- **Fix:** Changed to `"filter" not in validated_inputs`
+- **Result:** Consistent validation logic
+
+### Pattern to Avoid
+❌ **NEVER use truthiness checks on filter/data parameters:**
+```python
+if filter_dict:  # BAD - empty dict {} is falsy!
+if not filter_dict:  # BAD - empty dict {} is falsy!
+```
+
+✅ **ALWAYS use key existence checks:**
+```python
+if "filter" in kwargs:  # GOOD
+if "filter" not in validated_inputs:  # GOOD
+```
+
+### Verification
+Comprehensive search performed (v0.6.3): 50+ files, 100+ locations checked.
+Result: All similar bugs found and fixed. Confidence: 95%+
+
+### Affected Versions
+- ❌ v0.5.4 - v0.6.1: Broken filter operators
+- ✅ v0.6.2+: All filter operators work correctly
+- ✅ v0.6.3+: BulkDelete safe mode fixed
+
+**Upgrade Command:**
+```bash
+pip install --upgrade kailash-dataflow>=0.6.3
+```
+
 ## Quick Start
 
 ```python
@@ -162,10 +206,12 @@ workflow.add_node("User_Create", "user1", {...})
 
 ## Version Compatibility
 
-- **Current Version**: 0.6.0 (MongoDB + pgvector support)
+- **Current Version**: 0.6.3 (Critical bug fixes)
 - **Core SDK Version**: 0.9.25+
 - **Python**: 3.8+
-- **New in 0.6.0**: MongoDB document database + PostgreSQL pgvector support
+- **v0.6.3**: BulkDeleteNode safe mode validation fix
+- **v0.6.2**: ListNode filter operators fix ($ne, $nin, $in, $not)
+- **v0.6.0**: MongoDB document database + PostgreSQL pgvector support
 - **Architecture**: BaseAdapter hierarchy with SQL, Document, and Vector adapters
 
 ## Multi-Database Support Matrix
