@@ -36,7 +36,7 @@ The changelog has been reorganized into individual files for better management. 
 
 ### Core SDK Releases
 
-### [0.9.26] - 2025-10-22
+### [0.9.27] - 2025-10-22
 
 **CRITICAL: AsyncLocalRuntime Parameter Passing Fix**
 
