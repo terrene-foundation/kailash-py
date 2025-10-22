@@ -1,4 +1,4 @@
-"""Enhanced MCP Client implementation - temporary file for development."""
+"""Production MCP Client - Official Kailash SDK implementation with comprehensive MCP protocol support."""
 
 import asyncio
 import json
@@ -7,7 +7,10 @@ import os
 import time
 import uuid
 from contextlib import AsyncExitStack
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+
+if TYPE_CHECKING:
+    from mcp import ClientSession
 
 from .auth import AuthManager, AuthProvider, PermissionManager, RateLimiter
 from .errors import (
@@ -24,7 +27,42 @@ logger = logging.getLogger(__name__)
 
 
 class MCPClient:
-    """Enhanced MCP client using official Anthropic SDK with production features."""
+    """
+    Production MCP client for Model Context Protocol servers.
+
+    Provides comprehensive support for MCP protocol including:
+    - Tool discovery and execution
+    - Resource access (files, data, etc.)
+    - Prompt templates
+    - Multiple transport protocols (STDIO, SSE, HTTP, WebSocket)
+    - Authentication and authorization
+    - Connection pooling
+    - Retry strategies and circuit breakers
+    - Metrics collection
+
+    Examples:
+        >>> client = MCPClient()
+        >>>
+        >>> # Discover tools from a server
+        >>> tools = await client.discover_tools({"command": "uvx", "args": ["mcp-server-sqlite"]})
+        >>>
+        >>> # Call a tool
+        >>> result = await client.call_tool(
+        ...     {"command": "uvx", "args": ["mcp-server-sqlite"]},
+        ...     "query",
+        ...     {"sql": "SELECT * FROM users"}
+        ... )
+        >>>
+        >>> # Work with resources
+        >>> async with client._connect_stdio(...) as session:
+        ...     resources = await client.list_resources(session)
+        ...     content = await client.read_resource(session, "file:///path/to/file.txt")
+        >>>
+        >>> # Work with prompts
+        >>> async with client._connect_stdio(...) as session:
+        ...     prompts = await client.list_prompts(session)
+        ...     prompt = await client.get_prompt(session, "greeting", {"name": "Alice"})
+    """
 
     def __init__(
         self,
@@ -54,6 +92,9 @@ class MCPClient:
             connection_timeout = connection_timeout or config.get(
                 "connection_timeout", 30.0
             )
+
+        # Logger
+        self.logger = logging.getLogger(__name__)
 
         # Connection state
         self.connected = False
@@ -669,27 +710,6 @@ class MCPClient:
             raise
 
     # Additional enhanced methods
-    async def list_resources(
-        self,
-        server_config: Union[str, Dict[str, Any]],
-        force_refresh: bool = False,
-        timeout: Optional[float] = None,
-    ) -> List[Dict[str, Any]]:
-        """List resources with enhanced features."""
-        # Similar implementation to discover_tools but for resources
-        # ... (implementation similar to discover_tools)
-        pass
-
-    async def read_resource(
-        self,
-        server_config: Union[str, Dict[str, Any]],
-        uri: str,
-        timeout: Optional[float] = None,
-    ) -> Dict[str, Any]:
-        """Read resource with enhanced features."""
-        # ... (implementation similar to call_tool)
-        pass
-
     async def health_check(
         self, server_config: Union[str, Dict[str, Any]]
     ) -> Dict[str, Any]:
@@ -859,6 +879,146 @@ class MCPClient:
                 "timestamp": str(time.time()),
             },
         }
+
+    # Session-based helper methods for resources and prompts
+    async def list_resources(self, session: "ClientSession") -> list[dict[str, Any]]:
+        """
+        List available resources from an MCP server.
+
+        Args:
+            session: Active MCP client session
+
+        Returns:
+            List of resource definitions
+        """
+        try:
+            result = await session.list_resources()
+            resources = []
+
+            for resource in result.resources:
+                resources.append(
+                    {
+                        "uri": resource.uri,
+                        "name": resource.name,
+                        "description": resource.description,
+                        "mimeType": resource.mimeType,
+                    }
+                )
+
+            return resources
+
+        except Exception as e:
+            self.logger.error(f"Failed to list resources: {e}")
+            return []
+
+    async def read_resource(self, session: "ClientSession", uri: str) -> Any:
+        """
+        Read a specific resource from an MCP server.
+
+        Args:
+            session: Active MCP client session
+            uri: Resource URI
+
+        Returns:
+            Resource content
+        """
+        try:
+            result = await session.read_resource(uri=uri)
+
+            # Extract content
+            if hasattr(result, "contents"):
+                content = []
+                for item in result.contents:
+                    if hasattr(item, "text"):
+                        content.append({"type": "text", "text": item.text})
+                    elif hasattr(item, "blob"):
+                        content.append({"type": "blob", "data": item.blob})
+                    else:
+                        content.append(str(item))
+                return content
+            else:
+                return str(result)
+
+        except Exception as e:
+            self.logger.error(f"Failed to read resource '{uri}': {e}")
+            raise
+
+    async def list_prompts(self, session: "ClientSession") -> list[dict[str, Any]]:
+        """
+        List available prompts from an MCP server.
+
+        Args:
+            session: Active MCP client session
+
+        Returns:
+            List of prompt definitions
+        """
+        try:
+            result = await session.list_prompts()
+            prompts = []
+
+            for prompt in result.prompts:
+                prompt_dict = {
+                    "name": prompt.name,
+                    "description": prompt.description,
+                    "arguments": [],
+                }
+
+                if hasattr(prompt, "arguments"):
+                    for arg in prompt.arguments:
+                        prompt_dict["arguments"].append(
+                            {
+                                "name": arg.name,
+                                "description": arg.description,
+                                "required": arg.required,
+                            }
+                        )
+
+                prompts.append(prompt_dict)
+
+            return prompts
+
+        except Exception as e:
+            self.logger.error(f"Failed to list prompts: {e}")
+            return []
+
+    async def get_prompt(
+        self, session: "ClientSession", name: str, arguments: dict[str, Any]
+    ) -> dict[str, Any]:
+        """
+        Get a prompt from an MCP server.
+
+        Args:
+            session: Active MCP client session
+            name: Prompt name
+            arguments: Prompt arguments
+
+        Returns:
+            Prompt with messages
+        """
+        try:
+            result = await session.get_prompt(name=name, arguments=arguments)
+
+            # Extract messages
+            messages = []
+            if hasattr(result, "messages"):
+                for msg in result.messages:
+                    messages.append(
+                        {
+                            "role": msg.role,
+                            "content": (
+                                msg.content.text
+                                if hasattr(msg.content, "text")
+                                else str(msg.content)
+                            ),
+                        }
+                    )
+
+            return {"name": name, "messages": messages, "arguments": arguments}
+
+        except Exception as e:
+            self.logger.error(f"Failed to get prompt '{name}': {e}")
+            raise
 
     # WebSocket Connection Pooling Methods
     async def _get_or_create_websocket_connection(

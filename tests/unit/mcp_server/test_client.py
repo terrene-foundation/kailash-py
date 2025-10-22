@@ -701,22 +701,5 @@ class TestMCPClientUnimplementedMethods:
         """Set up test fixtures."""
         self.client = MCPClient()
 
-    @pytest.mark.asyncio
-    async def test_list_resources(self):
-        """Test list_resources method (unimplemented)."""
-        server_config = {"transport": "stdio", "command": "python"}
-
-        result = await self.client.list_resources(server_config)
-
-        # Should return None (not implemented)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_read_resource(self):
-        """Test read_resource method (unimplemented)."""
-        server_config = {"transport": "stdio", "command": "python"}
-
-        result = await self.client.read_resource(server_config, "test://resource")
-
-        # Should return None (not implemented)
-        assert result is None
+    # Note: list_resources and read_resource are now session-based methods
+    # Tests for these methods are in test_client_resources_prompts.py

@@ -87,7 +87,7 @@ from kaizen.agents import (
 
 ### Tool Calling (NEW in v0.2.0)
 
-**Autonomous tool execution with approval workflows:**
+**Autonomous tool execution with approval workflows - Universal Integration (All 25 Agents):**
 ```python
 from kaizen.core.base_agent import BaseAgent
 from kaizen.tools import ToolRegistry
@@ -97,11 +97,12 @@ from kaizen.tools.builtin import register_builtin_tools
 registry = ToolRegistry()
 register_builtin_tools(registry)  # 12 builtin tools
 
-# Create agent with tool support
+# Works with ALL 25 agents (ADR-016 complete)
 agent = BaseAgent(
     config=config,
     signature=signature,
-    tool_registry=registry  # Enable tool calling
+    tool_registry=registry,  # Enable tool calling
+    mcp_servers=mcp_servers  # Optional MCP integration
 )
 
 # Discover tools
@@ -122,6 +123,8 @@ results = await agent.execute_tool_chain([
 - **HTTP (4)**: http_get, http_post, http_put, http_delete
 - **Bash (1)**: bash_command
 - **Web (2)**: fetch_url, extract_links
+
+**Universal Support**: All 25 agents (autonomous, single-shot, coordination) now support tool_registry and mcp_servers parameters (100% backward compatible)
 
 ### Control Protocol (NEW in v0.2.0)
 

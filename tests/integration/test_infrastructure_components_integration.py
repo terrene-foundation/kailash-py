@@ -23,6 +23,11 @@ import time
 from typing import Any, Dict, List
 
 import pytest
+
+from kailash.runtime.local import LocalRuntime
+
+# Import Core SDK components for real integration
+from kailash.workflow.builder import WorkflowBuilder
 from tests.utils import test_fixtures
 from tests.utils.mock_providers import (
     MockLLMProvider,
@@ -33,11 +38,6 @@ from tests.utils.mock_providers import (
 
 # Import test infrastructure components
 from tests.utils.performance_tracker import PerformanceReport, PerformanceTracker
-
-from kailash.runtime.local import LocalRuntime
-
-# Import Core SDK components for real integration
-from kailash.workflow.builder import WorkflowBuilder
 
 # Test markers
 pytestmark = pytest.mark.integration

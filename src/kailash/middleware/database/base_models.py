@@ -8,7 +8,13 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, Column, DateTime
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+)
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy import (
     Float,
