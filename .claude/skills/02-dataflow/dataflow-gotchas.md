@@ -25,7 +25,62 @@ Common misunderstandings and mistakes when using DataFlow, with solutions.
 
 ## Critical Gotchas
 
-### 0. Primary Key MUST Be Named 'id' ⚠️ HIGH IMPACT
+### 0. Empty Dict Truthiness Bug (Fixed in v0.6.2-v0.6.3) ⚠️ CRITICAL
+
+#### The Bug
+Python treats empty dict `{}` as falsy, causing incorrect behavior in filter operations.
+
+#### Symptoms (Before Fix)
+```python
+# This would return ALL records instead of filtered records (v0.6.1 and earlier)
+workflow.add_node("UserListNode", "query", {
+    "filter": {"status": {"$ne": "inactive"}}
+})
+# Expected: 2 users (active only)
+# Actual (v0.6.1 and earlier): 3 users (ALL records)
+```
+
+#### The Fix (v0.6.2+)
+✅ **Upgrade to DataFlow v0.6.2 or later**
+```bash
+pip install --upgrade kailash-dataflow>=0.6.3
+```
+
+✅ All filter operators now work correctly:
+- $ne (not equal)
+- $nin (not in)
+- $in (in)
+- $not (logical NOT)
+- All comparison operators ($gt, $lt, $gte, $lte)
+
+#### Prevention Pattern
+When checking if a parameter was provided:
+```python
+# ❌ WRONG - treats empty dict as "not provided"
+if filter_dict:
+    process_filter()
+
+# ✅ CORRECT - checks if key exists
+if "filter" in kwargs:
+    process_filter()
+```
+
+#### Root Cause
+Two locations had truthiness bugs:
+1. **v0.6.2 fix**: ListNode at nodes.py:1810 - `if filter_dict:` → `if "filter" in kwargs:`
+2. **v0.6.3 fix**: BulkDeleteNode at bulk_delete.py:177 - `not filter_conditions` → `"filter" not in validated_inputs`
+
+#### Affected Versions
+- ❌ v0.5.4 - v0.6.1: Broken
+- ✅ v0.6.2+: Filter operators fixed
+- ✅ v0.6.3+: BulkDelete safe mode fixed
+
+#### Impact
+**High**: All query filtering was broken in v0.6.1 and earlier. Upgrade immediately if using filters.
+
+---
+
+### 0.1. Primary Key MUST Be Named 'id' ⚠️ HIGH IMPACT
 
 ```python
 # WRONG - Custom primary key names FAIL
@@ -329,6 +384,8 @@ Use `dataflow-specialist` when:
 
 ## Version Notes
 
+- **v0.6.3**: BulkDeleteNode safe mode validation fix (truthiness bug)
+- **v0.6.2**: ListNode filter operators fix ($ne, $nin, $in, $not - truthiness bug)
 - **v0.4.0+**: String ID support, TEXT type, datetime fix, multi-instance isolation
 - **v0.9.4+**: Password special character support
 - **v0.9.25+**: Threading fixes for Docker
