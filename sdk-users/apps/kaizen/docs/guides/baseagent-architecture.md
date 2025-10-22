@@ -88,7 +88,7 @@ class MyAgent(BaseAgent):
             config=config,  # Auto-converted to BaseAgentConfig
             signature=MySignature()
         )
-    
+
     def process(self, user_input: str) -> dict:
         result = self.run(input_field=user_input)
         return result
@@ -171,7 +171,7 @@ class MyDomainConfig:
     model: str = "gpt-4"
     temperature: float = 0.7
     max_tokens: int = 500
-    
+
     # Domain-specific fields (not extracted):
     my_custom_field: str = "value"
 
@@ -298,12 +298,12 @@ class InteractiveAgent(BaseAgent):
             "Which option?",
             ["Fast", "Accurate", "Balanced"]
         )
-        
+
         approved = await self.request_approval(
             "Delete temp files",
             {"count": 10}
         )
-        
+
         await self.report_progress("Processing...", 50.0)
 ```
 
@@ -460,13 +460,13 @@ class MultiStepAgent(BaseAgent):
     async def process(self, task: str) -> dict:
         # Step 1: Plan
         plan_result = self.run(task=task, step="plan")
-        
+
         # Step 2: Execute
         exec_result = self.run(plan=plan_result["plan"], step="execute")
-        
+
         # Step 3: Verify
         verify_result = self.run(execution=exec_result, step="verify")
-        
+
         return verify_result
 ```
 
@@ -483,7 +483,7 @@ class AutonomousAgent(BaseAgent):
             strategy=MultiCycleStrategy(),  # Explicit for autonomous
             tool_registry=tool_registry
         )
-    
+
     def solve(self, problem: str) -> dict:
         return self.run(problem=problem)
         # Automatically loops with tool calls until solved
