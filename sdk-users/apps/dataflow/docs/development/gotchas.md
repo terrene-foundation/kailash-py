@@ -2,6 +2,34 @@
 
 This guide covers the most common mistakes developers make with DataFlow and how to fix them quickly. Following these patterns can reduce debugging time from 4+ hours to less than 10 minutes.
 
+## ⚠️ Critical Bug Fix Alert (v0.6.2-v0.6.3)
+
+### Filter Operators Bug (FIXED in v0.6.2)
+
+**Symptom:**
+```python
+# Expected: Returns 2 users (active only)
+# Actual (v0.6.1 and earlier): Returns ALL 3 users
+workflow.add_node("UserListNode", "query", {
+    "filter": {"status": {"$ne": "inactive"}}
+})
+```
+
+**Cause:** Python truthiness bug - `if filter_dict:` treated empty dict `{}` as False
+
+**Fix:** Upgrade to v0.6.2+
+```bash
+pip install --upgrade kailash-dataflow>=0.6.3
+```
+
+**Affected Operators:** $ne, $nin, $in, $not, and all comparison operators were broken in v0.6.1 and earlier.
+
+**Affected Versions:**
+- ❌ v0.5.4 - v0.6.1: Broken
+- ✅ v0.6.2+: All operators work correctly
+
+---
+
 ## Table of Contents
 
 1. [CreateNode: Wrapping Fields in 'data'](#error-1-createnode-wrapping-fields-in-data)
