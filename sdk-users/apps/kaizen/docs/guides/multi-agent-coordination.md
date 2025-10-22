@@ -6,7 +6,7 @@ Kaizen provides production-ready multi-agent coordination using Google's Agent-t
 
 **Key Features:**
 - **Semantic Matching**: Agents selected by capability, not hardcoded rules
-- **A2A Protocol**: 100% compliant with Google A2A specification  
+- **A2A Protocol**: 100% compliant with Google A2A specification
 - **Automatic Discovery**: BaseAgent auto-generates capability cards
 - **5 Coordination Patterns**: Supervisor-Worker, Consensus, Debate, Sequential, Handoff
 - **Shared Memory**: Multi-agent context sharing via SharedMemoryPool
@@ -434,11 +434,11 @@ def test_supervisor_worker_pattern():
     # Use mock agents
     supervisor = MockSupervisorAgent()
     workers = [MockWorkerAgent(id=i) for i in range(3)]
-    
+
     pattern = SupervisorWorkerPattern(
         supervisor, workers, coordinator=None, shared_pool=None
     )
-    
+
     result = pattern.execute_task("test task")
     assert result["status"] == "completed"
 ```
@@ -450,12 +450,12 @@ def test_supervisor_worker_pattern():
 async def test_real_multi_agent():
     # Use real agents with mock LLM provider
     shared_pool = SharedMemoryPool()
-    
+
     agent1 = SimpleQAAgent(TestConfig(llm_provider="mock"), shared_memory=shared_pool)
     agent2 = CodeGenerationAgent(TestConfig(llm_provider="mock"), shared_memory=shared_pool)
-    
+
     pattern = SupervisorWorkerPattern(supervisor, [agent1, agent2], coordinator, shared_pool)
-    
+
     result = pattern.execute_task("Generate Python code")
     assert "code" in result
 ```
