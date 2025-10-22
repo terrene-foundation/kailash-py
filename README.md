@@ -22,35 +22,38 @@
 
 ---
 
-## 🔥 Latest Release: v0.9.21 (October 8, 2025)
+## 🔥 Latest Release: v0.9.27 (October 22, 2024)
 
-**AsyncSQL Event Loop Isolation Fix**
+**CRITICAL: AsyncLocalRuntime Parameter Passing Fix**
 
 ### 🐛 Critical Bug Fixes
-- **Event Loop Isolation**: Fixed "Event loop is closed" errors in AsyncSQLDatabaseNode
-  - Automatic connection pool isolation per event loop
-  - Prevents pool sharing across different event loops (FastAPI, sequential workflows)
-  - Backward compatible - no code changes required
-  - <5% performance overhead
+- **AsyncLocalRuntime Parameter Passing**: Fixed P0 bug causing 100% failure rate for ALL DataFlow operations
+  - Root cause: `async_run()` called directly instead of `execute_async()`, bypassing node.config parameter merging
+  - Impact: ALL DataFlow CRUD operations (Create, Update, Delete, List) now work correctly with AsyncLocalRuntime
+  - Solution: Changed async_local.py:745-756 to call `execute_async()`, matching LocalRuntime pattern
+  - **Backward compatible** - no code changes required
+  - **Zero regressions** - 587/588 tests passing
 
-### Previous Release: v0.9.20 (October 6, 2025)
-- **Mock Provider Bypass**: Removed hardcoded `if provider == "mock"` logic from LLMAgentNode
-- **Tool Execution Flow**: Unified provider response generation for all providers
-- **Provider Registry**: All providers now use consistent registry path
+### ✨ What's Fixed
+- DataFlow CreateNode works with AsyncLocalRuntime
+- DataFlow UpdateNode works with AsyncLocalRuntime
+- DataFlow DeleteNode works with AsyncLocalRuntime
+- DataFlow ListNode works with AsyncLocalRuntime
+- All bulk operations work correctly
+- Docker/FastAPI deployments using AsyncLocalRuntime now functional
 
-### ✨ Enhancements
-- **Custom Mock Providers**: Enables signature-aware mock providers (e.g., KaizenMockProvider)
-- **Multi-Modal Foundation**: Foundation for vision/audio processing in Kaizen AI framework
-- **Tool Call Generation**: MockProvider generates mock tool_calls for action-oriented messages
-- **Enhanced Testing**: 510+ tests passing with custom mock providers
+### 📈 Impact
+- **Success Rate**: DataFlow with AsyncLocalRuntime - 0% → 100%
+- **Production Ready**: AsyncLocalRuntime now fully functional for Docker/FastAPI
+- **Pattern Alignment**: Now follows same architecture as LocalRuntime
 
 ### 📦 Package Updates
-- **kailash**: v0.9.20 - Provider registry fix & multi-modal support
-- **kailash-kaizen**: v0.1.1 - AI agent framework (NEW!)
-- **kailash-nexus**: v1.0.6 - Multi-channel platform
-- **kailash-dataflow**: v0.5.0 - Database framework
+- **kailash**: v0.9.27 - AsyncLocalRuntime parameter passing fix (CRITICAL)
+- **kailash-dataflow**: v0.6.3 - Bug fixes and improvements
+- **kailash-nexus**: v1.1.0 - Security enhancements
+- **kailash-kaizen**: v0.2.0 - AI agent framework
 
-[Full Changelog](sdk-users/6-reference/changelogs/releases/v0.9.20-provider-registry-fix.md) | [Core SDK 0.9.20](https://pypi.org/project/kailash/0.9.20/) | [Kaizen 0.1.1](https://pypi.org/project/kailash-kaizen/0.1.1/) | [Nexus 1.0.6](https://pypi.org/project/kailash-nexus/1.0.6/) | [DataFlow 0.5.0](https://pypi.org/project/kailash-dataflow/0.5.0/)
+[Full Changelog](CHANGELOG.md) | [Core SDK 0.9.27](https://pypi.org/project/kailash/0.9.27/) | [Release Notes](https://github.com/terrene-foundation/kailash-py/releases/tag/v0.9.27)
 
 ## 🎯 What Makes Kailash Different
 

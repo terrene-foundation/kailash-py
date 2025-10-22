@@ -24,7 +24,6 @@ from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import networkx as nx
-
 from kailash.nodes.base import Node
 from kailash.nodes.base_async import AsyncNode
 from kailash.resources import ResourceRegistry
@@ -744,13 +743,16 @@ class AsyncLocalRuntime(LocalRuntime):
 
                 # Execute async node
                 if isinstance(node_instance, AsyncNode):
-                    # Pass resource registry if available
+                    # Add resource registry to inputs if available
+                    # (execute_async will merge node.config and validate inputs)
                     if context.resource_registry:
-                        result = await node_instance.async_run(
-                            resource_registry=context.resource_registry, **inputs
-                        )
-                    else:
-                        result = await node_instance.async_run(**inputs)
+                        inputs["resource_registry"] = context.resource_registry
+
+                    # BUGFIX v0.9.26: Call execute_async() instead of async_run()
+                    # execute_async() merges node.config with runtime inputs (base_async.py:190)
+                    # This matches LocalRuntime's pattern (local.py:1362)
+                    # Previous behavior: async_run() was called directly, bypassing config merge
+                    result = await node_instance.execute_async(**inputs)
                 else:
                     # Shouldn't happen in fully async workflow, but handle gracefully
                     result = await self._execute_sync_node_in_thread(
