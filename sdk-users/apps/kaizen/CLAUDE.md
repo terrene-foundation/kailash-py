@@ -189,13 +189,21 @@ class MyAgent(BaseAgent):
 
 ### Core Guides
 - **[Signature Programming](docs/guides/signature-programming.md)** - Type-safe I/O with Signatures
-- **[BaseAgent Architecture](docs/guides/baseagent-architecture.md)** - Unified agent system
-- **[Multi-Modal Processing](docs/guides/multi-modal.md)** - Vision and audio agents
-- **[Multi-Agent Coordination](docs/guides/multi-agent.md)** - Google A2A protocol patterns
+- **[BaseAgent Architecture](docs/guides/baseagent-architecture.md)** - Unified agent system with strategies, memory, tools
+- **[Multi-Agent Coordination](docs/guides/multi-agent-coordination.md)** - Google A2A protocol patterns
+- **[Integration Patterns](docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP integration
+- **[Control Protocol Tutorial](docs/guides/control-protocol-tutorial.md)** - CLI → Web migration guide
+- **[Custom Transports](docs/guides/custom-transports.md)** - Build custom transport layers
+- **[Migrating to Control Protocol](docs/guides/migrating-to-control-protocol.md)** - Migration guide
+- **[Ollama Quickstart](docs/guides/ollama-quickstart.md)** - Local LLM setup
 
 ### Reference
 - **[API Reference](docs/reference/api-reference.md)** - Complete API documentation
-- **[Configuration Guide](docs/reference/configuration.md)** - All config options
+- **[Control Protocol API](docs/reference/control-protocol-api.md)** - Bidirectional communication API
+- **[Multi-Modal API](docs/reference/multi-modal-api-reference.md)** - Vision, audio APIs with common pitfalls
+- **[Memory Patterns Guide](docs/reference/memory-patterns-guide.md)** - Memory usage patterns
+- **[Strategy Selection Guide](docs/reference/strategy-selection-guide.md)** - When to use which strategy
+- **[Configuration Guide](docs/reference/configuration.md)** - Environment configuration
 - **[Troubleshooting](docs/reference/troubleshooting.md)** - Common issues
 
 ### Examples
