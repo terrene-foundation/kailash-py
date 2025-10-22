@@ -48,23 +48,42 @@ Expert in Kaizen AI framework v0.2.0 - signature-based programming, BaseAgent ar
 ## Documentation Navigation
 
 ### Primary References (SDK Users)
-- **[CLAUDE.md](../sdk-users/apps/kaizen/CLAUDE.md)** - Quick reference for using Kaizen
-- **[README.md](../sdk-users/apps/kaizen/README.md)** - Complete Kaizen user guide
-- **[Examples](../apps/kailash-kaizen/examples/)** - 35+ working implementations
+- **[CLAUDE.md](../../../sdk-users/apps/kaizen/CLAUDE.md)** - Quick reference for using Kaizen
+- **[README.md](../../../sdk-users/apps/kaizen/README.md)** - Complete Kaizen user guide
+- **[Examples](../../examples/)** - 35+ working implementations
 
 ### Critical API References
-- **[Multi-Modal API](../sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md)** - Vision, audio APIs with common pitfalls
-- **[Quickstart](../sdk-users/apps/kaizen/docs/getting-started/quickstart.md)** - 5-minute tutorial
-- **[Troubleshooting](../sdk-users/apps/kaizen/docs/reference/troubleshooting.md)** - Common errors and solutions
-- **[Integration Patterns](../sdk-users/apps/kaizen/docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP integration
+- **[API Reference](../../../sdk-users/apps/kaizen/docs/reference/api-reference.md)** - Complete API documentation
+- **[BaseAgent Architecture](../../../sdk-users/apps/kaizen/docs/guides/baseagent-architecture.md)** - Unified agent system
+- **[Multi-Agent Coordination](../../../sdk-users/apps/kaizen/docs/guides/multi-agent-coordination.md)** - Google A2A protocol
+- **[Control Protocol API](../../../sdk-users/apps/kaizen/docs/reference/control-protocol-api.md)** - Bidirectional communication
+- **[Multi-Modal API](../../../sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md)** - Vision, audio APIs
+- **[Memory Patterns](../../../sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md)** - Memory usage patterns
+- **[Strategy Selection](../../../sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md)** - When to use which strategy
+- **[Signature Programming](../../../sdk-users/apps/kaizen/docs/guides/signature-programming.md)** - Type-safe I/O
+- **[Integration Patterns](../../../sdk-users/apps/kaizen/docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP
+- **[Troubleshooting](../../../sdk-users/apps/kaizen/docs/reference/troubleshooting.md)** - Common errors
 
 ### By Use Case
 | Need | Documentation |
 |------|---------------|
 | Getting started | `sdk-users/apps/kaizen/docs/getting-started/quickstart.md` |
+| First agent tutorial | `sdk-users/apps/kaizen/docs/getting-started/first-agent.md` |
+| Installation | `sdk-users/apps/kaizen/docs/getting-started/installation.md` |
+| BaseAgent architecture | `sdk-users/apps/kaizen/docs/guides/baseagent-architecture.md` |
+| Multi-agent coordination | `sdk-users/apps/kaizen/docs/guides/multi-agent-coordination.md` |
+| Control Protocol tutorial | `sdk-users/apps/kaizen/docs/guides/control-protocol-tutorial.md` |
+| Custom transports | `sdk-users/apps/kaizen/docs/guides/custom-transports.md` |
+| Migration guide | `sdk-users/apps/kaizen/docs/guides/migrating-to-control-protocol.md` |
+| Ollama local LLM | `sdk-users/apps/kaizen/docs/guides/ollama-quickstart.md` |
 | Multi-modal (vision/audio) | `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` |
+| Memory patterns | `sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md` |
+| Strategy selection | `sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md` |
+| Configuration | `sdk-users/apps/kaizen/docs/reference/configuration.md` |
+| Signature programming | `sdk-users/apps/kaizen/docs/guides/signature-programming.md` |
 | Integration patterns | `sdk-users/apps/kaizen/docs/guides/integration-patterns.md` |
 | Troubleshooting | `sdk-users/apps/kaizen/docs/reference/troubleshooting.md` |
+| Complete API reference | `sdk-users/apps/kaizen/docs/reference/api-reference.md` |
 | Complete guide | `sdk-users/apps/kaizen/README.md` |
 | Working examples | `apps/kailash-kaizen/examples/` |
 
