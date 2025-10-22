@@ -30,12 +30,6 @@ from typing import Any, Dict, List
 
 import pytest
 import pytest_asyncio
-from tests.utils.docker_config import (
-    REDIS_CONFIG,
-    get_postgres_connection_string,
-    skip_if_no_docker,
-    skip_if_no_postgres,
-)
 
 # SDK imports for real functionality
 from kailash.nodes.ai import LLMAgentNode
@@ -43,6 +37,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import JSONReaderNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+from tests.utils.docker_config import (
+    REDIS_CONFIG,
+    get_postgres_connection_string,
+    skip_if_no_docker,
+    skip_if_no_postgres,
+)
 
 # MCP Platform imports - TODO: Fix module path
 # from apps.mcp_platform.core.core.gateway import MCPGateway

@@ -26,6 +26,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List
 
 import pytest
+
 from tests.performance.load_test_framework import (
     LoadTestConfig,
     LoadTestFramework,

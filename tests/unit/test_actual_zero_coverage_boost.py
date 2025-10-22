@@ -82,18 +82,6 @@ class TestActualZeroCoverageModules:
             # Module might not be available
             assert True
 
-    def test_client_new_coverage(self):
-        """Test src/kailash/mcp_server/client_new.py (0% coverage)."""
-        try:
-            from kailash.mcp_server.client_new import NewClient
-
-            # Test class exists
-            assert NewClient is not None
-            assert hasattr(NewClient, "__init__")
-        except ImportError:
-            # Module might not be available
-            assert True
-
     def test_database_base_coverage(self):
         """Test src/kailash/middleware/database/base.py (0% coverage)."""
         try:

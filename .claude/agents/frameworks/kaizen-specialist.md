@@ -102,6 +102,12 @@ This section focuses on **enterprise AI architecture** and **advanced agent patt
 
 **Danger-Level Approval Workflows**: SAFE (auto-approved) → LOW → MEDIUM → HIGH → CRITICAL
 
+**Universal Integration (ADR-016)**: All 25 agents now support tool_registry parameter
+- ✅ 3 Autonomous: ReActAgent, RAGResearchAgent, CodeGenerationAgent (TODO-162)
+- ✅ 12 Single-Shot Specialized: SimpleQA, ChainOfThought, StreamingChat, SelfReflection, VisionAgent, TranscriptionAgent, MultiModalAgent, ResilientAgent, MemoryAgent, BatchProcessingAgent, HumanApprovalAgent, SupervisorAgent, CoordinatorAgent (TODO-165)
+- ✅ 6 Coordination: ProponentAgent, OpponentAgent, JudgeAgent, ProposerAgent, VoterAgent, AggregatorAgent (TODO-165)
+- ✅ 4 Sequential/Handoff: SequentialAgent, HandoffAgent patterns (existing support)
+
 ```python
 from kaizen.core.base_agent import BaseAgent
 from kaizen.tools import ToolRegistry
@@ -111,10 +117,12 @@ from kaizen.tools.builtin import register_builtin_tools
 registry = ToolRegistry()
 register_builtin_tools(registry)
 
+# Works with ALL agents now
 agent = BaseAgent(
     config=config,
     signature=signature,
-    tool_registry=registry  # Enables tool calling
+    tool_registry=registry,  # Enables tool calling
+    mcp_servers=mcp_servers  # Optional MCP integration
 )
 
 # Execute tool with approval workflow
@@ -135,9 +143,10 @@ results = await agent.execute_tool_chain([
 - 100% backward compatible (tool support is optional)
 - Automatic ToolExecutor creation when `tool_registry` provided
 - Control Protocol integration for approval workflows
-- 228/228 tests passing (100% coverage)
+- Universal integration across all 25 agents (ADR-016)
+- 286/286 tests passing (100% coverage)
 
-**Reference**: `docs/features/baseagent-tool-integration.md`, ADR-012, `examples/autonomy/tools/`
+**Reference**: `docs/features/baseagent-tool-integration.md`, ADR-012, ADR-016, `examples/autonomy/tools/`
 
 ### Control Protocol (v0.2.0 - Bidirectional Communication)
 
@@ -360,13 +369,16 @@ def test_qa_agent(simple_qa_example, assert_async_strategy, test_queries):
 - ✅ Let AsyncSingleShotStrategy be default (don't specify)
 - ✅ Call `self.run()` (sync interface), not `strategy.execute()`
 - ✅ Use SharedMemoryPool for multi-agent coordination
-- ✅ **Tool Calling (v0.2.0)**: Enable via `tool_registry` parameter (opt-in)
+- ✅ **Tool Calling (v0.2.0)**: Enable via `tool_registry` parameter (opt-in, all 25 agents support it)
+- ✅ **MCP Integration (v0.2.0)**: Use `mcp_servers` parameter for MCP server integration
 - ✅ **Control Protocol (v0.2.0)**: Use `control_protocol` parameter for bidirectional communication
 - ✅ **Multi-Modal**: Use config objects for OllamaVisionProvider
 - ✅ **Multi-Modal**: Use 'question' for VisionAgent, 'prompt' for providers
 - ✅ **Multi-Modal**: Pass file paths, not base64 data URLs
 - ✅ **Testing**: Validate with real models, not just mocks
+- ✅ **Testing**: Use `llm_provider="mock"` explicitly in unit tests
 - ✅ Use standardized test fixtures from `conftest.py`
+- ✅ **Systematic Validation**: Verify task completion with concrete evidence before marking complete
 
 ### NEVER
 - ❌ Manually create BaseAgentConfig (use auto-extraction)
@@ -407,6 +419,39 @@ data = self.extract_list(result, "actual_key_name", default=[])
 ### Multi-Modal API Errors
 **See**: `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` - Common Pitfalls section
 
+## 🎓 Recent Completions
+
+### Universal Tool Integration - TODO-165 (2025-10-22)
+- ✅ **10 Agents Updated**: Added tool_registry + mcp_servers parameters to all remaining agents
+  - 4 Specialized: ResilientAgent, MemoryAgent, BatchProcessingAgent, HumanApprovalAgent
+  - 6 Coordination: ProponentAgent, OpponentAgent, JudgeAgent, ProposerAgent, VoterAgent, AggregatorAgent
+- ✅ **Comprehensive Testing**: 286 tests passing (27 integration + 259 regression)
+- ✅ **100% Backward Compatible**: All new parameters optional
+- ✅ **Bug Fixes**: Fixed supervisor_worker string task handling (38 tests), mock provider issues (18 tests)
+- ✅ **Systematic Validation**: Evidence-based task verification with todo-manager and gh-manager
+- 📄 See: ADR-016, `todos/completed/TODO-165-COMPLETED-2025-10-22.md`, GitHub issue #437
+
+### Tool Calling Prompt Integration - TODO-162 (2025-10-22)
+- ✅ **3 Autonomous Agents**: ReActAgent, RAGResearchAgent, CodeGenerationAgent
+- ✅ **Tool Documentation in Prompts**: LLMs now receive complete tool documentation
+- ✅ **116 Tests Passing**: 100% test coverage across all autonomous agents
+- ✅ **Production Ready**: Enables proper tool discovery and autonomous multi-cycle execution
+- 📄 See: ADR-016, GitHub issue #435
+
+### Agent Classification Review - TODO-164 (2025-10-22)
+- ✅ **10 Agents Reviewed**: All correctly classified as single-shot
+- ✅ **Key Finding**: Pattern-level iteration ≠ Agent-level autonomy
+- ✅ **Zero Code Changes**: All agents already correctly designed
+- 📄 See: `docs/reports/TODO-164-AGENT-REVIEW-SUMMARY.md`, GitHub issue #436
+
+### BaseAgent Tool Integration (2025-10-20)
+- ✅ 12 builtin tools (file, HTTP, bash, web operations)
+- ✅ Autonomous tool calling with approval workflows
+- ✅ 50 new tests (35 Tier 1 unit + 15 Tier 2 integration)
+- ✅ 100% backward compatible (182/182 total tests passing)
+- ✅ Comprehensive documentation (667-line guide + 3 examples)
+- 📄 See: `docs/features/baseagent-tool-integration.md`, ADR-012
+
 ## Examples Directory
 
 **Location**: `apps/kailash-kaizen/examples/`
@@ -427,12 +472,14 @@ data = self.extract_list(result, "actual_key_name", default=[])
 - ✅ Designing multi-agent coordination
 - ✅ **Building autonomous agents with tool calling (v0.2.0)**
 - ✅ **Implementing interactive agents with Control Protocol (v0.2.0)**
+- ✅ **Universal tool integration across all agents (ADR-016)**
 - ✅ Building multi-modal workflows (vision/audio/text)
 - ✅ Optimizing agent prompts and signatures
-- ✅ Writing agent tests with fixtures
-- ✅ Debugging agent execution
+- ✅ Writing agent tests with fixtures (use `llm_provider="mock"` for unit tests)
+- ✅ Debugging agent execution and test failures
 - ✅ Implementing RAG, CoT, or ReAct patterns
 - ✅ Cost tracking and budget management
+- ✅ **Systematic validation**: Evidence-based task completion verification
 
 ### Coordinate With
 - **pattern-expert** - Core SDK workflow patterns
