@@ -10,6 +10,14 @@ import pymysql
 import pytest
 import pytest_asyncio
 import redis
+
+# Import core nodes to ensure they're registered
+import kailash.nodes.ai
+import kailash.nodes.code
+import kailash.nodes.data
+import kailash.nodes.logic
+import kailash.nodes.security
+from kailash.nodes.base import NodeRegistry
 from tests.utils.docker_config import (
     DATABASE_CONFIG,
     MYSQL_CONFIG,
@@ -20,14 +28,6 @@ from tests.utils.docker_config import (
     get_postgres_connection_string,
     get_redis_url,
 )
-
-# Import core nodes to ensure they're registered
-import kailash.nodes.ai
-import kailash.nodes.code
-import kailash.nodes.data
-import kailash.nodes.logic
-import kailash.nodes.security
-from kailash.nodes.base import NodeRegistry
 
 
 class DockerIntegrationTestBase:

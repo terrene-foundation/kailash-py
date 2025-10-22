@@ -8,7 +8,6 @@ import time
 from typing import Any, Dict
 
 import pytest
-from tests.utils.docker_config import requires_docker, requires_ollama
 
 from kailash.nodes.ai.iterative_llm_agent import ConvergenceMode, IterativeLLMAgentNode
 from kailash.nodes.validation import (  # Force import validation nodes
@@ -18,6 +17,7 @@ from kailash.nodes.validation import (  # Force import validation nodes
 )
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+from tests.utils.docker_config import requires_docker, requires_ollama
 
 
 @pytest.mark.e2e

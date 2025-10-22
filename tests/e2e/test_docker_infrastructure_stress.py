@@ -19,12 +19,6 @@ from typing import Any, Dict, List
 import asyncpg
 import pytest
 import pytest_asyncio
-from tests.utils.docker_config import (
-    DATABASE_CONFIG,
-    REDIS_CONFIG,
-    get_postgres_connection_string,
-    get_redis_url,
-)
 
 from kailash import Workflow
 from kailash.nodes.api import HTTPRequestNode
@@ -33,6 +27,12 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import SQLDatabaseNode
 from kailash.runtime.local import LocalRuntime
 from kailash.utils.resource_manager import ResourceTracker
+from tests.utils.docker_config import (
+    DATABASE_CONFIG,
+    REDIS_CONFIG,
+    get_postgres_connection_string,
+    get_redis_url,
+)
 
 try:
     import redis

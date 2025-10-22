@@ -9,51 +9,6 @@ DataFlow is a **zero-config database framework** built on Core SDK that automati
 pip install kailash-dataflow
 ```
 
-## ⚠️ Common Mistakes (Read This First!)
-
-| Mistake | Impact | Correct Approach |
-|---------|--------|------------------|
-| **Using `user_id` or `model_id` instead of `id`** | 10-20 min debugging | **CRITICAL**: Primary key MUST be named `id` (not `user_id`, `agent_id`, etc.) |
-| **Applying CreateNode pattern to UpdateNode** | 1-2 hours debugging | CreateNode uses flat fields, UpdateNode uses `{"filter": {...}, "fields": {...}}` |
-| **Including `created_at`/`updated_at` in updates** | Validation errors | DataFlow auto-manages these fields - NEVER include them manually |
-| **Wrong node naming** | Node not found errors | Use `ModelOperationNode` pattern (e.g., `UserCreateNode`, not `User_Create`) |
-| **Missing `db_instance` parameter** | Generic validation errors | ALL DataFlow nodes require `db_instance` and `model_name` parameters |
-
-### Critical Rules
-
-```python
-# ✅ CORRECT: Primary key MUST be named 'id'
-@db.model
-class User:
-    id: str  # ✅ MUST use 'id' - not 'user_id', 'model_id', etc.
-    name: str
-
-# ❌ WRONG: Custom primary key names cause errors
-@db.model
-class User:
-    user_id: str  # ❌ FAILS - DataFlow requires 'id'
-    name: str
-
-# ✅ CORRECT: Different patterns for Create vs Update
-# CreateNode: Flat individual fields
-workflow.add_node("UserCreateNode", "create", {
-    "db_instance": "my_db",
-    "model_name": "User",
-    "id": "user_001",  # Individual fields at top level
-    "name": "Alice",
-    "email": "alice@example.com"
-})
-
-# UpdateNode: Nested filter + fields
-workflow.add_node("UserUpdateNode", "update", {
-    "db_instance": "my_db",
-    "model_name": "User",
-    "filter": {"id": "user_001"},  # Which records to update
-    "fields": {"name": "Alice Updated"}  # What to change
-    # ⚠️ Do NOT include created_at or updated_at - auto-managed!
-})
-```
-
 ## Current Status: v0.6.0 Release Ready
 
 **Database Support:**

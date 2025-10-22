@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 import psutil
 import pytest
-from tests.utils.docker_config import REDIS_CONFIG, get_postgres_connection_string
 
 from kailash.nodes.admin.permission_check import PermissionCheckNode
 from kailash.nodes.admin.role_management import RoleManagementNode
@@ -29,6 +28,7 @@ from kailash.nodes.data import SQLDatabaseNode
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import NodeExecutionError
 from kailash.workflow import WorkflowBuilder
+from tests.utils.docker_config import REDIS_CONFIG, get_postgres_connection_string
 
 
 class TestAdminNodesPerformanceE2E:

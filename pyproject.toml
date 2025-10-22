@@ -99,6 +99,20 @@ dev = [
     "isort>=5.10",
     "mypy>=0.9",
 ]
+dataflow = [
+    "kailash-dataflow",
+]
+nexus = [
+    "kailash-nexus",
+]
+kaizen = [
+    "kailash-kaizen",
+]
+all = [
+    "kailash-dataflow",
+    "kailash-nexus",
+    "kailash-kaizen",
+]
 
 [project.urls]
 "Homepage" = "https://github.com/terrene-foundation/kailash-py"
