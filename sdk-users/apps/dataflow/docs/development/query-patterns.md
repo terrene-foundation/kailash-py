@@ -2,6 +2,30 @@
 
 Advanced query patterns and optimization techniques for DataFlow applications.
 
+## ⚠️ Important: Filter Operators Fixed in v0.6.2
+
+**If using v0.6.1 or earlier:** All MongoDB-style filter operators except `$eq` were broken due to a Python truthiness bug.
+
+**Solution:** Upgrade to v0.6.2 or later:
+```bash
+pip install --upgrade kailash-dataflow>=0.6.3
+```
+
+**Fixed Operators:**
+- ✅ $ne (not equal)
+- ✅ $nin (not in)
+- ✅ $in (in)
+- ✅ $not (logical NOT)
+- ✅ All comparison operators ($gt, $lt, $gte, $lte)
+
+**Root Cause:** Python truthiness check `if filter_dict:` treated empty dict `{}` as False, causing all advanced operators to be skipped.
+
+**Affected Versions:**
+- ❌ v0.5.4 - v0.6.1: Broken
+- ✅ v0.6.2+: All operators work correctly
+
+---
+
 ## Overview
 
 DataFlow provides a powerful query builder that supports MongoDB-style operators while generating optimized SQL queries for your database.

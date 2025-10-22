@@ -118,6 +118,27 @@ Every model automatically gets 9 nodes:
 
 ## 📋 Version History
 
+### Recent Critical Fixes
+
+#### v0.6.3 (2025-10-22)
+- **Fixed**: BulkDeleteNode safe mode validation bug
+- **Fix**: Changed `not filter_conditions` to `"filter" not in validated_inputs`
+- **Impact**: Safe mode now correctly validates empty filter operations
+- **Verification**: Comprehensive search of 50+ files, 100+ locations checked
+
+#### v0.6.2 (2025-10-22)
+- **Fixed**: ListNode filter operators ($ne, $nin, $in, $not)
+- **Fix**: Changed `if filter_dict:` to `if "filter" in kwargs:`
+- **Impact**: All MongoDB-style operators now work correctly
+- **Root Cause**: Python truthiness check on empty dict {} caused wrong behavior
+
+**Upgrade Command:**
+```bash
+pip install --upgrade kailash-dataflow>=0.6.3
+```
+
+### Previous Releases
+
 - **v0.6.6** - Multi-database support, progressive configuration
 - **v0.6.5** - Query optimization, visual migrations
 - **v0.6.0** - Auto-migrations, bulk operations

@@ -2,6 +2,23 @@
 
 High-performance bulk operations for processing thousands of records efficiently.
 
+## ⚠️ Important: BulkDeleteNode Fixed in v0.6.3
+
+**If using v0.6.2 or earlier:** BulkDeleteNode safe mode validation had a bug that incorrectly rejected valid empty filter operations.
+
+**Solution:** Upgrade to v0.6.3 or later:
+```bash
+pip install --upgrade kailash-dataflow>=0.6.3
+```
+
+**Fix:** Safe mode validation now correctly handles empty filter parameters.
+
+**Affected Versions:**
+- ❌ v0.6.2 and earlier: Safe mode validation bug
+- ✅ v0.6.3+: Validation works correctly
+
+---
+
 ## Overview
 
 DataFlow provides specialized bulk operation nodes that are optimized for high-throughput data processing. These nodes automatically handle:
