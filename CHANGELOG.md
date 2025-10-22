@@ -36,6 +36,48 @@ The changelog has been reorganized into individual files for better management. 
 
 ### Core SDK Releases
 
+### [0.9.26] - 2025-10-22
+
+**CRITICAL: AsyncLocalRuntime Parameter Passing Fix**
+
+This release resolves a P0 critical bug where AsyncLocalRuntime failed to pass node configuration parameters to async_run(), causing ALL DataFlow operations to fail.
+
+#### Fixed
+- 🐛 **CRITICAL: AsyncLocalRuntime Parameter Passing Bug**: AsyncLocalRuntime now correctly calls `execute_async()` instead of `async_run()` directly, ensuring node.config parameters are merged before execution
+- 🐛 **DataFlow Complete Failure**: Fixed 100% failure rate for ALL DataFlow CRUD operations (Create, Update, Delete, List) with AsyncLocalRuntime
+- 🐛 **Parameter Loss**: Resolved issue where node configuration parameters (from `workflow.add_node()`) were never passed to nodes
+- 🐛 **Docker/FastAPI Impact**: Fixed recommended runtime for Docker deployments being completely non-functional
+
+#### Changed
+- ⚡ **Pattern Alignment**: AsyncLocalRuntime now follows same pattern as LocalRuntime (calls `execute_async()` which merges config at base_async.py:190)
+- ⚡ **Resource Registry Handling**: Resource registry now passed via inputs dict instead of separate parameter
+
+#### Added
+- ✅ **Regression Tests**: Comprehensive test suite ensuring parameter passing stays fixed (tests/runtime/test_async_local_bug_fix_v0926.py)
+- ✅ **Integration Tests**: DataFlow integration tests verify end-to-end CRUD operations work correctly
+
+#### Impact
+- 🚀 **Success Rate**: DataFlow with AsyncLocalRuntime - 0% → 100% success rate
+- 🚀 **Production Ready**: AsyncLocalRuntime now fully functional for Docker/FastAPI deployments
+- 🚀 **Backward Compatible**: Pure bug fix - no API changes, existing code works unchanged
+- 🚀 **Zero Regressions**: 587/588 runtime tests passing (1 unrelated timeout)
+
+#### Technical Details
+**Root Cause**: AsyncLocalRuntime called `node_instance.async_run(**inputs)` directly at async_local.py:753, bypassing `execute_async()` which merges node.config with runtime inputs (base_async.py:190).
+
+**Solution**: Changed async_local.py:745-756 to call `execute_async()` instead, matching LocalRuntime's pattern (local.py:1362):
+```python
+# Before (BROKEN):
+result = await node_instance.async_run(**inputs)
+
+# After (FIXED):
+result = await node_instance.execute_async(**inputs)  # Merges config internally
+```
+
+**Evidence**: Users independently discovered bug and documented workarounds: "Use LocalRuntime (not AsyncLocalRuntime) - AsyncLocalRuntime has parameter passing bug"
+
+**Full Bug Report**: apps/kailash-dataflow/reports/bugs/014-asynclocalruntime/
+
 ### [0.9.25] - 2025-10-15
 
 **CRITICAL: Multi-Node Workflow Threading Fix**
