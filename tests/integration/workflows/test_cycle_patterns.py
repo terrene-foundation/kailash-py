@@ -21,7 +21,11 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode, SQLDatabaseNode
 from kailash.runtime import LocalRuntime
 
-from tests.utils.docker_config import OLLAMA_CONFIG, REDIS_CONFIG, get_postgres_connection_string
+from tests.utils.docker_config import (
+    OLLAMA_CONFIG,
+    REDIS_CONFIG,
+    get_postgres_connection_string,
+)
 
 
 @pytest.mark.integration

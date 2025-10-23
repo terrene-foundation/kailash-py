@@ -37,7 +37,11 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import JSONReaderNode
 
 # Streaming imports
-from kailash.nodes.data.streaming import EventStreamNode, StreamPublisherNode, WebSocketNode
+from kailash.nodes.data.streaming import (
+    EventStreamNode,
+    StreamPublisherNode,
+    WebSocketNode,
+)
 
 # Enterprise workflow imports
 from kailash.nodes.enterprise import (

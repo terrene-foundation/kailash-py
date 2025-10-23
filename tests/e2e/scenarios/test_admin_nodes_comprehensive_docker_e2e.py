@@ -21,7 +21,11 @@ from uuid import uuid4
 
 import pytest
 from kailash import LocalRuntime, Workflow, WorkflowBuilder
-from kailash.nodes.admin import PermissionCheckNode, RoleManagementNode, UserManagementNode
+from kailash.nodes.admin import (
+    PermissionCheckNode,
+    RoleManagementNode,
+    UserManagementNode,
+)
 from kailash.nodes.admin.schema_manager import AdminSchemaManager
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.code import PythonCodeNode

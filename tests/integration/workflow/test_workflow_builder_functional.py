@@ -943,7 +943,9 @@ class TestEnhancedWarningSystemIntegration:
             from kailash.nodes.base import Node, NodeParameter
             from kailash.workflow.builder import WorkflowBuilder
 
-            from tests.conftest import MockNode  # This is registered with @register_node
+            from tests.conftest import (
+                MockNode,
+            )  # This is registered with @register_node
 
             builder = WorkflowBuilder()
 

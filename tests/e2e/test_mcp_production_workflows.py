@@ -353,7 +353,10 @@ while True:
         import asyncpg
         import redis
 
-        from tests.utils.docker_config import get_postgres_connection_string, get_redis_url
+        from tests.utils.docker_config import (
+            get_postgres_connection_string,
+            get_redis_url,
+        )
 
         # Verify Docker services are available
         services_ready = await ensure_docker_services()

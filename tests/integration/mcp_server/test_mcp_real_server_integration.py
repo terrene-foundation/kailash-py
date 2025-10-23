@@ -23,7 +23,11 @@ from kailash.mcp_server.transports import (
     WebSocketTransport,
 )
 
-from tests.utils.docker_config import REDIS_CONFIG, ensure_docker_services, get_redis_url
+from tests.utils.docker_config import (
+    REDIS_CONFIG,
+    ensure_docker_services,
+    get_redis_url,
+)
 
 
 @pytest.mark.integration

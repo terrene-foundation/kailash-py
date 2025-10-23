@@ -16,7 +16,11 @@ from typing import Any, Dict, List
 
 import pytest
 from kailash import Workflow, WorkflowBuilder
-from kailash.nodes.admin import PermissionCheckNode, RoleManagementNode, UserManagementNode
+from kailash.nodes.admin import (
+    PermissionCheckNode,
+    RoleManagementNode,
+    UserManagementNode,
+)
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.base_cycle_aware import CycleAwareNode

@@ -35,7 +35,11 @@ try:
     )
 
     # Import new server classes (v0.6.7+)
-    from kailash.servers import DurableWorkflowServer, EnterpriseWorkflowServer, WorkflowServer
+    from kailash.servers import (
+        DurableWorkflowServer,
+        EnterpriseWorkflowServer,
+        WorkflowServer,
+    )
 
     # Import updated create_gateway function with enterprise defaults
     from kailash.servers.gateway import (

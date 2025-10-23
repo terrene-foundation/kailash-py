@@ -11,7 +11,11 @@ import warnings
 from unittest.mock import Mock, patch
 
 import pytest
-from src.kailash.servers import DurableWorkflowServer, EnterpriseWorkflowServer, WorkflowServer
+from src.kailash.servers import (
+    DurableWorkflowServer,
+    EnterpriseWorkflowServer,
+    WorkflowServer,
+)
 from src.kailash.servers.gateway import (
     create_basic_gateway,
     create_durable_gateway,

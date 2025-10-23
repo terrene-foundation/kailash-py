@@ -20,7 +20,12 @@ import pytest
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.code import AsyncPythonCodeNode, PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, JSONReaderNode
-from kailash.resources import CacheFactory, DatabasePoolFactory, HttpClientFactory, ResourceRegistry
+from kailash.resources import (
+    CacheFactory,
+    DatabasePoolFactory,
+    HttpClientFactory,
+    ResourceRegistry,
+)
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.workflow import WorkflowBuilder
 

@@ -61,7 +61,11 @@ from pathlib import Path
 from typing import Any, get_type_hints
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
-from kailash.sdk_exceptions import NodeConfigurationError, NodeExecutionError, SafetyViolationError
+from kailash.sdk_exceptions import (
+    NodeConfigurationError,
+    NodeExecutionError,
+    SafetyViolationError,
+)
 from kailash.security import (
     ExecutionTimeoutError,
     MemoryLimitError,

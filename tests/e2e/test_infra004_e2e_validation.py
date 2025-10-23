@@ -32,7 +32,11 @@ from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 from tests.utils import test_fixtures
-from tests.utils.mock_providers import MockLLMProvider, MockServiceRegistry, create_mock_framework
+from tests.utils.mock_providers import (
+    MockLLMProvider,
+    MockServiceRegistry,
+    create_mock_framework,
+)
 
 # Import complete test infrastructure
 from tests.utils.performance_tracker import PerformanceReport, PerformanceTracker

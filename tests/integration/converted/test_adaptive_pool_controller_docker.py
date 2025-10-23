@@ -73,7 +73,10 @@ class TestPoolSizeCalculatorFunctionality(DockerIntegrationTestBase):
     def test_utilization_based_scaling_behavior(self):
         """Test pool scaling based on utilization thresholds."""
         try:
-            from kailash.core.actors.adaptive_pool_controller import PoolMetrics, PoolSizeCalculator
+            from kailash.core.actors.adaptive_pool_controller import (
+                PoolMetrics,
+                PoolSizeCalculator,
+            )
 
             calculator = PoolSizeCalculator(target_utilization=0.75)
 
@@ -133,7 +136,10 @@ class TestPoolSizeCalculatorFunctionality(DockerIntegrationTestBase):
     def test_queue_depth_based_scaling(self):
         """Test pool scaling based on queue depth patterns."""
         try:
-            from kailash.core.actors.adaptive_pool_controller import PoolMetrics, PoolSizeCalculator
+            from kailash.core.actors.adaptive_pool_controller import (
+                PoolMetrics,
+                PoolSizeCalculator,
+            )
 
             calculator = PoolSizeCalculator()
 
@@ -177,7 +183,10 @@ class TestPoolSizeCalculatorFunctionality(DockerIntegrationTestBase):
     def test_response_time_based_scaling(self):
         """Test pool scaling based on response time targets."""
         try:
-            from kailash.core.actors.adaptive_pool_controller import PoolMetrics, PoolSizeCalculator
+            from kailash.core.actors.adaptive_pool_controller import (
+                PoolMetrics,
+                PoolSizeCalculator,
+            )
 
             calculator = PoolSizeCalculator(max_wait_time_ms=100.0)
 

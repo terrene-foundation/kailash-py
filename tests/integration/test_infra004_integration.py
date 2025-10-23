@@ -204,7 +204,10 @@ class TestInfrastructureUtilitiesIntegration:
 
     def test_test_fixtures_with_real_kaizen_framework(self):
         """Test fixtures must work with real Kaizen framework components."""
-        from tests.utils.test_fixtures import integration_test_config, test_agent_configs
+        from tests.utils.test_fixtures import (
+            integration_test_config,
+            test_agent_configs,
+        )
 
         with PerformanceTracker("fixtures_integration", threshold=3.0) as tracker:
             # Use test fixtures

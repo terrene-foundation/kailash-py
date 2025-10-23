@@ -253,7 +253,9 @@ class TestTwoPhaseCommitE2E:
                     # Simulate this participant voting to abort
                     from datetime import UTC, datetime
 
-                    from kailash.nodes.transaction.two_phase_commit import ParticipantVote
+                    from kailash.nodes.transaction.two_phase_commit import (
+                        ParticipantVote,
+                    )
 
                     participant.vote = ParticipantVote.ABORT
                     participant.prepare_time = datetime.now(UTC)
@@ -261,7 +263,9 @@ class TestTwoPhaseCommitE2E:
                     # Other participants vote to prepare
                     from datetime import UTC, datetime
 
-                    from kailash.nodes.transaction.two_phase_commit import ParticipantVote
+                    from kailash.nodes.transaction.two_phase_commit import (
+                        ParticipantVote,
+                    )
 
                     participant.vote = ParticipantVote.PREPARED
                     participant.prepare_time = datetime.now(UTC)
