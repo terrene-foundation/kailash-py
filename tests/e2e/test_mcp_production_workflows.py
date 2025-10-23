@@ -12,6 +12,7 @@ import time
 from pathlib import Path
 
 import pytest
+from tests.utils.docker_config import ensure_docker_services, get_redis_url
 
 from kailash.mcp_server import (
     MCPClient,
@@ -22,7 +23,6 @@ from kailash.mcp_server import (
 )
 from kailash.mcp_server.auth import APIKeyAuth
 from kailash.mcp_server.discovery import ServerInfo
-from tests.utils.docker_config import ensure_docker_services, get_redis_url
 
 
 @pytest.mark.e2e
@@ -352,7 +352,6 @@ while True:
         """Test MCP integration with real Docker database services."""
         import asyncpg
         import redis
-
         from tests.utils.docker_config import (
             get_postgres_connection_string,
             get_redis_url,
