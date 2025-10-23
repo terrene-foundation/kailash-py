@@ -229,6 +229,56 @@ workflow.add_node("UserCreateNode", "create", {
 
 **Applies To:** CreateNode, UpdateNode, BulkCreateNode, BulkUpdateNode, BulkUpsertNode
 
+### Dynamic Updates with PythonCodeNode Multi-Output (Core SDK v0.9.28+)
+
+**NEW**: Core SDK v0.9.28 enables PythonCodeNode to export multiple variables directly, making dynamic DataFlow updates natural and intuitive.
+
+**Before v0.9.28 (nested result pattern):**
+```python
+# OLD: Forced to nest everything in 'result'
+workflow.add_node("PythonCodeNode", "prepare", {
+    "code": """
+result = {
+    "filter": {"id": summary_id},
+    "fields": {"summary_markdown": updated_text}
+}
+    """
+})
+# Complex nested path connections required
+workflow.add_connection("prepare", "result.filter", "update", "filter")
+workflow.add_connection("prepare", "result.fields", "update", "fields")
+```
+
+**After v0.9.28 (multi-output pattern):**
+```python
+# NEW: Natural variable definitions
+workflow.add_node("PythonCodeNode", "prepare", {
+    "code": """
+filter_data = {"id": summary_id}
+summary_markdown = updated_text
+edited_by_user = True
+    """
+})
+
+# Clean, direct connections
+workflow.add_node("ConversationSummaryUpdateNode", "update", {})
+workflow.add_connection("prepare", "filter_data", "update", "filter")
+workflow.add_connection("prepare", "summary_markdown", "update", "summary_markdown")
+workflow.add_connection("prepare", "edited_by_user", "update", "edited_by_user")
+```
+
+**Benefits:**
+- ✅ Natural variable naming
+- ✅ Matches developer mental model
+- ✅ Less nesting, cleaner code
+- ✅ Full DataFlow benefits retained (no SQL needed!)
+
+**Backward Compatibility:** Old patterns with `result = {...}` continue to work 100%.
+
+**Requirements:** Core SDK >= v0.9.28, DataFlow >= v0.6.6
+
+**See Also:** [dataflow-dynamic-updates](../../skills/02-dataflow/dataflow-dynamic-updates.md) skill for complete examples
+
 ### Event Loop Isolation
 
 AsyncSQLDatabaseNode now automatically isolates connection pools per event loop, preventing "Event loop is closed" errors in sequential workflows and FastAPI applications.
