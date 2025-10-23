@@ -5,13 +5,13 @@ import time
 from unittest.mock import Mock, patch
 
 import pytest
+from tests.utils import AsyncTestUtils, FunctionalTestMixin, PerformanceTestMixin
+
 from kailash.tracking.metrics_collector import (
     MetricsCollector,
     PerformanceMetrics,
     collect_metrics,
 )
-
-from tests.utils import AsyncTestUtils, FunctionalTestMixin, PerformanceTestMixin
 
 
 class TestPerformanceMetrics:
