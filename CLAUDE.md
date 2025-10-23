@@ -6,6 +6,11 @@
    - Instead of building your own API gateway or use FastAPI, always check with the nexus-specialist on how to do it with the nexus framework
    - Instead of building your own MCP server/client, always check with the mcp-specialist on how to do it with the mcp_server module inside the core SDK
    - Instead of building your own agentic platform, always check with the kaizen-specialist on how to do it with the kaizen framework
+4. **CRITICAL: ALWAYS load environment variables from .env before ANY operation**
+   - **For pytest**: ALWAYS prefix with environment variables OR use pytest-dotenv.
+   - **For Docker**: ALWAYS use docker-compose with env_file OR pass --env-file.
+   - **For Python scripts**: Load dotenv at top of file.
+   - **NEVER run tests/scripts without checking .env first** - assume ALL API keys exist there
 
 ## 🏗️ Documentation
 
