@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
-
 from kailash.mcp_server.server import MCPServer
 from kailash.mcp_server.subscriptions import (
     ResourceChange,
@@ -17,6 +16,7 @@ from kailash.mcp_server.subscriptions import (
     ResourceSubscriptionManager,
 )
 from kailash.middleware.gateway.event_store import EventStore
+
 from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 

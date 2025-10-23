@@ -20,8 +20,6 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 # Service discovery and resilience imports
 from kailash.edge.discovery import EdgeDiscovery
@@ -39,11 +37,7 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import JSONReaderNode
 
 # Streaming imports
-from kailash.nodes.data.streaming import (
-    EventStreamNode,
-    StreamPublisherNode,
-    WebSocketNode,
-)
+from kailash.nodes.data.streaming import EventStreamNode, StreamPublisherNode, WebSocketNode
 
 # Enterprise workflow imports
 from kailash.nodes.enterprise import (
@@ -58,6 +52,8 @@ from kailash.nodes.logic import SwitchNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.resilience import RetryPolicy, WorkflowResilience
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 # Test utilities
 from tests.utils.docker_config import (

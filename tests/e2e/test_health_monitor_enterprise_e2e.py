@@ -9,11 +9,7 @@ import asyncio
 import time
 
 import pytest
-
-from src.kailash.core.resilience.bulkhead import (
-    execute_with_bulkhead,
-    get_bulkhead_manager,
-)
+from src.kailash.core.resilience.bulkhead import execute_with_bulkhead, get_bulkhead_manager
 from src.kailash.core.resilience.health_monitor import (
     AlertLevel,
     DatabaseHealthCheck,
@@ -23,10 +19,8 @@ from src.kailash.core.resilience.health_monitor import (
     RedisHealthCheck,
     get_health_monitor,
 )
-from tests.utils.docker_config import (
-    get_postgres_connection_string,
-    get_redis_connection_params,
-)
+
+from tests.utils.docker_config import get_postgres_connection_string, get_redis_connection_params
 
 
 @pytest.mark.e2e

@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from kailash.manifest import KailashManifest
 from kailash.nodes.base import NodeRegistry
 from kailash.utils.export import WorkflowExporter

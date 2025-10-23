@@ -12,10 +12,10 @@ from typing import Any, Dict
 import asyncpg
 import pytest
 import redis
-
 from kailash.nodes.transaction.two_phase_commit import TwoPhaseCommitCoordinatorNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
 from tests.utils.docker_config import (
     ensure_docker_services,
     get_postgres_connection_string,
@@ -253,9 +253,7 @@ class TestTwoPhaseCommitE2E:
                     # Simulate this participant voting to abort
                     from datetime import UTC, datetime
 
-                    from kailash.nodes.transaction.two_phase_commit import (
-                        ParticipantVote,
-                    )
+                    from kailash.nodes.transaction.two_phase_commit import ParticipantVote
 
                     participant.vote = ParticipantVote.ABORT
                     participant.prepare_time = datetime.now(UTC)
@@ -263,9 +261,7 @@ class TestTwoPhaseCommitE2E:
                     # Other participants vote to prepare
                     from datetime import UTC, datetime
 
-                    from kailash.nodes.transaction.two_phase_commit import (
-                        ParticipantVote,
-                    )
+                    from kailash.nodes.transaction.two_phase_commit import ParticipantVote
 
                     participant.vote = ParticipantVote.PREPARED
                     participant.prepare_time = datetime.now(UTC)

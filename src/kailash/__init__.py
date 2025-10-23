@@ -35,11 +35,7 @@ try:
     )
 
     # Import new server classes (v0.6.7+)
-    from kailash.servers import (
-        DurableWorkflowServer,
-        EnterpriseWorkflowServer,
-        WorkflowServer,
-    )
+    from kailash.servers import DurableWorkflowServer, EnterpriseWorkflowServer, WorkflowServer
 
     # Import updated create_gateway function with enterprise defaults
     from kailash.servers.gateway import (
@@ -57,7 +53,7 @@ except ImportError:
 # For backward compatibility
 WorkflowGraph = Workflow
 
-__version__ = "0.9.27"
+__version__ = "0.9.28"
 
 __all__ = [
     # Core workflow components

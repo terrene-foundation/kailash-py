@@ -15,9 +15,9 @@ import time
 from typing import Any, Dict
 
 import pytest
-
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.workflow import AsyncWorkflowBuilder
+
 from tests.utils.docker_config import DATABASE_CONFIG, REDIS_CONFIG
 
 pytestmark = [pytest.mark.e2e, pytest.mark.requires_docker, pytest.mark.asyncio]

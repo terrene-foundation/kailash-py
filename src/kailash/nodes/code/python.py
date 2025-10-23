@@ -61,11 +61,7 @@ from pathlib import Path
 from typing import Any, get_type_hints
 
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
-from kailash.sdk_exceptions import (
-    NodeConfigurationError,
-    NodeExecutionError,
-    SafetyViolationError,
-)
+from kailash.sdk_exceptions import NodeConfigurationError, NodeExecutionError, SafetyViolationError
 from kailash.security import (
     ExecutionTimeoutError,
     MemoryLimitError,
@@ -555,7 +551,14 @@ class CodeExecutor:
 
             # Return all non-private variables from LOCAL namespace only
             # Variables from previous executions cannot leak through
-            return {k: v for k, v in local_namespace.items() if not k.startswith("_")}
+            # NEW: Also filter out imported modules to prevent serialization errors
+            import types
+
+            return {
+                k: v
+                for k, v in local_namespace.items()
+                if not k.startswith("_") and not isinstance(v, types.ModuleType)
+            }
         except ExecutionTimeoutError:
             raise
         except MemoryLimitError:
@@ -1147,8 +1150,18 @@ class PythonCodeNode(Node):
         query = locals().get('query', '')  # locals() is restricted
         if 'query' in dir():  # dir() is restricted
 
-    The node requires a 'result' variable to be set with the output data.
-    All outputs should be wrapped in a dictionary assigned to 'result'.
+    The node supports two output patterns:
+    1. Single output: Set a 'result' variable with your output data
+    2. Multiple outputs: Define multiple variables - all become available as outputs
+
+    Examples:
+        # Single output (traditional pattern)
+        result = {"processed_data": data}
+
+        # Multiple outputs (NEW - more flexible!)
+        filter_data = {"id": "user-123"}
+        fields_data = {"name": "Updated"}
+        status = "success"
 
     Example:
         >>> # Function-based node
@@ -1409,13 +1422,16 @@ class PythonCodeNode(Node):
         if self._output_schema:
             return self._output_schema
 
-        # Otherwise, return default result schema
+        # NEW: Dynamic output schema - 'result' is optional
+        # This allows code to export multiple variables directly
+        # Example: filter_data = {...}; fields_data = {...}
+        # Both filter_data and fields_data become available outputs
         return {
             "result": NodeParameter(
                 name="result",
                 type=Any,  # Use Any instead of self.output_type to avoid validation issues
-                required=True,
-                description="Output result",
+                required=False,  # CHANGED: Allow code to export other variables
+                description="Primary output result (optional - code can export multiple variables)",
             )
         }
 
