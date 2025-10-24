@@ -2,8 +2,9 @@
 
 import os
 
-from dataflow import DataFlow
 from dotenv import load_dotenv
+
+from dataflow import DataFlow
 
 # Load environment variables
 load_dotenv()

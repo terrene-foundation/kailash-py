@@ -11,10 +11,10 @@ This example demonstrates:
 from datetime import datetime
 from typing import Optional
 
-from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 
 # Zero configuration - just works!
 db = DataFlow()

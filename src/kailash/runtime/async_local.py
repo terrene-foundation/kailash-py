@@ -364,12 +364,30 @@ class AsyncLocalRuntime(LocalRuntime):
         # Thread pool for sync node execution
         self.thread_pool = ThreadPoolExecutor(max_workers=thread_pool_size)
 
-        # Execution semaphore for concurrency control
-        self.execution_semaphore = asyncio.Semaphore(max_concurrent_nodes)
+        # P0-7 FIX: Don't create event loop or semaphore in __init__
+        # Will be lazily initialized during execute_workflow_async() execution
+        # This prevents race conditions where __init__ runs outside async context
+        self._semaphore = None
+        self._max_concurrent = max_concurrent_nodes
 
         logger.info(
             f"AsyncLocalRuntime initialized with max_concurrent_nodes={max_concurrent_nodes}"
         )
+
+    @property
+    def execution_semaphore(self) -> asyncio.Semaphore:
+        """
+        Lazily create execution semaphore when accessed.
+
+        P0-7 FIX: Semaphore must be created in async context (with running event loop).
+        Creating in __init__ causes race conditions in FastAPI/Docker deployments.
+        """
+        if self._semaphore is None:
+            self._semaphore = asyncio.Semaphore(self._max_concurrent)
+            logger.debug(
+                f"Execution semaphore created with limit={self._max_concurrent}"
+            )
+        return self._semaphore
 
     def execute(
         self,
@@ -925,16 +943,59 @@ class AsyncLocalRuntime(LocalRuntime):
         return inputs
 
     async def cleanup(self) -> None:
-        """Clean up runtime resources."""
-        logger.info("Cleaning up AsyncLocalRuntime")
+        """
+        Clean up runtime resources (idempotent).
 
-        # Clean up thread pool
-        self.thread_pool.shutdown(wait=True)
+        P0-8 FIX: Enhanced cleanup with proper resource management.
+        Safe to call multiple times - tracks cleanup state.
 
-        # Clean up resource registry if owned
-        if self.resource_registry:
-            await self.resource_registry.cleanup()
+        Recommended usage with FastAPI lifespan:
+            ```python
+            from contextlib import asynccontextmanager
+            from fastapi import FastAPI
 
+            @asynccontextmanager
+            async def lifespan(app: FastAPI):
+                # Startup
+                runtime = AsyncLocalRuntime()
+                yield {"runtime": runtime}
+                # Shutdown
+                await runtime.cleanup()
+
+            app = FastAPI(lifespan=lifespan)
+            ```
+        """
+        # Track cleanup to make it idempotent
+        if hasattr(self, "_cleaned_up") and self._cleaned_up:
+            logger.debug("AsyncLocalRuntime already cleaned up, skipping")
+            return
+
+        logger.info("Cleaning up AsyncLocalRuntime resources...")
+
+        # Clean up thread pool (if exists and not already shutdown)
+        if hasattr(self, "thread_pool") and self.thread_pool:
+            try:
+                self.thread_pool.shutdown(wait=True)
+                logger.debug("Thread pool shutdown successfully")
+            except Exception as e:
+                logger.warning(f"Error shutting down thread pool: {e}")
+            finally:
+                self.thread_pool = None
+
+        # Clean up resource registry (if owned)
+        if hasattr(self, "resource_registry") and self.resource_registry:
+            try:
+                await self.resource_registry.cleanup()
+                logger.debug("Resource registry cleaned up")
+            except Exception as e:
+                logger.warning(f"Error cleaning up resource registry: {e}")
+
+        # Clean up semaphore reference
+        if hasattr(self, "_semaphore"):
+            self._semaphore = None
+
+        # Mark as cleaned up
+        self._cleaned_up = True
         logger.info("AsyncLocalRuntime cleanup complete")
 
     def __del__(self):
