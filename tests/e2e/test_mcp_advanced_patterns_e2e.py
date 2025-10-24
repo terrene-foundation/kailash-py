@@ -20,15 +20,6 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-# Test utilities
-from tests.utils.docker_config import (
-    REDIS_CONFIG,
-    ensure_docker_services,
-    get_postgres_connection_string,
-)
 
 # Service discovery and resilience imports
 from kailash.edge.discovery import EdgeDiscovery
@@ -65,6 +56,15 @@ from kailash.nodes.logic import SwitchNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.resilience import RetryPolicy, WorkflowResilience
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+# Test utilities
+from tests.utils.docker_config import (
+    REDIS_CONFIG,
+    ensure_docker_services,
+    get_postgres_connection_string,
+)
 
 logger = logging.getLogger(__name__)
 
