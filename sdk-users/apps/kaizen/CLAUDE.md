@@ -189,6 +189,113 @@ cd docs/observability
 docker-compose up -d  # Starts Jaeger, Prometheus, Grafana, ELK Stack
 ```
 
+### Lifecycle Infrastructure (NEW in v0.5.0)
+
+**Production-ready hooks, state management, and interrupts for enterprise agents:**
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.core.autonomy.hooks.builtin import LoggingHook, MetricsHook
+from kaizen.core.autonomy.state import StateManager, FilesystemStorage
+from kaizen.core.autonomy.interrupts import InterruptSignal
+
+# Every BaseAgent has lifecycle infrastructure built-in
+agent = BaseAgent(config=config, signature=signature)
+
+# 1. Hooks - Event-driven monitoring
+agent._hook_manager.register_hook(LoggingHook(log_level="INFO"))
+agent._hook_manager.register_hook(MetricsHook())
+
+# 2. State - Persistent checkpoints
+storage = FilesystemStorage(base_path="./agent_state")
+state_manager = StateManager(storage_backend=storage)
+
+# Create checkpoint before risky operation
+checkpoint_id = await state_manager.create_checkpoint(
+    agent_id=agent.agent_id,
+    description="Before processing"
+)
+
+# Execute agent
+result = agent.run(question="test")
+
+# Save state
+await state_manager.save_state(current_state)
+
+# 3. Interrupts - Graceful control
+agent._interrupt_manager.request_interrupt(
+    signal=InterruptSignal.USER_REQUESTED,
+    reason="Awaiting approval"
+)
+
+if agent._interrupt_manager.is_interrupted():
+    # Save and pause
+    await state_manager.save_state(current_state)
+```
+
+**Key Components:**
+- **6 Builtin Hooks**: LoggingHook, MetricsHook, CostTrackingHook, PerformanceProfilerHook, AuditHook, TracingHook
+- **4 Storage Backends**: Filesystem, Redis, PostgreSQL, S3
+- **6 Interrupt Signals**: USER_REQUESTED, RATE_LIMIT, BUDGET_EXCEEDED, TIMEOUT, SHUTDOWN, CUSTOM
+
+### Permission System (NEW in v0.5.0+)
+
+**Policy-based access control with budget enforcement:**
+
+```python
+from kaizen.core.autonomy.permissions import ExecutionContext, PermissionRule, PermissionType, PermissionMode
+
+# Create execution context with budget
+context = ExecutionContext(
+    mode=PermissionMode.DEFAULT,
+    budget_limit=50.0,  # $50 maximum
+    allowed_tools={"read_file", "http_get"},
+    denied_tools={"delete_file"}
+)
+
+# Define permission rules
+rules = [
+    # Deny destructive operations
+    PermissionRule(
+        pattern="(delete|drop|truncate)_.*",
+        permission_type=PermissionType.DENY,
+        reason="Destructive operations not allowed",
+        priority=100
+    ),
+    # Ask for write operations
+    PermissionRule(
+        pattern="(write|create|update)_.*",
+        permission_type=PermissionType.ASK,
+        reason="Write operations require approval",
+        priority=50
+    ),
+    # Allow read operations
+    PermissionRule(
+        pattern="(read|get|list)_.*",
+        permission_type=PermissionType.ALLOW,
+        reason="Read operations are safe",
+        priority=10
+    )
+]
+
+# Check permissions before tool execution
+if context.can_use_tool("read_file"):
+    result = await agent.execute_tool("read_file", {"path": "data.txt"})
+    context.record_tool_usage("read_file", cost=0.001)
+
+# Check budget
+if context.has_budget():
+    # Proceed with operation
+    pass
+```
+
+**Features:**
+- **4 Permission Modes**: DEFAULT, ACCEPT_EDITS, PLAN, BYPASS
+- **3 Permission Types**: ALLOW, DENY, ASK
+- **Budget Tracking**: Cost limits and usage monitoring
+- **Pattern Matching**: Regex-based tool name matching
+- **Multi-Agent Isolation**: Per-agent permission contexts
+
 ### Agent Architecture Pattern
 
 All agents follow the same BaseAgent pattern:
@@ -413,6 +520,25 @@ agent = SimpleQAAgent(config)  # Auto-extraction happens here
    - SupervisorWorkerPattern with semantic matching (production-ready)
    - 4 additional patterns: Consensus, Debate, Sequential, Handoff
    - Automatic capability discovery, no hardcoded selection
+
+5. **Observability Stack (v0.5.0)** (`src/kaizen/core/autonomy/observability/`)
+   - Distributed tracing: OpenTelemetry + Jaeger
+   - Metrics collection: Prometheus with percentiles
+   - Structured logging: JSON for ELK Stack
+   - Audit trails: Immutable JSONL for compliance
+   - Production-validated: -0.06% overhead, zero impact
+
+6. **Lifecycle Infrastructure (v0.5.0)** (`src/kaizen/core/autonomy/`)
+   - Hooks: Event-driven monitoring (6 builtin hooks)
+   - State: Persistent checkpoints with pluggable storage
+   - Interrupts: Graceful execution control (6 signal types)
+   - Thread-safe, composable, extensible
+
+7. **Permission System (v0.5.0+)** (`src/kaizen/core/autonomy/permissions/`)
+   - ExecutionContext: Thread-safe runtime state
+   - PermissionRule: Pattern-based access control
+   - Budget enforcement: Cost tracking and limits
+   - Enterprise security: RBAC, compliance, multi-tenant isolation
 
 ## 🧪 Testing
 

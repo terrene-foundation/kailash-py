@@ -102,7 +102,9 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **BaseAgent**: Unified agent system with lazy initialization, auto-generates A2A capability cards
 - **Autonomous Tool Calling** (v0.2.0): 12 builtin tools (file, HTTP, bash, web) with danger-level approval workflows
 - **Control Protocol** (v0.2.0): Bidirectional agent ↔ client communication (CLI, HTTP/SSE, stdio, memory transports)
-- **Distributed Tracing** (v0.4.0): OpenTelemetry + Jaeger integration with automatic span creation
+- **Observability** (v0.5.0): Complete monitoring stack (tracing, metrics, logging, audit) with zero overhead
+- **Lifecycle Infrastructure** (v0.5.0): Hooks for event-driven monitoring, State for persistence, Interrupts for graceful control
+- **Permission System** (v0.5.0+): Policy-based access control with ExecutionContext, PermissionRule, and budget enforcement
 - **Strategy Pattern**: Pluggable execution (AsyncSingleShotStrategy is default)
 - **SharedMemoryPool**: Multi-agent coordination
 - **A2A Protocol**: Google Agent-to-Agent protocol for semantic capability matching
@@ -1059,6 +1061,10 @@ def test_qa_agent(simple_qa_example, assert_async_strategy, test_queries):
 - ✅ **Tool Calling (v0.2.0)**: Enable via `tool_registry` parameter (opt-in, all 25 agents support it)
 - ✅ **MCP Integration (v0.2.0)**: Use `mcp_servers` parameter for MCP server integration
 - ✅ **Control Protocol (v0.2.0)**: Use `control_protocol` parameter for bidirectional communication
+- ✅ **Observability (v0.5.0)**: Enable via `agent.enable_observability()` when needed (opt-in, zero overhead when disabled)
+- ✅ **Hooks (v0.5.0)**: Use `agent._hook_manager` to register hooks for lifecycle events
+- ✅ **State (v0.5.0)**: Create checkpoints before risky operations with StateManager
+- ✅ **Permissions (v0.5.0+)**: Check `ExecutionContext.can_use_tool()` before tool execution
 - ✅ **Multi-Modal**: Use config objects for OllamaVisionProvider
 - ✅ **Multi-Modal**: Use 'question' for VisionAgent, 'prompt' for providers
 - ✅ **Multi-Modal**: Pass file paths, not base64 data URLs
@@ -1127,6 +1133,9 @@ data = self.extract_list(result, "actual_key_name", default=[])
 - ✅ **Building autonomous agents with tool calling (v0.2.0)**
 - ✅ **Implementing interactive agents with Control Protocol (v0.2.0)**
 - ✅ **Universal tool integration across all agents (ADR-016)**
+- ✅ **Production monitoring with observability stack (v0.5.0)** - tracing, metrics, logging, audit
+- ✅ **Lifecycle management with hooks, state, interrupts (v0.5.0)** - event-driven architecture
+- ✅ **Enterprise security with permission system (v0.5.0+)** - policy-based access control, budgets
 - ✅ Building multi-modal workflows (vision/audio/text)
 - ✅ Optimizing agent prompts and signatures
 - ✅ Writing agent tests with fixtures (use `llm_provider="mock"` for unit tests)

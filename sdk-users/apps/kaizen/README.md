@@ -485,6 +485,171 @@ async with anyio.create_task_group() as tg:
 - **StdioTransport**: Standard I/O for MCP integration
 - **MemoryTransport**: In-memory for testing
 
+## 🎛️ Lifecycle Infrastructure (v0.5.0)
+
+**Production-ready hooks, state management, and interrupts for enterprise agents.**
+
+### Hooks - Event-Driven Monitoring
+
+```python
+from kaizen.core.autonomy.hooks.builtin import LoggingHook, MetricsHook, AuditHook
+
+# Every BaseAgent has a hook manager
+agent = BaseAgent(config=config, signature=signature)
+
+# Register builtin hooks
+agent._hook_manager.register_hook(LoggingHook(log_level="INFO"))
+agent._hook_manager.register_hook(MetricsHook())
+agent._hook_manager.register_hook(AuditHook(audit_path="./audit"))
+```
+
+**6 Builtin Hooks:**
+- `LoggingHook`: JSON-formatted logging
+- `MetricsHook`: Prometheus metrics collection
+- `CostTrackingHook`: Token usage and cost monitoring
+- `PerformanceProfilerHook`: Execution timing
+- `AuditHook`: Immutable audit trails
+- `TracingHook`: Distributed tracing
+
+### State - Persistent Checkpoints
+
+```python
+from kaizen.core.autonomy.state import StateManager, FilesystemStorage, AgentState
+
+# Create state manager
+storage = FilesystemStorage(base_path="./agent_state")
+state_manager = StateManager(storage_backend=storage)
+
+# Create checkpoint before risky operation
+checkpoint_id = await state_manager.create_checkpoint(
+    agent_id="my_agent",
+    description="Before processing"
+)
+
+# Execute agent
+result = agent.run(question="test")
+
+# Save state
+state = AgentState(
+    agent_id="my_agent",
+    conversation_history=agent.get_history(),
+    metadata={"result": result}
+)
+await state_manager.save_state(state)
+
+# Restore on error
+await state_manager.restore_checkpoint(checkpoint_id)
+```
+
+**Features:**
+- Automatic checkpointing
+- Version history tracking
+- Multiple storage backends (Filesystem, Redis, PostgreSQL, S3)
+- Metadata attachment
+- TTL support
+
+### Interrupts - Graceful Control
+
+```python
+from kaizen.core.autonomy.interrupts import InterruptSignal
+
+# Request interruption
+agent._interrupt_manager.request_interrupt(
+    signal=InterruptSignal.USER_REQUESTED,
+    reason="Awaiting approval"
+)
+
+# Check if interrupted
+if agent._interrupt_manager.is_interrupted():
+    # Save state and pause
+    await state_manager.save_state(current_state)
+    return {"status": "paused", "resume_token": "xyz"}
+
+# Resume execution
+agent._interrupt_manager.clear_interrupt()
+```
+
+**6 Interrupt Signals:**
+- `USER_REQUESTED`: Manual pause
+- `RATE_LIMIT`: API rate limit hit
+- `BUDGET_EXCEEDED`: Cost budget exceeded
+- `TIMEOUT`: Operation timeout
+- `SHUTDOWN`: Graceful shutdown
+- `CUSTOM`: User-defined signals
+
+## 🔐 Permission System (v0.5.0+)
+
+**Policy-based access control with budget enforcement for enterprise security.**
+
+### Basic Usage
+
+```python
+from kaizen.core.autonomy.permissions import ExecutionContext, PermissionRule, PermissionType, PermissionMode
+
+# Create execution context
+context = ExecutionContext(
+    mode=PermissionMode.DEFAULT,
+    budget_limit=50.0,  # $50 maximum
+    allowed_tools={"read_file", "http_get"},
+    denied_tools={"delete_file", "bash_command"}
+)
+
+# Define permission rules
+rules = [
+    # Deny destructive operations
+    PermissionRule(
+        pattern="(delete|drop|truncate)_.*",
+        permission_type=PermissionType.DENY,
+        reason="Destructive operations not allowed",
+        priority=100
+    ),
+    # Ask for write operations
+    PermissionRule(
+        pattern="(write|create|update)_.*",
+        permission_type=PermissionType.ASK,
+        reason="Write operations require approval",
+        priority=50
+    ),
+    # Allow read operations
+    PermissionRule(
+        pattern="(read|get|list)_.*",
+        permission_type=PermissionType.ALLOW,
+        reason="Read operations are safe",
+        priority=10
+    )
+]
+
+# Check permissions
+if context.can_use_tool("read_file"):
+    result = await agent.execute_tool("read_file", {"path": "data.txt"})
+    context.record_tool_usage("read_file", cost=0.001)
+
+# Check budget
+if context.has_budget():
+    # Proceed with operation
+    pass
+else:
+    raise BudgetExceededError("Cost limit reached")
+```
+
+### Permission Modes
+- **DEFAULT**: Standard permission checks (production)
+- **ACCEPT_EDITS**: Auto-approve edit operations (development)
+- **PLAN**: Planning mode, no execution (dry-run)
+- **BYPASS**: Bypass all checks (admin mode)
+
+### Permission Types
+- **ALLOW**: Auto-approve execution
+- **DENY**: Block execution completely
+- **ASK**: Request user approval
+
+### Enterprise Features
+- **Budget Tracking**: Cost limits and usage monitoring
+- **Pattern Matching**: Regex-based tool name matching
+- **Multi-Agent Isolation**: Per-agent permission contexts
+- **Audit Trail**: Track all permission decisions
+- **Compliance**: SOC2, HIPAA, PCI-DSS ready
+
 ## 🔧 Creating Custom Agents
 
 ### Basic Custom Agent
