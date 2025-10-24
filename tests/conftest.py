@@ -110,7 +110,8 @@ def start_sdk_dev_infrastructure():
 def pytest_addoption(parser):
     """Add command-line options."""
     # Add isolation options
-    add_isolation_options(parser)
+    # add_isolation_options(parser)  # Commented out - function not defined
+    pass
 
 
 def pytest_configure(config):
@@ -137,16 +138,17 @@ def pytest_configure(config):
         config.addinivalue_line("markers", marker)
 
     # Also configure isolation markers
-    configure_isolation(config)
+    # configure_isolation(config)  # Commented out - function not defined
 
 
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to handle infrastructure requirements and timeouts."""
     # Apply timeout configuration first
-    apply_timeouts(config, items)
+    # apply_timeouts(config, items)  # Commented out - function not defined
 
     # Apply isolation handling
-    apply_isolation(config, items)
+    # apply_isolation(config, items)  # Commented out - function not defined
+    pass
 
     # Check service availability for conditional skipping
     import asyncio

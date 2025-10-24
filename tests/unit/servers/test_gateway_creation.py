@@ -11,7 +11,6 @@ import warnings
 from unittest.mock import Mock, patch
 
 import pytest
-
 from src.kailash.servers import (
     DurableWorkflowServer,
     EnterpriseWorkflowServer,

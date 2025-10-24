@@ -940,15 +940,12 @@ class TestEnhancedWarningSystemIntegration:
     def test_sdk_node_with_real_workflow(self):
         """Test that SDK nodes provide correct warnings in realistic workflows."""
         try:
-            from tests.conftest import (  # This is registered with @register_node
-                MockNode,
+            from tests.conftest import (
+                MockNode,  # This is registered with @register_node
             )
 
             from kailash.nodes.base import Node, NodeParameter
             from kailash.workflow.builder import WorkflowBuilder
-            from tests.conftest import (  # This is registered with @register_node
-                MockNode,
-            )
 
             builder = WorkflowBuilder()
 
@@ -1045,7 +1042,6 @@ class TestEnhancedWarningSystemIntegration:
 
             from kailash.nodes.base import Node, NodeParameter
             from kailash.workflow.builder import WorkflowBuilder
-            from tests.conftest import MockNode  # SDK node
 
             # Create a custom security validation node
             class SecurityValidationNode(Node):
@@ -1111,7 +1107,6 @@ class TestEnhancedWarningSystemIntegration:
 
             from kailash.nodes.base import Node, NodeParameter, NodeRegistry
             from kailash.workflow.builder import WorkflowBuilder
-            from tests.conftest import MockNode  # SDK node
 
             # Create custom node
             class UnregisteredCustomNode(Node):

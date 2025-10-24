@@ -24,12 +24,12 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio
+from tests.utils.docker_config import OLLAMA_CONFIG, ensure_docker_services
 
 from kailash.mcp_server import MCPClient
 from kailash.nodes.ai.iterative_llm_agent import IterativeLLMAgentNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-from tests.utils.docker_config import OLLAMA_CONFIG, ensure_docker_services
 
 
 @pytest.mark.e2e

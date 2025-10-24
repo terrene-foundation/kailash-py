@@ -77,37 +77,18 @@ from kailash.security import (
 
 logger = logging.getLogger(__name__)
 
-# Module whitelist for safety
-ALLOWED_MODULES = {
-    "math",
-    "statistics",
-    "datetime",
-    "json",
-    "random",
-    "itertools",
-    "collections",
-    "functools",
-    "string",
-    "time",
-    "re",
-    "os",  # For file operations in cycles
-    "pandas",
-    "numpy",
-    "scipy",
-    "sklearn",
-    "matplotlib",
-    "seaborn",
-    "plotly",
-    "array",  # Required by numpy internally
-    # File processing modules
-    "csv",  # For CSV file processing
-    "mimetypes",  # For MIME type detection
-    "pathlib",  # For modern path operations
-    "glob",  # For file pattern matching
-    "xml",  # For XML processing
-    "uuid",  # For generating unique identifiers (safe, no I/O)
-    "hashlib",  # For cryptographic hashing (safe for common use cases)
-}
+# Import shared constants and utilities
+from kailash.nodes.code.common import (
+    ALLOWED_BUILTINS,
+    ALLOWED_MODULES,
+    COMPLETELY_BLOCKED_MODULES,
+    DANGEROUS_GLOBAL_FUNCTIONS,
+    DANGEROUS_MODULE_FUNCTIONS,
+    ensure_json_serializable,
+    format_dangerous_function_error,
+    format_module_not_allowed_error,
+    is_dangerous_function,
+)
 
 
 class SafeCodeChecker(ast.NodeVisitor):
@@ -246,70 +227,8 @@ class CodeExecutor:
         """
         self.allowed_modules = set(allowed_modules or ALLOWED_MODULES)
         self.security_config = security_config or get_security_config()
-        self.allowed_builtins = {
-            "abs",
-            "all",
-            "any",
-            "bool",
-            "dict",
-            "enumerate",
-            "filter",
-            "float",
-            "int",
-            "isinstance",  # Common type checking
-            "len",
-            "list",
-            "map",
-            "max",
-            "min",
-            "range",
-            "round",
-            "sorted",
-            "str",
-            "sum",
-            "tuple",
-            "type",
-            "zip",
-            "print",  # Allow print for debugging
-            "hasattr",  # For attribute checking
-            "hash",  # For hashing operations
-            # Exception classes for proper error handling
-            "Exception",
-            "ValueError",
-            "TypeError",
-            "KeyError",
-            "NameError",
-            "AttributeError",
-            "IndexError",
-            "RuntimeError",
-            "StopIteration",
-            "ImportError",
-            "OSError",
-            "IOError",
-            "FileNotFoundError",
-            "ZeroDivisionError",
-            "ArithmeticError",
-            "AssertionError",
-            # Useful built-ins for data science
-            "set",
-            "frozenset",
-            "bytes",
-            "bytearray",
-            "complex",
-            "divmod",
-            "pow",
-            "hex",
-            "oct",
-            "bin",
-            "format",
-            "ord",
-            "chr",
-            "repr",
-            "vars",  # For debugging
-            "getattr",  # For attribute access
-            "open",  # For file operations
-            "__import__",  # For imports (controlled by ALLOWED_MODULES)
-        }
+        # Use shared builtin whitelist for consistency
+        self.allowed_builtins = ALLOWED_BUILTINS
         self._execution_namespace = {}
 
     def check_code_safety(self, code: str) -> tuple[bool, list[dict], list[str]]:
@@ -506,16 +425,19 @@ class CodeExecutor:
             namespace["get_workflow_context"] = node_instance.get_workflow_context
             namespace["set_workflow_context"] = node_instance.set_workflow_context
         else:
-            # Add placeholder functions that warn about unavailability
+            # Fail fast instead of silent defaults - prevents subtle bugs
             def _get_workflow_context(key: str, default=None):
-                logger.warning(
-                    "get_workflow_context() is not available in PythonCodeNode execution context. Node instance not provided."
+                raise NodeExecutionError(
+                    "get_workflow_context() is not available - node instance not provided. "
+                    "This function requires execution through a workflow runtime with context support. "
+                    "If you need stateful data, consider using explicit variables or external storage."
                 )
-                return default
 
             def _set_workflow_context(key: str, value):
-                logger.warning(
-                    "set_workflow_context() is not available in PythonCodeNode execution context. Node instance not provided."
+                raise NodeExecutionError(
+                    "set_workflow_context() is not available - node instance not provided. "
+                    "This function requires execution through a workflow runtime with context support. "
+                    "If you need stateful data, consider using explicit variables or external storage."
                 )
 
             namespace["get_workflow_context"] = _get_workflow_context

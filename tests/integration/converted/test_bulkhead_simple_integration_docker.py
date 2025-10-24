@@ -6,6 +6,7 @@ import sqlite3
 import tempfile
 
 import pytest
+from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 from kailash.core.resilience.bulkhead import (
     BulkheadManager,
@@ -16,7 +17,6 @@ from kailash.core.resilience.bulkhead import (
 )
 from kailash.nodes.data.sql import SQLDatabaseNode
 from kailash.sdk_exceptions import NodeExecutionError
-from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 
 @pytest.mark.integration

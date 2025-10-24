@@ -6,9 +6,9 @@ import time
 
 import pytest
 import redis
+from tests.utils.docker_config import get_redis_connection_params
 
 from kailash.nodes.data.query_cache import CacheInvalidationStrategy, QueryCache
-from tests.utils.docker_config import get_redis_connection_params
 
 
 @pytest.mark.integration

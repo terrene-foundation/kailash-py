@@ -5,9 +5,10 @@ DataFlow QueryBuilder Example
 Demonstrates MongoDB-style query building with cross-database support.
 """
 
+from kailash_dataflow import DataFlow
+
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-from kailash_dataflow import DataFlow
 
 # Initialize DataFlow with query builder
 db = DataFlow(enable_query_cache=True, cache_invalidation_strategy="pattern_based")

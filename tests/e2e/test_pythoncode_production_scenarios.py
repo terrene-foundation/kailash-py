@@ -15,6 +15,11 @@ import asyncpg
 import httpx
 import pytest
 import redis
+from tests.utils.docker_config import (
+    ensure_docker_services,
+    get_postgres_connection_string,
+    get_redis_connection_params,
+)
 
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.redis import RedisNode
@@ -27,11 +32,6 @@ from kailash.runtime.parameter_injector import (
     create_deferred_sql,
 )
 from kailash.workflow.builder import WorkflowBuilder
-from tests.utils.docker_config import (
-    ensure_docker_services,
-    get_postgres_connection_string,
-    get_redis_connection_params,
-)
 
 
 @pytest.mark.e2e
