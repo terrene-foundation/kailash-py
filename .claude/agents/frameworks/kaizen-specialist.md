@@ -216,17 +216,25 @@ await agent.report_progress(
 
 **Reference**: ADR-011, `docs/autonomy/control-protocol.md`, `examples/autonomy/`
 
-### Distributed Tracing & Observability (v0.4.0 - Production Ready)
+### Distributed Tracing & Observability (v0.5.0 - Production Ready)
 
 > **See Skill**: [`kaizen-observability`](../../skills/04-kaizen/kaizen-observability.md) for comprehensive tracing patterns and setup.
+
+**⚠️ IMPORTANT: Observability is OPT-IN**
+- ✅ **100% backward compatible** - existing agents work without any changes
+- ✅ **No migration required** - agents work perfectly fine without observability
+- ✅ **Zero breaking changes** - observability is disabled by default
+- ✅ **Enable when needed** - call `agent.enable_observability()` to activate monitoring
 
 **OpenTelemetry + Jaeger Integration**: Production-ready distributed tracing with automatic span creation for agent lifecycle events.
 
 ```python
 from kaizen.core.base_agent import BaseAgent
 
-# Enable observability (one line!)
+# Create agent - works perfectly without observability
 agent = BaseAgent(config=config, signature=signature)
+
+# Enable observability when you need monitoring (opt-in!)
 agent.enable_observability(service_name="my-agent")
 
 # Now all agent events are traced to Jaeger
@@ -253,14 +261,22 @@ pre_agent_loop (root)
 - PRE/POST event pairing for accurate operation durations
 - Event filtering (trace only specific events)
 - Composite keys for multiple tool calls: `(trace_id, event_pair:tool_name)`
-- Performance: <3% overhead with real Jaeger backend
+- **Performance: -0.06% overhead** (essentially zero, validated with 100 real OpenAI API calls)
+
+**v0.5.0 Complete Stack**:
+- System 3: Distributed Tracing (OpenTelemetry + Jaeger, 58 tests)
+- System 4: Metrics Collection (Prometheus, 40 tests)
+- System 5: Structured Logging (JSON/ELK, 31 tests)
+- System 6: Audit Trails (JSONL/Compliance, 29 tests)
+- System 7: Unified ObservabilityManager (18 integration + 16 E2E tests)
 
 **Test Coverage**:
-- Unit: 20/20 (100%) ✅
-- Integration: 10/10 (100%) ✅ - Real Jaeger export
-- E2E: Jaeger UI validation
+- Total: 192/192 tests passing (100%) ✅
+- Tier 1: 158 unit tests
+- Tier 2: 18 integration tests (real infrastructure, NO MOCKING)
+- Tier 3: 16 E2E tests (real LLM providers)
 
-**Reference**: `docs/guides/observability/`, `examples/autonomy/observability/`, ADR-017
+**Reference**: `docs/observability/`, `examples/autonomy/observability/`, ADR-017
 
 ### A2A Capability Matching (Google A2A Protocol - Advanced)
 
