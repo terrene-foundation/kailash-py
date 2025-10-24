@@ -9,6 +9,7 @@ import os
 import tempfile
 
 import pytest
+from tests.utils.docker_config import get_postgres_connection_string
 
 from kailash.core.resilience.bulkhead import (
     BulkheadManager,
@@ -20,7 +21,6 @@ from kailash.core.resilience.bulkhead import (
     get_bulkhead_manager,
 )
 from kailash.nodes.data.sql import SQLDatabaseNode
-from tests.utils.docker_config import get_postgres_connection_string
 
 
 @pytest.mark.integration

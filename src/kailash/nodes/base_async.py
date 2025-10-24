@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from kailash.nodes.base import Node
+from kailash.runtime.template_resolver import resolve_templates
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 
@@ -188,6 +189,12 @@ class AsyncNode(Node):
 
             # Merge runtime inputs with config (runtime inputs take precedence)
             merged_inputs = {**self.config, **runtime_inputs}
+
+            # Resolve ${param} templates in merged parameters (v0.9.30)
+            # This enables dynamic parameter injection in nested configurations
+            # Example: {"filter": {"tag": "${tag}"}} with runtime_inputs={"tag": "local"}
+            # Becomes: {"filter": {"tag": "local"}}
+            merged_inputs = resolve_templates(merged_inputs, runtime_inputs)
 
             # Handle nested config case (for nodes that store parameters in config['config'])
             if "config" in merged_inputs and isinstance(merged_inputs["config"], dict):

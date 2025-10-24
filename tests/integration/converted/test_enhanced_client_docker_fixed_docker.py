@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, patch
 
 import aiohttp
 import pytest
-
 from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 
