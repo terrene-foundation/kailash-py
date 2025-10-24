@@ -522,6 +522,56 @@ workflow.add_node("UserUpdateNode", "increment_login_count", {
 })
 ```
 
+### Dynamic Updates with PythonCodeNode (Core SDK v0.9.28+)
+
+**NEW**: Core SDK v0.9.28 enables PythonCodeNode to export multiple variables, making dynamic updates more natural.
+
+**Example: Dynamic field updates with business logic**
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime import AsyncLocalRuntime
+
+workflow = WorkflowBuilder()
+
+# Prepare dynamic update data with business logic
+workflow.add_node("PythonCodeNode", "prepare_update", {
+    "code": """
+import json
+
+# Prepare filter
+filter_data = {"id": summary_id}
+
+# Apply business logic to prepare fields
+summary_markdown = generate_markdown(raw_text)
+topics_json = json.dumps(extract_topics(raw_text))
+edited_by_user = True
+    """
+})
+
+# UpdateNode receives individual fields via connections
+workflow.add_node("ConversationSummaryUpdateNode", "update", {})
+
+# Clean, direct connections (no nested paths!)
+workflow.add_connection("prepare_update", "filter_data", "update", "filter")
+workflow.add_connection("prepare_update", "summary_markdown", "update", "summary_markdown")
+workflow.add_connection("prepare_update", "topics_json", "update", "topics_json")
+workflow.add_connection("prepare_update", "edited_by_user", "update", "edited_by_user")
+
+runtime = AsyncLocalRuntime()
+result = await runtime.execute_workflow_async(workflow.build(), {
+    "summary_id": "summary-123",
+    "raw_text": "Conversation text..."
+})
+```
+
+**Benefits:**
+- Natural variable naming (no nested `result` dict)
+- Matches developer mental model
+- Full DataFlow benefits (no SQL needed!)
+- Clean connections (no nested paths like `result.filter`)
+
+**Backward Compatibility:** Old pattern with `result = {"filter": {...}, "fields": {...}}` still works 100%.
+
 ## Delete Operations
 
 ### Single Record Delete

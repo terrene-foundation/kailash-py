@@ -119,6 +119,7 @@ workflow.add_node("UserUpdateNode", "update", {
 **2. Bulk Operations**
 - ❌ MISUNDERSTANDING: "Bulk operations are limited in alpha"
 - ✅ REALITY: ALL bulk operations work perfectly (ContactBulkCreateNode, ContactBulkUpdateNode, ContactBulkDeleteNode, ContactBulkUpsertNode all exist and function)
+- **v0.7.1 UPDATE**: BulkUpsertNode was fully implemented in v0.7.1 (previous versions had stub implementation)
 - **Impact**: Don't avoid bulk operations - they're production-ready and performant (10k+ ops/sec)
 
 **3. ListNode Result Structure**
@@ -229,6 +230,56 @@ workflow.add_node("UserCreateNode", "create", {
 
 **Applies To:** CreateNode, UpdateNode, BulkCreateNode, BulkUpdateNode, BulkUpsertNode
 
+### Dynamic Updates with PythonCodeNode Multi-Output (Core SDK v0.9.28+)
+
+**NEW**: Core SDK v0.9.28 enables PythonCodeNode to export multiple variables directly, making dynamic DataFlow updates natural and intuitive.
+
+**Before v0.9.28 (nested result pattern):**
+```python
+# OLD: Forced to nest everything in 'result'
+workflow.add_node("PythonCodeNode", "prepare", {
+    "code": """
+result = {
+    "filter": {"id": summary_id},
+    "fields": {"summary_markdown": updated_text}
+}
+    """
+})
+# Complex nested path connections required
+workflow.add_connection("prepare", "result.filter", "update", "filter")
+workflow.add_connection("prepare", "result.fields", "update", "fields")
+```
+
+**After v0.9.28 (multi-output pattern):**
+```python
+# NEW: Natural variable definitions
+workflow.add_node("PythonCodeNode", "prepare", {
+    "code": """
+filter_data = {"id": summary_id}
+summary_markdown = updated_text
+edited_by_user = True
+    """
+})
+
+# Clean, direct connections
+workflow.add_node("ConversationSummaryUpdateNode", "update", {})
+workflow.add_connection("prepare", "filter_data", "update", "filter")
+workflow.add_connection("prepare", "summary_markdown", "update", "summary_markdown")
+workflow.add_connection("prepare", "edited_by_user", "update", "edited_by_user")
+```
+
+**Benefits:**
+- ✅ Natural variable naming
+- ✅ Matches developer mental model
+- ✅ Less nesting, cleaner code
+- ✅ Full DataFlow benefits retained (no SQL needed!)
+
+**Backward Compatibility:** Old patterns with `result = {...}` continue to work 100%.
+
+**Requirements:** Core SDK >= v0.9.28, DataFlow >= v0.6.6
+
+**See Also:** [dataflow-dynamic-updates](../../skills/02-dataflow/dataflow-dynamic-updates.md) skill for complete examples
+
 ### Event Loop Isolation
 
 AsyncSQLDatabaseNode now automatically isolates connection pools per event loop, preventing "Event loop is closed" errors in sequential workflows and FastAPI applications.
@@ -298,6 +349,12 @@ workflow.add_node(result['generated_nodes']['User']['create'], 'create_user', {.
 > **See Skills**: [`dataflow-crud-operations`](../../skills/02-dataflow/dataflow-crud-operations.md) and [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md) for complete CRUD and query examples.
 
 Quick reference: 9 nodes auto-generated per model (Create, Read, Update, Delete, List, BulkCreate, BulkUpdate, BulkDelete, BulkUpsert).
+
+**v0.7.1 Update - BulkUpsertNode:**
+- Fully implemented in v0.7.1 (previous versions had stub implementation)
+- Parameters: `data` (required), `conflict_resolution` ("update" or "skip"/"ignore")
+- Conflict column: Always `id` (DataFlow standard, auto-inferred)
+- No `unique_fields` parameter - conflict detection uses `id` field only
 
 ### 🔑 CRITICAL: Template Syntax
 **Kailash uses `${}` NOT `{{}}`** - See [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md) for examples.

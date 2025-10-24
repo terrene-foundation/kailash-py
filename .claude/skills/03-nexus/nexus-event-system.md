@@ -9,6 +9,30 @@ tags: [nexus, events, broadcasting, lifecycle, hooks]
 
 Event-driven architecture for workflow lifecycle and cross-channel communication.
 
+## ⚠️ IMPORTANT: v1.0 vs v1.1 Capabilities
+
+**v1.0 (Current - v1.1.0):**
+- ✅ Events are **logged** to `_event_log` (not broadcast in real-time)
+- ✅ Retrieve events with `app.get_events()` helper method
+- ✅ Event decorators work but only trigger logging
+- ⏳ Real-time broadcasting **planned for v1.1**
+
+**v1.1 (Planned):**
+- 🔜 Real-time WebSocket broadcasting
+- 🔜 SSE (Server-Sent Events) streaming
+- 🔜 MCP notifications for AI agents
+- 🔜 Cross-channel event synchronization
+
+**Current Behavior:**
+```python
+# v1.0: Events are logged, not broadcast
+app.broadcast_event("CUSTOM_EVENT", {"data": "value"})
+# Logs: "Event logged (broadcast in v1.1): CUSTOM_EVENT"
+
+# Retrieve events manually
+events = app.get_events(event_type="CUSTOM_EVENT")
+```
+
 ## Built-in Events
 
 ### Workflow Lifecycle Events
@@ -74,23 +98,38 @@ def on_unregistered(event):
 
 ## Cross-Channel Broadcasting
 
-### Broadcast to All Channels
+### Broadcast to All Channels (v1.0 - Logged Only)
 
 ```python
-# Broadcast event to all channels
+# v1.0: Event is logged (NOT broadcast in real-time)
 app.broadcast_event("CUSTOM_EVENT", {
     "type": "notification",
     "message": "Important update",
     "timestamp": time.time()
 })
 
-# Listeners in each channel receive the event:
+# v1.0 Reality: Event logged to app._event_log
+# Retrieve later with: app.get_events(event_type="CUSTOM_EVENT")
+
+# v1.1 (Planned): Real-time broadcasting to:
 # - API: WebSocket push
 # - CLI: Terminal notification
 # - MCP: Event notification
 ```
 
-### Real-Time Updates
+**How to Retrieve Events in v1.0:**
+```python
+# Get all events
+all_events = app.get_events()
+
+# Filter by type
+custom_events = app.get_events(event_type="CUSTOM_EVENT")
+
+# Filter by session
+session_events = app.get_events(session_id="session-123")
+```
+
+### Real-Time Updates (v1.0 - Polling Required)
 
 ```python
 workflow = WorkflowBuilder()
@@ -100,7 +139,7 @@ workflow.add_node("PythonCodeNode", "long_process", {
 import time
 
 for i in range(10):
-    # Broadcast progress
+    # v1.0: Logs progress event (not real-time broadcast)
     app.broadcast_event('PROGRESS_UPDATE', {
         'percentage': (i + 1) * 10,
         'step': f'Processing step {i+1}/10',
@@ -113,6 +152,17 @@ result = {'completed': True, 'steps': 10}
 })
 
 app.register("monitored-process", workflow.build())
+
+# v1.0: Poll for progress updates
+while True:
+    events = app.get_events(event_type='PROGRESS_UPDATE')
+    latest = events[-1] if events else None
+    if latest and latest['data']['percentage'] == 100:
+        break
+    time.sleep(1)
+
+# v1.1 (Planned): Real-time WebSocket streaming
+# Client subscribes and receives events as they happen
 ```
 
 ## Custom Events
@@ -369,24 +419,51 @@ router.register("workflow_completed", notify_completion)
 router.route("workflow_completed", event)
 ```
 
-## Best Practices
+## Best Practices (v1.1.0)
 
-1. **Keep Handlers Fast** - Don't block event processing
-2. **Use Async for I/O** - Network calls, database writes
-3. **Handle Errors Gracefully** - Don't let handler errors crash app
-4. **Filter Events** - Only handle relevant events
-5. **Log All Events** - For debugging and auditing
-6. **Emit Custom Events** - For application-specific logic
+1. **Understand v1.0 Limitations** - Events are logged, not broadcast in real-time
+2. **Use `get_events()` for Retrieval** - Poll for events when needed
+3. **Keep Event Data Small** - Large payloads stored in `_event_log`
+4. **Filter Events Efficiently** - Use `event_type` and `session_id` parameters
+5. **Plan for v1.1 Migration** - Design with real-time broadcasting in mind
+6. **Use Event Decorators** - They work but only trigger logging in v1.0
 
-## Key Takeaways
+**v1.0 Workarounds:**
+```python
+# Instead of real-time broadcast, use polling
+def poll_events(app, event_type, timeout=30):
+    start = time.time()
+    while time.time() - start < timeout:
+        events = app.get_events(event_type=event_type)
+        if events:
+            return events[-1]
+        time.sleep(0.5)
+    return None
+```
 
-- Built-in lifecycle events for workflows and sessions
-- Cross-channel broadcasting for real-time updates
-- Custom events for application-specific logic
-- Multiple handlers per event
-- Async handler support
-- Event filtering and routing
-- Integration with external services
+## Key Takeaways (v1.1.0)
+
+**v1.0 Reality (Current):**
+- ✅ Events are **logged** to `_event_log`, not broadcast in real-time
+- ✅ Retrieve events with `app.get_events(event_type, session_id)`
+- ✅ Event decorators work but only trigger logging
+- ✅ Custom events supported via `broadcast_event()`
+- ❌ Real-time broadcasting NOT available (planned for v1.1)
+
+**v1.1 Planned:**
+- 🔜 Real-time WebSocket broadcasting
+- 🔜 SSE streaming for browser clients
+- 🔜 MCP notifications for AI agents
+- 🔜 Cross-channel event synchronization
+
+**Current Usage Pattern:**
+```python
+# Log event
+app.broadcast_event("EVENT_TYPE", {"data": "value"})
+
+# Retrieve later
+events = app.get_events(event_type="EVENT_TYPE")
+```
 
 ## Related Skills
 
