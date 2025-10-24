@@ -20,13 +20,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
 import pytest
-from tests.utils.docker_config import (
-    DATABASE_CONFIG,
-    OLLAMA_CONFIG,
-    REDIS_CONFIG,
-    ensure_docker_services,
-    get_postgres_connection_string,
-)
 
 from kailash import LocalRuntime, Workflow, WorkflowBuilder
 from kailash.nodes.admin import (
@@ -39,6 +32,13 @@ from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import SQLDatabaseNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+from tests.utils.docker_config import (
+    DATABASE_CONFIG,
+    OLLAMA_CONFIG,
+    REDIS_CONFIG,
+    ensure_docker_services,
+    get_postgres_connection_string,
+)
 
 # Mark as requiring Docker infrastructure
 pytestmark = [pytest.mark.docker, pytest.mark.e2e, pytest.mark.slow]

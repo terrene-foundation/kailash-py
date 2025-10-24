@@ -9,10 +9,11 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from kailash.workflow.builder import WorkflowBuilder
 from nexus import Nexus
 from nexus.channels import create_session_manager
 from nexus.discovery import discover_workflows
+
+from kailash.workflow.builder import WorkflowBuilder
 
 
 @pytest.mark.e2e

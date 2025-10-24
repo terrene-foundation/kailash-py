@@ -12,7 +12,6 @@ import time
 from pathlib import Path
 
 import pytest
-from tests.utils.docker_config import ensure_docker_services, get_redis_url
 
 from kailash.mcp_server import (
     MCPClient,
@@ -23,6 +22,7 @@ from kailash.mcp_server import (
 )
 from kailash.mcp_server.auth import APIKeyAuth
 from kailash.mcp_server.discovery import ServerInfo
+from tests.utils.docker_config import ensure_docker_services, get_redis_url
 
 
 @pytest.mark.e2e

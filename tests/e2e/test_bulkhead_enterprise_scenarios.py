@@ -10,6 +10,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+
 from src.kailash.core.resilience.bulkhead import (
     BulkheadManager,
     BulkheadPartition,
@@ -20,7 +21,6 @@ from src.kailash.core.resilience.bulkhead import (
     get_bulkhead_manager,
 )
 from src.kailash.nodes.data.sql import SQLDatabaseNode
-
 from tests.utils.docker_config import get_postgres_connection_string, get_redis_url
 
 

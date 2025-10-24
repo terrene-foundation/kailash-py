@@ -8,7 +8,6 @@ that work reliably in E2E test environments.
 from typing import Any, Dict, Optional
 
 from kailash.workflow.builder import WorkflowBuilder
-
 from tests.e2e.config import E2ETestConfig
 
 

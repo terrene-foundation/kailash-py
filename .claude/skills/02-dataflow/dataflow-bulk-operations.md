@@ -1,18 +1,20 @@
 ---
 name: dataflow-bulk-operations
-description: "High-performance bulk operations for DataFlow. Use when bulk operations, batch insert, BulkCreateNode, BulkUpdateNode, mass data import, or high-throughput processing."
+description: "High-performance bulk operations for DataFlow with MongoDB-style operators. Use when bulk operations, batch insert, BulkCreateNode, BulkUpdateNode, mass data import, $in/$nin operators, or high-throughput processing."
 ---
 
 # DataFlow Bulk Operations
 
-High-performance bulk nodes for processing thousands of records efficiently with automatic optimization.
+High-performance bulk nodes for processing thousands of records efficiently with automatic optimization and MongoDB-style query operators.
 
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+ / DataFlow 0.6.0`
+> SDK Version: `0.9.28+ / DataFlow 0.7.0`
 > Related Skills: [`dataflow-crud-operations`](#), [`dataflow-models`](#), [`dataflow-queries`](#)
 > Related Subagents: `dataflow-specialist` (performance optimization, troubleshooting)
+>
+> **⚡ New in v0.7.0**: MongoDB-style operators ($in, $nin, $gt, $gte, $lt, $lte, $ne) for bulk UPDATE and DELETE
 
 ## Quick Reference
 
@@ -159,7 +161,7 @@ workflow.add_node("ProductBulkUpdateNode", "update", {
 
 ```python
 workflow.add_node("ProductBulkDeleteNode", "cleanup", {
-    # Filter (which records to delete)
+    # Filter (which records to delete) - MongoDB-style operators supported (v0.7.0+)
     "filter": {
         "active": False,
         "created_at": {"$lt": "2022-01-01"}
@@ -177,6 +179,62 @@ workflow.add_node("ProductBulkDeleteNode", "cleanup", {
     "batch_size": 1000
 })
 ```
+
+### ⚡ MongoDB-Style Operators (v0.7.0+)
+
+**NEW**: Bulk UPDATE and DELETE operations support MongoDB-style query operators for intuitive filtering.
+
+**Supported Operators:**
+| Operator | SQL | Description | Example |
+|----------|-----|-------------|---------|
+| `$in` | `IN` | Match any value in list | `{"status": {"$in": ["active", "pending"]}}` |
+| `$nin` | `NOT IN` | Match values NOT in list | `{"type": {"$nin": ["test", "demo"]}}` |
+| `$gt` | `>` | Greater than | `{"price": {"$gt": 100.00}}` |
+| `$gte` | `>=` | Greater than or equal | `{"stock": {"$gte": 10}}` |
+| `$lt` | `<` | Less than | `{"views": {"$lt": 1000}}` |
+| `$lte` | `<=` | Less than or equal | `{"age": {"$lte": 18}}` |
+| `$ne` | `!=` | Not equal | `{"status": {"$ne": "deleted"}}` |
+
+**Examples:**
+
+```python
+# $in operator - Delete multiple statuses
+workflow.add_node("OrderBulkDeleteNode", "cleanup", {
+    "filter": {"status": {"$in": ["cancelled", "expired", "failed"]}}
+})
+
+# $nin operator - Keep only specific statuses
+workflow.add_node("OrderBulkDeleteNode", "cleanup_except", {
+    "filter": {"status": {"$nin": ["completed", "shipped"]}}
+})
+
+# Comparison operators - Update based on numeric comparison
+workflow.add_node("ProductBulkUpdateNode", "restock", {
+    "filter": {"stock": {"$lt": 10}},  # Stock less than 10
+    "fields": {"needs_restock": True}
+})
+
+# Combined operators - Complex filtering
+workflow.add_node("UserBulkUpdateNode", "flag_inactive", {
+    "filter": {
+        "last_login": {"$lt": "2024-01-01"},
+        "account_type": {"$in": ["free", "trial"]},
+        "status": {"$ne": "suspended"}
+    },
+    "fields": {"inactive": True}
+})
+
+# Multiple IDs - Common pattern
+workflow.add_node("ProductBulkDeleteNode", "delete_specific", {
+    "filter": {"id": {"$in": ["prod_1", "prod_2", "prod_3"]}}
+})
+```
+
+**Edge Cases Handled:**
+- ✅ Empty lists: `{"id": {"$in": []}}` → Matches nothing (0 records)
+- ✅ Single value: `{"id": {"$in": ["prod_1"]}}` → Works correctly
+- ✅ Duplicates: `{"id": {"$in": ["prod_1", "prod_1"]}}` → Deduped automatically
+- ✅ Mixed operators: Multiple operators in same filter work correctly
 
 ### BulkUpsertNode (v0.7.1+)
 
