@@ -98,87 +98,22 @@ from kailash.security import ExecutionTimeoutError
 
 logger = logging.getLogger(__name__)
 
-# Async-safe module whitelist with expanded capabilities
-ALLOWED_ASYNC_MODULES = {
-    # Core async functionality
-    "asyncio",
-    "contextvars",  # For async context management
-    "concurrent.futures",  # For thread/process pools
-    # Standard library - data types and utilities
-    "uuid",
-    "json",
-    "datetime",
-    "time",
-    "random",
-    "collections",
-    "functools",
-    "itertools",
-    "math",
-    "statistics",
-    "string",
-    "re",
-    "enum",
-    "dataclasses",
-    "typing",
-    "copy",
-    "pickle",  # For serialization (with caution)
-    "base64",
-    "hashlib",
-    "hmac",
-    "secrets",  # For cryptographic randomness
-    # Data processing and analysis
-    "pandas",
-    "numpy",
-    "scipy",
-    "sklearn",
-    # Async file operations
-    "aiofiles",  # Async file I/O
-    "pathlib",
-    "os",  # Limited to safe operations
-    "tempfile",  # For temporary files
-    # Async HTTP and networking
-    "aiohttp",  # Async HTTP client/server
-    "httpx",  # Modern async HTTP client
-    "websockets",  # WebSocket support
-    # Database drivers (async-native)
-    "asyncpg",  # PostgreSQL
-    "aiomysql",  # MySQL
-    "motor",  # MongoDB
-    "redis",  # Redis with asyncio support
-    "redis.asyncio",  # Redis async module
-    "aiosqlite",  # SQLite
-    # Message queues and streaming
-    "aiokafka",  # Kafka
-    "aio_pika",  # RabbitMQ
-    # Cloud SDKs (async variants)
-    "aioboto3",  # AWS
-    "aioazure",  # Azure
-    # Serialization and encoding
-    "msgpack",
-    "orjson",  # Fast JSON
-    "yaml",
-    "toml",
-    # Monitoring and logging
-    "structlog",  # Structured logging
-    "prometheus_client",  # Metrics
-    # Utilities
-    "cachetools",  # Caching
-    "tenacity",  # Retry logic
-    "ratelimit",  # Rate limiting
-}
+# Import shared constants and utilities
+from kailash.nodes.code.common import (
+    ALLOWED_ASYNC_BUILTINS,
+    ALLOWED_ASYNC_MODULES,
+    ASYNC_FUNCTION_REPLACEMENTS,
+    COMPLETELY_BLOCKED_MODULES,
+    DANGEROUS_GLOBAL_FUNCTIONS,
+    DANGEROUS_MODULE_FUNCTIONS,
+    ensure_json_serializable,
+    format_dangerous_function_error,
+    format_module_not_allowed_error,
+    is_dangerous_function,
+)
 
-# Dangerous async operations to block
-BLOCKED_ASYNC_PATTERNS = [
-    "subprocess",
-    "multiprocessing",
-    "__import__",
-    "eval",
-    "exec",
-    "compile",
-    "open",  # Use aiofiles instead
-    "input",
-    "raw_input",
-]
+# For backward compatibility, expose as module-level constants
+BLOCKED_ASYNC_PATTERNS = list(DANGEROUS_GLOBAL_FUNCTIONS)
 
 
 class AsyncSafeCodeChecker(ast.NodeVisitor):
@@ -653,58 +588,60 @@ class AsyncPythonCodeNode(AsyncNode):
                 raise ImportError(f"Import of module '{module_name}' is not allowed")
             return __import__(name, *args, **kwargs)
 
-        # Safe builtins (limited set)
+        # Use shared builtin whitelist for consistency with sync version
+        # Start with the common builtins from shared module
+        import builtins as builtin_module
+
         safe_builtins = {
-            "__import__": safe_import,  # Controlled import
-            "locals": locals,
-            "globals": globals,
-            "len": len,
-            "range": range,
-            "enumerate": enumerate,
-            "zip": zip,
-            "map": map,
-            "filter": filter,
-            "sum": sum,
-            "min": min,
-            "max": max,
-            "abs": abs,
-            "round": round,
-            "sorted": sorted,
-            "reversed": reversed,
-            "all": all,
-            "any": any,
-            "bool": bool,
-            "int": int,
-            "float": float,
-            "str": str,
-            "list": list,
-            "dict": dict,
-            "set": set,
-            "tuple": tuple,
-            "print": print,  # For debugging
-            "isinstance": isinstance,
-            "hasattr": hasattr,
-            "getattr": getattr,
-            "setattr": setattr,
-            "type": type,
-            "callable": callable,
-            "hash": hash,
-            "Exception": Exception,
-            "ValueError": ValueError,
-            "TypeError": TypeError,
-            "KeyError": KeyError,
-            "IndexError": IndexError,
-            "RuntimeError": RuntimeError,
-            "ConnectionError": ConnectionError,
-            "OSError": OSError,
-            "FileNotFoundError": FileNotFoundError,
+            "__import__": safe_import,  # Controlled import (override)
         }
+
+        # Add all allowed builtins from shared configuration
+        for name in ALLOWED_ASYNC_BUILTINS:
+            if hasattr(builtin_module, name):
+                safe_builtins[name] = getattr(builtin_module, name)
 
         # Create namespace with inputs and safe builtins
         namespace = {
             "__builtins__": safe_builtins,
             **inputs,  # Make inputs available as variables
         }
+
+        # Add data path utilities (matching sync version)
+        try:
+            from kailash.utils.data_paths import (
+                get_data_path,
+                get_input_data_path,
+                get_output_data_path,
+            )
+
+            namespace["get_input_data_path"] = get_input_data_path
+            namespace["get_output_data_path"] = get_output_data_path
+            namespace["get_data_path"] = get_data_path
+        except ImportError:
+            logger.warning(
+                "Could not import data path utilities - functions will not be available in AsyncPythonCodeNode execution"
+            )
+
+        # Add workflow context functions (matching sync version)
+        # Note: These would need to be async versions in a real implementation
+        # For now, we'll add fail-fast placeholders to match sync behavior
+        def _get_workflow_context(key: str, default=None):
+            raise NodeExecutionError(
+                "get_workflow_context() is not available - node instance not provided. "
+                "This function requires execution through a workflow runtime with context support. "
+                "If you need stateful data, consider using explicit variables or external storage."
+            )
+
+        def _set_workflow_context(key: str, value):
+            raise NodeExecutionError(
+                "set_workflow_context() is not available - node instance not provided. "
+                "This function requires execution through a workflow runtime with context support. "
+                "If you need stateful data, consider using explicit variables or external storage."
+            )
+
+        namespace["get_workflow_context"] = _get_workflow_context
+        namespace["set_workflow_context"] = _set_workflow_context
 
         return namespace
 
@@ -814,6 +751,8 @@ class AsyncPythonCodeNode(AsyncNode):
             )
 
             # We'll compile the entire async function as a unit
+            # CRITICAL FIX: Return ALL variables from local scope, not just 'result'
+            # This enables multi-output pattern (v0.9.28+) for AsyncPythonCodeNode
             async_func_code = f"""
 async def {func_name}(_namespace):
     # Extract input variables
@@ -822,11 +761,26 @@ async def {func_name}(_namespace):
     # User's async code
 {self._indent_code(self.code)}
 
-    # Return result if defined
-    try:
-        return result
-    except NameError:
-        return {{}}
+    # Export ALL non-private variables (multi-output pattern)
+    # This matches PythonCodeNode behavior and fixes variable export bug
+    import types
+
+    # Get local variables (exclude function parameters and builtins)
+    local_vars = locals().copy()
+
+    # Filter to exportable variables:
+    # - Not private (no leading underscore)
+    # - Not module types
+    # - Not the _namespace parameter itself
+    exported_vars = {{
+        k: v
+        for k, v in local_vars.items()
+        if not k.startswith("_")
+        and not isinstance(v, types.ModuleType)
+        and k != "_namespace"
+    }}
+
+    return exported_vars
 """
 
             # Compile and execute the function definition
@@ -858,7 +812,7 @@ async def {func_name}(_namespace):
             try:
                 # Execute with timeout
                 start_time = time.time()
-                result = await asyncio.wait_for(
+                exported_vars = await asyncio.wait_for(
                     user_function(namespace), timeout=self.timeout
                 )
                 execution_time = time.time() - start_time
@@ -867,11 +821,14 @@ async def {func_name}(_namespace):
                     f"AsyncPythonCodeNode executed successfully in {execution_time:.2f}s"
                 )
 
-                # Ensure result is a dictionary
-                if not isinstance(result, dict):
-                    result = {"value": result}
+                # Match PythonCodeNode behavior:
+                # - If 'result' exists, return just that (wrapped in dict)
+                # - Otherwise return all exported variables (multi-output pattern)
+                if "result" in exported_vars:
+                    return {"result": exported_vars["result"]}
 
-                return result
+                # Return all exported variables for multi-output pattern
+                return exported_vars
 
             finally:
                 # Restore original create_task
@@ -885,6 +842,33 @@ async def {func_name}(_namespace):
             logger.error(f"Async code execution failed: {e}")
             logger.debug(f"Traceback: {traceback.format_exc()}")
             raise NodeExecutionError(f"Execution failed: {str(e)}")
+
+    def get_output_schema(self) -> Dict[str, NodeParameter]:
+        """Define output parameters for this node.
+
+        Returns:
+            Dictionary mapping output names to their parameter definitions
+
+        Note:
+            Supports multi-output pattern (v0.9.28+) where code can export
+            multiple variables directly without using 'result':
+
+            Example:
+                my_filter = {"id": "test_123"}
+                my_fields = {"name": "John"}
+
+            Both my_filter and my_fields become available as outputs.
+        """
+        # Dynamic output schema - 'result' is optional
+        # This allows code to export multiple variables directly
+        return {
+            "result": NodeParameter(
+                name="result",
+                type=Any,
+                required=False,  # Allow code to export other variables
+                description="Primary output result (optional - code can export multiple variables)",
+            )
+        }
 
     def validate_outputs(self, outputs: Dict[str, Any]) -> Dict[str, Any]:
         """Validate outputs are JSON-serializable."""
@@ -1034,3 +1018,198 @@ async def {func_name}(_namespace):
 
         # Create node with function's code
         return cls(code=code, name=config.get("name", func.__name__), **config)
+
+    @staticmethod
+    def list_allowed_modules() -> list[str]:
+        """List all allowed modules for AsyncPythonCodeNode.
+
+        Returns:
+            Sorted list of allowed module names
+
+        Example:
+            >>> modules = AsyncPythonCodeNode.list_allowed_modules()
+            >>> 'asyncio' in modules
+            True
+            >>> 'subprocess' in modules
+            False
+        """
+        return sorted(ALLOWED_ASYNC_MODULES)
+
+    @staticmethod
+    def check_module_availability(module_name: str) -> Dict[str, Any]:
+        """Check if a module is allowed and available for import.
+
+        This utility helps users understand why a module import might fail
+        and provides helpful suggestions for alternatives.
+
+        Args:
+            module_name: Name of the module to check
+
+        Returns:
+            Dictionary with status information:
+                - module: Module name
+                - allowed: Whether module is in whitelist
+                - installed: Whether module is installed
+                - importable: Whether module can be imported
+                - error: Error message if any
+                - suggestions: List of helpful suggestions
+
+        Example:
+            >>> result = AsyncPythonCodeNode.check_module_availability("asyncio")
+            >>> result['allowed']
+            True
+            >>> result['installed']
+            True
+
+            >>> result = AsyncPythonCodeNode.check_module_availability("subprocess")
+            >>> result['allowed']
+            False
+            >>> 'not allowed' in result['suggestions'][0]
+            True
+        """
+        import importlib.util
+
+        result = {
+            "module": module_name,
+            "allowed": module_name in ALLOWED_ASYNC_MODULES,
+            "installed": False,
+            "importable": False,
+            "error": None,
+            "suggestions": [],
+        }
+
+        if not result["allowed"]:
+            result["suggestions"].append(
+                f"Module '{module_name}' is not in the allowed list for async context."
+            )
+            result["suggestions"].append(
+                f"Allowed modules: {', '.join(sorted(ALLOWED_ASYNC_MODULES))}"
+            )
+
+            # Add specific suggestions
+            from kailash.nodes.code.common import get_module_suggestions
+
+            specific_suggestions = get_module_suggestions(module_name)
+            result["suggestions"].extend(specific_suggestions)
+        else:
+            # Check if module is installed
+            try:
+                spec = importlib.util.find_spec(module_name)
+                result["installed"] = spec is not None
+
+                if result["installed"]:
+                    # Try to import it
+                    try:
+                        importlib.import_module(module_name)
+                        result["importable"] = True
+                    except Exception as e:
+                        result["error"] = str(e)
+                        result["suggestions"].append(
+                            f"Module is installed but cannot be imported: {e}"
+                        )
+                else:
+                    result["suggestions"].append(
+                        f"Module '{module_name}' needs to be installed: pip install {module_name}"
+                    )
+            except Exception as e:
+                result["error"] = str(e)
+                result["suggestions"].append(f"Error checking module: {e}")
+
+        return result
+
+    def validate_code(self, code: str) -> Dict[str, Any]:
+        """Validate async Python code and provide detailed feedback.
+
+        This method checks code for syntax errors, security violations, and
+        provides helpful suggestions. It's useful for pre-validating user code
+        before execution.
+
+        Args:
+            code: Async Python code to validate
+
+        Returns:
+            Dictionary with validation results:
+                - valid: Whether code is valid and safe
+                - syntax_errors: List of syntax errors found
+                - safety_violations: List of security violations
+                - imports: List of modules imported
+                - suggestions: List of helpful suggestions
+                - warnings: List of warnings (non-blocking)
+
+        Example:
+            >>> node = AsyncPythonCodeNode(code="result = 1")
+            >>> result = node.validate_code("import subprocess")
+            >>> result['valid']
+            False
+            >>> 'subprocess' in result['safety_violations'][0]['module']
+            True
+        """
+        result = {
+            "valid": True,
+            "syntax_errors": [],
+            "safety_violations": [],
+            "imports": [],
+            "suggestions": [],
+            "warnings": [],
+        }
+
+        # Check syntax
+        try:
+            ast.parse(code)
+        except SyntaxError as e:
+            result["valid"] = False
+            result["syntax_errors"].append(
+                {"line": e.lineno, "column": e.offset, "message": e.msg, "text": e.text}
+            )
+            result["suggestions"].append(
+                f"Fix syntax error at line {e.lineno}: {e.msg}"
+            )
+            return result
+
+        # Check safety
+        try:
+            checker = AsyncSafeCodeChecker()
+            checker.visit(ast.parse(code))
+            result["imports"] = checker.imports_found
+
+            if checker.violations:
+                result["valid"] = False
+                result["safety_violations"] = checker.violations
+
+                # Add suggestions from violations
+                for violation in checker.violations:
+                    if violation["type"] in [
+                        "import",
+                        "import_from",
+                        "dangerous_import",
+                    ]:
+                        module = violation.get("module", "unknown")
+                        module_info = self.check_module_availability(module)
+                        result["suggestions"].extend(module_info["suggestions"])
+
+        except SafetyViolationError as e:
+            result["valid"] = False
+            result["safety_violations"].append(
+                {"type": "safety_error", "message": str(e), "line": 1}
+            )
+            result["suggestions"].append(
+                "Fix security violations before using this code."
+            )
+        except Exception as e:
+            result["warnings"].append(f"Could not complete safety check: {e}")
+
+        # Check for common issues
+        if "print(" in code and "result" not in code:
+            result["warnings"].append(
+                "Code uses print() but doesn't set 'result'. Output might not be captured."
+            )
+            result["suggestions"].append(
+                "Set 'result' variable to return values from the node."
+            )
+
+        if "await " not in code and "async def" not in code:
+            result["warnings"].append(
+                "Code doesn't use 'await' or define async functions. Consider using PythonCodeNode (sync) for better performance."
+            )
+
+        return result

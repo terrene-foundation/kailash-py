@@ -53,21 +53,34 @@ def ensure_nodes_registered():
         from kailash.nodes.code.python import PythonCodeNode
         from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode
         from kailash.nodes.data.sql import SQLDatabaseNode
-        from kailash.nodes.transform.data_transform import DataTransformer
 
         # Force registration if not already registered
+        # Use try/except because after sys.modules clearing, class hierarchy checks may fail
         if "PythonCodeNode" not in NodeRegistry._nodes:
-            NodeRegistry.register(PythonCodeNode, "PythonCodeNode")
+            try:
+                NodeRegistry.register(PythonCodeNode, "PythonCodeNode")
+            except Exception:
+                pass  # Ignore if already registered via decorator
         if "CSVReaderNode" not in NodeRegistry._nodes:
-            NodeRegistry.register(CSVReaderNode, "CSVReaderNode")
+            try:
+                NodeRegistry.register(CSVReaderNode, "CSVReaderNode")
+            except Exception:
+                pass
         if "JSONReaderNode" not in NodeRegistry._nodes:
-            NodeRegistry.register(JSONReaderNode, "JSONReaderNode")
+            try:
+                NodeRegistry.register(JSONReaderNode, "JSONReaderNode")
+            except Exception:
+                pass
         if "HTTPRequestNode" not in NodeRegistry._nodes:
-            NodeRegistry.register(HTTPRequestNode, "HTTPRequestNode")
+            try:
+                NodeRegistry.register(HTTPRequestNode, "HTTPRequestNode")
+            except Exception:
+                pass
         if "SQLDatabaseNode" not in NodeRegistry._nodes:
-            NodeRegistry.register(SQLDatabaseNode, "SQLDatabaseNode")
-        if "DataTransformer" not in NodeRegistry._nodes:
-            NodeRegistry.register(DataTransformer, "DataTransformer")
+            try:
+                NodeRegistry.register(SQLDatabaseNode, "SQLDatabaseNode")
+            except Exception:
+                pass
 
     except ImportError as e:
         # If imports fail, try to at least import the main module

@@ -942,10 +942,9 @@ class TestEnhancedWarningSystemIntegration:
         try:
             from kailash.nodes.base import Node, NodeParameter
             from kailash.workflow.builder import WorkflowBuilder
-
-            from tests.conftest import (
+            from tests.conftest import (  # This is registered with @register_node
                 MockNode,
-            )  # This is registered with @register_node
+            )
 
             builder = WorkflowBuilder()
 
@@ -1040,7 +1039,6 @@ class TestEnhancedWarningSystemIntegration:
         try:
             from kailash.nodes.base import Node, NodeParameter
             from kailash.workflow.builder import WorkflowBuilder
-
             from tests.conftest import MockNode  # SDK node
 
             # Create a custom security validation node
@@ -1105,7 +1103,6 @@ class TestEnhancedWarningSystemIntegration:
         try:
             from kailash.nodes.base import Node, NodeParameter, NodeRegistry
             from kailash.workflow.builder import WorkflowBuilder
-
             from tests.conftest import MockNode  # SDK node
 
             # Create custom node

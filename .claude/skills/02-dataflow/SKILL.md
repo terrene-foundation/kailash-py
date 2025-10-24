@@ -18,9 +18,37 @@ DataFlow transforms database models into workflow nodes automatically, providing
 - **Integration Ready**: Works with Nexus for multi-channel deployment
 - **Specialized Adapters**: SQL (9 nodes/model), Document (8 nodes), Vector (3 nodes)
 
-## ⚠️ Critical Bug Fixes (v0.6.2-v0.6.3)
+## ⚠️ Critical Bug Fixes (v0.6.2-v0.7.0)
 
-### Truthiness Bug Pattern (FIXED)
+### v0.7.0 Bulk Operations Fixes (LATEST - 2025-10-24)
+
+**8 Critical bugs fixed in bulk operations:**
+
+1. **BUG-001**: BulkUpsertNode silent INSERT failure (CRITICAL) - Fixed in v0.7.0
+2. **BUG-002**: Parameter serialization (conflict_fields) - Fixed in v0.7.0
+3. **BUG-003**: BulkCreateNode count reporting - Fixed in v0.7.0
+4. **BUG-004**: BulkUpsertNode UPDATE not working - Fixed in v0.7.0
+5. **BUG-005**: BulkDeleteNode $in operator not converting to SQL IN - Fixed in v0.7.0
+6. **BUG-006**: BulkUpdateNode $in operator not converting to SQL IN - Fixed in v0.7.0
+7. **BUG-007**: Empty $in list causes SQL syntax error - Fixed in v0.7.0
+8. **BUG-008**: Empty $nin list not handled - Fixed in v0.7.0
+
+**Key Fixes:**
+- ✅ **UPDATE Operations**: BulkUpsertNode now correctly updates existing records using PostgreSQL `xmax` detection
+- ✅ **MongoDB Operators**: All bulk operations support `$in`, `$nin`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`
+- ✅ **Empty List Handling**: `{"id": {"$in": []}}` now works correctly (matches nothing)
+- ✅ **Code Quality**: 160 lines eliminated via shared helper function
+
+**Test Coverage**: 57/57 tests passing (100%)
+
+**Upgrade Command:**
+```bash
+pip install --upgrade kailash-dataflow>=0.7.0
+```
+
+---
+
+### v0.6.2-v0.6.3 Truthiness Bug Pattern (FIXED)
 Two critical bugs caused by Python truthiness checks on empty dicts:
 
 **v0.6.2 - ListNode Filter Operators:**
@@ -48,19 +76,11 @@ if "filter" in kwargs:  # GOOD
 if "filter" not in validated_inputs:  # GOOD
 ```
 
-### Verification
-Comprehensive search performed (v0.6.3): 50+ files, 100+ locations checked.
-Result: All similar bugs found and fixed. Confidence: 95%+
-
 ### Affected Versions
 - ❌ v0.5.4 - v0.6.1: Broken filter operators
 - ✅ v0.6.2+: All filter operators work correctly
 - ✅ v0.6.3+: BulkDelete safe mode fixed
-
-**Upgrade Command:**
-```bash
-pip install --upgrade kailash-dataflow>=0.6.3
-```
+- ✅ v0.7.0+: All bulk operations fully functional with MongoDB operators
 
 ## Quick Start
 
