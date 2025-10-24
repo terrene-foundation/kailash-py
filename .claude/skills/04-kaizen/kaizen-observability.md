@@ -6,6 +6,14 @@
 
 Kaizen v0.5.0 includes production-ready observability with zero performance impact (-0.06% overhead). Complete monitoring stack with distributed tracing (OpenTelemetry/Jaeger), metrics collection (Prometheus), structured logging (JSON/ELK), and audit trails (JSONL). All systems validated with real infrastructure and 192 tests passing.
 
+**⚠️ IMPORTANT: Observability is OPT-IN**
+- ✅ **100% backward compatible** - existing agents work without any changes
+- ✅ **No migration required** - agents work perfectly fine without observability
+- ✅ **Zero breaking changes** - observability is disabled by default
+- ✅ **Enable when needed** - call `agent.enable_observability()` to activate monitoring
+
+Agents created without calling `enable_observability()` function normally with no overhead.
+
 ## Quick Start - Complete Observability
 
 ```python
