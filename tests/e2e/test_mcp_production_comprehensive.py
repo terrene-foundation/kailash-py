@@ -37,7 +37,6 @@ from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import JSONReaderNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
 from tests.utils.docker_config import (
     REDIS_CONFIG,
     get_postgres_connection_string,

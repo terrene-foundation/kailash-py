@@ -28,6 +28,11 @@ from typing import Any, Dict, List
 
 import pytest
 
+from kailash.runtime.local import LocalRuntime
+
+# Import Core SDK components for real integration testing
+from kailash.workflow.builder import WorkflowBuilder
+
 # Import test infrastructure utilities
 from tests.utils.performance_tracker import PerformanceReport, PerformanceTracker
 from tests.utils.test_fixtures import (
@@ -35,11 +40,6 @@ from tests.utils.test_fixtures import (
     load_test_scenarios,
     test_environment_config,
 )
-
-from kailash.runtime.local import LocalRuntime
-
-# Import Core SDK components for real integration testing
-from kailash.workflow.builder import WorkflowBuilder
 
 # Test markers
 pytestmark = pytest.mark.integration
