@@ -68,7 +68,7 @@ best_worker = pattern.supervisor.select_worker_for_task(
 
 ### Available Specialized Agents
 
-**Implemented and Production-Ready (v0.2.0):**
+**Implemented and Production-Ready (v0.5.0):**
 ```python
 from kaizen.agents import (
     # Single-Agent Patterns (8 agents)
@@ -178,11 +178,10 @@ result = agent.run(question="test")
 - **Audit Trails**: Immutable JSONL for SOC2/GDPR/HIPAA compliance
 - **Grafana Dashboards**: 10+ pre-built dashboards (UI: http://localhost:3000)
 
-**Production Validated:**
+**Production Validated (v0.5.0 Release):**
 - -0.06% overhead (essentially zero, tested with 100 real OpenAI API calls)
-- 192 tests passing (158 unit + 18 integration + 16 E2E)
-- 100% test coverage for all observability systems
 - 0.57ms p95 audit latency (<10ms target, 17.5x margin)
+- Validated with real infrastructure (NO MOCKING in Tiers 2-3 tests)
 
 **Start Observability Stack:**
 ```bash
@@ -411,7 +410,7 @@ agent = SimpleQAAgent(config)  # Auto-extraction happens here
 
 4. **Multi-Agent Coordination** (`src/kaizen/agents/coordination/`)
    - Google A2A protocol integration (100% compliant)
-   - SupervisorWorkerPattern with semantic matching (14/14 tests)
+   - SupervisorWorkerPattern with semantic matching (production-ready)
    - 4 additional patterns: Consensus, Debate, Sequential, Handoff
    - Automatic capability discovery, no hardcoded selection
 
