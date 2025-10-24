@@ -940,12 +940,12 @@ class TestEnhancedWarningSystemIntegration:
     def test_sdk_node_with_real_workflow(self):
         """Test that SDK nodes provide correct warnings in realistic workflows."""
         try:
+            from tests.conftest import (  # This is registered with @register_node
+                MockNode,
+            )
+
             from kailash.nodes.base import Node, NodeParameter
             from kailash.workflow.builder import WorkflowBuilder
-
-            from tests.conftest import (
-                MockNode,
-            )  # This is registered with @register_node
 
             builder = WorkflowBuilder()
 
@@ -1038,10 +1038,10 @@ class TestEnhancedWarningSystemIntegration:
     def test_mixed_node_types_realistic_workflow(self):
         """Test realistic workflow with mix of SDK and custom nodes."""
         try:
+            from tests.conftest import MockNode  # SDK node
+
             from kailash.nodes.base import Node, NodeParameter
             from kailash.workflow.builder import WorkflowBuilder
-
-            from tests.conftest import MockNode  # SDK node
 
             # Create a custom security validation node
             class SecurityValidationNode(Node):
@@ -1103,10 +1103,10 @@ class TestEnhancedWarningSystemIntegration:
     def test_node_detection_accuracy_with_registry(self):
         """Test that node type detection works correctly with the NodeRegistry."""
         try:
+            from tests.conftest import MockNode  # SDK node
+
             from kailash.nodes.base import Node, NodeParameter, NodeRegistry
             from kailash.workflow.builder import WorkflowBuilder
-
-            from tests.conftest import MockNode  # SDK node
 
             # Create custom node
             class UnregisteredCustomNode(Node):
