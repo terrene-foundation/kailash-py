@@ -280,15 +280,19 @@ pip install kailash-dataflow
 - **4 production examples** with complete deployment guides
 - **Latest**: v0.3.3 - Critical connection parsing fix for special characters in passwords
 
-### 2. Nexus - Multi-Channel Platform (v1.0.3)
+### 2. Nexus - Multi-Channel Platform (v1.1.0)
 ```bash
 pip install kailash-nexus
 ```
 - **Unified API, CLI, and MCP** from single codebase
 - **Enterprise orchestration** with multi-tenancy
 - **Session management** with cross-channel synchronization
-- **105 tests** with comprehensive validation
-- **Latest**: v1.0.3 - Production-ready release with enhanced stability
+- **248 tests passing** with comprehensive validation
+- **Latest**: v1.1.0 - Production-ready with stub implementation fixes
+  - Fixed 10 stub implementations (3 CRITICAL, 4 HIGH, 3 MEDIUM)
+  - Event logging implemented (v1.0), real-time broadcasting planned (v1.1)
+  - Metadata-based workflow schema extraction
+  - Clear v1.0 vs v1.1 feature roadmap
 
 ### 3. AI Registry - Advanced RAG Platform
 ```bash

@@ -9,9 +9,37 @@ tags: [nexus, plugins, extensibility, custom, development]
 
 Extend Nexus with custom plugins and integrations.
 
-## Plugin System Overview
+## Plugin System Overview (v1.1.0)
 
 Nexus provides a plugin system for extending functionality without modifying core code.
+
+**v1.1.0 Validation Improvements:**
+- ✅ Plugin validation now checks for `name` and `apply` method
+- ✅ Specific error handling for TypeError (missing constructor args)
+- ✅ Improved logging for plugin failures
+- ✅ Validates plugin name is non-empty string
+
+**Plugin Interface:**
+```python
+from nexus.plugins import NexusPlugin
+
+class MyPlugin(NexusPlugin):
+    @property
+    def name(self) -> str:
+        return "my_plugin"  # Required: non-empty string
+
+    @property
+    def description(self) -> str:
+        return "Description"  # Required
+
+    def apply(self, nexus_instance) -> None:
+        # Required: must be callable
+        pass
+
+    def validate(self) -> bool:
+        # Optional: custom validation
+        return super().validate()
+```
 
 ## Built-in Plugins
 

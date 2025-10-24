@@ -1,6 +1,7 @@
 # Kailash SDK Test Environment
 # Comprehensive testing infrastructure with all required services
 # Based on production-quality patterns from Kailash Studio
+name: kailash_sdk
 
 services:
   # PostgreSQL with admin schema and pgvector

@@ -41,10 +41,10 @@ workflow.add_node("ProductBulkDeleteNode", "cleanup", {
     "soft_delete": True
 })
 
-# Bulk upsert
+# Bulk upsert (v0.7.1+)
 workflow.add_node("ProductBulkUpsertNode", "sync", {
     "data": products_list,
-    "unique_fields": ["sku"]
+    "conflict_resolution": "update"  # "update" or "skip"/"ignore"
 })
 ```
 
@@ -103,7 +103,7 @@ print(f"Success: {imported['success_count']}, Failed: {imported['failure_count']
 | **BulkCreateNode** | 10k+/sec | Data import | `data`, `batch_size`, `conflict_resolution` |
 | **BulkUpdateNode** | 50k+/sec | Mass updates | `filter`, `updates`, `batch_size` |
 | **BulkDeleteNode** | 100k+/sec | Cleanup | `filter`, `soft_delete`, `batch_size` |
-| **BulkUpsertNode** | 3k+/sec | Sync operations | `data`, `unique_fields`, `batch_size` |
+| **BulkUpsertNode** | 3k+/sec | Sync operations | `data`, `conflict_resolution`, `batch_size` |
 
 ## Key Parameters / Options
 
@@ -178,22 +178,53 @@ workflow.add_node("ProductBulkDeleteNode", "cleanup", {
 })
 ```
 
-### BulkUpsertNode
+### BulkUpsertNode (v0.7.1+)
+
+**IMPORTANT**: BulkUpsertNode was fully implemented in v0.7.1. Previous versions had only a stub implementation.
 
 ```python
 workflow.add_node("ProductBulkUpsertNode", "sync", {
-    # Data to upsert
+    # Required: Data to upsert (must include 'id' field)
     "data": products_list,
 
-    # Matching fields
-    "unique_fields": ["sku"],       # Check these for duplicates
-
-    # Field control
-    "update_fields": ["price", "stock"],  # Update these on match
-    "insert_fields": ["*"],         # All fields for new records
+    # Conflict resolution strategy
+    "conflict_resolution": "update",  # "update" (default) or "skip"/"ignore"
 
     # Performance
     "batch_size": 2000
+})
+```
+
+**Key Points:**
+- **Conflict Column**: Always `id` (DataFlow standard, auto-inferred)
+- **conflict_resolution**:
+  - `"update"` (default): Update existing records on conflict
+  - `"skip"` or `"ignore"`: Skip existing records, insert only new ones
+- **No unique_fields parameter**: Conflict detection always uses `id` field
+- **Data Structure**: Each record in `data` must include an `id` field
+
+**Example: Update Conflicts**
+```python
+# Update existing products, insert new ones
+products = [
+    {"id": "prod-001", "name": "Widget A", "price": 19.99, "stock": 100},
+    {"id": "prod-002", "name": "Widget B", "price": 29.99, "stock": 50},
+]
+
+workflow.add_node("ProductBulkUpsertNode", "upsert_products", {
+    "data": products,
+    "conflict_resolution": "update",  # Update if id exists
+    "batch_size": 1000
+})
+```
+
+**Example: Skip Conflicts (Insert Only New)**
+```python
+# Insert only new products, skip existing ones
+workflow.add_node("ProductBulkUpsertNode", "insert_new_products", {
+    "data": products,
+    "conflict_resolution": "skip",  # Skip if id exists
+    "batch_size": 1000
 })
 ```
 
@@ -349,8 +380,9 @@ from datetime import datetime
 response = requests.get("https://api.example.com/products")
 products = response.json()
 
-# Add sync timestamp
+# Add sync timestamp and ensure 'id' field exists
 for product in products:
+    product["id"] = product.get("id") or product.get("external_id")
     product["last_synced"] = datetime.now().isoformat()
 
 result = {"products": products}
@@ -360,7 +392,7 @@ result = {"products": products}
 # BulkUpsertNode converts all datetime strings
 workflow.add_node("ProductBulkUpsertNode", "sync_products", {
     "data": "{{fetch_external_data.products}}",  # ISO strings → datetime
-    "unique_fields": ["external_id"],
+    "conflict_resolution": "update",  # Update existing products
     "batch_size": 500
 })
 ```
@@ -439,13 +471,19 @@ workflow.add_node("PythonCodeNode", "sync_api", {
     "code": """
 import requests
 response = requests.get("https://api.partner.com/inventory")
-result = {"inventory": response.json()}  # Contains ISO datetime strings
+inventory_data = response.json()
+
+# Ensure each record has 'id' field (required for upsert)
+for item in inventory_data:
+    item["id"] = item.get("id") or item.get("sku")
+
+result = {"inventory": inventory_data}  # Contains ISO datetime strings
     """
 })
 
 workflow.add_node("InventoryBulkUpsertNode", "sync", {
     "data": "{{sync_api.inventory}}",  # Timestamps auto-converted
-    "unique_fields": ["sku"],
+    "conflict_resolution": "update",  # Update existing inventory
     "batch_size": 1000
 })
 ```
@@ -592,18 +630,21 @@ print(f"Updated {updated['success_count']} products")
 # Sync products from external API
 external_products = fetch_from_api()  # Get external data
 
+# Ensure all records have 'id' field (required for upsert)
+for product in external_products:
+    product["id"] = product.get("id") or product.get("external_id")
+
 workflow = WorkflowBuilder()
 workflow.add_node("ProductBulkUpsertNode", "sync_products", {
     "data": external_products,
-    "unique_fields": ["external_id"],    # Match on external ID
-    "update_fields": ["price", "stock"], # Update price/stock
-    "insert_fields": ["*"],              # All fields for new
+    "conflict_resolution": "update",  # Update existing, insert new
     "batch_size": 3000
 })
 
 results, run_id = runtime.execute(workflow.build())
 sync_result = results["sync_products"]["data"]
-print(f"Created: {sync_result['inserted']}, Updated: {sync_result['updated']}")
+print(f"Processed: {sync_result['records_processed']}")
+print(f"Inserted: {sync_result['inserted']}, Updated: {sync_result['updated']}")
 ```
 
 ## Troubleshooting
