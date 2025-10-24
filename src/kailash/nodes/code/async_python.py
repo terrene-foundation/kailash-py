@@ -689,6 +689,23 @@ class AsyncPythonCodeNode(AsyncNode):
             "type": type,
             "callable": callable,
             "hash": hash,
+            # Additional useful builtins for feature parity with PythonCodeNode
+            "iter": iter,  # For iterator creation
+            "next": next,  # For iterator consumption
+            "frozenset": frozenset,
+            "bytes": bytes,
+            "bytearray": bytearray,
+            "complex": complex,
+            "divmod": divmod,
+            "pow": pow,
+            "hex": hex,
+            "oct": oct,
+            "bin": bin,
+            "format": format,
+            "ord": ord,
+            "chr": chr,
+            "repr": repr,
+            "vars": vars,
             "Exception": Exception,
             "ValueError": ValueError,
             "TypeError": TypeError,
@@ -698,6 +715,16 @@ class AsyncPythonCodeNode(AsyncNode):
             "ConnectionError": ConnectionError,
             "OSError": OSError,
             "FileNotFoundError": FileNotFoundError,
+            # Additional exception classes for feature parity with PythonCodeNode
+            # Fix for bug: "name 'NameError' is not defined"
+            "NameError": NameError,  # Critical: undefined variables
+            "AttributeError": AttributeError,  # Critical: missing attributes
+            "StopIteration": StopIteration,  # Iterator exhaustion
+            "ImportError": ImportError,  # Import failures
+            "IOError": IOError,  # I/O errors (alias for OSError)
+            "ZeroDivisionError": ZeroDivisionError,  # Division by zero
+            "ArithmeticError": ArithmeticError,  # Arithmetic errors
+            "AssertionError": AssertionError,  # Assertion errors
         }
 
         # Create namespace with inputs and safe builtins
