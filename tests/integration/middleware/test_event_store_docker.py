@@ -6,12 +6,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
+
 from kailash.middleware.gateway.event_store import EventStore, EventType, RequestEvent
 from kailash.middleware.gateway.storage_backends import (
     PostgreSQLEventStorage,
     RedisEventStorage,
 )
-
 from tests.config_unified import POSTGRES_CONFIG, REDIS_CONFIG
 
 

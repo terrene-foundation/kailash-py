@@ -189,12 +189,16 @@ class TestRuntimeHelperFunction:
         with pytest.raises(ValueError, match="Invalid context"):
             get_runtime("invalid_context")
 
-    def test_get_runtime_defaults_to_async(self):
-        """Test get_runtime defaults to async when no context specified."""
-        from kailash.runtime import get_runtime
+    def test_get_runtime_auto_detects_context(self):
+        """Test get_runtime auto-detects context when not specified (P0-4 fix).
 
-        runtime = get_runtime()  # No context argument
-        assert isinstance(runtime, AsyncLocalRuntime)
+        In sync contexts (like this test), it detects and returns LocalRuntime.
+        In async contexts (event loop running), it returns AsyncLocalRuntime.
+        """
+        from kailash.runtime import LocalRuntime, get_runtime
+
+        runtime = get_runtime()  # No context argument - auto-detects sync
+        assert isinstance(runtime, LocalRuntime)  # Sync context detected
 
 
 class TestRuntimeValidation:

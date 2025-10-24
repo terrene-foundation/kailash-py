@@ -657,8 +657,9 @@ async def async_process(data):
     function_name="async_process"
 )
 ```
-**Key Features**: Async execution, concurrent processing
-**Use Cases**: High-performance custom logic
+**Key Features**: Async execution, concurrent processing, full exception handling (NameError, AttributeError, etc.), iterator support (iter/next)
+**Use Cases**: High-performance custom logic, async I/O operations, concurrent data processing
+**Available Exceptions**: NameError, AttributeError, ZeroDivisionError, StopIteration, AssertionError, ImportError, IOError, ArithmeticError
 
 ### ScriptExecutorNode
 **Purpose**: Execute external scripts
