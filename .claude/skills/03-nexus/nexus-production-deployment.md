@@ -180,6 +180,287 @@ docker-compose logs -f nexus
 docker-compose down
 ```
 
+## Production Security Configuration (v1.1.1+)
+
+### Critical Security Fixes
+
+Nexus v1.1.1 includes P0 security and reliability fixes for production environments.
+
+### Environment Variables
+
+Set `NEXUS_ENV=production` to enable production security features:
+
+```bash
+export NEXUS_ENV=production
+```
+
+**What this does**:
+- ✅ Auto-enables authentication (unless explicitly disabled)
+- ✅ Ensures rate limiting is active (100 req/min default)
+- ✅ Adds security warnings if auth disabled
+
+### Authentication in Production
+
+**Recommended (Auto-Enable)**:
+```python
+import os
+from nexus import Nexus
+
+# Set environment variable
+os.environ["NEXUS_ENV"] = "production"
+
+# In production (NEXUS_ENV=production), this auto-enables auth
+app = Nexus()  # enable_auth auto-set to True
+```
+
+**Explicit Override**:
+```python
+# Force enable in development
+app = Nexus(enable_auth=True)
+
+# Disable in production (NOT RECOMMENDED - logs critical warning)
+app = Nexus(enable_auth=False)
+# ⚠️  SECURITY WARNING: Authentication is DISABLED in production environment!
+#    Set enable_auth=True to secure your API endpoints.
+```
+
+**Docker Environment**:
+```yaml
+# docker-compose.yml
+services:
+  nexus:
+    environment:
+      - NEXUS_ENV=production  # Auto-enables auth
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/nexus
+      - REDIS_URL=redis://redis:6379
+```
+
+### Rate Limiting
+
+**Default Configuration (v1.1.1+)**:
+```python
+app = Nexus()  # rate_limit defaults to 100 req/min
+```
+
+**Custom Rate Limits**:
+```python
+# Higher limit for high-traffic APIs
+app = Nexus(rate_limit=1000)
+
+# Disable (NOT RECOMMENDED - logs security warning)
+app = Nexus(rate_limit=None)
+# ⚠️  SECURITY WARNING: Rate limiting is DISABLED!
+#    This allows unlimited requests and may lead to DoS attacks.
+```
+
+**Per-Endpoint Rate Limiting**:
+```python
+from nexus import Nexus
+
+app = Nexus()
+
+# Custom endpoint with specific rate limit
+@app.endpoint("/api/search", rate_limit=50)
+async def search_endpoint(q: str):
+    """Search endpoint with lower rate limit."""
+    return await app._execute_workflow("search", {"query": q})
+```
+
+### Input Validation (v1.1.1+)
+
+All channels (API, MCP, CLI) now validate inputs automatically:
+
+**Protections Enabled**:
+- ✅ **Dangerous Keys Blocked**: `__import__`, `eval`, `exec`, `compile`, `globals`, `locals`, etc.
+- ✅ **Input Size Limits**: 10MB default (configurable)
+- ✅ **Path Traversal Prevention**: Blocks `../`, `..\\`, absolute paths
+- ✅ **Key Length Limits**: 256 characters max
+
+**Configuration**:
+```python
+# Default (10MB input limit)
+app = Nexus()
+
+# Custom input size limit
+app._max_input_size = 20 * 1024 * 1024  # 20MB
+```
+
+**No configuration needed** - automatically applied across all channels.
+
+### Production Deployment Example
+
+Complete production-ready configuration:
+
+```python
+import os
+from nexus import Nexus
+
+# Production configuration with all security features
+app = Nexus(
+    # Environment
+    # Set NEXUS_ENV=production to auto-enable auth
+
+    # Server
+    api_port=int(os.getenv("PORT", "8000")),
+    api_host="0.0.0.0",
+
+    # Security (P0 fixes)
+    enable_auth=True,          # P0-1: Explicit enable (or use NEXUS_ENV=production)
+    rate_limit=1000,           # P0-2: DoS protection (default 100)
+    auto_discovery=False,      # P0-3: No blocking (manual registration)
+
+    # Performance
+    max_concurrent_workflows=200,
+    enable_caching=True,
+    request_timeout=60,
+
+    # Monitoring
+    enable_monitoring=True,
+    monitoring_interval=30,
+
+    # Sessions
+    session_backend="redis",
+    redis_url=os.getenv("REDIS_URL"),
+
+    # Logging
+    log_level="INFO",
+    log_format="json",
+    log_file="/var/log/nexus/app.log"
+)
+
+# Register workflows explicitly (no auto-discovery)
+from workflows import user_workflow, order_workflow
+app.register("users", user_workflow.build())
+app.register("orders", order_workflow.build())
+
+if __name__ == "__main__":
+    app.start()
+```
+
+### Docker Production Deployment
+
+**Dockerfile** (with security):
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY . .
+
+# Set production environment
+ENV NEXUS_ENV=production
+
+# Expose ports
+EXPOSE 8000 3001
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# Run with production settings
+CMD ["python", "app.py"]
+```
+
+**docker-compose.yml** (with security):
+```yaml
+version: '3.8'
+
+services:
+  nexus:
+    build: .
+    ports:
+      - "8000:8000"
+      - "3001:3001"
+    environment:
+      # Security
+      - NEXUS_ENV=production              # Auto-enable auth
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/nexus
+      - REDIS_URL=redis://redis:6379
+
+      # Logging
+      - LOG_LEVEL=INFO
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=nexus
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+### Security Monitoring
+
+**Monitor security events**:
+```python
+# Check auth status
+health = app.health_check()
+print(f"Auth Enabled: {health.get('auth_enabled', False)}")
+
+# Monitor rate limiting
+print(f"Rate Limit: {app._rate_limit} req/min")
+
+# Get security logs
+# Security warnings logged at CRITICAL level
+```
+
+### Common Security Mistakes
+
+❌ **DON'T**:
+```python
+# Disable auth in production
+app = Nexus(enable_auth=False)  # CRITICAL WARNING
+
+# Disable rate limiting
+app = Nexus(rate_limit=None)    # SECURITY WARNING
+
+# Enable auto-discovery in production
+app = Nexus(auto_discovery=True)  # 5-10s blocking delay
+```
+
+✅ **DO**:
+```python
+# Use environment variable
+export NEXUS_ENV=production
+app = Nexus()  # Auth auto-enabled
+
+# Or explicit enable
+app = Nexus(enable_auth=True, rate_limit=1000, auto_discovery=False)
+```
+
 ## Kubernetes Deployment
 
 ### Deployment

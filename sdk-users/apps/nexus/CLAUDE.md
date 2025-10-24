@@ -24,15 +24,26 @@ app.start()
 
 ## 🎯 Core API
 
-### Constructor
+### Constructor (v1.1.1+ Security Defaults)
 ```python
 app = Nexus(
-    api_port=8000,          # API server port (default: 8000)
-    mcp_port=3001,          # MCP server port (default: 3001)
-    enable_auth=False,      # Enable authentication (default: False)
-    enable_monitoring=False,# Enable monitoring (default: False)
-    rate_limit=None,        # Rate limit per minute (default: None)
-    auto_discovery=True     # Auto-discover workflows (default: True)
+    api_port=8000,                # API server port (default: 8000)
+    mcp_port=3001,                # MCP server port (default: 3001)
+
+    # Security (v1.1.1+ improved defaults)
+    enable_auth=None,             # Authentication (default: None)
+                                  # None = auto-enable if NEXUS_ENV=production
+                                  # True = always enabled
+                                  # False = always disabled (logs warning in production)
+
+    rate_limit=100,               # Rate limit req/min (default: 100 for DoS protection)
+                                  # Set to None to disable (not recommended)
+
+    # Discovery (v1.1.1+ changed to prevent blocking)
+    auto_discovery=False,         # Auto-discover workflows (default: False)
+                                  # Set to True to enable auto-discovery
+
+    enable_monitoring=False       # Enable monitoring (default: False)
 )
 ```
 

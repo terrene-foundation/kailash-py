@@ -21,14 +21,20 @@ app = Nexus(
     mcp_port=3001,                    # MCP server port
     mcp_host="0.0.0.0",               # MCP bind address
 
-    # Discovery
-    auto_discovery=True,              # Auto-discover workflows
+    # Discovery (v1.1.1+: Default False for reliability)
+    auto_discovery=False,             # Auto-discover workflows (P0-3)
+                                      # False = prevents blocking with DataFlow
+                                      # True = enables auto-discovery (adds 5-10s startup delay)
     discovery_paths=["./workflows"],  # Paths to scan
 
-    # Security
-    enable_auth=False,                # Enable authentication
-    enable_rate_limiting=False,       # Enable rate limiting
-    rate_limit=1000,                  # Requests per minute
+    # Security (v1.1.1+: Production-safe defaults)
+    enable_auth=None,                 # Authentication (P0-1)
+                                      # None = auto-enable if NEXUS_ENV=production
+                                      # True = always enabled
+                                      # False = always disabled (logs critical warning in production)
+    rate_limit=100,                   # Requests per minute (P0-2)
+                                      # Default 100 for DoS protection
+                                      # None = disable (logs security warning)
 
     # Monitoring
     enable_monitoring=False,          # Enable monitoring
@@ -123,6 +129,11 @@ app.monitoring.alert_thresholds = {
 ## Environment Variables
 
 ```bash
+# Environment (v1.1.1+: Controls security auto-enable)
+export NEXUS_ENV=production          # Auto-enables authentication (P0-1)
+                                      # development = default, no auto-enable
+                                      # production = auto-enables auth
+
 # Server
 export NEXUS_API_PORT=8000
 export NEXUS_MCP_PORT=3001
@@ -306,6 +317,51 @@ if validate_config(config):
     app = Nexus(**config)
 ```
 
+## Security Features (v1.1.1+)
+
+### P0 Security Fixes
+
+Nexus v1.1.1 includes critical security and reliability fixes:
+
+**P0-1: Environment-Aware Authentication**
+```python
+# Production mode (auto-enables auth)
+export NEXUS_ENV=production
+app = Nexus()  # enable_auth automatically set to True
+
+# Explicit override (logs critical warning in production)
+app = Nexus(enable_auth=False)
+# ⚠️  SECURITY WARNING: Authentication is DISABLED in production environment!
+```
+
+**P0-2: Rate Limiting Default**
+```python
+# DoS protection enabled by default
+app = Nexus()  # rate_limit=100 req/min
+
+# Disable (logs security warning)
+app = Nexus(rate_limit=None)
+# ⚠️  SECURITY WARNING: Rate limiting is DISABLED!
+```
+
+**P0-3: Auto-Discovery Default Changed**
+```python
+# Fast startup (no blocking)
+app = Nexus()  # auto_discovery=False by default
+
+# Enable if needed (adds 5-10s startup delay with DataFlow)
+app = Nexus(auto_discovery=True)
+```
+
+**P0-5: Unified Input Validation**
+
+All channels (API, CLI, MCP) now validate inputs automatically:
+- ✅ Dangerous keys blocked (`__import__`, `eval`, `exec`, etc.)
+- ✅ Input size limits enforced (10MB default)
+- ✅ Path traversal attacks prevented
+
+No configuration needed - automatically applied across all channels.
+
 ## Key Takeaways
 
 - Flexible configuration via constructor, attributes, env vars, files
@@ -314,6 +370,7 @@ if validate_config(config):
 - Validate configuration before starting
 - Use environment variables for secrets
 - Separate concerns (server, security, monitoring)
+- **v1.1.1+**: Production-safe defaults (auth auto-enable, rate limiting, no auto-discovery)
 
 ## Related Skills
 

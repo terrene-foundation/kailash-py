@@ -1,8 +1,12 @@
 # DataFlow + Nexus Integration Solution
 
-## Problem Summary
+> **✅ RESOLVED IN v1.1.1+**: As of Nexus v1.1.1 (released October 24, 2025), the default for `auto_discovery` has been changed to `False` (P0-3 fix). This blocking issue no longer occurs by default. This document is retained for reference and for users on earlier versions.
 
-When integrating DataFlow models with Nexus platform, the server initialization hangs indefinitely during DataFlow model registration if Nexus is initialized with `auto_discovery=True` (default behavior).
+## Problem Summary (Resolved in v1.1.1+)
+
+**Historical Issue (v1.1.0 and earlier)**: When integrating DataFlow models with Nexus platform, the server initialization hangs indefinitely during DataFlow model registration if Nexus is initialized with `auto_discovery=True` (which was the default behavior in v1.1.0 and earlier).
+
+**Resolution**: Nexus v1.1.1+ defaults to `auto_discovery=False`, eliminating this blocking issue automatically.
 
 ## Root Cause Analysis
 
@@ -64,13 +68,13 @@ def create_production_app():
         auto_discovery=False,  # Prevents blocking
         enable_durability=True
     )
-    
+
     # Step 2: Import DataFlow AFTER Nexus init
     from database.dataflow_models import db
-    
+
     # Step 3: Register workflows manually
     register_workflows(app, db)
-    
+
     return app
 ```
 
@@ -97,21 +101,21 @@ db = DataFlow(
 def setup_dataflow_models():
     """Setup DataFlow models in a function scope."""
     from dataflow.core.engine import DataFlow
-    
+
     db = DataFlow(...)
-    
+
     @db.model
     class User:
         id: str
         email: str
         name: Optional[str] = None
-    
+
     @db.model
     class Session:
         id: str
         user_id: str
         token: str
-    
+
     return db
 ```
 
@@ -121,7 +125,7 @@ def setup_dataflow_models():
 def register_production_workflows(app: Nexus, db: DataFlow):
     """Register DataFlow-based workflows with Nexus."""
     from kailash.workflow.builder import WorkflowBuilder
-    
+
     # User CRUD workflow
     user_workflow = WorkflowBuilder()
     user_workflow.add_node("UserCreateNode", "create_user", {
@@ -129,7 +133,7 @@ def register_production_workflows(app: Nexus, db: DataFlow):
         "name": "{{name}}"
     })
     app.register("user_create", user_workflow.build())
-    
+
     # Session management workflow
     session_workflow = WorkflowBuilder()
     session_workflow.add_node("SessionCreateNode", "create_session", {
@@ -148,7 +152,7 @@ from typing import Optional
 
 class DataFlowNexusApp:
     """Production-ready DataFlow + Nexus integration."""
-    
+
     def __init__(self):
         # Initialize Nexus FIRST with auto_discovery=False
         self.app = Nexus(
@@ -156,24 +160,24 @@ class DataFlowNexusApp:
             mcp_port=3001,
             auto_discovery=False  # Critical for DataFlow integration
         )
-        
+
         # Setup DataFlow AFTER Nexus
         self._setup_dataflow()
-        
+
         # Register workflows
         self._register_workflows()
-    
+
     def _setup_dataflow(self):
         """Setup DataFlow models."""
         from dataflow.core.engine import DataFlow
-        
+
         self.db = DataFlow(
             database_url="postgresql://kailash:kailash@localhost:5432/prod",
             auto_migrate=False,
             skip_migration=True,
             enable_model_persistence=True
         )
-        
+
         # Define models
         @self.db.model
         class User:
@@ -182,7 +186,7 @@ class DataFlowNexusApp:
             full_name: Optional[str] = None
             created_at: str
             active: bool = True
-        
+
         @self.db.model
         class Session:
             id: str
@@ -190,7 +194,7 @@ class DataFlowNexusApp:
             token: str
             created_at: str
             expires_at: str
-    
+
     def _register_workflows(self):
         """Register workflows with Nexus."""
         # User creation workflow
@@ -200,7 +204,7 @@ class DataFlowNexusApp:
             "full_name": "{{full_name}}"
         })
         self.app.register("create_user", user_create.build())
-        
+
         # Session creation workflow
         session_create = WorkflowBuilder()
         session_create.add_node("SessionCreateNode", "create", {
@@ -208,7 +212,7 @@ class DataFlowNexusApp:
             "token": "{{token}}"
         })
         self.app.register("create_session", session_create.build())
-    
+
     def start(self):
         """Start the application."""
         self.app.start()
@@ -240,7 +244,7 @@ if __name__ == "__main__":
    ```python
    # OLD (blocks with DataFlow)
    app = Nexus(api_port=8002)
-   
+
    # NEW (works with DataFlow)
    app = Nexus(api_port=8002, auto_discovery=False)
    ```
@@ -250,7 +254,7 @@ if __name__ == "__main__":
    # OLD (DataFlow imported globally)
    from database.dataflow_models import db
    app = Nexus()  # Blocks here
-   
+
    # NEW (DataFlow imported after Nexus)
    app = Nexus(auto_discovery=False)
    from database.dataflow_models import db
