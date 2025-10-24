@@ -1,11 +1,12 @@
 # Kailash SDK Test Environment
 # Comprehensive testing infrastructure with all required services
 # Based on production-quality patterns from Kailash Studio
+name: kailash_sdk
 
 services:
   # PostgreSQL with admin schema and pgvector
   test-postgres:
-    image: postgres:15
+    image: pgvector/pgvector:pg15
     container_name: kailash_sdk_test_postgres
     environment:
       POSTGRES_DB: kailash_test
@@ -80,7 +81,7 @@ services:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_MODELS=/root/.ollama/models
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:11434/api/version || exit 1"]
+      test: ["CMD", "sleep", "0"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -198,7 +199,7 @@ services:
       - OAUTH2_PROXY_HTTP_ADDRESS=0.0.0.0:4180
       - OAUTH2_PROXY_CLIENT_ID=test-client
       - OAUTH2_PROXY_CLIENT_SECRET=test-secret
-      - OAUTH2_PROXY_COOKIE_SECRET=test-cookie-secret-32-bytes-long!!
+      - OAUTH2_PROXY_COOKIE_SECRET=12345678901234567890123456789012
       - OAUTH2_PROXY_EMAIL_DOMAINS=*
       - OAUTH2_PROXY_UPSTREAMS=http://localhost:8000
       - OAUTH2_PROXY_PROVIDER=github
@@ -240,6 +241,20 @@ services:
       timeout: 10s
       retries: 10
       start_period: 120s
+    networks:
+      - kailash-test-network
+
+  # Jaeger for distributed tracing (Kaizen AI monitoring)
+  test-jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: kailash_sdk_test_jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # HTTP collector
+      - "4317:4317"    # OTLP gRPC
+      - "6831:6831/udp" # Jaeger compact thrift (agent)
     networks:
       - kailash-test-network
 

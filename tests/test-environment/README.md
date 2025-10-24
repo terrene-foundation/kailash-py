@@ -33,6 +33,8 @@ A comprehensive, production-grade test environment for the Kailash SDK that prov
 | MinIO | 9000/9001 | S3-compatible storage |
 | Kafka | 9092 | Event streaming |
 | Elasticsearch | 9200 | Search and analytics |
+| Jaeger | 16686/4317 | Distributed tracing (UI/OTLP) for AI agents |
+| Kubernetes (kind) | 6443 | K8s testing with NodePort 30080/30443 |
 | OAuth2 Mock | 8080 | Authentication testing |
 | Adminer | 8090 | Database management UI |
 | Health Dashboard | 8091 | Service status monitoring |
@@ -75,6 +77,9 @@ REDIS_TEST_URL=redis://localhost:6380
 OLLAMA_TEST_URL=http://localhost:11435
 MONGODB_URL=mongodb://kailash:kailash123@localhost:27017
 QDRANT_URL=http://localhost:6333
+JAEGER_ENDPOINT=http://localhost:4317
+JAEGER_UI=http://localhost:16686
+MINIO_ENDPOINT=localhost:9000
 TEST_DOCKER_AVAILABLE=true
 ```
 
@@ -192,18 +197,41 @@ tests/test-environment/
 └── README.md              # This file
 ```
 
+### Project Name
+All containers use the project name `kailash_sdk` for consistency across the SDK and all app frameworks.
+
 ### Network
 All services run on the `kailash_test_network` bridge network for inter-service communication.
 
+### Container Names
+All containers are prefixed with `kailash_sdk_test_`:
+- `kailash_sdk_test_postgres`
+- `kailash_sdk_test_redis`
+- `kailash_sdk_test_mysql`
+- `kailash_sdk_test_mongodb`
+- `kailash_sdk_test_ollama`
+- `kailash_sdk_test_kafka`
+- `kailash_sdk_test_zookeeper`
+- `kailash_sdk_test_elasticsearch`
+- `kailash_sdk_test_qdrant`
+- `kailash_sdk_test_minio`
+- `kailash_sdk_test_kubernetes`
+- `kailash_sdk_test_jaeger`
+- `kailash_sdk_test_oauth2`
+- `kailash_sdk_test_adminer`
+- `kailash_sdk_test_healthcheck`
+
 ### Volumes
-Persistent volumes for each service ensure data survives container restarts:
-- `postgres_test_data`
-- `mysql_test_data`
-- `mongodb_test_data`
-- `ollama_models`
-- `qdrant_test_data`
-- `minio_test_data`
-- `elasticsearch_data`
+Persistent volumes with `kailash_sdk_` prefix ensure data survives container restarts:
+- `kailash_sdk_postgres_test_data`
+- `kailash_sdk_mysql_test_data`
+- `kailash_sdk_mongodb_test_data`
+- `kailash_sdk_ollama_models`
+- `kailash_sdk_qdrant_test_data`
+- `kailash_sdk_minio_test_data`
+- `kailash_sdk_elasticsearch_data`
+- `kailash_sdk_kubernetes_data`
+- `kailash_sdk_kubernetes_config`
 
 ## 🤝 Contributing
 
