@@ -52,29 +52,36 @@ Understanding how Nexus works internally.
 **Purpose**: Expose workflows via API, CLI, and MCP
 
 **Components**:
-- **API Channel**: FastAPI-based REST server
-- **CLI Channel**: Command-line interface
-- **MCP Channel**: Model Context Protocol server
+- **API Channel**: FastAPI-based REST server (via enterprise gateway)
+- **CLI Channel**: Command-line interface (via enterprise gateway)
+- **MCP Channel**: Model Context Protocol server (separate initialization)
 
 **Key Features**:
-- Single workflow registration
-- Automatic endpoint generation
+- Single workflow registration via `Nexus.register()`
+- Automatic endpoint generation through enterprise gateway
 - Unified parameter handling
 
+**v1.1.0 Implementation:**
 ```python
-# Implementation concept
-class MultiChannelManager:
+# Actual v1.1.0 architecture - NO ChannelManager class
+class Nexus:
     def __init__(self):
-        self.api = APIChannel()
-        self.cli = CLIChannel()
-        self.mcp = MCPChannel()
+        # Channels initialized by Nexus directly:
+        self._initialize_gateway()        # API + CLI channels
+        self._initialize_mcp_server()     # MCP channel
 
-    def register_workflow(self, name, workflow):
-        # Register in all channels
-        self.api.register_endpoint(name, workflow)
-        self.cli.register_command(name, workflow)
-        self.mcp.register_tool(name, workflow)
+    def register(self, name, workflow):
+        # Single registration → Multi-channel exposure
+        self._gateway.register_workflow(name, workflow)  # API + CLI
+        self._mcp_channel.register_workflow(name, workflow)  # MCP
+
+        # All three channels now have the workflow
 ```
+
+**What Changed from Stubs:**
+- ❌ **REMOVED**: `ChannelManager.initialize_channels()` (was stub returning success)
+- ❌ **REMOVED**: `ChannelManager.register_workflow_on_channels()` (was stub logging success)
+- ✅ **REALITY**: Nexus handles initialization and registration directly
 
 ### 2. Session Manager
 
@@ -254,31 +261,32 @@ workflow.add_node("PythonCodeNode", "test", {...})
 app.register("test", workflow.build())
 ```
 
-## Request Flow
+## Request Flow (v1.1.0)
 
 ### API Request Flow
 
 ```
 1. Client sends HTTP POST to /workflows/name/execute
    ↓
-2. API Channel receives request
+2. Enterprise Gateway receives request (FastAPI)
    ↓
-3. Enterprise Gateway processes:
-   - Authentication
-   - Rate limiting
-   - Caching check
+3. Gateway processes (built-in):
+   - Authentication (if enabled)
+   - Rate limiting (if configured)
+   - Request validation
    ↓
-4. Session Manager creates/retrieves session
+4. Gateway retrieves workflow from registry
    ↓
-5. Workflow Registry retrieves workflow
+5. Kailash Runtime executes workflow
    ↓
-6. Kailash Runtime executes workflow
+6. Gateway formats response
    ↓
-7. Response formatted and cached
+7. Monitoring records metrics (if enabled)
    ↓
-8. Monitoring records metrics
-   ↓
-9. Response returned to client
+8. Response returned to client
+
+NOTE: Session management uses lazy initialization (v1.1 planned feature)
+NOTE: Response caching is optional (enable_durability flag)
 ```
 
 ### CLI Request Flow
@@ -427,15 +435,27 @@ runtime = AsyncLocalRuntime()
 result = await runtime.execute_workflow_async(workflow, inputs)
 ```
 
-## Key Takeaways
+## Key Takeaways (v1.1.0)
 
-- Multi-layer architecture (Channels → Gateway → SDK)
-- Zero-configuration with progressive enhancement
-- Built on top of Kailash SDK
-- Unified session management across channels
-- Enterprise gateway for production features
-- Parameter broadcasting to all nodes
-- Multiple execution runtimes supported
+- **Multi-layer architecture**: Nexus → Enterprise Gateway → Kailash SDK
+- **Zero-configuration**: `Nexus()` with smart defaults
+- **Built on Kailash SDK**: Leverages proven workflow execution
+- **Single registration path**: `Nexus.register()` handles all channels
+- **Enterprise gateway integration**: FastAPI-based with multi-channel support
+- **Parameter broadcasting**: Inputs broadcast to all nodes via runtime
+- **v1.0 vs v1.1 features**: Event logging (v1.0) vs real-time broadcasting (v1.1)
+
+**What's Real in v1.1.0:**
+- ✅ Multi-channel exposure (API, CLI, MCP)
+- ✅ Workflow registration and execution
+- ✅ Custom REST endpoints with rate limiting
+- ✅ Health monitoring and metrics
+- ✅ Event logging (retrieve with `get_events()`)
+
+**Planned for v1.1:**
+- 🔜 Real-time event broadcasting (WebSocket/SSE)
+- 🔜 Automatic workflow schema inference
+- 🔜 Cross-channel session synchronization
 
 ## Related Skills
 

@@ -2,20 +2,43 @@
 
 High-performance bulk operations for processing thousands of records efficiently.
 
-## ⚠️ Important: BulkDeleteNode Fixed in v0.6.3
+## ⚠️ Important Updates
 
-**If using v0.6.2 or earlier:** BulkDeleteNode safe mode validation had a bug that incorrectly rejected valid empty filter operations.
+### BulkUpsertNode Fully Implemented (v0.7.1)
 
-**Solution:** Upgrade to v0.6.3 or later:
+**BREAKING CHANGE**: BulkUpsertNode parameters changed in v0.7.1:
+- **Removed**: `unique_fields` parameter
+- **Added**: `conflict_resolution` parameter ("update" or "skip"/"ignore")
+- **Behavior**: Conflict detection always uses `id` field (DataFlow standard)
+
+**Migration Guide:**
+```python
+# ❌ OLD (v0.7.0 and earlier) - Will fail
+workflow.add_node("ProductBulkUpsertNode", "sync", {
+    "data": products,
+    "unique_fields": ["sku"]  # No longer supported
+})
+
+# ✅ NEW (v0.7.1+) - Correct usage
+workflow.add_node("ProductBulkUpsertNode", "sync", {
+    "data": products,  # Must include 'id' field
+    "conflict_resolution": "update"  # or "skip"/"ignore"
+})
+```
+
+**Why the Change:**
+- Aligns with DataFlow's standard requirement that all models have `id` as primary key
+- Simplifies API - no need to specify conflict columns
+- More performant - single conflict detection path
+
+### BulkDeleteNode Fixed (v0.6.3)
+
+**If using v0.6.2 or earlier:** BulkDeleteNode safe mode validation had a bug.
+
+**Solution:** Upgrade to v0.6.3+:
 ```bash
 pip install --upgrade kailash-dataflow>=0.6.3
 ```
-
-**Fix:** Safe mode validation now correctly handles empty filter parameters.
-
-**Affected Versions:**
-- ❌ v0.6.2 and earlier: Safe mode validation bug
-- ✅ v0.6.3+: Validation works correctly
 
 ---
 
@@ -157,12 +180,13 @@ result = {"inventory": inventory}
     """
 })
 
-# BulkUpsertNode converts all datetime fields
+# BulkUpsertNode converts all datetime fields (v0.7.1+)
 workflow.add_node("InventoryBulkUpsertNode", "sync_inventory", {
     "data": "{{fetch_inventory.inventory}}",  # All timestamps converted
-    "unique_fields": ["sku"],
+    "conflict_resolution": "update",  # "update" or "skip"/"ignore"
     "batch_size": 1000
 })
+# Note: Conflict detection uses 'id' field (DataFlow standard)
 ```
 
 ### Example: Historical Data Import
@@ -514,28 +538,23 @@ workflow.add_node("ProductBulkDeleteNode", "safe_delete_products", {
 ### Insert or Update
 
 ```python
-# Upsert products (insert new, update existing)
+# Upsert products (insert new, update existing) - v0.7.1+
 workflow.add_node("ProductBulkUpsertNode", "upsert_products", {
-    "data": products,
-    "unique_fields": ["name", "category"],  # Fields to check for duplicates
-    "update_fields": ["price", "stock", "updated_at"],  # Fields to update
-    "insert_fields": ["name", "category", "price", "stock"],  # Fields for new records
+    "data": products,  # Must include 'id' field
+    "conflict_resolution": "update",  # Update existing, insert new
     "batch_size": 2000
 })
+# Note: Conflict detection uses 'id' field (DataFlow standard)
 ```
 
 ### Conditional Upsert
 
 ```python
-# Upsert with conditions
-workflow.add_node("ProductBulkUpsertNode", "conditional_upsert", {
-    "data": products,
-    "unique_fields": ["sku"],
-    "upsert_conditions": {
-        "update_if": {"updated_at": {"$lt": ":current_timestamp"}},
-        "insert_if": {"active": True}
-    },
-    "conflict_resolution": "update"
+# Skip conflicts (insert only new records) - v0.7.1+
+workflow.add_node("ProductBulkUpsertNode", "insert_new_only", {
+    "data": products,  # Must include 'id' field
+    "conflict_resolution": "skip",  # Skip existing, insert only new
+    "batch_size": 2000
 })
 ```
 
@@ -763,26 +782,17 @@ workflow.add_node("ProductBulkCreateNode", "realtime_processing", {
 ### Data Synchronization
 
 ```python
-# Synchronize data between systems
+# Synchronize data between systems - v0.7.1+
+# Ensure external_products have 'id' field
+for product in external_products:
+    product["id"] = product.get("id") or product.get("external_id")
+
 workflow.add_node("ProductBulkUpsertNode", "sync_products", {
-    "data": external_products,
-    "unique_fields": ["external_id"],
-
-    # Synchronization settings
-    "sync_mode": "incremental",     # full, incremental, delta
-    "conflict_resolution": "source_wins",
-    "last_sync_timestamp": "2024-01-01T00:00:00Z",
-
-    # Change detection
-    "detect_changes": True,
-    "change_detection_fields": ["price", "stock", "description"],
-    "ignore_fields": ["internal_notes", "created_at"],
-
-    # Audit
-    "audit_sync": True,
-    "audit_table": "product_sync_audit",
-    "audit_level": "changes_only"
+    "data": external_products,  # All records must have 'id' field
+    "conflict_resolution": "update",  # Update existing, insert new
+    "batch_size": 1000
 })
+# Note: Conflict detection always uses 'id' field (DataFlow standard)
 ```
 
 ## Testing Bulk Operations

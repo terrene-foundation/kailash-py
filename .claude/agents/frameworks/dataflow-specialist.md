@@ -119,6 +119,7 @@ workflow.add_node("UserUpdateNode", "update", {
 **2. Bulk Operations**
 - ❌ MISUNDERSTANDING: "Bulk operations are limited in alpha"
 - ✅ REALITY: ALL bulk operations work perfectly (ContactBulkCreateNode, ContactBulkUpdateNode, ContactBulkDeleteNode, ContactBulkUpsertNode all exist and function)
+- **v0.7.1 UPDATE**: BulkUpsertNode was fully implemented in v0.7.1 (previous versions had stub implementation)
 - **Impact**: Don't avoid bulk operations - they're production-ready and performant (10k+ ops/sec)
 
 **3. ListNode Result Structure**
@@ -348,6 +349,12 @@ workflow.add_node(result['generated_nodes']['User']['create'], 'create_user', {.
 > **See Skills**: [`dataflow-crud-operations`](../../skills/02-dataflow/dataflow-crud-operations.md) and [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md) for complete CRUD and query examples.
 
 Quick reference: 9 nodes auto-generated per model (Create, Read, Update, Delete, List, BulkCreate, BulkUpdate, BulkDelete, BulkUpsert).
+
+**v0.7.1 Update - BulkUpsertNode:**
+- Fully implemented in v0.7.1 (previous versions had stub implementation)
+- Parameters: `data` (required), `conflict_resolution` ("update" or "skip"/"ignore")
+- Conflict column: Always `id` (DataFlow standard, auto-inferred)
+- No `unique_fields` parameter - conflict detection uses `id` field only
 
 ### 🔑 CRITICAL: Template Syntax
 **Kailash uses `${}` NOT `{{}}`** - See [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md) for examples.

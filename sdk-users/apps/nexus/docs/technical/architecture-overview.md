@@ -2,6 +2,91 @@
 
 Deep dive into Nexus's revolutionary workflow-native architecture that transforms traditional request-response patterns into persistent, multi-channel orchestration.
 
+## 🏗️ Actual Initialization Flow (v1.0)
+
+**IMPORTANT**: This section documents the actual initialization architecture implemented in v1.0.
+
+### Channel Initialization Ownership
+
+Channels are initialized automatically during `Nexus.__init__()` - there is NO separate initialization step:
+
+```python
+# Nexus initialization flow (actual implementation)
+class Nexus:
+    def __init__(self, api_port=8000, mcp_port=3001, ...):
+        # 1. Initialize enterprise gateway (API channel)
+        self._initialize_gateway()  # Creates gateway with API endpoints
+
+        # 2. Initialize MCP server (MCP channel)
+        self._initialize_mcp_server()  # Creates MCP server with resources
+
+        # 3. CLI channel needs no initialization (local execution)
+
+        # Channels are now ready - no separate initialize_channels() call needed
+```
+
+### Workflow Registration Flow
+
+Workflow registration is handled by a **single method** - `Nexus.register()`:
+
+```python
+# Workflow registration flow (actual implementation)
+def register(self, name: str, workflow: Workflow) -> None:
+    """Single source of truth for workflow registration."""
+
+    # 1. Store workflow internally
+    self._workflows[name] = workflow
+
+    # 2. Register with gateway (API channel)
+    self._gateway.register_workflow(name, workflow)
+    # Creates: POST /workflows/{name}/execute
+
+    # 3. Register with MCP channel
+    self._mcp_channel.register_workflow(name, workflow)
+    # Creates: MCP tool named {name}
+
+    # 4. CLI access automatic (reads from workflow registry)
+    # No explicit registration needed
+```
+
+### What Was Removed (v1.1.0 Fixes)
+
+The following redundant methods were **removed** as they duplicated functionality:
+
+1. ❌ `ChannelManager.initialize_channels()` - Redundant with `Nexus.__init__()`
+2. ❌ `ChannelManager.register_workflow_on_channels()` - Duplicate of `Nexus.register()`
+
+These methods returned success but did NO actual work, creating false confidence in tests.
+
+### Event System Architecture (v1.0)
+
+```python
+# Event system actual implementation
+def broadcast_event(self, event_type: str, data: dict, session_id: str = None):
+    """Log events for future broadcasting (v1.1 feature).
+
+    v1.0: Events are LOGGED to _event_log
+    v1.1: Events will be BROADCAST via WebSocket/SSE
+    """
+    event = self._create_event(event_type, data, session_id)
+
+    # v1.0: Store in event log
+    if not hasattr(self, '_event_log'):
+        self._event_log = []
+    self._event_log.append(event)
+
+    logger.debug(f"Event logged (broadcast in v1.1): {event_type}")
+    return event
+
+def get_events(self, session_id=None, event_type=None, limit=100):
+    """Retrieve logged events (v1.0 helper method)."""
+    # Filter and return events from _event_log
+```
+
+**Key Point**: In v1.0, `broadcast_event()` logs events. Real-time broadcasting comes in v1.1 with WebSocket/SSE support.
+
+---
+
 ## Revolutionary Architecture Principles
 
 ### Workflow-Native Foundation
