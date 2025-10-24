@@ -2,6 +2,8 @@
 
 A truly zero-configuration platform that allows enterprise users to focus on creating workflows without learning infrastructure complexity.
 
+**Current Version: v1.1.0** (2025-10-24)
+
 ## What is Nexus?
 
 Nexus embodies the zero-config philosophy: **just create `Nexus()` and start!**
@@ -11,6 +13,18 @@ Nexus embodies the zero-config philosophy: **just create `Nexus()` and start!**
 - **Multi-Channel**: API, CLI, and MCP access unified
 - **Simple Registration**: Use `app.register(name, workflow)` to add workflows
 - **Enterprise Ready**: Built-in auth, monitoring, and rate limiting
+
+## What's New in v1.1.0
+
+**CRITICAL Fixes:**
+- ✅ Fixed all 10 stub implementations with production-ready solutions
+- ✅ Channel initialization now handled directly by Nexus (no ChannelManager stubs)
+- ✅ Workflow registration through single path: `Nexus.register()`
+- ✅ Event broadcasting updated with honest v1.0 behavior (logging, not real-time)
+- ✅ Plugin validation improvements (checks `name` and `apply` method)
+- ✅ 248/248 unit tests passing
+
+**No Breaking Changes** - All improvements are internal
 
 ## Quick Start
 

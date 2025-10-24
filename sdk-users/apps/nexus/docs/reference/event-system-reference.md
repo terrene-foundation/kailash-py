@@ -2,6 +2,37 @@
 
 Complete reference for Nexus's enterprise-grade event system, covering event-driven architecture, real-time notifications, workflow triggers, and cross-channel event propagation.
 
+## ⚠️ Version Notice: v1.0 vs v1.1 Capabilities
+
+**IMPORTANT**: The event system documentation describes the complete architecture and API. However, some features differ between versions:
+
+### v1.0 (Current - Production Ready)
+- ✅ **Event Creation & Logging**: Full support via `broadcast_event()`
+- ✅ **Event Retrieval**: Use `get_events()` to retrieve logged events
+- ✅ **Event Handlers**: Full support for synchronous and asynchronous handlers
+- ✅ **Event Bus**: Complete pub/sub architecture implemented
+- ❌ **Real-Time Broadcasting**: Events are LOGGED, not broadcast in real-time
+- ❌ **WebSocket Streaming**: Planned for v1.1
+- ❌ **SSE (Server-Sent Events)**: Planned for v1.1
+
+### v1.1 (Planned - See ROADMAP.md)
+- ✅ All v1.0 features (backward compatible)
+- ✅ **WebSocket Event Broadcasting**: Real-time push to connected clients
+- ✅ **SSE Streaming**: Browser-compatible event streaming
+- ✅ **MCP Event Notifications**: AI agent event subscriptions
+
+**For v1.0 Users**:
+- Use `app.broadcast_event(type, data)` to log events
+- Use `app.get_events(session_id=None, event_type=None, limit=100)` to retrieve events
+- Events are stored in `_event_log` and can be queried
+- All code examples work as shown, but "broadcasting" means logging in v1.0
+
+**Upgrade Path to v1.1**:
+- No code changes required
+- `broadcast_event()` will automatically gain real-time capabilities
+- Existing event logging continues to work
+- New WebSocket/SSE endpoints will be additive
+
 ## Overview
 
 Nexus provides a comprehensive event system that enables real-time communication, workflow orchestration, and cross-channel session synchronization. This reference covers all event types, handlers, publishers, subscribers, and integration patterns.

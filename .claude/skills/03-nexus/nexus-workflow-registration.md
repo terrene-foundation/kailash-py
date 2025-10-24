@@ -9,7 +9,7 @@ tags: [nexus, workflow, registration, auto-discovery, versioning]
 
 Master workflow registration patterns from basic to advanced.
 
-## Basic Registration
+## Basic Registration (v1.1.0)
 
 ```python
 from nexus import Nexus
@@ -24,8 +24,18 @@ workflow.add_node("HTTPRequestNode", "fetch", {
     "method": "GET"
 })
 
-# Register with name
+# Register with name - single call exposes on ALL channels
 app.register("data-fetcher", workflow.build())
+
+# What happens internally (v1.1.0):
+# 1. Nexus stores workflow: self._workflows[name] = workflow
+# 2. Gateway registration: self._gateway.register_workflow(name, workflow)
+#    → API endpoint: POST /workflows/data-fetcher/execute
+#    → CLI command: nexus execute data-fetcher
+# 3. MCP registration: self._mcp_channel.register_workflow(name, workflow)
+#    → MCP tool: workflow_data-fetcher
+
+# No ChannelManager - Nexus handles everything directly
 ```
 
 ## Critical Rules
@@ -48,39 +58,36 @@ app.register(name, workflow.build())
 app.register(workflow.build(), name)
 ```
 
-## Enhanced Registration with Metadata
+## Enhanced Registration with Metadata (v1.1.0)
+
+**NOTE**: Metadata is currently NOT supported in v1.1.0's `register()` method signature.
+The method only accepts `(name, workflow)` - no metadata parameter.
 
 ```python
-app.register("data-fetcher", workflow.build(), metadata={
+# v1.1.0 Reality: No metadata parameter
+app.register("data-fetcher", workflow.build())
+
+# Planned for future version:
+# app.register("data-fetcher", workflow.build(), metadata={
+#     "version": "1.0.0",
+#     "description": "Fetches data from external API",
+#     "tags": ["data", "api"]
+# })
+
+# Current workaround: Store metadata separately
+app._workflow_metadata = getattr(app, '_workflow_metadata', {})
+app._workflow_metadata["data-fetcher"] = {
     "version": "1.0.0",
     "description": "Fetches data from external API",
     "author": "Development Team",
-    "tags": ["data", "api", "production"],
-    "category": "data-processing",
-    "documentation": "https://docs.example.com/workflows/data-fetcher",
-    "dependencies": ["requests", "json"],
-    "resource_requirements": {
-        "memory": "256MB",
-        "cpu": "0.5 cores",
-        "timeout": "30s"
-    },
-    "api_schema": {
-        "inputs": {
-            "limit": {
-                "type": "integer",
-                "default": 10,
-                "description": "Number of records"
-            }
-        },
-        "outputs": {
-            "data": {
-                "type": "array",
-                "description": "Fetched records"
-            }
-        }
-    }
-})
+    "tags": ["data", "api", "production"]
+}
 ```
+
+**What Changed:**
+- ❌ `register(name, workflow, metadata)` not supported in v1.1.0
+- ✅ Only `register(name, workflow)` signature available
+- 🔜 Metadata support planned for future version
 
 ## Auto-Discovery
 
@@ -437,14 +444,24 @@ app = Nexus(auto_discovery=False)
 app.register(name, workflow.build())  # Correct
 ```
 
-## Key Takeaways
+## Key Takeaways (v1.1.0)
 
-- Always call `.build()` before registration
-- Use metadata for documentation and discovery
-- Auto-discovery useful for simple cases
-- Manual registration gives fine-grained control
-- Versioning enables safe deployments
-- Lifecycle hooks provide monitoring and validation
+**Registration Flow:**
+- ✅ Single `app.register(name, workflow.build())` call
+- ✅ Automatically exposes on API, CLI, and MCP channels
+- ✅ No ChannelManager - Nexus handles everything directly
+- ✅ Enterprise gateway provides multi-channel support
+
+**Current Limitations:**
+- ❌ No metadata parameter (use workaround with `_workflow_metadata`)
+- ❌ Auto-discovery can block with DataFlow (use `auto_discovery=False`)
+- ✅ Versioning and lifecycle management require custom implementation
+
+**Always Remember:**
+1. Call `.build()` before registration
+2. Use `auto_discovery=False` when integrating with DataFlow
+3. Single registration → multi-channel exposure
+4. No need to manage channels manually
 
 ## Related Skills
 
