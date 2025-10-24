@@ -61,6 +61,7 @@ class MyAgent(BaseAgent):
 - **Multi-Agent**: Google A2A protocol for semantic capability matching
 - **Autonomous Tool Calling (v0.2.0)**: 12 builtin tools with approval workflows
 - **Bidirectional Control Protocol (v0.2.0)**: Agent ↔ client communication (questions, approvals, progress)
+- **Production Observability (v0.5.0)**: Complete monitoring stack (Jaeger, Prometheus, Grafana, ELK) with zero overhead
 - **Core SDK Compatible**: Seamless integration with Kailash workflows
 
 ## 🚀 Quick Start
@@ -68,11 +69,11 @@ class MyAgent(BaseAgent):
 ### Installation
 
 ```bash
-# Install Kaizen framework (latest v0.2.0)
+# Install Kaizen framework (latest v0.5.0)
 pip install kailash-kaizen
 
 # Or specific version
-pip install kailash-kaizen==0.2.0
+pip install kailash-kaizen==0.5.0
 ```
 
 ### Your First Agent (3 Steps)
@@ -360,7 +361,7 @@ best_worker = pattern.supervisor.select_worker_for_task(
 
 ### Available Coordination Patterns
 
-1. **SupervisorWorkerPattern** - Task delegation with semantic matching (14/14 tests ✅)
+1. **SupervisorWorkerPattern** - Task delegation with semantic matching ✅
 2. **ConsensusPattern** - Group decision-making
 3. **DebatePattern** - Adversarial reasoning
 4. **SequentialPattern** - Step-by-step processing
