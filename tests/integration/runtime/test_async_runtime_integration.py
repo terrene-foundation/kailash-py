@@ -211,8 +211,8 @@ class TestAsyncRuntimeRealWorld:
 db = await get_resource("postgres_db")
 
 async with db.acquire() as conn:
-    # Drop table if exists and create new one
-    await conn.execute("DROP TABLE IF EXISTS users")
+    # Drop table if exists and create new one (CASCADE to handle dependencies)
+    await conn.execute("DROP TABLE IF EXISTS users CASCADE")
     await conn.execute('''
         CREATE TABLE users (
             id SERIAL PRIMARY KEY,
@@ -307,9 +307,14 @@ async with db.acquire() as conn:
         "SELECT city, COUNT(*) as count FROM users GROUP BY city ORDER BY count DESC"
     )
 
+    # Convert Decimal to float for JSON serialization
+    age_stats_dict = dict(age_stats)
+    if age_stats_dict.get("avg_age") is not None:
+        age_stats_dict["avg_age"] = float(age_stats_dict["avg_age"])
+
 result = {
     "total_users": total_count,
-    "age_stats": dict(age_stats),
+    "age_stats": age_stats_dict,
     "city_distribution": [dict(row) for row in city_dist],
     "verification_complete": True
 }
