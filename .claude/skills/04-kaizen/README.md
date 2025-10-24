@@ -1,6 +1,6 @@
 # Kaizen Framework Skills
 
-23 skills for Kaizen AI agent framework covering core patterns, multi-agent coordination, multi-modal processing, and v0.2.0+ advanced features.
+24 skills for Kaizen AI agent framework covering core patterns, multi-agent coordination, multi-modal processing, v0.2.0+ tool calling, and v0.5.0 observability.
 
 ## Skill Categories
 
@@ -46,19 +46,21 @@ Vision, audio, and multi-modal processing:
 
 ---
 
-### Advanced Patterns (8 Skills - MEDIUM/HIGH)
+### Advanced Patterns (9 Skills - MEDIUM/HIGH)
 
-Production patterns, v0.2.0+ features, and specialized techniques:
+Production patterns, v0.2.0+ tool calling, v0.5.0 observability, and specialized techniques:
 
-16. **[kaizen-control-protocol.md](kaizen-control-protocol.md)** - **NEW v0.2.0** Bidirectional agent ↔ client communication
-17. **[kaizen-tool-calling.md](kaizen-tool-calling.md)** - **NEW v0.2.0** Autonomous tool execution with approval workflows
-18. **[kaizen-chain-of-thought.md](kaizen-chain-of-thought.md)** - CoT pattern, step-by-step reasoning
-19. **[kaizen-rag-agent.md](kaizen-rag-agent.md)** - RAG implementation with Kaizen
-20. **[kaizen-react-pattern.md](kaizen-react-pattern.md)** - ReAct (reasoning + acting)
-21. **[kaizen-cost-tracking.md](kaizen-cost-tracking.md)** - Token usage, budget management
-22. **[kaizen-streaming.md](kaizen-streaming.md)** - Streaming responses, real-time output
-23. **[kaizen-testing-patterns.md](kaizen-testing-patterns.md)** - 3-tier testing, fixtures, standardized tests
+16. **[kaizen-control-protocol.md](kaizen-control-protocol.md)** - **v0.2.0** Bidirectional agent ↔ client communication
+17. **[kaizen-tool-calling.md](kaizen-tool-calling.md)** - **v0.2.0** Autonomous tool execution with approval workflows
+18. **[kaizen-observability.md](kaizen-observability.md)** - **NEW v0.5.0** Complete observability stack (tracing, metrics, logging, audit)
+19. **[kaizen-chain-of-thought.md](kaizen-chain-of-thought.md)** - CoT pattern, step-by-step reasoning
+20. **[kaizen-rag-agent.md](kaizen-rag-agent.md)** - RAG implementation with Kaizen
+21. **[kaizen-react-pattern.md](kaizen-react-pattern.md)** - ReAct (reasoning + acting)
+22. **[kaizen-cost-tracking.md](kaizen-cost-tracking.md)** - Token usage, budget management
+23. **[kaizen-streaming.md](kaizen-streaming.md)** - Streaming responses, real-time output
+24. **[kaizen-testing-patterns.md](kaizen-testing-patterns.md)** - 3-tier testing, fixtures, standardized tests
 
+**New in v0.5.0**: Production-ready observability with zero overhead (-0.06%), complete monitoring stack
 **New in v0.2.0**: Control Protocol and Tool Calling enable interactive agents with autonomous tool execution
 **Testing**: All patterns use 3-tier strategy (Unit → Ollama → OpenAI), NO MOCKING in Tiers 2-3
 
@@ -200,10 +202,11 @@ print(result['answer'])          # Key is 'answer', NOT 'response'
 
 ---
 
-## Framework Status
+## Framework Status (v0.5.0)
 
-**Implementation**: 85.7% operational (454/454 tests passing)
-**Performance**: 17.34ms import time (4x better than targets)
+**Implementation**: Production-ready with 192 observability tests passing
+**Performance**: -0.06% overhead (essentially zero), validated with real LLM workloads
+**Observability**: Complete stack (tracing, metrics, logging, audit) with Grafana/Prometheus/Jaeger/ELK
 **Multi-Modal**: Vision (Ollama + OpenAI) + Audio (Whisper) fully operational
 **Multi-Agent**: SupervisorWorkerPattern production-ready (14/14 tests)
 **A2A Protocol**: 100% Google A2A compliant with automatic capability cards
@@ -234,6 +237,7 @@ print(result['answer'])          # Key is 'answer', NOT 'response'
 |------|--------|
 | Create basic agent | baseagent-quick, signatures, quickstart-template |
 | Production agent | config-patterns, ux-helpers, agent-execution, testing-patterns |
+| Production monitoring | **observability** (v0.5.0) - tracing, metrics, logging, audit |
 | Interactive agents | **control-protocol** (v0.2.0), baseagent-quick |
 | Tool calling | **tool-calling** (v0.2.0), control-protocol |
 | Multi-agent system | multi-agent-setup, shared-memory, a2a-protocol, supervisor-worker |
