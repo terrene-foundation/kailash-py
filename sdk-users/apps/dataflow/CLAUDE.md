@@ -1,6 +1,6 @@
-# Kailash DataFlow - Complete Function Access Guide (v0.5.6 Release Ready)
+# Kailash DataFlow - Complete Function Access Guide (v0.6.0 Release Ready)
 
-**🎉 Major Release: v0.5.6 with Complete Database Support**
+**🎉 Major Release: v0.6.0 with Complete Database Support + New CRUD API**
 - **MYSQL SUPPORT**: Full MySQL support with 100% feature parity (aiomysql driver)
 - **THREE DATABASES**: PostgreSQL, MySQL, and SQLite with identical 9 nodes per model
 - DateTime serialization issues resolved
@@ -17,6 +17,21 @@
 - **MongoDB**: Document database with PyMongo Async API for flexible schema applications
 - **Qdrant**: Dedicated vector database for billion-scale semantic search
 - **Neo4j**: Graph database for relationship-heavy data models
+
+## ⚠️ Common Mistakes (Critical)
+
+| Mistake | Impact | Solution |
+|---------|--------|----------|
+| **Using `user_id` or `model_id` instead of `id`** | 10-20 min debugging | **MUST use `id`** (not `user_id`, `agent_id`, etc.) |
+| **Applying CreateNode pattern to UpdateNode** | 1-2 hours debugging | CreateNode = flat fields, UpdateNode = `{"filter": {...}, "fields": {...}}` |
+| **Including `created_at`/`updated_at`** | Validation errors | Auto-managed - NEVER include manually |
+| **Wrong node naming** | Node not found | Use `ModelOperationNode` (e.g., `UserCreateNode`) |
+
+**Critical Rules**:
+1. **Primary key MUST be `id`** - DataFlow requires this exact name
+2. **CreateNode ≠ UpdateNode** - Different parameter patterns
+3. **Auto-managed fields** - created_at, updated_at handled by DataFlow
+4. **Node naming** - Always `ModelOperationNode` pattern (v0.6.0+)
 
 ## 🔧 STRING ID & CONTEXT-AWARE PATTERNS (NEW)
 
@@ -44,9 +59,9 @@ workflow.add_node("SsoSessionReadNode", "read_session", {
     "id": session_id  # String preserved as-is
 })
 
-# ✅ ALTERNATIVE: Use conditions for explicit type preservation
+# ✅ ALTERNATIVE: Use filter for explicit type preservation (v0.6.0+ API)
 workflow.add_node("SsoSessionReadNode", "read_session_alt", {
-    "conditions": {"id": session_id},  # Explicit type preservation
+    "filter": {"id": session_id},  # v0.6.0+ API - explicit type preservation
     "raise_on_not_found": True
 })
 

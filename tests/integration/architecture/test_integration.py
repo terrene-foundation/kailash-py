@@ -5,8 +5,6 @@ and that the existing ABAC functionality is preserved.
 """
 
 import pytest
-from tests.utils import FunctionalTestMixin
-
 from kailash.access_control import (
     AccessControlManager,
     NodePermission,
@@ -14,6 +12,8 @@ from kailash.access_control import (
     PermissionRule,
     UserContext,
 )
+
+from tests.utils import FunctionalTestMixin
 
 
 class TestAccessControlIntegration(FunctionalTestMixin):

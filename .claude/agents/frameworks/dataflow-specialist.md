@@ -28,8 +28,6 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - "With Nexus?" → [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-integration.md)
 - "Migration guide?" → [`dataflow-migrations-quick`](../../skills/02-dataflow/dataflow-migrations-quick.md)
 
-**See**: [Complete Skills Catalog](../../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) - 24 DataFlow Skills available
-
 ## Primary Responsibilities (This Subagent)
 
 ### Use This Subagent When:
@@ -50,16 +48,66 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - **[Main Integration Guide](../../sdk-users/guides/dataflow-nexus-integration.md)** - Start here
 - **[Full Features Config](../../sdk-users/apps/dataflow/docs/integration/dataflow-nexus-full-features.md)** - 10-30s startup, all features
 - **[Working Examples](../../sdk-users/apps/nexus/examples/dataflow-integration/)** - Copy-paste ready code
-- **Critical Settings**: `skip_registry=True, enable_model_persistence=False` for <2s startup
+- **Critical Settings**: `enable_model_persistence=False, auto_migrate=False` for <2s startup
 
 ### ⚡ Quick Config Reference
 | Use Case | Config | Startup Time |
 |----------|--------|--------------|
-| **Fast API** | `skip_registry=True, enable_model_persistence=False` | <2s |
-| **Full Features** | `skip_registry=False, enable_model_persistence=True, auto_migrate=True` | 10-30s |
+| **Fast API** | `enable_model_persistence=False, auto_migrate=False` | <2s |
+| **Full Features** | `enable_model_persistence=True, auto_migrate=True` | 10-30s |
 | **With Nexus** | Always use above + `Nexus(auto_discovery=False)` | Same |
 
 ## ⚠️ CRITICAL LEARNINGS - Read First
+
+### ⚠️ Common Mistakes (HIGH IMPACT - Prevents 1-4 Hour Debugging)
+
+**CRITICAL**: These mistakes cause the most debugging time for new developers. **READ THIS FIRST** before implementing DataFlow.
+
+| Mistake | Impact | Correct Approach |
+|---------|--------|------------------|
+| **Using `user_id` or `model_id` instead of `id`** | 10-20 min debugging | **PRIMARY KEY MUST BE `id`** (not `user_id`, `agent_id`, etc.) |
+| **Applying CreateNode pattern to UpdateNode** | 1-2 hours debugging | CreateNode = flat fields, UpdateNode = `{"filter": {...}, "fields": {...}}` |
+| **Including `created_at`/`updated_at` in updates** | Validation errors | Auto-managed by DataFlow - **NEVER** set manually |
+| **Wrong node naming** (e.g., `User_Create`) | Node not found | Use `ModelOperationNode` pattern (e.g., `UserCreateNode`) |
+| **Missing `db_instance` parameter** | Generic validation errors | ALL DataFlow nodes require `db_instance` and `model_name` |
+
+**Critical Rules**:
+1. **Primary key MUST be `id`** - DataFlow requires this exact field name (10-20 min impact)
+2. **CreateNode ≠ UpdateNode** - Completely different parameter patterns (1-2 hour impact)
+3. **Auto-managed fields** - created_at, updated_at handled automatically (5-10 min impact)
+4. **Node naming v0.6.0+** - Always `ModelOperationNode` pattern (5 min impact)
+
+**Examples**:
+```python
+# ✅ CORRECT: Primary key MUST be 'id'
+@db.model
+class User:
+    id: str  # ✅ REQUIRED - must be exactly 'id'
+    name: str
+
+# ❌ WRONG: Custom primary key names FAIL
+@db.model
+class User:
+    user_id: str  # ❌ FAILS - DataFlow requires 'id'
+
+# ✅ CORRECT: CreateNode uses flat fields
+workflow.add_node("UserCreateNode", "create", {
+    "db_instance": "my_db",
+    "model_name": "User",
+    "id": "user_001",  # Individual fields at top level
+    "name": "Alice",
+    "email": "alice@example.com"
+})
+
+# ✅ CORRECT: UpdateNode uses nested filter + fields
+workflow.add_node("UserUpdateNode", "update", {
+    "db_instance": "my_db",
+    "model_name": "User",
+    "filter": {"id": "user_001"},  # Which records to update
+    "fields": {"name": "Alice Updated"}  # What to change
+    # ⚠️ Do NOT include created_at or updated_at - auto-managed!
+})
+```
 
 ### Common Misunderstandings (VERIFIED v0.5.0)
 
@@ -71,6 +119,7 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 **2. Bulk Operations**
 - ❌ MISUNDERSTANDING: "Bulk operations are limited in alpha"
 - ✅ REALITY: ALL bulk operations work perfectly (ContactBulkCreateNode, ContactBulkUpdateNode, ContactBulkDeleteNode, ContactBulkUpsertNode all exist and function)
+- **v0.7.1 UPDATE**: BulkUpsertNode was fully implemented in v0.7.1 (previous versions had stub implementation)
 - **Impact**: Don't avoid bulk operations - they're production-ready and performant (10k+ ops/sec)
 
 **3. ListNode Result Structure**
@@ -112,6 +161,7 @@ When encountering apparent "limitations":
 - **Not an ORM**: Workflow-native database framework, not traditional ORM
 - **PostgreSQL + SQLite Full Parity**: Both databases fully supported with identical functionality
 - **Automatic Node Generation**: Each `@db.model` creates 9 node types automatically
+- **Datetime Auto-Conversion (v0.6.4+)**: ISO 8601 strings automatically converted to datetime objects
 - **6-Level Write Protection**: Comprehensive protection system (Global, Connection, Model, Operation, Field, Runtime)
 - **Migration System**: Auto-migration with schema state management and performance tracking
 - **Enterprise-Grade**: Built-in caching, multi-tenancy, distributed transactions
@@ -139,6 +189,96 @@ When encountering apparent "limitations":
 > **Note**: For basic patterns (setup, CRUD, queries), see the [DataFlow Skills](../../skills/02-dataflow/) - 24 Skills covering common operations.
 
 This section focuses on **enterprise-level patterns** and **production complexity**.
+
+### Automatic Datetime Conversion (v0.6.4+)
+
+DataFlow automatically converts ISO 8601 datetime strings to Python datetime objects across ALL CRUD nodes. This enables seamless integration with PythonCodeNode and external data sources.
+
+**Supported ISO 8601 Formats:**
+- Basic: `2024-01-01T12:00:00`
+- With microseconds: `2024-01-01T12:00:00.123456`
+- With timezone Z: `2024-01-01T12:00:00Z`
+- With timezone offset: `2024-01-01T12:00:00+05:30`
+
+**Example: PythonCodeNode → CreateNode**
+```python
+# PythonCodeNode outputs ISO string
+workflow.add_node("PythonCodeNode", "generate_timestamp", {
+    "code": """
+from datetime import datetime
+result = {"created_at": datetime.now().isoformat()}
+    """
+})
+
+# CreateNode automatically converts to datetime
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Alice",
+    "created_at": "{{generate_timestamp.created_at}}"  # ISO string → datetime
+})
+```
+
+**Backward Compatibility:**
+```python
+from datetime import datetime
+
+# Existing code with datetime objects still works
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Bob",
+    "created_at": datetime.now()  # Still works!
+})
+```
+
+**Applies To:** CreateNode, UpdateNode, BulkCreateNode, BulkUpdateNode, BulkUpsertNode
+
+### Dynamic Updates with PythonCodeNode Multi-Output (Core SDK v0.9.28+)
+
+**NEW**: Core SDK v0.9.28 enables PythonCodeNode to export multiple variables directly, making dynamic DataFlow updates natural and intuitive.
+
+**Before v0.9.28 (nested result pattern):**
+```python
+# OLD: Forced to nest everything in 'result'
+workflow.add_node("PythonCodeNode", "prepare", {
+    "code": """
+result = {
+    "filter": {"id": summary_id},
+    "fields": {"summary_markdown": updated_text}
+}
+    """
+})
+# Complex nested path connections required
+workflow.add_connection("prepare", "result.filter", "update", "filter")
+workflow.add_connection("prepare", "result.fields", "update", "fields")
+```
+
+**After v0.9.28 (multi-output pattern):**
+```python
+# NEW: Natural variable definitions
+workflow.add_node("PythonCodeNode", "prepare", {
+    "code": """
+filter_data = {"id": summary_id}
+summary_markdown = updated_text
+edited_by_user = True
+    """
+})
+
+# Clean, direct connections
+workflow.add_node("ConversationSummaryUpdateNode", "update", {})
+workflow.add_connection("prepare", "filter_data", "update", "filter")
+workflow.add_connection("prepare", "summary_markdown", "update", "summary_markdown")
+workflow.add_connection("prepare", "edited_by_user", "update", "edited_by_user")
+```
+
+**Benefits:**
+- ✅ Natural variable naming
+- ✅ Matches developer mental model
+- ✅ Less nesting, cleaner code
+- ✅ Full DataFlow benefits retained (no SQL needed!)
+
+**Backward Compatibility:** Old patterns with `result = {...}` continue to work 100%.
+
+**Requirements:** Core SDK >= v0.9.28, DataFlow >= v0.6.6
+
+**See Also:** [dataflow-dynamic-updates](../../skills/02-dataflow/dataflow-dynamic-updates.md) skill for complete examples
 
 ### Event Loop Isolation
 
@@ -209,6 +349,12 @@ workflow.add_node(result['generated_nodes']['User']['create'], 'create_user', {.
 > **See Skills**: [`dataflow-crud-operations`](../../skills/02-dataflow/dataflow-crud-operations.md) and [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md) for complete CRUD and query examples.
 
 Quick reference: 9 nodes auto-generated per model (Create, Read, Update, Delete, List, BulkCreate, BulkUpdate, BulkDelete, BulkUpsert).
+
+**v0.7.1 Update - BulkUpsertNode:**
+- Fully implemented in v0.7.1 (previous versions had stub implementation)
+- Parameters: `data` (required), `conflict_resolution` ("update" or "skip"/"ignore")
+- Conflict column: Always `id` (DataFlow standard, auto-inferred)
+- No `unique_fields` parameter - conflict detection uses `id` field only
 
 ### 🔑 CRITICAL: Template Syntax
 **Kailash uses `${}` NOT `{{}}`** - See [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md) for examples.
@@ -829,7 +975,7 @@ db = DataFlow(
 ### Never
 - Instantiate models directly (`User()`)
 - Use `${}` template syntax
-- Use string datetime values
+- Worry about datetime conversion - now automatic (v0.6.4+)
 - Skip safety checks in production
 - Expect MySQL execution in alpha (SQLite works fine!)
 - Use mocking in Tier 2-3 tests (NO MOCKING policy enforced)
@@ -901,10 +1047,8 @@ app = Nexus(
 # Step 2: Create DataFlow with optimized settings
 db = DataFlow(
     database_url="postgresql://...",
-    skip_registry=True,  # CRITICAL: Prevents 5-10s delay per model
     enable_model_persistence=False,  # No workflow execution during init
     auto_migrate=False,
-    skip_migration=True,
     enable_caching=True,  # Keep performance features
     enable_metrics=True
 )
@@ -924,8 +1068,8 @@ app.register("create_user", workflow.build())
 
 **Why These Settings Are Critical:**
 - `auto_discovery=False`: Prevents Nexus from re-importing DataFlow models (causes infinite loop)
-- `skip_registry=True`: Skips synchronous workflow execution during model registration (5-10s per model)
 - `enable_model_persistence=False`: Prevents database writes during initialization
+- `auto_migrate=False`: Skips migration checks during startup
 
 **What You Keep:**
 - ✅ All CRUD operations work normally

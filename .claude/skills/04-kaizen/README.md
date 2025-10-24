@@ -1,6 +1,6 @@
 # Kaizen Framework Skills
 
-21 skills for Kaizen AI agent framework covering core patterns, multi-agent coordination, multi-modal processing, and advanced patterns.
+23 skills for Kaizen AI agent framework covering core patterns, multi-agent coordination, multi-modal processing, and v0.2.0+ advanced features.
 
 ## Skill Categories
 
@@ -46,17 +46,20 @@ Vision, audio, and multi-modal processing:
 
 ---
 
-### Advanced Patterns (6 Skills - MEDIUM)
+### Advanced Patterns (8 Skills - MEDIUM/HIGH)
 
-Production patterns and specialized techniques:
+Production patterns, v0.2.0+ features, and specialized techniques:
 
-16. **[kaizen-chain-of-thought.md](kaizen-chain-of-thought.md)** - CoT pattern, step-by-step reasoning
-17. **[kaizen-rag-agent.md](kaizen-rag-agent.md)** - RAG implementation with Kaizen
-18. **[kaizen-react-pattern.md](kaizen-react-pattern.md)** - ReAct (reasoning + acting)
-19. **[kaizen-cost-tracking.md](kaizen-cost-tracking.md)** - Token usage, budget management
-20. **[kaizen-streaming.md](kaizen-streaming.md)** - Streaming responses, real-time output
-21. **[kaizen-testing-patterns.md](kaizen-testing-patterns.md)** - 3-tier testing, fixtures, standardized tests
+16. **[kaizen-control-protocol.md](kaizen-control-protocol.md)** - **NEW v0.2.0** Bidirectional agent ↔ client communication
+17. **[kaizen-tool-calling.md](kaizen-tool-calling.md)** - **NEW v0.2.0** Autonomous tool execution with approval workflows
+18. **[kaizen-chain-of-thought.md](kaizen-chain-of-thought.md)** - CoT pattern, step-by-step reasoning
+19. **[kaizen-rag-agent.md](kaizen-rag-agent.md)** - RAG implementation with Kaizen
+20. **[kaizen-react-pattern.md](kaizen-react-pattern.md)** - ReAct (reasoning + acting)
+21. **[kaizen-cost-tracking.md](kaizen-cost-tracking.md)** - Token usage, budget management
+22. **[kaizen-streaming.md](kaizen-streaming.md)** - Streaming responses, real-time output
+23. **[kaizen-testing-patterns.md](kaizen-testing-patterns.md)** - 3-tier testing, fixtures, standardized tests
 
+**New in v0.2.0**: Control Protocol and Tool Calling enable interactive agents with autonomous tool execution
 **Testing**: All patterns use 3-tier strategy (Unit → Ollama → OpenAI), NO MOCKING in Tiers 2-3
 
 ---
@@ -107,10 +110,27 @@ Production patterns and specialized techniques:
 
 ## Critical References
 
-### Source Documentation
-- **Specialist Agent**: `.claude/agents/frameworks/kaizen-specialist.md` (524 lines)
+### Comprehensive Documentation (sdk-users/)
+
+**Core Guides** (`sdk-users/apps/kaizen/docs/guides/`):
+- **[BaseAgent Architecture](../../../sdk-users/apps/kaizen/docs/guides/baseagent-architecture.md)** - Complete unified agent system (~600 lines)
+- **[Multi-Agent Coordination](../../../sdk-users/apps/kaizen/docs/guides/multi-agent-coordination.md)** - Google A2A protocol, 5 patterns (~600 lines)
+- **[Signature Programming](../../../sdk-users/apps/kaizen/docs/guides/signature-programming.md)** - Complete signature system
+- **[Control Protocol Tutorial](../../../sdk-users/apps/kaizen/docs/guides/control-protocol-tutorial.md)** - Bidirectional communication (13KB)
+- **[Integration Patterns](../../../sdk-users/apps/kaizen/docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP
+
+**Reference Docs** (`sdk-users/apps/kaizen/docs/reference/`):
+- **[API Reference](../../../sdk-users/apps/kaizen/docs/reference/api-reference.md)** - Complete API (351 lines)
+- **[Control Protocol API](../../../sdk-users/apps/kaizen/docs/reference/control-protocol-api.md)** - Full protocol reference (497 lines)
+- **[Memory Patterns Guide](../../../sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md)** - Memory usage (1,193 lines)
+- **[Strategy Selection Guide](../../../sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md)** - Strategy choice (1,296 lines)
+- **[Configuration Guide](../../../sdk-users/apps/kaizen/docs/reference/configuration.md)** - All config options
+- **[Troubleshooting](../../../sdk-users/apps/kaizen/docs/reference/troubleshooting.md)** - Common issues
+
+### Quick References
+- **Specialist Agent**: `.claude/agents/frameworks/kaizen-specialist.md` (comprehensive reference table)
 - **README**: `sdk-users/apps/kaizen/README.md`
-- **CLAUDE.md**: `sdk-users/apps/kaizen/CLAUDE.md`
+- **CLAUDE.md**: `sdk-users/apps/kaizen/CLAUDE.md` (quick start)
 - **Examples**: `apps/kailash-kaizen/examples/` (35+ working examples)
 
 ### Key Content Sources
@@ -214,6 +234,8 @@ print(result['answer'])          # Key is 'answer', NOT 'response'
 |------|--------|
 | Create basic agent | baseagent-quick, signatures, quickstart-template |
 | Production agent | config-patterns, ux-helpers, agent-execution, testing-patterns |
+| Interactive agents | **control-protocol** (v0.2.0), baseagent-quick |
+| Tool calling | **tool-calling** (v0.2.0), control-protocol |
 | Multi-agent system | multi-agent-setup, shared-memory, a2a-protocol, supervisor-worker |
 | Vision processing | **multimodal-pitfalls** (READ FIRST), vision-processing |
 | Audio processing | audio-processing, multimodal-orchestration |

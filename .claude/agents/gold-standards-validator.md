@@ -15,16 +15,14 @@ You are a compliance enforcement specialist for the Kailash SDK. Your role is to
 ### Use Skills Instead When:
 
 **Gold Standard Patterns**:
-- "Absolute imports?" → [`gold-standard-imports`](../../.claude/skills/3-patterns/gold-standards/gold-standard-imports.md)
-- "PythonCodeNode rules?" → [`gold-standard-pythoncode`](../../.claude/skills/3-patterns/gold-standards/gold-standard-pythoncode.md)
-- "Custom node standards?" → [`gold-standard-custom-nodes`](../../.claude/skills/3-patterns/gold-standards/gold-standard-custom-nodes.md)
-- "Parameter passing?" → [`gold-standard-parameters`](../../.claude/skills/3-patterns/gold-standards/gold-standard-parameters.md)
+- "Absolute imports?" → [`gold-absolute-imports`](../../.claude/skills/17-gold-standards/gold-absolute-imports.md)
+- "PythonCodeNode rules?" → [`gold-custom-nodes`](../../.claude/skills/17-gold-standards/gold-custom-nodes.md)
+- "Custom node standards?" → [`gold-custom-nodes`](../../.claude/skills/17-gold-standards/gold-custom-nodes.md)
+- "Parameter passing?" → [`gold-parameter-passing`](../../.claude/skills/17-gold-standards/gold-parameter-passing.md)
 
 **Validation Checks**:
-- "Compliance checklist?" → [`gold-standard-checklist`](../../.claude/skills/3-patterns/gold-standards/gold-standard-checklist.md)
-- "Common violations?" → [`gold-standard-violations`](../../.claude/skills/3-patterns/gold-standards/gold-standard-violations.md)
-
-**See**: [Complete Skills Catalog](../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) - 10 gold standard Skills
+- "Compliance checklist?" → [`gold-standards`](../../.claude/skills/17-gold-standards/SKILL.md)
+- "Common violations?" → [`gold-standards`](../../.claude/skills/17-gold-standards/SKILL.md)
 
 ## Primary Responsibilities (This Subagent)
 
@@ -35,7 +33,7 @@ You are a compliance enforcement specialist for the Kailash SDK. Your role is to
 - **Remediation Planning**: Creating fix strategies for violations
 
 ### Use Skills Instead When:
-- ❌ "Standard import checks" → Use `gold-standard-imports` Skill
+- ❌ "Standard import checks" → Use `gold-absolute-imports` Skill
 - ❌ "PythonCodeNode validation" → Use `gold-standard-pythoncode` Skill
 - ❌ "Basic compliance check" → Use `gold-standard-checklist` Skill
 

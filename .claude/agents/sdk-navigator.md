@@ -14,27 +14,25 @@ You are a navigation specialist for the Kailash SDK documentation ecosystem. You
 ### Use Skills Instead When:
 
 **Pattern Lookups**:
-- "How do I create a workflow?" → [`workflow-quickstart`](../skills/1-core-sdk/workflow-quickstart.md)
-- "Missing .build() error" → [`error-missing-build`](../skills/5-cross-cutting/errors/error-missing-build.md)
-- "Connection syntax" → [`connection-patterns`](../skills/1-core-sdk/connection-patterns.md)
-- "Parameter passing" → [`param-passing-quick`](../skills/1-core-sdk/param-passing-quick.md)
+- "How do I create a workflow?" → [`workflow-quickstart`](../skills/01-core-sdk/workflow-quickstart.md)
+- "Missing .build() error" → [`error-missing-build`](../skills/15-error-troubleshooting/error-missing-build.md)
+- "Connection syntax" → [`connection-patterns`](../skills/01-core-sdk/connection-patterns.md)
+- "Parameter passing" → [`param-passing-quick`](../skills/01-core-sdk/param-passing-quick.md)
 
 **Framework Decisions**:
-- "Which framework?" → [`decide-framework`](../skills/5-cross-cutting/decisions/decide-framework.md)
-- "DataFlow tutorial" → [`dataflow-quickstart`](../skills/2-frameworks/dataflow/dataflow-quickstart.md)
-- "Nexus setup" → [`nexus-quickstart`](../skills/2-frameworks/nexus/nexus-quickstart.md)
+- "Which framework?" → [`decide-framework`](../skills/13-architecture-decisions/decide-framework.md)
+- "DataFlow tutorial" → [`dataflow-quickstart`](../skills/02-dataflow/dataflow-quickstart.md)
+- "Nexus setup" → [`nexus-quickstart`](../skills/03-nexus/nexus-quickstart.md)
 
 **Node Selection**:
-- "What node for X?" → [`nodes-quick-index`](../skills/3-patterns/nodes/nodes-quick-index.md)
-- "CSV node" → [`nodes-data-reference`](../skills/3-patterns/nodes/nodes-data-reference.md)
-- "LLM node" → [`nodes-ai-reference`](../skills/3-patterns/nodes/nodes-ai-reference.md)
+- "What node for X?" → [`nodes-quick-index`](../skills/08-nodes-reference/nodes-quick-index.md)
+- "CSV node" → [`nodes-data-reference`](../skills/08-nodes-reference/nodes-data-reference.md)
+- "LLM node" → [`nodes-ai-reference`](../skills/08-nodes-reference/nodes-ai-reference.md)
 
 **Error Resolution**:
-- "Target node not found" → [`error-connection-params`](../skills/5-cross-cutting/errors/error-connection-params.md)
-- "Missing parameters" → [`error-parameter-validation`](../skills/5-cross-cutting/errors/error-parameter-validation.md)
-- "Cycle not converging" → [`error-cycle-convergence`](../skills/5-cross-cutting/errors/error-cycle-convergence.md)
-
-**See**: [Complete Skills Catalog](../SKILLS_TAXONOMY_COMPREHENSIVE.md) for all 227 Skills
+- "Target node not found" → [`error-connection-params`](../skills/15-error-troubleshooting/error-connection-params.md)
+- "Missing parameters" → [`error-parameter-validation`](../skills/15-error-troubleshooting/error-parameter-validation.md)
+- "Cycle not converging" → [`error-cycle-convergence`](../skills/15-error-troubleshooting/error-cycle-convergence.md)
 
 ## Primary Responsibilities (This Subagent)
 

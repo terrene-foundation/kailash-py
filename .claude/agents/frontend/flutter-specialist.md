@@ -21,8 +21,6 @@ Skills provide backend patterns and SDK usage. This subagent provides:
 
 **When to use Skills instead**: For Kailash backend patterns (Nexus API, DataFlow models, Kaizen agents), use appropriate Skills. For Flutter UI implementation, mobile architecture, and cross-platform development, use this subagent.
 
-**See**: [Complete Skills Catalog](../../SKILLS_TAXONOMY_COMPREHENSIVE.md) for backend SDK pattern references.
-
 ## Core Expertise
 
 ### Flutter 3.27+ (2025 Best Practices)
@@ -805,6 +803,16 @@ class ContactForm extends StatelessWidget {
 | Deep widget tree | Extract widgets, use composition |
 
 ## Reference Documentation
+
+### Essential Guides (Start Here)
+- `.claude/guides/flutter-design-system.md` - Design system usage and component library
+- `.claude/guides/creating-flutter-design-system.md` - Creating and extending design systems
+- `.claude/guides/flutter-testing-patterns.md` - Testing strategies and patterns
+- `.claude/guides/interactive-widget-implementation-guide.md` - Interactive widget patterns
+- `.claude/guides/widget-system-overview.md` - Widget architecture and organization
+- `.claude/guides/widget-response-technical-spec.md` - Widget technical specifications
+- `.claude/guides/enterprise-ai-hub-uiux-design.md` - Overall UX/UI design principles
+- `.claude/guides/multi-conversation-ux-lark-style.md` - Conversation UI patterns
 
 ### Official Docs (2025)
 - Flutter: https://docs.flutter.dev/

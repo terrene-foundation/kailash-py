@@ -20,6 +20,91 @@ Use the 9 automatically generated workflow nodes for Create, Read, Update, Delet
 - **Naming Pattern**: `{Model}{Operation}Node` (e.g., `UserCreateNode`)
 - **Performance**: <1ms for single operations
 - **String IDs**: Fully supported (v0.4.0+)
+- **Datetime Auto-Conversion**: ISO 8601 strings → datetime objects (v0.6.4+)
+
+## ⚠️ CRITICAL WARNING: CreateNode vs UpdateNode Patterns
+
+**CreateNode and UpdateNode use FUNDAMENTALLY DIFFERENT parameter structures.** This is the #1 cause of 4+ hour debugging sessions for new DataFlow developers.
+
+### Pattern Comparison
+
+| Node Type | Pattern | Example |
+|-----------|---------|---------|
+| **CreateNode** | **FLAT** individual fields | `{"name": "Alice", "email": "alice@example.com"}` |
+| **UpdateNode** | **NESTED** filter + fields | `{"filter": {"id": 1}, "fields": {"name": "Alice Updated"}}` |
+| **BulkUpdateNode** | **NESTED** filter + fields | `{"filter": {"active": True}, "fields": {"status": "verified"}}` |
+
+### CreateNode: FLAT Individual Fields
+
+```python
+# ✅ CORRECT - All fields at top level
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Alice",            # ← Individual field 1
+    "email": "alice@example.com", # ← Individual field 2
+    "age": 30                   # ← Individual field 3
+})
+
+# ❌ WRONG - Do NOT nest under 'data'
+workflow.add_node("UserCreateNode", "create", {
+    "data": {  # ← This creates a FIELD named "data"!
+        "name": "Alice",
+        "email": "alice@example.com"
+    }
+})
+# Error: "missing required inputs: name, email, age"
+```
+
+### UpdateNode: NESTED filter + fields
+
+```python
+# ✅ CORRECT - Nested structure with filter + fields
+workflow.add_node("UserUpdateNode", "update", {
+    "filter": {"id": 1},  # ← Which records to update
+    "fields": {            # ← What to change
+        "name": "Alice Updated",
+        "age": 31
+    }
+})
+
+# ❌ WRONG - Do NOT use flat fields like CreateNode
+workflow.add_node("UserUpdateNode", "update", {
+    "id": 1,          # ← Wrong! This is CreateNode pattern
+    "name": "Alice"
+})
+# Error: "UpdateNode requires 'filter' and 'fields' parameters"
+```
+
+### Why Different?
+
+- **CreateNode**: You're providing ALL data for a NEW record
+  → Flat structure makes sense (like object construction)
+
+- **UpdateNode**: You need to specify:
+  1. **WHICH** records to update (`filter`)
+  2. **WHAT** to change (`fields`)
+  → Nested structure separates concerns
+
+### Auto-Managed Fields
+
+⚠️ **IMPORTANT**: DataFlow automatically manages these fields:
+- `created_at` - Set automatically on create
+- `updated_at` - Updated automatically on update
+
+**Do NOT include them in your parameters!**
+
+```python
+# ❌ WRONG
+fields = {
+    "name": "Alice",
+    "updated_at": datetime.now()  # ← Remove this!
+}
+
+# ✅ CORRECT
+fields = {
+    "name": "Alice"
+    # updated_at is set automatically
+}
+```
 
 ## Core Pattern
 
@@ -50,18 +135,18 @@ workflow.add_node("UserCreateNode", "create_user", {
 
 # READ - Single record by ID
 workflow.add_node("UserReadNode", "read_user", {
-    "id": 1
+    "filter": {"id": 1}
 })
 
 # UPDATE - Single record
 workflow.add_node("UserUpdateNode", "update_user", {
-    "id": 1,
-    "updates": {"active": False}
+    "filter": {"id": 1},
+    "fields": {"active": False}
 })
 
 # DELETE - Single record
 workflow.add_node("UserDeleteNode", "delete_user", {
-    "id": 1
+    "filter": {"id": 1}
 })
 
 # LIST - Query with filters
@@ -81,6 +166,7 @@ results, run_id = runtime.execute(workflow.build())
 - **Account Updates**: Update user profile fields
 - **Account Deletion**: Soft or hard delete users
 - **User Search**: List users with filters and pagination
+- **Timestamp Handling**: Seamless datetime integration with PythonCodeNode (v0.6.4+)
 
 ## Generated Nodes Reference
 
@@ -122,20 +208,20 @@ workflow.add_node("UserCreateNode", "create", {
 ### ReadNode Parameters
 
 ```python
-# Option 1: By ID (simple)
+# Option 1: By ID (recommended)
 workflow.add_node("UserReadNode", "read", {
-    "id": 123
+    "filter": {"id": 123}
 })
 
-# Option 2: By conditions (flexible)
+# Option 2: By other conditions
 workflow.add_node("UserReadNode", "read", {
-    "conditions": {"email": "john@example.com"},
+    "filter": {"email": "john@example.com"},
     "raise_on_not_found": True  # Error if not found
 })
 
 # Option 3: String IDs (v0.4.0+)
 workflow.add_node("SessionReadNode", "read_session", {
-    "id": "session-uuid-string"  # String IDs preserved
+    "filter": {"id": "session-uuid-string"}  # String IDs preserved
 })
 ```
 
@@ -143,15 +229,15 @@ workflow.add_node("SessionReadNode", "read_session", {
 
 ```python
 workflow.add_node("UserUpdateNode", "update", {
-    # Target record
-    "id": 123,
-    # OR
-    "conditions": {"email": "john@example.com"},
+    # Target record(s) - REQUIRED
+    "filter": {"id": 123},
+    # OR multiple conditions
+    # "filter": {"email": "john@example.com", "active": True},
 
-    # Updates to apply
-    "updates": {
-        "active": False,
-        "updated_at": datetime.now()
+    # Fields to update - REQUIRED
+    "fields": {
+        "active": False
+        # NOTE: Do NOT include updated_at - it's automatic!
     },
 
     # Options
@@ -164,8 +250,8 @@ workflow.add_node("UserUpdateNode", "update", {
 
 ```python
 workflow.add_node("UserDeleteNode", "delete", {
-    # Target record
-    "id": 123,
+    # Target record - REQUIRED
+    "filter": {"id": 123},
 
     # Soft delete (preserve data)
     "soft_delete": True,  # Sets deleted_at, doesn't remove
@@ -202,10 +288,81 @@ workflow.add_node("UserListNode", "list", {
 
 ## Common Mistakes
 
-### Mistake 1: Missing .build() Call
+### Mistake 1: Wrapping CreateNode Fields in 'data'
 
 ```python
-# Wrong - missing .build()
+# ❌ WRONG - 'data' is treated as a field name
+workflow.add_node("UserCreateNode", "create", {
+    "data": {  # This creates a FIELD named "data"
+        "name": "Alice",
+        "email": "alice@example.com"
+    }
+})
+# Error: "missing required inputs: name, email"
+```
+
+**Fix: Use Flat Fields**
+
+```python
+# ✅ CORRECT - Fields at top level
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Alice",
+    "email": "alice@example.com"
+})
+```
+
+### Mistake 2: Using CreateNode Pattern on UpdateNode
+
+```python
+# ❌ WRONG - Flat fields on UpdateNode
+workflow.add_node("UserUpdateNode", "update", {
+    "id": 1,          # This is CreateNode pattern!
+    "name": "Alice"
+})
+# Error: "UpdateNode requires 'filter' and 'fields' parameters"
+```
+
+**Fix: Use Nested filter + fields**
+
+```python
+# ✅ CORRECT - Nested structure for UpdateNode
+workflow.add_node("UserUpdateNode", "update", {
+    "filter": {"id": 1},
+    "fields": {"name": "Alice"}
+})
+```
+
+### Mistake 3: Including Auto-Managed Fields
+
+```python
+# ❌ WRONG - Manually setting updated_at
+workflow.add_node("UserUpdateNode", "update", {
+    "filter": {"id": 1},
+    "fields": {
+        "name": "Alice",
+        "updated_at": datetime.now()  # Don't do this!
+    }
+})
+# Error: "multiple assignments to same column 'updated_at'"
+```
+
+**Fix: Remove Auto-Managed Fields**
+
+```python
+# ✅ CORRECT - Let DataFlow handle updated_at
+workflow.add_node("UserUpdateNode", "update", {
+    "filter": {"id": 1},
+    "fields": {
+        "name": "Alice"
+        # updated_at is automatic
+    }
+})
+```
+
+### Mistake 4: Missing .build() Call
+
+```python
+# ❌ WRONG - missing .build()
 workflow.add_node("UserCreateNode", "create", {...})
 results, run_id = runtime.execute(workflow)  # ERROR
 ```
@@ -213,15 +370,15 @@ results, run_id = runtime.execute(workflow)  # ERROR
 **Fix: Always Call .build()**
 
 ```python
-# Correct
+# ✅ CORRECT
 workflow.add_node("UserCreateNode", "create", {...})
 results, run_id = runtime.execute(workflow.build())
 ```
 
-### Mistake 2: Using Template Syntax for Parameters
+### Mistake 5: Using Template Syntax for Parameters
 
 ```python
-# Wrong - ${} conflicts with PostgreSQL
+# ❌ WRONG - ${} conflicts with PostgreSQL
 workflow.add_node("OrderCreateNode", "create", {
     "customer_id": "${create_customer.id}"  # FAILS
 })
@@ -230,26 +387,176 @@ workflow.add_node("OrderCreateNode", "create", {
 **Fix: Use Workflow Connections**
 
 ```python
-# Correct - use connections for dynamic values
+# ✅ CORRECT - use connections for dynamic values
 workflow.add_node("OrderCreateNode", "create", {
     "total": 100.0
 })
 workflow.add_connection("create_customer", "id", "create", "customer_id")
 ```
 
-### Mistake 3: Wrong Result Access Pattern
+## Automatic Datetime Conversion (v0.6.4+)
+
+DataFlow automatically converts ISO 8601 datetime strings to Python datetime objects for all datetime fields. This enables seamless integration with PythonCodeNode and external data sources.
+
+### Supported ISO 8601 Formats
+
+- **Basic**: `2024-01-01T12:00:00`
+- **With microseconds**: `2024-01-01T12:00:00.123456`
+- **With timezone Z**: `2024-01-01T12:00:00Z`
+- **With timezone offset**: `2024-01-01T12:00:00+05:30`
+
+### Example: PythonCodeNode → CreateNode
 
 ```python
-# Wrong - incorrect result structure
-user_id = results["create_user"]["id"]  # FAILS
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
+
+workflow = WorkflowBuilder()
+
+# PythonCodeNode generates ISO 8601 string
+workflow.add_node("PythonCodeNode", "generate_timestamp", {
+    "code": """
+from datetime import datetime
+result = {"registration_date": datetime.now().isoformat()}
+    """
+})
+
+# CreateNode automatically converts to datetime
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Alice",
+    "email": "alice@example.com",
+    "registration_date": "{{generate_timestamp.registration_date}}"  # ISO string → datetime
+})
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+
+# Database stores as proper datetime type
+created_user = results["create"]["result"]
+print(f"User registered at: {created_user['registration_date']}")
 ```
 
-**Fix: Access Through result Key**
+### Example: UpdateNode with Datetime
 
 ```python
-# Correct - results have 'result' wrapper
-user_data = results["create_user"]["result"]
-user_id = user_data["id"]
+# PythonCodeNode generates timestamp
+workflow.add_node("PythonCodeNode", "generate_last_login", {
+    "code": """
+from datetime import datetime
+result = {"last_login": datetime.now().isoformat()}
+    """
+})
+
+# UpdateNode automatically converts
+workflow.add_node("UserUpdateNode", "update_last_login", {
+    "filter": {"id": 1},
+    "fields": {
+        "last_login": "{{generate_last_login.last_login}}"  # ISO string → datetime
+    }
+})
+```
+
+### Example: BulkCreateNode with Datetime
+
+```python
+# Prepare bulk data with ISO strings
+workflow.add_node("PythonCodeNode", "generate_bulk_data", {
+    "code": """
+from datetime import datetime, timedelta
+import json
+
+users = []
+for i in range(100):
+    users.append({
+        "name": f"User {i}",
+        "email": f"user{i}@example.com",
+        "joined_at": (datetime.now() - timedelta(days=i)).isoformat()
+    })
+
+result = {"users": json.dumps(users)}
+    """
+})
+
+# BulkCreateNode automatically converts all datetime strings
+workflow.add_node("UserBulkCreateNode", "bulk_import", {
+    "data": "{{generate_bulk_data.users}}"  # All ISO strings → datetime
+})
+```
+
+### Backward Compatibility
+
+Existing code passing datetime objects continues to work without changes:
+
+```python
+from datetime import datetime
+
+# Still works - datetime objects accepted
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Bob",
+    "email": "bob@example.com",
+    "registration_date": datetime.now()  # Direct datetime object
+})
+
+# Also works - ISO strings now auto-converted
+workflow.add_node("UserCreateNode", "create_from_string", {
+    "name": "Charlie",
+    "email": "charlie@example.com",
+    "registration_date": "2024-01-15T10:30:00"  # ISO string → datetime
+})
+```
+
+### Applies To All CRUD Nodes
+
+Datetime auto-conversion works on:
+- ✅ `UserCreateNode` - Single record creation
+- ✅ `UserUpdateNode` - Single record updates
+- ✅ `UserBulkCreateNode` - Bulk record creation
+- ✅ `UserBulkUpdateNode` - Bulk record updates
+- ✅ `UserBulkUpsertNode` - Bulk upsert operations
+
+### Common Use Cases
+
+**External API Integration:**
+```python
+# API returns ISO 8601 strings
+workflow.add_node("PythonCodeNode", "fetch_api_data", {
+    "code": """
+import requests
+response = requests.get("https://api.example.com/users")
+result = response.json()  # Contains ISO datetime strings
+    """
+})
+
+# Automatically converted to datetime
+workflow.add_node("UserBulkCreateNode", "import_api_users", {
+    "data": "{{fetch_api_data.users}}"
+})
+```
+
+**CSV Import:**
+```python
+# CSV contains date strings
+workflow.add_node("PythonCodeNode", "parse_csv", {
+    "code": """
+import csv
+from datetime import datetime
+
+users = []
+with open('users.csv') as f:
+    for row in csv.DictReader(f):
+        users.append({
+            "name": row["name"],
+            "email": row["email"],
+            "registered": datetime.fromisoformat(row["registered_date"]).isoformat()
+        })
+
+result = {"users": users}
+    """
+})
+
+workflow.add_node("UserBulkCreateNode", "import_csv", {
+    "data": "{{parse_csv.users}}"  # ISO strings auto-converted
+})
 ```
 
 ## Related Patterns
@@ -311,14 +618,17 @@ workflow.add_node("UserCreateNode", "create", {
 })
 
 # Read created user
-workflow.add_node("UserReadNode", "read", {})
-workflow.add_connection("create", "id", "read", "id")
+workflow.add_node("UserReadNode", "read", {
+    "filter": {}  # Will be provided via connection
+})
+workflow.add_connection("create", "id", "read", "filter.id")
 
 # Update user
 workflow.add_node("UserUpdateNode", "update", {
-    "updates": {"active": False}
+    "filter": {},  # Will be provided via connection
+    "fields": {"active": False}
 })
-workflow.add_connection("read", "id", "update", "id")
+workflow.add_connection("read", "id", "update", "filter.id")
 
 # List all inactive users
 workflow.add_node("UserListNode", "list_inactive", {
@@ -357,13 +667,13 @@ workflow.add_node("SsoSessionCreateNode", "create_session", {
 
 # Read by string ID
 workflow.add_node("SsoSessionReadNode", "read_session", {
-    "id": session_id  # No conversion needed
+    "filter": {"id": session_id}  # No conversion needed
 })
 
 # Update by string ID
 workflow.add_node("SsoSessionUpdateNode", "update_session", {
-    "id": session_id,
-    "updates": {"state": "expired"}
+    "filter": {"id": session_id},
+    "fields": {"state": "expired"}
 })
 
 runtime = LocalRuntime()
@@ -386,7 +696,7 @@ workflow = WorkflowBuilder()
 
 # Soft delete (preserves data)
 workflow.add_node("CustomerDeleteNode", "soft_delete_customer", {
-    "id": 123,
+    "filter": {"id": 123},
     "soft_delete": True  # Sets deleted_at timestamp
 })
 

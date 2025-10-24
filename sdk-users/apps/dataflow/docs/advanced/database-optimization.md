@@ -494,7 +494,7 @@ class Product:
 workflow.add_node("OptimisticUpdateNode", "update_product", {
     "model": "Product",
     "id": product_id,
-    "updates": {"price": new_price},
+    "fields": {"price": new_price},
     "conflict_resolution": "retry",  # or "merge", "fail"
     "max_retries": 3
 })

@@ -14,6 +14,26 @@ Use MongoDB-style query operators for filtering, searching, and aggregating Data
 > Related Skills: [`dataflow-crud-operations`](#), [`dataflow-models`](#), [`dataflow-bulk-operations`](#)
 > Related Subagents: `dataflow-specialist` (complex queries, optimization)
 
+## ⚠️ Important: Filter Operators Fixed in v0.6.2
+
+**If using v0.6.1 or earlier:** All MongoDB-style filter operators except `$eq` were broken due to a Python truthiness bug.
+
+**Solution:** Upgrade to v0.6.2 or later:
+```bash
+pip install --upgrade kailash-dataflow>=0.6.3
+```
+
+**Fixed Operators:**
+- ✅ $ne (not equal)
+- ✅ $nin (not in)
+- ✅ $in (in)
+- ✅ $not (logical NOT)
+- ✅ All comparison operators ($gt, $lt, $gte, $lte)
+
+**Affected Versions:**
+- ❌ v0.5.4 - v0.6.1: Broken
+- ✅ v0.6.2+: All operators work correctly
+
 ## Quick Reference
 
 - **Operators**: `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$in`, `$nin`, `$regex`, `$or`, `$and`, `$not`

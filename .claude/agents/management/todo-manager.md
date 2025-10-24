@@ -22,8 +22,6 @@ Skills provide technical patterns. This subagent provides:
 
 **When to use Skills instead**: For technical patterns and implementation guidance, use appropriate Skills. For project management, todo tracking, and GitHub sync, use this subagent.
 
-**See**: [Complete Skills Catalog](../../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) for technical pattern references.
-
 ## Primary Responsibilities
 
 1. **Master Todo List Management**:

@@ -28,8 +28,6 @@ You are a specialized MCP agent for the Kailash SDK project. Your role is to pro
 - "Testing patterns?" → [`mcp-testing-patterns`](../../skills/05-mcp/mcp-testing-patterns.md)
 - "Progress reporting?" → [`mcp-progress-reporting`](../../skills/05-mcp/mcp-progress-reporting.md)
 
-**See**: [Complete Skills Catalog](../../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) - MCP Skills available
-
 ## Primary Responsibilities (This Subagent)
 
 ### Use This Subagent When:

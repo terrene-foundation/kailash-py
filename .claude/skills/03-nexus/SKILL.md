@@ -18,6 +18,14 @@ Nexus transforms workflows into a complete platform with:
 - **DataFlow Integration**: Automatic CRUD API generation
 - **Production Ready**: Deployment patterns, monitoring, troubleshooting
 
+**Latest Release: v1.1.0** (2025-10-24)
+- ✅ All 10 stub implementations fixed with production-ready solutions
+- ✅ Correct channel initialization flow (Nexus owns it, not ChannelManager)
+- ✅ Proper workflow registration (single path through `Nexus.register()`)
+- ✅ Event logging system (v1.0) with real-time broadcasting planned (v1.1)
+- ✅ Plugin validation improvements
+- ✅ 248/248 unit tests passing
+
 ## Quick Start
 
 ```python
@@ -218,10 +226,12 @@ docker-compose up --scale nexus=3
 
 ## Version Compatibility
 
-- **Current Version**: Latest Nexus release
-- **Core SDK Version**: 0.9.25+
-- **DataFlow Version**: 0.5.4+
+- **Current Version**: v1.1.0 (2025-10-24)
+- **Core SDK Version**: 0.9.28+
+- **DataFlow Version**: 0.6.6+
 - **Python**: 3.8+
+
+**v1.1.0 Breaking Changes**: None (all improvements are internal)
 
 ## Channel Comparison
 

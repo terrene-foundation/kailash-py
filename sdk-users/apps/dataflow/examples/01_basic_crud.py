@@ -11,10 +11,10 @@ This example demonstrates:
 from datetime import datetime
 from typing import Optional
 
-from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 
 # Zero configuration - just works!
 db = DataFlow()
@@ -34,8 +34,8 @@ class BlogPost:
 
     # DataFlow automatically adds:
     # - id: int (primary key)
-    # - created_at: datetime
-    # - updated_at: datetime
+    # - created_at: datetime (auto-managed - don't set manually!)
+    # - updated_at: datetime (auto-managed - don't set manually!)
 
 
 def demo_create():
@@ -43,6 +43,25 @@ def demo_create():
     print("\n=== CREATE OPERATION ===")
 
     workflow = WorkflowBuilder()
+
+    # ==========================================
+    # CRITICAL: CreateNode uses FLAT individual fields
+    # ==========================================
+    # ✅ CORRECT Pattern:
+    #   workflow.add_node("BlogPostCreateNode", "create", {
+    #       "title": "...",    # ← Individual field 1
+    #       "content": "...",  # ← Individual field 2
+    #       "author": "..."    # ← Individual field 3
+    #   })
+    #
+    # ❌ WRONG - Do NOT nest under 'data':
+    #   workflow.add_node("BlogPostCreateNode", "create", {
+    #       "data": {          # ← This creates a FIELD named "data"!
+    #           "title": "...",
+    #           "content": "..."
+    #       }
+    #   })
+    # ==========================================
 
     # Create a blog post
     workflow.add_node(
@@ -72,7 +91,7 @@ def demo_read(post_id: int):
     workflow = WorkflowBuilder()
 
     # Read the blog post
-    workflow.add_node("BlogPostReadNode", "read_post", {"conditions": {"id": post_id}})
+    workflow.add_node("BlogPostReadNode", "read_post", {"filter": {"id": post_id}})
 
     runtime = LocalRuntime()
     results, run_id = runtime.execute(workflow.build())
@@ -88,16 +107,42 @@ def demo_update(post_id: int):
 
     workflow = WorkflowBuilder()
 
+    # ==========================================
+    # CRITICAL: UpdateNode uses NESTED filter + fields
+    # ==========================================
+    # ✅ CORRECT Pattern:
+    #   workflow.add_node("BlogPostUpdateNode", "update", {
+    #       "filter": {"id": post_id},  # ← Which records to update
+    #       "fields": {                  # ← What to change
+    #           "published": True,
+    #           "views": 100
+    #       }
+    #   })
+    #
+    # ❌ WRONG - Do NOT use flat fields like CreateNode:
+    #   workflow.add_node("BlogPostUpdateNode", "update", {
+    #       "id": post_id,      # ← This is CreateNode pattern!
+    #       "published": True,
+    #       "views": 100
+    #   })
+    #
+    # ❌ WRONG - Do NOT set updated_at manually:
+    #   "fields": {
+    #       "published": True,
+    #       "updated_at": datetime.now()  # ← Auto-managed!
+    #   }
+    # ==========================================
+
     # Update the post
     workflow.add_node(
         "BlogPostUpdateNode",
         "update_post",
         {
-            "conditions": {"id": post_id},
-            "updates": {
+            "filter": {"id": post_id},  # Which record to update
+            "fields": {  # What to change
                 "published": True,
                 "views": 100,
-                "updated_at": datetime.now().isoformat(),
+                # NOTE: updated_at is automatic - don't include it!
             },
         },
     )
@@ -168,9 +213,7 @@ def demo_delete(post_id: int):
     workflow = WorkflowBuilder()
 
     # Delete the post
-    workflow.add_node(
-        "BlogPostDeleteNode", "delete_post", {"conditions": {"id": post_id}}
-    )
+    workflow.add_node("BlogPostDeleteNode", "delete_post", {"filter": {"id": post_id}})
 
     runtime = LocalRuntime()
     results, run_id = runtime.execute(workflow.build())
@@ -200,20 +243,18 @@ def demo_complex_workflow():
     workflow.add_node(
         "BlogPostUpdateNode",
         "increment_views",
-        {"conditions": {"id": ":post_id"}, "updates": {"views": "views + 1"}},
+        {"filter": {"id": ":post_id"}, "fields": {"views": "views + 1"}},
     )
 
     # Publish the post
     workflow.add_node(
         "BlogPostUpdateNode",
         "publish",
-        {"conditions": {"id": ":post_id"}, "updates": {"published": True}},
+        {"filter": {"id": ":post_id"}, "fields": {"published": True}},
     )
 
     # Read the final state
-    workflow.add_node(
-        "BlogPostReadNode", "final_state", {"conditions": {"id": ":post_id"}}
-    )
+    workflow.add_node("BlogPostReadNode", "final_state", {"filter": {"id": ":post_id"}})
 
     # Connect nodes - data flows between them
     workflow.add_connection("create", "increment_views", "id", "post_id")

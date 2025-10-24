@@ -112,7 +112,7 @@ def create_order_workflow(customer_id: int, items: list):
 
     # Connection acquired once
     workflow.add_node("CustomerReadNode", "get_customer", {
-        "conditions": {"id": customer_id}
+        "filter": {"id": customer_id}
     })
 
     workflow.add_node("OrderCreateNode", "create_order", {
@@ -123,8 +123,8 @@ def create_order_workflow(customer_id: int, items: list):
     # Parallel inventory updates (non-blocking)
     for i, item in enumerate(items):
         workflow.add_node("ProductUpdateNode", f"update_{i}", {
-            "conditions": {"id": item['product_id']},
-            "updates": {"stock": f"stock - {item['quantity']}"}
+            "filter": {"id": item['product_id']},
+            "fields": {"stock": f"stock - {item['quantity']}"}
         })
         workflow.add_connection("create_order", f"update_{i}")
 
@@ -192,7 +192,7 @@ def complex_operation():
 workflow = WorkflowBuilder()
 
 workflow.add_node("UserReadNode", "get_user", {
-    "conditions": {"email": email}
+    "filter": {"email": email}
 })
 
 workflow.add_node("OrderCreateNode", "create_order", {

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "0.9.26"
+version = "0.9.28"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -98,6 +98,20 @@ dev = [
     "black>=22.0",
     "isort>=5.10",
     "mypy>=0.9",
+]
+dataflow = [
+    "kailash-dataflow",
+]
+nexus = [
+    "kailash-nexus",
+]
+kaizen = [
+    "kailash-kaizen",
+]
+all = [
+    "kailash-dataflow",
+    "kailash-nexus",
+    "kailash-kaizen",
 ]
 
 [project.urls]

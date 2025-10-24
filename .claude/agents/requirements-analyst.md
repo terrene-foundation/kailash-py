@@ -19,8 +19,6 @@ Skills provide patterns and templates. This subagent provides:
 
 **When to use Skills instead**: For pattern lookups and quick references, use appropriate Skill. For comprehensive requirements analysis, ADR documentation, and strategic planning, use this subagent.
 
-**See**: [Complete Skills Catalog](../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) for instant pattern references.
-
 ## Primary Responsibilities
 
 1. **Systematic Requirements Breakdown**: Decompose features into concrete, implementable components

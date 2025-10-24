@@ -17,11 +17,168 @@ Common misunderstandings and mistakes when using DataFlow, with solutions.
 ## Quick Reference
 
 - **NOT an ORM**: DataFlow is workflow-native, not like SQLAlchemy
+- **Primary Key MUST be `id`**: NOT `user_id`, `model_id`, or anything else
+- **CreateNode ≠ UpdateNode**: Different parameter patterns (flat vs nested)
 - **Template Syntax**: DON'T use `${}` - conflicts with PostgreSQL
 - **Connections**: Use connections, NOT template strings
 - **Result Access**: `results["node"]["result"]`, not `results["node"]`
 
 ## Critical Gotchas
+
+### 0. Empty Dict Truthiness Bug (Fixed in v0.6.2-v0.6.3) ⚠️ CRITICAL
+
+#### The Bug
+Python treats empty dict `{}` as falsy, causing incorrect behavior in filter operations.
+
+#### Symptoms (Before Fix)
+```python
+# This would return ALL records instead of filtered records (v0.6.1 and earlier)
+workflow.add_node("UserListNode", "query", {
+    "filter": {"status": {"$ne": "inactive"}}
+})
+# Expected: 2 users (active only)
+# Actual (v0.6.1 and earlier): 3 users (ALL records)
+```
+
+#### The Fix (v0.6.2+)
+✅ **Upgrade to DataFlow v0.6.2 or later**
+```bash
+pip install --upgrade kailash-dataflow>=0.6.3
+```
+
+✅ All filter operators now work correctly:
+- $ne (not equal)
+- $nin (not in)
+- $in (in)
+- $not (logical NOT)
+- All comparison operators ($gt, $lt, $gte, $lte)
+
+#### Prevention Pattern
+When checking if a parameter was provided:
+```python
+# ❌ WRONG - treats empty dict as "not provided"
+if filter_dict:
+    process_filter()
+
+# ✅ CORRECT - checks if key exists
+if "filter" in kwargs:
+    process_filter()
+```
+
+#### Root Cause
+Two locations had truthiness bugs:
+1. **v0.6.2 fix**: ListNode at nodes.py:1810 - `if filter_dict:` → `if "filter" in kwargs:`
+2. **v0.6.3 fix**: BulkDeleteNode at bulk_delete.py:177 - `not filter_conditions` → `"filter" not in validated_inputs`
+
+#### Affected Versions
+- ❌ v0.5.4 - v0.6.1: Broken
+- ✅ v0.6.2+: Filter operators fixed
+- ✅ v0.6.3+: BulkDelete safe mode fixed
+
+#### Impact
+**High**: All query filtering was broken in v0.6.1 and earlier. Upgrade immediately if using filters.
+
+---
+
+### 0.1. Primary Key MUST Be Named 'id' ⚠️ HIGH IMPACT
+
+```python
+# WRONG - Custom primary key names FAIL
+@db.model
+class User:
+    user_id: str  # FAILS - DataFlow requires 'id'
+    name: str
+
+# WRONG - Other variations also fail
+@db.model
+class Agent:
+    agent_id: str  # FAILS
+    model_id: str  # FAILS
+```
+
+**Why**: DataFlow's auto-generated nodes expect `id` as the primary key field name.
+
+**Fix: Use 'id' Exactly**
+```python
+# CORRECT - Primary key MUST be 'id'
+@db.model
+class User:
+    id: str  # ✅ REQUIRED - must be exactly 'id'
+    name: str
+```
+
+**Impact**: 10-20 minutes debugging if violated. Use `id` for all models, always.
+
+### 0.1. CreateNode vs UpdateNode Pattern Difference ⚠️ CRITICAL
+
+```python
+# WRONG - Applying CreateNode pattern to UpdateNode
+workflow.add_node("UserUpdateNode", "update", {
+    "db_instance": "my_db",
+    "model_name": "User",
+    "id": "user_001",  # ❌ Individual fields don't work for UpdateNode
+    "name": "Alice",
+    "status": "active"
+})
+# Error: "column user_id does not exist" (misleading!)
+```
+
+**Why**: CreateNode and UpdateNode use FUNDAMENTALLY DIFFERENT patterns:
+- **CreateNode**: Flat individual fields at top level
+- **UpdateNode**: Nested `filter` + `fields` dicts
+
+**Fix: Use Correct Pattern**
+```python
+# CreateNode: FLAT individual fields
+workflow.add_node("UserCreateNode", "create", {
+    "db_instance": "my_db",
+    "model_name": "User",
+    "id": "user_001",  # ✅ Individual fields
+    "name": "Alice",
+    "email": "alice@example.com"
+})
+
+# UpdateNode: NESTED filter + fields
+workflow.add_node("UserUpdateNode", "update", {
+    "db_instance": "my_db",
+    "model_name": "User",
+    "filter": {"id": "user_001"},  # ✅ Which records
+    "fields": {"name": "Alice Updated"}  # ✅ What to change
+    # ⚠️ Do NOT include created_at or updated_at - auto-managed!
+})
+```
+
+**Impact**: 1-2 hours debugging if violated. Different patterns for different operations.
+
+### 0.2. Auto-Managed Timestamp Fields ⚠️
+
+```python
+# WRONG - Including auto-managed fields
+workflow.add_node("UserUpdateNode", "update", {
+    "filter": {"id": "user_001"},
+    "fields": {
+        "name": "Alice",
+        "updated_at": datetime.now()  # ❌ FAILS - auto-managed
+    }
+})
+# Error: "multiple assignments to same column 'updated_at'"
+```
+
+**Why**: DataFlow automatically manages `created_at` and `updated_at` fields.
+
+**Fix: Omit Auto-Managed Fields**
+```python
+# CORRECT - Omit auto-managed fields
+workflow.add_node("UserUpdateNode", "update", {
+    "filter": {"id": "user_001"},
+    "fields": {
+        "name": "Alice"  # ✅ Only your fields
+        # created_at, updated_at auto-managed by DataFlow
+    }
+})
+```
+
+**Impact**: 5-10 minutes debugging. Never manually set `created_at` or `updated_at`.
 
 ### 1. DataFlow is NOT an ORM
 
@@ -77,7 +234,6 @@ nexus = Nexus(dataflow_config={"integration": db})
 ```python
 db = DataFlow(
     auto_migrate=False,
-    skip_registry=True,
     existing_schema_mode=True
 )
 nexus = Nexus(dataflow_config={
@@ -228,6 +384,8 @@ Use `dataflow-specialist` when:
 
 ## Version Notes
 
+- **v0.6.3**: BulkDeleteNode safe mode validation fix (truthiness bug)
+- **v0.6.2**: ListNode filter operators fix ($ne, $nin, $in, $not - truthiness bug)
 - **v0.4.0+**: String ID support, TEXT type, datetime fix, multi-instance isolation
 - **v0.9.4+**: Password special character support
 - **v0.9.25+**: Threading fixes for Docker

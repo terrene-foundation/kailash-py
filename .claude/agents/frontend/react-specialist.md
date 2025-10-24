@@ -22,7 +22,6 @@ Skills provide backend patterns and SDK usage. This subagent provides:
 
 **When to use Skills instead**: For Kailash backend patterns (Nexus API integration, DataFlow queries, Kaizen agent execution), use appropriate Skills. For React/Next.js frontend architecture, workflow editors, and complex UI patterns, use this subagent.
 
-**See**: [Complete Skills Catalog](../../SKILLS_TAXONOMY_COMPREHENSIVE.md) for backend SDK pattern references.
 
 ## Core Expertise
 
@@ -498,6 +497,14 @@ function useWorkflowExecution(executionId: string) {
 | Wrong folder name | Use `elements/`, not `components/` |
 
 ## Reference Documentation
+
+### Essential Guides (Start Here)
+- `.claude/guides/enterprise-ai-hub-uiux-design.md` - Overall UX/UI design principles
+- `.claude/guides/interactive-widget-implementation-guide.md` - Interactive widget patterns
+- `.claude/guides/widget-system-overview.md` - Widget architecture and organization
+- `.claude/guides/widget-response-technical-spec.md` - Widget technical specifications
+- `.claude/guides/multi-conversation-ux-lark-style.md` - Conversation UI patterns
+- `.claude/guides/uiux-design-principles.md` - Design principles and patterns
 
 ### Official Docs (2025)
 - React 19: https://react.dev/blog/2024/12/05/react-19

@@ -7,7 +7,6 @@ Tests designed to fail first, then be fixed with minimal implementation.
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor, WorkflowState
@@ -16,6 +15,7 @@ from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor, WorkflowState
 class TestMalformedOutputValidation:
     """Test cases for validating and handling malformed node outputs in cyclic workflows."""
 
+    @pytest.mark.slow
     def test_none_exit_result_in_cycle_termination(self):
         """Test handling when exit_result is None in cycle termination logic."""
         # This specifically tests the bug on line 882 of cyclic_runner.py

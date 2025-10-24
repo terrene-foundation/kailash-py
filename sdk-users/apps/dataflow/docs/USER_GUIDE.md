@@ -404,10 +404,10 @@ workflow.add_node("ProductBulkCreateNode", "import_products", {
     "error_strategy": "continue"  # Continue if some records fail
 })
 
-# Step 2: Bulk update categories (database-optimized SQL)
+# Step 2: Bulk update categories (database-optimized SQL) - v0.6.0+ API
 workflow.add_node("ProductBulkUpdateNode", "categorize_products", {
     "filter": {"category": "uncategorized"},
-    "updates": {"category": "general"}
+    "fields": {"category": "general"}  # v0.6.0+ API
 })
 
 # Step 3: Generate reports on the imported data
@@ -600,10 +600,10 @@ class Product:
 
     __dataflow__ = {'versioned': True}
 
-# Update with version check
+# Update with version check (v0.6.0+ API)
 workflow.add_node("ProductUpdateNode", "update_stock", {
-    "conditions": {"id": 1, "version": 5},
-    "updates": {"stock": 100},
+    "filter": {"id": 1, "version": 5},  # v0.6.0+ API
+    "fields": {"stock": 100},
     # Fails if version changed (concurrent update)
 })
 ```

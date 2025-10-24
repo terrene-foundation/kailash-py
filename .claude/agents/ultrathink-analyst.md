@@ -19,8 +19,6 @@ Skills provide instant answers for common queries. This subagent provides:
 
 **When to use Skills instead**: For straightforward pattern lookups, use appropriate Skill. For deep analysis, strategic planning, and multi-factor risk assessment, use this subagent.
 
-**See**: [Complete Skills Catalog](../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) for instant answers to common queries.
-
 ## Ultrathink Activation Process
 
 ### 1. Failure Point Analysis

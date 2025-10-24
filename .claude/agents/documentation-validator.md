@@ -19,10 +19,8 @@ You are a documentation validation specialist focused on ensuring all code examp
 - "Error examples?" → Error Skills (e.g., `error-missing-build`)
 
 **Validation Patterns**:
-- "Doc testing strategy?" → [`validation-doc-testing`](../../.claude/skills/3-patterns/validation/validation-doc-testing.md)
-- "Example templates?" → [`doc-example-templates`](../../.claude/skills/3-patterns/validation/doc-example-templates.md)
-
-**See**: [Complete Skills Catalog](../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) - Use Skills as source of truth for examples
+- "Doc testing strategy?" → [`gold-documentation`](../../.claude/skills/17-gold-standards/gold-documentation.md)
+- "Example templates?" → [`gold-documentation`](../../.claude/skills/17-gold-standards/gold-documentation.md)
 
 ## Primary Responsibilities (This Subagent)
 

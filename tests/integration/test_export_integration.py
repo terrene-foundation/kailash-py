@@ -4,14 +4,13 @@ import json
 from pathlib import Path
 
 import pytest
-
-# Register MockNode from conftest
-from tests.conftest import MockNode
-
 from kailash.manifest import KailashManifest
 from kailash.nodes.base import NodeRegistry
 from kailash.utils.export import WorkflowExporter
 from kailash.workflow import WorkflowBuilder
+
+# Register MockNode from conftest
+from tests.conftest import MockNode
 
 NodeRegistry.register(MockNode)
 

@@ -13,12 +13,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 import pytest
-from tests.utils.docker_config import (
-    OLLAMA_CONFIG,
-    REDIS_CONFIG,
-    get_postgres_connection_string,
-)
-
 from kailash import Workflow, WorkflowBuilder
 from kailash.nodes.ai import A2AAgentNode, LLMAgentNode
 from kailash.nodes.base import Node, NodeParameter
@@ -26,6 +20,12 @@ from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode, SQLDatabaseNode
 from kailash.runtime import LocalRuntime
+
+from tests.utils.docker_config import (
+    OLLAMA_CONFIG,
+    REDIS_CONFIG,
+    get_postgres_connection_string,
+)
 
 
 @pytest.mark.integration

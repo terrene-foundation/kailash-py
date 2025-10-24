@@ -87,7 +87,7 @@ from kaizen.agents import (
 
 ### Tool Calling (NEW in v0.2.0)
 
-**Autonomous tool execution with approval workflows:**
+**Autonomous tool execution with approval workflows - Universal Integration (All 25 Agents):**
 ```python
 from kaizen.core.base_agent import BaseAgent
 from kaizen.tools import ToolRegistry
@@ -97,11 +97,12 @@ from kaizen.tools.builtin import register_builtin_tools
 registry = ToolRegistry()
 register_builtin_tools(registry)  # 12 builtin tools
 
-# Create agent with tool support
+# Works with ALL 25 agents (ADR-016 complete)
 agent = BaseAgent(
     config=config,
     signature=signature,
-    tool_registry=registry  # Enable tool calling
+    tool_registry=registry,  # Enable tool calling
+    mcp_servers=mcp_servers  # Optional MCP integration
 )
 
 # Discover tools
@@ -122,6 +123,8 @@ results = await agent.execute_tool_chain([
 - **HTTP (4)**: http_get, http_post, http_put, http_delete
 - **Bash (1)**: bash_command
 - **Web (2)**: fetch_url, extract_links
+
+**Universal Support**: All 25 agents (autonomous, single-shot, coordination) now support tool_registry and mcp_servers parameters (100% backward compatible)
 
 ### Control Protocol (NEW in v0.2.0)
 
@@ -186,13 +189,21 @@ class MyAgent(BaseAgent):
 
 ### Core Guides
 - **[Signature Programming](docs/guides/signature-programming.md)** - Type-safe I/O with Signatures
-- **[BaseAgent Architecture](docs/guides/baseagent-architecture.md)** - Unified agent system
-- **[Multi-Modal Processing](docs/guides/multi-modal.md)** - Vision and audio agents
-- **[Multi-Agent Coordination](docs/guides/multi-agent.md)** - Google A2A protocol patterns
+- **[BaseAgent Architecture](docs/guides/baseagent-architecture.md)** - Unified agent system with strategies, memory, tools
+- **[Multi-Agent Coordination](docs/guides/multi-agent-coordination.md)** - Google A2A protocol patterns
+- **[Integration Patterns](docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP integration
+- **[Control Protocol Tutorial](docs/guides/control-protocol-tutorial.md)** - CLI → Web migration guide
+- **[Custom Transports](docs/guides/custom-transports.md)** - Build custom transport layers
+- **[Migrating to Control Protocol](docs/guides/migrating-to-control-protocol.md)** - Migration guide
+- **[Ollama Quickstart](docs/guides/ollama-quickstart.md)** - Local LLM setup
 
 ### Reference
 - **[API Reference](docs/reference/api-reference.md)** - Complete API documentation
-- **[Configuration Guide](docs/reference/configuration.md)** - All config options
+- **[Control Protocol API](docs/reference/control-protocol-api.md)** - Bidirectional communication API
+- **[Multi-Modal API](docs/reference/multi-modal-api-reference.md)** - Vision, audio APIs with common pitfalls
+- **[Memory Patterns Guide](docs/reference/memory-patterns-guide.md)** - Memory usage patterns
+- **[Strategy Selection Guide](docs/reference/strategy-selection-guide.md)** - When to use which strategy
+- **[Configuration Guide](docs/reference/configuration.md)** - Environment configuration
 - **[Troubleshooting](docs/reference/troubleshooting.md)** - Common issues
 
 ### Examples

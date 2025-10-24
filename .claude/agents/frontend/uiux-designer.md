@@ -19,7 +19,6 @@ Skills provide technical patterns and code implementation. This subagent provide
 
 **When to use Skills instead**: For technical implementation patterns (React components, Flutter widgets, API integration), use appropriate Skills. For design analysis, UX optimization, and visual design decisions, use this subagent.
 
-**See**: [Complete Skills Catalog](../../SKILLS_TAXONOMY_COMPREHENSIVE.md) for technical implementation references.
 
 ## When to Invoke
 Use this agent proactively when:
@@ -160,8 +159,15 @@ Ask yourself:
 
 ## Reference Resources
 
-### Must Consult
+### Essential Guides (Must Consult First)
 - `.claude/guides/uiux-design-principles.md` - Comprehensive design principles and patterns
+- `.claude/guides/enterprise-ai-hub-uiux-design.md` - Overall UX/UI design principles for AI Hub
+- `.claude/guides/creating-flutter-design-system.md` - Design system creation patterns
+- `.claude/guides/flutter-design-system.md` - Design system usage
+- `.claude/guides/multi-conversation-ux-lark-style.md` - Conversation UI patterns
+- `.claude/guides/interactive-widget-implementation-guide.md` - Interactive widget patterns
+
+### Implementation References
 - Design system files in `lib/core/design/` - Current implementation
 - Material Design 3 guidelines - Flutter standards
 - Enterprise design patterns (Linear, Notion, Stripe)

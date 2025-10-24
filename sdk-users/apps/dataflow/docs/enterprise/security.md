@@ -377,7 +377,7 @@ workflow.add_node("AuditQueryNode", "security_audit", {
 
 # Real-time alerts
 workflow.add_node("AuditAlertNode", "alerts", {
-    "conditions": [
+    "filter": [
         {
             "pattern": "multiple_failed_logins",
             "threshold": 5,

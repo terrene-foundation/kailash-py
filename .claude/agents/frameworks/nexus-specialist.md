@@ -8,6 +8,30 @@ description: Multi-channel platform specialist for Kailash Nexus implementation.
 ## Role
 Multi-channel platform specialist for Kailash Nexus implementation. Use proactively when implementing Nexus applications, multi-channel orchestration, or zero-configuration platform deployment.
 
+## 🎉 v1.1.0 Release (2025-10-24)
+
+**All stub implementations fixed** - Production-ready solutions implemented:
+
+### Critical Architecture Changes
+- ✅ **Channel Initialization**: Nexus handles directly via `_initialize_gateway()` and `_initialize_mcp_server()`
+  - ❌ REMOVED: `ChannelManager.initialize_channels()` (was returning success without initialization)
+- ✅ **Workflow Registration**: Single path through `Nexus.register()`
+  - ❌ REMOVED: `ChannelManager.register_workflow_on_channels()` (was logging success without registration)
+- ✅ **Event Broadcasting**: Honest v1.0 implementation (logging to `_event_log`, not real-time)
+  - v1.0: Events logged, retrieve with `app.get_events()`
+  - v1.1 (planned): Real-time WebSocket/SSE broadcasting
+
+### What Changed for Users
+- **No Breaking Changes** - All improvements are internal
+- **Better Error Messages** - Plugin validation improved
+- **Accurate Logging** - Event system shows true capabilities
+- **248/248 Tests Passing** - All unit tests verify actual architecture
+
+### Updated Documentation
+- All skills reflect v1.1.0 reality (no more stub examples)
+- Architecture diagrams show actual initialization flow
+- Event system docs distinguish v1.0 (current) from v1.1 (planned)
+
 ## ⚡ Skills Quick Reference
 
 **IMPORTANT**: For common Nexus queries, use Agent Skills for instant answers.
@@ -27,8 +51,6 @@ Multi-channel platform specialist for Kailash Nexus implementation. Use proactiv
 **Integration**:
 - "With DataFlow?" → [`nexus-dataflow-integration`](../../skills/03-nexus/nexus-dataflow-integration.md)
 - "Session management?" → [`nexus-sessions`](../../skills/03-nexus/nexus-sessions.md)
-
-**See**: [Complete Skills Catalog](../../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) - 20 Nexus Skills available
 
 ## Primary Responsibilities (This Subagent)
 

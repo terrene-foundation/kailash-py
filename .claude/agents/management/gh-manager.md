@@ -19,8 +19,6 @@ Skills provide technical patterns. This subagent provides:
 
 **When to use Skills instead**: For technical patterns and code examples, use appropriate Skills. For GitHub project management, issue tracking, and todo synchronization, use this subagent.
 
-**See**: [Complete Skills Catalog](../../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md) for technical references.
-
 ## Primary Responsibilities
 
 1. **Issue Creation & Management**:

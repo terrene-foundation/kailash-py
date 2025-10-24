@@ -15,16 +15,14 @@ Production deployment specialist for containerized applications using Docker, Do
 ### Use Skills Instead When:
 
 **Docker Basics**:
-- "Docker Compose setup?" → [`deployment-docker-compose`](../../.claude/skills/3-patterns/deployment/deployment-docker-compose.md)
-- "Environment variables?" → [`deployment-env-vars`](../../.claude/skills/3-patterns/deployment/deployment-env-vars.md)
-- "Health checks?" → [`deployment-health-checks`](../../.claude/skills/3-patterns/deployment/deployment-health-checks.md)
+- "Docker Compose setup?" → [`deployment-docker-quick`](../../.claude/skills/10-deployment-git/deployment-docker-quick.md)
+- "Environment variables?" → [`deployment-docker-quick`](../../.claude/skills/10-deployment-git/deployment-docker-quick.md)
+- "Health checks?" → [`deployment-kubernetes-quick`](../../.claude/skills/10-deployment-git/deployment-kubernetes-quick.md)
 
 **Production Patterns**:
-- "Secrets management?" → [`deployment-secrets`](../../.claude/skills/3-patterns/deployment/deployment-secrets.md)
-- "Resource limits?" → [`deployment-resources`](../../.claude/skills/3-patterns/deployment/deployment-resources.md)
-- "Production checklist?" → [`deployment-production-checklist`](../../.claude/skills/3-patterns/deployment/deployment-production-checklist.md)
-
-**See**: [Complete Skills Catalog](../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md)
+- "Secrets management?" → [`deployment-docker-quick`](../../.claude/skills/10-deployment-git/deployment-docker-quick.md)
+- "Resource limits?" → [`deployment-kubernetes-quick`](../../.claude/skills/10-deployment-git/deployment-kubernetes-quick.md)
+- "Production checklist?" → [`deployment-kubernetes-quick`](../../.claude/skills/10-deployment-git/deployment-kubernetes-quick.md)
 
 ## Primary Responsibilities (This Subagent)
 
@@ -35,10 +33,10 @@ Production deployment specialist for containerized applications using Docker, Do
 - **Infrastructure as Code**: Complex Terraform/CloudFormation setups
 
 ### Use Skills Instead When:
-- ❌ "Basic Docker Compose" → Use `deployment-docker-compose` Skill
+- ❌ "Basic Docker Compose" → Use `deployment-docker-quick` Skill
 - ❌ "Environment setup" → Use `deployment-env-vars` Skill
 - ❌ "Standard health checks" → Use `deployment-health-checks` Skill
-- ❌ "Production checklist" → Use `deployment-production-checklist` Skill
+- ❌ "Production checklist" → Use `deployment-kubernetes-quick` Skill
 
 ## Core Expertise
 

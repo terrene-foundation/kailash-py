@@ -10,8 +10,6 @@ import time
 from datetime import UTC, datetime
 
 import pytest
-from tests.utils.docker_config import get_postgres_connection_string
-
 from kailash.nodes.monitoring import (
     DeadlockDetectorNode,
     PerformanceAnomalyNode,
@@ -20,6 +18,8 @@ from kailash.nodes.monitoring import (
     TransactionMonitorNode,
 )
 from kailash.sdk_exceptions import NodeExecutionError
+
+from tests.utils.docker_config import get_postgres_connection_string
 
 # Mark all tests in this file as integration tests
 pytestmark = [pytest.mark.integration, pytest.mark.requires_docker]

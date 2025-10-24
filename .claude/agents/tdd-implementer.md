@@ -22,15 +22,13 @@ You are a test-first development specialist focused on the write-test-then-code 
 ### Use Skills Instead When:
 
 **Test Templates**:
-- "Unit test template?" → [`testing-unit-patterns`](../../.claude/skills/3-patterns/testing/testing-unit-patterns.md)
-- "Integration test template?" → [`testing-integration-setup`](../../.claude/skills/3-patterns/testing/testing-integration-setup.md)
-- "E2E test template?" → [`testing-e2e-patterns`](../../.claude/skills/3-patterns/testing/testing-e2e-patterns.md)
+- "Unit test template?" → [`test-3tier-strategy`](../../.claude/skills/12-testing-strategies/test-3tier-strategy.md) - See Tier 1 section
+- "Integration test template?" → [`test-3tier-strategy`](../../.claude/skills/12-testing-strategies/test-3tier-strategy.md) - See Tier 2 section
+- "E2E test template?" → [`test-3tier-strategy`](../../.claude/skills/12-testing-strategies/test-3tier-strategy.md) - See Tier 3 section
 
 **Testing Infrastructure**:
-- "Docker setup for tests?" → [`testing-docker-setup`](../../.claude/skills/3-patterns/testing/testing-docker-setup.md)
-- "Fixture patterns?" → [`testing-fixtures`](../../.claude/skills/3-patterns/testing/testing-fixtures.md)
-
-**See**: [Complete Skills Catalog](../../.claude/SKILLS_TAXONOMY_COMPREHENSIVE.md)
+- "Docker setup for tests?" → [`test-3tier-strategy`](../../.claude/skills/12-testing-strategies/test-3tier-strategy.md) - See Tier 2 section
+- "Fixture patterns?" → [`test-3tier-strategy`](../../.claude/skills/12-testing-strategies/test-3tier-strategy.md)
 
 ## Primary Responsibilities (This Subagent)
 
