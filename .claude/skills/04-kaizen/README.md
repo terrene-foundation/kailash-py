@@ -26,10 +26,8 @@ Multi-agent coordination and Google A2A protocol:
 7. **[kaizen-multi-agent-setup.md](kaizen-multi-agent-setup.md)** - SharedMemoryPool, agent coordination infrastructure
 8. **[kaizen-shared-memory.md](kaizen-shared-memory.md)** - write_to_memory(), read_relevant(), patterns
 9. **[kaizen-a2a-protocol.md](kaizen-a2a-protocol.md)** - Automatic capability cards, semantic matching (100% Google A2A)
-10. **[kaizen-supervisor-worker.md](kaizen-supervisor-worker.md)** - Supervisor-worker pattern, task delegation (14/14 tests)
+10. **[kaizen-supervisor-worker.md](kaizen-supervisor-worker.md)** - Supervisor-worker pattern, task delegation
 11. **[kaizen-agent-patterns.md](kaizen-agent-patterns.md)** - Consensus, debate, specialists, producer-consumer
-
-**Status**: SupervisorWorkerPattern production-ready (14/14 tests), 4 patterns in development
 
 ---
 
@@ -60,8 +58,6 @@ Production patterns, v0.2.0+ tool calling, v0.5.0 observability, and specialized
 23. **[kaizen-streaming.md](kaizen-streaming.md)** - Streaming responses, real-time output
 24. **[kaizen-testing-patterns.md](kaizen-testing-patterns.md)** - 3-tier testing, fixtures, standardized tests
 
-**New in v0.5.0**: Production-ready observability with zero overhead (-0.06%), complete monitoring stack
-**New in v0.2.0**: Control Protocol and Tool Calling enable interactive agents with autonomous tool execution
 **Testing**: All patterns use 3-tier strategy (Unit → Ollama → OpenAI), NO MOCKING in Tiers 2-3
 
 ---
@@ -204,11 +200,11 @@ print(result['answer'])          # Key is 'answer', NOT 'response'
 
 ## Framework Status (v0.5.0)
 
-**Implementation**: Production-ready with 192 observability tests passing
+**Implementation**: Production-ready
 **Performance**: -0.06% overhead (essentially zero), validated with real LLM workloads
 **Observability**: Complete stack (tracing, metrics, logging, audit) with Grafana/Prometheus/Jaeger/ELK
 **Multi-Modal**: Vision (Ollama + OpenAI) + Audio (Whisper) fully operational
-**Multi-Agent**: SupervisorWorkerPattern production-ready (14/14 tests)
+**Multi-Agent**: SupervisorWorkerPattern production-ready
 **A2A Protocol**: 100% Google A2A compliant with automatic capability cards
 
 ---

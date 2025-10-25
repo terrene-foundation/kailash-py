@@ -4,7 +4,15 @@
 
 ## Overview
 
-Kaizen v0.5.0 includes production-ready observability with zero performance impact (-0.06% overhead). Complete monitoring stack with distributed tracing (OpenTelemetry/Jaeger), metrics collection (Prometheus), structured logging (JSON/ELK), and audit trails (JSONL). All systems validated with real infrastructure and 192 tests passing.
+Kaizen v0.5.0 includes production-ready observability with zero performance impact (-0.06% overhead). Complete monitoring stack with distributed tracing (OpenTelemetry/Jaeger), metrics collection (Prometheus), structured logging (JSON/ELK), and audit trails (JSONL).
+
+**⚠️ IMPORTANT: Observability is OPT-IN**
+- ✅ **100% backward compatible** - existing agents work without any changes
+- ✅ **No migration required** - agents work perfectly fine without observability
+- ✅ **Zero breaking changes** - observability is disabled by default
+- ✅ **Enable when needed** - call `agent.enable_observability()` to activate monitoring
+
+Agents created without calling `enable_observability()` function normally with no overhead.
 
 ## Quick Start - Complete Observability
 
@@ -33,38 +41,33 @@ result = agent.run(question="test")
 - Dashboards: `http://localhost:3000` (Grafana)
 - Logs: `http://localhost:5601` (Kibana)
 
-## Core Components (Phase 4 Complete)
+## Core Components
 
 ### System 3: TracingManager (Distributed Tracing)
 - OpenTelemetry TracerProvider with Jaeger OTLP exporter
 - Batch span processor for efficient export
 - Thread-safe concurrent span creation
 - Performance: <1ms per span creation
-- 58 unit tests passing
 
 ### System 4: MetricsManager (Prometheus Metrics)
 - Counter, Gauge, Histogram with p50/p95/p99 percentiles
 - Prometheus-compatible exposition format
 - Production overhead: -0.06% (validated with 100 OpenAI calls)
-- 40 unit tests passing
 
 ### System 5: LoggingManager (Structured Logging)
 - JSON-formatted logs for ELK Stack integration
 - Context propagation for trace correlation
 - Centralized logger management
-- 31 unit tests passing
 
 ### System 6: AuditTrailManager (Compliance)
 - Append-only JSONL for immutable audit trails
 - SOC2, GDPR, HIPAA, PCI-DSS compliance ready
 - 0.57ms p95 latency (<10ms target, 17.5x margin)
-- 29 unit tests passing
 
 ### System 7: ObservabilityManager (Unified Interface)
 - Single interface for all observability subsystems
 - Selective component enabling/disabling
 - BaseAgent integration via hook manager
-- 18 integration tests + 16 E2E tests
 
 ```python
 from kaizen.core.autonomy.observability import TracingManager
@@ -272,12 +275,10 @@ def query_jaeger_traces(service_name: str) -> List[Dict]:
 
 ## Performance (Production Validated)
 
-- **Total Tests**: 192 tests passing (158 unit + 18 integration + 16 E2E)
 - **Production Overhead**: -0.06% (essentially zero, validated with 100 real OpenAI API calls)
 - **Audit Trail Latency**: 0.57ms p95 (<10ms target, 17.5x margin)
 - **Span Creation**: <1ms per span
-- **Test Coverage**: 100% for all observability systems
-- **Real Infrastructure**: NO MOCKING in Tiers 2-3 tests
+- **Testing Approach**: NO MOCKING in Tiers 2-3 tests (validated with real infrastructure)
 
 ## Common Patterns
 

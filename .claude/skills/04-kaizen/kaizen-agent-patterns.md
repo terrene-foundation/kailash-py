@@ -4,7 +4,7 @@ Consensus, debate, specialists, producer-consumer patterns.
 
 ## Available Patterns
 
-1. **SupervisorWorkerPattern** - Task delegation (14/14 tests ✅)
+1. **SupervisorWorkerPattern** - Task delegation ✅
 2. **ConsensusPattern** - Group decision-making
 3. **DebatePattern** - Adversarial reasoning
 4. **SequentialPattern** - Step-by-step processing

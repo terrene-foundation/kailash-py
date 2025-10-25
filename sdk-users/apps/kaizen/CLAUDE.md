@@ -68,7 +68,7 @@ best_worker = pattern.supervisor.select_worker_for_task(
 
 ### Available Specialized Agents
 
-**Implemented and Production-Ready (v0.2.0):**
+**Implemented and Production-Ready (v0.5.0):**
 ```python
 from kaizen.agents import (
     # Single-Agent Patterns (8 agents)
@@ -178,17 +178,310 @@ result = agent.run(question="test")
 - **Audit Trails**: Immutable JSONL for SOC2/GDPR/HIPAA compliance
 - **Grafana Dashboards**: 10+ pre-built dashboards (UI: http://localhost:3000)
 
-**Production Validated:**
+**Production Validated (v0.5.0 Release):**
 - -0.06% overhead (essentially zero, tested with 100 real OpenAI API calls)
-- 192 tests passing (158 unit + 18 integration + 16 E2E)
-- 100% test coverage for all observability systems
 - 0.57ms p95 audit latency (<10ms target, 17.5x margin)
+- Validated with real infrastructure (NO MOCKING in Tiers 2-3 tests)
 
 **Start Observability Stack:**
 ```bash
 cd docs/observability
 docker-compose up -d  # Starts Jaeger, Prometheus, Grafana, ELK Stack
 ```
+
+### Lifecycle Infrastructure (NEW in v0.5.0)
+
+**Production-ready hooks, state management, and interrupts for enterprise agents:**
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.core.autonomy.hooks.builtin import LoggingHook, MetricsHook
+from kaizen.core.autonomy.state import StateManager, FilesystemStorage
+from kaizen.core.autonomy.interrupts import InterruptSignal
+
+# Every BaseAgent has lifecycle infrastructure built-in
+agent = BaseAgent(config=config, signature=signature)
+
+# 1. Hooks - Event-driven monitoring
+agent._hook_manager.register_hook(LoggingHook(log_level="INFO"))
+agent._hook_manager.register_hook(MetricsHook())
+
+# 2. State - Persistent checkpoints
+storage = FilesystemStorage(base_path="./agent_state")
+state_manager = StateManager(storage_backend=storage)
+
+# Create checkpoint before risky operation
+checkpoint_id = await state_manager.create_checkpoint(
+    agent_id=agent.agent_id,
+    description="Before processing"
+)
+
+# Execute agent
+result = agent.run(question="test")
+
+# Save state
+await state_manager.save_state(current_state)
+
+# 3. Interrupts - Graceful control
+agent._interrupt_manager.request_interrupt(
+    signal=InterruptSignal.USER_REQUESTED,
+    reason="Awaiting approval"
+)
+
+if agent._interrupt_manager.is_interrupted():
+    # Save and pause
+    await state_manager.save_state(current_state)
+```
+
+**Key Components:**
+- **6 Builtin Hooks**: LoggingHook, MetricsHook, CostTrackingHook, PerformanceProfilerHook, AuditHook, TracingHook
+- **4 Storage Backends**: Filesystem, Redis, PostgreSQL, S3
+- **6 Interrupt Signals**: USER_REQUESTED, RATE_LIMIT, BUDGET_EXCEEDED, TIMEOUT, SHUTDOWN, CUSTOM
+
+### Permission System (NEW in v0.5.0+)
+
+**Policy-based access control with budget enforcement:**
+
+```python
+from kaizen.core.autonomy.permissions import ExecutionContext, PermissionRule, PermissionType, PermissionMode
+
+# Create execution context with budget
+context = ExecutionContext(
+    mode=PermissionMode.DEFAULT,
+    budget_limit=50.0,  # $50 maximum
+    allowed_tools={"read_file", "http_get"},
+    denied_tools={"delete_file"}
+)
+
+# Define permission rules
+rules = [
+    # Deny destructive operations
+    PermissionRule(
+        pattern="(delete|drop|truncate)_.*",
+        permission_type=PermissionType.DENY,
+        reason="Destructive operations not allowed",
+        priority=100
+    ),
+    # Ask for write operations
+    PermissionRule(
+        pattern="(write|create|update)_.*",
+        permission_type=PermissionType.ASK,
+        reason="Write operations require approval",
+        priority=50
+    ),
+    # Allow read operations
+    PermissionRule(
+        pattern="(read|get|list)_.*",
+        permission_type=PermissionType.ALLOW,
+        reason="Read operations are safe",
+        priority=10
+    )
+]
+
+# Check permissions before tool execution
+if context.can_use_tool("read_file"):
+    result = await agent.execute_tool("read_file", {"path": "data.txt"})
+    context.record_tool_usage("read_file", cost=0.001)
+
+# Check budget
+if context.has_budget():
+    # Proceed with operation
+    pass
+```
+
+**Features:**
+- **4 Permission Modes**: DEFAULT, ACCEPT_EDITS, PLAN, BYPASS
+- **3 Permission Types**: ALLOW, DENY, ASK
+- **Budget Tracking**: Cost limits and usage monitoring
+- **Pattern Matching**: Regex-based tool name matching
+- **Multi-Agent Isolation**: Per-agent permission contexts
+
+### Memory & Learning System (NEW in v0.5.0)
+
+**Production-ready memory with learning capabilities for conversational agents:**
+
+```python
+from kaizen.memory import ShortTermMemory, LongTermMemory, SemanticMemory
+from kaizen.memory.storage import SQLiteStorage, FileStorage, PostgreSQLStorage
+from kaizen.memory.learning import PatternRecognition, PreferenceLearning, ErrorCorrection
+
+# 1. Short-term memory (session-scoped, in-memory)
+short_term = ShortTermMemory(max_entries=100, ttl_seconds=3600)
+short_term.add(
+    content={"question": "What is AI?", "answer": "..."},
+    importance=0.8,
+    tags=["qa", "technical"]
+)
+
+# 2. Long-term memory (persistent with SQLite)
+storage = SQLiteStorage(db_path="./agent_memory.db")
+long_term = LongTermMemory(storage_backend=storage)
+long_term.add(
+    content={"user_name": "Alice", "preferences": {"style": "formal"}},
+    importance=0.9,
+    tags=["user_profile"]
+)
+
+# 3. Semantic search (similarity-based retrieval)
+similar_memories = long_term.search_similar(
+    query="user preferences",
+    limit=5,
+    min_similarity=0.7
+)
+
+# 4. Pattern recognition (detect FAQs)
+pattern_learner = PatternRecognition(memory=long_term)
+faqs = pattern_learner.detect_frequent_patterns(
+    min_occurrences=3,
+    time_window_days=7
+)
+
+# 5. Preference learning
+pref_learner = PreferenceLearning(memory=long_term)
+user_prefs = pref_learner.learn_preferences(
+    user_id="alice",
+    min_confidence=0.7
+)
+
+# 6. Error correction (learn from mistakes)
+error_learner = ErrorCorrection(memory=long_term)
+error_learner.record_error(
+    error_type="invalid_tool_call",
+    context={"tool": "read_file", "error": "FileNotFoundError"},
+    correction="Check file existence before reading"
+)
+
+# 7. BaseAgent integration
+from kaizen.core.base_agent import BaseAgent
+
+agent = BaseAgent(config=config, signature=signature)
+agent._memory = long_term  # Attach memory system
+
+# Agent can now remember conversations, learn patterns, avoid past errors
+result = agent.run(question="What's my communication style?")
+# Returns: "Based on your preferences, you prefer formal communication"
+```
+
+**3 Memory Types:**
+- **ShortTermMemory**: Session-scoped, in-memory, fast retrieval (<10ms)
+- **LongTermMemory**: Persistent, SQLite/File/PostgreSQL backends, semantic search
+- **SemanticMemory**: Vector-based similarity search with embeddings
+
+**3 Storage Backends:**
+- **SQLiteStorage**: Local file-based, 10,000+ entries per agent
+- **FileStorage**: JSONL append-only, portable, audit-friendly
+- **PostgreSQLStorage**: Enterprise scale, millions of entries, distributed
+
+**4 Learning Mechanisms:**
+- **PatternRecognition**: Detect FAQs, common workflows, repetitive tasks
+- **PreferenceLearning**: Learn user preferences from interactions
+- **ErrorCorrection**: Record errors and corrections to avoid repeat mistakes
+- **AdaptiveLearning**: Adjust strategies based on success rates
+
+**Performance (v0.5.0 validated):**
+- <50ms retrieval (p95)
+- <100ms storage (p95)
+- 10,000+ entries per agent (SQLite)
+- Millions of entries (PostgreSQL)
+
+**Use Cases:**
+- Conversational agents with context continuity
+- Customer support bots with preference learning
+- Research agents that learn from feedback
+- Code generation agents that avoid past errors
+- Multi-agent systems with shared knowledge
+
+### Document Extraction & RAG (NEW in v0.5.0)
+
+**Production-ready document extraction with RAG-optimized chunking:**
+
+```python
+from kaizen.agents.multi_modal import DocumentExtractionAgent, DocumentExtractionConfig
+
+# 1. FREE configuration (Ollama vision)
+config = DocumentExtractionConfig(
+    provider="ollama_vision",  # $0.00 cost
+    chunk_for_rag=True,        # Enable RAG chunking
+    chunk_size=512,            # Tokens per chunk
+    overlap=50,                # Overlap for context continuity
+    extract_tables=True        # Extract table data
+)
+
+agent = DocumentExtractionAgent(config=config)
+
+# 2. Extract document with RAG chunking
+result = agent.extract(
+    file_path="report.pdf",
+    extract_tables=True,
+    chunk_for_rag=True
+)
+
+# 3. Access RAG-ready chunks with page citations
+for chunk in result['chunks']:
+    print(f"Page {chunk['page']}: {chunk['text'][:100]}...")
+    # Each chunk has: text, page, start_idx, end_idx, metadata
+
+# 4. Vector store integration
+from kaizen.rag import VectorStore
+
+vector_store = VectorStore()
+for chunk in result['chunks']:
+    vector_store.add(
+        text=chunk['text'],
+        metadata={
+            "source": "document.pdf",
+            "page": chunk['page'],
+            "doc_id": "doc123"
+        },
+        embedding=generate_embedding(chunk['text'])  # Your embedding function
+    )
+
+# 5. RAG query with source attribution
+query = "What are the key findings?"
+relevant_chunks = vector_store.search(query, limit=5)
+
+for chunk in relevant_chunks:
+    print(f"Source: {chunk['metadata']['source']}, Page: {chunk['metadata']['page']}")
+    print(f"Content: {chunk['text']}\n")
+
+# 6. Batch processing for multiple documents
+documents = ["doc1.pdf", "doc2.pdf", "doc3.pdf"]
+batch_results = agent.extract_batch(
+    file_paths=documents,
+    chunk_for_rag=True,
+    max_workers=3  # Parallel processing
+)
+```
+
+**3 Provider Options:**
+
+| Provider      | Speed | Accuracy | Cost (per page) | Best For                     |
+|---------------|-------|----------|-----------------|------------------------------|
+| Ollama        | 2-4s  | 70-80%   | $0.00           | Unlimited processing, dev    |
+| OpenAI Vision | 1-2s  | 85-90%   | ~$0.01          | Production, good accuracy    |
+| Landing AI    | 2-3s  | 95%+     | ~$0.05          | Mission-critical, max accuracy |
+
+**RAG Optimization Features:**
+- **Chunking**: Configurable size (default 512 tokens) with overlap
+- **Page Citations**: Every chunk tracks source page for attribution
+- **Table Extraction**: Structured table data with bounding boxes
+- **Metadata Preservation**: Original formatting, fonts, positions
+- **Cost Control**: Prefer-free mode tries Ollama first, falls back to paid
+
+**Production Validated (v0.5.0):**
+- 201 tests passing (149 unit + 34 integration + 18 E2E)
+- Real infrastructure testing (NO MOCKING)
+- Ollama: $0.00 cost for unlimited processing
+- OpenAI: Budget-controlled, accurate
+- Landing AI: Mission-critical accuracy (95%+)
+
+**Use Cases:**
+- RAG systems with source attribution
+- Enterprise document search
+- Research paper analysis
+- Compliance document processing
+- Invoice/receipt extraction
+- Legal document analysis
 
 ### Agent Architecture Pattern
 
@@ -411,9 +704,28 @@ agent = SimpleQAAgent(config)  # Auto-extraction happens here
 
 4. **Multi-Agent Coordination** (`src/kaizen/agents/coordination/`)
    - Google A2A protocol integration (100% compliant)
-   - SupervisorWorkerPattern with semantic matching (14/14 tests)
+   - SupervisorWorkerPattern with semantic matching (production-ready)
    - 4 additional patterns: Consensus, Debate, Sequential, Handoff
    - Automatic capability discovery, no hardcoded selection
+
+5. **Observability Stack (v0.5.0)** (`src/kaizen/core/autonomy/observability/`)
+   - Distributed tracing: OpenTelemetry + Jaeger
+   - Metrics collection: Prometheus with percentiles
+   - Structured logging: JSON for ELK Stack
+   - Audit trails: Immutable JSONL for compliance
+   - Production-validated: -0.06% overhead, zero impact
+
+6. **Lifecycle Infrastructure (v0.5.0)** (`src/kaizen/core/autonomy/`)
+   - Hooks: Event-driven monitoring (6 builtin hooks)
+   - State: Persistent checkpoints with pluggable storage
+   - Interrupts: Graceful execution control (6 signal types)
+   - Thread-safe, composable, extensible
+
+7. **Permission System (v0.5.0+)** (`src/kaizen/core/autonomy/permissions/`)
+   - ExecutionContext: Thread-safe runtime state
+   - PermissionRule: Pattern-based access control
+   - Budget enforcement: Cost tracking and limits
+   - Enterprise security: RBAC, compliance, multi-tenant isolation
 
 ## 🧪 Testing
 
