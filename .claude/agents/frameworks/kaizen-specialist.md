@@ -873,6 +873,639 @@ Week 1 ✅ **COMPLETE**: Foundation (ExecutionContext, PermissionRule, Permissio
 
 **Reference**: `src/kaizen/core/autonomy/permissions/`, `tests/unit/core/autonomy/permissions/`, ADR-019 (Permission System)
 
+### Memory & Learning System (Production-Ready)
+
+**Comprehensive memory and learning system for persistent context, pattern recognition, and continuous improvement.**
+
+**What**: Multi-type memory with intelligent learning mechanisms for long-running agents
+**When**: Need agents to remember past interactions, learn user preferences, or improve over time
+**How**: Opt-in memory system with multiple storage backends and learning algorithms
+
+#### Memory Types
+
+**Short-Term Memory (Session-Scoped)**:
+```python
+from kaizen.memory import ShortTermMemory
+
+# Create short-term memory (cleared on session end)
+short_term = ShortTermMemory(
+    max_entries=100,  # Keep last 100 interactions
+    ttl_seconds=3600   # Expire after 1 hour
+)
+
+# Store interaction
+short_term.add(
+    content={"question": "What is AI?", "answer": "..."},
+    importance=0.8,
+    tags=["qa", "technical"]
+)
+
+# Retrieve recent memories
+recent = short_term.get_recent(limit=10)
+```
+
+**Long-Term Memory (Cross-Session)**:
+```python
+from kaizen.memory import LongTermMemory
+from kaizen.memory.storage import SQLiteStorage
+
+# Create long-term memory with persistent storage
+storage = SQLiteStorage(db_path="./agent_memory.db")
+long_term = LongTermMemory(storage_backend=storage)
+
+# Store important information
+long_term.add(
+    content={"user_name": "Alice", "preferences": {"style": "formal"}},
+    importance=0.9,
+    tags=["user_profile", "preferences"]
+)
+
+# Retrieve by similarity (semantic search)
+similar = long_term.search_similar(
+    query="user preferences",
+    limit=5,
+    min_similarity=0.7
+)
+```
+
+**Semantic Memory (Concept Extraction)**:
+```python
+from kaizen.memory import SemanticMemory
+
+# Create semantic memory for concept tracking
+semantic = SemanticMemory(storage_backend=storage)
+
+# Extract and store concepts
+semantic.extract_concepts(
+    text="The user prefers concise answers with technical depth",
+    context={"session_id": "123"}
+)
+
+# Query by concept
+concept_memories = semantic.get_by_concept("communication_style")
+```
+
+**SharedMemoryPool (Multi-Agent)**:
+```python
+from kaizen.memory.shared_memory import SharedMemoryPool
+
+# Create shared memory for multi-agent coordination
+shared_pool = SharedMemoryPool()
+
+# Agent 1 writes insight
+agent1.write_to_memory(
+    content={"finding": "User needs data visualization"},
+    tags=["insight", "user_need"],
+    importance=0.9
+)
+
+# Agent 2 reads relevant insights
+relevant_insights = agent2.read_relevant(
+    query="user requirements",
+    limit=10
+)
+```
+
+#### Storage Backends
+
+**SQLite (Production Local)**:
+```python
+from kaizen.memory.storage import SQLiteStorage
+
+storage = SQLiteStorage(
+    db_path="./memory.db",
+    connection_pool_size=10,
+    enable_fts=True  # Full-text search
+)
+```
+
+**File-Based (JSONL)**:
+```python
+from kaizen.memory.storage import FileStorage
+
+storage = FileStorage(
+    directory="./memory_logs",
+    compression=True,  # gzip compression
+    rotation_size_mb=100  # Rotate at 100MB
+)
+```
+
+**PostgreSQL (via DataFlow)**:
+```python
+from kaizen.memory.storage import PostgreSQLStorage
+
+storage = PostgreSQLStorage(
+    connection_string="postgresql://user:pass@localhost/memory",
+    schema="agent_memory"
+)
+```
+
+#### Learning Mechanisms
+
+**Pattern Recognition (FAQ Detection)**:
+```python
+from kaizen.memory.learning import PatternRecognition
+
+pattern_learner = PatternRecognition(memory=long_term)
+
+# Detect frequently asked questions
+faqs = pattern_learner.detect_frequent_patterns(
+    min_occurrences=3,
+    time_window_days=7
+)
+
+# Example output: [
+#   {"pattern": "What is AI?", "count": 5, "confidence": 0.95},
+#   {"pattern": "How does ML work?", "count": 3, "confidence": 0.87}
+# ]
+```
+
+**Preference Learning (User Adaptation)**:
+```python
+from kaizen.memory.learning import PreferenceLearning
+
+pref_learner = PreferenceLearning(memory=long_term)
+
+# Learn user preferences from interactions
+preferences = pref_learner.learn_preferences(
+    user_id="alice",
+    min_confidence=0.7
+)
+
+# Example output: {
+#   "communication_style": "concise",
+#   "technical_depth": "advanced",
+#   "format_preference": "bullet_points"
+# }
+
+# Apply preferences to agent behavior
+if preferences.get("communication_style") == "concise":
+    agent.config.max_tokens = 200
+```
+
+**Error Correction (Learn from Mistakes)**:
+```python
+from kaizen.memory.learning import ErrorCorrection
+
+error_learner = ErrorCorrection(memory=long_term)
+
+# Record error
+error_learner.record_error(
+    error_type="invalid_tool_call",
+    context={"tool": "read_file", "error": "FileNotFoundError"},
+    correction="Check file existence before reading"
+)
+
+# Check if similar error occurred before
+should_avoid = error_learner.should_avoid(
+    action="read_file",
+    context={"path": "/nonexistent/file.txt"}
+)
+
+# Get suggested correction
+correction = error_learner.get_correction(
+    error_type="invalid_tool_call",
+    context={"tool": "read_file"}
+)
+```
+
+**Adaptive Learning (Continuous Improvement)**:
+```python
+from kaizen.memory.learning import AdaptiveLearning
+
+adaptive = AdaptiveLearning(
+    memory=long_term,
+    pattern_recognition=pattern_learner,
+    preference_learning=pref_learner,
+    error_correction=error_learner
+)
+
+# Consolidate all learnings
+insights = adaptive.consolidate_learnings(
+    user_id="alice",
+    time_window_days=30
+)
+
+# Example output: {
+#   "faqs": [...],
+#   "preferences": {...},
+#   "common_errors": [...],
+#   "recommendations": [...]
+# }
+```
+
+#### BaseAgent Integration
+
+**Enable Memory for Agent**:
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.memory import LongTermMemory
+from kaizen.memory.storage import SQLiteStorage
+
+class MemoryEnabledAgent(BaseAgent):
+    def __init__(self, config):
+        super().__init__(config=config, signature=MySignature())
+
+        # Setup memory
+        storage = SQLiteStorage(db_path=f"./memory/{self.agent_id}.db")
+        self.memory = LongTermMemory(storage_backend=storage)
+
+        # Setup learning
+        from kaizen.memory.learning import PreferenceLearning
+        self.pref_learner = PreferenceLearning(memory=self.memory)
+
+    def process_with_memory(self, user_id: str, question: str):
+        # Load user preferences
+        preferences = self.pref_learner.learn_preferences(user_id)
+
+        # Apply preferences to config
+        if preferences.get("technical_depth") == "advanced":
+            self.config.temperature = 0.3  # More precise
+
+        # Execute with context
+        result = self.run(question=question)
+
+        # Store interaction for future learning
+        self.memory.add(
+            content={"user_id": user_id, "question": question, "answer": result["answer"]},
+            importance=0.8,
+            tags=["interaction", user_id]
+        )
+
+        return result
+```
+
+#### Performance Characteristics
+
+**Benchmarks (10,000 entries per agent)**:
+- **Retrieval Latency (p95)**: <50ms (target: <50ms) ✅
+- **Storage Latency (p95)**: <100ms (target: <100ms) ✅
+- **Similarity Search**: <50ms for cosine similarity
+- **Keyword Search**: <30ms with FTS5 (SQLite)
+- **Pattern Detection**: <500ms for 1,000 patterns
+- **Preference Learning**: <200ms aggregation query
+
+**Memory Capacity**:
+- SQLite: 10,000+ entries per agent, unlimited agents
+- File-based: 100,000+ entries (with compression and rotation)
+- PostgreSQL: Millions of entries (production scale)
+
+**Storage Efficiency**:
+- Average entry size: ~500 bytes (compressed)
+- 10,000 entries ≈ 5MB (SQLite with FTS5)
+- Automatic pruning: 90%+ reduction in irrelevant memories
+
+#### Use Cases
+
+**Long-Running Conversational Agents**:
+- Remember user context across 30+ hour sessions
+- Learn user preferences over time
+- Detect and auto-answer FAQs
+
+**Multi-Agent Collaboration**:
+- Share insights via SharedMemoryPool
+- Coordinate work based on shared context
+- Avoid duplicate work through memory checking
+
+**Enterprise Customer Support**:
+- Track customer history and preferences
+- Learn common issues and solutions
+- Improve response quality over time
+
+**Research Assistants**:
+- Build knowledge graph of research topics
+- Remember past findings and citations
+- Suggest relevant past research
+
+**Code Generation Agents**:
+- Remember coding patterns user prefers
+- Learn from past mistakes (syntax errors, etc.)
+- Suggest code based on past successful patterns
+
+**Benefits**:
+- ✅ **Persistent Context**: Agents remember across sessions
+- ✅ **Continuous Learning**: Improve from every interaction
+- ✅ **User Adaptation**: Learn individual user preferences
+- ✅ **Error Reduction**: Avoid repeating past mistakes
+- ✅ **Performance**: <50ms retrieval, <100ms storage
+- ✅ **Scalability**: Support millions of entries with PostgreSQL
+
+**Reference**: `src/kaizen/memory/`, `tests/unit/memory/` (365 tests), `docs/reference/memory-patterns-guide.md`
+
+### Document Extraction & RAG Integration (Production-Ready)
+
+**Multi-provider document extraction with RAG-ready chunking and cost optimization.**
+
+**What**: Extract text, tables, and structure from documents (PDF, images) with automatic RAG chunking
+**When**: Need to process documents for search, analysis, or question-answering systems
+**How**: Multi-provider architecture with automatic fallback and zero-cost option
+
+#### Core Features
+
+**3 Provider Options**:
+- **Landing AI**: Best accuracy, bounding boxes, table extraction ($$$)
+- **OpenAI Vision** (GPT-4V): Good accuracy, fast, cost-effective ($$)
+- **Ollama Vision**: Local inference, FREE, unlimited processing ($0)
+
+**RAG-Ready Chunking**:
+- Semantic chunking (512 tokens default, 50 overlap)
+- Page citations for source attribution
+- Bounding boxes for visual reference (Landing AI)
+- Table extraction and formatting
+- Preserves document structure
+
+**Cost Optimization**:
+- Budget constraints (max_cost parameter)
+- Prefer-free mode (tries Ollama first)
+- Provider fallback chain (Landing AI → OpenAI → Ollama)
+- Zero-cost option available (Ollama)
+
+#### Basic Usage
+
+```python
+from kaizen.agents.multi_modal import DocumentExtractionAgent, DocumentExtractionConfig
+
+# Configuration (FREE by default!)
+config = DocumentExtractionConfig(
+    provider="ollama_vision",  # FREE local provider
+    chunk_for_rag=True,        # Generate semantic chunks
+    chunk_size=512,            # 512 tokens per chunk
+    overlap=50,                # 50 token overlap
+    extract_tables=True        # Extract tables
+)
+
+agent = DocumentExtractionAgent(config=config)
+
+# Extract document
+result = agent.extract(
+    file_path="report.pdf",
+    extract_tables=True,
+    chunk_for_rag=True
+)
+
+# Access results
+print(f"Text: {result['text'][:100]}...")        # Full extracted text
+print(f"Chunks: {len(result['chunks'])}")        # RAG-ready chunks
+print(f"Tables: {len(result['tables'])}")        # Extracted tables
+print(f"Cost: ${result['cost']:.3f}")             # $0.00 with Ollama!
+print(f"Provider: {result['provider']}")          # "ollama_vision"
+```
+
+#### RAG Integration
+
+**Chunks with Page Citations**:
+```python
+# Each chunk includes page number for source attribution
+for chunk in result['chunks']:
+    print(f"Page {chunk['page']}: {chunk['text'][:50]}...")
+    print(f"Position: {chunk.get('bbox', 'N/A')}")  # Bounding box (Landing AI)
+
+# Example output:
+# Page 1: Executive Summary - Q4 2024 financial...
+# Page 2: Revenue increased by 23% year-over-year...
+# Page 3: Customer acquisition costs decreased...
+```
+
+**Vector Store Integration**:
+```python
+from kaizen.agents.multi_modal import DocumentExtractionAgent
+from your_vector_store import VectorStore
+
+# Extract and chunk document
+result = agent.extract(file_path="document.pdf", chunk_for_rag=True)
+
+# Store chunks in vector database
+vector_store = VectorStore()
+for chunk in result['chunks']:
+    vector_store.add(
+        text=chunk['text'],
+        metadata={
+            "source": "document.pdf",
+            "page": chunk['page'],
+            "chunk_id": chunk['chunk_id']
+        },
+        embedding=generate_embedding(chunk['text'])
+    )
+```
+
+**RAG Query Example**:
+```python
+# User query
+query = "What was the Q4 revenue?"
+
+# Retrieve relevant chunks
+relevant_chunks = vector_store.search(query, limit=3)
+
+# Generate answer with source citations
+context = "\n\n".join([
+    f"[Page {chunk['page']}] {chunk['text']}"
+    for chunk in relevant_chunks
+])
+
+answer = llm.generate(
+    prompt=f"Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
+)
+
+# Answer includes page citations automatically!
+```
+
+#### Multi-Provider Architecture
+
+**Provider Selection**:
+```python
+# Explicit provider selection
+config = DocumentExtractionConfig(provider="openai_vision")  # GPT-4V
+config = DocumentExtractionConfig(provider="landing_ai")     # Landing AI
+config = DocumentExtractionConfig(provider="ollama_vision")  # Ollama (FREE)
+
+# Automatic fallback chain
+config = DocumentExtractionConfig(
+    provider="landing_ai",  # Try first
+    fallback_providers=["openai_vision", "ollama_vision"]  # Then these
+)
+```
+
+**Cost Optimization**:
+```python
+# Budget constraint
+config = DocumentExtractionConfig(
+    max_cost=1.0,  # Maximum $1.00
+    provider="landing_ai"  # Will switch to cheaper if budget exceeded
+)
+
+# Prefer free (try Ollama first)
+config = DocumentExtractionConfig(
+    prefer_free=True,  # Try Ollama first, fallback to paid if quality low
+    quality_threshold=0.8  # Minimum quality required
+)
+
+# Zero cost option (unlimited processing!)
+config = DocumentExtractionConfig(
+    provider="ollama_vision"  # $0.00 cost, unlimited documents
+)
+```
+
+#### Advanced Features
+
+**Table Extraction**:
+```python
+result = agent.extract(file_path="financial_report.pdf", extract_tables=True)
+
+# Access extracted tables
+for table in result['tables']:
+    print(f"Table on page {table['page']}:")
+    print(f"Headers: {table['headers']}")
+    print(f"Rows: {len(table['rows'])}")
+
+    # Table data is structured
+    for row in table['rows']:
+        print(row)
+```
+
+**Bounding Boxes (Landing AI)**:
+```python
+config = DocumentExtractionConfig(provider="landing_ai")
+result = agent.extract(file_path="invoice.pdf")
+
+# Each chunk has bounding box coordinates
+for chunk in result['chunks']:
+    if 'bbox' in chunk:
+        x, y, w, h = chunk['bbox']
+        print(f"Chunk at ({x}, {y}), size ({w}x{h})")
+```
+
+**Batch Processing**:
+```python
+from pathlib import Path
+
+# Process multiple documents
+documents = list(Path("./documents").glob("*.pdf"))
+
+for doc_path in documents:
+    result = agent.extract(
+        file_path=str(doc_path),
+        chunk_for_rag=True
+    )
+
+    print(f"Processed {doc_path.name}: {len(result['chunks'])} chunks, ${result['cost']:.3f}")
+
+    # Store in vector database
+    store_chunks(result['chunks'])
+```
+
+#### Integration with VisionAgent
+
+**Optional Document Extraction**:
+```python
+from kaizen.agents import VisionAgent, VisionAgentConfig
+
+# VisionAgent can use document extraction (opt-in)
+config = VisionAgentConfig(
+    llm_provider="ollama",
+    model="bakllava",
+    enable_document_extraction=True  # Enable document features
+)
+
+agent = VisionAgent(config=config)
+
+# Analyze document image
+result = agent.analyze(
+    image="receipt.jpg",
+    question="Extract total amount and items"
+)
+
+# Can also chunk for RAG if needed
+chunks = agent.extract_for_rag(image="document.jpg", chunk_size=512)
+```
+
+#### Performance & Cost
+
+**Provider Comparison**:
+| Provider | Speed | Accuracy | Tables | Bounding Boxes | Cost (per page) |
+|----------|-------|----------|--------|----------------|-----------------|
+| Ollama   | 2-4s  | 70-80%   | Basic  | No             | $0.00           |
+| OpenAI   | 1-2s  | 85-90%   | Good   | No             | ~$0.01          |
+| Landing AI | 2-3s | 95%+    | Excellent | Yes          | ~$0.05          |
+
+**Benchmarks (100-page document)**:
+- **Ollama**: $0.00, 5-10 minutes, 70-80% accuracy
+- **OpenAI**: ~$1.00, 2-3 minutes, 85-90% accuracy
+- **Landing AI**: ~$5.00, 3-5 minutes, 95%+ accuracy
+
+**Recommendation**:
+- **Development/Testing**: Use Ollama (unlimited free processing)
+- **Production (Cost-Sensitive)**: Use OpenAI (good balance)
+- **Production (Quality-Critical)**: Use Landing AI (best accuracy + tables + bboxes)
+
+#### Use Cases
+
+**RAG Systems**:
+- Process document libraries for semantic search
+- Generate FAQ systems from documentation
+- Build knowledge bases from PDF reports
+
+**Enterprise Document Processing**:
+- Invoice processing and data extraction
+- Contract analysis and clause extraction
+- Financial report analysis
+
+**Research Assistants**:
+- Academic paper processing and citation extraction
+- Research report summarization
+- Literature review automation
+
+**Compliance & Legal**:
+- Policy document analysis
+- Regulatory compliance checking
+- Legal document review
+
+**Benefits**:
+- ✅ **Zero-Cost Option**: Unlimited processing with Ollama
+- ✅ **RAG-Ready**: Automatic chunking with page citations
+- ✅ **Multi-Provider**: Fallback for reliability
+- ✅ **Table Extraction**: Structured data from documents
+- ✅ **Production-Validated**: 201 tests passing (149 unit + 34 integration + 18 E2E)
+- ✅ **100% Backward Compatible**: Opt-in feature, no breaking changes
+
+**Reference**: `src/kaizen/agents/multi_modal/document_extraction_agent.py`, `src/kaizen/providers/document/`, `tests/unit/agents/multi_modal/`, `examples/8-multi-modal/document-rag/`, `docs/guides/document-extraction-integration.md`
+
+### Strategy Pattern (Execution Strategies)
+
+**Pluggable execution strategies - AsyncSingleShotStrategy is default for all agents.**
+
+**What**: Different execution strategies for single-shot, streaming, parallel, fallback, and multi-cycle patterns
+**When**: Need specific execution behavior (streaming, parallel processing, retry logic, iterative loops)
+**How**: Strategy pattern with pluggable executors - BaseAgent auto-selects based on agent type
+
+#### Available Strategies
+
+**AsyncSingleShotStrategy (Default)**: Async-first, non-blocking, best for Docker/FastAPI
+**StreamStrategy**: Real-time streaming for chat interfaces
+**ParallelBatchStrategy**: Concurrent execution for bulk processing
+**FallbackStrategy**: Retry with provider alternatives for reliability
+**HumanInLoopStrategy**: Interactive approval for dangerous operations
+**MultiCycleStrategy**: Iterative execution for autonomous agents (ReAct, CodeGen, RAG)
+
+**Reference**: `src/kaizen/strategies/`, `docs/reference/strategy-selection-guide.md`
+
+### Agent Classification (Autonomous vs Interactive)
+
+**25 agents classified by execution pattern - Universal tool support (ADR-016).**
+
+**Autonomous Agents (3)**: ReActAgent, CodeGenerationAgent, RAGResearchAgent
+- Multi-cycle execution with tool calling REQUIRED
+- Use MultiCycleStrategy by default
+- Objective convergence (task completion detection)
+
+**Interactive Agents (22)**: All other agents
+- Single-shot execution (AsyncSingleShotStrategy)
+- Tool calling OPTIONAL (enhancement)
+- Includes: SimpleQA, ChainOfThought, Streaming, Vision, Transcription, Coordination patterns
+
+**Universal Tool Support**: ALL 25 agents support `tool_registry` parameter (100% backward compatible, opt-in)
+
+**Reference**: `src/kaizen/agents/`, `docs/guides/agent-selection-guide.md`, ADR-016
+
 ### A2A Capability Matching (Google A2A Protocol - Advanced)
 
 > **See Skill**: [`kaizen-a2a-protocol`](../../skills/04-kaizen/kaizen-a2a-protocol.md) for A2A basics and standard patterns.

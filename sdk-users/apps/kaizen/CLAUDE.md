@@ -296,6 +296,193 @@ if context.has_budget():
 - **Pattern Matching**: Regex-based tool name matching
 - **Multi-Agent Isolation**: Per-agent permission contexts
 
+### Memory & Learning System (NEW in v0.5.0)
+
+**Production-ready memory with learning capabilities for conversational agents:**
+
+```python
+from kaizen.memory import ShortTermMemory, LongTermMemory, SemanticMemory
+from kaizen.memory.storage import SQLiteStorage, FileStorage, PostgreSQLStorage
+from kaizen.memory.learning import PatternRecognition, PreferenceLearning, ErrorCorrection
+
+# 1. Short-term memory (session-scoped, in-memory)
+short_term = ShortTermMemory(max_entries=100, ttl_seconds=3600)
+short_term.add(
+    content={"question": "What is AI?", "answer": "..."},
+    importance=0.8,
+    tags=["qa", "technical"]
+)
+
+# 2. Long-term memory (persistent with SQLite)
+storage = SQLiteStorage(db_path="./agent_memory.db")
+long_term = LongTermMemory(storage_backend=storage)
+long_term.add(
+    content={"user_name": "Alice", "preferences": {"style": "formal"}},
+    importance=0.9,
+    tags=["user_profile"]
+)
+
+# 3. Semantic search (similarity-based retrieval)
+similar_memories = long_term.search_similar(
+    query="user preferences",
+    limit=5,
+    min_similarity=0.7
+)
+
+# 4. Pattern recognition (detect FAQs)
+pattern_learner = PatternRecognition(memory=long_term)
+faqs = pattern_learner.detect_frequent_patterns(
+    min_occurrences=3,
+    time_window_days=7
+)
+
+# 5. Preference learning
+pref_learner = PreferenceLearning(memory=long_term)
+user_prefs = pref_learner.learn_preferences(
+    user_id="alice",
+    min_confidence=0.7
+)
+
+# 6. Error correction (learn from mistakes)
+error_learner = ErrorCorrection(memory=long_term)
+error_learner.record_error(
+    error_type="invalid_tool_call",
+    context={"tool": "read_file", "error": "FileNotFoundError"},
+    correction="Check file existence before reading"
+)
+
+# 7. BaseAgent integration
+from kaizen.core.base_agent import BaseAgent
+
+agent = BaseAgent(config=config, signature=signature)
+agent._memory = long_term  # Attach memory system
+
+# Agent can now remember conversations, learn patterns, avoid past errors
+result = agent.run(question="What's my communication style?")
+# Returns: "Based on your preferences, you prefer formal communication"
+```
+
+**3 Memory Types:**
+- **ShortTermMemory**: Session-scoped, in-memory, fast retrieval (<10ms)
+- **LongTermMemory**: Persistent, SQLite/File/PostgreSQL backends, semantic search
+- **SemanticMemory**: Vector-based similarity search with embeddings
+
+**3 Storage Backends:**
+- **SQLiteStorage**: Local file-based, 10,000+ entries per agent
+- **FileStorage**: JSONL append-only, portable, audit-friendly
+- **PostgreSQLStorage**: Enterprise scale, millions of entries, distributed
+
+**4 Learning Mechanisms:**
+- **PatternRecognition**: Detect FAQs, common workflows, repetitive tasks
+- **PreferenceLearning**: Learn user preferences from interactions
+- **ErrorCorrection**: Record errors and corrections to avoid repeat mistakes
+- **AdaptiveLearning**: Adjust strategies based on success rates
+
+**Performance (v0.5.0 validated):**
+- <50ms retrieval (p95)
+- <100ms storage (p95)
+- 10,000+ entries per agent (SQLite)
+- Millions of entries (PostgreSQL)
+
+**Use Cases:**
+- Conversational agents with context continuity
+- Customer support bots with preference learning
+- Research agents that learn from feedback
+- Code generation agents that avoid past errors
+- Multi-agent systems with shared knowledge
+
+### Document Extraction & RAG (NEW in v0.5.0)
+
+**Production-ready document extraction with RAG-optimized chunking:**
+
+```python
+from kaizen.agents.multi_modal import DocumentExtractionAgent, DocumentExtractionConfig
+
+# 1. FREE configuration (Ollama vision)
+config = DocumentExtractionConfig(
+    provider="ollama_vision",  # $0.00 cost
+    chunk_for_rag=True,        # Enable RAG chunking
+    chunk_size=512,            # Tokens per chunk
+    overlap=50,                # Overlap for context continuity
+    extract_tables=True        # Extract table data
+)
+
+agent = DocumentExtractionAgent(config=config)
+
+# 2. Extract document with RAG chunking
+result = agent.extract(
+    file_path="report.pdf",
+    extract_tables=True,
+    chunk_for_rag=True
+)
+
+# 3. Access RAG-ready chunks with page citations
+for chunk in result['chunks']:
+    print(f"Page {chunk['page']}: {chunk['text'][:100]}...")
+    # Each chunk has: text, page, start_idx, end_idx, metadata
+
+# 4. Vector store integration
+from kaizen.rag import VectorStore
+
+vector_store = VectorStore()
+for chunk in result['chunks']:
+    vector_store.add(
+        text=chunk['text'],
+        metadata={
+            "source": "document.pdf",
+            "page": chunk['page'],
+            "doc_id": "doc123"
+        },
+        embedding=generate_embedding(chunk['text'])  # Your embedding function
+    )
+
+# 5. RAG query with source attribution
+query = "What are the key findings?"
+relevant_chunks = vector_store.search(query, limit=5)
+
+for chunk in relevant_chunks:
+    print(f"Source: {chunk['metadata']['source']}, Page: {chunk['metadata']['page']}")
+    print(f"Content: {chunk['text']}\n")
+
+# 6. Batch processing for multiple documents
+documents = ["doc1.pdf", "doc2.pdf", "doc3.pdf"]
+batch_results = agent.extract_batch(
+    file_paths=documents,
+    chunk_for_rag=True,
+    max_workers=3  # Parallel processing
+)
+```
+
+**3 Provider Options:**
+
+| Provider      | Speed | Accuracy | Cost (per page) | Best For                     |
+|---------------|-------|----------|-----------------|------------------------------|
+| Ollama        | 2-4s  | 70-80%   | $0.00           | Unlimited processing, dev    |
+| OpenAI Vision | 1-2s  | 85-90%   | ~$0.01          | Production, good accuracy    |
+| Landing AI    | 2-3s  | 95%+     | ~$0.05          | Mission-critical, max accuracy |
+
+**RAG Optimization Features:**
+- **Chunking**: Configurable size (default 512 tokens) with overlap
+- **Page Citations**: Every chunk tracks source page for attribution
+- **Table Extraction**: Structured table data with bounding boxes
+- **Metadata Preservation**: Original formatting, fonts, positions
+- **Cost Control**: Prefer-free mode tries Ollama first, falls back to paid
+
+**Production Validated (v0.5.0):**
+- 201 tests passing (149 unit + 34 integration + 18 E2E)
+- Real infrastructure testing (NO MOCKING)
+- Ollama: $0.00 cost for unlimited processing
+- OpenAI: Budget-controlled, accurate
+- Landing AI: Mission-critical accuracy (95%+)
+
+**Use Cases:**
+- RAG systems with source attribution
+- Enterprise document search
+- Research paper analysis
+- Compliance document processing
+- Invoice/receipt extraction
+- Legal document analysis
+
 ### Agent Architecture Pattern
 
 All agents follow the same BaseAgent pattern:
