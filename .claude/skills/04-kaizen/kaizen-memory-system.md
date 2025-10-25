@@ -558,7 +558,7 @@ class MyAgent(BaseAgent):
 | Pattern detection | <500ms | 10/s | Clustering algorithm |
 | Preference learning | <200ms | 50/s | Aggregation query |
 
-**Tested with**: 10,000 entries per agent, 365/365 tests passing
+**Tested with**: 10,000 entries per agent
 
 ---
 
@@ -808,15 +808,11 @@ if not semantic_results:
 
 ## References
 
-- **TODO-168 Completion**: `todos/completed/TODO-168-COMPLETED-2025-10-23.md`
-- **Phase Reports**: `todos/reports/TODO-168-PHASE-*-COMPLETION.md`
 - **Source Code**: `src/kaizen/memory/`
-- **Tests**: `tests/unit/memory/` (365 tests, 100% pass rate)
-- **Performance Benchmarks**: Phase 1 completion report
+- **Tests**: `tests/unit/memory/`
 
 ---
 
 **Status**: Production-ready (v0.5.0+)
-**Test Coverage**: 365/365 tests passing (100%)
 **Performance**: All targets met (<50ms retrieval, <100ms storage)
 **Backward Compatible**: 100% (opt-in, no breaking changes)

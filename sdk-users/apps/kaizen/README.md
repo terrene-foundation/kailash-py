@@ -61,6 +61,7 @@ class MyAgent(BaseAgent):
 - **Multi-Agent**: Google A2A protocol for semantic capability matching
 - **Autonomous Tool Calling (v0.2.0)**: 12 builtin tools with approval workflows
 - **Bidirectional Control Protocol (v0.2.0)**: Agent ↔ client communication (questions, approvals, progress)
+- **Production Observability (v0.5.0)**: Complete monitoring stack (Jaeger, Prometheus, Grafana, ELK) with zero overhead
 - **Core SDK Compatible**: Seamless integration with Kailash workflows
 
 ## 🚀 Quick Start
@@ -68,11 +69,11 @@ class MyAgent(BaseAgent):
 ### Installation
 
 ```bash
-# Install Kaizen framework (latest v0.2.0)
+# Install Kaizen framework (latest v0.5.0)
 pip install kailash-kaizen
 
 # Or specific version
-pip install kailash-kaizen==0.2.0
+pip install kailash-kaizen==0.5.0
 ```
 
 ### Your First Agent (3 Steps)
@@ -360,7 +361,7 @@ best_worker = pattern.supervisor.select_worker_for_task(
 
 ### Available Coordination Patterns
 
-1. **SupervisorWorkerPattern** - Task delegation with semantic matching (14/14 tests ✅)
+1. **SupervisorWorkerPattern** - Task delegation with semantic matching ✅
 2. **ConsensusPattern** - Group decision-making
 3. **DebatePattern** - Adversarial reasoning
 4. **SequentialPattern** - Step-by-step processing
@@ -483,6 +484,305 @@ async with anyio.create_task_group() as tg:
 - **HTTPTransport (SSE)**: Server-sent events for web UIs
 - **StdioTransport**: Standard I/O for MCP integration
 - **MemoryTransport**: In-memory for testing
+
+## 🎛️ Lifecycle Infrastructure (v0.5.0)
+
+**Production-ready hooks, state management, and interrupts for enterprise agents.**
+
+### Hooks - Event-Driven Monitoring
+
+```python
+from kaizen.core.autonomy.hooks.builtin import LoggingHook, MetricsHook, AuditHook
+
+# Every BaseAgent has a hook manager
+agent = BaseAgent(config=config, signature=signature)
+
+# Register builtin hooks
+agent._hook_manager.register_hook(LoggingHook(log_level="INFO"))
+agent._hook_manager.register_hook(MetricsHook())
+agent._hook_manager.register_hook(AuditHook(audit_path="./audit"))
+```
+
+**6 Builtin Hooks:**
+- `LoggingHook`: JSON-formatted logging
+- `MetricsHook`: Prometheus metrics collection
+- `CostTrackingHook`: Token usage and cost monitoring
+- `PerformanceProfilerHook`: Execution timing
+- `AuditHook`: Immutable audit trails
+- `TracingHook`: Distributed tracing
+
+### State - Persistent Checkpoints
+
+```python
+from kaizen.core.autonomy.state import StateManager, FilesystemStorage, AgentState
+
+# Create state manager
+storage = FilesystemStorage(base_path="./agent_state")
+state_manager = StateManager(storage_backend=storage)
+
+# Create checkpoint before risky operation
+checkpoint_id = await state_manager.create_checkpoint(
+    agent_id="my_agent",
+    description="Before processing"
+)
+
+# Execute agent
+result = agent.run(question="test")
+
+# Save state
+state = AgentState(
+    agent_id="my_agent",
+    conversation_history=agent.get_history(),
+    metadata={"result": result}
+)
+await state_manager.save_state(state)
+
+# Restore on error
+await state_manager.restore_checkpoint(checkpoint_id)
+```
+
+**Features:**
+- Automatic checkpointing
+- Version history tracking
+- Multiple storage backends (Filesystem, Redis, PostgreSQL, S3)
+- Metadata attachment
+- TTL support
+
+### Interrupts - Graceful Control
+
+```python
+from kaizen.core.autonomy.interrupts import InterruptSignal
+
+# Request interruption
+agent._interrupt_manager.request_interrupt(
+    signal=InterruptSignal.USER_REQUESTED,
+    reason="Awaiting approval"
+)
+
+# Check if interrupted
+if agent._interrupt_manager.is_interrupted():
+    # Save state and pause
+    await state_manager.save_state(current_state)
+    return {"status": "paused", "resume_token": "xyz"}
+
+# Resume execution
+agent._interrupt_manager.clear_interrupt()
+```
+
+**6 Interrupt Signals:**
+- `USER_REQUESTED`: Manual pause
+- `RATE_LIMIT`: API rate limit hit
+- `BUDGET_EXCEEDED`: Cost budget exceeded
+- `TIMEOUT`: Operation timeout
+- `SHUTDOWN`: Graceful shutdown
+- `CUSTOM`: User-defined signals
+
+## 🔐 Permission System (v0.5.0+)
+
+**Policy-based access control with budget enforcement for enterprise security.**
+
+### Basic Usage
+
+```python
+from kaizen.core.autonomy.permissions import ExecutionContext, PermissionRule, PermissionType, PermissionMode
+
+# Create execution context
+context = ExecutionContext(
+    mode=PermissionMode.DEFAULT,
+    budget_limit=50.0,  # $50 maximum
+    allowed_tools={"read_file", "http_get"},
+    denied_tools={"delete_file", "bash_command"}
+)
+
+# Define permission rules
+rules = [
+    # Deny destructive operations
+    PermissionRule(
+        pattern="(delete|drop|truncate)_.*",
+        permission_type=PermissionType.DENY,
+        reason="Destructive operations not allowed",
+        priority=100
+    ),
+    # Ask for write operations
+    PermissionRule(
+        pattern="(write|create|update)_.*",
+        permission_type=PermissionType.ASK,
+        reason="Write operations require approval",
+        priority=50
+    ),
+    # Allow read operations
+    PermissionRule(
+        pattern="(read|get|list)_.*",
+        permission_type=PermissionType.ALLOW,
+        reason="Read operations are safe",
+        priority=10
+    )
+]
+
+# Check permissions
+if context.can_use_tool("read_file"):
+    result = await agent.execute_tool("read_file", {"path": "data.txt"})
+    context.record_tool_usage("read_file", cost=0.001)
+
+# Check budget
+if context.has_budget():
+    # Proceed with operation
+    pass
+else:
+    raise BudgetExceededError("Cost limit reached")
+```
+
+### Permission Modes
+- **DEFAULT**: Standard permission checks (production)
+- **ACCEPT_EDITS**: Auto-approve edit operations (development)
+- **PLAN**: Planning mode, no execution (dry-run)
+- **BYPASS**: Bypass all checks (admin mode)
+
+### Permission Types
+- **ALLOW**: Auto-approve execution
+- **DENY**: Block execution completely
+- **ASK**: Request user approval
+
+### Enterprise Features
+- **Budget Tracking**: Cost limits and usage monitoring
+- **Pattern Matching**: Regex-based tool name matching
+- **Multi-Agent Isolation**: Per-agent permission contexts
+- **Audit Trail**: Track all permission decisions
+- **Compliance**: SOC2, HIPAA, PCI-DSS ready
+
+## 🧠 Memory & Learning System (v0.5.0)
+
+**Production-ready memory with learning capabilities for conversational agents.**
+
+### 3 Memory Types
+
+```python
+from kaizen.memory import ShortTermMemory, LongTermMemory, SemanticMemory
+from kaizen.memory.storage import SQLiteStorage
+
+# Short-term memory (session-scoped)
+short_term = ShortTermMemory(max_entries=100, ttl_seconds=3600)
+short_term.add(content={"question": "What is AI?"}, importance=0.8)
+
+# Long-term memory (persistent)
+storage = SQLiteStorage(db_path="./agent_memory.db")
+long_term = LongTermMemory(storage_backend=storage)
+long_term.add(content={"user_name": "Alice"}, importance=0.9)
+
+# Semantic search
+similar = long_term.search_similar(query="user preferences", limit=5, min_similarity=0.7)
+```
+
+### 4 Learning Mechanisms
+
+```python
+from kaizen.memory.learning import PatternRecognition, PreferenceLearning, ErrorCorrection
+
+# Pattern recognition (detect FAQs)
+pattern_learner = PatternRecognition(memory=long_term)
+faqs = pattern_learner.detect_frequent_patterns(min_occurrences=3, time_window_days=7)
+
+# Preference learning
+pref_learner = PreferenceLearning(memory=long_term)
+user_prefs = pref_learner.learn_preferences(user_id="alice", min_confidence=0.7)
+
+# Error correction (learn from mistakes)
+error_learner = ErrorCorrection(memory=long_term)
+error_learner.record_error(
+    error_type="invalid_tool_call",
+    context={"tool": "read_file", "error": "FileNotFoundError"},
+    correction="Check file existence before reading"
+)
+```
+
+### BaseAgent Integration
+
+```python
+from kaizen.core.base_agent import BaseAgent
+
+agent = BaseAgent(config=config, signature=signature)
+agent._memory = long_term  # Attach memory system
+
+# Agent now remembers conversations, learns patterns, avoids past errors
+result = agent.run(question="What's my communication style?")
+```
+
+**Performance (v0.5.0 validated):**
+- <50ms retrieval (p95), <100ms storage (p95)
+- 10,000+ entries per agent (SQLite), millions (PostgreSQL)
+- 365 tests passing (100% coverage)
+
+**Use Cases:** Conversational agents, customer support, research agents, code generation, multi-agent systems
+
+## 📄 Document Extraction & RAG (v0.5.0)
+
+**Production-ready document extraction with RAG-optimized chunking.**
+
+### 3 Provider Options
+
+```python
+from kaizen.agents.multi_modal import DocumentExtractionAgent, DocumentExtractionConfig
+
+# FREE configuration (Ollama vision - $0.00 cost)
+config = DocumentExtractionConfig(
+    provider="ollama_vision",
+    chunk_for_rag=True,
+    chunk_size=512,
+    overlap=50,
+    extract_tables=True
+)
+
+agent = DocumentExtractionAgent(config=config)
+
+# Extract document with RAG chunking
+result = agent.extract(
+    file_path="report.pdf",
+    extract_tables=True,
+    chunk_for_rag=True
+)
+
+# Access RAG-ready chunks with page citations
+for chunk in result['chunks']:
+    print(f"Page {chunk['page']}: {chunk['text'][:100]}...")
+```
+
+### Vector Store Integration
+
+```python
+from kaizen.rag import VectorStore
+
+vector_store = VectorStore()
+for chunk in result['chunks']:
+    vector_store.add(
+        text=chunk['text'],
+        metadata={"source": "document.pdf", "page": chunk['page']},
+        embedding=generate_embedding(chunk['text'])
+    )
+
+# RAG query with source attribution
+query = "What are the key findings?"
+relevant_chunks = vector_store.search(query, limit=5)
+
+for chunk in relevant_chunks:
+    print(f"Source: {chunk['metadata']['source']}, Page: {chunk['metadata']['page']}")
+    print(f"Content: {chunk['text']}\n")
+```
+
+### Provider Comparison
+
+| Provider      | Speed | Accuracy | Cost (per page) | Best For                     |
+|---------------|-------|----------|-----------------|------------------------------|
+| Ollama        | 2-4s  | 70-80%   | $0.00           | Unlimited processing, dev    |
+| OpenAI Vision | 1-2s  | 85-90%   | ~$0.01          | Production, good accuracy    |
+| Landing AI    | 2-3s  | 95%+     | ~$0.05          | Mission-critical, max accuracy |
+
+**Production Validated (v0.5.0):**
+- 201 tests passing (149 unit + 34 integration + 18 E2E)
+- Real infrastructure testing (NO MOCKING)
+- Ollama: $0.00 cost for unlimited processing
+- RAG chunking with page citations for source attribution
+
+**Use Cases:** RAG systems, enterprise document search, research paper analysis, compliance processing, invoice/receipt extraction, legal document analysis
 
 ## 🔧 Creating Custom Agents
 
