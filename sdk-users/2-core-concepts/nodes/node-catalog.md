@@ -643,10 +643,11 @@ def process_data(data):
 **Use Cases**: Custom logic, data processing
 
 ### AsyncPythonCodeNode
-**Purpose**: Execute Python code asynchronously
+**Purpose**: Execute Python code asynchronously with full PythonCodeNode feature parity
 ```python
 from kailash.nodes.code import AsyncPythonCodeNode
 
+# LEGACY PATTERN: Single result (still works)
 node = AsyncPythonCodeNode(
     name="async_python",
     code="""
@@ -656,10 +657,45 @@ async def async_process(data):
     """,
     function_name="async_process"
 )
+
+# RECOMMENDED (v0.9.30+): Multi-output pattern - exports ALL variables
+node = AsyncPythonCodeNode(
+    name="async_multi_output",
+    code="""
+import asyncio
+
+# Fetch data concurrently
+async def fetch_data(id):
+    await asyncio.sleep(0.1)
+    return {"id": id, "value": id * 2}
+
+ids = [1, 2, 3, 4, 5]
+tasks = [fetch_data(id) for id in ids]
+results = await asyncio.gather(*tasks)
+
+# All variables are automatically exported (no 'result' needed!)
+processed_data = results
+total_count = len(results)
+average_value = sum(r["value"] for r in results) / len(results)
+processing_complete = True
+    """
+)
 ```
-**Key Features**: Async execution, concurrent processing, full exception handling (NameError, AttributeError, etc.), iterator support (iter/next)
-**Use Cases**: High-performance custom logic, async I/O operations, concurrent data processing
+**Key Features**:
+- ✅ **Full multi-output support** (v0.9.30+) - exports ALL variables like PythonCodeNode
+- ✅ **Complete sync/async parity** - identical behavior to PythonCodeNode
+- ✅ Async execution, concurrent processing (asyncio.gather, asyncio.create_task)
+- ✅ Full exception handling (NameError, AttributeError, ZeroDivisionError, etc.)
+- ✅ Iterator support (iter/next), frozenset, bytes, bytearray, complex
+- ✅ Template resolution in nested parameters (v0.9.30+)
+
+**Use Cases**: High-performance custom logic, async I/O operations, concurrent data processing, database queries with asyncpg/aiomysql, HTTP requests with aiohttp
+
+**Multi-Output Pattern** (v0.9.30+): Both PythonCodeNode and AsyncPythonCodeNode export ALL non-private variables. No need to wrap in `result = {...}`.
+
 **Available Exceptions**: NameError, AttributeError, ZeroDivisionError, StopIteration, AssertionError, ImportError, IOError, ArithmeticError
+
+**See Also**: [dataflow-dynamic-updates](../../.claude/skills/02-dataflow/dataflow-dynamic-updates.md) for examples with DataFlow
 
 ### ScriptExecutorNode
 **Purpose**: Execute external scripts
