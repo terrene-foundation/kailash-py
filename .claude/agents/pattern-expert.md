@@ -237,6 +237,107 @@ workflow.add_node("PythonCodeNode", "calc", {
 })
 ```
 
+### Multi-Output Pattern (v0.9.28+)
+```python
+# ✅ MODERN PATTERN: Export multiple variables directly
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": """
+# Calculate multiple outputs
+total = sum(data)
+average = total / len(data)
+max_value = max(data)
+min_value = min(data)
+# All 4 variables are automatically exported!
+    """
+})
+
+# Connect each output individually
+workflow.add_connection("processor", "total", "display", "total_input")
+workflow.add_connection("processor", "average", "display", "avg_input")
+workflow.add_connection("processor", "max_value", "display", "max_input")
+
+# ✅ LEGACY PATTERN: Still works (backward compatible)
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": "result = {'total': sum(data), 'average': sum(data)/len(data)}"
+})
+workflow.add_connection("processor", "result.total", "display", "total_input")
+```
+
+## AsyncPythonCodeNode Patterns (v0.9.30+)
+
+### Full Parity with PythonCodeNode
+**IMPORTANT**: AsyncPythonCodeNode now has 100% feature parity with PythonCodeNode (v0.9.30+)
+- ✅ Multi-output support (exports ALL variables)
+- ✅ Template resolution in nested parameters
+- ✅ All exception classes available
+- ✅ Identical module whitelists
+
+```python
+# AsyncPythonCodeNode and PythonCodeNode work identically!
+
+# ✅ MULTI-OUTPUT: Both export all variables
+workflow.add_node("AsyncPythonCodeNode", "async_processor", {
+    "code": """
+import asyncio
+
+# Fetch data concurrently
+async def fetch_item(id):
+    await asyncio.sleep(0.1)
+    return {"id": id, "value": id * 2}
+
+ids = [1, 2, 3]
+tasks = [fetch_item(id) for id in ids]
+results = await asyncio.gather(*tasks)
+
+# All variables automatically exported (v0.9.30+)
+processed_data = results
+item_count = len(results)
+processing_complete = True
+    """
+})
+
+# Connect each output individually
+workflow.add_connection("async_processor", "processed_data", "next_node", "data")
+workflow.add_connection("async_processor", "item_count", "next_node", "count")
+workflow.add_connection("async_processor", "processing_complete", "next_node", "status")
+```
+
+### Async I/O Operations
+```python
+workflow.add_node("AsyncPythonCodeNode", "fetch_data", {
+    "code": """
+import aiohttp
+import asyncio
+
+async def fetch_url(url):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            return await response.json()
+
+urls = ["https://api.example.com/data1", "https://api.example.com/data2"]
+tasks = [fetch_url(url) for url in urls]
+api_responses = await asyncio.gather(*tasks)
+
+# Export multiple results
+response_count = len(api_responses)
+fetch_success = all(r is not None for r in api_responses)
+    """
+})
+```
+
+### When to Use AsyncPythonCodeNode vs PythonCodeNode
+```python
+# ✅ USE AsyncPythonCodeNode FOR:
+# - Async I/O (database, HTTP, file operations)
+# - Concurrent operations (asyncio.gather)
+# - Integration with async libraries (aiohttp, asyncpg, aiomysql)
+
+# ✅ USE PythonCodeNode FOR:
+# - CPU-bound operations (calculations, data processing)
+# - Simple synchronous logic
+# - Visualization (matplotlib, seaborn - blocking I/O)
+```
+
 ## MCP Integration Patterns (v0.6.6+)
 
 ### Real MCP Execution (Default)

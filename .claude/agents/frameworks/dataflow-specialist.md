@@ -232,7 +232,9 @@ workflow.add_node("UserCreateNode", "create", {
 
 ### Dynamic Updates with PythonCodeNode Multi-Output (Core SDK v0.9.28+)
 
-**NEW**: Core SDK v0.9.28 enables PythonCodeNode to export multiple variables directly, making dynamic DataFlow updates natural and intuitive.
+**NEW**: Core SDK v0.9.28+ enables **BOTH** PythonCodeNode and AsyncPythonCodeNode to export multiple variables directly, making dynamic DataFlow updates natural and intuitive.
+
+**IMPORTANT**: AsyncPythonCodeNode achieved full feature parity with PythonCodeNode in v0.9.30 - both work identically for multi-output patterns!
 
 **Before v0.9.28 (nested result pattern):**
 ```python
@@ -273,10 +275,39 @@ workflow.add_connection("prepare", "edited_by_user", "update", "edited_by_user")
 - ✅ Matches developer mental model
 - ✅ Less nesting, cleaner code
 - ✅ Full DataFlow benefits retained (no SQL needed!)
+- ✅ Works with both PythonCodeNode AND AsyncPythonCodeNode (v0.9.30+)
+
+**AsyncPythonCodeNode Example (v0.9.30+):**
+```python
+# Async operations with multi-output - identical to sync!
+workflow.add_node("AsyncPythonCodeNode", "async_prepare", {
+    "code": """
+import asyncio
+
+# Simulate async data fetching
+async def fetch_user_data(user_id):
+    await asyncio.sleep(0.1)  # Simulate I/O
+    return {"id": user_id, "verified": True}
+
+user_data = await fetch_user_data(user_id)
+
+# Export multiple variables for DataFlow nodes
+filter_data = {"id": user_data["id"]}
+verification_status = user_data["verified"]
+updated_by_system = True
+    """
+})
+
+# Works identically with DataFlow nodes!
+workflow.add_node("UserUpdateNode", "update", {})
+workflow.add_connection("async_prepare", "filter_data", "update", "filter")
+workflow.add_connection("async_prepare", "verification_status", "update", "verified")
+workflow.add_connection("async_prepare", "updated_by_system", "update", "updated_by_system")
+```
 
 **Backward Compatibility:** Old patterns with `result = {...}` continue to work 100%.
 
-**Requirements:** Core SDK >= v0.9.28, DataFlow >= v0.6.6
+**Requirements:** Core SDK >= v0.9.30 (for AsyncPythonCodeNode multi-output), DataFlow >= v0.6.6
 
 **See Also:** [dataflow-dynamic-updates](../../skills/02-dataflow/dataflow-dynamic-updates.md) skill for complete examples
 
