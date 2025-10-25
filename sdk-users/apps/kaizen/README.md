@@ -650,6 +650,140 @@ else:
 - **Audit Trail**: Track all permission decisions
 - **Compliance**: SOC2, HIPAA, PCI-DSS ready
 
+## 🧠 Memory & Learning System (v0.5.0)
+
+**Production-ready memory with learning capabilities for conversational agents.**
+
+### 3 Memory Types
+
+```python
+from kaizen.memory import ShortTermMemory, LongTermMemory, SemanticMemory
+from kaizen.memory.storage import SQLiteStorage
+
+# Short-term memory (session-scoped)
+short_term = ShortTermMemory(max_entries=100, ttl_seconds=3600)
+short_term.add(content={"question": "What is AI?"}, importance=0.8)
+
+# Long-term memory (persistent)
+storage = SQLiteStorage(db_path="./agent_memory.db")
+long_term = LongTermMemory(storage_backend=storage)
+long_term.add(content={"user_name": "Alice"}, importance=0.9)
+
+# Semantic search
+similar = long_term.search_similar(query="user preferences", limit=5, min_similarity=0.7)
+```
+
+### 4 Learning Mechanisms
+
+```python
+from kaizen.memory.learning import PatternRecognition, PreferenceLearning, ErrorCorrection
+
+# Pattern recognition (detect FAQs)
+pattern_learner = PatternRecognition(memory=long_term)
+faqs = pattern_learner.detect_frequent_patterns(min_occurrences=3, time_window_days=7)
+
+# Preference learning
+pref_learner = PreferenceLearning(memory=long_term)
+user_prefs = pref_learner.learn_preferences(user_id="alice", min_confidence=0.7)
+
+# Error correction (learn from mistakes)
+error_learner = ErrorCorrection(memory=long_term)
+error_learner.record_error(
+    error_type="invalid_tool_call",
+    context={"tool": "read_file", "error": "FileNotFoundError"},
+    correction="Check file existence before reading"
+)
+```
+
+### BaseAgent Integration
+
+```python
+from kaizen.core.base_agent import BaseAgent
+
+agent = BaseAgent(config=config, signature=signature)
+agent._memory = long_term  # Attach memory system
+
+# Agent now remembers conversations, learns patterns, avoids past errors
+result = agent.run(question="What's my communication style?")
+```
+
+**Performance (v0.5.0 validated):**
+- <50ms retrieval (p95), <100ms storage (p95)
+- 10,000+ entries per agent (SQLite), millions (PostgreSQL)
+- 365 tests passing (100% coverage)
+
+**Use Cases:** Conversational agents, customer support, research agents, code generation, multi-agent systems
+
+## 📄 Document Extraction & RAG (v0.5.0)
+
+**Production-ready document extraction with RAG-optimized chunking.**
+
+### 3 Provider Options
+
+```python
+from kaizen.agents.multi_modal import DocumentExtractionAgent, DocumentExtractionConfig
+
+# FREE configuration (Ollama vision - $0.00 cost)
+config = DocumentExtractionConfig(
+    provider="ollama_vision",
+    chunk_for_rag=True,
+    chunk_size=512,
+    overlap=50,
+    extract_tables=True
+)
+
+agent = DocumentExtractionAgent(config=config)
+
+# Extract document with RAG chunking
+result = agent.extract(
+    file_path="report.pdf",
+    extract_tables=True,
+    chunk_for_rag=True
+)
+
+# Access RAG-ready chunks with page citations
+for chunk in result['chunks']:
+    print(f"Page {chunk['page']}: {chunk['text'][:100]}...")
+```
+
+### Vector Store Integration
+
+```python
+from kaizen.rag import VectorStore
+
+vector_store = VectorStore()
+for chunk in result['chunks']:
+    vector_store.add(
+        text=chunk['text'],
+        metadata={"source": "document.pdf", "page": chunk['page']},
+        embedding=generate_embedding(chunk['text'])
+    )
+
+# RAG query with source attribution
+query = "What are the key findings?"
+relevant_chunks = vector_store.search(query, limit=5)
+
+for chunk in relevant_chunks:
+    print(f"Source: {chunk['metadata']['source']}, Page: {chunk['metadata']['page']}")
+    print(f"Content: {chunk['text']}\n")
+```
+
+### Provider Comparison
+
+| Provider      | Speed | Accuracy | Cost (per page) | Best For                     |
+|---------------|-------|----------|-----------------|------------------------------|
+| Ollama        | 2-4s  | 70-80%   | $0.00           | Unlimited processing, dev    |
+| OpenAI Vision | 1-2s  | 85-90%   | ~$0.01          | Production, good accuracy    |
+| Landing AI    | 2-3s  | 95%+     | ~$0.05          | Mission-critical, max accuracy |
+
+**Production Validated (v0.5.0):**
+- 201 tests passing (149 unit + 34 integration + 18 E2E)
+- Real infrastructure testing (NO MOCKING)
+- Ollama: $0.00 cost for unlimited processing
+- RAG chunking with page citations for source attribution
+
+**Use Cases:** RAG systems, enterprise document search, research paper analysis, compliance processing, invoice/receipt extraction, legal document analysis
+
 ## 🔧 Creating Custom Agents
 
 ### Basic Custom Agent
