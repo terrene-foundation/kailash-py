@@ -19,7 +19,6 @@ from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from kailash.runtime.resource_manager import (
     AdaptiveRetryStrategy,
     CircuitBreaker,
@@ -81,11 +80,11 @@ class TestRetryStrategy:
 
         strategy = TestStrategy()
         # Should retry for retriable exceptions
-        assert strategy.should_retry(ValueError(), 1) == True
-        assert strategy.should_retry(RuntimeError(), 2) == True
+        assert strategy.should_retry(ValueError(), 1)
+        assert strategy.should_retry(RuntimeError(), 2)
 
         # Should not retry for non-retriable exceptions by default
-        assert strategy.should_retry(KeyboardInterrupt(), 1) == False
+        assert not strategy.should_retry(KeyboardInterrupt(), 1)
 
 
 class TestExponentialBackoffStrategy:
@@ -102,7 +101,7 @@ class TestExponentialBackoffStrategy:
         assert strategy.base_delay == 2.0
         assert strategy.max_delay == 120.0
         assert strategy.multiplier == 3.0
-        assert strategy.jitter == True
+        assert strategy.jitter
 
     def test_exponential_backoff_delay_calculation(self):
         """Test exponential backoff delay calculation."""
@@ -172,7 +171,7 @@ class TestLinearBackoffStrategy:
         assert strategy.base_delay == 1.5
         assert strategy.max_delay == 30.0
         assert strategy.increment == 2.0
-        assert strategy.jitter == False
+        assert not strategy.jitter
 
     def test_linear_backoff_delay_calculation(self):
         """Test linear backoff delay calculation."""
@@ -206,7 +205,7 @@ class TestFixedDelayStrategy:
         assert strategy.name == "fixed_delay"
         assert strategy.max_attempts == 6
         assert strategy.delay == 2.5
-        assert strategy.jitter == True
+        assert strategy.jitter
 
     def test_fixed_delay_calculation(self):
         """Test fixed delay calculation."""
@@ -332,15 +331,15 @@ class TestExceptionClassifier:
         classifier = ExceptionClassifier()
 
         # Network-related exceptions should be retriable
-        assert classifier.is_retriable(ConnectionError()) == True
-        assert classifier.is_retriable(TimeoutError()) == True
+        assert classifier.is_retriable(ConnectionError())
+        assert classifier.is_retriable(TimeoutError())
 
         # System exceptions should not be retriable
-        assert classifier.is_retriable(KeyboardInterrupt()) == False
-        assert classifier.is_retriable(SystemExit()) == False
+        assert not classifier.is_retriable(KeyboardInterrupt())
+        assert not classifier.is_retriable(SystemExit())
 
         # Runtime errors should be retriable by default
-        assert classifier.is_retriable(RuntimeError()) == True
+        assert classifier.is_retriable(RuntimeError())
 
     def test_exception_classifier_custom_rules(self):
         """Test adding custom classification rules."""
@@ -351,14 +350,14 @@ class TestExceptionClassifier:
             pass
 
         classifier.add_retriable_exception(CustomRetriableError)
-        assert classifier.is_retriable(CustomRetriableError()) == True
+        assert classifier.is_retriable(CustomRetriableError())
 
         # Add custom non-retriable exception
         class CustomNonRetriableError(Exception):
             pass
 
         classifier.add_non_retriable_exception(CustomNonRetriableError)
-        assert classifier.is_retriable(CustomNonRetriableError()) == False
+        assert not classifier.is_retriable(CustomNonRetriableError())
 
     def test_exception_classifier_pattern_matching(self):
         """Test pattern-based exception classification."""
@@ -369,8 +368,8 @@ class TestExceptionClassifier:
         classifier.add_non_retriable_pattern(r".*permission.*", case_sensitive=False)
 
         # Test pattern matching
-        assert classifier.is_retriable(Exception("Connection timeout occurred")) == True
-        assert classifier.is_retriable(Exception("Permission denied")) == False
+        assert classifier.is_retriable(Exception("Connection timeout occurred"))
+        assert not classifier.is_retriable(Exception("Permission denied"))
 
     def test_exception_classifier_priority_rules(self):
         """Test that non-retriable rules take priority over retriable rules."""
@@ -381,8 +380,8 @@ class TestExceptionClassifier:
         classifier.add_non_retriable_pattern(r"critical.*error", case_sensitive=False)
 
         # Non-retriable pattern should take priority
-        assert classifier.is_retriable(RuntimeError("Critical system error")) == False
-        assert classifier.is_retriable(RuntimeError("Regular runtime error")) == True
+        assert not classifier.is_retriable(RuntimeError("Critical system error"))
+        assert classifier.is_retriable(RuntimeError("Regular runtime error"))
 
 
 class TestRetryMetrics:
@@ -513,8 +512,8 @@ class TestRetryPolicyEngine:
 
         assert engine.default_strategy == custom_strategy
         assert engine.exception_classifier == custom_classifier
-        assert engine.enable_analytics == True
-        assert engine.enable_circuit_breaker_coordination == True
+        assert engine.enable_analytics
+        assert engine.enable_circuit_breaker_coordination
 
     @pytest.mark.asyncio
     async def test_retry_policy_engine_successful_call(self):
@@ -527,7 +526,7 @@ class TestRetryPolicyEngine:
         result = await engine.execute_with_retry(successful_function)
 
         assert result.value == "success"
-        assert result.success == True
+        assert result.success
         assert result.total_attempts == 1
 
     @pytest.mark.asyncio
@@ -551,7 +550,7 @@ class TestRetryPolicyEngine:
         result = await engine.execute_with_retry(failing_then_succeeding_function)
 
         assert result.value == "success"
-        assert result.success == True
+        assert result.success
         assert result.total_attempts == 3
         assert call_count == 3
 
@@ -566,7 +565,7 @@ class TestRetryPolicyEngine:
 
         result = await engine.execute_with_retry(always_failing_function)
 
-        assert result.success == False
+        assert not result.success
         assert result.total_attempts == 2
         assert isinstance(result.final_exception, ValueError)
 
@@ -585,7 +584,7 @@ class TestRetryPolicyEngine:
             result = await asyncio.wait_for(
                 engine.execute_with_retry(keyboard_interrupt_function), timeout=1.0
             )
-            assert result.success == False
+            assert not result.success
             assert result.total_attempts == 1  # Should not retry
             assert isinstance(result.final_exception, KeyboardInterrupt)
         except (KeyboardInterrupt, asyncio.TimeoutError):
@@ -644,7 +643,7 @@ class TestRetryPolicyEngine:
         result = await engine.execute_with_retry(test_function)
 
         # Should fail immediately due to open circuit breaker
-        assert result.success == False
+        assert not result.success
         assert result.total_attempts == 1
         assert isinstance(result.final_exception, CircuitBreakerOpenError)
 
@@ -667,7 +666,7 @@ class TestRetryPolicyEngine:
         result = await engine.execute_with_retry(test_function)
 
         # Should fail due to resource limits
-        assert result.success == False
+        assert not result.success
         assert result.total_attempts == 1
 
     def test_retry_policy_engine_analytics(self):
@@ -741,7 +740,7 @@ class TestRetryPolicyEngineIntegration:
 
         result = await engine.execute_with_retry(sync_function)
 
-        assert result.success == True
+        assert result.success
         assert result.total_attempts == 2
         assert "success on attempt 2" in result.value
 
@@ -760,7 +759,7 @@ class TestRetryPolicyEngineIntegration:
             function_with_params, "success", "test", kwarg1="kw1", kwarg2="kw2"
         )
 
-        assert result.success == True
+        assert result.success
         assert result.value == "success-test-kw1-kw2"
 
     @pytest.mark.asyncio
@@ -786,7 +785,7 @@ class TestRetryPolicyEngineIntegration:
         end_time = time.time()
 
         # Should have timed out
-        assert result.success == False
+        assert not result.success
         # With mocked sleep, execution should be fast
         assert (end_time - start_time) < 0.1
 
@@ -864,12 +863,12 @@ class TestRetryPolicyEngineIntegration:
             return "success"
 
         result1 = await engine.execute_with_retry(learning_function)
-        assert result1.success == True
+        assert result1.success
 
         # Second execution - should use learned data
         call_count = 0
         result2 = await engine.execute_with_retry(learning_function)
-        assert result2.success == True
+        assert result2.success
 
         # Strategy should have learned and potentially adjusted delays
         assert len(adaptive_strategy.attempt_history) > 0
