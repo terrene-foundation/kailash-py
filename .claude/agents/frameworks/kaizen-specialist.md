@@ -1846,6 +1846,251 @@ pattern = SupervisorWorkerPattern(
 result = pattern.execute_task("Process this PDF report")
 ```
 
+#### Composable Pipeline Patterns (Phase 3 - TODO-174)
+
+Kaizen provides **9 factory methods** on `Pipeline` class for creating production-ready coordination patterns:
+
+##### 1. Sequential Pipeline
+**When to use**: Linear step-by-step processing where each step depends on the previous
+**Factory method**: `Pipeline.sequential()`
+
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+pipeline = Pipeline.sequential(
+    agents=[extractor, transformer, loader]
+)
+result = pipeline.run(input="raw_data")
+```
+
+**A2A Integration**: None (deterministic order)
+
+---
+
+##### 2. Supervisor-Worker Pattern
+**When to use**: Task decomposition with central coordination and semantic agent selection
+**Factory method**: `Pipeline.supervisor_worker()`
+
+```python
+pipeline = Pipeline.supervisor_worker(
+    supervisor=supervisor_agent,
+    workers=[code_expert, data_expert, writing_expert],
+    selection_mode="semantic"  # A2A capability matching
+)
+
+tasks = pipeline.delegate("Process 100 documents")
+results = pipeline.aggregate_results(tasks[0]["request_id"])
+```
+
+**A2A Integration**: ✅ **Semantic worker selection** - Automatically routes tasks to best worker based on A2A capability matching
+
+---
+
+##### 3. Router (Meta-Controller) Pattern
+**When to use**: Intelligent request routing to best agent based on task requirements
+**Factory method**: `Pipeline.router()`
+
+```python
+pipeline = Pipeline.router(
+    agents=[code_agent, data_agent, writing_agent],
+    routing_strategy="semantic",  # A2A-based routing
+    error_handling="graceful"
+)
+
+result = pipeline.run(
+    task="Write a Python function to analyze data",
+    input="sales.csv"
+)
+```
+
+**A2A Integration**: ✅ **Semantic routing** - Routes each request to the best agent via A2A capability matching. Falls back to round-robin when A2A unavailable.
+
+**Common Pitfalls**:
+- Don't hardcode routing logic - use semantic routing with A2A
+- Always provide `task` parameter for best routing accuracy
+
+---
+
+##### 4. Ensemble Pattern
+**When to use**: Multi-perspective analysis where diverse viewpoints improve results
+**Factory method**: `Pipeline.ensemble()`
+
+```python
+pipeline = Pipeline.ensemble(
+    agents=[code_agent, data_agent, writing_agent, research_agent],
+    synthesizer=synthesis_agent,
+    discovery_mode="a2a",  # A2A discovery
+    top_k=3  # Select top 3 agents
+)
+
+result = pipeline.run(
+    task="Analyze codebase and suggest improvements",
+    input="repository_path"
+)
+```
+
+**A2A Integration**: ✅ **Agent discovery** - Automatically selects top-k agents with best capability matches via A2A. Synthesizer combines their perspectives.
+
+**Common Pitfalls**:
+- Set `top_k` appropriately (3-5 agents typical)
+- Ensure synthesizer can handle multiple perspectives
+- Use `discovery_mode="all"` only for small agent pools (<10)
+
+---
+
+##### 5. Blackboard Pattern
+**When to use**: Complex problems requiring iterative collaboration and dynamic specialist selection
+**Factory method**: `Pipeline.blackboard()`
+
+```python
+pipeline = Pipeline.blackboard(
+    specialists=[problem_solver, data_analyst, optimizer, validator],
+    controller=controller_agent,
+    selection_mode="semantic",  # A2A selection
+    max_iterations=5
+)
+
+result = pipeline.run(
+    task="Solve complex optimization problem",
+    input="problem_definition"
+)
+```
+
+**A2A Integration**: ✅ **Dynamic specialist selection** - Iteratively selects specialists based on evolving blackboard state using A2A. Controller determines convergence.
+
+**Common Pitfalls**:
+- Set `max_iterations` to prevent infinite loops
+- Controller must have clear convergence criteria
+- Blackboard state should be self-contained
+
+---
+
+##### 6. Consensus Pattern
+**When to use**: Democratic decision-making requiring agreement across multiple voters
+**Factory method**: `Pipeline.consensus()`
+
+```python
+pipeline = Pipeline.consensus(
+    agents=[technical_expert, business_expert, legal_expert],
+    threshold=0.67,  # 2 out of 3 must agree
+    voting_strategy="majority"
+)
+
+proposal = pipeline.create_proposal("Should we adopt AI?")
+for voter in pipeline.voters:
+    voter.vote(proposal)
+result = pipeline.determine_consensus(proposal["proposal_id"])
+```
+
+**A2A Integration**: None (voting-based decision)
+
+**Common Pitfalls**:
+- Set threshold appropriately (0.5 for majority, 1.0 for unanimous)
+- Ensure voters have sufficient context
+- Use `voting_strategy="weighted"` for expert panels
+
+---
+
+##### 7. Debate Pattern
+**When to use**: Adversarial analysis to explore tradeoffs and strengthen arguments
+**Factory method**: `Pipeline.debate()`
+
+```python
+pipeline = Pipeline.debate(
+    agents=[proponent_agent, opponent_agent],
+    rounds=3,
+    judge=judge_agent
+)
+
+result = pipeline.debate(
+    topic="Should AI be regulated?",
+    context="Considering safety and innovation"
+)
+print(f"Winner: {result['judgment']['winner']}")
+```
+
+**A2A Integration**: None (adversarial fixed roles)
+
+**Common Pitfalls**:
+- Set rounds appropriately (3-5 typical)
+- Judge must be neutral and capable
+- Provide sufficient context for informed debate
+
+---
+
+##### 8. Handoff Pattern
+**When to use**: Tier escalation where complexity determines which tier handles the task
+**Factory method**: `Pipeline.handoff()`
+
+```python
+pipeline = Pipeline.handoff(
+    agents=[tier1_agent, tier2_agent, tier3_agent]
+)
+
+result = pipeline.execute_with_handoff(
+    task="Debug complex distributed system issue",
+    max_tier=3
+)
+print(f"Handled by tier: {result['final_tier']}")
+print(f"Escalations: {result['escalation_count']}")
+```
+
+**A2A Integration**: None (tier-based escalation)
+
+**Common Pitfalls**:
+- Each tier must evaluate its capability before escalating
+- Avoid unnecessary escalations (inefficient)
+- Tier 1 should handle 70-80% of requests
+
+---
+
+##### 9. Parallel Pattern
+**When to use**: Independent tasks that can execute concurrently for 10-100x speedup
+**Factory method**: `Pipeline.parallel()`
+
+```python
+pipeline = Pipeline.parallel(
+    agents=[agent1, agent2, agent3],
+    aggregator=lambda results: {"combined": " | ".join(r["output"] for r in results)},
+    max_workers=5,
+    timeout=30.0
+)
+
+result = pipeline.run(input="test_data")
+```
+
+**A2A Integration**: None (parallel execution)
+
+**Common Pitfalls**:
+- Set `max_workers` to prevent resource exhaustion
+- Set `timeout` for long-running agents
+- Use `error_handling="graceful"` for production
+
+---
+
+#### Pattern Selection Decision Matrix
+
+| Pattern | Task Decomposition | Semantic Selection (A2A) | Parallel Execution | Iterative | Democratic | Adversarial | Tiered |
+|---------|-------------------|--------------------------|-------------------|-----------|------------|-------------|--------|
+| **Sequential** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Supervisor-Worker** | ✅ | ✅ | Optional | ❌ | ❌ | ❌ | ❌ |
+| **Router** | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Ensemble** | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Blackboard** | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| **Consensus** | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ |
+| **Debate** | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ |
+| **Handoff** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **Parallel** | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+**Quick Selection Guide**:
+- **Need A2A semantic matching?** → Router, Supervisor-Worker, Ensemble, Blackboard
+- **Need parallel execution?** → Parallel, Ensemble, Consensus
+- **Need iterative refinement?** → Blackboard, Debate
+- **Need democratic decision?** → Consensus
+- **Need adversarial analysis?** → Debate
+- **Need tier escalation?** → Handoff
+- **Need linear processing?** → Sequential
+
 #### Key Benefits
 
 **Composability**:
@@ -1900,6 +2145,7 @@ class CustomPipeline(Pipeline):
 - Implementation: `src/kaizen/orchestration/pipeline.py`
 - Tests: `tests/unit/orchestration/test_pipeline.py`
 - Examples: `examples/orchestration/pipeline-patterns/`
+- ADR: `docs/architecture/adr/ADR-018-pipeline-pattern-architecture-phase3.md`
 
 ### A2A Capability Matching (Google A2A Protocol - Advanced)
 

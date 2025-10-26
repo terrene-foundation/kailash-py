@@ -531,15 +531,144 @@ agent2 = MyAgent(config, shared_memory=shared_pool)  # ✅
 
 ---
 
+## Pipeline Patterns (v0.5.0+)
+
+### What Are Pipeline Patterns?
+
+**Pipeline patterns** provide factory methods on `Pipeline` class for creating composable multi-step workflows with A2A integration. All 9 patterns can be converted to BaseAgent via `.to_agent()`.
+
+### Available Patterns
+
+Kaizen provides **9 pipeline patterns** accessible via `Pipeline` class:
+
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+# 1. Sequential - Linear processing
+pipeline = Pipeline.sequential(agents=[agent1, agent2, agent3])
+
+# 2. Supervisor-Worker - Task decomposition with A2A
+pipeline = Pipeline.supervisor_worker(supervisor, workers, selection_mode="semantic")
+
+# 3. Router (Meta-Controller) - Intelligent routing
+pipeline = Pipeline.router(agents=[...], routing_strategy="semantic")
+
+# 4. Ensemble - Multi-perspective with A2A discovery
+pipeline = Pipeline.ensemble(agents=[...], synthesizer, discovery_mode="a2a", top_k=3)
+
+# 5. Blackboard - Iterative collaboration
+pipeline = Pipeline.blackboard(specialists=[...], controller, selection_mode="semantic")
+
+# 6. Consensus - Democratic voting
+pipeline = Pipeline.consensus(agents=[...], threshold=0.67)
+
+# 7. Debate - Adversarial analysis
+pipeline = Pipeline.debate(agents=[pro, con], rounds=3, judge)
+
+# 8. Handoff - Tier escalation
+pipeline = Pipeline.handoff(agents=[tier1, tier2, tier3])
+
+# 9. Parallel - Concurrent execution
+pipeline = Pipeline.parallel(agents=[...], max_workers=5)
+```
+
+### A2A Integration (4 Patterns)
+
+**Router, Supervisor-Worker, Ensemble, Blackboard** use A2A semantic matching:
+
+| Pattern | A2A Usage | When to Use |
+|---------|-----------|-------------|
+| **Router** | Routes each request to best agent | Single-agent selection per request |
+| **Supervisor-Worker** | Selects best worker for task | Task decomposition + delegation |
+| **Ensemble** | Discovers top-k agents | Multi-perspective analysis |
+| **Blackboard** | Iteratively selects specialists | Complex iterative problems |
+
+### Pattern Selection Quick Guide
+
+**Need A2A semantic matching?**
+→ Router, Supervisor-Worker, Ensemble, Blackboard
+
+**Need parallel execution?**
+→ Parallel, Ensemble, Consensus
+
+**Need iterative refinement?**
+→ Blackboard, Debate
+
+**Need democratic decision?**
+→ Consensus
+
+**Need adversarial analysis?**
+→ Debate
+
+**Need tier escalation?**
+→ Handoff
+
+**Need linear processing?**
+→ Sequential
+
+### Composability with Multi-Agent Patterns
+
+All pipelines can be converted to BaseAgent and used in coordination patterns:
+
+```python
+from kaizen.orchestration.pipeline import Pipeline
+from kaizen.orchestration.patterns import SupervisorWorkerPattern
+
+# Create custom pipeline
+class DocumentPipeline(Pipeline):
+    def run(self, **inputs):
+        # Multi-step document processing
+        return {"processed": True}
+
+# Convert to agent
+doc_agent = DocumentPipeline().to_agent(name="doc_processor")
+
+# Use in multi-agent pattern
+pattern = SupervisorWorkerPattern(
+    supervisor=supervisor,
+    workers=[
+        doc_agent,      # Pipeline as worker
+        qa_agent,       # Regular agent
+        research_agent  # Regular agent
+    ],
+    coordinator=coordinator,
+    shared_pool=shared_pool
+)
+
+# Supervisor routes tasks to pipeline like any agent
+result = pattern.execute_task("Process PDF report")
+```
+
+### Pattern Implementation Details
+
+**Factory Methods Location**: All 9 factory methods are static methods on `Pipeline` class (`src/kaizen/orchestration/pipeline.py`)
+
+**Pattern Implementations**: Individual pattern classes in `src/kaizen/orchestration/patterns/`
+- `meta_controller.py` (Router)
+- `ensemble.py` (Ensemble)
+- `blackboard.py` (Blackboard)
+- `parallel.py` (Parallel)
+- Plus existing patterns (Supervisor-Worker, Consensus, Debate, Handoff, Sequential)
+
+**Examples**: `examples/orchestration/pipeline-patterns/`
+- `1_basic_pipeline.py` - Custom pipeline with `.to_agent()`
+- `2_pipeline_in_multi_agent.py` - Pipelines as workers
+- `3_nested_pipelines.py` - Pipeline composition
+
+**Reference**: ADR-018 Pipeline Pattern Architecture (`docs/architecture/adr/ADR-018-pipeline-pattern-architecture-phase3.md`)
+
+---
+
 ## Related Documentation
 
 - **[BaseAgent Architecture](baseagent-architecture.md)** - Unified agent system
 - **[Memory Patterns Guide](../reference/memory-patterns-guide.md)** - Memory usage patterns
 - **[Strategy Selection](../reference/strategy-selection-guide.md)** - When to use which strategy
 - **[API Reference](../reference/api-reference.md)** - Complete API documentation
+- **[Pipeline Patterns Examples](../../../../examples/orchestration/pipeline-patterns/)** - Working pipeline examples
 
 ---
 
-**Last Updated:** 2025-10-22
-**Version:** Kaizen v0.2.0
+**Last Updated:** 2025-10-27
+**Version:** Kaizen v0.5.0
 **Status:** Production-ready ✅
