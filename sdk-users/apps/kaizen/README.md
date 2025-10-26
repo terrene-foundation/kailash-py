@@ -375,17 +375,17 @@ BaseAgent now supports autonomous tool calling with built-in safety controls and
 
 ```python
 from kaizen.core.base_agent import BaseAgent
-from kaizen.tools import ToolRegistry
-from kaizen.tools.builtin import register_builtin_tools
+# Tools auto-configured via MCP
+
 
 # Enable tool calling
-registry = ToolRegistry()
-register_builtin_tools(registry)  # 12 builtin tools
+
+# 12 builtin tools enabled via MCP
 
 agent = BaseAgent(
     config=config,
     signature=signature,
-    tool_registry=registry  # Opt-in tool support
+    tools="all"  # Enable 12 builtin tools via MCP
 )
 ```
 
@@ -453,7 +453,7 @@ protocol = ControlProtocol(CLITransport())
 agent = BaseAgent(
     config=config,
     signature=signature,
-    tool_registry=registry,
+    tools="all"  # Enable 12 builtin tools via MCP
     control_protocol=protocol  # Enable bidirectional communication
 )
 

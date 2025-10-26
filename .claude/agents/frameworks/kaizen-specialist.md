@@ -127,7 +127,8 @@ This section focuses on **enterprise AI architecture** and **advanced agent patt
 
 **Danger-Level Approval Workflows**: SAFE (auto-approved) → LOW → MEDIUM → HIGH → CRITICAL
 
-**Universal Integration (ADR-016)**: All 25 agents now support tool_registry parameter
+**MCP Auto-Connect**: All BaseAgent-derived agents automatically connect to kaizen_builtin MCP server
+- ✅ 12 Builtin Tools: File operations, HTTP requests, bash commands, web search
 - ✅ 3 Autonomous: ReActAgent, RAGResearchAgent, CodeGenerationAgent
 - ✅ 12 Single-Shot Specialized: SimpleQA, ChainOfThought, StreamingChat, SelfReflection, VisionAgent, TranscriptionAgent, MultiModalAgent, ResilientAgent, MemoryAgent, BatchProcessingAgent, HumanApprovalAgent, SupervisorAgent, CoordinatorAgent
 - ✅ 6 Coordination: ProponentAgent, OpponentAgent, JudgeAgent, ProposerAgent, VoterAgent, AggregatorAgent
@@ -135,40 +136,42 @@ This section focuses on **enterprise AI architecture** and **advanced agent patt
 
 ```python
 from kaizen.core.base_agent import BaseAgent
-from kaizen.tools import ToolRegistry
-from kaizen.tools.builtin import register_builtin_tools
 
-# Enable tools (opt-in)
-registry = ToolRegistry()
-register_builtin_tools(registry)
-
-# Works with ALL agents now
+# MCP auto-connect - tools available automatically
 agent = BaseAgent(
     config=config,
     signature=signature,
-    tool_registry=registry,  # Enables tool calling
-    mcp_servers=mcp_servers  # Optional MCP integration
+    # Optional: Add custom MCP servers
+    mcp_servers=[
+        {
+            "name": "filesystem",
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["@modelcontextprotocol/server-filesystem", "/data"]
+        }
+    ]
 )
 
-# Execute tool with approval workflow
-result = await agent.execute_tool(
-    tool_name="write_file",
-    params={"path": "/tmp/output.txt", "content": "data"},
-    store_in_memory=True  # Store in agent memory
-)
+# Discover available tools from MCP servers
+tools = await agent.discover_mcp_tools()
+# Returns: [
+#   {"name": "mcp__kaizen_builtin__read_file", ...},
+#   {"name": "mcp__kaizen_builtin__write_file", ...},
+#   {"name": "mcp__filesystem__read_file", ...},
+# ]
 
-# Tool chain (sequential execution)
-results = await agent.execute_tool_chain([
-    {"tool_name": "read_file", "params": {"path": "input.txt"}},
-    {"tool_name": "bash_command", "params": {"command": "wc -l input.txt"}},
-])
+# Execute MCP tool with approval workflow
+result = await agent.execute_mcp_tool(
+    "mcp__kaizen_builtin__write_file",
+    {"path": "/tmp/output.txt", "content": "data"}
+)
 ```
 
 **Key Features**:
-- 100% backward compatible (tool support is optional)
-- Automatic ToolExecutor creation when `tool_registry` provided
+- MCP auto-connect to kaizen_builtin server (12 tools)
+- Custom MCP servers via `mcp_servers` parameter
 - Control Protocol integration for approval workflows
-- Universal integration across all 25 agents (ADR-016)
+- Universal MCP integration across all 25 agents
 
 **Reference**: `docs/features/baseagent-tool-integration.md`, ADR-012, ADR-016, `examples/autonomy/tools/`
 
@@ -284,66 +287,233 @@ pre_agent_loop (root span)
 
 **Production-Ready Systems** for agent lifecycle management, state persistence, and execution control.
 
-#### Hook System
+#### Hooks System (Zero-Code-Change Observability)
 
-**What**: Event-driven architecture for agent lifecycle monitoring and extension
-**When**: Need to instrument, log, audit, or extend agent behavior without modifying core logic
-**How**: Register hooks that execute on lifecycle events (PRE/POST patterns)
+**What**: Lifecycle event framework for zero-code-change integration of cross-cutting concerns like monitoring, tracing, auditing, and metrics collection. Enables instrumentation without modifying agent logic.
+
+**When**: Need to monitor, audit, debug, enforce policies, or collect analytics without changing agent code.
+
+**How**: Register hooks that execute on lifecycle events (PRE/POST patterns). Pass `hook_manager` parameter to BaseAgent.
+
+**Key Benefits**:
+- ✅ **Zero code changes** - Add observability without modifying agent logic
+- ✅ **Composable** - Mix and match multiple hooks
+- ✅ **Production-ready** - Enterprise features (tracing, metrics, auditing)
+- ✅ **High performance** - <0.01ms overhead (p95), <0.56KB memory per hook
+- ✅ **100+ concurrent hooks** - Performance validated
+
+#### Hook Events
+
+| Event | When Triggered | Use Case |
+|-------|----------------|----------|
+| `PRE_AGENT_LOOP` | Before agent processes request | Input validation, tracing start |
+| `POST_AGENT_LOOP` | After agent completes | Metrics collection, tracing end |
+| `PRE_TOOL_USE` | Before agent calls a tool | Tool usage auditing |
+| `POST_TOOL_USE` | After tool execution | Tool performance tracking |
+
+#### Basic Hook Usage
 
 ```python
-from kaizen.core.autonomy.hooks import HookManager, HookEvent
-from kaizen.core.autonomy.hooks.builtin import LoggingHook, MetricsHook
+from kaizen.core.base_agent import BaseAgent
+from kaizen.core.autonomy.hooks.manager import HookManager
+from kaizen.core.autonomy.hooks.types import (
+    HookEvent,
+    HookContext,
+    HookResult,
+    HookPriority,
+)
 
-# Every BaseAgent has a hook manager
-hook_manager = agent._hook_manager
+# 1. Create hook function
+async def my_hook(context: HookContext) -> HookResult:
+    print(f"Agent {context.agent_id} is executing!")
+    return HookResult(success=True)
 
-# Use builtin hooks
-logging_hook = LoggingHook(log_level="INFO")
-metrics_hook = MetricsHook()
+# 2. Register hook
+hook_manager = HookManager()
+hook_manager.register(
+    HookEvent.PRE_AGENT_LOOP,
+    my_hook,
+    HookPriority.NORMAL
+)
 
-# Register hooks
-hook_manager.register_hook(logging_hook)  # Auto-registers for all supported events
-hook_manager.register(HookEvent.PRE_TOOL_USE, custom_hook)  # Specific event
+# 3. Attach to agent
+agent = BaseAgent(
+    config=my_config,
+    signature=my_signature,
+    hook_manager=hook_manager  # ← Hooks enabled
+)
 
-# Available events
-# - PRE_AGENT_LOOP / POST_AGENT_LOOP: Agent lifecycle
-# - PRE_TOOL_USE / POST_TOOL_USE: Tool executions
-# - PRE_LLM_CALL / POST_LLM_CALL: LLM API calls
-# - PRE_MEMORY_READ / POST_MEMORY_READ: Memory operations
+# 4. Run agent (hooks execute automatically)
+result = agent.run(question="What is AI?")
 ```
 
-**Builtin Hooks**:
-- `LoggingHook`: JSON-formatted logging
-- `MetricsHook`: Prometheus metrics collection
-- `CostTrackingHook`: Token usage and cost monitoring
-- `PerformanceProfilerHook`: Execution timing and profiling
-- `AuditHook`: Immutable audit trails
-- `TracingHook`: Distributed tracing (integrates with observability)
+#### Production Hook Examples
 
-**Custom Hooks**:
+**Distributed Tracing (OpenTelemetry)**:
 ```python
-from kaizen.core.autonomy.hooks import BaseHook, HookContext, HookResult
+class DistributedTracingHook:
+    """Integrate OpenTelemetry tracing."""
 
-class ValidationHook(BaseHook):
-    def supported_events(self) -> list[HookEvent]:
-        return [HookEvent.PRE_TOOL_USE]
+    def __init__(self, service_name: str):
+        self.service_name = service_name
+        self.active_spans = {}
+
+    async def start_span(self, context: HookContext) -> HookResult:
+        from opentelemetry import trace
+        tracer = trace.get_tracer(self.service_name)
+        span = tracer.start_span(f"agent.{context.agent_id}.loop")
+        self.active_spans[context.trace_id] = span
+        return HookResult(success=True, data={"span_started": True})
+
+    async def end_span(self, context: HookContext) -> HookResult:
+        span = self.active_spans.pop(context.trace_id)
+        span.set_attribute("agent.id", context.agent_id)
+        span.end()
+        return HookResult(success=True, data={"span_ended": True})
+
+# Usage
+tracing_hook = DistributedTracingHook("my-agent-service")
+hook_manager.register(HookEvent.PRE_AGENT_LOOP, tracing_hook.start_span, HookPriority.HIGH)
+hook_manager.register(HookEvent.POST_AGENT_LOOP, tracing_hook.end_span, HookPriority.HIGH)
+```
+
+**Prometheus Metrics**:
+```python
+class PrometheusMetricsHook:
+    """Collect Prometheus metrics."""
+
+    def __init__(self):
+        from prometheus_client import Counter, Histogram
+
+        self.loop_duration = Histogram(
+            'agent_loop_duration_seconds',
+            'Agent loop duration',
+            ['agent_id']
+        )
+        self.loop_total = Counter(
+            'agent_loop_total',
+            'Total agent loops',
+            ['agent_id']
+        )
+        self.loop_start_times = {}
+
+    async def record_start(self, context: HookContext) -> HookResult:
+        import time
+        self.loop_start_times[context.trace_id] = time.time()
+        self.loop_total.labels(agent_id=context.agent_id).inc()
+        return HookResult(success=True)
+
+    async def record_end(self, context: HookContext) -> HookResult:
+        import time
+        duration = time.time() - self.loop_start_times.pop(context.trace_id)
+        self.loop_duration.labels(agent_id=context.agent_id).observe(duration)
+        return HookResult(success=True, data={"duration": duration})
+
+# Usage
+metrics_hook = PrometheusMetricsHook()
+hook_manager.register(HookEvent.PRE_AGENT_LOOP, metrics_hook.record_start)
+hook_manager.register(HookEvent.POST_AGENT_LOOP, metrics_hook.record_end)
+```
+
+**Audit Trail (Compliance - SOC2/GDPR/HIPAA)**:
+```python
+class AuditTrailHook:
+    """Immutable audit trail for compliance."""
+
+    def __init__(self, audit_log_path: Path):
+        self.audit_log_path = audit_log_path
+        self.loop_start_times = {}
+
+    async def record_start(self, context: HookContext) -> HookResult:
+        import time
+        self.loop_start_times[context.trace_id] = time.time()
+
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "event_type": "AGENT_LOOP_START",
+            "agent_id": context.agent_id,
+            "trace_id": context.trace_id,
+            "action": "agent_execution_start",
+            "inputs": context.data.get("inputs", {}),
+        }
+
+        # Append-only (immutable)
+        with open(self.audit_log_path, "a") as f:
+            json.dump(entry, f)
+            f.write("\n")
+
+        return HookResult(success=True, data={"audit_recorded": True})
+
+# Usage
+audit_hook = AuditTrailHook(Path("/var/log/kaizen/audit.jsonl"))
+hook_manager.register(HookEvent.PRE_AGENT_LOOP, audit_hook.record_start, HookPriority.HIGHEST)
+hook_manager.register(HookEvent.POST_AGENT_LOOP, audit_hook.record_end, HookPriority.HIGHEST)
+```
+
+#### Custom Hook Classes
+
+Create reusable hook classes with `BaseHook`:
+
+```python
+from kaizen.core.autonomy.hooks.protocol import BaseHook
+
+class LoggingHook(BaseHook):
+    """Reusable logging hook."""
+
+    events = [HookEvent.PRE_AGENT_LOOP, HookEvent.POST_AGENT_LOOP]
+    priority = HookPriority.NORMAL
+
+    def __init__(self, logger_name: str):
+        super().__init__(name="logging_hook")
+        self.logger = logging.getLogger(logger_name)
 
     async def handle(self, context: HookContext) -> HookResult:
-        # Validate tool parameters
-        if context.data.get("tool_name") == "delete_file":
-            if not context.data["params"]["path"].startswith("/tmp/"):
-                return HookResult(
-                    success=False,
-                    error="delete_file only allowed in /tmp/"
-                )
+        if context.event_type == HookEvent.PRE_AGENT_LOOP:
+            self.logger.info(f"Agent {context.agent_id} starting")
+        else:
+            self.logger.info(f"Agent {context.agent_id} completed")
+
         return HookResult(success=True)
+
+# Usage (register for all events automatically)
+logging_hook = LoggingHook("my_agent")
+hook_manager.register_hook(logging_hook)  # ← Registers for both events
 ```
 
-**Key Patterns**:
-- PRE hooks can block execution by returning `success=False`
-- POST hooks receive execution results in `context.data`
-- Hook execution is async-first
-- Hooks run in registration order
+#### Hook Priority
+
+Controls execution order when multiple hooks exist for the same event:
+
+- `HIGHEST = 0` - Runs first (e.g., audit trails, authentication)
+- `HIGH = 1` - Security, compliance hooks
+- `NORMAL = 2` - Default priority
+- `LOW = 3` - Cleanup, optional logging
+- `LOWEST = 4` - Runs last
+
+#### Performance Characteristics
+
+The Hooks System is designed for production use with minimal overhead:
+
+| Metric | Target | Actual | Status |
+|--------|--------|--------|--------|
+| Hook execution overhead (p95) | <5ms | 0.008ms | ✅ **625x better** |
+| Registration overhead | <1ms | 0.038ms | ✅ **26x better** |
+| Stats tracking overhead | <0.1ms | ~0ms | ✅ Negligible |
+| Concurrent hooks supported | >50 | 100+ | ✅ Validated |
+| Memory per hook | <100KB | 0.56KB | ✅ **178x better** |
+
+**Performance validated**: 8 performance benchmarks in `tests/performance/test_hooks_performance.py`
+
+#### Key Patterns
+
+- **PRE hooks** can block execution by returning `success=False`
+- **POST hooks** receive execution results in `context.data`
+- **Hook execution** is async-first
+- **Hooks run** in priority order (HIGHEST → LOWEST)
+- **Error isolation** - One hook's failure doesn't affect others
+- **Timeout protection** - Default 5s timeout per hook
+
+**Reference**: `docs/features/hooks-system.md`, `examples/autonomy/hooks/`, `tests/unit/core/autonomy/hooks/`
 
 #### State Management
 
@@ -392,6 +562,80 @@ await state_manager.restore_checkpoint(checkpoint_id)
 - Result caching across sessions
 - A/B testing (checkpoint, try variant, restore)
 - Audit trails (track all state mutations)
+
+#### Checkpoint & Resume System
+
+**What**: Automatic checkpointing and resume for autonomous agents
+**When**: Need long-running agents to recover from failures or interruptions
+**How**: Configure automatic checkpointing with optional compression and retention policies
+
+```python
+from kaizen.agents.autonomous.base import BaseAutonomousAgent, AutonomousConfig
+from kaizen.core.autonomy.state.storage import FilesystemStorage
+from kaizen.core.autonomy.state.manager import StateManager
+from kaizen.signatures import Signature, InputField, OutputField
+
+class TaskSignature(Signature):
+    task: str = InputField(description="Task to perform")
+    result: str = OutputField(description="Result")
+
+# Configure with automatic checkpointing
+config = AutonomousConfig(
+    max_cycles=10,
+    checkpoint_frequency=5,  # Save every 5 steps
+    resume_from_checkpoint=True,  # Resume on restart
+    llm_provider="ollama",
+    model="llama3.2",
+)
+
+# Create agent with state manager
+storage = FilesystemStorage(
+    base_dir=".kaizen/checkpoints",
+    compress=True  # Enable gzip compression (>50% size reduction)
+)
+state_manager = StateManager(
+    storage=storage,
+    checkpoint_frequency=5,
+    retention_count=10  # Keep only latest 10 checkpoints
+)
+
+agent = BaseAutonomousAgent(
+    config=config,
+    signature=TaskSignature(),
+    state_manager=state_manager,
+)
+
+# Run with automatic checkpointing and resume
+result = await agent._autonomous_loop("Perform a complex task")
+```
+
+**Features**:
+- **Automatic Checkpointing**: Save state every N steps or M seconds
+- **Seamless Resume**: Continue execution from last checkpoint
+- **JSONL Compression**: Reduce checkpoint size by >50% with gzip
+- **Retention Policy**: Automatically clean up old checkpoints
+- **Hook Integration**: PRE/POST checkpoint hooks (PRE_CHECKPOINT_SAVE, POST_CHECKPOINT_SAVE)
+- **Error Recovery**: Resume after failures or interruptions
+- **Zero Configuration**: Works out-of-the-box with sensible defaults
+
+**Checkpoint Triggers**:
+- Frequency-based: `checkpoint_frequency=5` (every 5 steps)
+- Interval-based: `checkpoint_interval_seconds=30.0` (every 30 seconds)
+- Hybrid (OR logic): Both triggers active simultaneously
+
+**Storage Optimization**:
+- Compression: Enable with `compress=True` (>50% size reduction, <10ms overhead)
+- Retention: Keep latest N checkpoints with `retention_count=10`
+- Auto-cleanup: Oldest checkpoints deleted automatically
+
+**Use Cases**:
+- Long-running autonomous agents (30+ hour sessions)
+- Resume after system failures or interruptions
+- Development testing with quick iteration cycles
+- Production agents with automatic recovery
+- Cost optimization by avoiding repeated work
+
+**Reference**: `docs/features/checkpoint-resume-system.md`, `src/kaizen/agents/autonomous/base.py:192` (state capture/restore), `tests/unit/agents/autonomous/test_auto_checkpoint.py` (114 tests passing)
 
 #### Interrupt System
 
@@ -521,9 +765,7 @@ class ProductionAgent(BaseAgent):
 
 ### Permission System (Enterprise Security & Governance)
 
-**Production-Ready Framework** for fine-grained agent permission control, budget enforcement, and security policies.
-
-**Status**: Foundation complete (Week 1/10) - ExecutionContext, PermissionRule, PermissionType ready for use
+**Fine-grained agent permission control, budget enforcement, and security policies.**
 
 **What**: Policy-based permission management for tool usage, API calls, and resource access
 **When**: Need to enforce security policies, budget limits, or regulatory compliance for agent actions
@@ -857,19 +1099,6 @@ expensive_rule = TimeBasedPermissionRule(
 - **Cost Control**: Prevent budget overruns on expensive APIs
 - **Regulatory Compliance**: Audit trail for all agent actions
 - **Development vs Production**: Different permission profiles per environment
-
-#### Roadmap (Coming Soon)
-
-Week 1 ✅ **COMPLETE**: Foundation (ExecutionContext, PermissionRule, PermissionType)
-
-**Upcoming Features** (Weeks 2-10):
-- Week 2: `PermissionPolicy` (aggregate multiple rules)
-- Week 3: `ToolApprovalManager` (interactive approval workflows)
-- Week 4-5: `BudgetEnforcer` (cost tracking and limits)
-- Week 6: `PermissionAuditLogger` (compliance audit trails)
-- Week 7-8: Integration with BaseAgent (seamless permission enforcement)
-- Week 9: `RoleBasedPermissions` (RBAC support)
-- Week 10: Production validation and documentation
 
 **Reference**: `src/kaizen/core/autonomy/permissions/`, `tests/unit/core/autonomy/permissions/`, ADR-019 (Permission System)
 
@@ -1502,7 +1731,7 @@ chunks = agent.extract_for_rag(image="document.jpg", chunk_size=512)
 - Tool calling OPTIONAL (enhancement)
 - Includes: SimpleQA, ChainOfThought, Streaming, Vision, Transcription, Coordination patterns
 
-**Universal Tool Support**: ALL 25 agents support `tool_registry` parameter (100% backward compatible, opt-in)
+**Universal MCP Support**: ALL 25 agents support MCP auto-connect with 12 builtin tools (100% backward compatible)
 
 **Reference**: `src/kaizen/agents/`, `docs/guides/agent-selection-guide.md`, ADR-016
 
@@ -1691,8 +1920,8 @@ def test_qa_agent(simple_qa_example, assert_async_strategy, test_queries):
 - ✅ Let AsyncSingleShotStrategy be default (don't specify)
 - ✅ Call `self.run()` (sync interface), not `strategy.execute()`
 - ✅ Use SharedMemoryPool for multi-agent coordination
-- ✅ **Tool Calling (v0.2.0)**: Enable via `tool_registry` parameter (opt-in, all 25 agents support it)
-- ✅ **MCP Integration (v0.2.0)**: Use `mcp_servers` parameter for MCP server integration
+- ✅ **Tool Calling (v0.2.0+)**: MCP auto-connect provides 12 builtin tools automatically, use `mcp_servers` parameter for custom MCP servers
+- ✅ **MCP Integration (v0.2.0+)**: ALL agents auto-connect to kaizen_builtin MCP server with 12 tools, add custom servers via `mcp_servers` parameter
 - ✅ **Control Protocol (v0.2.0)**: Use `control_protocol` parameter for bidirectional communication
 - ✅ **Observability (v0.5.0)**: Enable via `agent.enable_observability()` when needed (opt-in, zero overhead when disabled)
 - ✅ **Hooks (v0.5.0)**: Use `agent._hook_manager` to register hooks for lifecycle events
