@@ -16,7 +16,7 @@ def test_postgres_connection():
 
 # ✅ DO THIS INSTEAD
 def test_redis_operations():
-    # Test will fail immediately if Redis is not available
+    """Test will fail immediately if Redis is not available."""
     redis_client = redis.Redis(host='localhost', port=6380)
     redis_client.ping()  # Fails fast with clear error
 ```
@@ -30,9 +30,9 @@ from unittest.mock import patch
 def test_api_integration(mock_get):
     mock_get.return_value.status_code = 200
 
-# ✅ DO THIS INSTEAD
+# ✅ DO THIS INSTEAD - Use real Docker services
 def test_api_integration():
-    # Use real Docker mock-api service
+    """Use real Docker mock-api service."""
     response = requests.get('http://localhost:8888/v1/users')
     assert response.status_code == 200
 ```
@@ -40,9 +40,9 @@ def test_api_integration():
 ### 3. Proper Test Organization
 ```
 tests/
-├── unit/           # Fast, isolated, mocking allowed
-├── integration/    # Real services, no mocking
-└── e2e/           # Full scenarios, real infrastructure
+├── unit/           # Fast, isolated, mocking allowed, LocalRuntime
+├── integration/    # Real Docker services, NO MOCKING, LocalRuntime/AsyncLocalRuntime
+└── e2e/           # Full scenarios, real infrastructure, AsyncLocalRuntime
 ```
 
 ## Docker Service Usage
@@ -58,38 +58,57 @@ tests/
 ### Using Docker Services in Tests
 
 ```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime import LocalRuntime
 from tests.utils.docker_config import (
     get_postgres_connection_string,
     get_redis_url,
     OLLAMA_CONFIG,
     MOCK_API_CONFIG
 )
+import pytest
 
 class TestWithRealServices:
+    @pytest.mark.requires_docker
     def test_postgres_operations(self):
-        # Real PostgreSQL connection
+        """Test with real PostgreSQL - NO MOCKING."""
         conn_string = get_postgres_connection_string()
+
         workflow = WorkflowBuilder()
         workflow.add_node("SQLDatabaseNode", "db_node", {
             "connection_string": conn_string,
-            "query": "SELECT 1",
+            "query": "SELECT 1 as value",
             "operation": "select"
         })
+
         runtime = LocalRuntime()
         results, run_id = runtime.execute(workflow.build())
-        assert results['db_node']['success']
 
+        assert results['db_node']['success']
+        assert len(results['db_node']['data']) > 0
+
+    @pytest.mark.requires_docker
     def test_redis_caching(self):
-        # Real Redis connection
+        """Test with real Redis - NO MOCKING."""
         redis_url = get_redis_url()
         redis_client = redis.from_url(redis_url)
-        redis_client.set('key', 'value')
-        assert redis_client.get('key') == b'value'
 
+        redis_client.set('test_key', 'test_value')
+        assert redis_client.get('test_key') == b'test_value'
+
+    @pytest.mark.requires_docker
     def test_api_integration(self):
-        # Real HTTP calls to mock API
-        response = requests.get(f"{MOCK_API_CONFIG['base_url']}/v1/users")
-        assert response.status_code == 200
+        """Test with real mock-api Docker service - NO MOCKING."""
+        workflow = WorkflowBuilder()
+        workflow.add_node("HTTPRequestNode", "api", {
+            "url": f"{MOCK_API_CONFIG['base_url']}/v1/users",
+            "method": "GET"
+        })
+
+        runtime = LocalRuntime()
+        results, run_id = runtime.execute(workflow.build())
+
+        assert results["api"]["status_code"] == 200
 ```
 
 ## Common Patterns
@@ -108,32 +127,65 @@ def test_requires_postgres():
     # Test continues only if connection succeeds
 ```
 
-### 2. Using WorkflowBuilder Correctly
+### 2. Runtime Selection
 ```python
-# ✅ Correct usage
+from kailash.runtime import LocalRuntime, AsyncLocalRuntime
+import pytest
+
+# ✅ Correct - LocalRuntime for sync tests
+def test_sync_workflow():
+    """Unit/integration test with LocalRuntime."""
+    workflow = WorkflowBuilder()
+    workflow.add_node("PythonCodeNode", "node", {"code": "result = 42"})
+
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(workflow.build())
+
+    assert results["node"]["result"] == 42
+
+# ✅ Correct - AsyncLocalRuntime for async tests
+@pytest.mark.asyncio
+async def test_async_workflow():
+    """E2E test with AsyncLocalRuntime."""
+    workflow = WorkflowBuilder()
+    workflow.add_node("PythonCodeNode", "node", {"code": "result = 42"})
+
+    runtime = AsyncLocalRuntime()
+    results = await runtime.execute_workflow_async(workflow.build(), inputs={})
+
+    assert results["node"]["result"] == 42
+```
+
+### 3. Testing Both Runtimes
+```python
+import asyncio
+
+@pytest.mark.parametrize("runtime_class", [LocalRuntime, AsyncLocalRuntime])
+def test_workflow_with_both_runtimes(runtime_class):
+    """Test workflow works with both sync and async runtimes."""
+    workflow = WorkflowBuilder()
+    workflow.add_node("PythonCodeNode", "node", {"code": "result = 100"})
+
+    runtime = runtime_class()
+
+    if isinstance(runtime, AsyncLocalRuntime):
+        results = asyncio.run(runtime.execute_workflow_async(workflow.build(), inputs={}))
+    else:
+        results, run_id = runtime.execute(workflow.build())
+
+    assert results["node"]["result"] == 100
+```
+
+### 4. Proper Node Usage
+```python
+# ✅ Correct - String-based API with LocalRuntime
 workflow = WorkflowBuilder()
-workflow.add_node("NodeType", "node_id", {})
-
-# ❌ Old deprecated way
-# AsyncWorkflowBuilder is deprecated - use WorkflowBuilder with LocalRuntime
-```
-
-### 3. Using CycleBuilder API
-```python
-# ✅ New CycleBuilder API
-cycle_builder = workflow.create_cycle("my_cycle")
-cycle_builder.connect("node1", "output", "node2", "input")
-    .max_iterations(5)
-    .converge_when("condition == True")
-    .build()
-```
-
-### 4. Proper Node Initialization
-```python
-# ✅ Correct - String-based API
 workflow.add_node("PythonCodeNode", "processor", {
-    "code": code
+    "code": "result = {'status': 'completed'}"
 })
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
 
 # ❌ Wrong - Instance-based API
 # Never create node instances directly

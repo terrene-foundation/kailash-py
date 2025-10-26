@@ -46,7 +46,13 @@ import networkx as nx
 import psutil
 
 from kailash.nodes import Node
+from kailash.runtime.base import BaseRuntime
 from kailash.runtime.compatibility_reporter import CompatibilityReporter
+from kailash.runtime.mixins import (
+    ConditionalExecutionMixin,
+    CycleExecutionMixin,
+    ValidationMixin,
+)
 from kailash.runtime.parameter_injector import WorkflowParameterInjector
 from kailash.runtime.performance_monitor import ExecutionMetrics, PerformanceMonitor
 from kailash.runtime.secret_provider import EnvironmentSecretProvider, SecretProvider
@@ -171,12 +177,20 @@ def _get_execution_planner():
     return _DynamicExecutionPlanner
 
 
-class LocalRuntime:
+class LocalRuntime(
+    BaseRuntime, CycleExecutionMixin, ValidationMixin, ConditionalExecutionMixin
+):
     """Unified runtime with enterprise capabilities.
 
     This class provides a comprehensive, production-ready execution engine that
     seamlessly handles both traditional workflows and advanced cyclic patterns,
     with full enterprise feature integration through composable nodes.
+
+    Inherits from:
+        BaseRuntime: Provides core runtime foundation and configuration
+        CycleExecutionMixin: Provides shared cycle execution delegation
+        ValidationMixin: Provides workflow validation and contract checking
+        ConditionalExecutionMixin: Provides conditional execution and branching logic
 
     Enterprise Features (Composably Integrated):
     - Access control via existing AccessControlManager and security nodes
@@ -243,83 +257,35 @@ class LocalRuntime:
             max_concurrent_workflows: Maximum number of concurrent workflows in persistent mode.
             connection_pool_size: Default size for connection pools.
         """
-        # Validate connection_validation parameter
-        valid_conn_modes = {"off", "warn", "strict"}
-        if connection_validation not in valid_conn_modes:
-            raise ValueError(
-                f"Invalid connection_validation mode: {connection_validation}. "
-                f"Must be one of: {valid_conn_modes}"
-            )
+        # Initialize parent classes (BaseRuntime + CycleExecutionMixin)
+        # Pass ALL configuration to BaseRuntime for unified initialization
+        super().__init__(
+            debug=debug,
+            enable_cycles=enable_cycles,
+            enable_async=enable_async,
+            max_concurrency=max_concurrency,
+            user_context=user_context,
+            enable_monitoring=enable_monitoring,
+            enable_security=enable_security,
+            enable_audit=enable_audit,
+            resource_limits=resource_limits,
+            secret_provider=secret_provider,
+            connection_validation=connection_validation,
+            conditional_execution=conditional_execution,
+            content_aware_success_detection=content_aware_success_detection,
+            persistent_mode=persistent_mode,
+            enable_connection_sharing=enable_connection_sharing,
+            max_concurrent_workflows=max_concurrent_workflows,
+            connection_pool_size=connection_pool_size,
+            enable_enterprise_monitoring=enable_enterprise_monitoring,
+            enable_health_monitoring=enable_health_monitoring,
+            enable_resource_coordination=enable_resource_coordination,
+            circuit_breaker_config=circuit_breaker_config,
+            retry_policy_config=retry_policy_config,
+            connection_pool_config=connection_pool_config,
+        )
 
-        # Validate conditional_execution parameter
-        valid_exec_modes = {"route_data", "skip_branches"}
-        if conditional_execution not in valid_exec_modes:
-            raise ValueError(
-                f"Invalid conditional_execution mode: {conditional_execution}. "
-                f"Must be one of: {valid_exec_modes}"
-            )
-
-        # Validate persistent mode parameters
-        if max_concurrent_workflows < 0:
-            max_concurrent_workflows = 10  # Set to reasonable default
-        if connection_pool_size < 0:
-            connection_pool_size = 20  # Set to reasonable default
-
-        # Validate resource limits
-        if resource_limits:
-            for key, value in resource_limits.items():
-                if isinstance(value, (int, float)) and value < 0:
-                    raise ValueError(
-                        f"Resource limit '{key}' cannot be negative: {value}"
-                    )
-
-        self.debug = debug
-        self.enable_cycles = enable_cycles
-        self.enable_async = enable_async
-        self.max_concurrency = max_concurrency
-        self.user_context = user_context
-        self.secret_provider = secret_provider
-        self.enable_monitoring = enable_monitoring
-        self.enable_security = enable_security
-        self.enable_audit = enable_audit
-        self.resource_limits = resource_limits or {}
-        self._resource_limits = self.resource_limits  # Alias for test compatibility
-        self.connection_validation = connection_validation
-        self.conditional_execution = conditional_execution
-        self.content_aware_success_detection = content_aware_success_detection
-        self.logger = logger
-
-        # Enhanced persistent mode attributes
-        self._persistent_mode = persistent_mode
-        self._enable_connection_sharing = enable_connection_sharing
-        self._max_concurrent_workflows = max_concurrent_workflows
-        self._connection_pool_size = connection_pool_size
-
-        # Enterprise configuration
-        self._enable_enterprise_monitoring = enable_enterprise_monitoring
-        self._enable_health_monitoring = enable_health_monitoring
-        self._enable_resource_coordination = enable_resource_coordination
-        self._circuit_breaker_config = circuit_breaker_config or {}
-        self._retry_policy_config = retry_policy_config or {}
-        self._connection_pool_config = connection_pool_config or {}
-
-        # Persistent mode state management
-        self._is_persistent_started = False
-        self._persistent_event_loop = None
-        self._active_workflows = {}
-        self._runtime_id = f"runtime_{id(self)}_{int(time.time())}"
-
-        # Initialize resource coordination components (lazy initialization)
-        self._resource_coordinator = None
-        self._pool_coordinator = None
-        self._resource_monitor = None
-        self._runtime_monitor = None
-        self._health_monitor = None
-        self._metrics_collector = None
-        self._audit_logger = None
-        self._resource_enforcer = None
-        self._lifecycle_manager = None
-
+        # LocalRuntime-specific initialization (not in BaseRuntime)
         # Automatically initialize resource limit enforcer with sensible defaults
         # if any enterprise features are enabled or in persistent mode
         auto_enable_resources = (
@@ -954,29 +920,12 @@ class LocalRuntime:
                     self.logger.warning(f"Failed to create task run: {e}")
                     # Continue without tracking
 
-            # Check for cyclic workflows and delegate accordingly
+            # Check for cyclic workflows and delegate to CycleExecutionMixin
             if self.enable_cycles and workflow.has_cycles():
-                self.logger.info(
-                    "Cyclic workflow detected, using CyclicWorkflowExecutor"
+                # Delegate to CycleExecutionMixin (Phase 3 integration)
+                results, run_id = self._execute_cyclic_workflow(
+                    workflow, processed_parameters, task_manager, run_id
                 )
-                # Use cyclic executor for workflows with cycles
-                try:
-                    # Pass run_id and runtime instance to cyclic executor for enterprise features
-                    cyclic_results, cyclic_run_id = self.cyclic_executor.execute(
-                        workflow,
-                        processed_parameters,
-                        task_manager,
-                        run_id,
-                        runtime=self,
-                    )
-                    results = cyclic_results
-                    # Update run_id if task manager is being used
-                    if not run_id:
-                        run_id = cyclic_run_id
-                except Exception as e:
-                    raise RuntimeExecutionError(
-                        f"Cyclic workflow execution failed: {e}"
-                    ) from e
             elif (
                 self.conditional_execution == "skip_branches"
                 and self._has_conditional_patterns(workflow)
@@ -1293,7 +1242,7 @@ class LocalRuntime:
                     node_id=node_id,
                     node_instance=node_instance,
                     node_outputs=node_outputs,
-                    parameters=parameters.get(node_id, {}),
+                    parameters=parameters,  # Pass full dict - filtering happens inside
                 )
 
                 # CRITICAL FIX: DO NOT modify node_instance.config with runtime parameters!
@@ -1302,15 +1251,8 @@ class LocalRuntime:
                 # Runtime parameters are already properly merged in inputs and passed to execute().
                 # Bug report: PythonCodeNode Variable Persistence (P0)
 
-                # ENTERPRISE PARAMETER INJECTION FIX: Injected parameters should override connection inputs
-                # This ensures workflow parameters take precedence over connection inputs for the same parameter names
-                injected_params = parameters.get(node_id, {})
-                if injected_params:
-                    inputs.update(injected_params)
-                    if self.debug:
-                        self.logger.debug(
-                            f"Applied parameter injections for {node_id}: {list(injected_params.keys())}"
-                        )
+                # Parameter filtering now handled inside _prepare_node_inputs() to prevent
+                # cross-node parameter leaks while maintaining proper scoping
 
                 if self.debug:
                     self.logger.debug(f"Node {node_id} inputs: {inputs}")
@@ -1664,8 +1606,40 @@ class LocalRuntime:
                         f"  No outputs found for source node {source_node_id}"
                     )
 
-        # Apply parameter overrides
-        inputs.update(parameters)
+        # Apply parameter overrides with proper scoping
+        #
+        # After _process_workflow_parameters(), parameters are in node-specific format:
+        # {"node_id": {node_params}, ...}
+        #
+        # For backward compatibility, we apply parameter entries based on node relevance:
+        # - If node_id in parameters: Unwrap and include its specific params
+        # - Also include any non-node-ID keys (workflow-level params)
+        #
+        # This prevents node-specific parameters from leaking across nodes while
+        # maintaining the format nodes expect.
+
+        if parameters:
+            node_ids_in_graph = (
+                set(workflow.graph.nodes()) if hasattr(workflow, "graph") else set()
+            )
+
+            # Build filtered parameters for this node
+            filtered_params = {}
+            for key, value in parameters.items():
+                if key == node_id:
+                    # This node's specific parameters - unwrap the dict
+                    if isinstance(value, dict):
+                        filtered_params.update(value)
+                    else:
+                        # Shouldn't happen, but be defensive
+                        filtered_params[key] = value
+                elif key not in node_ids_in_graph:
+                    # Global parameter (not a node ID) - include directly
+                    filtered_params[key] = value
+                # else: key is another node's ID - skip it
+
+            # Apply the filtered parameters
+            inputs.update(filtered_params)
 
         # Connection parameter validation (TODO-121) with enhanced error messages and metrics
         if self.connection_validation != "off":
@@ -2050,73 +2024,6 @@ class LocalRuntime:
         # For now, stop if the failed node has dependents
         # Future: implement configurable error handling policies
         return has_dependents
-
-    def validate_workflow(self, workflow: Workflow) -> list[str]:
-        """Validate a workflow before execution.
-
-        Args:
-            workflow: Workflow to validate
-
-        Returns:
-            List of validation warnings (empty if valid)
-
-        Raises:
-            WorkflowValidationError: If workflow is invalid
-        """
-        warnings = []
-
-        try:
-            workflow.validate()
-        except WorkflowValidationError:
-            # Re-raise validation errors
-            raise
-        except Exception as e:
-            raise WorkflowValidationError(f"Workflow validation failed: {e}") from e
-
-        # Check for disconnected nodes
-        for node_id in workflow.graph.nodes():
-            if (
-                workflow.graph.in_degree(node_id) == 0
-                and workflow.graph.out_degree(node_id) == 0
-                and len(workflow.graph.nodes()) > 1
-            ):
-                warnings.append(f"Node '{node_id}' is disconnected from the workflow")
-
-        # Check for missing required parameters
-        for node_id, node_instance in workflow._node_instances.items():
-            try:
-                params = node_instance.get_parameters()
-            except Exception as e:
-                warnings.append(f"Failed to get parameters for node '{node_id}': {e}")
-                continue
-
-            for param_name, param_def in params.items():
-                if param_def.required:
-                    # Check if provided in config or connected
-                    if param_name not in node_instance.config:
-                        # Check if connected from another node
-                        incoming_params = set()
-                        for _, _, data in workflow.graph.in_edges(node_id, data=True):
-                            mapping = data.get("mapping", {})
-                            incoming_params.update(mapping.values())
-
-                        if (
-                            param_name not in incoming_params
-                            and param_def.default is None
-                        ):
-                            warnings.append(
-                                f"Node '{node_id}' missing required parameter '{param_name}' "
-                                f"(no default value provided)"
-                            )
-
-        # Check for potential performance issues
-        if len(workflow.graph.nodes()) > 100:
-            warnings.append(
-                f"Large workflow with {len(workflow.graph.nodes())} nodes "
-                f"may have performance implications"
-            )
-
-        return warnings
 
     # Enterprise Feature Helper Methods
 
@@ -2622,166 +2529,6 @@ class LocalRuntime:
         # Default to workflow-level format
         return False
 
-    def _validate_connection_contracts(
-        self,
-        workflow: Workflow,
-        target_node_id: str,
-        target_inputs: dict[str, Any],
-        node_outputs: dict[str, dict[str, Any]],
-    ) -> list[dict[str, str]]:
-        """
-        Validate connection contracts for a target node.
-
-        Args:
-            workflow: The workflow being executed
-            target_node_id: ID of the target node
-            target_inputs: Inputs being passed to the target node
-            node_outputs: Outputs from all previously executed nodes
-
-        Returns:
-            List of contract violations (empty if all valid)
-        """
-        violations = []
-
-        # Get connection contracts from workflow metadata
-        connection_contracts = workflow.metadata.get("connection_contracts", {})
-        if not connection_contracts:
-            return violations  # No contracts to validate
-
-        # Create contract validator
-        validator = ContractValidator()
-
-        # Find all connections targeting this node
-        for connection in workflow.connections:
-            if connection.target_node == target_node_id:
-                connection_id = f"{connection.source_node}.{connection.source_output} → {connection.target_node}.{connection.target_input}"
-
-                # Check if this connection has a contract
-                if connection_id in connection_contracts:
-                    contract_dict = connection_contracts[connection_id]
-
-                    # Reconstruct contract from dictionary
-                    contract = ConnectionContract.from_dict(contract_dict)
-
-                    # Get source data from node outputs
-                    source_data = None
-                    if connection.source_node in node_outputs:
-                        source_outputs = node_outputs[connection.source_node]
-                        if connection.source_output in source_outputs:
-                            source_data = source_outputs[connection.source_output]
-
-                    # Get target data from inputs
-                    target_data = target_inputs.get(connection.target_input)
-
-                    # Validate the connection if we have data
-                    if source_data is not None or target_data is not None:
-                        is_valid, errors = validator.validate_connection(
-                            contract, source_data, target_data
-                        )
-
-                        if not is_valid:
-                            violations.append(
-                                {
-                                    "connection": connection_id,
-                                    "contract": contract.name,
-                                    "error": "; ".join(errors),
-                                }
-                            )
-
-        return violations
-
-    def _has_conditional_patterns(self, workflow: Workflow) -> bool:
-        """
-        Check if workflow has conditional patterns (SwitchNodes) and is suitable for conditional execution.
-
-        CRITICAL: Only enable conditional execution for DAG workflows.
-        Cyclic workflows must use normal execution to preserve cycle safety mechanisms.
-
-        Args:
-            workflow: Workflow to check
-
-        Returns:
-            True if workflow contains SwitchNode instances AND is a DAG (no cycles)
-        """
-        try:
-            if not hasattr(workflow, "graph") or workflow.graph is None:
-                return False
-
-            # CRITICAL: Check for cycles first - conditional execution is only safe for DAGs
-            if self._workflow_has_cycles(workflow):
-                self.logger.info(
-                    "Cyclic workflow detected - using normal execution to preserve cycle safety mechanisms"
-                )
-                return False
-
-            # Import here to avoid circular dependencies
-            from kailash.analysis import ConditionalBranchAnalyzer
-
-            analyzer = ConditionalBranchAnalyzer(workflow)
-            switch_nodes = analyzer._find_switch_nodes()
-
-            has_switches = len(switch_nodes) > 0
-
-            if has_switches:
-                self.logger.debug(
-                    f"Found {len(switch_nodes)} SwitchNodes in DAG workflow - eligible for conditional execution"
-                )
-            else:
-                self.logger.debug("No SwitchNodes found - using normal execution")
-
-            return has_switches
-
-        except Exception as e:
-            self.logger.warning(f"Error checking conditional patterns: {e}")
-            return False
-
-    def _workflow_has_cycles(self, workflow: Workflow) -> bool:
-        """
-        Detect if workflow has cycles using multiple detection methods.
-
-        Args:
-            workflow: Workflow to check
-
-        Returns:
-            True if workflow contains any cycles
-        """
-        try:
-            # Method 1: Check for explicitly marked cycle connections
-            if hasattr(workflow, "has_cycles") and callable(workflow.has_cycles):
-                if workflow.has_cycles():
-                    self.logger.debug("Detected cycles via workflow.has_cycles()")
-                    return True
-
-            # Method 2: Check for cycle edges in connections
-            if hasattr(workflow, "connections"):
-                for connection in workflow.connections:
-                    if hasattr(connection, "cycle") and connection.cycle:
-                        self.logger.debug("Detected cycle via connection.cycle flag")
-                        return True
-
-            # Method 3: NetworkX graph cycle detection
-            if hasattr(workflow, "graph") and workflow.graph is not None:
-                import networkx as nx
-
-                is_dag = nx.is_directed_acyclic_graph(workflow.graph)
-                if not is_dag:
-                    self.logger.debug("Detected cycles via NetworkX graph analysis")
-                    return True
-
-            # Method 4: Check graph edges for cycle metadata
-            if hasattr(workflow, "graph") and workflow.graph is not None:
-                for u, v, edge_data in workflow.graph.edges(data=True):
-                    if edge_data.get("cycle", False):
-                        self.logger.debug("Detected cycle via edge metadata")
-                        return True
-
-            return False
-
-        except Exception as e:
-            self.logger.warning(f"Error detecting cycles: {e}")
-            # On error, assume cycles exist for safety
-            return True
-
     async def _execute_conditional_approach(
         self,
         workflow: Workflow,
@@ -2871,11 +2618,13 @@ class LocalRuntime:
                     f"Conditional execution results invalid: {fallback_reason}"
                 )
 
-            # Performance tracking
-            self._track_conditional_execution_performance(results, workflow)
-
             # Record execution metrics for performance monitoring
             execution_time = time.time() - start_time
+
+            # Performance tracking (mixin signature: workflow, results, duration)
+            self._track_conditional_execution_performance(
+                workflow, results, execution_time
+            )
             nodes_executed = len(results)
             nodes_skipped = total_nodes - nodes_executed
 
@@ -2906,8 +2655,13 @@ class LocalRuntime:
             if fallback_reason:
                 self.logger.warning(f"Fallback reason: {fallback_reason}")
 
-            # Log performance impact before fallback
-            self._log_conditional_execution_failure(e, workflow, len(results))
+            # Log performance impact before fallback (mixin signature: workflow, error, context)
+            context = {
+                "nodes_completed": len(results),
+                "total_nodes": total_nodes,
+                "fallback_reason": fallback_reason or "Unknown",
+            }
+            self._log_conditional_execution_failure(workflow, e, context)
 
             # Enhanced fallback with detailed logging
             self.logger.warning(
@@ -2922,8 +2676,8 @@ class LocalRuntime:
                     task_manager=task_manager,
                 )
 
-                # Track fallback usage for monitoring
-                self._track_fallback_usage(workflow, str(e), fallback_reason)
+                # Track fallback usage for monitoring (mixin signature: workflow, reason)
+                self._track_fallback_usage(workflow, fallback_reason or str(e))
 
                 return fallback_results
 
@@ -3523,330 +3277,6 @@ class LocalRuntime:
         if self._retry_policy_engine:
             return self._retry_policy_engine.get_configuration()
         return None
-
-    def _should_use_hierarchical_execution(
-        self, workflow: Workflow, switch_node_ids: List[str]
-    ) -> bool:
-        """
-        Determine if hierarchical switch execution should be used.
-
-        Args:
-            workflow: The workflow to analyze
-            switch_node_ids: List of switch node IDs
-
-        Returns:
-            True if hierarchical execution would be beneficial
-        """
-        # Use hierarchical execution if:
-        # 1. There are multiple switches
-        if len(switch_node_ids) < 2:
-            return False
-
-        # 2. Check if switches have dependencies on each other
-        from kailash.analysis import ConditionalBranchAnalyzer
-
-        analyzer = ConditionalBranchAnalyzer(workflow)
-        hierarchy_info = analyzer.analyze_switch_hierarchies(switch_node_ids)
-
-        # Use hierarchical if there are multiple execution layers
-        execution_layers = hierarchy_info.get("execution_layers", [])
-        if len(execution_layers) > 1:
-            self.logger.debug(
-                f"Detected {len(execution_layers)} execution layers in switch hierarchy"
-            )
-            return True
-
-        # Use hierarchical if there are dependency chains
-        dependency_chains = hierarchy_info.get("dependency_chains", [])
-        if dependency_chains and any(len(chain) > 1 for chain in dependency_chains):
-            self.logger.debug("Detected dependency chains in switch hierarchy")
-            return True
-
-        return False
-
-    def _validate_conditional_execution_prerequisites(self, workflow: Workflow) -> bool:
-        """
-        Validate that workflow meets prerequisites for conditional execution.
-
-        Args:
-            workflow: Workflow to validate
-
-        Returns:
-            True if prerequisites are met, False otherwise
-        """
-        try:
-            # Check if workflow has at least one SwitchNode
-            from kailash.analysis import ConditionalBranchAnalyzer
-
-            analyzer = ConditionalBranchAnalyzer(workflow)
-            switch_nodes = analyzer._find_switch_nodes()
-
-            if not switch_nodes:
-                self.logger.debug(
-                    "No SwitchNodes found - cannot use conditional execution"
-                )
-                return False
-
-            # Check if workflow is too complex for conditional execution
-            if len(workflow.graph.nodes) > 100:  # Configurable threshold
-                self.logger.warning(
-                    "Workflow too large for conditional execution optimization"
-                )
-                return False
-
-            # Validate that all SwitchNodes have proper outputs
-            for switch_id in switch_nodes:
-                node_data = workflow.graph.nodes[switch_id]
-                node_instance = node_data.get("node") or node_data.get("instance")
-
-                if node_instance is None:
-                    self.logger.warning(f"SwitchNode {switch_id} has no instance")
-                    return False
-
-                # Check if the SwitchNode has proper output configuration
-                # SwitchNode might store condition_field in different ways
-                has_condition = (
-                    hasattr(node_instance, "condition_field")
-                    or hasattr(node_instance, "_condition_field")
-                    or (
-                        hasattr(node_instance, "parameters")
-                        and "condition_field"
-                        in getattr(node_instance, "parameters", {})
-                    )
-                    or "SwitchNode"
-                    in str(type(node_instance))  # Type-based validation as fallback
-                )
-
-                if not has_condition:
-                    self.logger.debug(
-                        f"SwitchNode {switch_id} condition validation unclear - allowing execution"
-                    )
-                    # Don't fail here - let conditional execution attempt and fall back if needed
-
-            return True
-
-        except Exception as e:
-            self.logger.warning(
-                f"Error validating conditional execution prerequisites: {e}"
-            )
-            return False
-
-    def _validate_switch_results(
-        self, switch_results: dict[str, dict[str, Any]]
-    ) -> bool:
-        """
-        Validate that switch results are valid for conditional execution.
-
-        Args:
-            switch_results: Results from SwitchNode execution
-
-        Returns:
-            True if results are valid, False otherwise
-        """
-        try:
-            if not switch_results:
-                self.logger.debug("No switch results to validate")
-                return True
-
-            for switch_id, result in switch_results.items():
-                # Check for execution errors
-                if isinstance(result, dict) and result.get("failed"):
-                    self.logger.warning(
-                        f"SwitchNode {switch_id} failed during execution"
-                    )
-                    return False
-
-                # Validate result structure
-                if not isinstance(result, dict):
-                    self.logger.warning(
-                        f"SwitchNode {switch_id} returned invalid result type: {type(result)}"
-                    )
-                    return False
-
-                # Check for required output keys (at least one branch should be present)
-                has_output = any(
-                    key in result for key in ["true_output", "false_output"]
-                )
-                if not has_output:
-                    self.logger.warning(
-                        f"SwitchNode {switch_id} missing required output keys"
-                    )
-                    return False
-
-            return True
-
-        except Exception as e:
-            self.logger.warning(f"Error validating switch results: {e}")
-            return False
-
-    def _validate_conditional_execution_results(
-        self, results: dict[str, dict[str, Any]], workflow: Workflow
-    ) -> bool:
-        """
-        Validate final results from conditional execution.
-
-        Args:
-            results: Execution results
-            workflow: Original workflow
-
-        Returns:
-            True if results are valid, False otherwise
-        """
-        try:
-            # Check that at least some nodes executed
-            if not results:
-                self.logger.warning("No results from conditional execution")
-                return False
-
-            # Validate that critical nodes (if any) were executed
-            # This could be expanded based on workflow metadata
-            total_nodes = len(workflow.graph.nodes)
-            executed_nodes = len(results)
-
-            # If we executed less than 30% of nodes, might be an issue
-            if executed_nodes < (total_nodes * 0.3):
-                self.logger.warning(
-                    f"Conditional execution only ran {executed_nodes}/{total_nodes} nodes - might indicate an issue"
-                )
-                # Don't fail here, but log for monitoring
-
-            # Check for excessive failures
-            failed_nodes = sum(
-                1
-                for result in results.values()
-                if isinstance(result, dict) and result.get("failed")
-            )
-
-            if failed_nodes > (executed_nodes * 0.5):
-                self.logger.warning(
-                    f"Too many node failures: {failed_nodes}/{executed_nodes}"
-                )
-                return False
-
-            return True
-
-        except Exception as e:
-            self.logger.warning(f"Error validating conditional execution results: {e}")
-            return False
-
-    def _track_conditional_execution_performance(
-        self, results: dict[str, dict[str, Any]], workflow: Workflow
-    ):
-        """
-        Track performance metrics for conditional execution.
-
-        Args:
-            results: Execution results
-            workflow: Original workflow
-        """
-        try:
-            total_nodes = len(workflow.graph.nodes)
-            executed_nodes = len(results)
-            skipped_nodes = total_nodes - executed_nodes
-
-            # Log performance metrics
-            if skipped_nodes > 0:
-                performance_improvement = (skipped_nodes / total_nodes) * 100
-                self.logger.info(
-                    f"Conditional execution performance: {performance_improvement:.1f}% reduction in executed nodes ({skipped_nodes}/{total_nodes} skipped)"
-                )
-
-            # Track for monitoring (could be sent to metrics system)
-            if hasattr(self, "_performance_metrics"):
-                self._performance_metrics["conditional_execution"] = {
-                    "total_nodes": total_nodes,
-                    "executed_nodes": executed_nodes,
-                    "skipped_nodes": skipped_nodes,
-                    "performance_improvement_percent": (
-                        (skipped_nodes / total_nodes) * 100 if total_nodes > 0 else 0
-                    ),
-                }
-
-        except Exception as e:
-            self.logger.warning(
-                f"Error tracking conditional execution performance: {e}"
-            )
-
-    def _log_conditional_execution_failure(
-        self, error: Exception, workflow: Workflow, nodes_completed: int
-    ):
-        """
-        Log detailed information about conditional execution failure.
-
-        Args:
-            error: Exception that caused the failure
-            workflow: Workflow that failed
-            nodes_completed: Number of nodes that completed before failure
-        """
-        try:
-            total_nodes = len(workflow.graph.nodes)
-
-            self.logger.error(
-                f"Conditional execution failed after {nodes_completed}/{total_nodes} nodes"
-            )
-            self.logger.error(f"Error type: {type(error).__name__}")
-            self.logger.error(f"Error message: {str(error)}")
-
-            # Log workflow characteristics for debugging
-            from kailash.analysis import ConditionalBranchAnalyzer
-
-            analyzer = ConditionalBranchAnalyzer(workflow)
-            switch_nodes = analyzer._find_switch_nodes()
-
-            self.logger.debug(
-                f"Workflow characteristics: {len(switch_nodes)} switches, {total_nodes} total nodes"
-            )
-
-        except Exception as log_error:
-            self.logger.warning(
-                f"Error logging conditional execution failure: {log_error}"
-            )
-
-    def _track_fallback_usage(
-        self, workflow: Workflow, error_message: str, fallback_reason: str
-    ):
-        """
-        Track fallback usage for monitoring and optimization.
-
-        Args:
-            workflow: Workflow that required fallback
-            error_message: Error that triggered fallback
-            fallback_reason: Reason for fallback
-        """
-        try:
-            import time
-
-            # Log fallback usage
-            self.logger.info(
-                f"Fallback used for workflow '{workflow.name}': {fallback_reason}"
-            )
-
-            # Track for monitoring (could be sent to metrics system)
-            if hasattr(self, "_fallback_metrics"):
-                if "fallback_usage" not in self._fallback_metrics:
-                    self._fallback_metrics["fallback_usage"] = []
-
-                self._fallback_metrics["fallback_usage"].append(
-                    {
-                        "workflow_name": workflow.name,
-                        "workflow_id": workflow.workflow_id,
-                        "error_message": error_message,
-                        "fallback_reason": fallback_reason,
-                        "timestamp": time.time(),
-                    }
-                )
-
-            # Limit tracking history to prevent memory growth
-            if (
-                hasattr(self, "_fallback_metrics")
-                and len(self._fallback_metrics.get("fallback_usage", [])) > 100
-            ):
-                self._fallback_metrics["fallback_usage"] = self._fallback_metrics[
-                    "fallback_usage"
-                ][-50:]
-
-        except Exception as e:
-            self.logger.warning(f"Error tracking fallback usage: {e}")
 
     # ===== PHASE 5: PRODUCTION READINESS =====
 

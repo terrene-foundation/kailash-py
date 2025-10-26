@@ -21,12 +21,17 @@ workflow.add_node("PythonCodeNode", "processor", {
     "code": "result = {'status': 'processed', 'data': input_data}"
 })
 
-# 3. Add connections
-workflow.add_connection("source", "processor", "output", "input_data")
+# 3. Add connections (4-parameter syntax)
+workflow.add_connection("source", "output", "processor", "input_data")
 
-# 4. Execute
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())  # ALWAYS .build()
+# 4. Execute - ALWAYS call .build()
+runtime = LocalRuntime()  # For CLI/scripts
+results, run_id = runtime.execute(workflow.build())
+
+# For Docker/FastAPI (async)
+# from kailash.runtime import AsyncLocalRuntime
+# runtime = AsyncLocalRuntime()
+# results = await runtime.execute_workflow_async(workflow.build(), inputs={})
 ```
 
 ### 2. Quick Data Processing
@@ -52,9 +57,9 @@ workflow.add_node("CSVWriterNode", "writer", {
     "file_path": "output.csv"
 })
 
-# Connect
-workflow.add_connection("reader", "process", "data", "data")
-workflow.add_connection("process", "writer", "result", "data")
+# Connect (4-parameter syntax: from_node, output_key, to_node, input_key)
+workflow.add_connection("reader", "data", "process", "data")
+workflow.add_connection("process", "result", "writer", "data")
 ```
 
 ### 3. Quick API Integration
@@ -70,7 +75,7 @@ workflow.add_node("PythonCodeNode", "transform", {
     "code": "result = {'data': response.get('data'), 'count': len(response.get('data', []))}"
 })
 
-workflow.add_connection("api_call", "transform", "response", "response")
+workflow.add_connection("api_call", "response", "transform", "response")
 ```
 
 ### 4. Quick AI Integration
@@ -87,7 +92,7 @@ workflow.add_node("PythonCodeNode", "format", {
     "code": "result = {'summary': response}"
 })
 
-workflow.add_connection("ai", "format", "response", "response")
+workflow.add_connection("ai", "response", "format", "response")
 ```
 
 ### 5. Essential Runtime Patterns
@@ -140,11 +145,11 @@ workflow.add_node("HTTPRequestNode", "api", {
 
 ### 8. Essential Connection Pattern
 ```python
-# Connect nodes: source → target
+# Connect nodes: source → target (4-parameter syntax)
 workflow.add_connection(
     "source_node_id",    # From this node
-    "target_node_id",    # To this node
     "output_key",        # This output key
+    "target_node_id",    # To this node
     "input_key"          # Maps to this input key
 )
 ```

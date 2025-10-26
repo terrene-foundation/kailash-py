@@ -3,14 +3,23 @@ name: cycle-debugging
 description: "Cycle debugging and troubleshooting patterns for fixing common cycle issues. Use when asking 'cycle debugging', 'cycle errors', 'cycle troubleshooting', 'infinite cycles', 'cycle not converging', or 'cycle issues'."
 ---
 
-# Cycle Debugging & Troubleshooting
+# ⚠️ CYCLIC WORKFLOWS - PLANNED FEATURE
 
-Quick fixes and debugging patterns for common cycle issues.
+> **STATUS**: Cyclic workflows are NOT YET IMPLEMENTED in SDK v0.9.31.
+>
+> This skill documents the planned CycleBuilder API and debugging patterns.
+> Use current alternatives: Python loops, recursive workflows, or SwitchNode state machines.
+
+---
+
+# Cycle Debugging & Troubleshooting (PLANNED)
+
+Quick fixes and debugging patterns for common cycle issues (when implemented).
 
 > **Skill Metadata**
 > Category: `core-patterns`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+`
+> SDK Version: `Future Release`
 
 ## Quick Reference
 

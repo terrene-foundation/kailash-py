@@ -519,14 +519,15 @@ workflow.add_connection("batch_processor", "result", "aggregate_results", "batch
 workflow.add_connection("lineage_tracker", "result", "aggregate_results", "lineage_results")
 workflow.add_connection("credential_rotation", "result", "aggregate_results", "credential_results")
 
-# Execute with monitoring
+# Execute with advanced runtime configuration
+# LocalRuntime supports 29 configuration parameters for fine-tuned control
 runtime = LocalRuntime(
     max_workers=8,
     timeout=600.0,
     enable_logging=True
 )
 
-# Run workflow
+# Run workflow - ALWAYS call .build() before execution
 results, run_id = runtime.execute(workflow.build(), parameters={
     "access_check": {
         "user_id": "analyst_001",
@@ -547,6 +548,41 @@ print(f"- Total records: {summary.get('total_records')}")
 print(f"- Processing time: {summary.get('processing_time'):.2f}s")
 ```
 
+## Advanced Runtime Configuration
+
+### Runtime Parameters (29 Available)
+
+Both `LocalRuntime` and `AsyncLocalRuntime` support extensive configuration:
+
+```python
+from kailash.runtime import LocalRuntime, AsyncLocalRuntime
+
+# Synchronous runtime for CLI/scripts
+runtime = LocalRuntime(
+    max_workers=8,              # Parallel execution workers
+    timeout=600.0,              # Workflow timeout in seconds
+    enable_logging=True,        # Enable detailed logging
+    retry_on_failure=True,      # Auto-retry failed nodes
+    max_retries=3,              # Maximum retry attempts
+    # ... 24 more parameters available
+)
+
+# Asynchronous runtime for Docker/FastAPI
+async_runtime = AsyncLocalRuntime(
+    max_workers=10,             # Concurrent async tasks
+    timeout=300.0,              # Async workflow timeout
+    enable_logging=True,        # Detailed async logging
+    # Same parameter set as LocalRuntime
+)
+```
+
+**Note**: Both runtimes inherit from `BaseRuntime` which provides:
+- **ValidationMixin**: Parameter validation and type checking
+- **ParameterHandlingMixin**: Template resolution (${param}) and parameter injection
+- Consistent execution architecture across sync/async contexts
+
+For custom runtime development, extend `BaseRuntime` to leverage these mixins.
+
 ## Best Practices Summary
 
 ### Enterprise Development Guidelines
@@ -562,6 +598,7 @@ print(f"- Processing time: {summary.get('processing_time'):.2f}s")
 3. **Data Governance**: Track transformations and ensure compliance
 4. **Error Handling**: Plan for failures with retry and fallback patterns
 5. **Resource Management**: Monitor and optimize resource usage
+6. **Runtime Selection**: Use AsyncLocalRuntime for Docker/FastAPI, LocalRuntime for CLI/scripts
 
 ## Related Guides
 

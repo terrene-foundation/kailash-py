@@ -18,9 +18,32 @@ DataFlow transforms database models into workflow nodes automatically, providing
 - **Integration Ready**: Works with Nexus for multi-channel deployment
 - **Specialized Adapters**: SQL (9 nodes/model), Document (8 nodes), Vector (3 nodes)
 
-## ⚠️ Critical Bug Fixes (v0.6.2-v0.7.0)
+## ⚠️ Critical Updates & Bug Fixes
 
-### v0.7.0 Bulk Operations Fixes (LATEST - 2025-10-24)
+### v0.7.3 Schema Cache + Migration Fixes (LATEST - 2025-10-26)
+
+**Performance Improvement:**
+- ✅ **Schema Cache**: Thread-safe table existence cache for 91-99% performance improvement
+- ✅ **Cache Metrics**: Observable metrics for monitoring cache performance
+- ✅ **Automatic Management**: Configurable TTL, size limits, LRU eviction
+
+**Bug Fixes:**
+- ✅ **Async-Safe Migration**: Fixed migration recording in FastAPI/async contexts
+- ✅ **Error Messages**: Enhanced error messages with contextual help
+
+**Performance Impact:**
+- First operation: ~1500ms (cache miss - migration check)
+- Cached operations: ~1ms (cache hit)
+- Multi-operation workflows: 91-99% faster
+
+**Upgrade Command:**
+```bash
+pip install --upgrade kailash-dataflow>=0.7.3
+```
+
+---
+
+### v0.7.0 Bulk Operations Fixes (2025-10-24)
 
 **8 Critical bugs fixed in bulk operations:**
 
@@ -226,9 +249,11 @@ workflow.add_node("User_Create", "user1", {...})
 
 ## Version Compatibility
 
-- **Current Version**: 0.6.3 (Critical bug fixes)
+- **Current Version**: 0.7.3 (Schema cache + migration fixes)
 - **Core SDK Version**: 0.9.25+
 - **Python**: 3.8+
+- **v0.7.3**: Schema cache (91-99% faster) + async-safe migrations
+- **v0.7.0**: Bulk operations fixes (8 critical bugs)
 - **v0.6.3**: BulkDeleteNode safe mode validation fix
 - **v0.6.2**: ListNode filter operators fix ($ne, $nin, $in, $not)
 - **v0.6.0**: MongoDB document database + PostgreSQL pgvector support
