@@ -18,14 +18,20 @@ Fix parameter validation errors including missing required inputs, wrong paramet
 
 ```
 Node 'create' missing required inputs: ['email']
-ValidationError: Missing required parameter 'X'
+ValueError: Missing required parameter 'X'
+ValueError: Invalid validation mode 'invalid'
 Required parameter 'file_path' not provided
 Parameter validation failed for node 'X'
 ```
 
 ## Root Cause
 
-Kailash SDK requires parameters to be provided through one of **3 methods**. Missing parameters cause validation errors.
+Kailash SDK raises `ValueError` for validation errors including:
+- Missing required parameters
+- Invalid validation modes
+- Parameter type mismatches
+
+Parameters must be provided through one of **3 methods**.
 
 ## Quick Fix: The 3 Methods
 

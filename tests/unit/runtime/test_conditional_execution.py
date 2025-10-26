@@ -120,7 +120,7 @@ class TestLocalRuntimeConditionalExecution:
 
         log_capture = io.StringIO()
         handler = logging.StreamHandler(log_capture)
-        logger = logging.getLogger("kailash.runtime.local")
+        logger = logging.getLogger("kailash.runtime.base")
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)
 

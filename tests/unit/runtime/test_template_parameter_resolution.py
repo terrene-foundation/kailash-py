@@ -36,11 +36,11 @@ class TestTopLevelTemplateResolution:
         )
 
         # Top-level template (should work)
-        result = await runtime.execute_workflow_async(
+        results, run_id = await runtime.execute_workflow_async(
             workflow.build(), inputs={"limit": 10}
         )
 
-        node_result = result["results"]["test_node"]
+        node_result = results["test_node"]
         assert node_result["result"]["limit_received"] == 10
         assert node_result["result"]["limit_type"] == "int"
 
@@ -73,14 +73,14 @@ result = {
         # Execute with nested template in node parameters
         # Note: We need to manually construct the workflow with template in parameters
         # since add_node doesn't support templates yet
-        result = await runtime.execute_workflow_async(
+        results, run_id = await runtime.execute_workflow_async(
             workflow.build(),
             inputs={
                 "filter_dict": {"run_tag": "local", "status": "active"}
             },  # Pass actual dict
         )
 
-        node_result = result["results"]["test_node"]
+        node_result = results["test_node"]
         assert node_result["result"]["filter_type"] == "dict"
         # This test establishes baseline - next we'll test actual template resolution
 
@@ -103,12 +103,12 @@ result = {
             },
         )
 
-        result = await runtime.execute_workflow_async(
+        results, run_id = await runtime.execute_workflow_async(
             workflow.build(),
             inputs={"level1": {"level2": {"level3": "deep_value"}}},
         )
 
-        node_result = result["results"]["test_node"]
+        node_result = results["test_node"]
         assert node_result["result"]["level1_type"] == "dict"
 
     @pytest.mark.asyncio
@@ -123,11 +123,11 @@ result = {
             {"code": "result = {'items_received': items, 'count': len(items)}"},
         )
 
-        result = await runtime.execute_workflow_async(
+        results, run_id = await runtime.execute_workflow_async(
             workflow.build(), inputs={"items": [{"value": "item1"}, {"value": "item2"}]}
         )
 
-        node_result = result["results"]["test_node"]
+        node_result = results["test_node"]
         assert node_result["result"]["count"] == 2
 
 

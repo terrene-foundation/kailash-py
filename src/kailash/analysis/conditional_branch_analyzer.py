@@ -102,12 +102,11 @@ class ConditionalBranchAnalyzer:
 
                         branch_map[switch_id][source_port].add(target)
                         logger.debug(
-                            f"Switch {switch_id} port {source_port} -> {target}"
+                            f"Switch {switch_id} port {source_port} -> {target} (direct connection only)"
                         )
 
-                        # Find downstream nodes recursively
-                        downstream = self._find_downstream_nodes(target, switch_nodes)
-                        branch_map[switch_id][source_port].update(downstream)
+                        # Don't recursively add downstream nodes - that breaks nested conditionals
+                        # The get_reachable_nodes method will traverse downstream from activated branches
 
         self._branch_map = branch_map
         logger.info(f"Built branch map for {len(branch_map)} switches")
@@ -176,12 +175,14 @@ class ConditionalBranchAnalyzer:
         to_process = set()
 
         # Process each switch result to find directly connected nodes
+        logger.debug(f"Processing switch results: {switch_results}")
         for switch_id, port_results in switch_results.items():
             if switch_id not in branch_map:
                 logger.warning(f"Switch {switch_id} not found in branch map")
                 continue
 
             switch_branches = branch_map[switch_id]
+            logger.debug(f"Branch map for {switch_id}: {switch_branches}")
 
             for port, result in port_results.items():
                 if result is not None:  # This port was activated
@@ -190,12 +191,26 @@ class ConditionalBranchAnalyzer:
                         reachable.update(direct_nodes)
                         to_process.update(direct_nodes)
                         logger.debug(
-                            f"Switch {switch_id} port {port} activated - added {len(direct_nodes)} direct nodes"
+                            f"Switch {switch_id} port {port} activated - added direct nodes: {direct_nodes}"
                         )
+                else:
+                    logger.debug(f"Switch {switch_id} port {port} NOT activated (None)")
 
         # Now traverse the graph to find ALL downstream nodes from the activated branches
+        # BUT: Don't traverse through switches - they control their own branches
         while to_process:
             current_node = to_process.pop()
+
+            # Skip switches during downstream traversal - they've already been processed
+            node_data = self.workflow.graph.nodes.get(current_node, {})
+            node_instance = node_data.get("node") or node_data.get("instance")
+            if isinstance(node_instance, SwitchNode):
+                # Don't traverse through switches - only their explicitly activated branches
+                # were added in the first loop
+                logger.debug(
+                    f"Skipping switch {current_node} during downstream traversal"
+                )
+                continue
 
             # Get all successors of the current node
             if hasattr(self.workflow.graph, "successors"):

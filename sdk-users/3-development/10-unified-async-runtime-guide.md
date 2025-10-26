@@ -32,9 +32,10 @@ runtime = AsyncLocalRuntime(
 
 # Execute any workflow
 async def run_workflow():
-    result = await runtime.execute_workflow_async(workflow, {"input": "data"})
-    print(f"Completed in {result.get('total_duration', 0):.2f} seconds")
-    print(f"Results: {result['results']}")
+    results, run_id = await runtime.execute_workflow_async(workflow, {"input": "data"})
+    print(f"Run ID: {run_id}")
+    print(f"Results: {results}")
+    return results
 
 # Run with asyncio
 asyncio.run(run_workflow())
@@ -66,31 +67,33 @@ runtime = AsyncLocalRuntime(
 )
 
 # Execute workflow - nodes can access resources via get_resource()
-result = await runtime.execute_workflow_async(workflow, inputs)
+results, run_id = await runtime.execute_workflow_async(workflow, inputs)
 ```
 
-## Result Format
+## Return Structure
 
-The AsyncLocalRuntime returns a different format than the standard LocalRuntime:
+**AsyncLocalRuntime now returns a tuple** `(results, run_id)` for consistency with LocalRuntime (v0.9.31+):
 
 ```python
-{
-    "results": {
-        "node_id": {"result": {...}},  # Node outputs
-        # ... more nodes
-    },
-    "errors": {
-        "failed_node": "Error message",  # Any node errors
-        # ... more errors
-    },
-    "total_duration": 1.23,  # Total execution time
-    "workflow_id": "uuid-here",  # Unique execution ID
-    "metrics": {  # If profiling enabled
-        "node_durations": {...},
-        "resource_access_count": {...}
-    }
-}
+from kailash.runtime import AsyncLocalRuntime
+
+runtime = AsyncLocalRuntime()
+
+# NEW (v0.9.31+): Returns tuple
+results, run_id = await runtime.execute_workflow_async(workflow, inputs={"param": "value"})
+
+# Access results:
+print(results["node_id"]["result"])  # Node output
+print(run_id)                        # Execution ID
+
+# Example results structure:
+# {
+#     "node_id": {"result": {...}},  # Node outputs
+#     "another_node": {"result": {...}}
+# }
 ```
+
+This consistent return structure ensures that both sync and async runtimes work identically, making it easy to switch between them without code changes.
 
 ## Configuration Options
 
@@ -181,9 +184,9 @@ workflow.add_connection("input", "result.data", "process2", "input_data")
 # Both processors run simultaneously
 async def execute():
     start_time = time.time()
-    result = await runtime.execute_workflow_async(workflow.build(), {})
+    results, run_id = await runtime.execute_workflow_async(workflow.build(), {})
     print(f"Parallel execution took {time.time() - start_time:.2f}s")
-    return result
+    return results
 
 asyncio.run(execute())
 ```
@@ -221,7 +224,7 @@ result = {"processed": processed}
 workflow.add_connection("fetch", "result.users", "process", "users")
 
 # Runtime handles both node types automatically
-result = await runtime.execute_workflow_async(workflow.build(), {})
+results, run_id = await runtime.execute_workflow_async(workflow.build(), {})
 ```
 
 ### 3. Data Pipeline Pattern
@@ -281,8 +284,8 @@ workflow.add_connection("source", "result.data", "clean", "input_data")
 workflow.add_connection("clean", "result.cleaned", "validate", "cleaned_data")
 
 # Execute pipeline
-result = await runtime.execute_workflow_async(workflow.build(), {})
-print(f"Validated {result['results']['validate']['result']['valid_count']} records")
+results, run_id = await runtime.execute_workflow_async(workflow.build(), {})
+print(f"Validated {results['validate']['result']['valid_count']} records")
 ```
 
 ### 4. API Aggregation Pattern
@@ -355,7 +358,7 @@ workflow.add_connection("orders_api", "result.orders", "aggregate", "orders")
 workflow.add_connection("preferences_api", "result.preferences", "aggregate", "preferences")
 
 # All API calls run concurrently, then aggregate
-result = await runtime.execute_workflow_async(workflow.build(), {})
+results, run_id = await runtime.execute_workflow_async(workflow.build(), {})
 ```
 
 ## Error Handling
@@ -384,43 +387,33 @@ result = {"data": data}
 
 # Execute with error handling
 try:
-    result = await runtime.execute_workflow_async(workflow.build(), {})
-
-    # Check for errors
-    if result["errors"]:
-        print("Workflow had errors:")
-        for node_id, error in result["errors"].items():
-            print(f"  {node_id}: {error}")
-    else:
-        print("Workflow succeeded")
+    results, run_id = await runtime.execute_workflow_async(workflow.build(), {})
+    print(f"Workflow succeeded with run ID: {run_id}")
+    print(f"Results: {results}")
 
 except Exception as e:
     print(f"Workflow execution failed: {e}")
+    # The runtime raises exceptions for workflow failures
+    # Check the exception message for details
 ```
 
-### Monitoring Errors
+### Monitoring Execution
 
 ```python
-result = await runtime.execute_workflow_async(workflow, inputs)
+import logging
 
-# Check for errors
-if result["errors"]:
-    print("Workflow had errors:")
-    for node_id, error in result["errors"].items():
-        print(f"  {node_id}: {error}")
+# Enable logging for execution details
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("kailash.runtime")
 
-# Check metrics for performance issues
-if "metrics" in result and hasattr(result["metrics"], "node_durations"):
-    slow_nodes = {
-        node_id: duration
-        for node_id, duration in result["metrics"].node_durations.items()
-        if duration > 1.0  # Nodes taking > 1 second
-    }
+try:
+    results, run_id = await runtime.execute_workflow_async(workflow, inputs)
+    logger.info(f"Workflow {run_id} completed successfully")
+    logger.info(f"Executed {len(results)} nodes")
 
-    if slow_nodes:
-        print("Slow nodes detected:")
-        for node_id, duration in slow_nodes.items():
-            print(f"  {node_id}: {duration:.2f}s")
+except Exception as e:
+    logger.error(f"Workflow execution failed: {e}")
+    raise
 ```
 
 ## Performance Optimization
@@ -428,25 +421,28 @@ if "metrics" in result and hasattr(result["metrics"], "node_durations"):
 ### Resource Usage Monitoring
 
 ```python
-# Monitor resource usage
-result = await runtime.execute_workflow_async(workflow, inputs)
+# Monitor workflow execution
+import time
 
-if "metrics" in result and hasattr(result["metrics"], "resource_access_count"):
-    resource_usage = result["metrics"].resource_access_count
-    for resource_name, access_count in resource_usage.items():
-        print(f"{resource_name}: {access_count} accesses")
+start_time = time.time()
+results, run_id = await runtime.execute_workflow_async(workflow, inputs)
+execution_time = time.time() - start_time
 
-    # Optimize based on usage patterns
-    if resource_usage.get("database", 0) > 10:
-        print("High database usage - consider connection pooling")
+print(f"Execution completed in {execution_time:.2f}s")
+print(f"Nodes executed: {len(results)}")
 
-    if resource_usage.get("api_client", 0) > 5:
-        print("Multiple API calls - consider batching or caching")
+# Check individual node results
+for node_id, node_output in results.items():
+    if isinstance(node_output, dict) and "result" in node_output:
+        print(f"Node {node_id}: {node_output['result']}")
 ```
 
 ### Concurrent Execution Tuning
 
 ```python
+import time
+import asyncio
+
 # Find optimal concurrency
 async def benchmark_concurrency():
     workflows = [create_test_workflow() for _ in range(10)]
@@ -456,13 +452,15 @@ async def benchmark_concurrency():
         runtime = AsyncLocalRuntime(max_concurrent_nodes=max_concurrent)
 
         start_time = time.time()
-        results = await asyncio.gather(*[
+        tasks = [
             runtime.execute_workflow_async(wf, {})
             for wf in workflows
-        ])
+        ]
+        results = await asyncio.gather(*tasks)
         execution_time = time.time() - start_time
 
         print(f"Concurrency {max_concurrent}: {execution_time:.2f}s")
+        print(f"  Completed {len(results)} workflows")
 
         await runtime.cleanup()
 
@@ -479,7 +477,8 @@ await benchmark_concurrency()
 runtime = AsyncLocalRuntime(resource_registry=registry)
 
 try:
-    result = await runtime.execute_workflow_async(workflow, inputs)
+    results, run_id = await runtime.execute_workflow_async(workflow, inputs)
+    logger.info(f"Workflow {run_id} completed successfully")
 finally:
     await runtime.cleanup()  # Important for production
 ```
@@ -487,21 +486,27 @@ finally:
 ### 2. Error Monitoring
 
 ```python
+import logging
+
+logger = logging.getLogger("app")
+
 # Comprehensive error checking
-result = await runtime.execute_workflow_async(workflow, inputs)
+try:
+    results, run_id = await runtime.execute_workflow_async(workflow, inputs)
 
-# Log metrics for monitoring
-logger.info("Workflow execution metrics:", extra={
-    "duration": result.get("total_duration", 0),
-    "node_count": len(result["results"]),
-    "error_count": len(result["errors"]),
-    "workflow_id": result.get("workflow_id", "unknown")
-})
+    # Log metrics for monitoring
+    logger.info("Workflow execution metrics", extra={
+        "run_id": run_id,
+        "node_count": len(results),
+        "workflow_name": "my_workflow"
+    })
 
-# Alert on errors
-if result["errors"]:
-    for node_id, error in result["errors"].items():
-        logger.error(f"Node {node_id} failed: {error}")
+except Exception as e:
+    logger.error(f"Workflow execution failed", extra={
+        "error": str(e),
+        "workflow_name": "my_workflow"
+    })
+    raise
 ```
 
 ### 3. PythonCodeNode Best Practices
@@ -526,7 +531,9 @@ workflow.add_connection("source", "result.data", "processor", "input_value")
 
 ### Simple Migration
 
-**Before:**
+Both runtimes now return the same structure, making migration seamless:
+
+**Before (LocalRuntime):**
 ```python
 from kailash.runtime.local import LocalRuntime
 
@@ -534,7 +541,7 @@ runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow, parameters=inputs)
 ```
 
-**After:**
+**After (AsyncLocalRuntime):**
 ```python
 from kailash.runtime.async_local import AsyncLocalRuntime
 import asyncio
@@ -542,11 +549,15 @@ import asyncio
 runtime = AsyncLocalRuntime()
 
 async def execute():
-    result = await runtime.execute_workflow_async(workflow, inputs)
-    return result["results"]  # Results are under 'results' key
+    results, run_id = await runtime.execute_workflow_async(workflow, inputs)
+    return results  # Same structure as LocalRuntime!
 
 results = asyncio.run(execute())
 ```
+
+The only differences are:
+1. Async/await syntax
+2. Parameter name: `parameters` → `inputs`
 
 ### Advanced Migration
 
@@ -554,7 +565,6 @@ results = asyncio.run(execute())
 ```python
 runtime = LocalRuntime(
     debug=True,
-    enable_cycles=True,
     max_concurrency=5
 )
 ```
@@ -566,8 +576,12 @@ runtime = AsyncLocalRuntime(
     enable_analysis=True,       # Optimization enabled
     enable_profiling=True       # Similar to debug
 )
-# Note: Cyclic workflows not supported in AsyncLocalRuntime
 ```
+
+**Key Notes:**
+- Both runtimes support conditional execution (SwitchNode)
+- AsyncLocalRuntime automatically detects and handles conditional workflows
+- Return structure is identical for both runtimes
 
 ## Troubleshooting
 
@@ -575,13 +589,18 @@ runtime = AsyncLocalRuntime(
 
 **1. Slow Performance:**
 ```python
-# Check node execution times
-result = await runtime.execute_workflow_async(workflow, inputs)
+import time
+import logging
 
-if "metrics" in result and hasattr(result["metrics"], "node_durations"):
-    for node_id, duration in result["metrics"].node_durations.items():
-        if duration > 2.0:
-            print(f"Slow node: {node_id} took {duration:.2f}s")
+# Enable logging
+logging.basicConfig(level=logging.DEBUG)
+
+# Measure execution time
+start = time.time()
+results, run_id = await runtime.execute_workflow_async(workflow, inputs)
+duration = time.time() - start
+
+print(f"Execution took {duration:.2f}s for {len(results)} nodes")
 
 # Try increasing concurrency
 runtime = AsyncLocalRuntime(max_concurrent_nodes=20)
@@ -592,11 +611,11 @@ runtime = AsyncLocalRuntime(max_concurrent_nodes=20)
 # Enable debug logging
 import logging
 logging.getLogger("kailash.resources").setLevel(logging.DEBUG)
+logging.getLogger("kailash.runtime").setLevel(logging.DEBUG)
 
-# Check resource access in metrics
-result = await runtime.execute_workflow_async(workflow, inputs)
-if "metrics" in result:
-    print(f"Resource usage: {getattr(result['metrics'], 'resource_access_count', {})}")
+# Check execution
+results, run_id = await runtime.execute_workflow_async(workflow, inputs)
+print(f"Completed {len(results)} nodes")
 ```
 
 **3. Memory Issues:**
@@ -623,7 +642,8 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logging.getLogger("kailash").setLevel(logging.DEBUG)
 
-result = await runtime.execute_workflow_async(workflow, inputs)
+results, run_id = await runtime.execute_workflow_async(workflow, inputs)
+print(f"Debug run {run_id}: {len(results)} nodes executed")
 ```
 
 ## Enhanced AsyncNode Support (v0.6.6+)

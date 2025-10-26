@@ -1,10 +1,21 @@
 # Cyclic Workflows Guide
 
-*Advanced workflow patterns with state persistence, convergence detection, and safety mechanisms*
+⚠️ **PLANNED FEATURE - NOT YET IMPLEMENTED**
+
+This documentation describes a planned feature for cyclic workflows that is not yet available in the current SDK version. The implementation is planned for a future release.
+
+## What This Would Be
+
+Cyclic workflows would enable iterative processing patterns including optimization loops, retry mechanisms, data quality cycles, and training workflows. When implemented, the Kailash SDK would provide comprehensive cycle management with state persistence, convergence detection, safety mechanisms, and performance optimization.
+
+**Current Status**: Planned but not implemented
+**Target Release**: TBD
 
 ## Overview
 
-Cyclic workflows enable iterative processing patterns including optimization loops, retry mechanisms, data quality cycles, and training workflows. The Kailash SDK provides comprehensive cycle management with state persistence, convergence detection, safety mechanisms, and performance optimization.
+*Note: The following describes the planned implementation. None of these features are currently available.*
+
+Cyclic workflows would enable iterative processing patterns including optimization loops, retry mechanisms, data quality cycles, and training workflows. The Kailash SDK would provide comprehensive cycle management with state persistence, convergence detection, safety mechanisms, and performance optimization.
 
 ## Prerequisites
 

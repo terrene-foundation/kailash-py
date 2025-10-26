@@ -1,74 +1,205 @@
 ---
 name: gold-parameter-passing
-description: "Parameter passing standard with three methods, explicit parameter declaration, and enterprise security patterns. Use when asking 'parameter standard', 'parameter gold', 'parameter validation', 'parameter security', or 'parameter compliance'."
+description: "Parameter passing standard with three methods, explicit parameter declaration, parameter scoping, and enterprise security patterns. Use when asking 'parameter standard', 'parameter gold', 'parameter validation', 'parameter security', or 'parameter compliance'."
 ---
 
 # Gold Standard: Parameter Passing
 
-Gold Standard: Parameter Passing guide with patterns, examples, and best practices.
+Parameter passing compliance standard with three methods, automatic unwrapping, and security patterns.
 
 > **Skill Metadata**
 > Category: `gold-standards`
 > Priority: `CRITICAL`
-> SDK Version: `0.9.25+`
+> SDK Version: `0.9.31+`
 
 ## Quick Reference
 
-- **Primary Use**: Gold Standard: Parameter Passing
+- **Primary Use**: Parameter Passing Compliance Standard
 - **Category**: gold-standards
 - **Priority**: CRITICAL
-- **Trigger Keywords**: parameter standard, parameter gold, parameter validation, parameter security
+- **Trigger Keywords**: parameter standard, parameter gold, parameter validation, parameter security, parameter scoping
 
-## Core Pattern
+## Three Methods of Parameter Passing
+
+### Method 1: Node Configuration (Most Reliable)
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
 
-# Gold Parameter Passing implementation
 workflow = WorkflowBuilder()
-
-# See source documentation for specific node types and parameters
-# Reference: sdk-users/2-core-concepts/cheatsheet/gold-parameter-passing.md
-
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
+workflow.add_node("CSVReaderNode", "reader", {
+    "file_path": "data.csv",
+    "delimiter": ",",
+    "has_header": True
+})
 ```
 
+**Use when**: Static values, test fixtures, default settings
 
-## Common Use Cases
+### Method 2: Workflow Connections (Dynamic Data Flow)
 
-- **Gold-Parameter-Passing Core Functionality**: Primary operations and common patterns
-- **Integration Patterns**: Connect with other nodes, workflows, external systems
-- **Error Handling**: Robust error handling with retries, fallbacks, and logging
-- **Performance**: Optimization techniques, caching, batch operations, async execution
-- **Production Use**: Enterprise-grade patterns with monitoring, security, and reliability
+```python
+workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
+workflow.add_node("DataTransformerNode", "transformer", {})
+
+# Pass data between nodes (4-parameter syntax)
+workflow.add_connection("reader", "data", "transformer", "input_data")
+```
+
+**Use when**: Dynamic data flow, pipelines, transformations
+
+### Method 3: Runtime Parameters (User Input)
+
+```python
+from kailash.runtime.local import LocalRuntime
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(
+    workflow.build(),
+    parameters={
+        "reader": {"file_path": "custom.csv"},
+        "transformer": {"operation": "normalize"}
+    }
+)
+```
+
+**Use when**: User input, environment overrides, dynamic values
+
+## Parameter Scoping (v0.9.31+)
+
+**Node-specific parameters are automatically unwrapped:**
+
+```python
+# What you pass to runtime:
+parameters = {
+    "api_key": "global-key",      # Global param (all nodes)
+    "node1": {"value": 10},        # Node-specific for node1
+    "node2": {"value": 20}         # Node-specific for node2
+}
+
+runtime.execute(workflow.build(), parameters=parameters)
+
+# What node1 receives (unwrapped automatically):
+{
+    "api_key": "global-key",       # Global param
+    "value": 10                     # Unwrapped from nested dict
+}
+# node1 does NOT receive node2's parameters (isolated)
+```
+
+**Scoping Rules:**
+1. **Parameters filtered by node ID**: Only relevant params passed to each node
+2. **Node-specific params unwrapped**: Contents extracted from nested dict
+3. **Global params included**: Top-level non-node-ID keys go to all nodes
+4. **Other nodes' params excluded**: Prevents parameter leakage
+
+## Explicit Parameter Declaration (Security)
+
+Custom nodes must declare parameters explicitly:
+
+```python
+from kailash.nodes.base import Node, NodeParameter
+
+class CustomNode(Node):
+    def get_parameters(self):
+        """Declare ALL expected parameters."""
+        return {
+            "file_path": NodeParameter(
+                type=str,
+                required=True,
+                description="Path to input file"
+            ),
+            "delimiter": NodeParameter(
+                type=str,
+                required=False,
+                default=",",
+                description="CSV delimiter"
+            )
+        }
+
+    def run(self, **kwargs):
+        file_path = kwargs["file_path"]  # Guaranteed to exist
+        delimiter = kwargs.get("delimiter", ",")  # Optional with default
+        return {"data": process_file(file_path, delimiter)}
+```
+
+**Why explicit declaration?**
+- **Security**: Prevents parameter injection attacks
+- **Compliance**: Enables parameter tracking and auditing
+- **Debugging**: Clear parameter expectations
+- **Testing**: Testable parameter contracts
+- **Isolation**: Automatic scoping prevents data leakage
+
+## Common Pitfalls
+
+### Pitfall 1: Empty Parameter Declaration
+
+```python
+# WRONG - No parameters declared
+class BadNode(Node):
+    def get_parameters(self):
+        return {}  # SDK injects nothing!
+
+# CORRECT - Explicit declaration
+class GoodNode(Node):
+    def get_parameters(self):
+        return {
+            "config": NodeParameter(type=dict, required=True)
+        }
+```
+
+### Pitfall 2: Expecting Undeclared Parameters
+
+```python
+# WRONG - Expecting undeclared parameter
+def run(self, **kwargs):
+    value = kwargs.get('param')  # Always None if not declared!
+
+# CORRECT - Declare in get_parameters() first
+def get_parameters(self):
+    return {"param": NodeParameter(type=str, required=True)}
+```
+
+## Validation Errors (v0.9.31+)
+
+**Validation failures now raise ValueError:**
+
+```python
+try:
+    runtime = LocalRuntime(connection_validation="invalid")
+except ValueError as e:  # Changed from RuntimeExecutionError
+    print(f"Configuration error: {e}")
+
+try:
+    workflow.build()  # Validates parameters
+except ValueError as e:  # Missing required parameters
+    print(f"Parameter error: {e}")
+```
 
 ## Related Patterns
 
-- **For fundamentals**: See [`workflow-quickstart`](#)
-- **For connections**: See [`connection-patterns`](#)
-- **For parameters**: See [`param-passing-quick`](#)
-
-## When to Escalate to Subagent
-
-Use specialized subagents when:
-- Complex implementation needed
-- Production deployment required
-- Deep analysis necessary
-- Enterprise patterns needed
+- **For runtime execution**: See [`runtime-execution`](../01-core-sdk/runtime-execution.md)
+- **For workflow basics**: See [`workflow-quickstart`](../01-core-sdk/workflow-quickstart.md)
+- **For quick reference**: See [`param-passing-quick`](../01-core-sdk/param-passing-quick.md)
 
 ## Documentation References
 
 ### Primary Sources
 - [`sdk-users/7-gold-standards/parameter_passing_comprehensive.md`](../../../sdk-users/7-gold-standards/parameter_passing_comprehensive.md)
+- [`sdk-users/3-development/parameter-passing-guide.md`](../../../sdk-users/3-development/parameter-passing-guide.md)
+
+### Internal Implementation
+- `src/kailash/runtime/local.py:1621-1640` - Parameter scoping implementation
 
 ## Quick Tips
 
-- 💡 **Tip 1**: Always follow Gold Standard: Parameter Passing best practices
-- 💡 **Tip 2**: Test patterns incrementally
-- 💡 **Tip 3**: Reference documentation for details
+- Use Method 1 (node configuration) for tests - most reliable
+- Use Method 2 (connections) for dynamic data flow between nodes
+- Use Method 3 (runtime parameters) for user input and overrides
+- Always declare parameters explicitly in custom nodes
+- Parameter scoping prevents data leakage automatically (v0.9.31+)
+- Validation errors raise ValueError (v0.9.31+)
 
 ## Keywords for Auto-Trigger
 
-<!-- Trigger Keywords: parameter standard, parameter gold, parameter validation, parameter security -->
+<!-- Trigger Keywords: parameter standard, parameter gold, parameter validation, parameter security, parameter scoping, parameter compliance, parameter isolation, unwrap parameters -->

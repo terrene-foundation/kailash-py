@@ -297,12 +297,29 @@ class AsyncLocalRuntime(LocalRuntime):
     """
     Async-optimized runtime for Kailash workflows.
 
-    Extends LocalRuntime with advanced async execution capabilities:
-    - Concurrent node execution where possible
-    - Integrated ResourceRegistry support
-    - Workflow analysis and optimization
-    - Advanced performance tracking
-    - Circuit breaker patterns
+    Extends LocalRuntime with advanced async execution capabilities while
+    inheriting all enterprise features through shared mixin architecture.
+
+    Inherits from:
+        LocalRuntime: Provides 100% feature parity with sync runtime
+            ├─ BaseRuntime: Core runtime foundation and configuration
+            ├─ CycleExecutionMixin: Cyclic workflow execution delegation
+            ├─ ValidationMixin: Workflow validation and contract checking
+            └─ ConditionalExecutionMixin: Conditional execution and branching logic
+
+    Async-Specific Extensions:
+        - WorkflowAnalyzer: Analyzes workflows for optimization opportunities
+        - ExecutionContext: Async context with integrated resource access
+        - Level-based parallel execution: Executes independent nodes concurrently
+        - Semaphore-based concurrency control: Limits concurrent node execution
+        - Thread pool for sync nodes: Executes sync nodes without blocking async loop
+        - Advanced performance tracking: Detailed metrics collection
+
+    Execution Strategies:
+        The runtime automatically selects the optimal execution strategy:
+        - Pure async: All nodes are async (fastest, full concurrency)
+        - Mixed: Combination of sync and async nodes (balanced)
+        - Sync in thread pool: All sync nodes (compatibility mode)
 
     Example:
         ```python
@@ -474,7 +491,7 @@ class AsyncLocalRuntime(LocalRuntime):
         workflow,
         inputs: Dict[str, Any],
         context: Optional[ExecutionContext] = None,
-    ) -> Dict[str, Any]:
+    ) -> Tuple[Dict[str, Any], str]:
         """
         Execute workflow with native async support.
 
@@ -490,12 +507,17 @@ class AsyncLocalRuntime(LocalRuntime):
             context: Optional execution context
 
         Returns:
-            Dictionary containing execution results and metrics
+            Tuple of (results dict, run_id) - SAME AS LocalRuntime.execute()
+            - results: Dictionary mapping node_id -> node output
+            - run_id: Unique execution identifier
 
         Raises:
             WorkflowExecutionError: If execution fails
         """
         start_time = time.time()
+
+        # Generate run_id for tracking (consistent with LocalRuntime)
+        run_id = f"run_{int(time.time() * 1000)}"
 
         # Create execution context
         if context is None:
@@ -505,26 +527,47 @@ class AsyncLocalRuntime(LocalRuntime):
         context.variables.update(inputs)
 
         try:
-            # Analyze workflow if enabled
-            execution_plan = None
-            if self.analyzer:
-                execution_plan = self.analyzer.analyze(workflow)
+            # Check for conditional workflow with skip_branches mode
+            # Only use conditional execution approach if skip_branches is enabled
+            if (
+                self._has_conditional_patterns(workflow)
+                and self.conditional_execution == "skip_branches"
+            ):
                 logger.info(
-                    f"Execution plan: {execution_plan.max_concurrent_nodes} max concurrent, "
-                    f"{len(execution_plan.execution_levels)} levels"
+                    "Conditional workflow with skip_branches mode detected, using conditional execution"
                 )
-
-            # Choose execution strategy based on analysis
-            if execution_plan and execution_plan.is_fully_async:
-                result = await self._execute_fully_async_workflow(
-                    workflow, context, execution_plan
-                )
-            elif execution_plan and execution_plan.has_async_nodes:
-                result = await self._execute_mixed_workflow(
-                    workflow, context, execution_plan
+                # Use inherited conditional execution from ConditionalExecutionMixin
+                tracker_result = await self._execute_conditional_approach(
+                    workflow=workflow,
+                    parameters=inputs,
+                    task_manager=None,
+                    run_id=run_id,
+                    workflow_context=None,
                 )
             else:
-                result = await self._execute_sync_workflow(workflow, context)
+                # Regular execution path
+                # Analyze workflow if enabled
+                execution_plan = None
+                if self.analyzer:
+                    execution_plan = self.analyzer.analyze(workflow)
+                    logger.info(
+                        f"Execution plan: {execution_plan.max_concurrent_nodes} max concurrent, "
+                        f"{len(execution_plan.execution_levels)} levels"
+                    )
+
+                # Choose execution strategy based on analysis
+                if execution_plan and execution_plan.is_fully_async:
+                    tracker_result = await self._execute_fully_async_workflow(
+                        workflow, context, execution_plan
+                    )
+                elif execution_plan and execution_plan.has_async_nodes:
+                    tracker_result = await self._execute_mixed_workflow(
+                        workflow, context, execution_plan
+                    )
+                else:
+                    tracker_result = await self._execute_sync_workflow(
+                        workflow, context
+                    )
 
             # Update total execution time
             total_time = time.time() - start_time
@@ -532,7 +575,24 @@ class AsyncLocalRuntime(LocalRuntime):
 
             logger.info(f"Workflow execution completed in {total_time:.2f}s")
 
-            return result
+            # Extract plain results dict (consistent with LocalRuntime)
+            # Conditional approach (skip_branches mode) returns plain dict, other methods return tracker wrapper
+            if (
+                self._has_conditional_patterns(workflow)
+                and self.conditional_execution == "skip_branches"
+            ):
+                results = (
+                    tracker_result  # Already plain dict from conditional execution
+                )
+            else:
+                results = (
+                    tracker_result.get("results", {})
+                    if isinstance(tracker_result, dict)
+                    else tracker_result
+                )
+
+            # Return same structure as LocalRuntime.execute(): (results, run_id)
+            return results, run_id
 
         except Exception as e:
             logger.error(f"Workflow execution failed: {e}")
