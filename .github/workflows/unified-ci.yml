@@ -431,8 +431,9 @@ jobs:
           # Fast test execution without forking overhead
           # Problematic threading test moved to integration tests
           # Disable pytest-xdist and pytest-forked to avoid test isolation issues
-          PYTEST_CMD="pytest tests/unit/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v -p no:xdist -p no:forked"
-          echo "Running Tier 1 unit tests only (fast mode) with marker-based exclusion"
+          # Include parity and shared tests (fast, no external dependencies)
+          PYTEST_CMD="pytest tests/unit/ tests/parity/ tests/shared/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v --log-cli-level=WARNING -p no:xdist -p no:forked"
+          echo "Running Tier 1 unit tests + parity + shared tests (fast mode) with marker-based exclusion"
 
           # Run all checks in parallel with proper failure detection
           pids=()

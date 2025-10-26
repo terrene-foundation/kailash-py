@@ -31,27 +31,42 @@ workflow.add_node("PythonCodeNode", "validator", {
     "code": "result = {'valid': data.get('status') == 'processed'}"
 })
 
-# Step 3: Connect nodes
-workflow.add_connection("processor", "validator", "result", "data")
+# Step 3: Connect nodes (4-parameter syntax: from_node, output_key, to_node, input_key)
+workflow.add_connection("processor", "result", "validator", "data")
 
-# Step 4: Execute
-runtime = LocalRuntime()
+# Step 4: Execute - ALWAYS call .build()
+runtime = LocalRuntime()  # For CLI/scripts
 results, run_id = runtime.execute(workflow.build(), parameters={
     "processor": {"input_data": {"value": 100}}
 })
+
+# For Docker/FastAPI (async)
+# from kailash.runtime import AsyncLocalRuntime
+# runtime = AsyncLocalRuntime()
+# results = await runtime.execute_workflow_async(workflow.build(), inputs={...})
+
+# Note: Both runtimes inherit from BaseRuntime and use 3 shared mixins for
+# consistent behavior:
+# - CycleExecutionMixin: Cycle execution delegation to CyclicWorkflowExecutor
+# - ValidationMixin: Workflow structure validation (5 methods)
+# - ConditionalExecutionMixin: Conditional execution and branching with SwitchNode support
+# LocalRuntime also provides validation helpers: get_validation_metrics(),
+# reset_validation_metrics(), plus enhanced error messages.
+# ParameterHandlingMixin NOT used - LocalRuntime uses WorkflowParameterInjector instead.
 ```
 
 ### 3. Connection Patterns
 
 **Direct Connection**:
 ```python
-workflow.add_connection("source", "target", "output_key", "input_key")
+# 4-parameter syntax: from_node, output_key, to_node, input_key
+workflow.add_connection("source", "output_key", "target", "input_key")
 ```
 
 **Multiple Outputs**:
 ```python
-workflow.add_connection("processor", "validator", "result", "data")
-workflow.add_connection("processor", "logger", "result", "log_data")
+workflow.add_connection("processor", "result", "validator", "data")
+workflow.add_connection("processor", "result", "logger", "log_data")
 ```
 
 **Conditional Routing**:
@@ -133,10 +148,14 @@ def test_workflow():
         "code": "result = {'test': 'passed'}"
     })
 
-    runtime = LocalRuntime()
+    # Use strict validation mode for testing (default)
+    runtime = LocalRuntime(connection_validation="strict")
     results, run_id = runtime.execute(workflow.build())
 
     assert results["test_node"]["result"]["test"] == "passed"
+
+    # Get validation metrics if needed
+    metrics = runtime.get_validation_metrics()
 ```
 
 ## When to Engage

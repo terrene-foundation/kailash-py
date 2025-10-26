@@ -43,7 +43,7 @@ from kailash.runtime import AsyncLocalRuntime
 @app.post("/execute")
 async def execute_workflow():
     runtime = AsyncLocalRuntime()  # ✓ Async runtime
-    results = await runtime.execute_workflow_async(workflow.build())
+    results = await runtime.execute_workflow_async(workflow.build(), inputs={})
 ```
 
 ### Missing Return Values
@@ -60,7 +60,7 @@ results, run_id = runtime.execute(workflow.build())
 | Context | Runtime | Method |
 |---------|---------|--------|
 | **CLI/Scripts** | `LocalRuntime()` | `execute(workflow.build())` |
-| **FastAPI/Docker** | `AsyncLocalRuntime()` | `await execute_workflow_async(workflow.build())` |
+| **FastAPI/Docker** | `AsyncLocalRuntime()` | `await execute_workflow_async(workflow.build(), inputs={})` |
 | **Parallel** | `ParallelRuntime(max_workers=4)` | `execute(workflow.build())` |
 | **Auto-detect** | `get_runtime()` | Context-aware |
 
@@ -97,7 +97,7 @@ async def execute():
     })
 
     runtime = AsyncLocalRuntime()
-    results = await runtime.execute_workflow_async(workflow.build())
+    results = await runtime.execute_workflow_async(workflow.build(), inputs={})
     return results
 ```
 
