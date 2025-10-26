@@ -1,22 +1,32 @@
 ---
 name: cycle-workflows-basics
-description: "Create cyclic workflows with convergence criteria, iteration limits, and state management. Use when asking 'cyclic workflow', 'cycles', 'loops', 'iteration', 'convergence', 'max_iterations', 'cyclic patterns', 'workflow loops', 'iterative processing', or 'cycle basics'."
+description: "⚠️ PLANNED - NOT IMPLEMENTED. Cyclic workflows are a planned feature for future release. Use when asking 'cyclic workflow', 'cycles', 'loops', 'iteration', 'convergence', 'max_iterations', 'cyclic patterns', 'workflow loops', or 'iterative processing'."
 ---
 
 # Cyclic Workflows Basics
 
-Cyclic Workflows Basics guide with patterns, examples, and best practices.
+⚠️ **PLANNED FEATURE - NOT YET IMPLEMENTED**
 
 > **Skill Metadata**
 > Category: `core-sdk`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+`
+> SDK Version: `PLANNED - NOT AVAILABLE`
+> Status: `NOT IMPLEMENTED`
+
+## Important Notice
+
+**Cyclic workflows are NOT yet implemented in the Kailash SDK.** This is a planned feature for a future release.
+
+- **Current Status**: Planned but not implemented
+- **Target Release**: TBD
+- **Recommendation**: Use alternative patterns (retry logic, manual loops) until feature is available
 
 ## Quick Reference
 
-- **Primary Use**: Cyclic Workflows Basics
+- **Primary Use**: Cyclic Workflows (PLANNED)
 - **Category**: core-sdk
 - **Priority**: HIGH
+- **Status**: NOT IMPLEMENTED
 - **Trigger Keywords**: cyclic workflow, cycles, loops, iteration, convergence, max_iterations
 
 ## Core Pattern

@@ -118,7 +118,7 @@ from kailash.runtime import AsyncLocalRuntime  # Docker-optimized runtime
 workflow = WorkflowBuilder()
 workflow.add_node("NodeName", "id", {"param": "value"})  # String-based
 runtime = AsyncLocalRuntime()  # Async-first, no threading
-results = await runtime.execute_workflow_async(workflow.build(), inputs={})
+results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs={})  # Same return as LocalRuntime!
 ```
 
 ### For CLI/Scripts (Sync Contexts)
@@ -128,7 +128,7 @@ from kailash.runtime import LocalRuntime
 
 workflow = WorkflowBuilder()
 workflow.add_node("NodeName", "id", {"param": "value"})  # String-based
-runtime = LocalRuntime()
+runtime = LocalRuntime()  # Inherits from BaseRuntime with 3 mixins
 results, run_id = runtime.execute(workflow.build())  # ALWAYS .build()
 ```
 
@@ -141,11 +141,94 @@ from kailash.runtime import get_runtime
 runtime = get_runtime()  # Defaults to "async" context
 ```
 
+### Runtime Architecture (Internal)
+Both LocalRuntime and AsyncLocalRuntime inherit from BaseRuntime and use shared mixins:
+
+**BaseRuntime Foundation**:
+- 29 configuration parameters (debug, enable_cycles, conditional_execution, connection_validation, etc.)
+- Execution metadata management (run IDs, workflow caching)
+- Common initialization and validation modes (strict, warn, off)
+
+**Shared Mixins**:
+- **CycleExecutionMixin**: Cycle execution delegation to CyclicWorkflowExecutor with validation and error wrapping
+- **ValidationMixin**: Workflow structure validation (5 methods)
+  - validate_workflow(): Checks workflow structure, node connections, parameter mappings
+  - _validate_connection_contracts(): Validates connection parameter contracts
+  - _validate_conditional_execution_prerequisites(): Validates conditional execution setup
+  - _validate_switch_results(): Validates switch node results
+  - _validate_conditional_execution_results(): Validates conditional execution results
+- **ConditionalExecutionMixin**: Conditional execution and branching logic with SwitchNode support
+  - Pattern detection and cycle detection
+  - Node skipping and hierarchical execution
+  - Conditional workflow orchestration
+
+**LocalRuntime-Specific Features**:
+- Enhanced error messages via _generate_enhanced_validation_error()
+- Connection context building via _build_connection_context()
+- Public validation API: get_validation_metrics(), reset_validation_metrics()
+
+**ParameterHandlingMixin Not Used**:
+LocalRuntime uses WorkflowParameterInjector for enterprise parameter handling instead of ParameterHandlingMixin (architectural boundary for complex workflows).
+
+**Usage**:
+```python
+# Configuration from BaseRuntime (29 parameters)
+runtime = LocalRuntime(
+    debug=True,
+    enable_cycles=True,                    # CycleExecutionMixin
+    conditional_execution="skip_branches",  # ConditionalExecutionMixin
+    connection_validation="strict"          # ValidationMixin (strict/warn/off)
+)
+results, run_id = runtime.execute(workflow.build())
+
+# Validation metrics (LocalRuntime public API)
+metrics = runtime.get_validation_metrics()
+runtime.reset_validation_metrics()
+```
+
+This architecture ensures consistent behavior between sync and async runtimes with no API changes.
+
+**AsyncLocalRuntime-Specific Features**:
+AsyncLocalRuntime extends LocalRuntime with async-optimized execution:
+- **WorkflowAnalyzer**: Analyzes workflows to determine optimal execution strategy
+- **ExecutionContext**: Async execution context with integrated resource access
+- **Execution Strategies**: Automatically selects pure async, mixed, or sync-only execution
+- **Level-Based Parallelism**: Executes independent nodes concurrently within dependency levels
+- **Thread Pool**: Executes sync nodes without blocking async loop
+- **Semaphore Control**: Limits concurrent executions to prevent resource exhaustion
+
+Inherits all LocalRuntime capabilities through MRO:
+- All 29 BaseRuntime configuration parameters
+- All mixin methods (cycle execution, validation, conditional execution)
+- Enhanced error messages and validation metrics
+
+**Usage**:
+```python
+from kailash.runtime import AsyncLocalRuntime
+
+# Same configuration as LocalRuntime
+runtime = AsyncLocalRuntime(
+    debug=True,
+    enable_cycles=True,                    # CycleExecutionMixin
+    conditional_execution="skip_branches",  # ConditionalExecutionMixin
+    connection_validation="strict",         # ValidationMixin
+    max_concurrent_nodes=10                 # AsyncLocalRuntime-specific
+)
+results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs={})
+
+# All inherited methods available
+runtime.validate_workflow(workflow)  # ValidationMixin
+metrics = runtime.get_validation_metrics()  # LocalRuntime
+```
+
+This inheritance ensures 100% feature parity between sync and async runtimes, including identical return structures.
+
 ## ⚠️ Critical Rules
 - ALWAYS: `runtime.execute(workflow.build())`
 - NEVER: `workflow.execute(runtime)`
 - String-based nodes: `workflow.add_node("NodeName", "id", {})`
 - Real infrastructure: NO MOCKING in Tiers 2-3 tests
+- **Return Structure**: Both LocalRuntime and AsyncLocalRuntime return `(results, run_id)` - identical structure
 - **Docker/FastAPI**: Use `AsyncLocalRuntime()` or `WorkflowAPI()` (defaults to async)
 - **CLI/Scripts**: Use `LocalRuntime()` for synchronous execution
 

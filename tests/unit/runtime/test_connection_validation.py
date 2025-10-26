@@ -51,6 +51,7 @@ class TestLocalRuntimeConnectionValidation:
         workflow.nodes = {"test_node": {"node": mock_node}}
         workflow.graph = Mock()
         workflow.graph.in_edges = Mock(return_value=[])
+        workflow.graph.nodes = Mock(return_value=["test_node"])  # For parameter scoping
         workflow.metadata = {}  # Required by _validate_connection_contracts
         workflow.connections = []  # Required by connection validation logic
 
@@ -75,6 +76,7 @@ class TestLocalRuntimeConnectionValidation:
         workflow.nodes = {"test_node": {"node": mock_node}}
         workflow.graph = Mock()
         workflow.graph.in_edges = Mock(return_value=[])
+        workflow.graph.nodes = Mock(return_value=["test_node"])  # For parameter scoping
         workflow.metadata = {}  # Required by _validate_connection_contracts
         workflow.connections = []  # Required by connection validation logic
 
@@ -123,6 +125,9 @@ class TestLocalRuntimeConnectionValidation:
         workflow = Mock(spec=Workflow)
         workflow.nodes = {"target_node": {"node": mock_node}}
         workflow.graph = Mock()
+        workflow.graph.nodes = Mock(
+            return_value=["source_node", "target_node"]
+        )  # For parameter scoping
         workflow.metadata = {}  # Required by _validate_connection_contracts
         workflow.connections = []  # Required by connection validation logic
 
@@ -160,6 +165,9 @@ class TestLocalRuntimeConnectionValidation:
         workflow = Mock(spec=Workflow)
         workflow.nodes = {"test_node": {"node": mock_node}}
         workflow.graph = Mock()
+        workflow.graph.nodes = Mock(
+            return_value=["source", "test_node"]
+        )  # For parameter scoping
         workflow.metadata = {}  # Required by _validate_connection_contracts
         workflow.connections = []  # Required by connection validation logic
 
