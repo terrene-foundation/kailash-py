@@ -65,6 +65,31 @@ def test_full_application():
 - Databases
 - External APIs (in integration tests)
 
+## Runtime Parity Testing
+
+Test workflows against **both** LocalRuntime and AsyncLocalRuntime using shared fixtures:
+
+```python
+import pytest
+from tests.shared.runtime.conftest import runtime_class, execute_runtime
+
+def test_workflow_execution(runtime_class):
+    """Test runs twice: once with LocalRuntime, once with AsyncLocalRuntime"""
+    runtime = runtime_class()
+    workflow = create_test_workflow()
+
+    # Helper normalizes parameter names and return structures
+    results = execute_runtime(runtime, workflow, parameters={"input": "data"})
+
+    assert results["output_node"]["result"] == expected_value
+```
+
+**Key Features:**
+- Parametrized fixtures run same test on both runtimes
+- `execute_runtime()` helper normalizes parameters and return structures
+- Ensures identical behavior between sync and async runtimes
+- Located in `tests/shared/runtime/` directory
+
 ## Documentation
 
 - **Testing Guide**: [`# contrib (removed)/5-testing/01-testing-strategy.md`](../../../../# contrib (removed)/5-testing/01-testing-strategy.md)

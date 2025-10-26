@@ -1,17 +1,30 @@
-# Cycles and Convergence - Production Ready ✅
+# ⚠️ CYCLIC WORKFLOWS - PLANNED FEATURE
 
-**Status**: ✅ **Production Ready** (v0.9.0+)
-**Critical Fixes**: TODO-128 cycle convergence issues resolved (2025-01-29)
+> **STATUS**: This feature is planned but NOT YET IMPLEMENTED in the current SDK version (v0.9.31).
+>
+> The cycle convergence functionality described in this document represents planned capabilities.
+> While some internal cycle detection and handling exists, the CycleBuilder API and full cyclic workflow
+> support is under active development.
+>
+> **Current Alternatives**:
+> - Recursive workflows with manual iteration control
+> - External Python loops around workflow execution
+> - State machines with conditional routing (SwitchNode)
+> - Sequential workflow executions with state persistence
 
-Kailash SDK provides robust support for cyclic workflows with reliable convergence, natural termination, and optimal performance.
+---
 
-## 🎯 Key Features
+# Cycles and Convergence (PLANNED)
 
-- **✅ Deterministic Execution**: Same inputs always produce same outputs
-- **✅ Natural Termination**: Cycles terminate when SwitchNode conditions change
-- **✅ Optimal Performance**: Each node executes exactly once per iteration
-- **✅ Parameter Propagation**: Data correctly flows between iterations
-- **✅ Hierarchical Switch Support**: Multi-level dependent switch execution
+**Future Capability**: Kailash SDK will provide robust support for cyclic workflows with reliable convergence, natural termination, and optimal performance.
+
+## 🎯 Planned Key Features
+
+- **Deterministic Execution**: Same inputs will always produce same outputs
+- **Natural Termination**: Cycles will terminate when SwitchNode conditions change
+- **Optimal Performance**: Each node will execute exactly once per iteration
+- **Parameter Propagation**: Data will correctly flow between iterations
+- **Hierarchical Switch Support**: Multi-level dependent switch execution
 
 ## 🚀 Quick Start
 
