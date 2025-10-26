@@ -93,9 +93,18 @@ For in-depth documentation, see `sdk-users/apps/kaizen/docs/`:
 ### Advanced Features (v0.2.0+)
 - **[kaizen-control-protocol](kaizen-control-protocol.md)** - **NEW** Bidirectional agent ↔ client communication
 - **[kaizen-tool-calling](kaizen-tool-calling.md)** - **NEW** Autonomous tool execution with approval workflows
+- **[kaizen-memory-system](kaizen-memory-system.md)** - **NEW** Persistent memory, learning, FAQ detection, preference adaptation (v0.5.0+)
+- **[kaizen-checkpoint-resume](kaizen-checkpoint-resume.md)** - **NEW** Checkpoint & resume for long-running agents, failure recovery (v0.5.0+)
 - **[kaizen-streaming](kaizen-streaming.md)** - Streaming agent responses
 - **[kaizen-cost-tracking](kaizen-cost-tracking.md)** - Cost monitoring and optimization
 - **[kaizen-ux-helpers](kaizen-ux-helpers.md)** - UX enhancement utilities
+
+### Observability & Monitoring
+- **[kaizen-observability-hooks](kaizen-observability-hooks.md)** - Lifecycle event hooks and hook management system
+- **[kaizen-observability-tracing](kaizen-observability-tracing.md)** - Distributed tracing with OpenTelemetry and Jaeger
+- **[kaizen-observability-metrics](kaizen-observability-metrics.md)** - Prometheus metrics collection with p50/p95/p99 percentiles
+- **[kaizen-observability-logging](kaizen-observability-logging.md)** - Structured JSON logging for ELK Stack integration
+- **[kaizen-observability-audit](kaizen-observability-audit.md)** - Compliance audit trails (SOC2, GDPR, HIPAA, PCI-DSS)
 
 ### Testing & Quality
 - **[kaizen-testing-patterns](kaizen-testing-patterns.md)** - Testing AI agents
@@ -116,6 +125,16 @@ Foundation for all Kaizen agents:
 - **Cost Tracking**: Monitor API usage and costs
 - **Streaming**: Support for streaming responses
 - **Memory**: State management across invocations
+- **Hooks System**: Zero-code-change observability and lifecycle management
+
+### Hooks System (Lifecycle Events)
+Event-driven framework for zero-code-change observability:
+- **What**: Lifecycle event framework for monitoring, tracing, auditing, and metrics
+- **How**: Register hooks that execute on PRE/POST lifecycle events
+- **Benefits**: Add observability without modifying agent logic
+- **Performance**: <0.01ms overhead, 100+ concurrent hooks supported
+- **Events**: PRE/POST_AGENT_LOOP, PRE/POST_TOOL_USE
+- **Use Cases**: Distributed tracing, Prometheus metrics, audit trails, policy enforcement
 
 ### Multi-Agent Patterns
 - **Supervisor-Worker**: Central coordinator with specialized workers
@@ -139,6 +158,8 @@ Use Kaizen when you need to:
 - Implement chain-of-thought reasoning
 - Build supervisor-worker architectures
 - Track costs and performance of AI agents
+- Add zero-code-change observability to agents (hooks system)
+- Monitor, trace, and audit agent behavior in production
 - Create production-ready agentic applications
 
 ## Integration Patterns
