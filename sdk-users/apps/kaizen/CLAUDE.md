@@ -50,7 +50,7 @@ print(result['answer'])  # Key is 'answer', NOT 'response'
 ### Multi-Agent Coordination
 
 ```python
-from kaizen.agents.coordination.supervisor_worker import SupervisorWorkerPattern
+from kaizen.orchestration.patterns import SupervisorWorkerPattern
 
 # Semantic capability matching (NO hardcoded if/else!)
 pattern = SupervisorWorkerPattern(supervisor, workers, coordinator, shared_pool)
@@ -602,7 +602,7 @@ result = agent.analyze(
 
 ### Multi-Agent Coordination
 ```python
-from kaizen.agents.coordination.supervisor_worker import SupervisorWorkerPattern
+from kaizen.orchestration.patterns import SupervisorWorkerPattern
 from kaizen.agents import SimpleQAAgent, CodeGenerationAgent, RAGResearchAgent
 
 # Create worker agents
@@ -699,11 +699,12 @@ agent = SimpleQAAgent(config)  # Auto-extraction happens here
    - Unified orchestration with MultiModalAgent
    - Real infrastructure testing (NO MOCKING)
 
-4. **Multi-Agent Coordination** (`src/kaizen/agents/coordination/`)
+4. **Multi-Agent Coordination** (`src/kaizen/orchestration/`)
    - Google A2A protocol integration (100% compliant)
    - SupervisorWorkerPattern with semantic matching (production-ready)
    - 4 additional patterns: Consensus, Debate, Sequential, Handoff
    - Automatic capability discovery, no hardcoded selection
+   - Pipeline infrastructure for composable workflows (v0.5.0+)
 
 5. **Observability Stack (v0.5.0)** (`src/kaizen/core/autonomy/observability/`)
    - Distributed tracing: OpenTelemetry + Jaeger
