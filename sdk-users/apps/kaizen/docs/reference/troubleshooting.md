@@ -67,16 +67,16 @@ ValueError: Agent does not have tool calling support enabled
 agent = BaseAgent(config=config, signature=signature)
 
 # ✅ CORRECT - Add tool registry
-from kaizen.tools import ToolRegistry
-from kaizen.tools.builtin import register_builtin_tools
+# Tools auto-configured via MCP
 
-registry = ToolRegistry()
-register_builtin_tools(registry)
+
+
+# 12 builtin tools enabled via MCP
 
 agent = BaseAgent(
     config=config,
     signature=signature,
-    tool_registry=registry  # Enable tools
+    tools="all"  # Enable 12 builtin tools via MCP
 )
 ```
 
@@ -103,7 +103,7 @@ protocol = ControlProtocol(transport)
 agent = BaseAgent(
     config=config,
     signature=signature,
-    tool_registry=registry,
+    tools="all"  # Enable 12 builtin tools via MCP
     control_protocol=protocol  # Add protocol
 )
 

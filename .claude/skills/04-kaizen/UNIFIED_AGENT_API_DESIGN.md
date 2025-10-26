@@ -102,7 +102,7 @@ agent = Agent(model="gpt-4", workflow="supervisor_worker")
 | Feature | Components | Default State | User Control | Expert Override |
 |---------|-----------|--------------|--------------|-----------------|
 | **Memory System** | BufferMemory, PersistentBufferMemory, SummaryMemory, VectorMemory, KnowledgeGraphMemory, SharedMemoryPool | ✅ Enabled (BufferMemory, 10 turns) | `memory_turns=20`<br>`memory_type="persistent"` | `memory=CustomMemory()` |
-| **Tool Calling** | ToolRegistry, ToolExecutor, 12 builtin tools | ✅ Enabled (all builtin) | `tools=["read_file", "http_get"]`<br>`tools=False` | `tool_registry=CustomRegistry()` |
+| **Tool Calling** | ToolRegistry, ToolExecutor, 12 builtin tools | ✅ Enabled (all builtin) | `tools=["read_file", "http_get"]`<br>`tools=False` | `tools="all"  # Enable tools via MCP
 | **Observability** | HookManager, Tracing, Metrics, Logging, Audit | ✅ Enabled (auto-start) | `observability=False`<br>`tracing_only=True` | `hook_manager=CustomHooks()` |
 | **Checkpointing** | StateManager, FilesystemStorage | ✅ Enabled (every 5 steps) | `checkpoint_frequency=10`<br>`checkpointing=False` | `state_manager=CustomStateManager()` |
 | **Cost Tracking** | Budget monitoring, warnings | ✅ Enabled ($1.00 limit) | `budget_limit_usd=5.0`<br>`budget_limit_usd=None` | Always enabled (safety) |
@@ -280,7 +280,7 @@ agent = Agent(
     ),
 
     # Custom tool registry
-    tool_registry=CustomToolRegistry(
+    tools="all"  # Enable tools via MCP
         discovery_service="consul",
         dynamic_loading=True
     ),
@@ -586,7 +586,7 @@ from dataclasses import dataclass
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import Signature
 from kaizen.memory import BaseMemory, BufferMemory
-from kaizen.tools import ToolRegistry
+# Tools auto-configured via MCP
 from kaizen.core.autonomy.hooks import HookManager
 from kaizen.core.autonomy.state.manager import StateManager
 
@@ -760,7 +760,7 @@ class Agent:
         # Setup infrastructure (or use expert overrides)
         self._setup_infrastructure(
             memory=memory,
-            tool_registry=tool_registry,
+            tools="all"  # Enable tools via MCP
             hook_manager=hook_manager,
             state_manager=state_manager,
             control_protocol=control_protocol,
@@ -869,7 +869,7 @@ class Agent:
     def _setup_infrastructure(
         self,
         memory=None,
-        tool_registry=None,
+        tools="all"  # Enable tools via MCP
         hook_manager=None,
         state_manager=None,
         control_protocol=None,
@@ -978,7 +978,6 @@ class Agent:
             print(f"   Budget: ${self._budget_config['limit_usd']:.2f} USD limit")
 
         print()  # Blank line
-
 
 # Agent type presets (defined earlier)
 AGENT_TYPE_PRESETS = {
@@ -1106,8 +1105,8 @@ agent = Agent(model="gpt-4", temperature=0.7)
 **BEFORE (Current)**:
 ```python
 from kaizen.agents import ReActAgent
-from kaizen.tools import ToolRegistry
-from kaizen.tools.builtin import register_builtin_tools
+# Tools auto-configured via MCP
+
 from dataclasses import dataclass
 
 @dataclass
@@ -1118,8 +1117,8 @@ class ReActConfig:
     temperature: float = 0.7
 
 # Setup tools
-registry = ToolRegistry()
-register_builtin_tools(registry)
+
+# 12 builtin tools enabled via MCP
 
 # Create agent
 config = ReActConfig()
@@ -1128,7 +1127,7 @@ agent = ReActAgent(
     model=config.model,
     max_cycles=config.max_cycles,
     temperature=config.temperature,
-    tool_registry=registry
+    tools="all"  # Enable 12 builtin tools via MCP
 )
 
 # Execute
@@ -1307,7 +1306,6 @@ result = agent.run("What is machine learning?")
 # - Cost tracking: $1.00 limit
 # - Rich output: Startup banner, progress, metrics
 
-
 # ====================================
 # LAYER 2: Configuration (Power User)
 # ====================================
@@ -1325,7 +1323,6 @@ agent = Agent(
 )
 
 result = agent.run("Research latest AI papers and summarize")
-
 
 # ====================================
 # LAYER 3: Expert Override
@@ -1348,7 +1345,7 @@ agent = Agent(
         replication_factor=3
     ),
 
-    tool_registry=ConsulToolRegistry(
+    tools="all"  # Enable tools via MCP
         service_discovery="consul.internal",
         dynamic_loading=True
     ),
