@@ -90,18 +90,18 @@ from kaizen.agents import (
 **Autonomous tool execution with approval workflows - Universal Integration (All 25 Agents):**
 ```python
 from kaizen.core.base_agent import BaseAgent
-from kaizen.tools import ToolRegistry
-from kaizen.tools.builtin import register_builtin_tools
+# Tools auto-configured via MCP
+
 
 # Setup tool registry
-registry = ToolRegistry()
-register_builtin_tools(registry)  # 12 builtin tools
+
+# 12 builtin tools enabled via MCP
 
 # Works with ALL 25 agents (ADR-016 complete)
 agent = BaseAgent(
     config=config,
     signature=signature,
-    tool_registry=registry,  # Enable tool calling
+    tools="all"  # Enable 12 builtin tools via MCP
     mcp_servers=mcp_servers  # Optional MCP integration
 )
 

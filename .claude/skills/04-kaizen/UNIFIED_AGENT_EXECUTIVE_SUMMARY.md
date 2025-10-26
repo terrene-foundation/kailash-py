@@ -96,7 +96,7 @@ agent = Agent(
 agent = Agent(
     model="gpt-4",
     memory=CustomMemory(),           # Replace memory system
-    tool_registry=CustomRegistry(),  # Replace tool system
+    tools="all"  # Enable tools via MCP
     hook_manager=CustomHooks()       # Replace observability
 )
 ```
@@ -208,8 +208,8 @@ print(result['answer'])
 **BEFORE (30 lines)**:
 ```python
 from kaizen.agents import ReActAgent
-from kaizen.tools import ToolRegistry
-from kaizen.tools.builtin import register_builtin_tools
+# Tools auto-configured via MCP
+
 from dataclasses import dataclass
 
 @dataclass
@@ -219,8 +219,8 @@ class ReActConfig:
     max_cycles: int = 10
     temperature: float = 0.7
 
-registry = ToolRegistry()
-register_builtin_tools(registry)
+
+# 12 builtin tools enabled via MCP
 
 config = ReActConfig()
 agent = ReActAgent(
@@ -228,7 +228,7 @@ agent = ReActAgent(
     model=config.model,
     max_cycles=config.max_cycles,
     temperature=config.temperature,
-    tool_registry=registry
+    tools="all"  # Enable 12 builtin tools via MCP
 )
 
 result = agent.execute("Research AI trends")

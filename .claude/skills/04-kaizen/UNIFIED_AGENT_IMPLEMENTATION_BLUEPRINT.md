@@ -94,8 +94,8 @@ from kaizen.memory import (
     KnowledgeGraphMemory,
     SharedMemoryPool,
 )
-from kaizen.tools import ToolRegistry, ToolExecutor
-from kaizen.tools.builtin import register_builtin_tools
+# Tools auto-configured via MCP, ToolExecutor
+
 from kaizen.core.autonomy.hooks import HookManager
 from kaizen.core.autonomy.state.manager import StateManager
 from kaizen.core.autonomy.state.storage import FilesystemStorage
@@ -104,7 +104,6 @@ from kaizen.core.autonomy.control import ControlProtocol
 logger = logging.getLogger(__name__)
 
 __all__ = ["Agent", "AgentManager"]
-
 
 class Agent:
     """
@@ -146,7 +145,7 @@ class Agent:
         >>> agent = Agent(
         ...     model="gpt-4",
         ...     memory=RedisMemory(),
-        ...     tool_registry=ConsulRegistry(),
+        ...     tools="all"  # Enable tools via MCP
         ...     hook_manager=DatadogHooks()
         ... )
     """
@@ -309,7 +308,7 @@ class Agent:
         # Setup infrastructure (smart defaults or expert overrides)
         self._setup_infrastructure(
             memory=memory,
-            tool_registry=tool_registry,
+            tools="all"  # Enable tools via MCP
             hook_manager=hook_manager,
             state_manager=state_manager,
             control_protocol=control_protocol,
@@ -483,7 +482,7 @@ class Agent:
     def _setup_infrastructure(
         self,
         memory=None,
-        tool_registry=None,
+        tools="all"  # Enable tools via MCP
         hook_manager=None,
         state_manager=None,
         control_protocol=None,
@@ -574,12 +573,12 @@ class Agent:
 
     def _create_default_tool_registry(self) -> ToolRegistry:
         """Create default tool registry with builtin tools."""
-        registry = ToolRegistry()
+        
 
         # Register builtin tools
         if self._tools_config["tools"] == "all":
             # Register all 12 builtin tools
-            register_builtin_tools(registry)
+            # 12 builtin tools enabled via MCP
         elif isinstance(self._tools_config["tools"], list):
             # Register subset of tools
             register_builtin_tools(
@@ -649,7 +648,7 @@ class Agent:
             config=base_config,
             signature=signature,
             memory=self._memory,
-            tool_registry=self._tool_registry,
+            tools="all"  # Enable tools via MCP
             hook_manager=self._hook_manager,
             state_manager=self._state_manager,
             control_protocol=self._control_protocol,
@@ -905,7 +904,6 @@ class Agent:
             "document": self._document_enabled if hasattr(self, "_document_enabled") else False,
         }
 
-
 # ====================================
 # AGENT MANAGER (Multi-agent orchestration)
 # ====================================
@@ -1110,8 +1108,7 @@ Tests all 3 layers:
 import pytest
 from kaizen import Agent
 from kaizen.memory import BufferMemory, PersistentBufferMemory
-from kaizen.tools import ToolRegistry
-
+# Tools auto-configured via MCP
 
 class TestLayer1ZeroConfig:
     """Test zero-config defaults (Layer 1)."""
@@ -1141,7 +1138,6 @@ class TestLayer1ZeroConfig:
 
         assert hasattr(agent, "run")
         assert callable(agent.run)
-
 
 class TestLayer2Configuration:
     """Test configuration options (Layer 2)."""
@@ -1199,7 +1195,6 @@ class TestLayer2Configuration:
         assert features["observability"] is False
         assert features["checkpointing"] is False
 
-
 class TestLayer3ExpertOverride:
     """Test expert override options (Layer 3)."""
 
@@ -1212,11 +1207,10 @@ class TestLayer3ExpertOverride:
 
     def test_custom_tool_registry(self):
         """Test custom tool registry override."""
-        custom_registry = ToolRegistry()
-        agent = Agent(model="gpt-4", tool_registry=custom_registry)
+        custom_
+        agent = Agent(model="gpt-4", tools="all"  # Enable tools via MCP
 
         assert agent._tool_registry is custom_registry
-
 
 # Add 100+ more unit tests...
 ```
