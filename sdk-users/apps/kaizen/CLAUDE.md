@@ -85,46 +85,43 @@ from kaizen.agents import (
 )
 ```
 
-### Tool Calling (NEW in v0.2.0)
+### Tool Calling (v0.2.0+)
 
-**Autonomous tool execution with approval workflows - Universal Integration (All 25 Agents):**
+**MCP (Model Context Protocol) integration - Auto-connects to 12 builtin tools:**
+
 ```python
 from kaizen.core.base_agent import BaseAgent
-from kaizen.tools import ToolRegistry
-from kaizen.tools.builtin import register_builtin_tools
 
-# Setup tool registry
-registry = ToolRegistry()
-register_builtin_tools(registry)  # 12 builtin tools
-
-# Works with ALL 25 agents (ADR-016 complete)
+# MCP auto-connect - 12 builtin tools available automatically
 agent = BaseAgent(
     config=config,
-    signature=signature,
-    tool_registry=registry,  # Enable tool calling
-    mcp_servers=mcp_servers  # Optional MCP integration
+    signature=signature
+    # Optional: Add custom MCP servers
+    # mcp_servers=[{
+    #     "name": "custom-server",
+    #     "command": "python",
+    #     "args": ["-m", "custom.mcp.server"],
+    #     "transport": "stdio"
+    # }]
 )
 
-# Discover tools
-tools = await agent.discover_tools(category="file")
+# Discover tools (from kaizen_builtin MCP server)
+tools = await agent.discover_mcp_tools(server_name="kaizen_builtin")
 
 # Execute single tool
-result = await agent.execute_tool("read_file", {"path": "data.txt"})
-
-# Chain multiple tools
-results = await agent.execute_tool_chain([
-    {"tool_name": "read_file", "params": {"path": "input.txt"}},
-    {"tool_name": "write_file", "params": {"path": "output.txt", "content": "..."}}
-])
+result = await agent.execute_mcp_tool(
+    tool_name="mcp__kaizen_builtin__read_file",
+    params={"path": "data.txt"}
+)
 ```
 
-**12 Builtin Tools:**
+**12 Builtin Tools** (via kaizen_builtin MCP server):
 - **File (5)**: read_file, write_file, delete_file, list_directory, file_exists
 - **HTTP (4)**: http_get, http_post, http_put, http_delete
 - **Bash (1)**: bash_command
 - **Web (2)**: fetch_url, extract_links
 
-**Universal Support**: All 25 agents (autonomous, single-shot, coordination) now support tool_registry and mcp_servers parameters (100% backward compatible)
+**Universal Support**: All agents inherit MCP integration from BaseAgent (100% backward compatible)
 
 ### Control Protocol (NEW in v0.2.0)
 
