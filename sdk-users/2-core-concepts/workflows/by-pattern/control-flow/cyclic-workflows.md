@@ -1,10 +1,25 @@
-# Cyclic Workflow Patterns
+# ⚠️ CYCLIC WORKFLOWS - PLANNED FEATURE
+
+> **STATUS**: This feature is planned but NOT YET IMPLEMENTED in the current SDK version (v0.9.31).
+>
+> Cyclic workflows (feedback loops, iterative processing) are under active development.
+> The CycleBuilder API shown in this documentation represents the planned interface.
+>
+> **Current Alternatives**:
+> - Recursive workflows with manual iteration
+> - External loop control with sequential workflow executions
+> - State machines with conditional routing (SwitchNode)
+> - Python loops around workflow execution
+
+---
+
+# Cyclic Workflow Patterns (PLANNED)
 
 **Iterative processes and feedback loops** - Build workflows that repeat until conditions are met.
 
-## 📋 Pattern Overview
+## 📋 Pattern Overview (Future Capability)
 
-Cyclic workflows enable iterative processing, optimization loops, and state-based flows where nodes can receive feedback from downstream processes. This pattern is essential for machine learning training, iterative refinement, retry mechanisms, and any process that requires convergence or repeated attempts.
+Cyclic workflows will enable iterative processing, optimization loops, and state-based flows where nodes can receive feedback from downstream processes. This pattern will be essential for machine learning training, iterative refinement, retry mechanisms, and any process that requires convergence or repeated attempts.
 
 ## 🚀 Working Examples
 

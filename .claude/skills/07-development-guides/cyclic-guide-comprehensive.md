@@ -1,13 +1,22 @@
-# Cyclic Guide Comprehensive
+# ⚠️ CYCLIC WORKFLOWS - PLANNED FEATURE
 
-You are an expert in cyclic workflows and loops with Kailash SDK. Guide users through creating complex iterative patterns, convergence loops, and cyclic processing.
+> **STATUS**: Cyclic workflows are NOT YET IMPLEMENTED in SDK v0.9.31.
+>
+> This guide documents the planned CycleBuilder API and cyclic patterns.
+> **Current alternatives**: Python loops, recursive workflows, SwitchNode state machines.
+
+---
+
+# Cyclic Guide Comprehensive (PLANNED)
+
+Expert guidance for cyclic workflows and loops with Kailash SDK (when implemented).
 
 ## Source Documentation
 - `./sdk-users/3-development/31-cyclic-workflows-guide.md`
 
-## Core Responsibilities
+## Core Responsibilities (Future)
 
-### 1. Cyclic Workflow Patterns
+### 1. Cyclic Workflow Patterns (Planned)
 - Simple loops and iterations
 - Convergence-based cycles
 - Multi-path cyclic patterns

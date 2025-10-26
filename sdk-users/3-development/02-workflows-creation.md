@@ -11,7 +11,7 @@
 ### Simple Workflow
 ```python
 from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime.local import LocalRuntime
+from kailash.runtime import LocalRuntime
 
 # Create workflow with modern API
 workflow = WorkflowBuilder()
@@ -35,9 +35,14 @@ result = {'processed_items': processed, 'count': len(processed)}
 # Connect nodes with 4-parameter syntax
 workflow.add_connection("data_reader", "result", "processor", "input_data")
 
-# Execute
-runtime = LocalRuntime()
+# Execute - ALWAYS call .build() before execution
+runtime = LocalRuntime()  # For CLI/scripts (synchronous)
 results, run_id = runtime.execute(workflow.build())
+
+# For Docker/FastAPI (asynchronous)
+# from kailash.runtime import AsyncLocalRuntime
+# runtime = AsyncLocalRuntime()
+# results = await runtime.execute_workflow_async(workflow.build(), inputs={})
 ```
 
 ### Progressive Workflow Building
@@ -118,9 +123,9 @@ result = {
 
     return workflow
 
-# Execute the pipeline
+# Execute the pipeline - ALWAYS call .build() before execution
 pipeline = build_data_pipeline()
-runtime = LocalRuntime()
+runtime = LocalRuntime()  # For CLI/scripts (synchronous)
 results, run_id = runtime.execute(pipeline.build())
 ```
 

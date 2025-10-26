@@ -5,23 +5,23 @@ description: "Three methods of parameter passing in Kailash SDK: node configurat
 
 # Parameter Passing - Three Methods
 
-Complete guide to the three methods of passing parameters to nodes in Kailash SDK workflows.
+Three methods to pass parameters to nodes in Kailash SDK workflows.
 
 > **Skill Metadata**
 > Category: `core-sdk`
 > Priority: `CRITICAL`
-> SDK Version: `0.7.0+`
-> Related Skills: [`workflow-quickstart`](workflow-quickstart.md), [`connection-patterns`](connection-patterns.md), [`error-parameter-validation`](../../5-cross-cutti../15-error-troubleshooting/error-parameter-validation.md)
+> SDK Version: `0.9.31+`
+> Related Skills: [`workflow-quickstart`](workflow-quickstart.md), [`connection-patterns`](connection-patterns.md), [`error-parameter-validation`](../ 15-error-troubleshooting/error-parameter-validation.md)
 > Related Subagents: `pattern-expert` (complex parameter patterns)
 
 ## Quick Reference
 
-**Three Methods** (in order of reliability):
+**Three Methods:**
 1. **Node Configuration** (Static) - Most reliable ⭐⭐⭐⭐⭐
 2. **Workflow Connections** (Dynamic) - Most reliable ⭐⭐⭐⭐⭐
-3. **Runtime Parameters** (Override) - Has edge case ⭐⭐⭐
+3. **Runtime Parameters** (Override) - Reliable (unwrapped automatically) ⭐⭐⭐⭐⭐
 
-**CRITICAL**: Every required parameter must come from one of these methods or the workflow fails at build time.
+**CRITICAL**: Every required parameter must come from one of these methods or workflow fails at build time.
 
 ## Core Pattern
 
@@ -33,22 +33,50 @@ workflow = WorkflowBuilder()
 
 # Method 1: Node Configuration (static values)
 workflow.add_node("EmailNode", "send", {
-    "to": "user@example.com",  # Static parameter
+    "to": "user@example.com",
     "subject": "Welcome"
 })
 
 # Method 2: Workflow Connection (dynamic from another node)
 workflow.add_node("UserLookupNode", "lookup", {"user_id": 123})
-workflow.add_connection("lookup", "email", "send", "to")  # Override static value
+workflow.add_connection("lookup", "email", "send", "to")
 
 # Method 3: Runtime Parameter (override at execution)
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build(), parameters={
-    "send": {"to": "override@example.com"}  # Override both config and connection
+    "send": {"to": "override@example.com"}
 })
 ```
 
-## The Three Methods Explained
+## Parameter Scoping (v0.9.31+)
+
+**Node-specific parameters are automatically unwrapped:**
+
+```python
+# What you pass to runtime:
+parameters = {
+    "api_key": "global-key",      # Global param (all nodes)
+    "node1": {"value": 10},        # Node-specific for node1
+    "node2": {"value": 20}         # Node-specific for node2
+}
+
+runtime.execute(workflow.build(), parameters=parameters)
+
+# What node1 receives (unwrapped automatically):
+{
+    "api_key": "global-key",       # Global param
+    "value": 10                     # Unwrapped from {"node1": {"value": 10}}
+}
+# node1 does NOT receive node2's parameters (isolated)
+```
+
+**Scoping rules:**
+- **Node-specific params**: Nested under node ID → unwrapped automatically
+- **Global params**: Top-level (not node IDs) → go to all nodes
+- **Parameter isolation**: Each node receives only its params + globals
+- **No leakage**: Node1's params never reach Node2
+
+## The Three Methods
 
 ### Method 1: Node Configuration (Static)
 **Use when**: Values known at design time
@@ -56,12 +84,12 @@ results, run_id = runtime.execute(workflow.build(), parameters={
 ```python
 workflow.add_node("UserCreateNode", "create", {
     "name": "Alice",
-    "email": "alice@example.com",  # All parameters in config
+    "email": "alice@example.com",
     "active": True
 })
 ```
 
-**Advantages**:
+**Advantages:**
 - Most reliable
 - Clear and explicit
 - Easy to debug
@@ -71,20 +99,17 @@ workflow.add_node("UserCreateNode", "create", {
 **Use when**: Values come from other nodes
 
 ```python
-# Source node
 workflow.add_node("FormDataNode", "form", {})
-
-# Target node
 workflow.add_node("UserCreateNode", "create", {
     "name": "Alice"
-    # 'email' will come from connection
+    # 'email' comes from connection
 })
 
-# Connect data flow
+# 4-parameter syntax: from_node, output_key, to_node, input_key
 workflow.add_connection("form", "email_field", "create", "email")
 ```
 
-**Advantages**:
+**Advantages:**
 - Dynamic data flow
 - Loose coupling
 - Enables pipelines
@@ -106,14 +131,6 @@ runtime.execute(workflow.build(), parameters={
     }
 })
 ```
-
-**⚠️ Edge Case Warning**:
-Fails when ALL conditions met:
-- Empty node config `{}`
-- All parameters optional
-- No connections provide parameters
-
-**Fix**: Provide minimal config: `{"_init": True}`
 
 ## Common Mistakes
 
@@ -146,8 +163,8 @@ runtime.execute(workflow.build(), parameters={
 
 - **For connections**: [`connection-patterns`](connection-patterns.md)
 - **For workflow creation**: [`workflow-quickstart`](workflow-quickstart.md)
-- **For parameter errors**: [`error-parameter-validation`](../../5-cross-cutti../15-error-troubleshooting/error-parameter-validation.md)
-- **Gold standard**: [`gold-parameter-passing`](../../17-gold-standards/gold-parameter-passing.md)
+- **For parameter errors**: [`error-parameter-validation`](../15-error-troubleshooting/error-parameter-validation.md)
+- **Gold standard**: [`gold-parameter-passing`](../17-gold-standards/gold-parameter-passing.md)
 
 ## When to Escalate to Subagent
 
@@ -164,7 +181,7 @@ Use `pattern-expert` when:
 - **Gold Standard**: [`sdk-users/7-gold-standards/parameter_passing_comprehensive.md`](../../../sdk-users/7-gold-standards/parameter_passing_comprehensive.md)
 
 ### Related Documentation
-- **Common Mistakes**: [`sdk-users/2-core-concepts/validation/common-mistakes.md` (lines 24-51)](../../../sdk-users/2-core-concepts/validation/common-mistakes.md#L24-L51)
+- **Common Mistakes**: [`sdk-users/2-core-concepts/validation/common-mistakes.md`](../../../sdk-users/2-core-concepts/validation/common-mistakes.md)
 
 ## Quick Tips
 
@@ -172,11 +189,12 @@ Use `pattern-expert` when:
 - 💡 **Method 2 for pipelines**: Natural for data flows
 - 💡 **Method 3 for user input**: Dynamic values at runtime
 - 💡 **Combine methods**: You can use all three together
-- 💡 **Avoid edge case**: Never use empty config `{}` with all optional params
+- 💡 **Parameter scoping**: Automatic unwrapping prevents leakage
 
 ## Version Notes
 
+- **v0.9.31+**: Parameter scoping with automatic unwrapping
 - **v0.7.0+**: Strict parameter validation enforced (security feature)
 - **v0.6.0+**: Three methods established as standard pattern
 
-<!-- Trigger Keywords: parameter passing, pass parameters, runtime parameters, node config, how to pass data, 3 methods, parameter methods, node parameters, workflow parameters, parameter flow, provide parameters -->
+<!-- Trigger Keywords: parameter passing, pass parameters, runtime parameters, node config, how to pass data, 3 methods, parameter methods, node parameters, workflow parameters, parameter flow, provide parameters, parameter scoping, unwrap parameters -->

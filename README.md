@@ -6,7 +6,7 @@
   <a href="https://pepy.tech/project/kailash"><img src="https://static.pepy.tech/badge/kailash" alt="Downloads"></a>
   <img src="https://img.shields.io/badge/license-Apache%202.0%20with%20Additional%20Terms-orange.svg" alt="Apache 2.0 with Additional Terms">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
-  <img src="https://img.shields.io/badge/tests-4000%2B%20passing-brightgreen.svg" alt="Tests: 4000+ Passing">
+  <img src="https://img.shields.io/badge/tests-928%20passing-brightgreen.svg" alt="Tests: 928 Passing">
   <img src="https://img.shields.io/badge/performance-11x%20faster-yellow.svg" alt="Performance: 11x Faster">
   <img src="https://img.shields.io/badge/docker-integrated-blue.svg" alt="Docker: Integrated">
   <img src="https://img.shields.io/badge/AI-MCP%20validated-purple.svg" alt="AI: MCP Validated">
@@ -22,38 +22,62 @@
 
 ---
 
-## 🔥 Latest Release: v0.9.27 (October 22, 2024)
+## 🔥 Latest Release: v0.10.0 (October 26, 2024)
 
-**CRITICAL: AsyncLocalRuntime Parameter Passing Fix**
+**⚠️ BREAKING CHANGES - Runtime Parity & Parameter Scoping**
 
-### 🐛 Critical Bug Fixes
-- **AsyncLocalRuntime Parameter Passing**: Fixed P0 bug causing 100% failure rate for ALL DataFlow operations
-  - Root cause: `async_run()` called directly instead of `execute_async()`, bypassing node.config parameter merging
-  - Impact: ALL DataFlow CRUD operations (Create, Update, Delete, List) now work correctly with AsyncLocalRuntime
-  - Solution: Changed async_local.py:745-756 to call `execute_async()`, matching LocalRuntime pattern
-  - **Backward compatible** - no code changes required
-  - **Zero regressions** - 587/588 tests passing
+### 🚨 Breaking Changes
 
-### ✨ What's Fixed
-- DataFlow CreateNode works with AsyncLocalRuntime
-- DataFlow UpdateNode works with AsyncLocalRuntime
-- DataFlow DeleteNode works with AsyncLocalRuntime
-- DataFlow ListNode works with AsyncLocalRuntime
-- All bulk operations work correctly
-- Docker/FastAPI deployments using AsyncLocalRuntime now functional
+**1. AsyncLocalRuntime Return Structure**
+```python
+# Before (v0.9.x):
+results = await runtime.execute_workflow_async(workflow, {})
+user = results["create_user"]["id"]  # Nested dict
+
+# After (v0.10.0):
+results, run_id = await runtime.execute_workflow_async(workflow, {})
+user = results["create_user"]["id"]  # Tuple unpacking required
+```
+
+**2. Validation Exception Types**
+```python
+# Before: RuntimeExecutionError
+# After: ValueError (for connection_validation mode errors)
+```
+
+**3. Parameter Scoping (Automatic Unwrapping)**
+```python
+# Before: Manual parameter management required
+parameters = {"node1": {"value": 10}}
+
+# After: Automatic unwrapping and isolation
+parameters = {
+    "node1": {"value": 10},  # Auto-unwrapped for node1
+    "node2": {"value": 20},  # Isolated to node2 only
+    "global_key": "value"    # Shared across all nodes
+}
+```
+
+### ✨ What's New
+- **Runtime Parity (100%)**: LocalRuntime and AsyncLocalRuntime now behave identically
+- **Parameter Scoping**: Automatic unwrapping of node-specific parameters with cross-node isolation
+- **Smart Parameter Filtering**: Global parameters shared, node-specific parameters isolated
+- **CI Performance**: 10x faster test execution (removed coverage overhead)
 
 ### 📈 Impact
-- **Success Rate**: DataFlow with AsyncLocalRuntime - 0% → 100%
-- **Production Ready**: AsyncLocalRuntime now fully functional for Docker/FastAPI
-- **Pattern Alignment**: Now follows same architecture as LocalRuntime
+- **API Consistency**: Both runtimes return `(results, run_id)` tuple
+- **Parameter Safety**: No more cross-node parameter leakage
+- **Test Coverage**: 928/928 tests passing (100%)
+- **CI Speed**: Shared test suite - 2.53s (was 20-30 min)
 
 ### 📦 Package Updates
-- **kailash**: v0.9.27 - AsyncLocalRuntime parameter passing fix (CRITICAL)
-- **kailash-dataflow**: v0.6.3 - Bug fixes and improvements
-- **kailash-nexus**: v1.1.0 - Security enhancements
-- **kailash-kaizen**: v0.2.0 - AI agent framework
+- **kailash**: v0.10.0 - Breaking changes for runtime parity
+- **kailash-dataflow**: Updated dependencies to kailash>=0.10.0
 
-[Full Changelog](CHANGELOG.md) | [Core SDK 0.9.27](https://pypi.org/project/kailash/0.9.27/) | [Release Notes](https://github.com/terrene-foundation/kailash-py/releases/tag/v0.9.27)
+### 🔄 Migration Guide
+See [CHANGELOG.md](CHANGELOG.md#0100---2025-10-26) for detailed migration instructions.
+
+[Full Changelog](CHANGELOG.md) | [Core SDK 0.10.0](https://pypi.org/project/kailash/0.10.0/)
 
 ## 🎯 What Makes Kailash Different
 
@@ -69,7 +93,7 @@ Not just a toolkit - complete production-ready applications built on enterprise-
 - **11x faster test execution** (117s → 10.75s) with smart isolation
 - **31.8M operations/second** query performance baseline
 - **30,000+ iterations/second** cyclic workflow execution
-- **100% test pass rate** across 4,000+ tests
+- **100% test pass rate** across 928 tests
 
 ### 🤖 **AI-First Architecture**
 - **A2A Google Protocol** for enterprise multi-agent coordination
@@ -109,7 +133,7 @@ kailash_python_sdk/
 │   ├── kailash-mcp/      # Enterprise MCP platform
 │   ├── ai_registry/      # Advanced RAG capabilities
 │   └── user_management/  # Enterprise RBAC system
-├── tests/               # 4,000+ tests (100% pass rate)
+├── tests/               # 928 tests (100% pass rate)
 ├── docs/                # Comprehensive documentation
 └── examples/            # Feature validation examples
 ```
@@ -210,7 +234,7 @@ results, run_id = runtime.execute(workflow.build())
 ## 🎯 Key Features
 
 ### 🧪 **Testing Excellence**
-- **4,000+ tests** with 100% pass rate
+- **928 tests** with 100% pass rate
 - **11x performance improvement** (117s → 10.75s execution)
 - **Docker integration** for real PostgreSQL, Redis, MongoDB
 - **Smart isolation** without process forking overhead
@@ -258,7 +282,7 @@ results, run_id = runtime.execute(workflow.build())
 
 ### Recent Achievements
 - **11x faster test execution**: 117s → 10.75s with smart isolation
-- **100% test pass rate**: 4,000+ tests across all categories
+- **100% test pass rate**: 928 tests across all categories
 - **31.8M operations/second**: Query performance baseline
 - **30,000+ iterations/second**: Cyclic workflow execution
 
@@ -316,11 +340,17 @@ pip install kailash-user-management
 
 ### Comprehensive Test Suite
 ```bash
-# All tests (4,000+ tests)
+# All tests (928 tests - 100% passing)
 pytest
 
-# Fast unit tests (11x faster execution)
-pytest tests/unit/ --timeout=1
+# Fast unit tests (Tier 1)
+pytest tests/unit/ -m 'not (slow or integration or e2e)' --timeout=1
+
+# Parity tests (LocalRuntime vs AsyncLocalRuntime)
+pytest tests/parity/ -v
+
+# Shared runtime tests (both sync and async)
+pytest tests/shared/runtime/ -v
 
 # Integration tests with Docker
 pytest tests/integration/ --timeout=5
@@ -411,10 +441,12 @@ git clone https://github.com/terrene-foundation/kailash-py.git
 cd kailash-python-sdk
 uv sync
 
-# Run tests (4,000+ tests)
-pytest tests/unit/ --timeout=1      # Fast unit tests
+# Run tests (928 tests - 100% passing)
+pytest tests/unit/ -m 'not (slow or integration or e2e)' --timeout=1  # Tier 1 unit tests
+pytest tests/parity/ -v             # Runtime parity tests
+pytest tests/shared/runtime/ -v     # Shared runtime tests
 pytest tests/integration/ --timeout=5  # Integration tests
-pytest tests/e2e/ --timeout=10     # End-to-end tests
+pytest tests/e2e/ --timeout=10      # End-to-end tests
 
 # Code quality
 black .
@@ -440,11 +472,18 @@ See [Contributing Guide](CONTRIBUTING.md) and [# contrib (removed)/CLAUDE.md](# 
 - **Backward Compatible**: Seamless integration with existing implementations
 - **Production Ready**: Enterprise-grade multi-agent coordination patterns
 
+### ✅ v0.10.0 - Runtime Parity & Parameter Scoping (BREAKING CHANGES)
+- **Runtime Parity (100%)**: LocalRuntime and AsyncLocalRuntime behave identically
+- **Parameter Scoping**: Automatic unwrapping and cross-node isolation
+- **API Consistency**: Both runtimes return `(results, run_id)` tuple
+- **Testing Excellence**: 928 tests with 100% pass rate
+- **CI Performance**: 10x faster test execution (removed coverage overhead)
+
 ### ✅ v0.8.1 - Complete App Framework
 - **Complete Application Framework**: DataFlow, Nexus, AI Registry, User Management
 - **PyPI Integration**: All packages available with proper extras support
 - **Performance Breakthrough**: 11x faster test execution
-- **Testing Excellence**: 4,000+ tests with 100% pass rate
+- **Testing Excellence**: 928 tests with 100% pass rate
 - **Enterprise Ready**: Production deployment patterns
 
 ### ✅ v0.7.0 - Major Framework Release
