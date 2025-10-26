@@ -1638,7 +1638,7 @@ config = VisionAgentConfig(
 agent = VisionAgent(config=config)
 
 # Analyze document image
-result = agent.analyze(
+result = agent.run(
     image="receipt.jpg",
     question="Extract total amount and items"
 )
@@ -1735,6 +1735,172 @@ chunks = agent.extract_for_rag(image="document.jpg", chunk_size=512)
 
 **Reference**: `src/kaizen/agents/`, `docs/guides/agent-selection-guide.md`, ADR-016
 
+### Pipeline Infrastructure (Composable Workflows - v0.5.0)
+
+**Composable multi-agent pipelines with `.to_agent()` for seamless integration.**
+
+**What**: Base `Pipeline` class for building composable multi-step workflows that can be converted into agents
+**When**: Multi-step workflows, sequential processing, agent composition, reusable workflow logic
+**Where**: `kaizen.orchestration.pipeline`, `kaizen.orchestration.patterns`
+
+#### Core Concepts
+
+**Pipeline Base Class**:
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+class DataProcessingPipeline(Pipeline):
+    def run(self, **inputs):
+        """Execute multi-step workflow"""
+        # Step 1: Clean data
+        cleaned = self.clean_data(inputs['data'])
+
+        # Step 2: Transform
+        transformed = self.transform(cleaned)
+
+        # Step 3: Analyze
+        analysis = self.analyze(transformed)
+
+        return {
+            "original": inputs['data'],
+            "cleaned": cleaned,
+            "transformed": transformed,
+            "analysis": analysis
+        }
+
+# Use directly
+pipeline = DataProcessingPipeline()
+result = pipeline.run(data="raw data...")
+
+# Convert to agent for composition
+agent = pipeline.to_agent(
+    name="data_processor",
+    description="Processes and analyzes data"
+)
+```
+
+**PipelineAgent Wrapper**:
+- `.to_agent()` creates `PipelineAgent` - a `BaseAgent` subclass
+- Pipelines become first-class agents with all BaseAgent capabilities
+- Can be used in multi-agent patterns, workflows, orchestrations
+
+#### SequentialPipeline (Convenience Class)
+
+```python
+from kaizen.orchestration.pipeline import SequentialPipeline
+from kaizen.agents import SimpleQAAgent, CodeGenerationAgent
+
+# Create pipeline from existing agents
+pipeline = SequentialPipeline(
+    agents=[
+        SimpleQAAgent(config),      # Step 1: Analyze task
+        CodeGenerationAgent(config)  # Step 2: Generate code
+    ]
+)
+
+# Execute pipeline (each agent's output → next agent's input)
+result = pipeline.run(task="Create a sorting function")
+
+# Access results
+print(result['final_output'])         # Last agent's output
+print(result['intermediate_results']) # All agent outputs
+
+# Convert to agent for larger orchestrations
+pipeline_agent = pipeline.to_agent(name="code_creation_pipeline")
+```
+
+#### Integration with Multi-Agent Patterns
+
+**Pipelines in SupervisorWorkerPattern**:
+```python
+from kaizen.orchestration.patterns import SupervisorWorkerPattern
+from kaizen.orchestration.pipeline import Pipeline
+
+# Define custom pipeline
+class DocumentProcessingPipeline(Pipeline):
+    def run(self, document):
+        # Multi-step document processing
+        extracted = self.extract(document)
+        validated = self.validate(extracted)
+        enriched = self.enrich(validated)
+        return {"processed_document": enriched}
+
+# Convert to agent
+doc_pipeline_agent = DocumentProcessingPipeline().to_agent(
+    name="document_processor"
+)
+
+# Use in multi-agent pattern alongside other agents
+pattern = SupervisorWorkerPattern(
+    supervisor=supervisor,
+    workers=[
+        doc_pipeline_agent,     # Pipeline wrapped as agent
+        qa_agent,               # Regular agent
+        research_agent          # Regular agent
+    ],
+    coordinator=coordinator,
+    shared_pool=shared_pool
+)
+
+# Supervisor can route tasks to pipeline just like any agent
+result = pattern.execute_task("Process this PDF report")
+```
+
+#### Key Benefits
+
+**Composability**:
+- ✅ Pipelines can be nested within other pipelines
+- ✅ Pipelines can be used as workers in multi-agent patterns
+- ✅ Reuse workflow logic across different contexts
+
+**Flexibility**:
+- ✅ Mix and match: Combine pipelines with regular agents
+- ✅ Progressive enhancement: Start simple, add complexity as needed
+- ✅ Type safety: Inherits BaseAgent's signature-based I/O
+
+**Production Ready**:
+- ✅ All BaseAgent features: memory, hooks, observability, permissions
+- ✅ Full compatibility with multi-agent patterns
+- ✅ Testable: Unit test pipelines independently, then compose
+
+#### Migration from Old Patterns
+
+**Old** (agents.coordination):
+```python
+# DEPRECATED (v0.4.x and earlier)
+from kaizen.agents.coordination.sequential_pipeline import SequentialPattern
+
+pattern = SequentialPattern(agents=[...])
+# Limited to sequential patterns, no composability
+```
+
+**New** (orchestration.patterns + orchestration.pipeline):
+```python
+# CURRENT (v0.5.0+)
+from kaizen.orchestration.patterns import SequentialPipelinePattern
+from kaizen.orchestration.pipeline import SequentialPipeline, Pipeline
+
+# Option 1: Use pattern for coordination
+pattern = SequentialPipelinePattern(agents=[...])
+
+# Option 2: Use pipeline for composability
+pipeline = SequentialPipeline(agents=[...])
+agent = pipeline.to_agent()  # Now composable!
+
+# Option 3: Custom pipeline with full control
+class CustomPipeline(Pipeline):
+    def run(self, **inputs):
+        # Custom multi-step logic
+        pass
+```
+
+**Backward Compatibility**: Old imports (`kaizen.agents.coordination.*`) still work with deprecation warnings. Will be removed in v0.6.0.
+
+**Reference**:
+- Implementation: `src/kaizen/orchestration/pipeline.py`
+- Tests: `tests/unit/orchestration/test_pipeline.py`
+- Examples: `examples/orchestration/pipeline-patterns/`
+
 ### A2A Capability Matching (Google A2A Protocol - Advanced)
 
 > **See Skill**: [`kaizen-a2a-protocol`](../../skills/04-kaizen/kaizen-a2a-protocol.md) for A2A basics and standard patterns.
@@ -1813,10 +1979,10 @@ provider = OllamaVisionProvider(config=config)
 ### Pitfall 2: VisionAgent Parameter Names
 ```python
 # ❌ WRONG - TypeError
-result = agent.analyze(image="...", prompt="What do you see?")
+result = agent.run(image="...", prompt="What do you see?")
 
 # ✅ CORRECT
-result = agent.analyze(image="...", question="What do you see?")
+result = agent.run(image="...", question="What do you see?")
 ```
 
 ### Pitfall 3: Image Path Handling
@@ -1839,11 +2005,11 @@ result = provider.analyze_image(...)
 text = result['response']
 
 # VisionAgent → 'answer' key
-result = agent.analyze(...)
+result = agent.run(...)
 text = result['answer']
 
 # MultiModalAgent → signature fields
-result = agent.analyze(...)
+result = agent.run(...)
 invoice = result['invoice_number']  # Depends on signature
 ```
 
@@ -1901,7 +2067,7 @@ def test_qa_agent(simple_qa_example, assert_async_strategy, test_queries):
     agent = QAAgent(config=QAConfig())
     assert_async_strategy(agent)  # One-line assertion
 
-    result = agent.ask(test_queries["simple"])
+    result = agent.run(question=test_queries["simple"])
     assert isinstance(result, dict)
 ```
 

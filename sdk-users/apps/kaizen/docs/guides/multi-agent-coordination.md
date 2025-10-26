@@ -68,7 +68,7 @@ card = agent.to_a2a_card()
 
 **Example:**
 ```python
-from kaizen.agents.coordination.supervisor_worker import SupervisorWorkerPattern
+from kaizen.orchestration.patterns import SupervisorWorkerPattern
 from kaizen.agents import SimpleQAAgent, CodeGenerationAgent, RAGResearchAgent
 from kaizen.memory import SharedMemoryPool
 
@@ -112,7 +112,7 @@ result = pattern.execute_task("Analyze this codebase and suggest improvements")
 
 **Example:**
 ```python
-from kaizen.agents.coordination.consensus_pattern import ConsensusPattern
+from kaizen.orchestration.patterns import ConsensusPattern
 
 # Create pattern with 3+ voters
 pattern = ConsensusPattern(
@@ -147,7 +147,7 @@ result = pattern.reach_consensus("Should we deploy the new feature?")
 
 **Example:**
 ```python
-from kaizen.agents.coordination.debate_pattern import DebatePattern
+from kaizen.orchestration.patterns import DebatePattern
 
 pattern = DebatePattern(
     proponent=proponent_agent,
@@ -187,9 +187,9 @@ result = pattern.debate("Should we migrate to microservices?")
 
 **Example:**
 ```python
-from kaizen.agents.coordination.sequential_pattern import SequentialPattern
+from kaizen.orchestration.patterns import SequentialPipelinePattern
 
-pattern = SequentialPattern(
+pattern = SequentialPipelinePattern(
     agents=[
         data_extraction_agent,
         data_validation_agent,
@@ -216,7 +216,7 @@ result = pattern.execute("raw_data.csv")
 
 **Example:**
 ```python
-from kaizen.agents.coordination.handoff_pattern import HandoffPattern
+from kaizen.orchestration.patterns import HandoffPattern
 
 pattern = HandoffPattern(
     initial_agent=triage_agent,

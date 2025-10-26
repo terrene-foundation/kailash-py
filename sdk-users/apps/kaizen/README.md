@@ -331,7 +331,7 @@ answer = result['answer']
 Kaizen implements the Google Agent-to-Agent (A2A) protocol for semantic capability matching. **No hardcoded if/else logic** - agents automatically match tasks based on semantic similarity.
 
 ```python
-from kaizen.agents.coordination.supervisor_worker import SupervisorWorkerPattern
+from kaizen.orchestration.patterns import SupervisorWorkerPattern
 from kaizen.agents import SimpleQAAgent, CodeGenerationAgent, RAGResearchAgent
 
 # Create specialized worker agents
