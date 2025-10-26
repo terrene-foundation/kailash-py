@@ -64,6 +64,50 @@ best_worker = pattern.supervisor.select_worker_for_task(
 # Returns: {"worker": <DataAnalystAgent>, "score": 0.9}
 ```
 
+### Pipeline Patterns (NEW in v0.5.0)
+
+**9 composable pipeline patterns** with factory methods on `Pipeline` class:
+
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+# 1. Sequential - Linear step-by-step processing
+pipeline = Pipeline.sequential(agents=[agent1, agent2, agent3])
+
+# 2. Supervisor-Worker - Task decomposition with A2A semantic worker selection
+pipeline = Pipeline.supervisor_worker(supervisor, workers, selection_mode="semantic")
+
+# 3. Router - Intelligent routing via A2A capability matching
+pipeline = Pipeline.router(agents=[...], routing_strategy="semantic")
+
+# 4. Ensemble - Multi-perspective with A2A agent discovery (top-k)
+pipeline = Pipeline.ensemble(agents=[...], synthesizer, discovery_mode="a2a", top_k=3)
+
+# 5. Blackboard - Iterative specialist collaboration with A2A selection
+pipeline = Pipeline.blackboard(specialists=[...], controller, selection_mode="semantic", max_iterations=5)
+
+# 6. Consensus - Democratic voting for agreement
+pipeline = Pipeline.consensus(agents=[...], threshold=0.67, voting_strategy="majority")
+
+# 7. Debate - Adversarial analysis with proponent/opponent
+pipeline = Pipeline.debate(agents=[proponent, opponent], rounds=3, judge)
+
+# 8. Handoff - Tier escalation based on complexity
+pipeline = Pipeline.handoff(agents=[tier1, tier2, tier3])
+
+# 9. Parallel - Concurrent execution for 10-100x speedup
+pipeline = Pipeline.parallel(agents=[...], aggregator, max_workers=5, timeout=30)
+
+# All pipelines can be converted to BaseAgent
+agent = pipeline.to_agent(name="my_pipeline")
+```
+
+**A2A Integration** (4 patterns):
+- ✅ **Router**: Semantic routing to best agent
+- ✅ **Supervisor-Worker**: Semantic worker selection
+- ✅ **Ensemble**: Agent discovery (top-k)
+- ✅ **Blackboard**: Dynamic specialist selection
+
 ## 🎯 Core API
 
 ### Available Specialized Agents
