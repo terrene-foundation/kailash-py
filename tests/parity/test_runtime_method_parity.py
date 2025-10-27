@@ -8,7 +8,6 @@ method in AsyncLocalRuntime (unless explicitly documented as runtime-specific).
 import inspect
 
 import pytest
-
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 
@@ -179,3 +178,106 @@ class TestRuntimePropertyParity:
             local_runtime.conditional_execution == async_runtime.conditional_execution
         )
         assert local_runtime.conditional_execution == "route_data"  # Expected default
+
+
+class TestUnifiedConditionalNodeSkipping_LocalRuntimeCompatibility:
+    """Test LocalRuntime compatibility with unified _should_skip_conditional_node from mixin.
+
+    These tests are part of Phase 4D Step 1: Semantic Analysis and Mixin Enhancement.
+    They verify that LocalRuntime correctly uses the enhanced mixin method instead of
+    its own override.
+    """
+
+    def test_localruntime_no_override_of_should_skip_method(self):
+        """Test LocalRuntime does NOT override _should_skip_conditional_node.
+
+        Expected behavior:
+        - After Phase 4D Step 1 implementation, LocalRuntime deletes its override
+        - Method should come from ConditionalExecutionMixin via MRO
+        - This test will FAIL in RED phase (LocalRuntime still has override)
+        - This test will PASS in GREEN phase (override deleted)
+        """
+        from kailash.runtime.mixins import ConditionalExecutionMixin
+
+        runtime = LocalRuntime()
+        method = runtime._should_skip_conditional_node
+
+        # Get the method's defining class
+        method_class = method.__qualname__.split(".")[0]
+
+        # Method should be defined in ConditionalExecutionMixin, not LocalRuntime
+        assert method_class == "ConditionalExecutionMixin", (
+            f"_should_skip_conditional_node should be defined in ConditionalExecutionMixin, "
+            f"but found in {method_class}. LocalRuntime should not override this method."
+        )
+
+    def test_localruntime_execution_uses_mixin_method(self):
+        """Test LocalRuntime execution calls unified mixin method correctly.
+
+        Expected behavior:
+        - LocalRuntime.execute() calls mixin's _should_skip_conditional_node
+        - Unified method supports inputs-based skipping (LocalRuntime pattern)
+        - Workflow with switch executes correctly with conditional skipping
+        - This test validates integration between LocalRuntime and mixin
+        """
+        from kailash.workflow.builder import WorkflowBuilder
+
+        runtime = LocalRuntime(conditional_execution="skip_branches")
+
+        # Create workflow with switch
+        builder = WorkflowBuilder()
+        builder.add_node(
+            "PythonCodeNode", "input_node", {"code": "result = {'status': 'active'}"}
+        )
+        builder.add_node(
+            "SwitchNode",
+            "switch",
+            {"condition_field": "status", "operator": "==", "value": "active"},
+        )
+        builder.add_node(
+            "PythonCodeNode", "true_proc", {"code": "result = 'true_path'"}
+        )
+        builder.add_node(
+            "PythonCodeNode", "false_proc", {"code": "result = 'false_path'"}
+        )
+        builder.add_connection("input_node", "result", "switch", "input_data")
+        builder.add_connection("switch", "true_output", "true_proc", "input")
+        builder.add_connection("switch", "false_output", "false_proc", "input")
+        workflow = builder.build()
+
+        # Execute workflow
+        results, run_id = runtime.execute(workflow)
+
+        # Verify skipping behavior
+        assert "input_node" in results, "Input node should execute"
+        assert "switch" in results, "Switch node should execute"
+        assert "true_proc" in results, "True branch should execute (status='active')"
+        # false_proc may or may not be in results depending on skip_branches implementation
+
+    def test_asynclocalruntime_inherits_unified_method(self):
+        """Test AsyncLocalRuntime inherits unified mixin method via MRO.
+
+        Expected behavior:
+        - AsyncLocalRuntime inherits from LocalRuntime
+        - LocalRuntime uses mixin's _should_skip_conditional_node
+        - AsyncLocalRuntime gets mixin method via inheritance chain
+        - MRO: AsyncLocalRuntime -> LocalRuntime -> ConditionalExecutionMixin
+        """
+        from kailash.runtime.mixins import ConditionalExecutionMixin
+
+        runtime = AsyncLocalRuntime()
+        method = runtime._should_skip_conditional_node
+
+        # Get the method's defining class
+        method_class = method.__qualname__.split(".")[0]
+
+        # Method should come from ConditionalExecutionMixin via MRO
+        assert method_class == "ConditionalExecutionMixin", (
+            f"_should_skip_conditional_node should be inherited from ConditionalExecutionMixin, "
+            f"but found in {method_class}."
+        )
+
+        # Verify MRO includes ConditionalExecutionMixin
+        assert (
+            ConditionalExecutionMixin in AsyncLocalRuntime.__mro__
+        ), "AsyncLocalRuntime MRO should include ConditionalExecutionMixin"
