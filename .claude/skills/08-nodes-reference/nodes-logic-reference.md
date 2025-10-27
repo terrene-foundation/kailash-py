@@ -31,18 +31,39 @@ from kailash.nodes.logic import (
 ### SwitchNode
 ```python
 from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
 workflow = WorkflowBuilder()
 
+# Boolean routing (true_output/false_output)
 workflow.add_node("SwitchNode", "router", {
-    "condition_field": "status",
-    "cases": {
-        "active": "process_active",
-        "inactive": "process_inactive",
-        "pending": "process_pending"
-    },
-    "default": "handle_unknown"
+    "condition_field": "score",
+    "operator": ">=",
+    "value": 80
 })
+
+# Multi-case routing (case_X outputs)
+workflow.add_node("SwitchNode", "status_router", {
+    "condition_field": "status",
+    "cases": ["active", "inactive", "pending"]
+})
+```
+
+### ⚠️ Dot Notation Limitation
+
+SwitchNode outputs are **mutually exclusive** (one is always `None`). Dot notation behavior depends on execution mode:
+
+**✅ skip_branches mode** (recommended): Dot notation works - inactive branches skipped
+```python
+workflow.add_connection("router", "true_output.name", "processor", "name")
+runtime = LocalRuntime(conditional_execution="skip_branches")
+```
+
+**⚠️ route_data mode**: Avoid dot notation - connect full output
+```python
+workflow.add_connection("router", "true_output", "processor", "data")
+# Extract field in code: name = data.get('name') if data else None
+runtime = LocalRuntime(conditional_execution="route_data")
 ```
 
 ## Merge Node

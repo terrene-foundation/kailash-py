@@ -15,11 +15,11 @@ from typing import Any, Dict, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash.runtime.base import BaseRuntime
 from kailash.runtime.mixins import ConditionalExecutionMixin
 from kailash.sdk_exceptions import RuntimeExecutionError, WorkflowExecutionError
 from kailash.workflow import Workflow
+
 from tests.unit.runtime.helpers_runtime import (
     create_empty_workflow,
     create_large_workflow,
@@ -352,13 +352,15 @@ class TestConditionalNodeSkipping:
         results = {
             "switch": {"true_output": {"data": "test"}, "false_output": None},
         }
+        # Prepare inputs for false_branch (would receive None from switch on "data" parameter)
+        inputs = {"data": None}
 
-        # Check if false branch should be skipped
+        # Check if false branch should be skipped (new signature)
         result = runtime._should_skip_conditional_node(
-            "false_branch", workflow, results
+            workflow, "false_branch", inputs, results
         )
-        # Skipping logic depends on workflow structure and conditional_execution mode
-        assert isinstance(result, bool)
+        # Should skip because all inputs are None from conditional routing
+        assert result is True
 
     def test_should_skip_conditional_node_reachable(self):
         """Test node is not skipped when reachable."""
@@ -367,9 +369,13 @@ class TestConditionalNodeSkipping:
         results = {
             "switch": {"true_output": {"data": "test"}, "false_output": None},
         }
+        # Prepare inputs for true_branch (receives data from switch on "data" parameter)
+        inputs = {"data": {"data": "test"}}
 
-        # Check if true branch should be skipped
-        result = runtime._should_skip_conditional_node("true_branch", workflow, results)
+        # Check if true branch should be skipped (new signature)
+        result = runtime._should_skip_conditional_node(
+            workflow, "true_branch", inputs, results
+        )
         assert result is False  # True branch reachable
 
     def test_should_skip_conditional_node_no_switch_results(self):
@@ -377,31 +383,36 @@ class TestConditionalNodeSkipping:
         runtime = TestConditionalRuntime()
         workflow = create_workflow_with_switch()
         results = {}
+        # No results yet, so inputs would be empty or default
+        inputs = {}
 
-        result = runtime._should_skip_conditional_node("true_branch", workflow, results)
+        # New signature
+        result = runtime._should_skip_conditional_node(
+            workflow, "true_branch", inputs, results
+        )
         assert result is False  # No switch results, execute all nodes
 
-    def test_should_skip_conditional_node_route_data_mode(self):
-        """Test node skipping in route_data mode (no skipping)."""
-        runtime = TestConditionalRuntime(conditional_execution="route_data")
+    def test_should_skip_conditional_node_all_modes(self):
+        """Test node skipping works in all conditional_execution modes.
+
+        After Phase 2 refactoring, skip logic works uniformly across all modes.
+        The old route_data mode check was removed as it prevented correct behavior.
+        """
         workflow = create_workflow_with_switch()
-        results = {"switch": {"true_output": {"data": "test"}}}
+        results = {"switch": {"true_output": None, "false_output": {"data": "test"}}}
 
-        result = runtime._should_skip_conditional_node(
-            "false_branch", workflow, results
-        )
-        assert result is False  # route_data mode doesn't skip nodes
+        # Test with valid modes only (None is invalid for conditional_execution)
+        for mode in ["route_data", "skip_branches"]:
+            runtime = TestConditionalRuntime(conditional_execution=mode)
+            inputs = {
+                "data": None
+            }  # Would receive None from switch on "data" parameter
 
-    def test_should_skip_conditional_node_skip_branches_mode(self):
-        """Test node skipping in skip_branches mode (active skipping)."""
-        runtime = TestConditionalRuntime(conditional_execution="skip_branches")
-        workflow = create_workflow_with_switch()
-        results = {"switch": {"true_output": {"data": "test"}, "false_output": None}}
-
-        result = runtime._should_skip_conditional_node(
-            "false_branch", workflow, results
-        )
-        assert result is True  # skip_branches mode actively skips unreachable nodes
+            result = runtime._should_skip_conditional_node(
+                workflow, "true_branch", inputs, results
+            )
+            # Should skip in all modes when inputs are None from conditional routing
+            assert result is True, f"Failed to skip in mode: {mode}"
 
 
 class TestPerformanceTracking:
@@ -782,9 +793,12 @@ class TestConditionalExecutionIntegration:
         runtime = TestConditionalRuntime(conditional_execution="skip_branches")
         workflow = create_workflow_with_switch()
         results = {"switch": {"true_output": {"data": "test"}, "false_output": None}}
+        # Prepare inputs for false_branch (would receive None from switch on "data" parameter)
+        inputs = {"data": None}
 
+        # Use new signature: (workflow, node_id, inputs, current_results)
         should_skip = runtime._should_skip_conditional_node(
-            "false_branch", workflow, results
+            workflow, "false_branch", inputs, results
         )
         assert should_skip is True  # Unreachable branch skipped
 

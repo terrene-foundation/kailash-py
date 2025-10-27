@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -1125,7 +1125,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "0.9.31"
+version = "0.10.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -1323,7 +1323,7 @@ dev = [
 
 [[package]]
 name = "kailash-dataflow"
-version = "0.7.2"
+version = "0.7.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiomysql" },
@@ -1336,9 +1336,9 @@ dependencies = [
     { name = "redis" },
     { name = "sqlalchemy" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/93/da/f752012276d2c1578bb47533fbc9f10a893d2d8a7e53bacf56a94dac41b7/kailash_dataflow-0.7.2.tar.gz", hash = "sha256:0759d21ed89016c68d6cc23704fd334fc8a12078f710a6c76c9d09cbcdf0c538", size = 685133, upload-time = "2025-10-24T14:25:17.955Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5a/4f/20fc3078f171fb3597630b65b941af4d6bdac2b963ad561bf5086ece01c1/kailash_dataflow-0.7.3.tar.gz", hash = "sha256:3e253bcc2fbb7425de49ce5a5fed1baf12d6062969b39d3e0cad838f30edf157", size = 692789, upload-time = "2025-10-26T12:21:19.826Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/8f/e7c751778199b347c3e0ffa2ef68ef2bc0afbe24fdf93447fc0f38d3f6b8/kailash_dataflow-0.7.2-py3-none-any.whl", hash = "sha256:ed4e528a6f74e2d9e23aa4070f40a0c52244587fd120f3a8c30b26e208e84289", size = 767614, upload-time = "2025-10-24T14:25:15.745Z" },
+    { url = "https://files.pythonhosted.org/packages/26/49/13a0aee6af9b207dac868b564fff7382b16fd89ea1ce688123f2fb545d14/kailash_dataflow-0.7.3-py3-none-any.whl", hash = "sha256:065022d8d48b9fe56b282ab4f7da6f37535a401930e176d6b6c9194c63e6d878", size = 775836, upload-time = "2025-10-26T12:21:17.676Z" },
 ]
 
 [[package]]
