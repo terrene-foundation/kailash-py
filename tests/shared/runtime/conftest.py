@@ -81,7 +81,9 @@ def execute_runtime(runtime, workflow, **kwargs) -> Dict[str, Any]:
         # LocalRuntime: use sync method (convert back to 'parameters' if needed)
         if "inputs" in kwargs and "parameters" not in kwargs:
             kwargs["parameters"] = kwargs.pop("inputs")
-        raw_results, run_id = runtime.execute(workflow, **kwargs)
+        # Use context manager for LocalRuntime
+        with runtime:
+            raw_results, run_id = runtime.execute(workflow, **kwargs)
 
     # Normalize nested result structure: extract "result" key from each node output
     normalized = {}
@@ -122,7 +124,9 @@ def execute_runtime_with_run_id(runtime, workflow, **kwargs) -> tuple:
         # LocalRuntime: convert back to 'parameters' if needed
         if "inputs" in kwargs and "parameters" not in kwargs:
             kwargs["parameters"] = kwargs.pop("inputs")
-        return runtime.execute(workflow, **kwargs)
+        # Use context manager for LocalRuntime
+        with runtime:
+            return runtime.execute(workflow, **kwargs)
 
 
 def is_async_runtime(runtime) -> bool:

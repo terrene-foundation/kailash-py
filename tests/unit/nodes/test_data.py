@@ -140,9 +140,8 @@ class TestCSVReaderNode:
         workflow.add_node("reader", csv_reader)
 
         # Test with async-enabled runtime
-        runtime = LocalRuntime(enable_async=True, debug=True)
-
-        results, run_id = runtime.execute(workflow)
+        with LocalRuntime(enable_async=True, debug=True) as runtime:
+            results, run_id = runtime.execute(workflow)
 
         # Verify results
         assert "reader" in results

@@ -47,8 +47,8 @@ class TestConditionalRouting:
         workflow.add_connection("stage_router", "false_output", "parse_dob", "input")
 
         # Execute workflow
-        runtime = LocalRuntime()
-        results, run_id = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, run_id = runtime.execute(workflow.build())
 
         # Verify SwitchNode outputs
         switch_result = results["stage_router"]
@@ -103,8 +103,8 @@ class TestConditionalRouting:
         workflow.add_connection("stage_router", "false_output", "parse_dob", "input")
 
         # Execute workflow
-        runtime = LocalRuntime()
-        results, run_id = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, run_id = runtime.execute(workflow.build())
 
         # Verify SwitchNode outputs
         switch_result = results["stage_router"]
@@ -169,8 +169,8 @@ class TestConditionalRouting:
         workflow.add_connection("priority_router", "case_low", "handle_low", "input")
 
         # Execute workflow
-        runtime = LocalRuntime()
-        results, run_id = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, run_id = runtime.execute(workflow.build())
 
         # Verify switch node outputs
         switch_result = results["priority_router"]
@@ -227,8 +227,8 @@ class TestConditionalRouting:
         workflow.add_connection("switch", "false_output", "conditional_false", "input")
 
         # Execute workflow
-        runtime = LocalRuntime()
-        results, run_id = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, run_id = runtime.execute(workflow.build())
 
         # Verify all non-conditional nodes executed
         assert results["source"] is not None
