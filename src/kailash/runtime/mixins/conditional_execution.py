@@ -298,390 +298,169 @@ class ConditionalExecutionMixin:
 
     def _should_skip_conditional_node(
         self,
-        workflow_or_node_id,
-        node_id_or_workflow,
-        inputs: Optional[Dict[str, Any]] = None,
-        results: Optional[Dict[str, Any]] = None,
+        workflow: Workflow,
+        node_id: str,
+        inputs: Dict[str, Any],
+        current_results: Optional[Dict[str, Any]] = None,
     ) -> bool:
-        """Unified conditional node skipping logic.
+        """
+        Determine if a node should be skipped due to conditional routing.
 
-        Supports both inputs-based (LocalRuntime) and results-based (mixin) patterns.
-
-        BACKWARD COMPATIBLE: Detects old signature (node_id, workflow, results)
-        vs new signature (workflow, node_id, inputs=None, results=None).
+        This is the CANONICAL implementation shared by LocalRuntime and AsyncLocalRuntime.
+        Replaces the previous LocalRuntime override with a unified mixin version.
 
         A node should be skipped if:
         1. It has incoming connections from conditional nodes (like SwitchNode)
-        2. All of its connected inputs are None
+        2. All of its connected inputs are None from conditional routing
         3. It has no node-level configuration parameters that would make it run independently
 
-        ENHANCED IN: Phase 4D Step 1 - Semantic Analysis and Mixin Enhancement
-        REPLACES: LocalRuntime override (lines 1870-1995)
+        REFACTORED FROM: LocalRuntime._should_skip_conditional_node() (lines 1870-1995)
+        SHARED LOGIC: 100% - Complete logic with edge case handling
+        VERSION: v0.10.0 Phase 2 completion (2025-10-27)
 
         Args:
-            workflow_or_node_id: Workflow (new signature) or node_id (old signature)
-            node_id_or_workflow: Node ID (new signature) or workflow (old signature)
-            inputs: Prepared inputs for the node (inputs-based mode, LocalRuntime pattern)
-            results: Current execution results (results-based mode, mixin pattern)
+            workflow: The workflow being executed
+            node_id: Node ID to check
+            inputs: Prepared inputs for the node (after parameter mapping)
+            current_results: Current execution results for transitive dependency checking
+                           (optional, can be None if not available)
 
         Returns:
-            True if node should be skipped, False otherwise
-
-        Data Source Priority:
-            1. inputs (LocalRuntime pattern - prepared inputs)
-            2. results (Mixin pattern - raw execution results)
-            3. self._current_results (Runtime state fallback)
-
-        Skipping Logic:
-            1. Check conditional_execution mode (route_data disables skipping)
-            2. Validate workflow graph structure
-            3. Get incoming edges for node
-            4. Resolve data source (inputs > results > _current_results)
-            5. Detect conditional inputs (SwitchNode + transitive dependencies)
-            6. Check node configuration (significant config may prevent skipping)
-            7. Determine if all connected inputs are None
+            True if the node should be skipped, False otherwise
 
         Examples:
-            # NEW SIGNATURE: Inputs-based (LocalRuntime pattern)
-            >>> skip = runtime._should_skip_conditional_node(
-            ...     workflow, "node_id", inputs={"input": None}
-            ... )
+            # LocalRuntime usage
+            if self._should_skip_conditional_node(workflow, node_id, inputs, self._current_results):
+                results[node_id] = None
+                continue
 
-            # NEW SIGNATURE: Results-based (future pattern)
-            >>> skip = runtime._should_skip_conditional_node(
-            ...     workflow, "node_id", results={"switch": {"output": None}}
-            ... )
-
-            # OLD SIGNATURE: Results-based (backward compatibility)
-            >>> skip = runtime._should_skip_conditional_node(
-            ...     "node_id", workflow, {"switch": {"output": None}}
-            ... )
-
-        Performance:
-            - Target: <1ms per call (hot path)
-            - Thread-safe: Uses only local variables and read-only state
-            - No allocations in common path
+            # AsyncLocalRuntime usage
+            if self._should_skip_conditional_node(workflow, node_id, inputs, tracker.results):
+                await tracker.record_result(node_id, None, 0.0)
+                return
 
         Raises:
-            None - Errors are logged and False is returned (execute node for safety)
+            None - Method is defensive and returns False on any error
         """
-        # STEP 0: Detect and adapt to old signature (node_id, workflow, results)
-        if isinstance(workflow_or_node_id, str) and hasattr(
-            node_id_or_workflow, "graph"
-        ):
-            # Old signature: (node_id, workflow, results)
-            node_id = workflow_or_node_id
-            workflow = node_id_or_workflow
-            # Third positional arg (inputs) is actually results in old signature
-            if inputs is not None and results is None:
-                results = inputs
-                inputs = None
-        else:
-            # New signature: (workflow, node_id, inputs=None, results=None)
-            workflow = workflow_or_node_id
-            node_id = node_id_or_workflow
-
         try:
-            # STEP 1: Check conditional execution mode
-            if hasattr(self, "conditional_execution"):
-                if self.conditional_execution == "route_data":
-                    return False  # Route data, never skip
-
-            # STEP 2: Validate workflow graph
+            # Get all incoming edges for this node
             if not hasattr(workflow, "graph") or workflow.graph is None:
-                return False  # Broken graph, execute for safety
+                return False
 
-            # STEP 3: Get incoming edges
             incoming_edges = list(workflow.graph.in_edges(node_id, data=True))
+
+            # If the node has no incoming connections, don't skip it
+            # (it might be a source node or have configuration parameters)
             if not incoming_edges:
-                return False  # Source node, always execute
+                return False
 
-            # STEP 4: Resolve data source (inputs > results > _current_results)
-            data_source = self._resolve_data_source(inputs, results)
-            if data_source is None:
-                return False  # No data, execute for safety
+            # Check for conditional inputs and analyze the nature of the data
+            has_conditional_inputs = False
+            has_non_none_connected_input = False
 
-            # STEP 5: Analyze conditional inputs
-            conditional_analysis = self._analyze_conditional_inputs(
-                workflow, node_id, incoming_edges, data_source
-            )
+            for source_node_id, _, edge_data in incoming_edges:
+                source_node = workflow._node_instances.get(source_node_id)
+                mapping = edge_data.get("mapping", {})
 
-            if not conditional_analysis["has_conditional_inputs"]:
-                return False  # No conditional inputs, execute
+                # Check if this edge provides any non-None inputs
+                for source_key, target_key in mapping.items():
+                    if target_key in inputs and inputs[target_key] is not None:
+                        has_non_none_connected_input = True
 
-            if conditional_analysis["has_non_none_input"]:
-                return False  # Has data, execute
+                # Direct connection from SwitchNode
+                if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
+                    has_conditional_inputs = True
+                # Transitive dependency: source node was skipped due to conditional routing
+                elif current_results and source_node_id in current_results:
+                    if current_results[source_node_id] is None:
+                        has_conditional_inputs = True
 
-            # STEP 6: Check node configuration
-            if self._node_has_significant_config(workflow, node_id):
-                # Node has config, check if ALL connected inputs are None
-                if self._all_connected_inputs_none(incoming_edges, data_source):
-                    self.logger.debug(
-                        f"Skipping node {node_id} - has config but all inputs None"
-                    )
-                    return True  # Config exists but no data, skip
-                return False  # Config + some data, execute
+            # If no conditional inputs, don't skip
+            if not has_conditional_inputs:
+                return False
 
-            # STEP 7: Final decision - skip if all connected inputs are None from conditional routing
-            if conditional_analysis["should_skip"]:
-                self.logger.debug(
-                    f"Skipping node {node_id} - all conditional inputs are None"
-                )
+            # If we have conditional inputs but also have non-None data, don't skip
+            # This handles mixed scenarios where some inputs are skipped but others provide data
+            if has_non_none_connected_input:
+                return False
+
+            # Get the node instance to check for configuration parameters
+            node_instance = workflow._node_instances.get(node_id)
+            if not node_instance:
+                return False
+
+            # Check if the node has configuration parameters that would make it run independently
+            # (excluding standard parameters and None values)
+            node_config = getattr(node_instance, "config", {})
+            significant_config = {
+                k: v
+                for k, v in node_config.items()
+                if k not in ["metadata", "name", "id"] and v is not None
+            }
+
+            # If the node has significant configuration, it might still be valuable to run
+            if significant_config:
+                # Check if any connected inputs have actual data (not None)
+                connected_inputs = {}
+                for _, _, edge_data in incoming_edges:
+                    mapping = edge_data.get("mapping", {})
+                    for source_key, target_key in mapping.items():
+                        if target_key in inputs:
+                            connected_inputs[target_key] = inputs[target_key]
+
+                # If all connected inputs are None but node has config, still skip
+                # The user can configure the node to run with default values if needed
+                if connected_inputs and all(
+                    v is None for v in connected_inputs.values()
+                ):
+                    return True
+
+            # Check if all connected inputs are None
+            # This is the main condition for conditional routing
+            has_non_none_input = False
+
+            # Count total connected inputs and None inputs from conditional sources
+            total_connected_inputs = 0
+            none_conditional_inputs = 0
+
+            for source_node_id, _, edge_data in incoming_edges:
+                mapping = edge_data.get("mapping", {})
+                for source_key, target_key in mapping.items():
+                    if target_key in inputs:
+                        total_connected_inputs += 1
+                        if inputs[target_key] is not None:
+                            has_non_none_input = True
+                        else:
+                            # Check if this None input came from conditional routing
+                            source_node = workflow._node_instances.get(source_node_id)
+                            is_from_conditional = (
+                                source_node
+                                and source_node.__class__.__name__ in ["SwitchNode"]
+                            ) or (
+                                current_results
+                                and source_node_id in current_results
+                                and current_results[source_node_id] is None
+                            )
+                            if is_from_conditional:
+                                none_conditional_inputs += 1
+
+            # Skip the node only if ALL connected inputs are None AND from conditional routing
+            # This means nodes with mixed inputs (some None from conditional, some real data) should still execute
+            if (
+                total_connected_inputs > 0
+                and none_conditional_inputs == total_connected_inputs
+            ):
                 return True
 
             return False
 
         except Exception as e:
-            if hasattr(self, "debug") and self.debug:
+            # Defensive: on any error, execute the node for safety
+            if hasattr(self, "logger"):
                 self.logger.warning(
                     f"Error checking if node {node_id} should be skipped: {e}"
                 )
-            # On error, execute for safety
             return False
-
-    def _resolve_data_source(
-        self,
-        inputs: Optional[Dict[str, Any]],
-        results: Optional[Dict[str, Any]],
-    ) -> Optional[Dict[str, Any]]:
-        """Resolve data source with priority: inputs > results > _current_results.
-
-        Args:
-            inputs: Prepared inputs (LocalRuntime pattern)
-            results: Execution results (Mixin pattern)
-
-        Returns:
-            Dict with 'type' and 'data' keys, or None if no data source available
-
-        Examples:
-            >>> data_source = self._resolve_data_source(inputs={"a": 1}, results=None)
-            >>> assert data_source == {"type": "inputs", "data": {"a": 1}}
-
-            >>> data_source = self._resolve_data_source(inputs=None, results={"b": 2})
-            >>> assert data_source == {"type": "results", "data": {"b": 2}}
-
-            >>> self._current_results = {"c": 3}
-            >>> data_source = self._resolve_data_source(inputs=None, results=None)
-            >>> assert data_source == {"type": "current_results", "data": {"c": 3}}
-        """
-        if inputs is not None:
-            return {"type": "inputs", "data": inputs}
-        elif results is not None:
-            return {"type": "results", "data": results}
-        elif hasattr(self, "_current_results"):
-            return {"type": "current_results", "data": self._current_results}
-        return None
-
-    def _analyze_conditional_inputs(
-        self,
-        workflow: Workflow,
-        node_id: str,
-        incoming_edges: List[tuple],
-        data_source: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        """Analyze incoming edges for conditional inputs.
-
-        Detects:
-        - Direct SwitchNode connections
-        - Transitive dependencies (skipped source nodes)
-        - Mixed None/data scenarios
-
-        Args:
-            workflow: Workflow being executed
-            node_id: Node ID being analyzed
-            incoming_edges: List of (source_node_id, target_node_id, edge_data) tuples
-            data_source: Resolved data source from _resolve_data_source
-
-        Returns:
-            Dict with analysis results:
-                - has_conditional_inputs: True if node receives conditional routing
-                - has_non_none_input: True if any input has data
-                - should_skip: True if all connected inputs are None from conditional routing
-
-        Examples:
-            >>> analysis = self._analyze_conditional_inputs(workflow, "node_b", edges, data_source)
-            >>> if analysis["should_skip"]:
-            ...     print("Node should be skipped")
-        """
-        has_conditional_inputs = False
-        has_non_none_input = False
-        total_connected_inputs = 0
-        none_conditional_inputs = 0
-
-        source_type = data_source["type"]
-        source_data = data_source["data"]
-
-        for source_node_id, _, edge_data in incoming_edges:
-            source_node = workflow._node_instances.get(source_node_id)
-            mapping = edge_data.get("mapping", {})
-
-            # Check for SwitchNode
-            if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
-                has_conditional_inputs = True
-
-            # Check for transitive dependencies and data presence
-            if source_type == "inputs":
-                # Inputs-based: Check prepared inputs
-                for source_key, target_key in mapping.items():
-                    if target_key in source_data:
-                        total_connected_inputs += 1
-                        if source_data[target_key] is not None:
-                            has_non_none_input = True
-                        else:
-                            # Check if None came from conditional routing
-                            if self._is_from_conditional(source_node_id, source_node):
-                                has_conditional_inputs = True
-                                none_conditional_inputs += 1
-            else:
-                # Results-based: Check execution results
-                if source_node_id in source_data:
-                    # For SwitchNode, check mapped outputs in results
-                    if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
-                        switch_result = source_data[source_node_id]
-                        # Check each mapped output
-                        for source_key, target_key in mapping.items():
-                            total_connected_inputs += 1
-                            if (
-                                isinstance(switch_result, dict)
-                                and source_key in switch_result
-                            ):
-                                if switch_result[source_key] is not None:
-                                    has_non_none_input = True
-                                else:
-                                    # Switch output is None
-                                    none_conditional_inputs += 1
-                    else:
-                        # Non-switch node: check if result is None
-                        total_connected_inputs += 1
-                        if source_data[source_node_id] is None:
-                            has_conditional_inputs = True
-                            none_conditional_inputs += 1
-                        else:
-                            has_non_none_input = True
-
-        should_skip = (
-            total_connected_inputs > 0
-            and none_conditional_inputs == total_connected_inputs
-        )
-
-        return {
-            "has_conditional_inputs": has_conditional_inputs,
-            "has_non_none_input": has_non_none_input,
-            "should_skip": should_skip,
-        }
-
-    def _node_has_significant_config(self, workflow: Workflow, node_id: str) -> bool:
-        """Check if node has significant configuration parameters.
-
-        Filters out standard/metadata parameters (name, id, metadata).
-        Only counts parameters with non-None values.
-
-        Args:
-            workflow: Workflow being executed
-            node_id: Node ID to check
-
-        Returns:
-            True if node has significant configuration, False otherwise
-
-        Examples:
-            >>> # Node with config: {"api_key": "sk-123", "metadata": {...}}
-            >>> has_config = self._node_has_significant_config(workflow, "api_node")
-            >>> assert has_config is True  # api_key is significant
-
-            >>> # Node with only metadata: {"metadata": {...}, "name": "test"}
-            >>> has_config = self._node_has_significant_config(workflow, "empty_node")
-            >>> assert has_config is False  # No significant config
-        """
-        node_instance = workflow._node_instances.get(node_id)
-        if not node_instance:
-            return False
-
-        node_config = getattr(node_instance, "config", {})
-        significant_config = {
-            k: v
-            for k, v in node_config.items()
-            if k not in ["metadata", "name", "id"] and v is not None
-        }
-        return len(significant_config) > 0
-
-    def _all_connected_inputs_none(
-        self, incoming_edges: List[tuple], data_source: Dict[str, Any]
-    ) -> bool:
-        """Check if all connected inputs are None.
-
-        Args:
-            incoming_edges: List of (source_node_id, target_node_id, edge_data) tuples
-            data_source: Resolved data source from _resolve_data_source
-
-        Returns:
-            True if all connected inputs are None, False if any input has data
-
-        Examples:
-            >>> # All inputs None
-            >>> all_none = self._all_connected_inputs_none(edges, {"type": "inputs", "data": {"a": None}})
-            >>> assert all_none is True
-
-            >>> # Some inputs have data
-            >>> all_none = self._all_connected_inputs_none(edges, {"type": "inputs", "data": {"a": None, "b": 1}})
-            >>> assert all_none is False
-        """
-        source_type = data_source["type"]
-        source_data = data_source["data"]
-
-        for _, _, edge_data in incoming_edges:
-            mapping = edge_data.get("mapping", {})
-            for source_key, target_key in mapping.items():
-                if source_type == "inputs":
-                    if (
-                        target_key in source_data
-                        and source_data[target_key] is not None
-                    ):
-                        return False
-                else:
-                    # Results-based: Check if source node result is not None
-                    # This is simplified - full implementation depends on data structure
-                    pass
-        return True
-
-    def _is_from_conditional(
-        self, source_node_id: str, source_node: Optional[Any]
-    ) -> bool:
-        """Check if source node is conditional or was skipped.
-
-        Args:
-            source_node_id: Source node ID
-            source_node: Source node instance (may be None)
-
-        Returns:
-            True if source is conditional (SwitchNode or skipped node), False otherwise
-
-        Examples:
-            >>> # SwitchNode
-            >>> is_conditional = self._is_from_conditional("switch1", switch_node_instance)
-            >>> assert is_conditional is True
-
-            >>> # Skipped node (None result in _current_results)
-            >>> self._current_results = {"node_a": None}
-            >>> is_conditional = self._is_from_conditional("node_a", node_a_instance)
-            >>> assert is_conditional is True
-
-            >>> # Normal node with data
-            >>> self._current_results = {"node_b": {"data": "value"}}
-            >>> is_conditional = self._is_from_conditional("node_b", node_b_instance)
-            >>> assert is_conditional is False
-        """
-        # SwitchNode check
-        if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
-            return True
-
-        # Transitive dependency check (skipped source node)
-        if hasattr(self, "_current_results"):
-            if source_node_id in self._current_results:
-                return self._current_results[source_node_id] is None
-
-        # Conservative default: treat None inputs as potentially conditional
-        # This allows skipping to work even without _current_results set
-        return True
 
     # ========================================================================
     # Performance Tracking and Logging

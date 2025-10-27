@@ -24,7 +24,6 @@ from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import networkx as nx
-
 from kailash.nodes.base import Node
 from kailash.nodes.base_async import AsyncNode
 from kailash.resources import ResourceRegistry
@@ -717,6 +716,19 @@ class AsyncLocalRuntime(LocalRuntime):
                 workflow, node_id, node_outputs, inputs
             )
 
+            # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
+            # Uses shared mixin method (ConditionalExecutionMixin._should_skip_conditional_node)
+            # Pass results dict for transitive dependency checking
+            if self._should_skip_conditional_node(
+                workflow, node_id, node_inputs, results
+            ):
+                logger.info(
+                    f"Skipping node {node_id} - all conditional inputs are None"
+                )
+                results[node_id] = None
+                node_outputs[node_id] = None
+                continue
+
             # Execute node
             try:
                 result = node_instance.execute(**node_inputs)
@@ -820,6 +832,18 @@ class AsyncLocalRuntime(LocalRuntime):
                     workflow, node_id, tracker, context
                 )
 
+                # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
+                # Uses shared mixin method (ConditionalExecutionMixin._should_skip_conditional_node)
+                # Pass tracker.results for transitive dependency checking
+                if self._should_skip_conditional_node(
+                    workflow, node_id, inputs, tracker.results
+                ):
+                    logger.info(
+                        f"Skipping node {node_id} - all conditional inputs are None"
+                    )
+                    await tracker.record_result(node_id, None, 0.0)
+                    return
+
                 # Execute async node
                 if isinstance(node_instance, AsyncNode):
                     # Add resource registry to inputs if available
@@ -873,6 +897,18 @@ class AsyncLocalRuntime(LocalRuntime):
                 inputs = await self._prepare_async_node_inputs(
                     workflow, node_id, tracker, context
                 )
+
+                # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
+                # Uses shared mixin method (ConditionalExecutionMixin._should_skip_conditional_node)
+                # Pass tracker.results for transitive dependency checking
+                if self._should_skip_conditional_node(
+                    workflow, node_id, inputs, tracker.results
+                ):
+                    logger.info(
+                        f"Skipping node {node_id} - all conditional inputs are None"
+                    )
+                    await tracker.record_result(node_id, None, 0.0)
+                    return
 
                 # Execute sync node in thread pool
                 result = await self._execute_sync_node_in_thread(node_instance, inputs)
