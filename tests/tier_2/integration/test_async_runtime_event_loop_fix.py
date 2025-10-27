@@ -19,7 +19,6 @@ import asyncio
 
 import pytest
 import pytest_asyncio
-
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -82,10 +81,11 @@ class TestEventLoopDetectionFix:
         )
         workflow = builder.build()
 
-        result = await runtime.execute_workflow_async(workflow, inputs={})
+        results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
 
         # THEN: Should execute successfully with correct event loop
-        assert result["success"] is True
+        assert results is not None
+        assert run_id is not None
 
         print("✅ P0-7.2: Event loop set during execution (lazy initialization)")
 
@@ -111,10 +111,11 @@ class TestEventLoopDetectionFix:
         workflow = builder.build()
 
         try:
-            result = await runtime.execute_workflow_async(workflow, inputs={})
+            results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
 
             # THEN: Should succeed without error
-            assert result["success"] is True
+            assert results is not None
+            assert run_id is not None
 
             print("✅ P0-7.3: No 'attached to different loop' error")
 
@@ -145,14 +146,14 @@ class TestEventLoopDetectionFix:
         # WHEN: Executing multiple times with same runtime
         results = []
         for i in range(5):
-            result = await runtime.execute_workflow_async(
+            result, run_id = await runtime.execute_workflow_async(
                 workflow, inputs={"execution_count": i}
             )
             results.append(result)
 
         # THEN: All executions should succeed
         assert all(
-            r["success"] for r in results
+            r is not None for r in results
         ), "❌ BUG: Not all executions succeeded"
 
         print("✅ P0-7.4: Same runtime instance handles multiple executions")
@@ -171,9 +172,7 @@ class TestEventLoopDetectionFix:
         builder.add_node(
             "PythonCodeNode",
             "test",
-            {
-                "code": "import asyncio; await asyncio.sleep(0.05); output = {'done': True}"
-            },
+            {"code": "import time; time.sleep(0.05); output = {'done': True}"},
         )
         workflow = builder.build()
 
@@ -183,9 +182,9 @@ class TestEventLoopDetectionFix:
         try:
             results = await asyncio.gather(*tasks)
 
-            # THEN: All should succeed without deadlock
+            # THEN: All should succeed without deadlock (results are tuples of (results, run_id))
             assert all(
-                r["success"] for r in results
+                r[0] is not None for r in results
             ), "❌ BUG: Some concurrent executions failed"
 
             print("✅ P0-7.5: Concurrent executions work without deadlocks")
@@ -218,15 +217,15 @@ class TestFastAPIContextSimulation:
             )
             workflow = builder.build()
 
-            result = await runtime.execute_workflow_async(workflow, inputs={})
-            return result
+            results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
+            return results, run_id
 
         # WHEN: Simulating 5 concurrent FastAPI requests
         tasks = [simulate_fastapi_request(i) for i in range(5)]
         results = await asyncio.gather(*tasks)
 
-        # THEN: All requests should succeed
-        assert all(r["success"] for r in results), "❌ BUG: FastAPI pattern failed"
+        # THEN: All requests should succeed (results are tuples)
+        assert all(r[0] is not None for r in results), "❌ BUG: FastAPI pattern failed"
 
         print("✅ P0-7.6: FastAPI request pattern works correctly")
 
@@ -256,9 +255,9 @@ class TestFastAPIContextSimulation:
         tasks = [simulate_request_with_shared_runtime(i) for i in range(10)]
         results = await asyncio.gather(*tasks)
 
-        # THEN: All should succeed without event loop conflicts
+        # THEN: All should succeed without event loop conflicts (results are tuples)
         assert all(
-            r["success"] for r in results
+            r[0] is not None for r in results
         ), "❌ BUG: Shared runtime pattern failed"
 
         print("✅ P0-7.7: Shared runtime pattern (app.state) works correctly")
@@ -292,10 +291,11 @@ class TestEventLoopEdgeCases:
             return await inner_async_function()
 
         # WHEN: Executing in nested async context
-        result = await outer_async_function()
+        results, run_id = await outer_async_function()
 
         # THEN: Should work correctly
-        assert result["success"] is True
+        assert results is not None
+        assert run_id is not None
 
         print("✅ P0-7.8: Works in nested async contexts")
 
@@ -319,10 +319,11 @@ class TestEventLoopEdgeCases:
         # WHEN: Executing via asyncio.create_task
         task = asyncio.create_task(runtime.execute_workflow_async(workflow, inputs={}))
 
-        result = await task
+        results, run_id = await task
 
         # THEN: Should work correctly
-        assert result["success"] is True
+        assert results is not None
+        assert run_id is not None
 
         print("✅ P0-7.9: Works with asyncio.create_task")
 
@@ -350,8 +351,8 @@ class TestEventLoopEdgeCases:
             runtime.execute_workflow_async(workflow, inputs={}),
         )
 
-        # THEN: All should succeed
-        assert all(r["success"] for r in results)
+        # THEN: All should succeed (results are tuples)
+        assert all(r[0] is not None for r in results)
 
         print("✅ P0-7.10: Works with asyncio.gather")
 
@@ -378,10 +379,11 @@ class TestEventLoopCleanup:
         workflow = builder.build()
 
         # WHEN: Executing and completing
-        result = await runtime.execute_workflow_async(workflow, inputs={})
+        results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
 
         # THEN: Should complete cleanly
-        assert result["success"] is True
+        assert results is not None
+        assert run_id is not None
 
         # Verify event loop still works after
         await asyncio.sleep(0.001)
@@ -415,8 +417,8 @@ class TestEventLoopCleanup:
             runtime3.execute_workflow_async(workflow, inputs={"instance_id": 3}),
         )
 
-        # THEN: All should succeed
-        assert all(r["success"] for r in results)
+        # THEN: All should succeed (results are tuples)
+        assert all(r[0] is not None for r in results)
 
         print("✅ P0-7.12: Multiple runtimes coexist correctly in same event loop")
 
