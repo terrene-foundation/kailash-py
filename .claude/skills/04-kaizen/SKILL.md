@@ -1,6 +1,6 @@
 ---
 name: kaizen
-description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'supervisor-worker', 'agent-to-agent communication', 'streaming agents', 'agent testing', 'agent memory', or 'agentic workflows'."
+description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'Planning agent', 'PEV agent', 'Tree-of-Thoughts', 'pipeline patterns', 'supervisor-worker', 'router pattern', 'ensemble pattern', 'blackboard pattern', 'parallel execution', 'agent-to-agent communication', 'A2A protocol', 'streaming agents', 'agent testing', 'agent memory', or 'agentic workflows'."
 ---
 
 # Kailash Kaizen - AI Agent Framework
