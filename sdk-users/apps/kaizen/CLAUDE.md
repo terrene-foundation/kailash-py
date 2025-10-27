@@ -108,6 +108,67 @@ agent = pipeline.to_agent(name="my_pipeline")
 - ✅ **Ensemble**: Agent discovery (top-k)
 - ✅ **Blackboard**: Dynamic specialist selection
 
+### Single-Agent Patterns (NEW in v0.5.0)
+
+**3 advanced patterns for structured workflows, iterative refinement, and multi-path exploration:**
+
+```python
+# 1. Planning Agent - Plan Before You Act
+from kaizen.agents.specialized.planning import PlanningAgent, PlanningConfig
+
+agent = PlanningAgent(PlanningConfig(
+    max_plan_steps=5,
+    validation_mode="strict",  # Pre-execution validation
+    enable_replanning=True
+))
+result = agent.run(task="Create research report", context={"length": "2000 words"})
+# Three-phase: Plan → Validate → Execute
+
+# 2. PEV Agent - Plan, Execute, Verify, Refine
+from kaizen.agents.specialized.pev import PEVAgent, PEVAgentConfig
+
+agent = PEVAgent(PEVAgentConfig(
+    max_iterations=5,  # Iterative refinement cycles
+    verification_strictness="medium",  # Post-execution verification
+    enable_error_recovery=True
+))
+result = agent.run(task="Generate production-ready code")
+# Iterative: Plan → Execute → Verify → Refine (loop until verified)
+
+# 3. Tree-of-Thoughts Agent - Multi-Path Exploration
+from kaizen.agents.specialized.tree_of_thoughts import ToTAgent, ToTAgentConfig
+
+agent = ToTAgent(ToTAgentConfig(
+    num_paths=5,  # Generate 5 alternative paths
+    temperature=0.9,  # HIGH for diversity
+    evaluation_criteria="quality",
+    parallel_execution=True
+))
+result = agent.run(task="Strategic decision: choose go-to-market strategy")
+# Parallel: Generate N paths → Evaluate → Select Best → Execute
+```
+
+**Pattern Selection Guide**:
+- **Planning**: Structured workflows with validation BEFORE execution (research, compliance)
+- **PEV**: Iterative refinement with verification AFTER execution (code generation, quality-critical)
+- **Tree-of-Thoughts**: Explore multiple alternatives, select best (strategic decisions, creative tasks)
+
+**Comparison Table**:
+
+| Pattern | Planning Phase | Verification | Cycles | Best For |
+|---------|---------------|--------------|--------|----------|
+| **Planning** | ✅ Upfront | Pre-execution | 1 (or replan) | Structured workflows |
+| **PEV** | ✅ Initial | Post-execution | Multiple refine | Quality-critical |
+| **ToT** | ❌ | Score evaluation | 1 generation | Alternatives exploration |
+| **ReAct** | ❌ | Observation | Variable | Real-time adaptation |
+| **CoT** | ❌ | ❌ | 1 | Step-by-step reasoning |
+
+**See Comprehensive Guides**:
+- [Planning Agent Guide](docs/guides/planning-agent.md) - 200+ lines
+- [PEV Agent Guide](docs/guides/pev-agent.md) - 200+ lines
+- [Tree-of-Thoughts Guide](docs/guides/tree-of-thoughts-agent.md) - 200+ lines
+- [Single-Agent Patterns Overview](docs/guides/single-agent-patterns.md) - All patterns comparison
+
 ## 🎯 Core API
 
 ### Available Specialized Agents

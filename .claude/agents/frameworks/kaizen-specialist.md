@@ -2159,6 +2159,172 @@ class CustomPipeline(Pipeline):
 
 **Key enterprise-level multi-modal insights preserved below** - these are CRITICAL for production implementations.
 
+### Single-Agent Patterns (Phase 4 - TODO-175)
+
+**NEW in v0.5.0**: Three advanced single-agent patterns for structured workflows, iterative refinement, and multi-path exploration.
+
+> **See Comprehensive Guides**:
+> - **[Planning Agent Guide](../../../sdk-users/apps/kaizen/docs/guides/planning-agent.md)** - Complete documentation
+> - **[PEV Agent Guide](../../../sdk-users/apps/kaizen/docs/guides/pev-agent.md)** - Complete documentation
+> - **[Tree-of-Thoughts Guide](../../../sdk-users/apps/kaizen/docs/guides/tree-of-thoughts-agent.md)** - Complete documentation
+> - **[Single-Agent Patterns Overview](../../../sdk-users/apps/kaizen/docs/guides/single-agent-patterns.md)** - All patterns comparison
+
+#### Planning Agent - Plan Before You Act
+**Pattern**: Generate complete plan → Validate feasibility → Execute validated plan
+
+**When to Use**:
+- Complex multi-step tasks requiring upfront planning
+- Critical operations needing validation before execution
+- Structured deliverables with clear steps and dependencies
+- Resource planning where feasibility must be checked first
+
+**Example**:
+```python
+from kaizen.agents.specialized.planning import PlanningAgent, PlanningConfig
+
+config = PlanningConfig(
+    llm_provider="openai",
+    model="gpt-4",
+    temperature=0.3,  # Low for consistent planning
+    max_plan_steps=5,
+    validation_mode="strict",  # strict, warn, off
+    enable_replanning=True
+)
+
+agent = PlanningAgent(config=config)
+result = agent.run(
+    task="Create a comprehensive research report on AI ethics",
+    context={
+        "max_sources": 5,
+        "report_length": "2000 words",
+        "focus_areas": ["privacy", "bias", "transparency"]
+    }
+)
+
+# Access three-phase results
+print(f"Plan: {len(result['plan'])} steps")
+print(f"Validation: {result['validation_result']['status']}")
+print(f"Execution: {len(result['execution_results'])} completed")
+print(f"Final: {result['final_result']}")
+```
+
+**vs ReAct**: Planning creates complete plan upfront; ReAct interleaves reasoning and action with real-time adaptation.
+
+**Reference**: `sdk-users/apps/kaizen/docs/guides/planning-agent.md`, `examples/1-single-agent/planning-agent/`
+
+#### PEV Agent - Plan, Execute, Verify, Refine
+**Pattern**: Create plan → Execute → Verify quality → Refine based on feedback (iterative loop)
+
+**When to Use**:
+- Quality-critical outputs (code generation, document writing)
+- Verification-driven workflows with measurable quality criteria
+- Iterative improvement needed to reach target quality
+- Feedback-based optimization
+
+**Example**:
+```python
+from kaizen.agents.specialized.pev import PEVAgent, PEVAgentConfig
+
+config = PEVAgentConfig(
+    llm_provider="openai",
+    model="gpt-4",
+    temperature=0.7,
+    max_iterations=5,  # Maximum refinement cycles
+    verification_strictness="medium",  # strict, medium, lenient
+    enable_error_recovery=True
+)
+
+agent = PEVAgent(config=config)
+result = agent.run(task="""
+Generate Python function with:
+- Type hints
+- Docstring
+- Error handling
+- Input validation
+- Passes pylint score > 9.0
+""")
+
+# Access iterative results
+print(f"Iterations: {len(result['refinements'])}")
+print(f"Verified: {result['verification']['passed']}")
+print(f"Issues: {result['verification'].get('issues', [])}")
+print(f"Final: {result['final_result']}")
+```
+
+**vs Planning**: PEV iteratively refines with post-execution verification; Planning validates plan before execution (single cycle).
+
+**Reference**: `sdk-users/apps/kaizen/docs/guides/pev-agent.md`, `examples/1-single-agent/pev-agent/`
+
+#### Tree-of-Thoughts Agent - Multi-Path Exploration
+**Pattern**: Generate N parallel paths → Evaluate each → Select best → Execute winner
+
+**When to Use**:
+- Multiple valid approaches exist, need to explore alternatives
+- Strategic decision-making where diverse perspectives improve outcomes
+- Creative problem-solving benefiting from alternative solutions
+- Uncertainty about optimal path
+
+**Example**:
+```python
+from kaizen.agents.specialized.tree_of_thoughts import ToTAgent, ToTAgentConfig
+
+config = ToTAgentConfig(
+    llm_provider="openai",
+    model="gpt-4",
+    temperature=0.9,  # HIGH for path diversity
+    num_paths=5,  # Generate 5 alternatives
+    evaluation_criteria="quality",  # quality, speed, creativity
+    parallel_execution=True
+)
+
+agent = ToTAgent(config=config)
+result = agent.run(task="""
+Startup with $500K needs go-to-market strategy.
+Consider: B2B enterprise, B2C freemium, platform, vertical integration.
+Recommend best strategy with reasoning.
+""")
+
+# Access multi-path results
+print(f"Paths Explored: {len(result['paths'])}")
+for i, eval in enumerate(result['evaluations'], 1):
+    print(f"Path {i}: Score {eval['score']:.2f}")
+print(f"Best Score: {result['best_path']['score']:.2f}")
+print(f"Recommendation: {result['final_result']}")
+```
+
+**vs CoT**: ToT explores multiple parallel paths; CoT follows single linear reasoning chain.
+
+**Reference**: `sdk-users/apps/kaizen/docs/guides/tree-of-thoughts-agent.md`, `examples/1-single-agent/tot-agent/`
+
+#### Single-Agent Pattern Decision Matrix
+
+| Pattern | Upfront Planning | Verification | Iteration | Multi-Path | Best For |
+|---------|-----------------|--------------|-----------|------------|----------|
+| **Planning** | ✅ Complete plan | Pre-execution | Single (or replan) | ❌ | Structured workflows, critical validation |
+| **PEV** | ✅ Initial plan | Post-execution | Multiple refine cycles | ❌ | Quality-critical, iterative refinement |
+| **ToT** | ❌ | Score-based evaluation | Single generation | ✅ N paths | Strategic decisions, alternatives |
+| **ReAct** | ❌ | Observation-based | Variable action cycles | ❌ | Dynamic, real-time adaptation |
+| **CoT** | ❌ | ❌ | Single reasoning | ❌ | Step-by-step reasoning tasks |
+| **SimpleQA** | ❌ | ❌ | Single-shot | ❌ | Simple Q&A, no workflow |
+
+**Quick Selection Guide**:
+- **Need upfront structure?** → Planning or PEV
+- **Need quality verification?** → PEV (post-execution) or Planning (pre-execution)
+- **Need multiple alternatives?** → Tree-of-Thoughts
+- **Need real-time adaptation?** → ReAct
+- **Simple reasoning task?** → Chain-of-Thought or SimpleQA
+
+**Pattern Comparison Examples**:
+
+| Task | Recommended Pattern | Reasoning |
+|------|---------------------|-----------|
+| Research report generation | **Planning** | Multi-step workflow, validation before execution |
+| Code generation with testing | **PEV** | Iterative refinement with quality verification |
+| Strategic business decision | **Tree-of-Thoughts** | Explore multiple alternatives, select best |
+| Dynamic troubleshooting | **ReAct** | Real-time observation-based adaptation |
+| Math problem solving | **Chain-of-Thought** | Step-by-step reasoning |
+| Simple question answering | **SimpleQA** | Direct answer, no workflow needed |
+
 ## UX Improvements (Apply to All New Code)
 
 ### Config Auto-Extraction
