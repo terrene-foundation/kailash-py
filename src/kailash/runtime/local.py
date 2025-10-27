@@ -44,7 +44,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import networkx as nx
 import psutil
-
 from kailash.nodes import Node
 from kailash.runtime.base import BaseRuntime
 from kailash.runtime.compatibility_reporter import CompatibilityReporter
@@ -1867,132 +1866,10 @@ class LocalRuntime(
         metrics_collector = get_metrics_collector()
         metrics_collector.reset_metrics()
 
-    def _should_skip_conditional_node(
-        self, workflow: Workflow, node_id: str, inputs: dict[str, Any]
-    ) -> bool:
-        """Determine if a node should be skipped due to conditional routing.
-
-        A node should be skipped if:
-        1. It has incoming connections from conditional nodes (like SwitchNode)
-        2. All of its connected inputs are None
-        3. It has no node-level configuration parameters that would make it run independently
-
-        Args:
-            workflow: The workflow being executed.
-            node_id: Node ID to check.
-            inputs: Prepared inputs for the node.
-
-        Returns:
-            True if the node should be skipped, False otherwise.
-        """
-        # Get all incoming edges for this node
-        incoming_edges = list(workflow.graph.in_edges(node_id, data=True))
-
-        # If the node has no incoming connections, don't skip it
-        # (it might be a source node or have configuration parameters)
-        if not incoming_edges:
-            return False
-
-        # Check for conditional inputs and analyze the nature of the data
-        has_conditional_inputs = False
-        has_non_none_connected_input = False
-
-        for source_node_id, _, edge_data in incoming_edges:
-            source_node = workflow._node_instances.get(source_node_id)
-            mapping = edge_data.get("mapping", {})
-
-            # Check if this edge provides any non-None inputs
-            for source_key, target_key in mapping.items():
-                if target_key in inputs and inputs[target_key] is not None:
-                    has_non_none_connected_input = True
-
-            # Direct connection from SwitchNode
-            if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
-                has_conditional_inputs = True
-            # Transitive dependency: source node was skipped due to conditional routing
-            elif (
-                hasattr(self, "_current_results")
-                and source_node_id in self._current_results
-            ):
-                if self._current_results[source_node_id] is None:
-                    has_conditional_inputs = True
-
-        # If no conditional inputs, don't skip
-        if not has_conditional_inputs:
-            return False
-
-        # If we have conditional inputs but also have non-None data, don't skip
-        # This handles mixed scenarios where some inputs are skipped but others provide data
-        if has_non_none_connected_input:
-            return False
-
-        # Get the node instance to check for configuration parameters
-        node_instance = workflow._node_instances.get(node_id)
-        if not node_instance:
-            return False
-
-        # Check if the node has configuration parameters that would make it run independently
-        # (excluding standard parameters and None values)
-        node_config = getattr(node_instance, "config", {})
-        significant_config = {
-            k: v
-            for k, v in node_config.items()
-            if k not in ["metadata", "name", "id"] and v is not None
-        }
-
-        # If the node has significant configuration, it might still be valuable to run
-        if significant_config:
-            # Check if any connected inputs have actual data (not None)
-            connected_inputs = {}
-            for _, _, edge_data in incoming_edges:
-                mapping = edge_data.get("mapping", {})
-                for source_key, target_key in mapping.items():
-                    if target_key in inputs:
-                        connected_inputs[target_key] = inputs[target_key]
-
-            # If all connected inputs are None but node has config, still skip
-            # The user can configure the node to run with default values if needed
-            if all(v is None for v in connected_inputs.values()):
-                return True
-
-        # Check if all connected inputs are None
-        # This is the main condition for conditional routing
-        has_non_none_input = False
-
-        # Count total connected inputs and None inputs from conditional sources
-        total_connected_inputs = 0
-        none_conditional_inputs = 0
-
-        for source_node_id, _, edge_data in incoming_edges:
-            mapping = edge_data.get("mapping", {})
-            for source_key, target_key in mapping.items():
-                if target_key in inputs:
-                    total_connected_inputs += 1
-                    if inputs[target_key] is not None:
-                        has_non_none_input = True
-                    else:
-                        # Check if this None input came from conditional routing
-                        source_node = workflow._node_instances.get(source_node_id)
-                        is_from_conditional = (
-                            source_node
-                            and source_node.__class__.__name__ in ["SwitchNode"]
-                        ) or (
-                            hasattr(self, "_current_results")
-                            and source_node_id in self._current_results
-                            and self._current_results[source_node_id] is None
-                        )
-                        if is_from_conditional:
-                            none_conditional_inputs += 1
-
-        # Skip the node only if ALL connected inputs are None AND from conditional routing
-        # This means nodes with mixed inputs (some None from conditional, some real data) should still execute
-        if (
-            total_connected_inputs > 0
-            and none_conditional_inputs == total_connected_inputs
-        ):
-            return True
-
-        return False
+    # NOTE: _should_skip_conditional_node implementation moved to ConditionalExecutionMixin
+    # LocalRuntime inherits this method via MRO from ConditionalExecutionMixin
+    # See: src/kailash/runtime/mixins/conditional_execution.py lines 299-666
+    # This reduces code duplication and ensures sync/async parity
 
     def _should_stop_on_error(self, workflow: Workflow, node_id: str) -> bool:
         """Determine if execution should stop when a node fails.
@@ -2543,6 +2420,20 @@ class LocalRuntime(
         Phase 1: Execute SwitchNodes to determine branches
         Phase 2: Execute only reachable nodes based on switch results
 
+        NOTE: This method intentionally overrides ConditionalExecutionMixin version.
+        The mixin provides a template implementation with generic signatures,
+        while this production version has:
+        - Explicit type-safe parameters (parameters, task_manager, run_id)
+        - Rich production metrics and monitoring
+        - Enhanced error handling and fallback logic
+        - Return type compatibility with LocalRuntime patterns
+
+        Both versions are maintained by design for different use cases:
+        - Mixin: Template/reference for other runtime implementations
+        - LocalRuntime: Production-optimized with explicit contracts
+
+        See: PHASE_4D_STEPS_3_5_SIGNATURE_ANALYSIS.md for detailed rationale
+
         Args:
             workflow: Workflow to execute
             parameters: Node-specific parameters
@@ -2696,6 +2587,17 @@ class LocalRuntime(
     ) -> dict[str, dict[str, Any]]:
         """
         Execute SwitchNodes first to determine conditional branches.
+
+        NOTE: This method intentionally overrides ConditionalExecutionMixin version.
+        LocalRuntime includes production-critical bug fixes (lines 2707-2721) that
+        prevent SwitchNode input parameter confusion. The mixin version lacks these
+        fixes and uses generic signatures.
+
+        Both versions maintained by design:
+        - Mixin: Template implementation with **kwargs pattern
+        - LocalRuntime: Production with explicit contracts and critical fixes
+
+        See: PHASE_4D_STEPS_3_5_SIGNATURE_ANALYSIS.md for technical details
 
         Args:
             workflow: Workflow being executed
@@ -2896,6 +2798,21 @@ class LocalRuntime(
     ) -> dict[str, dict[str, Any]]:
         """
         Execute pruned execution plan based on SwitchNode results.
+
+        NOTE: This method is FUNDAMENTALLY INCOMPATIBLE with ConditionalExecutionMixin version.
+        Different architectural approach:
+        - Mixin: Expects pre-computed execution_plan: List[str]
+        - LocalRuntime: Computes plan internally from switch_results: dict
+
+        LocalRuntime includes production features:
+        - Dynamic execution planning from switch results
+        - Switch re-execution logic (lines 2830-2850)
+        - Result merging for Phase 1+2 coordination
+        - Integration with DynamicExecutionPlanner
+
+        This is NOT code duplication - both versions serve distinct purposes.
+
+        See: PHASE_4D_STEPS_3_5_SIGNATURE_ANALYSIS.md for architectural details
 
         Args:
             workflow: Workflow being executed
