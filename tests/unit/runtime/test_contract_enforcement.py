@@ -37,10 +37,9 @@ class TestRuntimeContractEnforcement:
         workflow = builder.build()
 
         # Execute with strict validation
-        runtime = LocalRuntime(connection_validation="strict")
-
-        # Should execute successfully without contract violations
-        results, run_id = runtime.execute(workflow)
+        with LocalRuntime(connection_validation="strict") as runtime:
+            # Should execute successfully without contract violations
+            results, run_id = runtime.execute(workflow)
 
         assert results is not None
         assert run_id is not None
@@ -64,13 +63,12 @@ class TestRuntimeContractEnforcement:
 
         workflow = builder.build()
 
-        # Execute with strict validation - should fail
-        runtime = LocalRuntime(connection_validation="strict")
-
         # The contract validation should cause a failure
         # Let's check what actually happens
         try:
-            results, run_id = runtime.execute(workflow)
+            # Execute with strict validation - should fail
+            with LocalRuntime(connection_validation="strict") as runtime:
+                results, run_id = runtime.execute(workflow)
             # If it succeeds, check if there are error indicators
             if results and "target" in results and results["target"].get("failed"):
                 # Expected behavior - node failed due to contract validation
@@ -103,11 +101,11 @@ class TestRuntimeContractEnforcement:
         )
 
         workflow = builder.build()
-        runtime = LocalRuntime(connection_validation="strict")
 
         # Should fail due to SQL content in data
         try:
-            results, run_id = runtime.execute(workflow)
+            with LocalRuntime(connection_validation="strict") as runtime:
+                results, run_id = runtime.execute(workflow)
             # Check if node failed due to contract validation
             if results and "target" in results and results["target"].get("failed"):
                 pass  # Expected behavior
@@ -127,10 +125,10 @@ class TestRuntimeContractEnforcement:
         builder.add_connection("source", "result", "target", "data")
 
         workflow = builder.build()
-        runtime = LocalRuntime(connection_validation="strict")
 
         # Should execute normally without contract validation
-        results, run_id = runtime.execute(workflow)
+        with LocalRuntime(connection_validation="strict") as runtime:
+            results, run_id = runtime.execute(workflow)
 
         assert results is not None
         assert "target" in results
@@ -150,10 +148,9 @@ class TestRuntimeContractEnforcement:
         workflow = builder.build()
 
         # Execute with warn mode - should log warning but continue
-        runtime = LocalRuntime(connection_validation="warn")
-
-        with patch.object(runtime.logger, "warning") as mock_warning:
-            results, run_id = runtime.execute(workflow)
+        with LocalRuntime(connection_validation="warn") as runtime:
+            with patch.object(runtime.logger, "warning") as mock_warning:
+                results, run_id = runtime.execute(workflow)
 
             # Should complete execution but log contract warnings
             assert results is not None
@@ -179,10 +176,10 @@ class TestRuntimeContractEnforcement:
         workflow = builder.build()
 
         # Execute with validation off - should skip contract validation
-        runtime = LocalRuntime(connection_validation="off")
+        with LocalRuntime(connection_validation="off") as runtime:
+            # Should execute without any contract validation
+            results, run_id = runtime.execute(workflow)
 
-        # Should execute without any contract validation
-        results, run_id = runtime.execute(workflow)
         assert results is not None
 
     def test_multiple_contracts_validation(self):
@@ -204,10 +201,10 @@ class TestRuntimeContractEnforcement:
         )
 
         workflow = builder.build()
-        runtime = LocalRuntime(connection_validation="strict")
 
         # Should validate all contracts successfully
-        results, run_id = runtime.execute(workflow)
+        with LocalRuntime(connection_validation="strict") as runtime:
+            results, run_id = runtime.execute(workflow)
 
         assert results is not None
         assert "target1" in results
@@ -235,11 +232,11 @@ class TestRuntimeContractEnforcement:
         )
 
         workflow = builder.build()
-        runtime = LocalRuntime(connection_validation="strict")
 
         # Should fail due to the invalid contract
         try:
-            results, run_id = runtime.execute(workflow)
+            with LocalRuntime(connection_validation="strict") as runtime:
+                results, run_id = runtime.execute(workflow)
             # Check if any target node failed due to contract validation
             target_failed = any(
                 results.get(f"target{i}", {}).get("failed") for i in range(1, 3)
@@ -266,12 +263,12 @@ class TestRuntimeContractEnforcement:
         )
 
         workflow = builder.build()
-        runtime = LocalRuntime(connection_validation="strict")
 
         # Should handle missing source data gracefully
         # The actual behavior depends on how the source node handles missing outputs
         try:
-            results, run_id = runtime.execute(workflow)
+            with LocalRuntime(connection_validation="strict") as runtime:
+                results, run_id = runtime.execute(workflow)
             # If it succeeds, contracts should not cause additional failures
             assert results is not None
         except (WorkflowExecutionError, KeyError, Exception):
@@ -309,10 +306,10 @@ class TestRuntimeContractEnforcement:
         )
 
         workflow = builder.build()
-        runtime = LocalRuntime(connection_validation="strict")
 
         try:
-            results, run_id = runtime.execute(workflow)
+            with LocalRuntime(connection_validation="strict") as runtime:
+                results, run_id = runtime.execute(workflow)
             # Check if node failed due to contract validation
             if results and "target" in results and results["target"].get("failed"):
                 # Check error message content through logs or results
@@ -454,9 +451,9 @@ class TestContractIntegrationWithExistingValidation:
         # Should fail due to parameter validation at build time or contract validation at runtime
         try:
             workflow = builder.build()
-            runtime = LocalRuntime(connection_validation="strict")
 
-            results, run_id = runtime.execute(workflow)
+            with LocalRuntime(connection_validation="strict") as runtime:
+                results, run_id = runtime.execute(workflow)
             # Check if csv_reader node failed
             if (
                 results
@@ -482,23 +479,22 @@ class TestContractIntegrationWithExistingValidation:
         )
 
         workflow = builder.build()
-        runtime = LocalRuntime(connection_validation="strict")
 
         # Execute and capture metrics
         try:
-            results, run_id = runtime.execute(workflow)
+            with LocalRuntime(connection_validation="strict") as runtime:
+                results, run_id = runtime.execute(workflow)
+                # Verify metrics were collected (inside context to access runtime)
+                metrics = runtime.get_validation_metrics()
             # Check if target node failed due to contract validation
             if results and "target" in results and results["target"].get("failed"):
                 pass  # Expected behavior
             else:
                 assert False, "Expected contract validation to cause node failure"
+            assert "performance_summary" in metrics
+            assert "security_report" in metrics
         except WorkflowExecutionError:
             pass  # Also acceptable
-
-        # Verify metrics were collected
-        metrics = runtime.get_validation_metrics()
-        assert "performance_summary" in metrics
-        assert "security_report" in metrics
 
     def test_contract_validation_performance(self):
         """Test that contract validation doesn't significantly impact performance."""
@@ -517,11 +513,13 @@ class TestContractIntegrationWithExistingValidation:
             )
 
         workflow = builder.build()
-        runtime = LocalRuntime(connection_validation="strict", enable_monitoring=False)
 
         # Measure execution time
         start_time = time.time()
-        results, run_id = runtime.execute(workflow)
+        with LocalRuntime(
+            connection_validation="strict", enable_monitoring=False
+        ) as runtime:
+            results, run_id = runtime.execute(workflow)
         end_time = time.time()
 
         execution_time = end_time - start_time

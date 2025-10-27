@@ -873,6 +873,257 @@ Week 1 ✅ **COMPLETE**: Foundation (ExecutionContext, PermissionRule, Permissio
 
 **Reference**: `src/kaizen/core/autonomy/permissions/`, `tests/unit/core/autonomy/permissions/`, ADR-019 (Permission System)
 
+### Pipeline Patterns & Orchestration (Production-Ready)
+
+**9 composable pipeline patterns for multi-agent coordination with A2A-based agent discovery.**
+
+**What**: Pre-built patterns for common multi-agent coordination scenarios
+**When**: Need to coordinate multiple agents for complex tasks requiring diverse perspectives or specialized skills
+**How**: Use `Pipeline` factory methods for instant pattern creation with A2A semantic matching
+
+#### Available Patterns
+
+**Pattern Library (9 Patterns)**:
+1. **SupervisorWorkerPipeline**: Hierarchical coordination with supervisor directing specialized workers
+2. **MetaControllerPipeline** (Router): Intelligent task routing to best agent via A2A matching
+3. **EnsemblePipeline**: Multi-perspective collaboration with top-k A2A discovery and synthesis
+4. **BlackboardPipeline**: Controller-driven iterative problem-solving with shared state
+5. **ParallelPipeline**: Concurrent agent execution with result aggregation
+6. **SequentialPipeline**: Linear agent chain with output passing
+7. **HandoffPipeline**: Agent handoff with context transfer
+8. **ConsensusPipeline**: Voting-based decision making
+9. **DebatePipeline**: Adversarial deliberation with judgment
+
+**A2A-Integrated Patterns (4)**:
+- SupervisorWorkerPipeline, MetaControllerPipeline, EnsemblePipeline, BlackboardPipeline
+- All support semantic capability matching for agent selection
+- Graceful fallback when A2A unavailable
+
+#### Core Pattern: Ensemble with A2A Discovery
+
+**Multi-perspective problem solving with automatic agent selection:**
+
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+# Create agents with diverse capabilities
+code_expert = CodeAgent(config=CodeConfig())
+data_expert = DataAnalyst(config=DataConfig())
+writing_expert = WritingAgent(config=WritingConfig())
+research_expert = ResearchAgent(config=ResearchConfig())
+synthesis_agent = SynthesisAgent(config=SynthesisConfig())
+
+# Ensemble with A2A discovery (top-3 agents)
+pipeline = Pipeline.ensemble(
+    agents=[code_expert, data_expert, writing_expert, research_expert],
+    synthesizer=synthesis_agent,
+    discovery_mode="a2a",  # Semantic capability matching
+    top_k=3,               # Select top 3 agents
+    error_handling="graceful"  # Continue despite individual failures
+)
+
+# Execute - A2A automatically selects best 3 agents for task
+result = pipeline.run(
+    task="Analyze codebase and suggest improvements",
+    input="repository_path"
+)
+
+# Access synthesized result
+print(result['result'])              # Unified synthesis
+print(result['perspective_count'])   # Number of perspectives used
+print(result['task'])                # Original task
+```
+
+**How A2A Discovery Works**:
+1. Each agent generates A2A capability card (`agent.to_a2a_card()`)
+2. Task requirements matched against agent capabilities
+3. Top-k agents with highest capability scores selected
+4. Selected agents execute in parallel or sequentially
+5. Synthesizer combines perspectives into unified result
+
+#### Pattern: Blackboard (Iterative Problem-Solving)
+
+**Controller-driven multi-agent collaboration with shared state:**
+
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+# Create specialized agents
+problem_solver = ProblemSolverAgent(config)
+data_analyzer = DataAnalyzerAgent(config)
+optimizer = OptimizationAgent(config)
+controller = ControllerAgent(config)  # Orchestrates agents
+
+# Blackboard pattern
+pipeline = Pipeline.blackboard(
+    agents=[problem_solver, data_analyzer, optimizer],
+    controller=controller,
+    max_iterations=10,
+    discovery_mode="a2a"  # Semantic capability-based selection
+)
+
+# Execute - controller iteratively selects agents
+result = pipeline.run(
+    task="Optimize database query performance",
+    input="slow_query.sql"
+)
+
+# Access results
+print(result['insights'])        # All agent contributions
+print(result['iterations'])      # Number of iterations taken
+print(result['is_complete'])     # Convergence status
+```
+
+**Blackboard Flow**:
+1. **Controller** analyzes task and shared blackboard state
+2. **A2A Discovery** selects agent with needed capability
+3. **Agent** executes and writes insights to blackboard
+4. **Controller** checks if problem is solved
+5. Repeat until complete or max_iterations reached
+
+#### Pattern: Meta-Controller (Router)
+
+**Intelligent task routing to best-suited agent:**
+
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+# Create diverse agents
+pipeline = Pipeline.router(
+    agents=[code_agent, data_agent, writing_agent],
+    routing_strategy="semantic",  # A2A-based routing
+    fallback_strategy="round-robin"
+)
+
+# Automatically routes to best agent
+result = pipeline.run(task="Analyze sales data and create report")
+# Routes to data_agent (highest capability match)
+```
+
+#### Pattern: Parallel Execution
+
+**Concurrent agent execution for speed:**
+
+```python
+pipeline = Pipeline.parallel(
+    agents=[agent1, agent2, agent3],
+    aggregation_strategy="merge",  # merge, vote, or custom
+    error_handling="graceful"
+)
+
+result = pipeline.run(task="Multi-perspective analysis", input=data)
+```
+
+#### Pattern Composition
+
+**Patterns are composable - nest patterns within patterns:**
+
+```python
+# Create sub-patterns
+code_pipeline = Pipeline.sequential([code_agent1, code_agent2])
+data_pipeline = Pipeline.parallel([data_agent1, data_agent2, data_agent3])
+
+# Compose into meta-pattern
+meta_pipeline = Pipeline.router(
+    agents=[code_pipeline, data_pipeline],  # Pipelines are agents!
+    routing_strategy="semantic"
+)
+
+# Execute composed pattern
+result = meta_pipeline.run(task="Complex analysis requiring code + data")
+```
+
+#### Error Handling
+
+**Two modes: graceful (default) or fail-fast:**
+
+```python
+# Graceful: collect partial results, skip failures
+pipeline = Pipeline.ensemble(
+    agents=[agent1, agent2, agent3],
+    synthesizer=synthesizer,
+    error_handling="graceful"  # Default
+)
+result = pipeline.run(task="...")
+# result may contain partial perspectives if some agents failed
+
+# Fail-fast: raise exception on first error
+pipeline = Pipeline.ensemble(
+    agents=[agent1, agent2, agent3],
+    synthesizer=synthesizer,
+    error_handling="fail-fast"
+)
+```
+
+#### Convert Pipeline to Agent
+
+**All pipelines expose `.to_agent()` for recursive composition:**
+
+```python
+# Create pipeline
+ensemble_pipeline = Pipeline.ensemble(
+    agents=[agent1, agent2, agent3],
+    synthesizer=synthesizer
+)
+
+# Convert to agent
+ensemble_agent = ensemble_pipeline.to_agent(
+    name="EnsembleAgent",
+    description="Multi-perspective analysis agent"
+)
+
+# Use in another pipeline
+meta_pipeline = Pipeline.router(
+    agents=[ensemble_agent, other_agent],
+    routing_strategy="semantic"
+)
+```
+
+#### Performance Characteristics
+
+**Benchmarks (4-agent ensemble)**:
+- **A2A Discovery**: <50ms for top-k selection
+- **Parallel Execution**: 4x speedup over sequential
+- **Synthesis Overhead**: <100ms
+- **Memory Usage**: <512MB per pipeline
+- **Nesting Depth**: 10+ levels supported
+
+#### Use Cases
+
+**Ensemble Pattern**:
+- Multi-perspective document analysis
+- Diverse code review (architecture, security, performance)
+- Comprehensive research (multiple source types)
+- Balanced decision-making (multiple viewpoints)
+
+**Blackboard Pattern**:
+- Iterative problem-solving (optimization, debugging)
+- Complex planning (travel, project management)
+- Incremental knowledge building
+- Multi-step data analysis pipelines
+
+**Router Pattern**:
+- Intelligent task delegation to specialists
+- Load balancing across agents
+- Capability-based routing
+- Fallback workflows for reliability
+
+**Parallel Pattern**:
+- Bulk processing (batch analysis)
+- Redundant execution for reliability
+- Voting-based consensus
+- Speed optimization for independent tasks
+
+**Benefits**:
+- ✅ **Zero Hardcoded Logic**: A2A semantic matching eliminates if/else agent selection
+- ✅ **Composable**: Nest patterns within patterns for complex workflows
+- ✅ **Graceful Degradation**: Continues with partial results on agent failures
+- ✅ **Production-Validated**: 144 tests covering edge cases
+- ✅ **A2A Integration**: Automatic capability-based agent discovery
+- ✅ **Flexible Error Handling**: Graceful or fail-fast modes
+
+**Reference**: `src/kaizen/orchestration/patterns/`, `tests/unit/orchestration/`, ADR-018, `docs/testing/pipeline-edge-case-test-matrix.md`
+
 ### Memory & Learning System (Production-Ready)
 
 **Comprehensive memory and learning system for persistent context, pattern recognition, and continuous improvement.**
