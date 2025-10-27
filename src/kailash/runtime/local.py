@@ -37,6 +37,7 @@ Examples:
 import asyncio
 import hashlib
 import logging
+import threading
 import time
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -632,6 +633,14 @@ class LocalRuntime(
         else:
             self.logger.setLevel(logging.INFO)
 
+        # === Persistent Event Loop Management (v0.10.1+) ===
+        # Fixes event loop closure bug with AsyncSQLDatabaseNode connection pools
+        self._persistent_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop_thread: Optional[threading.Thread] = None
+        self._loop_lock = threading.Lock()  # Protect loop creation/cleanup
+        self._is_context_managed = False  # Track if using context manager
+        self._cleanup_registered = False  # Track if atexit cleanup registered
+
         # Enterprise execution context
         self._execution_context = {
             "security_enabled": enable_security,
@@ -664,7 +673,17 @@ class LocalRuntime(
         task_manager: TaskManager | None = None,
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], str | None]:
-        """Execute a workflow with unified enterprise capabilities.
+        """
+        Execute a workflow synchronously.
+
+        This method uses a persistent event loop across multiple executions,
+        ensuring connection pools and async resources remain valid. This is
+        critical for AsyncSQLDatabaseNode and other async components.
+
+        Persistent Event Loop Benefits:
+            - Connection pools remain valid across executions (no "Event loop closed" errors)
+            - Better performance (no loop recreation overhead)
+            - Efficient resource usage (connection pool reuse)
 
         Args:
             workflow: Workflow to execute.
@@ -678,8 +697,67 @@ class LocalRuntime(
             RuntimeExecutionError: If execution fails.
             WorkflowValidationError: If workflow is invalid.
             PermissionError: If access control denies execution.
+
+        Resource Management:
+            For proper resource cleanup in long-running applications, use
+            the context manager pattern or call close() explicitly:
+
+            Pattern 1 - Context Manager (Recommended):
+                >>> with LocalRuntime() as runtime:
+                ...     results, run_id = runtime.execute(workflow)
+                # Automatic cleanup
+
+            Pattern 2 - Explicit Close:
+                >>> runtime = LocalRuntime()
+                >>> try:
+                ...     results, run_id = runtime.execute(workflow)
+                ... finally:
+                ...     runtime.close()
+
+            Pattern 3 - Automatic (Deprecated):
+                >>> runtime = LocalRuntime()
+                >>> results, run_id = runtime.execute(workflow)  # ⚠️ DeprecationWarning
+                # Cleanup on process exit (atexit)
+
+        Deprecation Notice:
+            Using LocalRuntime without context manager or explicit close() is
+            deprecated and will emit a DeprecationWarning. This pattern will
+            raise an error in v0.12.0. Please migrate to context manager pattern.
+
+        Examples:
+            Sequential workflows with context manager:
+                >>> with LocalRuntime() as runtime:
+                ...     results1, _ = runtime.execute(workflow1)
+                ...     results2, _ = runtime.execute(workflow2)  # Same event loop!
+                ...     results3, _ = runtime.execute(workflow3)  # Same event loop!
+
+            Long-running service:
+                >>> class DataProcessor:
+                ...     def __init__(self):
+                ...         self.runtime = LocalRuntime()
+                ...     def process(self, workflow):
+                ...         return self.runtime.execute(workflow)
+                ...     def shutdown(self):
+                ...         self.runtime.close()
+
+        See Also:
+            - close(): Explicit cleanup
+            - __enter__, __exit__: Context manager support
+            - execute_async(): Async variant
         """
-        # For backward compatibility, run the async version in a sync wrapper
+        # Emit deprecation warning for non-context-managed usage
+        if not self._is_context_managed and not self._cleanup_registered:
+            import warnings
+
+            warnings.warn(
+                "LocalRuntime.execute() without context manager or explicit close() is deprecated. "
+                "Use 'with LocalRuntime() as runtime:' pattern for proper resource cleanup. "
+                "This will become an error in v0.12.0. "
+                "See documentation: https://docs.kailash.ai/runtime/local-runtime#resource-management",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         try:
             # Check if we're already in an event loop
             loop = asyncio.get_running_loop()
@@ -688,8 +766,11 @@ class LocalRuntime(
                 workflow=workflow, task_manager=task_manager, parameters=parameters
             )
         except RuntimeError:
-            # No event loop running, safe to use asyncio.run
-            return asyncio.run(
+            # No event loop running, use persistent loop
+            loop = self._ensure_event_loop()
+
+            # Run the async execution in the persistent loop
+            return loop.run_until_complete(
                 self._execute_async(
                     workflow=workflow, task_manager=task_manager, parameters=parameters
                 )
@@ -719,6 +800,379 @@ class LocalRuntime(
         return await self._execute_async(
             workflow=workflow, task_manager=task_manager, parameters=parameters
         )
+
+    def _ensure_event_loop(self) -> asyncio.AbstractEventLoop:
+        """
+        Ensure persistent event loop exists, creating if necessary.
+
+        This method is thread-safe and idempotent. It creates a NEW event loop
+        on the FIRST call and reuses the SAME loop for all subsequent calls.
+
+        The persistent loop is stored in self._persistent_loop and shared across
+        all execute() calls for this runtime instance. This ensures:
+        1. AsyncSQLDatabaseNode connection pools remain valid (same loop ID)
+        2. Better performance (no loop recreation overhead)
+        3. Resource efficiency (connection pool reuse)
+
+        Returns:
+            The persistent event loop instance
+
+        Thread Safety:
+            Protected by self._loop_lock for multi-threaded environments.
+            Each runtime instance has its own loop (no cross-instance pollution).
+
+        Corruption Handling:
+            Automatically recreates loop if it becomes closed/corrupted.
+            Logs warning if external closure detected.
+
+        Note:
+            For proper cleanup, use context manager or call close() explicitly:
+
+            >>> with LocalRuntime() as runtime:  # Recommended
+            ...     results = runtime.execute(workflow)
+            >>> # Or:
+            >>> runtime = LocalRuntime()
+            >>> try:
+            ...     results = runtime.execute(workflow)
+            ... finally:
+            ...     runtime.close()
+
+        Examples:
+            >>> runtime = LocalRuntime()
+            >>> loop1 = runtime._ensure_event_loop()
+            >>> loop2 = runtime._ensure_event_loop()
+            >>> assert loop1 is loop2  # Same loop reused
+
+        Raises:
+            RuntimeError: If loop creation fails (rare, OS-level issue)
+        """
+        with self._loop_lock:
+            # Check if existing loop is valid
+            if self._persistent_loop is not None:
+                if not self._persistent_loop.is_closed():
+                    # Existing loop is valid, reuse it
+                    if self.debug:
+                        logger.debug(
+                            f"Reusing persistent event loop for runtime {self._runtime_id} "
+                            f"(loop_id={id(self._persistent_loop)})"
+                        )
+                    return self._persistent_loop
+                else:
+                    # Loop was closed externally, log warning and recreate
+                    logger.warning(
+                        f"Persistent event loop for runtime {self._runtime_id} was closed externally. "
+                        f"Recreating event loop. This may indicate improper cleanup. "
+                        f"Consider using 'with LocalRuntime() as runtime:' pattern."
+                    )
+                    self._persistent_loop = None
+
+            # Create new persistent event loop
+            try:
+                self._persistent_loop = asyncio.new_event_loop()
+            except Exception as e:
+                raise RuntimeExecutionError(
+                    f"Failed to create persistent event loop for runtime {self._runtime_id}: {e}"
+                ) from e
+
+            # Register atexit cleanup if not using context manager
+            # This is a fallback - context manager or explicit close() is preferred
+            if not self._cleanup_registered and not self._is_context_managed:
+                import atexit
+
+                atexit.register(self._cleanup_event_loop)
+                self._cleanup_registered = True
+
+                if self.debug:
+                    logger.debug(
+                        f"Registered atexit cleanup for runtime {self._runtime_id} "
+                        "(fallback - use context manager or close() for better control)"
+                    )
+
+            if self.debug:
+                logger.debug(
+                    f"Created persistent event loop for runtime {self._runtime_id} "
+                    f"(loop_id={id(self._persistent_loop)})"
+                )
+
+            return self._persistent_loop
+
+    def _cleanup_event_loop(self) -> None:
+        """
+        Clean up persistent event loop and resources.
+
+        This method performs graceful shutdown of the persistent event loop:
+        1. Cancels all pending tasks
+        2. Waits for cancellation to complete
+        3. Closes the event loop
+        4. Clears internal references
+
+        This method is called:
+        1. Explicitly via close()
+        2. Via context manager __exit__
+        3. Via atexit if neither of above
+
+        Thread Safety:
+            Protected by self._loop_lock. Safe to call from any thread.
+
+        Idempotency:
+            Safe to call multiple times. Subsequent calls are no-ops.
+
+        Note:
+            After cleanup, a new event loop will be created automatically
+            on the next execute() call. However, for best practices, create
+            a new runtime instance instead.
+
+        Examples:
+            >>> runtime = LocalRuntime()
+            >>> runtime.execute(workflow1)
+            >>> runtime._cleanup_event_loop()  # Manual cleanup
+            >>> runtime.execute(workflow2)     # New loop created automatically
+
+        Errors:
+            Errors during cleanup are logged but not raised. Loop is force-closed
+            even if graceful shutdown fails.
+        """
+        with self._loop_lock:
+            if self._persistent_loop is None:
+                # Already cleaned up
+                if self.debug:
+                    logger.debug(
+                        f"Event loop for runtime {self._runtime_id} already cleaned up"
+                    )
+                return
+
+            loop = self._persistent_loop
+            loop_id = id(loop)
+
+            if self.debug:
+                logger.debug(
+                    f"Cleaning up event loop for runtime {self._runtime_id} "
+                    f"(loop_id={loop_id})"
+                )
+
+            # Cancel all pending tasks (graceful shutdown)
+            if not loop.is_closed():
+                try:
+                    # Get all pending tasks
+                    pending = asyncio.all_tasks(loop)
+
+                    if pending:
+                        logger.debug(
+                            f"Cancelling {len(pending)} pending tasks in event loop cleanup "
+                            f"(runtime {self._runtime_id})"
+                        )
+
+                        # Cancel all tasks
+                        for task in pending:
+                            task.cancel()
+
+                        # Wait for cancellation to complete
+                        loop.run_until_complete(
+                            asyncio.gather(*pending, return_exceptions=True)
+                        )
+
+                        if self.debug:
+                            logger.debug(
+                                f"Successfully cancelled {len(pending)} tasks "
+                                f"(runtime {self._runtime_id})"
+                            )
+
+                    # Close the loop
+                    loop.close()
+
+                    if self.debug:
+                        logger.debug(
+                            f"Closed persistent event loop for runtime {self._runtime_id} "
+                            f"(loop_id={loop_id})"
+                        )
+
+                except Exception as e:
+                    # Log error but don't raise - cleanup must succeed
+                    logger.warning(
+                        f"Error during event loop cleanup for runtime {self._runtime_id}: {e}. "
+                        f"Force-closing loop."
+                    )
+                    # Force close even if cleanup fails
+                    if not loop.is_closed():
+                        try:
+                            loop.close()
+                        except Exception as e2:
+                            logger.error(
+                                f"Failed to force-close event loop for runtime {self._runtime_id}: {e2}"
+                            )
+
+            # Clear reference
+            self._persistent_loop = None
+
+            if self.debug:
+                logger.debug(
+                    f"Event loop cleanup complete for runtime {self._runtime_id}"
+                )
+
+    def close(self) -> None:
+        """
+        Explicitly close the runtime and clean up resources.
+
+        This method should be called when you're done with the runtime instance,
+        especially in long-running applications. It closes the persistent event
+        loop and releases all associated resources, including:
+        - Event loop
+        - Pending async tasks
+        - Connection pools (indirectly, via loop closure)
+
+        Usage Patterns:
+
+            Pattern 1 - Try/Finally (Explicit Control):
+                >>> runtime = LocalRuntime()
+                >>> try:
+                ...     results, run_id = runtime.execute(workflow)
+                ... finally:
+                ...     runtime.close()  # Always clean up
+
+            Pattern 2 - Long-Running Service:
+                >>> class MyService:
+                ...     def __init__(self):
+                ...         self.runtime = LocalRuntime()
+                ...     def shutdown(self):
+                ...         self.runtime.close()
+
+            Pattern 3 - Context Manager (Recommended):
+                >>> with LocalRuntime() as runtime:
+                ...     results = runtime.execute(workflow)
+                # Automatic cleanup (close() called by __exit__)
+
+        Note:
+            After calling close(), the runtime can still be used - a new event loop
+            will be created automatically on the next execute() call. However, for
+            best practices, create a new runtime instance instead of reusing after close().
+
+        Thread Safety:
+            Safe to call from any thread. Protected by internal lock.
+
+        Idempotency:
+            Safe to call multiple times. Subsequent calls are no-ops.
+
+        Examples:
+            >>> runtime = LocalRuntime()
+            >>> runtime.execute(workflow1)
+            >>> runtime.close()                    # Clean up
+            >>> runtime.execute(workflow2)         # New loop created (OK but not recommended)
+            >>> runtime.close()                    # Safe to call again
+
+        See Also:
+            - __enter__, __exit__: Context manager support
+            - _cleanup_event_loop: Internal cleanup implementation
+        """
+        if self.debug:
+            logger.debug(f"Explicit close() called for runtime {self._runtime_id}")
+
+        self._cleanup_event_loop()
+
+    def __enter__(self) -> "LocalRuntime":
+        """
+        Enter context manager, ensuring event loop is created.
+
+        This method is called when entering a 'with' statement. It:
+        1. Marks the runtime as context-managed
+        2. Eagerly creates the persistent event loop
+        3. Returns self for with-statement binding
+
+        Usage:
+            >>> with LocalRuntime() as runtime:
+            ...     results, run_id = runtime.execute(workflow1)
+            ...     results2, run_id2 = runtime.execute(workflow2)  # Same loop!
+            # Automatic cleanup on exit (__exit__ called)
+
+        Context Management Benefits:
+            - Automatic cleanup (even on exceptions)
+            - Clear resource lifetime
+            - No atexit fallback needed
+            - Pythonic and explicit
+
+        Returns:
+            Self for with-statement binding
+
+        Examples:
+            >>> with LocalRuntime(debug=True, enable_cycles=True) as runtime:
+            ...     for workflow in workflow_list:
+            ...         results, run_id = runtime.execute(workflow)
+            # All workflows share same event loop, then cleanup
+
+        Note:
+            The event loop is created eagerly in __enter__, not lazily in execute().
+            This ensures consistent behavior regardless of execution paths.
+
+        See Also:
+            - __exit__: Cleanup counterpart
+            - close(): Explicit cleanup without context manager
+        """
+        if self.debug:
+            logger.debug(f"Entering context manager for runtime {self._runtime_id}")
+
+        # Mark as context-managed to prevent atexit registration
+        self._is_context_managed = True
+
+        # Eagerly create event loop
+        self._ensure_event_loop()
+
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[type],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[Any],
+    ) -> bool:
+        """
+        Exit context manager, cleaning up event loop.
+
+        This method is called when exiting a 'with' statement. It:
+        1. Cleans up the persistent event loop
+        2. Resets context-managed flag
+        3. Returns False to propagate exceptions
+
+        Args:
+            exc_type: Exception type if exception occurred in with-block
+            exc_val: Exception value if exception occurred
+            exc_tb: Exception traceback if exception occurred
+
+        Returns:
+            False (do not suppress exceptions)
+
+        Exception Handling:
+            This method does NOT suppress exceptions from the with-block.
+            If an exception occurs during workflow execution, it will be
+            propagated AFTER cleanup completes.
+
+        Examples:
+            >>> with LocalRuntime() as runtime:
+            ...     results = runtime.execute(workflow)
+            ...     raise ValueError("Test")  # Exception raised
+            # __exit__ called with exc_type=ValueError
+            # Cleanup happens, then ValueError propagated
+
+        Note:
+            Cleanup happens even if an exception occurred. The event loop
+            is guaranteed to be cleaned up regardless of execution success.
+
+        See Also:
+            - __enter__: Entry counterpart
+            - _cleanup_event_loop: Actual cleanup implementation
+        """
+        if self.debug:
+            logger.debug(
+                f"Exiting context manager for runtime {self._runtime_id} "
+                f"(exception: {exc_type.__name__ if exc_type else 'None'})"
+            )
+
+        # Clean up event loop
+        self._cleanup_event_loop()
+
+        # Reset context-managed flag
+        self._is_context_managed = False
+
+        # Don't suppress exceptions
+        return False
 
     def _execute_sync(
         self,
@@ -1258,7 +1712,10 @@ class LocalRuntime(
                     self.logger.debug(f"Node {node_id} inputs: {inputs}")
 
                 # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
-                if self._should_skip_conditional_node(workflow, node_id, inputs):
+                # Uses shared mixin method (ConditionalExecutionMixin._should_skip_conditional_node)
+                if self._should_skip_conditional_node(
+                    workflow, node_id, inputs, self._current_results
+                ):
                     if self.debug:
                         self.logger.debug(
                             f"DEBUG: Skipping {node_id} - inputs: {inputs}"
@@ -1867,132 +2324,10 @@ class LocalRuntime(
         metrics_collector = get_metrics_collector()
         metrics_collector.reset_metrics()
 
-    def _should_skip_conditional_node(
-        self, workflow: Workflow, node_id: str, inputs: dict[str, Any]
-    ) -> bool:
-        """Determine if a node should be skipped due to conditional routing.
-
-        A node should be skipped if:
-        1. It has incoming connections from conditional nodes (like SwitchNode)
-        2. All of its connected inputs are None
-        3. It has no node-level configuration parameters that would make it run independently
-
-        Args:
-            workflow: The workflow being executed.
-            node_id: Node ID to check.
-            inputs: Prepared inputs for the node.
-
-        Returns:
-            True if the node should be skipped, False otherwise.
-        """
-        # Get all incoming edges for this node
-        incoming_edges = list(workflow.graph.in_edges(node_id, data=True))
-
-        # If the node has no incoming connections, don't skip it
-        # (it might be a source node or have configuration parameters)
-        if not incoming_edges:
-            return False
-
-        # Check for conditional inputs and analyze the nature of the data
-        has_conditional_inputs = False
-        has_non_none_connected_input = False
-
-        for source_node_id, _, edge_data in incoming_edges:
-            source_node = workflow._node_instances.get(source_node_id)
-            mapping = edge_data.get("mapping", {})
-
-            # Check if this edge provides any non-None inputs
-            for source_key, target_key in mapping.items():
-                if target_key in inputs and inputs[target_key] is not None:
-                    has_non_none_connected_input = True
-
-            # Direct connection from SwitchNode
-            if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
-                has_conditional_inputs = True
-            # Transitive dependency: source node was skipped due to conditional routing
-            elif (
-                hasattr(self, "_current_results")
-                and source_node_id in self._current_results
-            ):
-                if self._current_results[source_node_id] is None:
-                    has_conditional_inputs = True
-
-        # If no conditional inputs, don't skip
-        if not has_conditional_inputs:
-            return False
-
-        # If we have conditional inputs but also have non-None data, don't skip
-        # This handles mixed scenarios where some inputs are skipped but others provide data
-        if has_non_none_connected_input:
-            return False
-
-        # Get the node instance to check for configuration parameters
-        node_instance = workflow._node_instances.get(node_id)
-        if not node_instance:
-            return False
-
-        # Check if the node has configuration parameters that would make it run independently
-        # (excluding standard parameters and None values)
-        node_config = getattr(node_instance, "config", {})
-        significant_config = {
-            k: v
-            for k, v in node_config.items()
-            if k not in ["metadata", "name", "id"] and v is not None
-        }
-
-        # If the node has significant configuration, it might still be valuable to run
-        if significant_config:
-            # Check if any connected inputs have actual data (not None)
-            connected_inputs = {}
-            for _, _, edge_data in incoming_edges:
-                mapping = edge_data.get("mapping", {})
-                for source_key, target_key in mapping.items():
-                    if target_key in inputs:
-                        connected_inputs[target_key] = inputs[target_key]
-
-            # If all connected inputs are None but node has config, still skip
-            # The user can configure the node to run with default values if needed
-            if all(v is None for v in connected_inputs.values()):
-                return True
-
-        # Check if all connected inputs are None
-        # This is the main condition for conditional routing
-        has_non_none_input = False
-
-        # Count total connected inputs and None inputs from conditional sources
-        total_connected_inputs = 0
-        none_conditional_inputs = 0
-
-        for source_node_id, _, edge_data in incoming_edges:
-            mapping = edge_data.get("mapping", {})
-            for source_key, target_key in mapping.items():
-                if target_key in inputs:
-                    total_connected_inputs += 1
-                    if inputs[target_key] is not None:
-                        has_non_none_input = True
-                    else:
-                        # Check if this None input came from conditional routing
-                        source_node = workflow._node_instances.get(source_node_id)
-                        is_from_conditional = (
-                            source_node
-                            and source_node.__class__.__name__ in ["SwitchNode"]
-                        ) or (
-                            hasattr(self, "_current_results")
-                            and source_node_id in self._current_results
-                            and self._current_results[source_node_id] is None
-                        )
-                        if is_from_conditional:
-                            none_conditional_inputs += 1
-
-        # Skip the node only if ALL connected inputs are None AND from conditional routing
-        # This means nodes with mixed inputs (some None from conditional, some real data) should still execute
-        if (
-            total_connected_inputs > 0
-            and none_conditional_inputs == total_connected_inputs
-        ):
-            return True
-
-        return False
+    # NOTE: _should_skip_conditional_node() is now provided by ConditionalExecutionMixin
+    # The previous LocalRuntime override (127 lines) has been moved to the mixin as the canonical implementation
+    # Both LocalRuntime and AsyncLocalRuntime now use the shared mixin version for feature parity
+    # See: src/kailash/runtime/mixins/conditional_execution.py:299
 
     def _should_stop_on_error(self, workflow: Workflow, node_id: str) -> bool:
         """Determine if execution should stop when a node fails.
