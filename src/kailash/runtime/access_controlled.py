@@ -118,6 +118,7 @@ class AccessControlledRuntime:
             base_runtime: The underlying runtime to use (defaults to LocalRuntime)
         """
         self.user_context = user_context
+        self._owns_runtime = base_runtime is None
         self.base_runtime = base_runtime or LocalRuntime()
         self.acm = get_access_control_manager()
 
@@ -144,10 +145,29 @@ class AccessControlledRuntime:
             if not workflow_decision.allowed:
                 raise PermissionError(f"Access denied: {workflow_decision.reason}")
 
-        # For simplicity, directly execute with the base runtime
-        # In a full implementation, we would wrap nodes or intercept execution
-        # But for this example, we'll rely on the nodes having access control attributes
+        # Execute with base runtime - it's managed via context manager
+        # The base runtime's context manager is entered in __enter__ if we own it
         return self.base_runtime.execute(workflow, parameters)
+
+    def close(self) -> None:
+        """Close the runtime and clean up resources.
+
+        Only closes the base runtime if it was created by this instance.
+        """
+        if self._owns_runtime and hasattr(self.base_runtime, "close"):
+            self.base_runtime.close()
+
+    def __enter__(self) -> "AccessControlledRuntime":
+        """Enter context manager."""
+        if hasattr(self.base_runtime, "__enter__"):
+            self.base_runtime.__enter__()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Exit context manager."""
+        if self._owns_runtime and hasattr(self.base_runtime, "__exit__"):
+            return self.base_runtime.__exit__(exc_type, exc_val, exc_tb)
+        return False
 
     def _create_controlled_workflow(self, workflow: Workflow) -> Workflow:
         """
@@ -455,6 +475,6 @@ def execute_with_access_control(
         access_config.apply_to_manager(acm)
         acm.enabled = True  # Enable access control
 
-    # Create runtime and execute
-    runtime = AccessControlledRuntime(user_context)
-    return runtime.execute(workflow, parameters)
+    # Create runtime and execute with context manager for proper cleanup
+    with AccessControlledRuntime(user_context) as runtime:
+        return runtime.execute(workflow, parameters)

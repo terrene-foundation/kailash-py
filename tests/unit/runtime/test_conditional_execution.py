@@ -81,14 +81,13 @@ class TestLocalRuntimeConditionalExecution:
         self.workflow.connect("switch1", "false_proc", {"false_output": "input"})
 
         # Test with default mode (should execute all nodes)
-        runtime = LocalRuntime(conditional_execution="route_data")
-
         # Mock the input data
         input_data = {"status": "active"}
 
-        results, run_id = runtime.execute(
-            self.workflow, parameters={"switch1": input_data}
-        )
+        with LocalRuntime(conditional_execution="route_data") as runtime:
+            results, run_id = runtime.execute(
+                self.workflow, parameters={"switch1": input_data}
+            )
 
         # In route_data mode, all nodes should execute (current behavior)
         assert "switch1" in results
@@ -111,7 +110,6 @@ class TestLocalRuntimeConditionalExecution:
         self.workflow.add_node("true_proc", true_proc)
         self.workflow.connect("switch1", "true_proc", {"true_output": "input"})
 
-        runtime = LocalRuntime(conditional_execution="skip_branches")
         input_data = {"status": "active"}
 
         # Capture log messages to verify conditional execution path
@@ -125,9 +123,10 @@ class TestLocalRuntimeConditionalExecution:
         logger.setLevel(logging.INFO)
 
         try:
-            results, run_id = runtime.execute(
-                self.workflow, parameters={"switch1": input_data}
-            )
+            with LocalRuntime(conditional_execution="skip_branches") as runtime:
+                results, run_id = runtime.execute(
+                    self.workflow, parameters={"switch1": input_data}
+                )
 
             # Verify conditional execution was triggered by checking log messages
             log_output = log_capture.getvalue()
@@ -180,9 +179,12 @@ class TestLocalRuntimeConditionalExecution:
 
                     # Test through public interface since private method requires more parameters
                     input_data = {"status": "active"}
-                    results, run_id = runtime.execute(
-                        self.workflow, parameters={"switch1": input_data}
-                    )
+                    with LocalRuntime(
+                        conditional_execution="skip_branches"
+                    ) as test_runtime:
+                        results, run_id = test_runtime.execute(
+                            self.workflow, parameters={"switch1": input_data}
+                        )
 
                     # Method should exist and be callable
                     assert results is not None
@@ -278,9 +280,10 @@ class TestLocalRuntimeConditionalExecution:
         input_data = {"a": 1, "b": 2}
 
         try:
-            results, run_id = runtime.execute(
-                self.workflow, parameters={"switch1": input_data}
-            )
+            with LocalRuntime(conditional_execution="skip_branches") as test_runtime:
+                results, run_id = test_runtime.execute(
+                    self.workflow, parameters={"switch1": input_data}
+                )
             # Should either execute successfully or fall back gracefully
             assert results is not None
         except Exception as e:
@@ -349,9 +352,10 @@ class TestLocalRuntimeConditionalExecution:
         # Test that parameter validation still works
         try:
             # This should work fine - None is handled gracefully
-            results, run_id = runtime.execute(
-                self.workflow, parameters={"switch1": None}
-            )
+            with LocalRuntime(conditional_execution="skip_branches") as test_runtime:
+                results, run_id = test_runtime.execute(
+                    self.workflow, parameters={"switch1": None}
+                )
             assert results is not None
         except Exception:
             # If it raises an exception, that's also acceptable
@@ -387,7 +391,10 @@ class TestLocalRuntimeConditionalExecution:
 
         # Should handle conditional cycles appropriately
         try:
-            results, run_id = runtime.execute(self.workflow)
+            with LocalRuntime(
+                conditional_execution="skip_branches", enable_cycles=True
+            ) as test_runtime:
+                results, run_id = test_runtime.execute(self.workflow)
             # Should execute successfully or provide clear error
             assert results is not None or True  # Placeholder for future implementation
         except Exception as e:
@@ -484,9 +491,12 @@ class TestLocalRuntimeTwoPhaseExecution:
 
                 # The method should handle errors gracefully in real usage
                 # We test this through the public interface
-                results, run_id = self.runtime.execute(
-                    self.workflow, parameters={"switch1": {"status": "active"}}
-                )
+                with LocalRuntime(
+                    conditional_execution="skip_branches"
+                ) as test_runtime:
+                    results, run_id = test_runtime.execute(
+                        self.workflow, parameters={"switch1": {"status": "active"}}
+                    )
                 assert results is not None
 
             except (AttributeError, NotImplementedError, Exception):
