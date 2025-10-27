@@ -25,15 +25,65 @@ SwitchNode Conditional Routing guide with patterns, examples, and best practices
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
-# Switchnode Patterns implementation
+# Basic SwitchNode conditional routing
 workflow = WorkflowBuilder()
 
-# See source documentation for specific node types and parameters
-# Reference: sdk-users/2-core-concepts/cheatsheet/switchnode-patterns.md
+workflow.add_node("SwitchNode", "switch", {
+    "condition_field": "status",
+    "operator": "==",
+    "value": "active"
+})
 
-runtime = LocalRuntime()
+# Connect both branches
+workflow.add_connection("switch", "true_output", "active_processor", "input")
+workflow.add_connection("switch", "false_output", "inactive_processor", "input")
+
+# Use skip_branches mode for best performance
+runtime = LocalRuntime(conditional_execution="skip_branches")
 results, run_id = runtime.execute(workflow.build())
 ```
+
+## ⚠️ Dot Notation: Execution Mode Dependent
+
+SwitchNode outputs are **mutually exclusive** - when `true_output` has data, `false_output` is `None`, and vice versa.
+
+### ✅ skip_branches Mode (Recommended)
+**Dot notation works perfectly** - inactive branches are automatically skipped:
+
+```python
+# Dot notation on SwitchNode outputs
+workflow.add_connection("switch", "true_output.name", "processor", "name")
+workflow.add_connection("switch", "false_output.name", "alt_processor", "name")
+
+# Use skip_branches mode (default for new code)
+runtime = LocalRuntime(conditional_execution="skip_branches")
+# Only the active branch executes - inactive is skipped intelligently
+```
+
+**Why it works**: Runtime detects `None` values and skips nodes automatically.
+
+### ⚠️ route_data Mode
+**Avoid dot notation** - connect full output and extract fields in node code:
+
+```python
+# Connect full output (no dot notation)
+workflow.add_connection("switch", "true_output", "processor", "data")
+
+# Extract field INSIDE node code
+workflow.add_node("PythonCodeNode", "processor", {
+    "code": """
+if data is not None:
+    name = data.get('name', 'Unknown')
+    result = f'Processing: {name}'
+else:
+    result = 'No data (inactive branch)'
+"""
+})
+
+runtime = LocalRuntime(conditional_execution="route_data")
+```
+
+**Why avoid**: Accessing `None.field_name` fails navigation. Node receives empty input and raises NameError.
 
 
 ## Common Use Cases

@@ -145,6 +145,20 @@ wheels = [
 ]
 
 [[package]]
+name = "alembic"
+version = "1.17.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mako" },
+    { name = "sqlalchemy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6b/45/6f4555f2039f364c3ce31399529dcf48dd60726ff3715ad67f547d87dfd2/alembic-1.17.0.tar.gz", hash = "sha256:4652a0b3e19616b57d652b82bfa5e38bf5dbea0813eed971612671cb9e90c0fe", size = 1975526, upload-time = "2025-10-11T18:40:13.585Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/44/1f/38e29b06bfed7818ebba1f84904afdc8153ef7b6c7e0d8f3bc6643f5989c/alembic-1.17.0-py3-none-any.whl", hash = "sha256:80523bc437d41b35c5db7e525ad9d908f79de65c27d6a5a5eab6df348a352d99", size = 247449, upload-time = "2025-10-11T18:40:16.288Z" },
+]
+
+[[package]]
 name = "annotated-types"
 version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1111,7 +1125,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "0.9.25"
+version = "0.10.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -1185,12 +1199,26 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+all = [
+    { name = "kailash-dataflow" },
+    { name = "kailash-kaizen" },
+    { name = "kailash-nexus" },
+]
+dataflow = [
+    { name = "kailash-dataflow" },
+]
 dev = [
     { name = "black" },
     { name = "isort" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-cov" },
+]
+kaizen = [
+    { name = "kailash-kaizen" },
+]
+nexus = [
+    { name = "kailash-nexus" },
 ]
 
 [package.dev-dependencies]
@@ -1221,6 +1249,12 @@ requires-dist = [
     { name = "isort", specifier = ">=6.0.1" },
     { name = "isort", marker = "extra == 'dev'", specifier = ">=5.10" },
     { name = "jsonschema", specifier = ">=4.24.0" },
+    { name = "kailash-dataflow", marker = "extra == 'all'" },
+    { name = "kailash-dataflow", marker = "extra == 'dataflow'" },
+    { name = "kailash-kaizen", marker = "extra == 'all'" },
+    { name = "kailash-kaizen", marker = "extra == 'kaizen'" },
+    { name = "kailash-nexus", marker = "extra == 'all'" },
+    { name = "kailash-nexus", marker = "extra == 'nexus'" },
     { name = "limits", specifier = ">=5.4.0" },
     { name = "matplotlib", specifier = ">=3.5" },
     { name = "mcp", extras = ["cli"], specifier = "==1.11.0" },
@@ -1277,7 +1311,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.31.0" },
     { name = "websockets", specifier = ">=12.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "dataflow", "nexus", "kaizen", "all"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1285,6 +1319,54 @@ dev = [
     { name = "detect-secrets", specifier = ">=1.5.0" },
     { name = "doc8", specifier = ">=1.1.2" },
     { name = "pre-commit", specifier = ">=4.2.0" },
+]
+
+[[package]]
+name = "kailash-dataflow"
+version = "0.7.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiomysql" },
+    { name = "aiosqlite" },
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "click" },
+    { name = "kailash" },
+    { name = "pydantic" },
+    { name = "redis" },
+    { name = "sqlalchemy" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5a/4f/20fc3078f171fb3597630b65b941af4d6bdac2b963ad561bf5086ece01c1/kailash_dataflow-0.7.3.tar.gz", hash = "sha256:3e253bcc2fbb7425de49ce5a5fed1baf12d6062969b39d3e0cad838f30edf157", size = 692789, upload-time = "2025-10-26T12:21:19.826Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/26/49/13a0aee6af9b207dac868b564fff7382b16fd89ea1ce688123f2fb545d14/kailash_dataflow-0.7.3-py3-none-any.whl", hash = "sha256:065022d8d48b9fe56b282ab4f7da6f37535a401930e176d6b6c9194c63e6d878", size = 775836, upload-time = "2025-10-26T12:21:17.676Z" },
+]
+
+[[package]]
+name = "kailash-kaizen"
+version = "0.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "bcrypt" },
+    { name = "kailash" },
+    { name = "pydantic" },
+    { name = "pyjwt" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/57/6b/ab78d5ad7287805d43dcd8d8af5231e908ec30f13aa7d1d0d46a287ac309/kailash_kaizen-0.5.0.tar.gz", hash = "sha256:4472a61cf2884d63a8357da997268e5113809e09adf210ff3da89ee68819450c", size = 3029889, upload-time = "2025-10-24T16:09:28.16Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9e/53/5d95807f3b793fbaa1bded26bedb641a1fc28060490bf6d42da0156e9450/kailash_kaizen-0.5.0-py3-none-any.whl", hash = "sha256:48e1a64ca3d29643a65380d36df739fa314aab3d75a61adc04bd7196b758447f", size = 823451, upload-time = "2025-10-24T16:09:26.349Z" },
+]
+
+[[package]]
+name = "kailash-nexus"
+version = "1.1.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "kailash" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/82/46/e69144af49a70c24f387a1c1674bf6611a864b1837d8608eb92edea318c6/kailash_nexus-1.1.2.tar.gz", hash = "sha256:39c20fdadf2ba22ce7cf42b720c62f424b2cea98bdc0c06156ff50a22689927c", size = 43970, upload-time = "2025-10-24T15:49:01.227Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6e/e1/a560a0e910b7facd09d8cf13a2cd010f0e3ddda5f28cb164c2cc4e3c36bc/kailash_nexus-1.1.2-py3-none-any.whl", hash = "sha256:c3ae8dc30f2c478eb2f82825e2c40f392a4e19108237f6171676a2c075c132ac", size = 50441, upload-time = "2025-10-24T15:48:58.585Z" },
 ]
 
 [[package]]
@@ -1376,6 +1458,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/79/32/95d4908a730213a5db40462b0e20c1b93a688b33eade8c4981bbf0ca08de/limits-5.4.0.tar.gz", hash = "sha256:27ebf55118e3c9045f0dbc476f4559b26d42f4b043db670afb8963f36cf07fd9", size = 95423, upload-time = "2025-06-16T16:18:53.03Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9f/aa/b84c06700735332017bc095182756ee9fb71db650d89b50b6d63549c6fcd/limits-5.4.0-py3-none-any.whl", hash = "sha256:1afb03c0624cf004085532aa9524953f2565cf8b0a914e48dda89d172c13ceb7", size = 60950, upload-time = "2025-06-16T16:18:51.593Z" },
+]
+
+[[package]]
+name = "mako"
+version = "1.3.10"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "markupsafe" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9e/38/bd5b78a920a64d708fe6bc8e0a2c075e1389d53bef8413725c63ba041535/mako-1.3.10.tar.gz", hash = "sha256:99579a6f39583fa7e5630a28c3c1f440e4e97a414b80372649c0ce338da2ea28", size = 392474, upload-time = "2025-04-10T12:44:31.16Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/87/fb/99f81ac72ae23375f22b7afdb7642aba97c00a713c217124420147681a2f/mako-1.3.10-py3-none-any.whl", hash = "sha256:baef24a52fc4fc514a0887ac600f9f1cff3d82c61d4d700a1fa84d597b88db59", size = 78509, upload-time = "2025-04-10T12:50:53.297Z" },
 ]
 
 [[package]]

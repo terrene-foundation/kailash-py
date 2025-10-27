@@ -85,6 +85,60 @@ workflow.add_connection("processor", "result.metadata", "switch", "metadata")
 
 ```
 
+## ⚠️ Dot Notation on SwitchNode Outputs
+
+### The Issue
+SwitchNode outputs are **mutually exclusive**:
+- When `true_output` has data → `false_output` is `None`
+- When `false_output` has data → `true_output` is `None`
+
+Accessing `None.field_name` fails navigation.
+
+### Solution: Depends on Execution Mode
+
+#### ✅ skip_branches Mode (Recommended)
+**Dot notation works** - runtime skips nodes with `None` inputs:
+
+```python
+from kailash.runtime.local import LocalRuntime
+
+# Dot notation is SAFE in skip_branches mode
+workflow.add_connection("switch", "true_output.name", "high_scorer", "name")
+workflow.add_connection("switch", "false_output.name", "low_scorer", "name")
+
+runtime = LocalRuntime(conditional_execution="skip_branches")
+results, _ = runtime.execute(workflow.build())
+# Only active branch executes - inactive branch skipped automatically
+```
+
+#### ⚠️ route_data Mode
+**Avoid dot notation** - connect full output and handle `None`:
+
+```python
+# Connect full output (no dot notation)
+workflow.add_connection("switch", "true_output", "high_scorer", "data")
+workflow.add_connection("switch", "false_output", "low_scorer", "data")
+
+# Handle None in node code
+workflow.add_node("PythonCodeNode", "high_scorer", {
+    "code": """
+if data is not None:
+    name = data.get('name', 'Unknown')
+    result = f'High scorer: {name}'
+else:
+    result = 'No data (inactive branch)'
+"""
+})
+
+runtime = LocalRuntime(conditional_execution="route_data")
+```
+
+### Best Practice
+
+**Use `skip_branches` for conditional workflows** - faster (skips inactive nodes) and dot notation works seamlessly.
+
+**Use `route_data` only when all branches must execute** (logging, auditing, side effects).
+
 ### ❌ Common Mistakes
 ```python
 from kailash.workflow.builder import WorkflowBuilder
