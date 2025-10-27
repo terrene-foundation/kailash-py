@@ -85,15 +85,14 @@ class TestAccessControlledRuntime:
             roles=["analyst"],
         )
 
-        runtime = AccessControlledRuntime(user_context=user)
-
         # Create a simple workflow
         builder = WorkflowBuilder()
         builder.add_node("TestNode", "test_node", {"value": 2.5})
         workflow = builder.build()
 
         # Should execute without access control checks (default behavior)
-        result, run_id = runtime.execute(workflow)
+        with AccessControlledRuntime(user_context=user) as runtime:
+            result, run_id = runtime.execute(workflow)
 
         assert result is not None
         assert run_id is not None
@@ -108,8 +107,6 @@ class TestAccessControlledRuntime:
             email="test@example.com",
             roles=["analyst"],
         )
-
-        runtime = AccessControlledRuntime(user_context=user)
 
         # Create a test node using the factory
         TestNode = mock_node_factory("TestNode", execute_return={"result": "allowed"})
@@ -144,7 +141,8 @@ class TestAccessControlledRuntime:
             workflow.workflow_id = "test_workflow"
 
             # Should execute successfully
-            result, run_id = runtime.execute(workflow)
+            with AccessControlledRuntime(user_context=user) as runtime:
+                result, run_id = runtime.execute(workflow)
 
             assert result is not None
             assert run_id is not None
@@ -164,8 +162,6 @@ class TestAccessControlledRuntime:
             email="test@example.com",
             roles=["analyst"],
         )
-
-        runtime = AccessControlledRuntime(user_context=user)
 
         # Enable access control without granting permissions
         acm = get_access_control_manager()
@@ -187,7 +183,8 @@ class TestAccessControlledRuntime:
 
             # Should raise PermissionError due to no matching rules
             with pytest.raises(PermissionError, match="Access denied"):
-                runtime.execute(workflow)
+                with AccessControlledRuntime(user_context=user) as runtime:
+                    runtime.execute(workflow)
 
         finally:
             # Cleanup
@@ -397,13 +394,12 @@ class TestAccessControlledRuntime:
             roles=["analyst"],
         )
 
-        runtime = AccessControlledRuntime(user_context=user)
-
         # Create empty workflow
         workflow = Workflow(workflow_id="empty", name="Empty Workflow")
 
         # Should handle empty workflow gracefully
-        result, run_id = runtime.execute(workflow)
+        with AccessControlledRuntime(user_context=user) as runtime:
+            result, run_id = runtime.execute(workflow)
 
         assert result is not None
         assert run_id is not None
@@ -439,8 +435,6 @@ class TestAccessControlledRuntime:
             roles=["analyst"],
         )
 
-        runtime = AccessControlledRuntime(user_context=user)
-
         # Access control should be disabled by default
         acm = get_access_control_manager()
         assert not acm.enabled
@@ -459,7 +453,8 @@ class TestAccessControlledRuntime:
         )
         workflow = builder.build()
 
-        result, run_id = runtime.execute(workflow)
+        with AccessControlledRuntime(user_context=user) as runtime:
+            result, run_id = runtime.execute(workflow)
 
         assert result is not None
         assert result["test_node"]["result"] == "backward_compatible"
@@ -472,8 +467,6 @@ class TestAccessControlledRuntime:
             email="test@example.com",
             roles=["analyst"],
         )
-
-        runtime = AccessControlledRuntime(user_context=user)
 
         # Test with potentially malicious code
         builder = WorkflowBuilder()
@@ -495,7 +488,8 @@ except Exception as e:
         workflow = builder.build()
 
         # Should execute (access control disabled by default)
-        result, run_id = runtime.execute(workflow)
+        with AccessControlledRuntime(user_context=user) as runtime:
+            result, run_id = runtime.execute(workflow)
 
         assert result is not None
         assert "test_node" in result

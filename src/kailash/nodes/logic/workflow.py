@@ -123,9 +123,6 @@ class WorkflowNode(Node):
         # Initialize parent
         super().__init__(**kwargs)
 
-        # Runtime will be created lazily to avoid circular imports
-        self._runtime = None
-
         # Load workflow if not provided directly
         if not self._workflow:
             self._load_workflow()
@@ -375,17 +372,13 @@ class WorkflowNode(Node):
                     workflow_inputs.setdefault(node_id, {}).update(node_inputs)
 
         try:
-            # Create runtime lazily to avoid circular imports
-            if self._runtime is None:
-                from kailash.runtime.local import LocalRuntime
+            # Import runtime (lazy to avoid circular imports)
+            from kailash.runtime.local import LocalRuntime
 
-                self._runtime = LocalRuntime()
-
-            # Execute the workflow
+            # Execute the workflow with context manager for proper resource cleanup
             self.logger.info(f"Executing wrapped workflow: {self._workflow.name}")
-            results, _ = self._runtime.execute(
-                self._workflow, parameters=workflow_inputs
-            )
+            with LocalRuntime() as runtime:
+                results, _ = runtime.execute(self._workflow, parameters=workflow_inputs)
 
             # Process results
             output = {"results": results}

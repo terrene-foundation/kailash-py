@@ -18,13 +18,10 @@ from kailash.workflow.graph import Workflow
 class TestHierarchicalSwitchExecution:
     """Test hierarchical switch execution functionality."""
 
-    def setup_method(self):
-        """Set up test fixtures."""
-        self.runtime = LocalRuntime(conditional_execution="skip_branches", debug=True)
-        self.workflow = Workflow("test", "Test Workflow")
-
     def test_simple_switch_hierarchy(self):
         """Test simple hierarchical switch pattern."""
+        workflow = Workflow("test", "Test Workflow")
+
         # Create workflow: source -> switch1 -> switch2 -> processor
         source = PythonCodeNode(
             name="source", code="result = {'level': 1, 'type': 'A'}"
@@ -39,29 +36,32 @@ class TestHierarchicalSwitchExecution:
             name="processor", code="result = {'processed': True}"
         )
 
-        self.workflow.add_node("source", source)
-        self.workflow.add_node("switch1", switch1)
-        self.workflow.add_node("switch2", switch2)
-        self.workflow.add_node("processor", processor)
+        workflow.add_node("source", source)
+        workflow.add_node("switch1", switch1)
+        workflow.add_node("switch2", switch2)
+        workflow.add_node("processor", processor)
 
-        self.workflow.connect("source", "switch1", {"result": "input_data"})
-        self.workflow.connect("switch1", "switch2", {"true_output": "input_data"})
-        self.workflow.connect("switch2", "processor", {"true_output": "input"})
+        workflow.connect("source", "switch1", {"result": "input_data"})
+        workflow.connect("switch1", "switch2", {"true_output": "input_data"})
+        workflow.connect("switch2", "processor", {"true_output": "input"})
 
         # Execute workflow
-        results, run_id = self.runtime.execute(self.workflow)
+        with LocalRuntime(conditional_execution="skip_branches", debug=True) as runtime:
+            results, run_id = runtime.execute(workflow)
 
-        # Verify all nodes executed
-        assert "source" in results
-        assert "switch1" in results
-        assert "switch2" in results
-        assert "processor" in results
+            # Verify all nodes executed
+            assert "source" in results
+            assert "switch1" in results
+            assert "switch2" in results
+            assert "processor" in results
 
-        # Verify correct execution
-        assert results["processor"]["result"]["processed"] is True
+            # Verify correct execution
+            assert results["processor"]["result"]["processed"] is True
 
     def test_parallel_switch_layers(self):
         """Test switches that can execute in parallel."""
+        workflow = Workflow("test", "Test Workflow")
+
         # Create workflow with parallel switches
         # source -> [switch1, switch2] -> merge
         source = PythonCodeNode(name="source", code="result = {'a': 1, 'b': 2}")
@@ -73,27 +73,30 @@ class TestHierarchicalSwitchExecution:
         )
         merge = PythonCodeNode(name="merge", code="result = {'merged': True}")
 
-        self.workflow.add_node("source", source)
-        self.workflow.add_node("switch1", switch1)
-        self.workflow.add_node("switch2", switch2)
-        self.workflow.add_node("merge", merge)
+        workflow.add_node("source", source)
+        workflow.add_node("switch1", switch1)
+        workflow.add_node("switch2", switch2)
+        workflow.add_node("merge", merge)
 
-        self.workflow.connect("source", "switch1", {"result": "input_data"})
-        self.workflow.connect("source", "switch2", {"result": "input_data"})
-        self.workflow.connect("switch1", "merge", {"true_output": "input1"})
-        self.workflow.connect("switch2", "merge", {"true_output": "input2"})
+        workflow.connect("source", "switch1", {"result": "input_data"})
+        workflow.connect("source", "switch2", {"result": "input_data"})
+        workflow.connect("switch1", "merge", {"true_output": "input1"})
+        workflow.connect("switch2", "merge", {"true_output": "input2"})
 
         # Execute workflow
-        results, run_id = self.runtime.execute(self.workflow)
+        with LocalRuntime(conditional_execution="skip_branches", debug=True) as runtime:
+            results, run_id = runtime.execute(workflow)
 
-        # Verify all nodes executed
-        assert "source" in results
-        assert "switch1" in results
-        assert "switch2" in results
-        assert "merge" in results
+            # Verify all nodes executed
+            assert "source" in results
+            assert "switch1" in results
+            assert "switch2" in results
+            assert "merge" in results
 
     def test_complex_switch_hierarchy(self):
         """Test complex multi-layer switch hierarchy."""
+        workflow = Workflow("test", "Test Workflow")
+
         # Create complex hierarchy:
         # source -> switch1 -> [switch2, switch3] -> switch4 -> final
         source = PythonCodeNode(
@@ -114,66 +117,70 @@ class TestHierarchicalSwitchExecution:
         )
         final = PythonCodeNode(name="final", code="result = {'complete': True}")
 
-        self.workflow.add_node("source", source)
-        self.workflow.add_node("switch1", switch1)
-        self.workflow.add_node("switch2", switch2)
-        self.workflow.add_node("switch3", switch3)
-        self.workflow.add_node("switch4", switch4)
-        self.workflow.add_node("final", final)
+        workflow.add_node("source", source)
+        workflow.add_node("switch1", switch1)
+        workflow.add_node("switch2", switch2)
+        workflow.add_node("switch3", switch3)
+        workflow.add_node("switch4", switch4)
+        workflow.add_node("final", final)
 
-        self.workflow.connect("source", "switch1", {"result": "input_data"})
-        self.workflow.connect("switch1", "switch2", {"true_output": "input_data"})
-        self.workflow.connect("switch1", "switch3", {"true_output": "input_data"})
-        self.workflow.connect("switch2", "switch4", {"true_output": "input_data"})
-        self.workflow.connect("switch3", "switch4", {"false_output": "input_data"})
-        self.workflow.connect("switch4", "final", {"true_output": "input"})
+        workflow.connect("source", "switch1", {"result": "input_data"})
+        workflow.connect("switch1", "switch2", {"true_output": "input_data"})
+        workflow.connect("switch1", "switch3", {"true_output": "input_data"})
+        workflow.connect("switch2", "switch4", {"true_output": "input_data"})
+        workflow.connect("switch3", "switch4", {"false_output": "input_data"})
+        workflow.connect("switch4", "final", {"true_output": "input"})
 
         # Execute workflow
-        results, run_id = self.runtime.execute(self.workflow)
+        with LocalRuntime(conditional_execution="skip_branches", debug=True) as runtime:
+            results, run_id = runtime.execute(workflow)
 
-        # Verify execution
-        assert "source" in results
-        assert "switch1" in results
-        assert "switch2" in results
-        assert "switch3" in results
-        assert "switch4" in results
-        assert "final" in results
+            # Verify execution
+            assert "source" in results
+            assert "switch1" in results
+            assert "switch2" in results
+            assert "switch3" in results
+            assert "switch4" in results
+            assert "final" in results
 
-        # Check that final node was reached
-        assert results["final"]["result"]["complete"] is True
+            # Check that final node was reached
+            assert results["final"]["result"]["complete"] is True
 
     def test_should_use_hierarchical_execution(self):
         """Test the decision logic for using hierarchical execution."""
+        workflow = Workflow("test", "Test Workflow")
+
         # Single switch - should not use hierarchical
         switch1 = SwitchNode(
             name="switch1", condition_field="a", operator="==", value=1
         )
-        self.workflow.add_node("switch1", switch1)
+        workflow.add_node("switch1", switch1)
 
-        assert not self.runtime._should_use_hierarchical_execution(
-            self.workflow, ["switch1"]
-        )
+        with LocalRuntime(conditional_execution="skip_branches", debug=True) as runtime:
+            assert not runtime._should_use_hierarchical_execution(workflow, ["switch1"])
 
-        # Multiple independent switches - should not use hierarchical
-        switch2 = SwitchNode(
-            name="switch2", condition_field="b", operator="==", value=2
-        )
-        self.workflow.add_node("switch2", switch2)
+            # Multiple independent switches - should not use hierarchical
+            switch2 = SwitchNode(
+                name="switch2", condition_field="b", operator="==", value=2
+            )
+            workflow.add_node("switch2", switch2)
 
-        assert not self.runtime._should_use_hierarchical_execution(
-            self.workflow, ["switch1", "switch2"]
-        )
+            assert not runtime._should_use_hierarchical_execution(
+                workflow, ["switch1", "switch2"]
+            )
 
-        # Dependent switches - should use hierarchical
-        self.workflow.connect("switch1", "switch2", {"true_output": "input_data"})
+            # Dependent switches - should use hierarchical
+            workflow.connect("switch1", "switch2", {"true_output": "input_data"})
 
-        assert self.runtime._should_use_hierarchical_execution(
-            self.workflow, ["switch1", "switch2"]
-        )
+            assert runtime._should_use_hierarchical_execution(
+                workflow, ["switch1", "switch2"]
+            )
 
     @pytest.mark.asyncio
     async def test_hierarchical_executor_directly(self):
         """Test HierarchicalSwitchExecutor directly."""
+        workflow = Workflow("test", "Test Workflow")
+
         # Create simple hierarchy
         source = PythonCodeNode(name="source", code="result = {'value': 10}")
         switch1 = SwitchNode(
@@ -183,15 +190,15 @@ class TestHierarchicalSwitchExecution:
             name="switch2", condition_field="value", operator="<", value=20
         )
 
-        self.workflow.add_node("source", source)
-        self.workflow.add_node("switch1", switch1)
-        self.workflow.add_node("switch2", switch2)
+        workflow.add_node("source", source)
+        workflow.add_node("switch1", switch1)
+        workflow.add_node("switch2", switch2)
 
-        self.workflow.connect("source", "switch1", {"result": "input_data"})
-        self.workflow.connect("switch1", "switch2", {"true_output": "input_data"})
+        workflow.connect("source", "switch1", {"result": "input_data"})
+        workflow.connect("switch1", "switch2", {"true_output": "input_data"})
 
         # Create executor
-        executor = HierarchicalSwitchExecutor(self.workflow, debug=True)
+        executor = HierarchicalSwitchExecutor(workflow, debug=True)
 
         # Mock node executor
         async def mock_executor(
@@ -231,6 +238,8 @@ class TestHierarchicalSwitchExecution:
 
     def test_hierarchical_with_errors(self):
         """Test hierarchical execution with switch errors."""
+        workflow = Workflow("test", "Test Workflow")
+
         # Create workflow with a failing switch
         source = PythonCodeNode(
             name="source", code="result = {'value': 'not_a_number'}"
@@ -242,23 +251,26 @@ class TestHierarchicalSwitchExecution:
             name="switch2", condition_field="other", operator="==", value=1
         )
 
-        self.workflow.add_node("source", source)
-        self.workflow.add_node("switch1", switch1)
-        self.workflow.add_node("switch2", switch2)
+        workflow.add_node("source", source)
+        workflow.add_node("switch1", switch1)
+        workflow.add_node("switch2", switch2)
 
-        self.workflow.connect("source", "switch1", {"result": "input_data"})
-        self.workflow.connect("switch1", "switch2", {"true_output": "input_data"})
+        workflow.connect("source", "switch1", {"result": "input_data"})
+        workflow.connect("switch1", "switch2", {"true_output": "input_data"})
 
         # Execute workflow - should handle error gracefully
-        results, run_id = self.runtime.execute(self.workflow)
+        with LocalRuntime(conditional_execution="skip_branches", debug=True) as runtime:
+            results, run_id = runtime.execute(workflow)
 
-        # Source should execute
-        assert "source" in results
-        # Switches might have errors but workflow should complete
-        assert len(results) > 0
+            # Source should execute
+            assert "source" in results
+            # Switches might have errors but workflow should complete
+            assert len(results) > 0
 
     def test_get_layer_dependencies(self):
         """Test dependency collection for switch layers."""
+        workflow = Workflow("test", "Test Workflow")
+
         # Create workflow with dependencies
         prep1 = PythonCodeNode(name="prep1", code="result = {'data': 1}")
         prep2 = PythonCodeNode(name="prep2", code="result = {'data': 2}")
@@ -266,15 +278,15 @@ class TestHierarchicalSwitchExecution:
             name="switch1", condition_field="data", operator="==", value=1
         )
 
-        self.workflow.add_node("prep1", prep1)
-        self.workflow.add_node("prep2", prep2)
-        self.workflow.add_node("switch1", switch1)
+        workflow.add_node("prep1", prep1)
+        workflow.add_node("prep2", prep2)
+        workflow.add_node("switch1", switch1)
 
-        self.workflow.connect("prep1", "switch1", {"result": "input_data"})
-        self.workflow.connect("prep2", "switch1", {"result": "extra_data"})
+        workflow.connect("prep1", "switch1", {"result": "input_data"})
+        workflow.connect("prep2", "switch1", {"result": "extra_data"})
 
         # Create executor and test dependency collection
-        executor = HierarchicalSwitchExecutor(self.workflow)
+        executor = HierarchicalSwitchExecutor(workflow)
         deps = executor._get_layer_dependencies(["switch1"], set())
 
         # Should include both prep nodes
@@ -283,6 +295,8 @@ class TestHierarchicalSwitchExecution:
 
     def test_execution_summary(self):
         """Test execution summary generation."""
+        workflow = Workflow("test", "Test Workflow")
+
         # Create workflow
         switch1 = SwitchNode(
             name="switch1", condition_field="a", operator="==", value=1
@@ -291,12 +305,12 @@ class TestHierarchicalSwitchExecution:
             name="switch2", condition_field="b", operator="==", value=2
         )
 
-        self.workflow.add_node("switch1", switch1)
-        self.workflow.add_node("switch2", switch2)
-        self.workflow.connect("switch1", "switch2", {"true_output": "input_data"})
+        workflow.add_node("switch1", switch1)
+        workflow.add_node("switch2", switch2)
+        workflow.connect("switch1", "switch2", {"true_output": "input_data"})
 
         # Create executor
-        executor = HierarchicalSwitchExecutor(self.workflow)
+        executor = HierarchicalSwitchExecutor(workflow)
 
         # Mock switch results
         switch_results = {

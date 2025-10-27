@@ -29,14 +29,13 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
-from pydantic import BaseModel, Field, ValidationError
-
 from kailash.nodes.ports import InputPort, OutputPort, get_port_registry
 from kailash.sdk_exceptions import (
     NodeConfigurationError,
     NodeExecutionError,
     NodeValidationError,
 )
+from pydantic import BaseModel, Field, ValidationError
 
 
 class NodeMetadata(BaseModel):
@@ -1121,9 +1120,8 @@ class Node(ABC):
 
         # Then validate JSON-serializability
         # Skip JSON validation for state management objects
-        from pydantic import BaseModel
-
         from kailash.workflow.state import WorkflowStateWrapper
+        from pydantic import BaseModel
 
         non_serializable = []
         for k, v in outputs.items():
@@ -2203,6 +2201,74 @@ class NodeRegistry:
             - Testing and debugging
         """
         return cls._nodes.copy()
+
+    @classmethod
+    def unregister(cls, node_name: str) -> bool:
+        """Unregister a single node from the registry.
+
+        Removes a specific node class from the global registry. Used for:
+
+        1. Test isolation - Clean up test-specific nodes
+        2. Dynamic reloading - Remove before re-registering
+        3. Instance cleanup - Remove DataFlow instance nodes
+
+        Args:
+            node_name: Name of the node to unregister
+
+        Returns:
+            bool: True if node was unregistered, False if not found
+
+        Side effects:
+            - Removes node from _nodes dictionary
+            - Logs the unregistration
+            - Existing node instances remain valid
+
+        Example usage:
+            NodeRegistry.unregister('UserCreateNode')
+            NodeRegistry.unregister('custom_alias')
+
+        Used by:
+            - Test cleanup fixtures
+            - DataFlow instance cleanup
+            - Dynamic node reloading
+        """
+        if node_name in cls._nodes:
+            del cls._nodes[node_name]
+            logging.debug(f"Unregistered node '{node_name}'")
+            return True
+        return False
+
+    @classmethod
+    def unregister_nodes(cls, node_names: list[str]) -> int:
+        """Unregister multiple nodes from the registry.
+
+        Batch unregistration for cleaning up a set of related nodes.
+        Returns count of successfully unregistered nodes.
+
+        Args:
+            node_names: List of node names to unregister
+
+        Returns:
+            int: Number of nodes successfully unregistered
+
+        Example usage:
+            # Clean up DataFlow model nodes
+            nodes = ['UserCreateNode', 'UserReadNode', 'UserUpdateNode']
+            count = NodeRegistry.unregister_nodes(nodes)
+            print(f"Unregistered {count} nodes")
+
+        Used by:
+            - DataFlow.cleanup_nodes()
+            - Test fixture teardown
+            - Multi-instance cleanup
+        """
+        count = 0
+        for node_name in node_names:
+            if cls.unregister(node_name):
+                count += 1
+        if count > 0:
+            logging.info(f"Unregistered {count} nodes from registry")
+        return count
 
     @classmethod
     def clear(cls):

@@ -8,10 +8,12 @@ Kaizen provides production-ready multi-agent coordination using Google's Agent-t
 - **Semantic Matching**: Agents selected by capability, not hardcoded rules
 - **A2A Protocol**: 100% compliant with Google A2A specification
 - **Automatic Discovery**: BaseAgent auto-generates capability cards
-- **5 Coordination Patterns**: Supervisor-Worker, Consensus, Debate, Sequential, Handoff
+- **9 Pipeline Patterns**: Ensemble, Blackboard, Router, Parallel, Supervisor-Worker, Sequential, Handoff, Consensus, Debate
+- **A2A Integration**: 4 patterns with semantic capability matching (Ensemble, Blackboard, Router, Supervisor-Worker)
 - **Shared Memory**: Multi-agent context sharing via SharedMemoryPool
+- **Composable**: Nest patterns within patterns for complex workflows
 
-**Version:** Kaizen v0.2.0+
+**Version:** Kaizen v0.2.0+ (Pipeline Patterns added in Phase 3, 2025-10-27)
 
 ---
 
@@ -56,9 +58,157 @@ card = agent.to_a2a_card()
 
 ---
 
-## Coordination Patterns
+## Pipeline Patterns
 
-### 1. Supervisor-Worker Pattern
+Kaizen provides 9 production-ready pipeline patterns via `Pipeline` factory methods. All patterns support error handling (graceful or fail-fast) and are composable.
+
+### Quick Reference
+
+**Pattern Selection Guide:**
+- **Ensemble**: Need diverse perspectives synthesized (code review, research, multi-expert analysis)
+- **Blackboard**: Iterative problem-solving with shared state (optimization, debugging, planning)
+- **Router** (Meta-Controller): Intelligent task delegation to specialists via A2A matching
+- **Parallel**: Concurrent execution for speed (bulk processing, voting-based consensus)
+- **Supervisor-Worker**: Hierarchical coordination with task decomposition
+- **Sequential**: Linear agent chain with output passing
+- **Handoff**: Agent handoff with context transfer
+- **Consensus**: Voting-based decision making
+- **Debate**: Adversarial deliberation with judgment
+
+**A2A-Integrated Patterns (4):** Ensemble, Blackboard, Router, Supervisor-Worker
+
+### 1. Ensemble Pattern (NEW - A2A Integrated)
+
+**When to Use:**
+- Need multiple perspectives on same task
+- Want automatic agent selection via A2A
+- Require synthesis of diverse viewpoints
+- Benefit from top-k expert selection
+
+**Example:**
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+# Create diverse agents
+code_expert = CodeAgent(config)
+data_expert = DataAnalyst(config)
+writing_expert = WritingAgent(config)
+research_expert = ResearchAgent(config)
+synthesis_agent = SynthesisAgent(config)
+
+# Ensemble with A2A discovery (top-3 agents)
+pipeline = Pipeline.ensemble(
+    agents=[code_expert, data_expert, writing_expert, research_expert],
+    synthesizer=synthesis_agent,
+    discovery_mode="a2a",  # A2A semantic matching
+    top_k=3,               # Select top 3 agents
+    error_handling="graceful"
+)
+
+# Execute - A2A automatically selects best agents
+result = pipeline.run(
+    task="Analyze codebase and suggest improvements",
+    input="repository_path"
+)
+
+print(result['result'])              # Synthesized result
+print(result['perspective_count'])   # Number of perspectives used
+```
+
+**How It Works:**
+1. Each agent generates A2A capability card
+2. Task requirements matched against agent capabilities
+3. Top-k agents with highest scores selected
+4. Selected agents execute in parallel/sequential
+5. Synthesizer combines perspectives into unified result
+
+### 2. Blackboard Pattern (NEW - A2A Integrated)
+
+**When to Use:**
+- Iterative problem-solving required
+- Controller needs to orchestrate multiple specialists
+- Shared state needed between iterations
+- Dynamic agent selection per iteration
+
+**Example:**
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+# Create specialists
+problem_solver = ProblemSolverAgent(config)
+data_analyzer = DataAnalyzerAgent(config)
+optimizer = OptimizationAgent(config)
+controller = ControllerAgent(config)
+
+# Blackboard pattern
+pipeline = Pipeline.blackboard(
+    agents=[problem_solver, data_analyzer, optimizer],
+    controller=controller,
+    max_iterations=10,
+    discovery_mode="a2a"  # A2A capability matching
+)
+
+# Execute - controller iteratively selects agents
+result = pipeline.run(
+    task="Optimize database query performance",
+    input="slow_query.sql"
+)
+
+print(result['insights'])     # All agent contributions
+print(result['iterations'])   # Number of iterations
+print(result['is_complete'])  # Convergence status
+```
+
+**How It Works:**
+1. Controller analyzes task and blackboard state
+2. A2A discovery selects agent with needed capability
+3. Agent executes and writes insights to blackboard
+4. Controller checks if problem is solved
+5. Repeat until complete or max_iterations reached
+
+### 3. Router Pattern (NEW - A2A Integrated)
+
+**When to Use:**
+- Need intelligent task delegation
+- Single best agent should handle task
+- Want automatic routing via capabilities
+- Require fallback strategies
+
+**Example:**
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+pipeline = Pipeline.router(
+    agents=[code_agent, data_agent, writing_agent],
+    routing_strategy="semantic",  # A2A-based routing
+    fallback_strategy="round-robin"
+)
+
+# Automatically routes to best agent
+result = pipeline.run(task="Analyze sales data and create report")
+# Routes to data_agent (highest capability match)
+```
+
+### 4. Parallel Pattern (NEW)
+
+**When to Use:**
+- Concurrent execution for speed
+- Bulk processing required
+- Voting-based consensus
+- Redundant execution for reliability
+
+**Example:**
+```python
+pipeline = Pipeline.parallel(
+    agents=[agent1, agent2, agent3],
+    aggregation_strategy="merge",  # merge, vote, or custom
+    error_handling="graceful"
+)
+
+result = pipeline.run(task="Multi-perspective analysis", input=data)
+```
+
+### 5. Supervisor-Worker Pattern
 
 **When to Use:**
 - Task decomposition needed
