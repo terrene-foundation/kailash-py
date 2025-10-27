@@ -203,15 +203,17 @@ result = {'context_value': context_value}
         workflow2.add_node(python_node2, "test", {})
 
         # Execute workflows with different contexts
-        results1, _ = runtime1.execute(
-            workflow1.build(),
-            parameters={"workflow_context": {"isolation_test": "runtime1_value"}},
-        )
+        with runtime1:
+            results1, _ = runtime1.execute(
+                workflow1.build(),
+                parameters={"workflow_context": {"isolation_test": "runtime1_value"}},
+            )
 
-        results2, _ = runtime2.execute(
-            workflow2.build(),
-            parameters={"workflow_context": {"isolation_test": "runtime2_value"}},
-        )
+        with runtime2:
+            results2, _ = runtime2.execute(
+                workflow2.build(),
+                parameters={"workflow_context": {"isolation_test": "runtime2_value"}},
+            )
 
         # Verify contexts were isolated
         context1_value = results1.get("test", {}).get("result", {}).get("context_value")

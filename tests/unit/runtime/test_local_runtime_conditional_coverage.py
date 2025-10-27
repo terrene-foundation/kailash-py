@@ -91,7 +91,8 @@ class TestLocalRuntimeConditionalCoverage:
         self.workflow.add_node("switch", switch)
 
         # Execute - should handle missing field gracefully
-        results, run_id = self.runtime.execute(self.workflow)
+        with self.runtime:
+            results, run_id = self.runtime.execute(self.workflow)
 
         # Should execute but handle the error
         assert "switch" in results
@@ -113,9 +114,10 @@ class TestLocalRuntimeConditionalCoverage:
         self.workflow.connect("switch1", "switch2", {"true_output": "input_data"})
 
         # Execute
-        results, run_id = self.runtime.execute(
-            self.workflow, parameters={"switch1": {"a": 1}, "switch2": {"b": 2}}
-        )
+        with self.runtime:
+            results, run_id = self.runtime.execute(
+                self.workflow, parameters={"switch1": {"a": 1}, "switch2": {"b": 2}}
+            )
 
         assert "switch1" in results
         assert "switch2" in results
@@ -131,7 +133,8 @@ class TestLocalRuntimeConditionalCoverage:
         self.workflow.connect("proc1", "proc2", {"result": "input"})
 
         # Execute
-        results, run_id = self.runtime.execute(self.workflow)
+        with self.runtime:
+            results, run_id = self.runtime.execute(self.workflow)
 
         # Should have results for both processors
         assert "proc1" in results
@@ -147,7 +150,8 @@ class TestLocalRuntimeConditionalCoverage:
         self.workflow.add_node("failing_node", failing_node)
 
         # Execute - should handle error gracefully
-        results, run_id = self.runtime.execute(self.workflow)
+        with self.runtime:
+            results, run_id = self.runtime.execute(self.workflow)
 
         # Should have executed with error
         assert "failing_node" in results
@@ -176,7 +180,8 @@ class TestLocalRuntimeConditionalCoverage:
         self.workflow.add_node("switch", switch)
 
         # Execute - should handle missing status field
-        results, run_id = self.runtime.execute(self.workflow)
+        with self.runtime:
+            results, run_id = self.runtime.execute(self.workflow)
 
         # Should execute successfully
         assert "switch" in results
@@ -223,7 +228,9 @@ class TestLocalRuntimeConditionalCoverage:
         self.workflow.connect("node1", "node2", {"result": "input"})
 
         # Should execute all nodes
-        results, run_id = runtime.execute(self.workflow)
+        with runtime:
+            results, run_id = runtime.execute(self.workflow)
+
         assert "node1" in results
         assert "node2" in results
 
@@ -254,7 +261,8 @@ class TestLocalRuntimeConditionalCoverage:
         # Execute with only switch1 true
         parameters = {"switch1": {"a": 1}, "switch2": {"b": 3}}  # Will be false
 
-        results, run_id = self.runtime.execute(self.workflow, parameters=parameters)
+        with self.runtime:
+            results, run_id = self.runtime.execute(self.workflow, parameters=parameters)
 
         # Merge should handle partial inputs
         assert "merge" in results
@@ -306,7 +314,8 @@ class TestLocalRuntimeConditionalCoverage:
         self.workflow.connect("high_value_proc", "final_merge", {"result": "data2"})
 
         # Execute
-        results, run_id = self.runtime.execute(self.workflow)
+        with self.runtime:
+            results, run_id = self.runtime.execute(self.workflow)
 
         # Verify execution
         assert "source" in results
@@ -323,7 +332,8 @@ class TestLocalRuntimeConditionalCoverage:
         runtime.workflow.add_node("node", node)
 
         # Execute
-        results, run_id = runtime.execute(runtime.workflow)
+        with runtime:
+            results, run_id = runtime.execute(runtime.workflow)
 
         # Should execute successfully
         assert results["node"]["result"]["data"] == "test"
@@ -371,7 +381,8 @@ class TestLocalRuntimeConditionalCoverage:
         self.workflow.connect("switch", "proc", {"true_output": "input"})
 
         # Execute
-        results, run_id = runtime.execute(self.workflow)
+        with runtime:
+            results, run_id = runtime.execute(self.workflow)
 
         # Should execute successfully
         assert "switch" in results
