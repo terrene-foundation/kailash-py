@@ -18,95 +18,95 @@ class TestWorkflowContext:
 
     def test_runtime_creates_workflow_context(self):
         """Test that LocalRuntime creates a workflow context for execution."""
-        runtime = LocalRuntime()
-        workflow = WorkflowBuilder().build()
+        with LocalRuntime() as runtime:
+            workflow = WorkflowBuilder().build()
 
-        with patch.object(runtime, "_execute_workflow_async") as mock_execute:
-            mock_execute.return_value = {"result": "success"}
-            runtime.execute(workflow)
+            with patch.object(runtime, "_execute_workflow_async") as mock_execute:
+                mock_execute.return_value = {"result": "success"}
+                runtime.execute(workflow)
 
-            # Verify workflow context was created
-            assert hasattr(runtime, "_current_workflow_context")
-            assert isinstance(runtime._current_workflow_context, dict)
+                # Verify workflow context was created
+                assert hasattr(runtime, "_current_workflow_context")
+                assert isinstance(runtime._current_workflow_context, dict)
 
     def test_workflow_context_passed_to_nodes(self):
         """Test that workflow context is passed to nodes during execution."""
-        runtime = LocalRuntime()
-        workflow = WorkflowBuilder()
-        # Don't provide code parameter as PythonCodeNode doesn't declare workflow parameters
-        # Create the node instance directly
-        from kailash.nodes.code.python import PythonCodeNode
+        with LocalRuntime() as runtime:
+            workflow = WorkflowBuilder()
+            # Don't provide code parameter as PythonCodeNode doesn't declare workflow parameters
+            # Create the node instance directly
+            from kailash.nodes.code.python import PythonCodeNode
 
-        python_node = PythonCodeNode(name="test", code="result = {'success': True}")
-        workflow.add_node(python_node, "test", {})
+            python_node = PythonCodeNode(name="test", code="result = {'success': True}")
+            workflow.add_node(python_node, "test", {})
 
-        context_received = []
+            context_received = []
 
-        def mock_execute(self, **kwargs):
-            # Check if workflow context was set
-            if hasattr(self, "_workflow_context"):
-                context_received.append(self._workflow_context)
-            return {"result": "success"}
+            def mock_execute(self, **kwargs):
+                # Check if workflow context was set
+                if hasattr(self, "_workflow_context"):
+                    context_received.append(self._workflow_context)
+                return {"result": "success"}
 
-        with patch.object(PythonCodeNode, "execute", mock_execute):
-            runtime.execute(
-                workflow.build(),
-                parameters={"workflow_context": {"test_key": "test_value"}},
-            )
+            with patch.object(PythonCodeNode, "execute", mock_execute):
+                runtime.execute(
+                    workflow.build(),
+                    parameters={"workflow_context": {"test_key": "test_value"}},
+                )
 
-            # Verify node received workflow context
-            assert len(context_received) == 1
-            assert isinstance(context_received[0], dict)
-            assert context_received[0].get("test_key") == "test_value"
+                # Verify node received workflow context
+                assert len(context_received) == 1
+                assert isinstance(context_received[0], dict)
+                assert context_received[0].get("test_key") == "test_value"
 
     def test_workflow_context_isolated_between_executions(self):
         """Test that each workflow execution gets its own context."""
-        runtime = LocalRuntime()
-        workflow = WorkflowBuilder()
-        # Create PythonCodeNode instance directly to avoid parameter validation issues
-        from kailash.nodes.code.python import PythonCodeNode
+        with LocalRuntime() as runtime:
+            workflow = WorkflowBuilder()
+            # Create PythonCodeNode instance directly to avoid parameter validation issues
+            from kailash.nodes.code.python import PythonCodeNode
 
-        python_node = PythonCodeNode(name="test", code="result = {'success': True}")
-        workflow.add_node(python_node, "test", {})
+            python_node = PythonCodeNode(name="test", code="result = {'success': True}")
+            workflow.add_node(python_node, "test", {})
 
-        contexts = []
+            contexts = []
 
-        def mock_execute(self, **kwargs):
-            if hasattr(self, "_workflow_context"):
-                contexts.append(id(self._workflow_context))
-            return {"result": "success"}
+            def mock_execute(self, **kwargs):
+                if hasattr(self, "_workflow_context"):
+                    contexts.append(id(self._workflow_context))
+                return {"result": "success"}
 
-        with patch.object(PythonCodeNode, "execute", mock_execute):
-            # Execute workflow twice with different contexts
-            runtime.execute(
-                workflow.build(), parameters={"workflow_context": {"run": 1}}
-            )
-            runtime.execute(
-                workflow.build(), parameters={"workflow_context": {"run": 2}}
-            )
+            with patch.object(PythonCodeNode, "execute", mock_execute):
+                # Execute workflow twice with different contexts
+                runtime.execute(
+                    workflow.build(), parameters={"workflow_context": {"run": 1}}
+                )
+                runtime.execute(
+                    workflow.build(), parameters={"workflow_context": {"run": 2}}
+                )
 
-            # Verify different contexts
-            assert len(contexts) == 2
+                # Verify different contexts
+                assert len(contexts) == 2
             # Context objects should be different
             assert contexts[0] != contexts[1]
 
     def test_workflow_context_cleanup_after_execution(self):
         """Test that workflow context is cleaned up after execution."""
-        runtime = LocalRuntime()
-        workflow = WorkflowBuilder()
-        # Create PythonCodeNode instance directly to avoid parameter validation issues
-        from kailash.nodes.code.python import PythonCodeNode
+        with LocalRuntime() as runtime:
+            workflow = WorkflowBuilder()
+            # Create PythonCodeNode instance directly to avoid parameter validation issues
+            from kailash.nodes.code.python import PythonCodeNode
 
-        python_node = PythonCodeNode(name="test", code="result = {'success': True}")
-        workflow.add_node(python_node, "test", {})
+            python_node = PythonCodeNode(name="test", code="result = {'success': True}")
+            workflow.add_node(python_node, "test", {})
 
-        runtime.execute(
-            workflow.build(), parameters={"workflow_context": {"test": "cleanup"}}
-        )
+            runtime.execute(
+                workflow.build(), parameters={"workflow_context": {"test": "cleanup"}}
+            )
 
-        # Verify context is cleaned up after execution
-        assert hasattr(runtime, "_current_workflow_context")
-        assert runtime._current_workflow_context is None
+            # Verify context is cleaned up after execution
+            assert hasattr(runtime, "_current_workflow_context")
+            assert runtime._current_workflow_context is None
 
 
 class TestNodeContextAccess:

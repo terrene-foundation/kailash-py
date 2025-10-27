@@ -9,7 +9,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import pytest
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.governance import DevelopmentNode, EnterpriseNode, SecureGovernedNode
@@ -26,18 +26,19 @@ logger = logging.getLogger(__name__)
 class UserOperationContract(BaseModel):
     """Contract for user operations."""
 
+    model_config = ConfigDict(extra="forbid")  # Security: reject unknown parameters
+
     operation: str = Field(description="Operation type: create, update, delete")
     user_data: Optional[Dict[str, Any]] = Field(default=None, description="User data")
     user_id: Optional[str] = Field(default=None, description="User ID")
     tenant_id: str = Field(description="Tenant identifier")
     requestor_id: str = Field(description="ID of user making request")
 
-    class Config:
-        extra = "forbid"  # Security: reject unknown parameters
-
 
 class DatabaseQueryContract(BaseModel):
     """Contract for database operations."""
+
+    model_config = ConfigDict(extra="forbid")
 
     query_type: str = Field(description="Type of query: select, insert, update")
     table: str = Field(description="Table name")
@@ -45,12 +46,11 @@ class DatabaseQueryContract(BaseModel):
         default=None, description="Query conditions"
     )
 
-    class Config:
-        extra = "forbid"
-
 
 class DatabaseConnectionContract(BaseModel):
     """Connection contract for database parameters."""
+
+    model_config = ConfigDict(extra="forbid")
 
     params: List[Any] = Field(description="SQL query parameters")
     query: Optional[str] = Field(default=None, description="SQL query string")
@@ -62,9 +62,6 @@ class DatabaseConnectionContract(BaseModel):
         if not isinstance(v, list):
             raise ValueError("params must be a list for SQL safety")
         return v
-
-    class Config:
-        extra = "forbid"
 
 
 # Test nodes using SecureGovernedNode
@@ -474,7 +471,6 @@ class TestSecurityPerformance:
         import time
 
         workflow = WorkflowBuilder()
-        runtime = LocalRuntime()
 
         # Time execution without security (basic node)
         class BasicNode(Node):
@@ -487,7 +483,8 @@ class TestSecurityPerformance:
         # Measure basic node
         workflow.add_node(BasicNode, "basic", {"data": {"test": 1}})
         start = time.time()
-        runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            runtime.execute(workflow.build())
         basic_time = time.time() - start
 
         # Time execution with security
@@ -504,7 +501,8 @@ class TestSecurityPerformance:
         )
 
         start = time.time()
-        runtime.execute(workflow2.build())
+        with LocalRuntime() as runtime:
+            runtime.execute(workflow2.build())
         secure_time = time.time() - start
 
         # Security overhead should be less than 100ms
