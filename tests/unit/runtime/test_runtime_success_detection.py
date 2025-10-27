@@ -200,7 +200,8 @@ class TestRuntimeSuccessDetectionIntegration:
         built_workflow = workflow.build()
 
         # Execute workflow
-        results, run_id = self.runtime.execute(built_workflow)
+        with self.runtime:
+            results, run_id = self.runtime.execute(built_workflow)
 
         # Should complete successfully
         assert run_id is not None
@@ -218,7 +219,8 @@ class TestRuntimeSuccessDetectionIntegration:
         with pytest.raises(
             Exception
         ):  # This test should fail until we implement the fix
-            results, run_id = self.runtime.execute(built_workflow)
+            with self.runtime:
+                results, run_id = self.runtime.execute(built_workflow)
 
     def test_runtime_backward_compatibility_with_exceptions(self):
         """Test that runtime still handles traditional exceptions correctly."""
@@ -228,7 +230,8 @@ class TestRuntimeSuccessDetectionIntegration:
         built_workflow = workflow.build()
 
         # Execute workflow - single node exceptions are stored in results, not propagated
-        results, run_id = self.runtime.execute(built_workflow)
+        with self.runtime:
+            results, run_id = self.runtime.execute(built_workflow)
 
         # Should complete with run_id but exception stored in results
         assert run_id is not None
@@ -247,7 +250,9 @@ class TestRuntimeSuccessDetectionIntegration:
         )
         built_workflow = workflow.build()
 
-        results, run_id = self.runtime.execute(built_workflow)
+        with self.runtime:
+            results, run_id = self.runtime.execute(built_workflow)
+
         assert run_id is not None  # Should default to success
 
         # Test None return
@@ -255,7 +260,9 @@ class TestRuntimeSuccessDetectionIntegration:
         workflow.add_node(MockMalformedNode, "malformed_node", {"mode": "none_return"})
         built_workflow = workflow.build()
 
-        results, run_id = self.runtime.execute(built_workflow)
+        with self.runtime:
+            results, run_id = self.runtime.execute(built_workflow)
+
         assert run_id is not None  # Should default to success
 
     def test_runtime_configuration_content_aware_mode(self):
@@ -270,7 +277,8 @@ class TestRuntimeSuccessDetectionIntegration:
 
         # Should fail when content-aware mode is enabled
         with pytest.raises(Exception):
-            results, run_id = runtime.execute(built_workflow)
+            with runtime:
+                results, run_id = runtime.execute(built_workflow)
 
     def test_runtime_configuration_legacy_mode(self):
         """Test runtime configuration for legacy exception-only mode."""
@@ -283,7 +291,9 @@ class TestRuntimeSuccessDetectionIntegration:
         built_workflow = workflow.build()
 
         # Should complete successfully in legacy mode (ignores return value)
-        results, run_id = runtime.execute(built_workflow)
+        with runtime:
+            results, run_id = runtime.execute(built_workflow)
+
         assert run_id is not None
         assert results["failure_node"]["success"] is False  # Data preserved
 

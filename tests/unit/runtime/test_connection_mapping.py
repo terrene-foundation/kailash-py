@@ -46,13 +46,13 @@ class TestConnectionMappingLocalRuntime:
         workflow = builder.build()
 
         # Execute workflow
-        runtime = LocalRuntime(connection_validation="off")
-        result, run_id = runtime.execute(workflow)
+        with LocalRuntime(connection_validation="off") as runtime:
+            result, run_id = runtime.execute(workflow)
 
-        # Verify result mapping
-        assert "target" in result
-        # Target should receive entire source output dict
-        assert result["target"]["result"] == {"data": 42, "status": "ok"}
+            # Verify result mapping
+            assert "target" in result
+            # Target should receive entire source output dict
+            assert result["target"]["result"] == {"data": 42, "status": "ok"}
 
     def test_dotted_path_navigation(self):
         """Test mapping nested paths like 'result.data.value'."""
@@ -80,13 +80,13 @@ class TestConnectionMappingLocalRuntime:
         workflow = builder.build()
 
         # Execute workflow
-        runtime = LocalRuntime(connection_validation="off")
-        result, run_id = runtime.execute(workflow)
+        with LocalRuntime(connection_validation="off") as runtime:
+            result, run_id = runtime.execute(workflow)
 
-        # Verify nested path navigation
-        assert "target" in result
-        # Target should receive 42 (from source.result.data.value)
-        assert result["target"]["result"] == 42
+            # Verify nested path navigation
+            assert "target" in result
+            # Target should receive 42 (from source.result.data.value)
+            assert result["target"]["result"] == 42
 
     def test_async_python_code_node_special_case(self):
         """Test handling AsyncPythonCodeNode's result prefix stripping."""
@@ -114,13 +114,13 @@ class TestConnectionMappingLocalRuntime:
         workflow = builder.build()
 
         # Execute workflow
-        runtime = LocalRuntime(connection_validation="off")
-        result, run_id = runtime.execute(workflow)
+        with LocalRuntime(connection_validation="off") as runtime:
+            result, run_id = runtime.execute(workflow)
 
-        # Verify data was accessed correctly
-        assert "target" in result
-        # Should access "data" key from AsyncPythonCodeNode output
-        assert result["target"]["result"] == {"value": 99}
+            # Verify data was accessed correctly
+            assert "target" in result
+            # Should access "data" key from AsyncPythonCodeNode output
+            assert result["target"]["result"] == {"value": 99}
 
     def test_multiple_connections(self):
         """Test multiple source nodes mapping to same target."""
@@ -154,14 +154,14 @@ class TestConnectionMappingLocalRuntime:
         workflow = builder.build()
 
         # Execute workflow
-        runtime = LocalRuntime(connection_validation="off")
-        result, run_id = runtime.execute(workflow)
+        with LocalRuntime(connection_validation="off") as runtime:
+            result, run_id = runtime.execute(workflow)
 
-        # Verify both connections worked
-        assert "target" in result
-        # Target should have received data from both sources
-        assert result["target"]["result"]["value"] == {"data": 100}
-        assert result["target"]["result"]["text"] == "hello"
+            # Verify both connections worked
+            assert "target" in result
+            # Target should have received data from both sources
+            assert result["target"]["result"]["value"] == {"data": 100}
+            assert result["target"]["result"]["text"] == "hello"
 
     def test_connection_mapping_with_none_values(self):
         """Test that None values are handled correctly in mapping."""
@@ -190,13 +190,13 @@ class TestConnectionMappingLocalRuntime:
         workflow = builder.build()
 
         # Execute workflow (should log warning but continue)
-        runtime = LocalRuntime(connection_validation="off")
-        result, run_id = runtime.execute(workflow)
+        with LocalRuntime(connection_validation="off") as runtime:
+            result, run_id = runtime.execute(workflow)
 
-        # Verify execution completes without error
-        assert "target" in result
-        # Target should complete successfully even without the mapped input
-        assert result["target"]["result"] == "completed"
+            # Verify execution completes without error
+            assert "target" in result
+            # Target should complete successfully even without the mapped input
+            assert result["target"]["result"] == "completed"
 
     def test_connection_mapping_with_missing_keys(self):
         """Test that missing keys are handled gracefully."""
@@ -223,11 +223,11 @@ class TestConnectionMappingLocalRuntime:
         workflow = builder.build()
 
         # Execute workflow (should log warning but continue)
-        runtime = LocalRuntime(connection_validation="off")
-        result, run_id = runtime.execute(workflow)
+        with LocalRuntime(connection_validation="off") as runtime:
+            result, run_id = runtime.execute(workflow)
 
-        # Verify execution completes without error
-        assert "target" in result
+            # Verify execution completes without error
+            assert "target" in result
 
 
 class TestConnectionMappingAsyncLocalRuntime:
@@ -478,11 +478,11 @@ class TestConnectionMappingParityBothRuntimes:
             # Async includes extra "result" wrapper in the mapped value
             assert results["target"]["result"] == {"result": {"data": 42}}
         else:
-            runtime = runtime_class(connection_validation="off")
-            results, run_id = runtime.execute(workflow)
-            # Sync returns flat result dict
-            assert "target" in results
-            assert results["target"]["result"] == {"data": 42}
+            with runtime_class(connection_validation="off") as runtime:
+                results, run_id = runtime.execute(workflow)
+                # Sync returns flat result dict
+                assert "target" in results
+                assert results["target"]["result"] == {"data": 42}
 
     @pytest.mark.parametrize(
         "runtime_class,is_async",
@@ -518,11 +518,11 @@ class TestConnectionMappingParityBothRuntimes:
             assert "target" in results
             assert results["target"]["result"] == 42
         else:
-            runtime = runtime_class(connection_validation="off")
-            results, run_id = runtime.execute(workflow)
-            # Sync returns flat result dict
-            assert "target" in results
-            assert results["target"]["result"] == 42
+            with runtime_class(connection_validation="off") as runtime:
+                results, run_id = runtime.execute(workflow)
+                # Sync returns flat result dict
+                assert "target" in results
+                assert results["target"]["result"] == 42
 
     @pytest.mark.parametrize(
         "runtime_class,is_async",
@@ -558,8 +558,8 @@ class TestConnectionMappingParityBothRuntimes:
             assert "target" in results
             assert results["target"]["result"] == {"value": 99}
         else:
-            runtime = runtime_class(connection_validation="off")
-            results, run_id = runtime.execute(workflow)
-            # Sync returns flat result dict
-            assert "target" in results
-            assert results["target"]["result"] == {"value": 99}
+            with runtime_class(connection_validation="off") as runtime:
+                results, run_id = runtime.execute(workflow)
+                # Sync returns flat result dict
+                assert "target" in results
+                assert results["target"]["result"] == {"value": 99}

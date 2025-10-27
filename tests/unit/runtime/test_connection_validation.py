@@ -227,8 +227,8 @@ class TestLocalRuntimeConnectionValidation:
         workflow.add_connection("node1", "output", "node2", "input")
 
         # Should work with default settings
-        runtime = LocalRuntime()  # Default is "warn"
-        results, _ = runtime.execute(workflow.build(), {})
+        with LocalRuntime() as runtime:  # Default is "warn"
+            results, _ = runtime.execute(workflow.build(), {})
 
         assert "node1" in results
         assert "node2" in results
