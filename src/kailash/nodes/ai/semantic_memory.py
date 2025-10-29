@@ -190,17 +190,21 @@ class SemanticMemoryStoreNode(Node):
     def __init__(self, name: str = "semantic_memory_store", **kwargs):
         """Initialize semantic memory store node."""
         self.content = None
-        self.metadata = None
+        # Note: Don't set self.metadata before super().__init__() as it's now a property
         self.collection = "default"
         self.embedding_model = "nomic-embed-text"
         self.embedding_host = "http://localhost:11434"
 
-        # Set attributes from kwargs
+        # Set attributes from kwargs (except metadata which is handled by parent)
         for key, value in kwargs.items():
-            if hasattr(self, key):
+            if hasattr(self, key) and key != "metadata":
                 setattr(self, key, value)
 
         super().__init__(name=name, **kwargs)
+
+        # Now safe to set metadata after parent init (if needed)
+        if "metadata" not in kwargs:
+            self.metadata = None
 
         # Shared store and provider (in production, use persistent storage)
         if not hasattr(self.__class__, "_store"):
