@@ -129,6 +129,92 @@ parameters = {
 # Does NOT receive: reader's table or limit
 ```
 
+## Parameter Naming (Core SDK v0.10.3+)
+
+### Using "metadata" as a Parameter Name
+
+You can use `metadata` as a parameter name in custom nodes. This is commonly needed for database models, monitoring systems, and data pipelines that track metadata.
+
+**What "metadata" means:**
+- **User metadata parameter** - Your dict parameter named "metadata"
+- **Node internal metadata** - The node's NodeMetadata object (name, description, version)
+
+Both types work independently without conflict.
+
+**Example:**
+
+```python
+from kailash.nodes.base import Node, NodeParameter
+from typing import Dict, Any, Optional
+
+class ArticleProcessorNode(Node):
+    """Node that processes articles with metadata."""
+
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        return {
+            "title": NodeParameter(type=str, required=True),
+            "content": NodeParameter(type=str, required=True),
+            # ✅ You can use "metadata" as a parameter name
+            "metadata": NodeParameter(
+                type=dict,
+                required=False,
+                default=None,
+                description="Article metadata (author, tags, timestamps)"
+            )
+        }
+
+    def run(self, title: str, content: str, metadata: Optional[dict] = None, **kwargs) -> Dict[str, Any]:
+        # Access user's metadata parameter
+        article_metadata = metadata or {}
+
+        # Access node's internal metadata (different object)
+        node_name = self.metadata.name
+        node_version = self.metadata.version
+
+        return {
+            "article": {
+                "title": title,
+                "content": content,
+                "metadata": article_metadata  # User parameter
+            },
+            "processing_info": {
+                "node_name": node_name,      # Internal NodeMetadata
+                "node_version": node_version  # Internal NodeMetadata
+            }
+        }
+```
+
+**In workflows:**
+
+```python
+workflow = WorkflowBuilder()
+
+workflow.add_node("ArticleProcessorNode", "processor", {
+    "title": "Introduction to Workflows",
+    "content": "...",
+    "metadata": {
+        "author": "Alice Smith",
+        "tags": ["workflows", "tutorial"],
+        "created_at": "2025-01-01"
+    }
+})
+```
+
+### Reserved Parameter Names
+
+Only one parameter name is reserved:
+
+```python
+def get_parameters(self) -> Dict[str, NodeParameter]:
+    return {
+        "data": NodeParameter(...),      # ✅ Allowed
+        "metadata": NodeParameter(...),  # ✅ Allowed (v0.10.3+)
+        "config": NodeParameter(...),    # ✅ Allowed
+        "value": NodeParameter(...),     # ✅ Allowed
+        "_node_id": NodeParameter(...)   # ❌ Reserved - do not use
+    }
+```
+
 ## Enterprise Patterns
 
 ### Pattern 1: Explicit Parameter Declaration

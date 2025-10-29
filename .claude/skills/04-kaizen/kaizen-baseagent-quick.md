@@ -138,19 +138,18 @@ analysis = analyst.analyze(insights)
 ## v0.2.0: Autonomous Tool Calling (Opt-In)
 
 ```python
-from kaizen.tools import ToolRegistry
-from kaizen.tools.builtin import register_builtin_tools
+# Tools auto-configured via MCP
 
 # Enable tool calling
-registry = ToolRegistry()
-register_builtin_tools(registry)  # 12 builtin tools
+
+# 12 builtin tools enabled via MCP
 
 class FileAgent(BaseAgent):
     def __init__(self, config: MyConfig):
         super().__init__(
             config=config,
             signature=MySignature(),
-            tool_registry=registry  # Enable tools
+            tools="all"  # Enable 12 builtin tools via MCP
         )
 
     async def process_file(self, path: str) -> dict:
