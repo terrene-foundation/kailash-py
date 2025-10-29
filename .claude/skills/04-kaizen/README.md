@@ -1,6 +1,6 @@
 # Kaizen Framework Skills
 
-24 skills for Kaizen AI agent framework covering core patterns, multi-agent coordination, multi-modal processing, v0.2.0+ tool calling, and v0.5.0 observability.
+26 skills for Kaizen AI agent framework covering core patterns, multi-agent coordination, multi-modal processing, autonomous tool calling, observability, memory systems, and checkpoint/resume.
 
 ## Skill Categories
 
@@ -44,19 +44,21 @@ Vision, audio, and multi-modal processing:
 
 ---
 
-### Advanced Patterns (9 Skills - MEDIUM/HIGH)
+### Advanced Patterns (11 Skills - MEDIUM/HIGH)
 
-Production patterns, v0.2.0+ tool calling, v0.5.0 observability, and specialized techniques:
+Production patterns, enterprise features, tool calling, observability, memory systems, and specialized techniques:
 
-16. **[kaizen-control-protocol.md](kaizen-control-protocol.md)** - **v0.2.0** Bidirectional agent ↔ client communication
-17. **[kaizen-tool-calling.md](kaizen-tool-calling.md)** - **v0.2.0** Autonomous tool execution with approval workflows
-18. **[kaizen-observability.md](kaizen-observability.md)** - **NEW v0.5.0** Complete observability stack (tracing, metrics, logging, audit)
-19. **[kaizen-chain-of-thought.md](kaizen-chain-of-thought.md)** - CoT pattern, step-by-step reasoning
-20. **[kaizen-rag-agent.md](kaizen-rag-agent.md)** - RAG implementation with Kaizen
-21. **[kaizen-react-pattern.md](kaizen-react-pattern.md)** - ReAct (reasoning + acting)
-22. **[kaizen-cost-tracking.md](kaizen-cost-tracking.md)** - Token usage, budget management
-23. **[kaizen-streaming.md](kaizen-streaming.md)** - Streaming responses, real-time output
-24. **[kaizen-testing-patterns.md](kaizen-testing-patterns.md)** - 3-tier testing, fixtures, standardized tests
+16. **[kaizen-control-protocol.md](kaizen-control-protocol.md)** - Bidirectional agent ↔ client communication
+17. **[kaizen-tool-calling.md](kaizen-tool-calling.md)** - Autonomous tool execution with approval workflows
+18. **[kaizen-observability.md](kaizen-observability.md)** - Complete observability stack (tracing, metrics, logging, audit)
+19. **[kaizen-memory-system.md](kaizen-memory-system.md)** - Persistent memory, learning, and preference adaptation
+20. **[kaizen-checkpoint-resume.md](kaizen-checkpoint-resume.md)** - Automatic checkpointing and resume for long-running agents
+21. **[kaizen-chain-of-thought.md](kaizen-chain-of-thought.md)** - CoT pattern, step-by-step reasoning
+22. **[kaizen-rag-agent.md](kaizen-rag-agent.md)** - RAG implementation with Kaizen
+23. **[kaizen-react-pattern.md](kaizen-react-pattern.md)** - ReAct (reasoning + acting)
+24. **[kaizen-cost-tracking.md](kaizen-cost-tracking.md)** - Token usage, budget management
+25. **[kaizen-streaming.md](kaizen-streaming.md)** - Streaming responses, real-time output
+26. **[kaizen-testing-patterns.md](kaizen-testing-patterns.md)** - 3-tier testing, fixtures, standardized tests
 
 **Testing**: All patterns use 3-tier strategy (Unit → Ollama → OpenAI), NO MOCKING in Tiers 2-3
 

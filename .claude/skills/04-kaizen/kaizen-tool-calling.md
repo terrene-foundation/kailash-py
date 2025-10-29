@@ -18,22 +18,29 @@ Tool Calling enables agents to execute external tools automatically:
 
 ```python
 from kaizen.core.base_agent import BaseAgent
-from kaizen.tools import ToolRegistry
-from kaizen.tools.builtin import register_builtin_tools
 
-# 1. Create registry
-registry = ToolRegistry()
-register_builtin_tools(registry)  # Add 12 builtin tools
-
-# 2. Enable for agent
+# 1. Tools auto-configured via MCP
 agent = MyAgent(
     config=config,
     signature=signature,
-    tool_registry=registry  # Enable tool calling
+    tools="all"  # Enable 12 builtin tools via MCP
 )
 
-# 3. Execute tool
+# 2. Execute tool
 result = await agent.execute_tool("read_file", {"path": "data.txt"})
+
+# 3. OR configure custom MCP servers
+mcp_servers = [{
+    "name": "kaizen_builtin",
+    "command": "python",
+    "args": ["-m", "kaizen.mcp.builtin_server"],
+    "transport": "stdio"
+}]
+agent = MyAgent(
+    config=config,
+    signature=signature,
+    custom_mcp_servers=mcp_servers
+)
 ```
 
 ---
@@ -256,7 +263,7 @@ mcp_servers = [
 agent = MyAgent(
     config=config,
     signature=signature,
-    tool_registry=registry,
+    tools="all"  # Enable 12 builtin tools via MCP
     mcp_servers=mcp_servers  # Add MCP tools
 )
 
@@ -276,7 +283,7 @@ from kaizen.agents import ReActAgent
 # ReActAgent uses tools autonomously
 agent = ReActAgent(
     config=config,
-    tool_registry=registry
+    tools="all"  # Enable 12 builtin tools via MCP
 )
 
 # Agent automatically:
@@ -298,8 +305,8 @@ result = agent.solve("Find all Python files and count lines of code")
 ```python
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import Signature, InputField, OutputField
-from kaizen.tools import ToolRegistry
-from kaizen.tools.builtin import register_builtin_tools
+# Tools auto-configured via MCP
+
 from dataclasses import dataclass
 
 class DataProcessingSignature(Signature):
@@ -312,11 +319,11 @@ class DataConfig:
     model: str = "gpt-4"
 
 class DataProcessingAgent(BaseAgent):
-    def __init__(self, config: DataConfig, registry: ToolRegistry):
+    def __init__(self, config: DataConfig):
         super().__init__(
             config=config,
             signature=DataProcessingSignature(),
-            tool_registry=registry
+            tools="all"  # Enable 12 builtin tools via MCP
         )
 
     async def process_data(self, source_file: str) -> dict:
@@ -344,8 +351,8 @@ class DataProcessingAgent(BaseAgent):
 
 # Usage
 async def main():
-    registry = ToolRegistry()
-    register_builtin_tools(registry)
+    
+    # 12 builtin tools enabled via MCP
 
     agent = DataProcessingAgent(DataConfig(), registry)
     result = await agent.process_data("input.txt")
@@ -434,11 +441,11 @@ class SafeAgent(BaseAgent):
 from kaizen.agents.coordination.supervisor_worker import SupervisorWorkerPattern
 
 # Supervisor with tools
-supervisor = SupervisorAgent(config, tool_registry=registry)
+supervisor = SupervisorAgent(config, tools="all"  # Enable 12 builtin tools via MCP
 
 # Workers with specialized tools
-file_worker = FileAgent(config, tool_registry=file_registry)
-api_worker = APIAgent(config, tool_registry=api_registry)
+file_worker = FileAgent(config, tools="all"  # Enable tools via MCP
+api_worker = APIAgent(config, tools="all"  # Enable tools via MCP
 
 pattern = SupervisorWorkerPattern(supervisor, [file_worker, api_worker], ...)
 ```
@@ -449,12 +456,12 @@ pattern = SupervisorWorkerPattern(supervisor, [file_worker, api_worker], ...)
 
 ```python
 import pytest
-from kaizen.tools import ToolRegistry, Tool
+# Tools auto-configured via MCP, Tool
 
 @pytest.mark.asyncio
 async def test_tool_execution():
     # Setup
-    registry = ToolRegistry()
+    
 
     # Register mock tool
     def mock_tool(param: str) -> dict:
@@ -469,7 +476,7 @@ async def test_tool_execution():
     registry.register_tool(tool)
 
     # Create agent
-    agent = MyAgent(config, tool_registry=registry)
+    agent = MyAgent(config, tools="all"  # Enable 12 builtin tools via MCP
 
     # Test
     result = await agent.execute_tool("mock_tool", {"param": "test"})
@@ -495,8 +502,8 @@ async def test_tool_execution():
 
 **Fix:** Ensure tool is registered:
 ```python
-registry = ToolRegistry()
-register_builtin_tools(registry)  # Required for builtin tools
+
+# 12 builtin tools enabled via MCP
 ```
 
 **Issue:** Tool execution hangs
@@ -513,7 +520,7 @@ result = await agent.execute_tool(
 
 **Fix:** Enable control protocol:
 ```python
-agent = MyAgent(config, tool_registry=registry, control_protocol=protocol)
+agent = MyAgent(config, tools="all"  # Enable 12 builtin tools via MCP
 ```
 
 ---
@@ -534,7 +541,7 @@ class MyAgent:
 **After** (Tool Calling):
 ```python
 # Unified tool calling
-agent = MyAgent(config, tool_registry=registry)
+agent = MyAgent(config, tools="all"  # Enable 12 builtin tools via MCP
 response = await agent.execute_tool("http_get", {
     "url": "https://api.example.com"
 })

@@ -16,7 +16,6 @@ from typing import Any, Dict
 from unittest.mock import Mock, patch
 
 import pytest
-
 from kailash.nodes.base import Node
 from kailash.runtime.local import (
     LocalRuntime,

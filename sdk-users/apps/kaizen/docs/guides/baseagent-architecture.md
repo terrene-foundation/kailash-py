@@ -140,7 +140,7 @@ result = agent.ask("What is AI?")
 from kaizen.agents import ReActAgent
 
 # ReActAgent uses MultiCycleStrategy internally
-agent = ReActAgent(config, tool_registry=registry)
+agent = ReActAgent(config, tools="all"  # Enable 12 builtin tools via MCP
 result = agent.solve("Find and summarize the latest research on AI safety")
 # Agent autonomously:
 # 1. Reasons about task
@@ -242,15 +242,14 @@ insights = agent2.read_from_memory(tags=["research"])
 ### Enable Tool Calling
 
 ```python
-from kaizen.tools import ToolRegistry
-from kaizen.tools.builtin import register_builtin_tools
+# Tools auto-configured via MCP
 
 # Create registry
-registry = ToolRegistry()
-register_builtin_tools(registry)  # 12 builtin tools
+
+# 12 builtin tools enabled via MCP
 
 # Enable for agent (opt-in)
-agent = MyAgent(config, tool_registry=registry)
+agent = MyAgent(config, tools="all"  # Enable 12 builtin tools via MCP
 
 # Agent can now call tools
 result = await agent.execute_tool("read_file", {"path": "data.txt"})
@@ -267,7 +266,7 @@ mcp_servers = [
 
 agent = MyAgent(
     config,
-    tool_registry=registry,
+    tools="all"  # Enable 12 builtin tools via MCP
     mcp_servers=mcp_servers  # MCP integration
 )
 ```
@@ -437,7 +436,7 @@ agent = MyAgent(config)  # Minimal
 agent = MyAgent(config, shared_memory=pool)
 
 # ✅ GOOD - Add tools when needed
-agent = MyAgent(config, tool_registry=registry)
+agent = MyAgent(config, tools="all"  # Enable 12 builtin tools via MCP
 ```
 
 ---
@@ -481,7 +480,7 @@ class AutonomousAgent(BaseAgent):
             config=config,
             signature=MySignature(),
             strategy=MultiCycleStrategy(),  # Explicit for autonomous
-            tool_registry=tool_registry
+            tools="all"  # Enable tools via MCP
         )
 
     def solve(self, problem: str) -> dict:
