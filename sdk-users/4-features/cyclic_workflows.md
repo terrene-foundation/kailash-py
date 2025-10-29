@@ -1,8 +1,23 @@
-# Cyclic Workflows in Kailash SDK
+# ⚠️ CYCLIC WORKFLOWS - PLANNED FEATURE
 
-## Overview
+> **STATUS**: This feature is planned but NOT YET IMPLEMENTED in the current SDK version (v0.9.31).
+>
+> Cyclic workflows (iterative processing, feedback loops) are under active development.
+> The CycleBuilder API and patterns shown in this documentation represent the planned interface.
+>
+> **Current Alternatives**:
+> - Manual iteration with Python loops around workflow execution
+> - Recursive workflow calls with state management
+> - Conditional routing with SwitchNode for state machines
+> - Sequential executions with external iteration control
 
-Cyclic workflows enable iterative processing patterns where data flows back through earlier nodes in the workflow graph. This powerful feature supports use cases like:
+---
+
+# Cyclic Workflows in Kailash SDK (PLANNED)
+
+## Overview (Future Capability)
+
+Cyclic workflows will enable iterative processing patterns where data flows back through earlier nodes in the workflow graph. This powerful feature will support use cases like:
 
 - **Iterative refinement**: Continuously improve results until they meet quality criteria
 - **Convergence algorithms**: Iterate until a stable state is reached

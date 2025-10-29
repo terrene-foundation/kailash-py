@@ -56,14 +56,13 @@ class TestBasicRuntime:
         node.config = {"x": 5}
         workflow.add_node("doubler", node)
 
-        runtime = LocalRuntime()
-
         # Create task manager with storage
         storage = FileSystemStorage(str(tmp_path))
         task_manager = TaskManager(storage)
 
         # Execute without parameters since we set config
-        results, run_id = runtime.execute(workflow, task_manager=task_manager)
+        with LocalRuntime() as runtime:
+            results, run_id = runtime.execute(workflow, task_manager=task_manager)
 
         assert len(results) == 1
         assert "doubler" in results

@@ -310,10 +310,9 @@ class TestLocalRuntimeMetricsIntegration:
         workflow.add_node("PythonCodeNode", "consumer", {"code": "result = data"})
         workflow.add_connection("source", "result", "consumer", "data")
 
-        runtime = LocalRuntime(connection_validation="strict")
-
-        # Execute workflow
-        results, run_id = runtime.execute(workflow.build())
+        with LocalRuntime(connection_validation="strict") as runtime:
+            # Execute workflow
+            results, run_id = runtime.execute(workflow.build())
 
         # Get metrics
         metrics = runtime.get_validation_metrics()
@@ -352,8 +351,8 @@ class TestLocalRuntimeMetricsIntegration:
         )
 
         # Get metrics through a runtime instance
-        runtime = LocalRuntime()
-        metrics = runtime.get_validation_metrics()
+        with LocalRuntime() as runtime:
+            metrics = runtime.get_validation_metrics()
 
         # Check security report
         security_report = metrics["security_report"]
@@ -364,23 +363,24 @@ class TestLocalRuntimeMetricsIntegration:
         """Test resetting runtime metrics."""
         reset_global_metrics()  # Start fresh
 
-        runtime = LocalRuntime(connection_validation="warn")  # Explicitly set to warn
+        with LocalRuntime(
+            connection_validation="warn"
+        ) as runtime:  # Explicitly set to warn
+            # Add some metrics by running a workflow
+            workflow = WorkflowBuilder()
+            workflow.add_node("PythonCodeNode", "node", {"code": "result = 1"})
+            runtime.execute(workflow.build())
 
-        # Add some metrics by running a workflow
-        workflow = WorkflowBuilder()
-        workflow.add_node("PythonCodeNode", "node", {"code": "result = 1"})
-        runtime.execute(workflow.build())
+            # Check that we have some metrics (either validations or bypasses)
+            metrics = runtime.get_validation_metrics()
+            summary = metrics["performance_summary"]
+            # With warn mode, we should have validations
+            assert summary["total_validations"] > 0 or summary["mode_bypasses"] > 0
 
-        # Check that we have some metrics (either validations or bypasses)
-        metrics = runtime.get_validation_metrics()
-        summary = metrics["performance_summary"]
-        # With warn mode, we should have validations
-        assert summary["total_validations"] > 0 or summary["mode_bypasses"] > 0
+            # Reset
+            runtime.reset_validation_metrics()
 
-        # Reset
-        runtime.reset_validation_metrics()
-
-        # Should be empty
-        metrics = runtime.get_validation_metrics()
-        assert metrics["performance_summary"]["total_validations"] == 0
-        assert metrics["performance_summary"]["mode_bypasses"] == 0
+            # Should be empty
+            metrics = runtime.get_validation_metrics()
+            assert metrics["performance_summary"]["total_validations"] == 0
+            assert metrics["performance_summary"]["mode_bypasses"] == 0

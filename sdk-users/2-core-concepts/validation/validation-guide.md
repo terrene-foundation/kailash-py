@@ -178,14 +178,18 @@ def robust_workflow_execution(workflow, parameters=None):
 
         return results, "Success"
 
-    except Exception as e:
+    except ValueError as e:
+        # Validation errors (wrong validation mode, invalid parameters, etc.)
         error_msg = str(e)
         if "missing required inputs" in error_msg:
             return None, f"Missing required parameters: {error_msg}"
         elif "connection" in error_msg.lower():
             return None, f"Connection error: {error_msg}"
         else:
-            return None, f"Execution error: {error_msg}"
+            return None, f"Validation error: {error_msg}"
+    except Exception as e:
+        # Other execution errors
+        return None, f"Execution error: {str(e)}"
 
 # Example usage with error handling
 workflow = WorkflowBuilder()

@@ -1,18 +1,18 @@
 # Parameter Passing Comprehensive
 
-You are an expert in comprehensive parameter passing patterns for Kailash SDK. This is the complete enterprise guide, not the quick reference.
+Enterprise parameter passing patterns for Kailash SDK with security and governance.
 
 ## Source Documentation
 - `./sdk-users/7-gold-standards/parameter_passing_comprehensive.md`
 
-## Core Responsibilities
+## Core Patterns
 
 ### 1. Three Ways to Pass Parameters
 
-**1. Static Parameters (Design Time)**
+**1. Static Parameters (Node Configuration)**
 ```python
 workflow.add_node("HTTPRequestNode", "api_call", {
-    "url": "https://api.example.com",  # Static
+    "url": "https://api.example.com",
     "method": "GET"
 })
 ```
@@ -20,134 +20,134 @@ workflow.add_node("HTTPRequestNode", "api_call", {
 **2. Dynamic Parameters (Runtime)**
 ```python
 runtime.execute(workflow.build(), parameters={
-    "api_call": {"url": "https://different-api.com"}  # Override at runtime
+    "api_call": {"url": "https://different-api.com"}
 })
 ```
 
 **3. Connection-Based (Data Flow)**
 ```python
-workflow.add_connection("source", "target", "output_key", "input_key")
-# Data flows from source output to target input
+workflow.add_connection("source", "output_key", "target", "input_key")
 ```
 
-### 2. Parameter Priority
-```
-Connection-based > Dynamic > Static
-(Highest priority)     (Lowest priority)
-```
+### 2. Parameter Scoping (v0.9.31+)
 
-### 3. Environment Variables
+**Node-specific parameters are unwrapped automatically:**
+
 ```python
-workflow.add_node("HTTPRequestNode", "api_call", {
-    "url": "${API_URL}",  # References $API_URL from environment
-    "headers": {
-        "Authorization": "Bearer ${API_TOKEN}"
-    }
-})
+# What you pass:
+parameters = {
+    "api_key": "global",     # Global param (all nodes)
+    "node1": {"value": 10},  # Node-specific
+    "node2": {"value": 20}   # Node-specific
+}
+
+# What node1 receives (unwrapped):
+{
+    "api_key": "global",  # Global param
+    "value": 10           # Unwrapped from nested dict
+}
+# node1 does NOT receive node2's parameters (isolated)
+```
+
+**Scoping rules:**
+- Parameters filtered by node ID
+- Node-specific params unwrapped
+- Global params (non-node-ID keys) included for all nodes
+- Other nodes' params excluded (prevents leakage)
+
+### 3. Parameter Priority
+```
+Connection-based > Runtime > Static
+(Highest)                   (Lowest)
 ```
 
 ### 4. Complex Parameter Patterns
 ```python
-# Nested parameters
 workflow.add_node("PythonCodeNode", "complex", {
     "code": """
+# Access parameters directly (automatically injected)
 config = {
     'database': {
-        'host': os.getenv('DB_HOST'),
-        'port': int(os.getenv('DB_PORT', 5432)),
-        'credentials': {
-            'user': os.getenv('DB_USER'),
-            'password': os.getenv('DB_PASSWORD')
-        }
+        'host': db_host,    # From parameter
+        'port': db_port,    # From parameter
+        'user': db_user     # From parameter
     }
 }
-
 result = {'config': config}
 """
+})
+
+# Provide via runtime
+runtime.execute(workflow.build(), parameters={
+    "complex": {
+        "db_host": "localhost",
+        "db_port": 5432,
+        "db_user": "admin"
+    }
 })
 ```
 
 ### 5. Parameter Validation
+
 ```python
-workflow.add_node("PythonCodeNode", "validator", {
-    "code": """
-# Validate parameters
-required = ['api_url', 'api_key', 'data']
-missing = [p for p in required if p not in locals()]
+from kailash.nodes.base import Node, NodeParameter
 
-if missing:
-    raise ValueError(f"Missing required parameters: {missing}")
+class ValidatedNode(Node):
+    def get_parameters(self):
+        return {
+            "api_url": NodeParameter(type=str, required=True),
+            "timeout": NodeParameter(type=int, required=False, default=30)
+        }
 
-# Type validation
-if not isinstance(data, dict):
-    raise TypeError("data must be a dictionary")
+    def run(self, **kwargs):
+        # Validate business logic
+        api_url = kwargs["api_url"]
+        if not api_url.startswith("https://"):
+            raise ValueError("API URL must use HTTPS")
 
-result = {'validated': True}
-"""
-})
+        timeout = kwargs.get("timeout", 30)
+        if timeout < 1 or timeout > 300:
+            raise ValueError("Timeout must be between 1-300 seconds")
+
+        return {"result": "validated"}
 ```
 
-### 6. Default Parameters
-```python
-workflow.add_node("PythonCodeNode", "with_defaults", {
-    "code": """
-# Use defaults for missing parameters
-timeout = locals().get('timeout', 30)
-retries = locals().get('retries', 3)
-batch_size = locals().get('batch_size', 100)
+### 6. Security Patterns
 
-result = {
-    'timeout': timeout,
-    'retries': retries,
-    'batch_size': batch_size
-}
-"""
-})
-```
-
-### 7. Parameter Transformation
 ```python
-workflow.add_node("PythonCodeNode", "transform_params", {
-    "code": """
-# Transform parameters before use
-api_url = base_url.rstrip('/') + '/api/v1/endpoint'
-headers = {
-    'Authorization': f'Bearer {api_token}',
-    'Content-Type': 'application/json',
-    'X-Custom-Header': custom_value
+# Parameter isolation prevents data leakage
+parameters = {
+    "tenant_a_processor": {"tenant_id": "tenant-a", "data": sensitive_a},
+    "tenant_b_processor": {"tenant_id": "tenant-b", "data": sensitive_b}
 }
 
-result = {'url': api_url, 'headers': headers}
-"""
-})
+# Each node only receives its own parameters
+# No cross-tenant data leakage possible
 ```
 
-### 8. Batch Parameter Passing
+### 7. Error Handling (v0.9.31+)
+
+**Validation failures now raise ValueError:**
+
 ```python
-workflow.add_node("PythonCodeNode", "batch_processor", {
-    "code": """
-# Process batch of items with parameters
-items = input_items
-batch_size = locals().get('batch_size', 100)
+try:
+    runtime = LocalRuntime(connection_validation="invalid")
+except ValueError as e:  # Changed from RuntimeExecutionError
+    print(f"Configuration error: {e}")
 
-results = []
-for i in range(0, len(items), batch_size):
-    batch = items[i:i+batch_size]
-    batch_result = process_batch(batch, **processing_params)
-    results.extend(batch_result)
-
-result = {'results': results, 'total': len(results)}
-"""
-})
+try:
+    workflow.build()
+except ValueError as e:  # Parameter validation errors
+    print(f"Missing parameters: {e}")
 ```
 
 ## When to Engage
-- User asks about "parameter passing guide", "comprehensive parameters", "enterprise parameters"
-- User has complex parameter needs
-- User needs parameter validation
-- User wants parameter best practices
+- User asks about "enterprise parameters", "parameter governance", "parameter security"
+- Complex parameter needs across multiple nodes
+- Multi-tenant parameter isolation required
+- Parameter validation patterns needed
 
 ## Integration with Other Skills
-- Route to **sdk-fundamentals** for basic concepts
-- Route to **workflow-creation-guide** for workflow building
-- Route to **advanced-features** for advanced patterns
+- Route to **param-passing-quick** for basic concepts
+- Route to **workflow-quickstart** for workflow building
+- Route to **gold-parameter-passing** for compliance patterns

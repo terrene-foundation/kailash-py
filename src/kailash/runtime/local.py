@@ -37,6 +37,7 @@ Examples:
 import asyncio
 import hashlib
 import logging
+import threading
 import time
 from collections import defaultdict
 from datetime import UTC, datetime
@@ -44,9 +45,14 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import networkx as nx
 import psutil
-
 from kailash.nodes import Node
+from kailash.runtime.base import BaseRuntime
 from kailash.runtime.compatibility_reporter import CompatibilityReporter
+from kailash.runtime.mixins import (
+    ConditionalExecutionMixin,
+    CycleExecutionMixin,
+    ValidationMixin,
+)
 from kailash.runtime.parameter_injector import WorkflowParameterInjector
 from kailash.runtime.performance_monitor import ExecutionMetrics, PerformanceMonitor
 from kailash.runtime.secret_provider import EnvironmentSecretProvider, SecretProvider
@@ -171,12 +177,20 @@ def _get_execution_planner():
     return _DynamicExecutionPlanner
 
 
-class LocalRuntime:
+class LocalRuntime(
+    BaseRuntime, CycleExecutionMixin, ValidationMixin, ConditionalExecutionMixin
+):
     """Unified runtime with enterprise capabilities.
 
     This class provides a comprehensive, production-ready execution engine that
     seamlessly handles both traditional workflows and advanced cyclic patterns,
     with full enterprise feature integration through composable nodes.
+
+    Inherits from:
+        BaseRuntime: Provides core runtime foundation and configuration
+        CycleExecutionMixin: Provides shared cycle execution delegation
+        ValidationMixin: Provides workflow validation and contract checking
+        ConditionalExecutionMixin: Provides conditional execution and branching logic
 
     Enterprise Features (Composably Integrated):
     - Access control via existing AccessControlManager and security nodes
@@ -243,83 +257,35 @@ class LocalRuntime:
             max_concurrent_workflows: Maximum number of concurrent workflows in persistent mode.
             connection_pool_size: Default size for connection pools.
         """
-        # Validate connection_validation parameter
-        valid_conn_modes = {"off", "warn", "strict"}
-        if connection_validation not in valid_conn_modes:
-            raise ValueError(
-                f"Invalid connection_validation mode: {connection_validation}. "
-                f"Must be one of: {valid_conn_modes}"
-            )
+        # Initialize parent classes (BaseRuntime + CycleExecutionMixin)
+        # Pass ALL configuration to BaseRuntime for unified initialization
+        super().__init__(
+            debug=debug,
+            enable_cycles=enable_cycles,
+            enable_async=enable_async,
+            max_concurrency=max_concurrency,
+            user_context=user_context,
+            enable_monitoring=enable_monitoring,
+            enable_security=enable_security,
+            enable_audit=enable_audit,
+            resource_limits=resource_limits,
+            secret_provider=secret_provider,
+            connection_validation=connection_validation,
+            conditional_execution=conditional_execution,
+            content_aware_success_detection=content_aware_success_detection,
+            persistent_mode=persistent_mode,
+            enable_connection_sharing=enable_connection_sharing,
+            max_concurrent_workflows=max_concurrent_workflows,
+            connection_pool_size=connection_pool_size,
+            enable_enterprise_monitoring=enable_enterprise_monitoring,
+            enable_health_monitoring=enable_health_monitoring,
+            enable_resource_coordination=enable_resource_coordination,
+            circuit_breaker_config=circuit_breaker_config,
+            retry_policy_config=retry_policy_config,
+            connection_pool_config=connection_pool_config,
+        )
 
-        # Validate conditional_execution parameter
-        valid_exec_modes = {"route_data", "skip_branches"}
-        if conditional_execution not in valid_exec_modes:
-            raise ValueError(
-                f"Invalid conditional_execution mode: {conditional_execution}. "
-                f"Must be one of: {valid_exec_modes}"
-            )
-
-        # Validate persistent mode parameters
-        if max_concurrent_workflows < 0:
-            max_concurrent_workflows = 10  # Set to reasonable default
-        if connection_pool_size < 0:
-            connection_pool_size = 20  # Set to reasonable default
-
-        # Validate resource limits
-        if resource_limits:
-            for key, value in resource_limits.items():
-                if isinstance(value, (int, float)) and value < 0:
-                    raise ValueError(
-                        f"Resource limit '{key}' cannot be negative: {value}"
-                    )
-
-        self.debug = debug
-        self.enable_cycles = enable_cycles
-        self.enable_async = enable_async
-        self.max_concurrency = max_concurrency
-        self.user_context = user_context
-        self.secret_provider = secret_provider
-        self.enable_monitoring = enable_monitoring
-        self.enable_security = enable_security
-        self.enable_audit = enable_audit
-        self.resource_limits = resource_limits or {}
-        self._resource_limits = self.resource_limits  # Alias for test compatibility
-        self.connection_validation = connection_validation
-        self.conditional_execution = conditional_execution
-        self.content_aware_success_detection = content_aware_success_detection
-        self.logger = logger
-
-        # Enhanced persistent mode attributes
-        self._persistent_mode = persistent_mode
-        self._enable_connection_sharing = enable_connection_sharing
-        self._max_concurrent_workflows = max_concurrent_workflows
-        self._connection_pool_size = connection_pool_size
-
-        # Enterprise configuration
-        self._enable_enterprise_monitoring = enable_enterprise_monitoring
-        self._enable_health_monitoring = enable_health_monitoring
-        self._enable_resource_coordination = enable_resource_coordination
-        self._circuit_breaker_config = circuit_breaker_config or {}
-        self._retry_policy_config = retry_policy_config or {}
-        self._connection_pool_config = connection_pool_config or {}
-
-        # Persistent mode state management
-        self._is_persistent_started = False
-        self._persistent_event_loop = None
-        self._active_workflows = {}
-        self._runtime_id = f"runtime_{id(self)}_{int(time.time())}"
-
-        # Initialize resource coordination components (lazy initialization)
-        self._resource_coordinator = None
-        self._pool_coordinator = None
-        self._resource_monitor = None
-        self._runtime_monitor = None
-        self._health_monitor = None
-        self._metrics_collector = None
-        self._audit_logger = None
-        self._resource_enforcer = None
-        self._lifecycle_manager = None
-
+        # LocalRuntime-specific initialization (not in BaseRuntime)
         # Automatically initialize resource limit enforcer with sensible defaults
         # if any enterprise features are enabled or in persistent mode
         auto_enable_resources = (
@@ -666,6 +632,14 @@ class LocalRuntime:
         else:
             self.logger.setLevel(logging.INFO)
 
+        # === Persistent Event Loop Management (v0.10.1+) ===
+        # Fixes event loop closure bug with AsyncSQLDatabaseNode connection pools
+        self._persistent_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._loop_thread: Optional[threading.Thread] = None
+        self._loop_lock = threading.Lock()  # Protect loop creation/cleanup
+        self._is_context_managed = False  # Track if using context manager
+        self._cleanup_registered = False  # Track if atexit cleanup registered
+
         # Enterprise execution context
         self._execution_context = {
             "security_enabled": enable_security,
@@ -698,7 +672,17 @@ class LocalRuntime:
         task_manager: TaskManager | None = None,
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
     ) -> tuple[dict[str, Any], str | None]:
-        """Execute a workflow with unified enterprise capabilities.
+        """
+        Execute a workflow synchronously.
+
+        This method uses a persistent event loop across multiple executions,
+        ensuring connection pools and async resources remain valid. This is
+        critical for AsyncSQLDatabaseNode and other async components.
+
+        Persistent Event Loop Benefits:
+            - Connection pools remain valid across executions (no "Event loop closed" errors)
+            - Better performance (no loop recreation overhead)
+            - Efficient resource usage (connection pool reuse)
 
         Args:
             workflow: Workflow to execute.
@@ -712,8 +696,67 @@ class LocalRuntime:
             RuntimeExecutionError: If execution fails.
             WorkflowValidationError: If workflow is invalid.
             PermissionError: If access control denies execution.
+
+        Resource Management:
+            For proper resource cleanup in long-running applications, use
+            the context manager pattern or call close() explicitly:
+
+            Pattern 1 - Context Manager (Recommended):
+                >>> with LocalRuntime() as runtime:
+                ...     results, run_id = runtime.execute(workflow)
+                # Automatic cleanup
+
+            Pattern 2 - Explicit Close:
+                >>> runtime = LocalRuntime()
+                >>> try:
+                ...     results, run_id = runtime.execute(workflow)
+                ... finally:
+                ...     runtime.close()
+
+            Pattern 3 - Automatic (Deprecated):
+                >>> runtime = LocalRuntime()
+                >>> results, run_id = runtime.execute(workflow)  # ⚠️ DeprecationWarning
+                # Cleanup on process exit (atexit)
+
+        Deprecation Notice:
+            Using LocalRuntime without context manager or explicit close() is
+            deprecated and will emit a DeprecationWarning. This pattern will
+            raise an error in v0.12.0. Please migrate to context manager pattern.
+
+        Examples:
+            Sequential workflows with context manager:
+                >>> with LocalRuntime() as runtime:
+                ...     results1, _ = runtime.execute(workflow1)
+                ...     results2, _ = runtime.execute(workflow2)  # Same event loop!
+                ...     results3, _ = runtime.execute(workflow3)  # Same event loop!
+
+            Long-running service:
+                >>> class DataProcessor:
+                ...     def __init__(self):
+                ...         self.runtime = LocalRuntime()
+                ...     def process(self, workflow):
+                ...         return self.runtime.execute(workflow)
+                ...     def shutdown(self):
+                ...         self.runtime.close()
+
+        See Also:
+            - close(): Explicit cleanup
+            - __enter__, __exit__: Context manager support
+            - execute_async(): Async variant
         """
-        # For backward compatibility, run the async version in a sync wrapper
+        # Emit deprecation warning for non-context-managed usage
+        if not self._is_context_managed and not self._cleanup_registered:
+            import warnings
+
+            warnings.warn(
+                "LocalRuntime.execute() without context manager or explicit close() is deprecated. "
+                "Use 'with LocalRuntime() as runtime:' pattern for proper resource cleanup. "
+                "This will become an error in v0.12.0. "
+                "See documentation: https://docs.kailash.ai/runtime/local-runtime#resource-management",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         try:
             # Check if we're already in an event loop
             loop = asyncio.get_running_loop()
@@ -722,8 +765,11 @@ class LocalRuntime:
                 workflow=workflow, task_manager=task_manager, parameters=parameters
             )
         except RuntimeError:
-            # No event loop running, safe to use asyncio.run
-            return asyncio.run(
+            # No event loop running, use persistent loop
+            loop = self._ensure_event_loop()
+
+            # Run the async execution in the persistent loop
+            return loop.run_until_complete(
                 self._execute_async(
                     workflow=workflow, task_manager=task_manager, parameters=parameters
                 )
@@ -753,6 +799,379 @@ class LocalRuntime:
         return await self._execute_async(
             workflow=workflow, task_manager=task_manager, parameters=parameters
         )
+
+    def _ensure_event_loop(self) -> asyncio.AbstractEventLoop:
+        """
+        Ensure persistent event loop exists, creating if necessary.
+
+        This method is thread-safe and idempotent. It creates a NEW event loop
+        on the FIRST call and reuses the SAME loop for all subsequent calls.
+
+        The persistent loop is stored in self._persistent_loop and shared across
+        all execute() calls for this runtime instance. This ensures:
+        1. AsyncSQLDatabaseNode connection pools remain valid (same loop ID)
+        2. Better performance (no loop recreation overhead)
+        3. Resource efficiency (connection pool reuse)
+
+        Returns:
+            The persistent event loop instance
+
+        Thread Safety:
+            Protected by self._loop_lock for multi-threaded environments.
+            Each runtime instance has its own loop (no cross-instance pollution).
+
+        Corruption Handling:
+            Automatically recreates loop if it becomes closed/corrupted.
+            Logs warning if external closure detected.
+
+        Note:
+            For proper cleanup, use context manager or call close() explicitly:
+
+            >>> with LocalRuntime() as runtime:  # Recommended
+            ...     results = runtime.execute(workflow)
+            >>> # Or:
+            >>> runtime = LocalRuntime()
+            >>> try:
+            ...     results = runtime.execute(workflow)
+            ... finally:
+            ...     runtime.close()
+
+        Examples:
+            >>> runtime = LocalRuntime()
+            >>> loop1 = runtime._ensure_event_loop()
+            >>> loop2 = runtime._ensure_event_loop()
+            >>> assert loop1 is loop2  # Same loop reused
+
+        Raises:
+            RuntimeError: If loop creation fails (rare, OS-level issue)
+        """
+        with self._loop_lock:
+            # Check if existing loop is valid
+            if self._persistent_loop is not None:
+                if not self._persistent_loop.is_closed():
+                    # Existing loop is valid, reuse it
+                    if self.debug:
+                        logger.debug(
+                            f"Reusing persistent event loop for runtime {self._runtime_id} "
+                            f"(loop_id={id(self._persistent_loop)})"
+                        )
+                    return self._persistent_loop
+                else:
+                    # Loop was closed externally, log warning and recreate
+                    logger.warning(
+                        f"Persistent event loop for runtime {self._runtime_id} was closed externally. "
+                        f"Recreating event loop. This may indicate improper cleanup. "
+                        f"Consider using 'with LocalRuntime() as runtime:' pattern."
+                    )
+                    self._persistent_loop = None
+
+            # Create new persistent event loop
+            try:
+                self._persistent_loop = asyncio.new_event_loop()
+            except Exception as e:
+                raise RuntimeExecutionError(
+                    f"Failed to create persistent event loop for runtime {self._runtime_id}: {e}"
+                ) from e
+
+            # Register atexit cleanup if not using context manager
+            # This is a fallback - context manager or explicit close() is preferred
+            if not self._cleanup_registered and not self._is_context_managed:
+                import atexit
+
+                atexit.register(self._cleanup_event_loop)
+                self._cleanup_registered = True
+
+                if self.debug:
+                    logger.debug(
+                        f"Registered atexit cleanup for runtime {self._runtime_id} "
+                        "(fallback - use context manager or close() for better control)"
+                    )
+
+            if self.debug:
+                logger.debug(
+                    f"Created persistent event loop for runtime {self._runtime_id} "
+                    f"(loop_id={id(self._persistent_loop)})"
+                )
+
+            return self._persistent_loop
+
+    def _cleanup_event_loop(self) -> None:
+        """
+        Clean up persistent event loop and resources.
+
+        This method performs graceful shutdown of the persistent event loop:
+        1. Cancels all pending tasks
+        2. Waits for cancellation to complete
+        3. Closes the event loop
+        4. Clears internal references
+
+        This method is called:
+        1. Explicitly via close()
+        2. Via context manager __exit__
+        3. Via atexit if neither of above
+
+        Thread Safety:
+            Protected by self._loop_lock. Safe to call from any thread.
+
+        Idempotency:
+            Safe to call multiple times. Subsequent calls are no-ops.
+
+        Note:
+            After cleanup, a new event loop will be created automatically
+            on the next execute() call. However, for best practices, create
+            a new runtime instance instead.
+
+        Examples:
+            >>> runtime = LocalRuntime()
+            >>> runtime.execute(workflow1)
+            >>> runtime._cleanup_event_loop()  # Manual cleanup
+            >>> runtime.execute(workflow2)     # New loop created automatically
+
+        Errors:
+            Errors during cleanup are logged but not raised. Loop is force-closed
+            even if graceful shutdown fails.
+        """
+        with self._loop_lock:
+            if self._persistent_loop is None:
+                # Already cleaned up
+                if self.debug:
+                    logger.debug(
+                        f"Event loop for runtime {self._runtime_id} already cleaned up"
+                    )
+                return
+
+            loop = self._persistent_loop
+            loop_id = id(loop)
+
+            if self.debug:
+                logger.debug(
+                    f"Cleaning up event loop for runtime {self._runtime_id} "
+                    f"(loop_id={loop_id})"
+                )
+
+            # Cancel all pending tasks (graceful shutdown)
+            if not loop.is_closed():
+                try:
+                    # Get all pending tasks
+                    pending = asyncio.all_tasks(loop)
+
+                    if pending:
+                        logger.debug(
+                            f"Cancelling {len(pending)} pending tasks in event loop cleanup "
+                            f"(runtime {self._runtime_id})"
+                        )
+
+                        # Cancel all tasks
+                        for task in pending:
+                            task.cancel()
+
+                        # Wait for cancellation to complete
+                        loop.run_until_complete(
+                            asyncio.gather(*pending, return_exceptions=True)
+                        )
+
+                        if self.debug:
+                            logger.debug(
+                                f"Successfully cancelled {len(pending)} tasks "
+                                f"(runtime {self._runtime_id})"
+                            )
+
+                    # Close the loop
+                    loop.close()
+
+                    if self.debug:
+                        logger.debug(
+                            f"Closed persistent event loop for runtime {self._runtime_id} "
+                            f"(loop_id={loop_id})"
+                        )
+
+                except Exception as e:
+                    # Log error but don't raise - cleanup must succeed
+                    logger.warning(
+                        f"Error during event loop cleanup for runtime {self._runtime_id}: {e}. "
+                        f"Force-closing loop."
+                    )
+                    # Force close even if cleanup fails
+                    if not loop.is_closed():
+                        try:
+                            loop.close()
+                        except Exception as e2:
+                            logger.error(
+                                f"Failed to force-close event loop for runtime {self._runtime_id}: {e2}"
+                            )
+
+            # Clear reference
+            self._persistent_loop = None
+
+            if self.debug:
+                logger.debug(
+                    f"Event loop cleanup complete for runtime {self._runtime_id}"
+                )
+
+    def close(self) -> None:
+        """
+        Explicitly close the runtime and clean up resources.
+
+        This method should be called when you're done with the runtime instance,
+        especially in long-running applications. It closes the persistent event
+        loop and releases all associated resources, including:
+        - Event loop
+        - Pending async tasks
+        - Connection pools (indirectly, via loop closure)
+
+        Usage Patterns:
+
+            Pattern 1 - Try/Finally (Explicit Control):
+                >>> runtime = LocalRuntime()
+                >>> try:
+                ...     results, run_id = runtime.execute(workflow)
+                ... finally:
+                ...     runtime.close()  # Always clean up
+
+            Pattern 2 - Long-Running Service:
+                >>> class MyService:
+                ...     def __init__(self):
+                ...         self.runtime = LocalRuntime()
+                ...     def shutdown(self):
+                ...         self.runtime.close()
+
+            Pattern 3 - Context Manager (Recommended):
+                >>> with LocalRuntime() as runtime:
+                ...     results = runtime.execute(workflow)
+                # Automatic cleanup (close() called by __exit__)
+
+        Note:
+            After calling close(), the runtime can still be used - a new event loop
+            will be created automatically on the next execute() call. However, for
+            best practices, create a new runtime instance instead of reusing after close().
+
+        Thread Safety:
+            Safe to call from any thread. Protected by internal lock.
+
+        Idempotency:
+            Safe to call multiple times. Subsequent calls are no-ops.
+
+        Examples:
+            >>> runtime = LocalRuntime()
+            >>> runtime.execute(workflow1)
+            >>> runtime.close()                    # Clean up
+            >>> runtime.execute(workflow2)         # New loop created (OK but not recommended)
+            >>> runtime.close()                    # Safe to call again
+
+        See Also:
+            - __enter__, __exit__: Context manager support
+            - _cleanup_event_loop: Internal cleanup implementation
+        """
+        if self.debug:
+            logger.debug(f"Explicit close() called for runtime {self._runtime_id}")
+
+        self._cleanup_event_loop()
+
+    def __enter__(self) -> "LocalRuntime":
+        """
+        Enter context manager, ensuring event loop is created.
+
+        This method is called when entering a 'with' statement. It:
+        1. Marks the runtime as context-managed
+        2. Eagerly creates the persistent event loop
+        3. Returns self for with-statement binding
+
+        Usage:
+            >>> with LocalRuntime() as runtime:
+            ...     results, run_id = runtime.execute(workflow1)
+            ...     results2, run_id2 = runtime.execute(workflow2)  # Same loop!
+            # Automatic cleanup on exit (__exit__ called)
+
+        Context Management Benefits:
+            - Automatic cleanup (even on exceptions)
+            - Clear resource lifetime
+            - No atexit fallback needed
+            - Pythonic and explicit
+
+        Returns:
+            Self for with-statement binding
+
+        Examples:
+            >>> with LocalRuntime(debug=True, enable_cycles=True) as runtime:
+            ...     for workflow in workflow_list:
+            ...         results, run_id = runtime.execute(workflow)
+            # All workflows share same event loop, then cleanup
+
+        Note:
+            The event loop is created eagerly in __enter__, not lazily in execute().
+            This ensures consistent behavior regardless of execution paths.
+
+        See Also:
+            - __exit__: Cleanup counterpart
+            - close(): Explicit cleanup without context manager
+        """
+        if self.debug:
+            logger.debug(f"Entering context manager for runtime {self._runtime_id}")
+
+        # Mark as context-managed to prevent atexit registration
+        self._is_context_managed = True
+
+        # Eagerly create event loop
+        self._ensure_event_loop()
+
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[type],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[Any],
+    ) -> bool:
+        """
+        Exit context manager, cleaning up event loop.
+
+        This method is called when exiting a 'with' statement. It:
+        1. Cleans up the persistent event loop
+        2. Resets context-managed flag
+        3. Returns False to propagate exceptions
+
+        Args:
+            exc_type: Exception type if exception occurred in with-block
+            exc_val: Exception value if exception occurred
+            exc_tb: Exception traceback if exception occurred
+
+        Returns:
+            False (do not suppress exceptions)
+
+        Exception Handling:
+            This method does NOT suppress exceptions from the with-block.
+            If an exception occurs during workflow execution, it will be
+            propagated AFTER cleanup completes.
+
+        Examples:
+            >>> with LocalRuntime() as runtime:
+            ...     results = runtime.execute(workflow)
+            ...     raise ValueError("Test")  # Exception raised
+            # __exit__ called with exc_type=ValueError
+            # Cleanup happens, then ValueError propagated
+
+        Note:
+            Cleanup happens even if an exception occurred. The event loop
+            is guaranteed to be cleaned up regardless of execution success.
+
+        See Also:
+            - __enter__: Entry counterpart
+            - _cleanup_event_loop: Actual cleanup implementation
+        """
+        if self.debug:
+            logger.debug(
+                f"Exiting context manager for runtime {self._runtime_id} "
+                f"(exception: {exc_type.__name__ if exc_type else 'None'})"
+            )
+
+        # Clean up event loop
+        self._cleanup_event_loop()
+
+        # Reset context-managed flag
+        self._is_context_managed = False
+
+        # Don't suppress exceptions
+        return False
 
     def _execute_sync(
         self,
@@ -954,29 +1373,12 @@ class LocalRuntime:
                     self.logger.warning(f"Failed to create task run: {e}")
                     # Continue without tracking
 
-            # Check for cyclic workflows and delegate accordingly
+            # Check for cyclic workflows and delegate to CycleExecutionMixin
             if self.enable_cycles and workflow.has_cycles():
-                self.logger.info(
-                    "Cyclic workflow detected, using CyclicWorkflowExecutor"
+                # Delegate to CycleExecutionMixin (Phase 3 integration)
+                results, run_id = self._execute_cyclic_workflow(
+                    workflow, processed_parameters, task_manager, run_id
                 )
-                # Use cyclic executor for workflows with cycles
-                try:
-                    # Pass run_id and runtime instance to cyclic executor for enterprise features
-                    cyclic_results, cyclic_run_id = self.cyclic_executor.execute(
-                        workflow,
-                        processed_parameters,
-                        task_manager,
-                        run_id,
-                        runtime=self,
-                    )
-                    results = cyclic_results
-                    # Update run_id if task manager is being used
-                    if not run_id:
-                        run_id = cyclic_run_id
-                except Exception as e:
-                    raise RuntimeExecutionError(
-                        f"Cyclic workflow execution failed: {e}"
-                    ) from e
             elif (
                 self.conditional_execution == "skip_branches"
                 and self._has_conditional_patterns(workflow)
@@ -1293,7 +1695,7 @@ class LocalRuntime:
                     node_id=node_id,
                     node_instance=node_instance,
                     node_outputs=node_outputs,
-                    parameters=parameters.get(node_id, {}),
+                    parameters=parameters,  # Pass full dict - filtering happens inside
                 )
 
                 # CRITICAL FIX: DO NOT modify node_instance.config with runtime parameters!
@@ -1302,21 +1704,17 @@ class LocalRuntime:
                 # Runtime parameters are already properly merged in inputs and passed to execute().
                 # Bug report: PythonCodeNode Variable Persistence (P0)
 
-                # ENTERPRISE PARAMETER INJECTION FIX: Injected parameters should override connection inputs
-                # This ensures workflow parameters take precedence over connection inputs for the same parameter names
-                injected_params = parameters.get(node_id, {})
-                if injected_params:
-                    inputs.update(injected_params)
-                    if self.debug:
-                        self.logger.debug(
-                            f"Applied parameter injections for {node_id}: {list(injected_params.keys())}"
-                        )
+                # Parameter filtering now handled inside _prepare_node_inputs() to prevent
+                # cross-node parameter leaks while maintaining proper scoping
 
                 if self.debug:
                     self.logger.debug(f"Node {node_id} inputs: {inputs}")
 
                 # CONDITIONAL EXECUTION: Skip nodes that only receive None inputs from conditional routing
-                if self._should_skip_conditional_node(workflow, node_id, inputs):
+                # Uses shared mixin method (ConditionalExecutionMixin._should_skip_conditional_node)
+                if self._should_skip_conditional_node(
+                    workflow, node_id, inputs, self._current_results
+                ):
                     if self.debug:
                         self.logger.debug(
                             f"DEBUG: Skipping {node_id} - inputs: {inputs}"
@@ -1664,8 +2062,40 @@ class LocalRuntime:
                         f"  No outputs found for source node {source_node_id}"
                     )
 
-        # Apply parameter overrides
-        inputs.update(parameters)
+        # Apply parameter overrides with proper scoping
+        #
+        # After _process_workflow_parameters(), parameters are in node-specific format:
+        # {"node_id": {node_params}, ...}
+        #
+        # For backward compatibility, we apply parameter entries based on node relevance:
+        # - If node_id in parameters: Unwrap and include its specific params
+        # - Also include any non-node-ID keys (workflow-level params)
+        #
+        # This prevents node-specific parameters from leaking across nodes while
+        # maintaining the format nodes expect.
+
+        if parameters:
+            node_ids_in_graph = (
+                set(workflow.graph.nodes()) if hasattr(workflow, "graph") else set()
+            )
+
+            # Build filtered parameters for this node
+            filtered_params = {}
+            for key, value in parameters.items():
+                if key == node_id:
+                    # This node's specific parameters - unwrap the dict
+                    if isinstance(value, dict):
+                        filtered_params.update(value)
+                    else:
+                        # Shouldn't happen, but be defensive
+                        filtered_params[key] = value
+                elif key not in node_ids_in_graph:
+                    # Global parameter (not a node ID) - include directly
+                    filtered_params[key] = value
+                # else: key is another node's ID - skip it
+
+            # Apply the filtered parameters
+            inputs.update(filtered_params)
 
         # Connection parameter validation (TODO-121) with enhanced error messages and metrics
         if self.connection_validation != "off":
@@ -1893,132 +2323,10 @@ class LocalRuntime:
         metrics_collector = get_metrics_collector()
         metrics_collector.reset_metrics()
 
-    def _should_skip_conditional_node(
-        self, workflow: Workflow, node_id: str, inputs: dict[str, Any]
-    ) -> bool:
-        """Determine if a node should be skipped due to conditional routing.
-
-        A node should be skipped if:
-        1. It has incoming connections from conditional nodes (like SwitchNode)
-        2. All of its connected inputs are None
-        3. It has no node-level configuration parameters that would make it run independently
-
-        Args:
-            workflow: The workflow being executed.
-            node_id: Node ID to check.
-            inputs: Prepared inputs for the node.
-
-        Returns:
-            True if the node should be skipped, False otherwise.
-        """
-        # Get all incoming edges for this node
-        incoming_edges = list(workflow.graph.in_edges(node_id, data=True))
-
-        # If the node has no incoming connections, don't skip it
-        # (it might be a source node or have configuration parameters)
-        if not incoming_edges:
-            return False
-
-        # Check for conditional inputs and analyze the nature of the data
-        has_conditional_inputs = False
-        has_non_none_connected_input = False
-
-        for source_node_id, _, edge_data in incoming_edges:
-            source_node = workflow._node_instances.get(source_node_id)
-            mapping = edge_data.get("mapping", {})
-
-            # Check if this edge provides any non-None inputs
-            for source_key, target_key in mapping.items():
-                if target_key in inputs and inputs[target_key] is not None:
-                    has_non_none_connected_input = True
-
-            # Direct connection from SwitchNode
-            if source_node and source_node.__class__.__name__ in ["SwitchNode"]:
-                has_conditional_inputs = True
-            # Transitive dependency: source node was skipped due to conditional routing
-            elif (
-                hasattr(self, "_current_results")
-                and source_node_id in self._current_results
-            ):
-                if self._current_results[source_node_id] is None:
-                    has_conditional_inputs = True
-
-        # If no conditional inputs, don't skip
-        if not has_conditional_inputs:
-            return False
-
-        # If we have conditional inputs but also have non-None data, don't skip
-        # This handles mixed scenarios where some inputs are skipped but others provide data
-        if has_non_none_connected_input:
-            return False
-
-        # Get the node instance to check for configuration parameters
-        node_instance = workflow._node_instances.get(node_id)
-        if not node_instance:
-            return False
-
-        # Check if the node has configuration parameters that would make it run independently
-        # (excluding standard parameters and None values)
-        node_config = getattr(node_instance, "config", {})
-        significant_config = {
-            k: v
-            for k, v in node_config.items()
-            if k not in ["metadata", "name", "id"] and v is not None
-        }
-
-        # If the node has significant configuration, it might still be valuable to run
-        if significant_config:
-            # Check if any connected inputs have actual data (not None)
-            connected_inputs = {}
-            for _, _, edge_data in incoming_edges:
-                mapping = edge_data.get("mapping", {})
-                for source_key, target_key in mapping.items():
-                    if target_key in inputs:
-                        connected_inputs[target_key] = inputs[target_key]
-
-            # If all connected inputs are None but node has config, still skip
-            # The user can configure the node to run with default values if needed
-            if all(v is None for v in connected_inputs.values()):
-                return True
-
-        # Check if all connected inputs are None
-        # This is the main condition for conditional routing
-        has_non_none_input = False
-
-        # Count total connected inputs and None inputs from conditional sources
-        total_connected_inputs = 0
-        none_conditional_inputs = 0
-
-        for source_node_id, _, edge_data in incoming_edges:
-            mapping = edge_data.get("mapping", {})
-            for source_key, target_key in mapping.items():
-                if target_key in inputs:
-                    total_connected_inputs += 1
-                    if inputs[target_key] is not None:
-                        has_non_none_input = True
-                    else:
-                        # Check if this None input came from conditional routing
-                        source_node = workflow._node_instances.get(source_node_id)
-                        is_from_conditional = (
-                            source_node
-                            and source_node.__class__.__name__ in ["SwitchNode"]
-                        ) or (
-                            hasattr(self, "_current_results")
-                            and source_node_id in self._current_results
-                            and self._current_results[source_node_id] is None
-                        )
-                        if is_from_conditional:
-                            none_conditional_inputs += 1
-
-        # Skip the node only if ALL connected inputs are None AND from conditional routing
-        # This means nodes with mixed inputs (some None from conditional, some real data) should still execute
-        if (
-            total_connected_inputs > 0
-            and none_conditional_inputs == total_connected_inputs
-        ):
-            return True
-
-        return False
+    # NOTE: _should_skip_conditional_node() is now provided by ConditionalExecutionMixin
+    # The previous LocalRuntime override (127 lines) has been moved to the mixin as the canonical implementation
+    # Both LocalRuntime and AsyncLocalRuntime now use the shared mixin version for feature parity
+    # See: src/kailash/runtime/mixins/conditional_execution.py:299
 
     def _should_stop_on_error(self, workflow: Workflow, node_id: str) -> bool:
         """Determine if execution should stop when a node fails.
@@ -2050,73 +2358,6 @@ class LocalRuntime:
         # For now, stop if the failed node has dependents
         # Future: implement configurable error handling policies
         return has_dependents
-
-    def validate_workflow(self, workflow: Workflow) -> list[str]:
-        """Validate a workflow before execution.
-
-        Args:
-            workflow: Workflow to validate
-
-        Returns:
-            List of validation warnings (empty if valid)
-
-        Raises:
-            WorkflowValidationError: If workflow is invalid
-        """
-        warnings = []
-
-        try:
-            workflow.validate()
-        except WorkflowValidationError:
-            # Re-raise validation errors
-            raise
-        except Exception as e:
-            raise WorkflowValidationError(f"Workflow validation failed: {e}") from e
-
-        # Check for disconnected nodes
-        for node_id in workflow.graph.nodes():
-            if (
-                workflow.graph.in_degree(node_id) == 0
-                and workflow.graph.out_degree(node_id) == 0
-                and len(workflow.graph.nodes()) > 1
-            ):
-                warnings.append(f"Node '{node_id}' is disconnected from the workflow")
-
-        # Check for missing required parameters
-        for node_id, node_instance in workflow._node_instances.items():
-            try:
-                params = node_instance.get_parameters()
-            except Exception as e:
-                warnings.append(f"Failed to get parameters for node '{node_id}': {e}")
-                continue
-
-            for param_name, param_def in params.items():
-                if param_def.required:
-                    # Check if provided in config or connected
-                    if param_name not in node_instance.config:
-                        # Check if connected from another node
-                        incoming_params = set()
-                        for _, _, data in workflow.graph.in_edges(node_id, data=True):
-                            mapping = data.get("mapping", {})
-                            incoming_params.update(mapping.values())
-
-                        if (
-                            param_name not in incoming_params
-                            and param_def.default is None
-                        ):
-                            warnings.append(
-                                f"Node '{node_id}' missing required parameter '{param_name}' "
-                                f"(no default value provided)"
-                            )
-
-        # Check for potential performance issues
-        if len(workflow.graph.nodes()) > 100:
-            warnings.append(
-                f"Large workflow with {len(workflow.graph.nodes())} nodes "
-                f"may have performance implications"
-            )
-
-        return warnings
 
     # Enterprise Feature Helper Methods
 
@@ -2622,166 +2863,6 @@ class LocalRuntime:
         # Default to workflow-level format
         return False
 
-    def _validate_connection_contracts(
-        self,
-        workflow: Workflow,
-        target_node_id: str,
-        target_inputs: dict[str, Any],
-        node_outputs: dict[str, dict[str, Any]],
-    ) -> list[dict[str, str]]:
-        """
-        Validate connection contracts for a target node.
-
-        Args:
-            workflow: The workflow being executed
-            target_node_id: ID of the target node
-            target_inputs: Inputs being passed to the target node
-            node_outputs: Outputs from all previously executed nodes
-
-        Returns:
-            List of contract violations (empty if all valid)
-        """
-        violations = []
-
-        # Get connection contracts from workflow metadata
-        connection_contracts = workflow.metadata.get("connection_contracts", {})
-        if not connection_contracts:
-            return violations  # No contracts to validate
-
-        # Create contract validator
-        validator = ContractValidator()
-
-        # Find all connections targeting this node
-        for connection in workflow.connections:
-            if connection.target_node == target_node_id:
-                connection_id = f"{connection.source_node}.{connection.source_output} → {connection.target_node}.{connection.target_input}"
-
-                # Check if this connection has a contract
-                if connection_id in connection_contracts:
-                    contract_dict = connection_contracts[connection_id]
-
-                    # Reconstruct contract from dictionary
-                    contract = ConnectionContract.from_dict(contract_dict)
-
-                    # Get source data from node outputs
-                    source_data = None
-                    if connection.source_node in node_outputs:
-                        source_outputs = node_outputs[connection.source_node]
-                        if connection.source_output in source_outputs:
-                            source_data = source_outputs[connection.source_output]
-
-                    # Get target data from inputs
-                    target_data = target_inputs.get(connection.target_input)
-
-                    # Validate the connection if we have data
-                    if source_data is not None or target_data is not None:
-                        is_valid, errors = validator.validate_connection(
-                            contract, source_data, target_data
-                        )
-
-                        if not is_valid:
-                            violations.append(
-                                {
-                                    "connection": connection_id,
-                                    "contract": contract.name,
-                                    "error": "; ".join(errors),
-                                }
-                            )
-
-        return violations
-
-    def _has_conditional_patterns(self, workflow: Workflow) -> bool:
-        """
-        Check if workflow has conditional patterns (SwitchNodes) and is suitable for conditional execution.
-
-        CRITICAL: Only enable conditional execution for DAG workflows.
-        Cyclic workflows must use normal execution to preserve cycle safety mechanisms.
-
-        Args:
-            workflow: Workflow to check
-
-        Returns:
-            True if workflow contains SwitchNode instances AND is a DAG (no cycles)
-        """
-        try:
-            if not hasattr(workflow, "graph") or workflow.graph is None:
-                return False
-
-            # CRITICAL: Check for cycles first - conditional execution is only safe for DAGs
-            if self._workflow_has_cycles(workflow):
-                self.logger.info(
-                    "Cyclic workflow detected - using normal execution to preserve cycle safety mechanisms"
-                )
-                return False
-
-            # Import here to avoid circular dependencies
-            from kailash.analysis import ConditionalBranchAnalyzer
-
-            analyzer = ConditionalBranchAnalyzer(workflow)
-            switch_nodes = analyzer._find_switch_nodes()
-
-            has_switches = len(switch_nodes) > 0
-
-            if has_switches:
-                self.logger.debug(
-                    f"Found {len(switch_nodes)} SwitchNodes in DAG workflow - eligible for conditional execution"
-                )
-            else:
-                self.logger.debug("No SwitchNodes found - using normal execution")
-
-            return has_switches
-
-        except Exception as e:
-            self.logger.warning(f"Error checking conditional patterns: {e}")
-            return False
-
-    def _workflow_has_cycles(self, workflow: Workflow) -> bool:
-        """
-        Detect if workflow has cycles using multiple detection methods.
-
-        Args:
-            workflow: Workflow to check
-
-        Returns:
-            True if workflow contains any cycles
-        """
-        try:
-            # Method 1: Check for explicitly marked cycle connections
-            if hasattr(workflow, "has_cycles") and callable(workflow.has_cycles):
-                if workflow.has_cycles():
-                    self.logger.debug("Detected cycles via workflow.has_cycles()")
-                    return True
-
-            # Method 2: Check for cycle edges in connections
-            if hasattr(workflow, "connections"):
-                for connection in workflow.connections:
-                    if hasattr(connection, "cycle") and connection.cycle:
-                        self.logger.debug("Detected cycle via connection.cycle flag")
-                        return True
-
-            # Method 3: NetworkX graph cycle detection
-            if hasattr(workflow, "graph") and workflow.graph is not None:
-                import networkx as nx
-
-                is_dag = nx.is_directed_acyclic_graph(workflow.graph)
-                if not is_dag:
-                    self.logger.debug("Detected cycles via NetworkX graph analysis")
-                    return True
-
-            # Method 4: Check graph edges for cycle metadata
-            if hasattr(workflow, "graph") and workflow.graph is not None:
-                for u, v, edge_data in workflow.graph.edges(data=True):
-                    if edge_data.get("cycle", False):
-                        self.logger.debug("Detected cycle via edge metadata")
-                        return True
-
-            return False
-
-        except Exception as e:
-            self.logger.warning(f"Error detecting cycles: {e}")
-            # On error, assume cycles exist for safety
-            return True
-
     async def _execute_conditional_approach(
         self,
         workflow: Workflow,
@@ -2871,11 +2952,13 @@ class LocalRuntime:
                     f"Conditional execution results invalid: {fallback_reason}"
                 )
 
-            # Performance tracking
-            self._track_conditional_execution_performance(results, workflow)
-
             # Record execution metrics for performance monitoring
             execution_time = time.time() - start_time
+
+            # Performance tracking (mixin signature: workflow, results, duration)
+            self._track_conditional_execution_performance(
+                workflow, results, execution_time
+            )
             nodes_executed = len(results)
             nodes_skipped = total_nodes - nodes_executed
 
@@ -2906,8 +2989,13 @@ class LocalRuntime:
             if fallback_reason:
                 self.logger.warning(f"Fallback reason: {fallback_reason}")
 
-            # Log performance impact before fallback
-            self._log_conditional_execution_failure(e, workflow, len(results))
+            # Log performance impact before fallback (mixin signature: workflow, error, context)
+            context = {
+                "nodes_completed": len(results),
+                "total_nodes": total_nodes,
+                "fallback_reason": fallback_reason or "Unknown",
+            }
+            self._log_conditional_execution_failure(workflow, e, context)
 
             # Enhanced fallback with detailed logging
             self.logger.warning(
@@ -2922,8 +3010,8 @@ class LocalRuntime:
                     task_manager=task_manager,
                 )
 
-                # Track fallback usage for monitoring
-                self._track_fallback_usage(workflow, str(e), fallback_reason)
+                # Track fallback usage for monitoring (mixin signature: workflow, reason)
+                self._track_fallback_usage(workflow, fallback_reason or str(e))
 
                 return fallback_results
 
@@ -3523,330 +3611,6 @@ class LocalRuntime:
         if self._retry_policy_engine:
             return self._retry_policy_engine.get_configuration()
         return None
-
-    def _should_use_hierarchical_execution(
-        self, workflow: Workflow, switch_node_ids: List[str]
-    ) -> bool:
-        """
-        Determine if hierarchical switch execution should be used.
-
-        Args:
-            workflow: The workflow to analyze
-            switch_node_ids: List of switch node IDs
-
-        Returns:
-            True if hierarchical execution would be beneficial
-        """
-        # Use hierarchical execution if:
-        # 1. There are multiple switches
-        if len(switch_node_ids) < 2:
-            return False
-
-        # 2. Check if switches have dependencies on each other
-        from kailash.analysis import ConditionalBranchAnalyzer
-
-        analyzer = ConditionalBranchAnalyzer(workflow)
-        hierarchy_info = analyzer.analyze_switch_hierarchies(switch_node_ids)
-
-        # Use hierarchical if there are multiple execution layers
-        execution_layers = hierarchy_info.get("execution_layers", [])
-        if len(execution_layers) > 1:
-            self.logger.debug(
-                f"Detected {len(execution_layers)} execution layers in switch hierarchy"
-            )
-            return True
-
-        # Use hierarchical if there are dependency chains
-        dependency_chains = hierarchy_info.get("dependency_chains", [])
-        if dependency_chains and any(len(chain) > 1 for chain in dependency_chains):
-            self.logger.debug("Detected dependency chains in switch hierarchy")
-            return True
-
-        return False
-
-    def _validate_conditional_execution_prerequisites(self, workflow: Workflow) -> bool:
-        """
-        Validate that workflow meets prerequisites for conditional execution.
-
-        Args:
-            workflow: Workflow to validate
-
-        Returns:
-            True if prerequisites are met, False otherwise
-        """
-        try:
-            # Check if workflow has at least one SwitchNode
-            from kailash.analysis import ConditionalBranchAnalyzer
-
-            analyzer = ConditionalBranchAnalyzer(workflow)
-            switch_nodes = analyzer._find_switch_nodes()
-
-            if not switch_nodes:
-                self.logger.debug(
-                    "No SwitchNodes found - cannot use conditional execution"
-                )
-                return False
-
-            # Check if workflow is too complex for conditional execution
-            if len(workflow.graph.nodes) > 100:  # Configurable threshold
-                self.logger.warning(
-                    "Workflow too large for conditional execution optimization"
-                )
-                return False
-
-            # Validate that all SwitchNodes have proper outputs
-            for switch_id in switch_nodes:
-                node_data = workflow.graph.nodes[switch_id]
-                node_instance = node_data.get("node") or node_data.get("instance")
-
-                if node_instance is None:
-                    self.logger.warning(f"SwitchNode {switch_id} has no instance")
-                    return False
-
-                # Check if the SwitchNode has proper output configuration
-                # SwitchNode might store condition_field in different ways
-                has_condition = (
-                    hasattr(node_instance, "condition_field")
-                    or hasattr(node_instance, "_condition_field")
-                    or (
-                        hasattr(node_instance, "parameters")
-                        and "condition_field"
-                        in getattr(node_instance, "parameters", {})
-                    )
-                    or "SwitchNode"
-                    in str(type(node_instance))  # Type-based validation as fallback
-                )
-
-                if not has_condition:
-                    self.logger.debug(
-                        f"SwitchNode {switch_id} condition validation unclear - allowing execution"
-                    )
-                    # Don't fail here - let conditional execution attempt and fall back if needed
-
-            return True
-
-        except Exception as e:
-            self.logger.warning(
-                f"Error validating conditional execution prerequisites: {e}"
-            )
-            return False
-
-    def _validate_switch_results(
-        self, switch_results: dict[str, dict[str, Any]]
-    ) -> bool:
-        """
-        Validate that switch results are valid for conditional execution.
-
-        Args:
-            switch_results: Results from SwitchNode execution
-
-        Returns:
-            True if results are valid, False otherwise
-        """
-        try:
-            if not switch_results:
-                self.logger.debug("No switch results to validate")
-                return True
-
-            for switch_id, result in switch_results.items():
-                # Check for execution errors
-                if isinstance(result, dict) and result.get("failed"):
-                    self.logger.warning(
-                        f"SwitchNode {switch_id} failed during execution"
-                    )
-                    return False
-
-                # Validate result structure
-                if not isinstance(result, dict):
-                    self.logger.warning(
-                        f"SwitchNode {switch_id} returned invalid result type: {type(result)}"
-                    )
-                    return False
-
-                # Check for required output keys (at least one branch should be present)
-                has_output = any(
-                    key in result for key in ["true_output", "false_output"]
-                )
-                if not has_output:
-                    self.logger.warning(
-                        f"SwitchNode {switch_id} missing required output keys"
-                    )
-                    return False
-
-            return True
-
-        except Exception as e:
-            self.logger.warning(f"Error validating switch results: {e}")
-            return False
-
-    def _validate_conditional_execution_results(
-        self, results: dict[str, dict[str, Any]], workflow: Workflow
-    ) -> bool:
-        """
-        Validate final results from conditional execution.
-
-        Args:
-            results: Execution results
-            workflow: Original workflow
-
-        Returns:
-            True if results are valid, False otherwise
-        """
-        try:
-            # Check that at least some nodes executed
-            if not results:
-                self.logger.warning("No results from conditional execution")
-                return False
-
-            # Validate that critical nodes (if any) were executed
-            # This could be expanded based on workflow metadata
-            total_nodes = len(workflow.graph.nodes)
-            executed_nodes = len(results)
-
-            # If we executed less than 30% of nodes, might be an issue
-            if executed_nodes < (total_nodes * 0.3):
-                self.logger.warning(
-                    f"Conditional execution only ran {executed_nodes}/{total_nodes} nodes - might indicate an issue"
-                )
-                # Don't fail here, but log for monitoring
-
-            # Check for excessive failures
-            failed_nodes = sum(
-                1
-                for result in results.values()
-                if isinstance(result, dict) and result.get("failed")
-            )
-
-            if failed_nodes > (executed_nodes * 0.5):
-                self.logger.warning(
-                    f"Too many node failures: {failed_nodes}/{executed_nodes}"
-                )
-                return False
-
-            return True
-
-        except Exception as e:
-            self.logger.warning(f"Error validating conditional execution results: {e}")
-            return False
-
-    def _track_conditional_execution_performance(
-        self, results: dict[str, dict[str, Any]], workflow: Workflow
-    ):
-        """
-        Track performance metrics for conditional execution.
-
-        Args:
-            results: Execution results
-            workflow: Original workflow
-        """
-        try:
-            total_nodes = len(workflow.graph.nodes)
-            executed_nodes = len(results)
-            skipped_nodes = total_nodes - executed_nodes
-
-            # Log performance metrics
-            if skipped_nodes > 0:
-                performance_improvement = (skipped_nodes / total_nodes) * 100
-                self.logger.info(
-                    f"Conditional execution performance: {performance_improvement:.1f}% reduction in executed nodes ({skipped_nodes}/{total_nodes} skipped)"
-                )
-
-            # Track for monitoring (could be sent to metrics system)
-            if hasattr(self, "_performance_metrics"):
-                self._performance_metrics["conditional_execution"] = {
-                    "total_nodes": total_nodes,
-                    "executed_nodes": executed_nodes,
-                    "skipped_nodes": skipped_nodes,
-                    "performance_improvement_percent": (
-                        (skipped_nodes / total_nodes) * 100 if total_nodes > 0 else 0
-                    ),
-                }
-
-        except Exception as e:
-            self.logger.warning(
-                f"Error tracking conditional execution performance: {e}"
-            )
-
-    def _log_conditional_execution_failure(
-        self, error: Exception, workflow: Workflow, nodes_completed: int
-    ):
-        """
-        Log detailed information about conditional execution failure.
-
-        Args:
-            error: Exception that caused the failure
-            workflow: Workflow that failed
-            nodes_completed: Number of nodes that completed before failure
-        """
-        try:
-            total_nodes = len(workflow.graph.nodes)
-
-            self.logger.error(
-                f"Conditional execution failed after {nodes_completed}/{total_nodes} nodes"
-            )
-            self.logger.error(f"Error type: {type(error).__name__}")
-            self.logger.error(f"Error message: {str(error)}")
-
-            # Log workflow characteristics for debugging
-            from kailash.analysis import ConditionalBranchAnalyzer
-
-            analyzer = ConditionalBranchAnalyzer(workflow)
-            switch_nodes = analyzer._find_switch_nodes()
-
-            self.logger.debug(
-                f"Workflow characteristics: {len(switch_nodes)} switches, {total_nodes} total nodes"
-            )
-
-        except Exception as log_error:
-            self.logger.warning(
-                f"Error logging conditional execution failure: {log_error}"
-            )
-
-    def _track_fallback_usage(
-        self, workflow: Workflow, error_message: str, fallback_reason: str
-    ):
-        """
-        Track fallback usage for monitoring and optimization.
-
-        Args:
-            workflow: Workflow that required fallback
-            error_message: Error that triggered fallback
-            fallback_reason: Reason for fallback
-        """
-        try:
-            import time
-
-            # Log fallback usage
-            self.logger.info(
-                f"Fallback used for workflow '{workflow.name}': {fallback_reason}"
-            )
-
-            # Track for monitoring (could be sent to metrics system)
-            if hasattr(self, "_fallback_metrics"):
-                if "fallback_usage" not in self._fallback_metrics:
-                    self._fallback_metrics["fallback_usage"] = []
-
-                self._fallback_metrics["fallback_usage"].append(
-                    {
-                        "workflow_name": workflow.name,
-                        "workflow_id": workflow.workflow_id,
-                        "error_message": error_message,
-                        "fallback_reason": fallback_reason,
-                        "timestamp": time.time(),
-                    }
-                )
-
-            # Limit tracking history to prevent memory growth
-            if (
-                hasattr(self, "_fallback_metrics")
-                and len(self._fallback_metrics.get("fallback_usage", [])) > 100
-            ):
-                self._fallback_metrics["fallback_usage"] = self._fallback_metrics[
-                    "fallback_usage"
-                ][-50:]
-
-        except Exception as e:
-            self.logger.warning(f"Error tracking fallback usage: {e}")
 
     # ===== PHASE 5: PRODUCTION READINESS =====
 

@@ -58,8 +58,8 @@ result = {
             "source", "result.password_hash", "validator", "password_hash"
         )
 
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(workflow.build())
 
         # Verify the hash was preserved
         output_hash = results["validator"]["result"]["hash_value"]
@@ -103,8 +103,8 @@ result = {
 
         workflow.add_connection("source", "result.data", "processor", "data")
 
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(workflow.build())
 
         assert (
             results["processor"]["result"]["output"] == test_string
@@ -139,8 +139,8 @@ result = {
 
         workflow.add_connection("source", "result.price", "parser", "price")
 
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(workflow.build())
 
         assert (
             results["parser"]["result"]["original"] == price
@@ -182,8 +182,8 @@ result = {
 
         workflow.add_connection("source", "result.pattern", "validator", "pattern")
 
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(workflow.build())
 
         assert (
             results["validator"]["result"]["pattern"] == regex_pattern
@@ -227,8 +227,8 @@ result = {
 
         workflow.add_connection("source", "result.hash", "validator", "hash_value")
 
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, _ = runtime.execute(workflow.build())
 
         assert (
             results["validator"]["result"]["hash"] == argon2_hash
@@ -276,17 +276,17 @@ result = {
 
             workflow.add_connection("source", "result.data", "validator", "data")
 
-            runtime = LocalRuntime()
-            results, _ = runtime.execute(workflow.build())
+            with LocalRuntime() as runtime:
+                results, _ = runtime.execute(workflow.build())
 
-            assert results["validator"]["result"]["output"] == test_str, (
-                f"String '{name}' corrupted!\n"
-                f"Expected: {test_str}\n"
-                f"Got:      {results['validator']['result']['output']}\n"
-            )
+                assert results["validator"]["result"]["output"] == test_str, (
+                    f"String '{name}' corrupted!\n"
+                    f"Expected: {test_str}\n"
+                    f"Got:      {results['validator']['result']['output']}\n"
+                )
 
-            assert results["validator"]["result"]["length"] == len(test_str), (
-                f"String '{name}' length mismatch!\n"
-                f"Expected: {len(test_str)}\n"
-                f"Got:      {results['validator']['result']['length']}\n"
-            )
+                assert results["validator"]["result"]["length"] == len(test_str), (
+                    f"String '{name}' length mismatch!\n"
+                    f"Expected: {len(test_str)}\n"
+                    f"Got:      {results['validator']['result']['length']}\n"
+                )

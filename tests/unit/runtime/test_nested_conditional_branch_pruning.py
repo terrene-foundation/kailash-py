@@ -342,18 +342,19 @@ class TestNestedConditionalBranchPruning:
         # Get the direct target of region_switch true_output
         true_output_targets = region_switch_branches["true_output"]
 
-        # Should include us_premium_processor and its downstream nodes
+        # Should include ONLY direct connections (not downstream nodes)
+        # This prevents nested conditional bugs where both branches execute
         assert "us_premium_processor" in true_output_targets
-        # Should also include aggregator (downstream from us_premium_processor)
-        assert "aggregator" in true_output_targets
+        # Aggregator is NOT in branch_map (it's found via downstream traversal in get_reachable_nodes)
+        assert "aggregator" not in true_output_targets
 
         # Get the direct target of region_switch false_output
         false_output_targets = region_switch_branches["false_output"]
 
-        # Should include intl_premium_processor and its downstream nodes
+        # Should include ONLY direct connections (not downstream nodes)
         assert "intl_premium_processor" in false_output_targets
-        # Should also include aggregator (downstream from intl_premium_processor)
-        assert "aggregator" in false_output_targets
+        # Aggregator is NOT in branch_map (it's found via downstream traversal in get_reachable_nodes)
+        assert "aggregator" not in false_output_targets
 
     def test_edge_case_no_switch_results(self):
         """Test behavior when no switch results are provided."""

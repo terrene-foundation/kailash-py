@@ -80,11 +80,11 @@ result = {'iteration': iteration, 'value': value}
             return built_workflow
 
         workflow = create_minimal_cyclic_workflow()
-        runtime = LocalRuntime(enable_monitoring=False)
 
         # Execute and measure time
         start_time = time.time()
-        result, run_id = runtime.execute(workflow)
+        with LocalRuntime(enable_monitoring=False) as runtime:
+            result, run_id = runtime.execute(workflow)
         execution_time = time.time() - start_time
 
         print(f"\nExecution time: {execution_time:.3f}s")
@@ -169,10 +169,10 @@ result = {'counter': counter, 'data': data}
             return built_workflow
 
         workflow = create_parameter_test_workflow()
-        runtime = LocalRuntime(enable_monitoring=False)
 
         start_time = time.time()
-        result, run_id = runtime.execute(workflow)
+        with LocalRuntime(enable_monitoring=False) as runtime:
+            result, run_id = runtime.execute(workflow)
         execution_time = time.time() - start_time
 
         print(f"\nParameter test execution time: {execution_time:.3f}s")
@@ -227,14 +227,14 @@ result = {'i': i}
             return built_workflow
 
         workflow = create_performance_workflow()
-        runtime = LocalRuntime(enable_monitoring=False)
 
         # Run multiple times to get average
         times = []
-        for _ in range(5):
-            start = time.time()
-            result, run_id = runtime.execute(workflow)
-            times.append(time.time() - start)
+        with LocalRuntime(enable_monitoring=False) as runtime:
+            for _ in range(5):
+                start = time.time()
+                result, run_id = runtime.execute(workflow)
+                times.append(time.time() - start)
 
         avg_time = sum(times) / len(times)
         max_time = max(times)

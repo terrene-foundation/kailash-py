@@ -20,6 +20,7 @@ Kaizen enables building sophisticated AI agents with:
 
 ## Quick Start
 
+### Basic Agent
 ```python
 from kaizen.base import BaseAgent
 from kaizen.signatures import Signature, InputField, OutputField
@@ -41,6 +42,39 @@ class SummaryAgent(BaseAgent):
 agent = SummaryAgent()
 result = agent(text="Long text here...")
 print(result.summary)
+```
+
+### Pipeline Patterns (Orchestration)
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+# Ensemble: Multi-perspective collaboration
+pipeline = Pipeline.ensemble(
+    agents=[code_expert, data_expert, writing_expert, research_expert],
+    synthesizer=synthesis_agent,
+    discovery_mode="a2a",  # A2A semantic matching
+    top_k=3                # Select top 3 agents
+)
+
+# Execute - automatically selects best agents for task
+result = pipeline.run(task="Analyze codebase", input="repo_path")
+print(result['result'])  # Synthesized result from multiple perspectives
+
+# Router: Intelligent task delegation
+router = Pipeline.router(
+    agents=[code_agent, data_agent, writing_agent],
+    routing_strategy="semantic"  # A2A-based routing
+)
+result = router.run(task="Analyze sales data")  # Routes to data_agent
+
+# Blackboard: Iterative problem-solving
+blackboard = Pipeline.blackboard(
+    agents=[solver, analyzer, optimizer],
+    controller=controller,
+    max_iterations=10,
+    discovery_mode="a2a"
+)
+result = blackboard.run(task="Optimize query", input="slow_query.sql")
 ```
 
 ## Reference Documentation
@@ -78,11 +112,24 @@ For in-depth documentation, see `sdk-users/apps/kaizen/docs/`:
 - **[kaizen-rag-agent](kaizen-rag-agent.md)** - Retrieval-Augmented Generation agents
 - **[kaizen-config-patterns](kaizen-config-patterns.md)** - Agent configuration strategies
 
-### Multi-Agent Systems
+### Multi-Agent Systems & Orchestration
 - **[kaizen-multi-agent-setup](kaizen-multi-agent-setup.md)** - Multi-agent system setup
 - **[kaizen-supervisor-worker](kaizen-supervisor-worker.md)** - Supervisor-worker coordination
 - **[kaizen-a2a-protocol](kaizen-a2a-protocol.md)** - Agent-to-agent communication
 - **[kaizen-shared-memory](kaizen-shared-memory.md)** - Shared memory between agents
+
+**Pipeline Patterns** (9 Composable Patterns):
+- **Ensemble**: Multi-perspective collaboration with A2A discovery + synthesis
+- **Blackboard**: Controller-driven iterative problem-solving
+- **Router** (Meta-Controller): Intelligent task routing via A2A matching
+- **Parallel**: Concurrent execution with aggregation
+- **Sequential**: Linear agent chain
+- **Supervisor-Worker**: Hierarchical coordination
+- **Handoff**: Agent handoff with context transfer
+- **Consensus**: Voting-based decision making
+- **Debate**: Adversarial deliberation
+
+**A2A-Integrated Patterns (4)**: Ensemble, Blackboard, Router, Supervisor-Worker
 
 ### Multimodal Processing
 - **[kaizen-multimodal-orchestration](kaizen-multimodal-orchestration.md)** - Multimodal coordination
@@ -133,13 +180,20 @@ Foundation for all Kaizen agents:
 
 Use Kaizen when you need to:
 - Build AI agents with type-safe interfaces
-- Implement multi-agent systems
+- Implement multi-agent systems with orchestration patterns
 - Process multimodal inputs (vision, audio, text)
 - Create RAG (Retrieval-Augmented Generation) systems
 - Implement chain-of-thought reasoning
-- Build supervisor-worker architectures
+- Build supervisor-worker or ensemble architectures
 - Track costs and performance of AI agents
 - Create production-ready agentic applications
+
+**Use Pipeline Patterns When:**
+- **Ensemble**: Need diverse perspectives synthesized (code review, research, analysis)
+- **Blackboard**: Iterative problem-solving (optimization, debugging, planning)
+- **Router**: Intelligent task delegation to specialists
+- **Parallel**: Bulk processing or voting-based consensus
+- **Sequential**: Linear workflows with dependency chains
 
 ## Integration Patterns
 

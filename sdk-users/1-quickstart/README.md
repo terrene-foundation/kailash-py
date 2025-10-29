@@ -23,7 +23,7 @@ workflow.add_node("PythonCodeNode", "hello", {
 # Execute it
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
-print(results["hello"]["message"])  # "Hello, Kailash!"
+print(results["hello"]["result"]["message"])  # "Hello, Kailash!"
 ```
 
 ### 3. Common Patterns

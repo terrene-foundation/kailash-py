@@ -56,11 +56,10 @@ else:
         cycle.max_iterations(5)
         cycle.build()
 
-        runtime = LocalRuntime()
-
         # This should handle None exit_result gracefully without AttributeError
         try:
-            results, run_id = runtime.execute(built_workflow)
+            with LocalRuntime() as runtime:
+                results, run_id = runtime.execute(built_workflow)
             # If we get here, the fix worked
             assert True
         except AttributeError as e:
@@ -95,10 +94,9 @@ else:
 
         workflow.add_connection("none_source", "result", "consumer", "parameters")
 
-        runtime = LocalRuntime()
-
         # This should not raise 'NoneType' object is not subscriptable
-        results, run_id = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, run_id = runtime.execute(workflow.build())
 
         # Consumer should have received None and handled it
         assert "consumer" in results
@@ -168,10 +166,9 @@ else:
             "conditional_source", "result", "dependent", "parameters"
         )
 
-        runtime = LocalRuntime()
-
         # Should handle None values in node outputs gracefully
-        results, run_id = runtime.execute(workflow.build())
+        with LocalRuntime() as runtime:
+            results, run_id = runtime.execute(workflow.build())
 
         # Dependent node should handle None input
         assert "dependent" in results
@@ -217,10 +214,9 @@ else:
         cycle.max_iterations(3)
         cycle.build()
 
-        runtime = LocalRuntime()
-
         # Should handle malformed edge data/mapping gracefully
-        results, run_id = runtime.execute(built_workflow)
+        with LocalRuntime() as runtime:
+            results, run_id = runtime.execute(built_workflow)
 
         # Processor should have executed and handled various input types
         assert "processor" in results
@@ -269,11 +265,10 @@ else:
         cycle.max_iterations(5)
         cycle.build()
 
-        runtime = LocalRuntime()
-
         # Should handle None results in cycle state updates
         try:
-            results, run_id = runtime.execute(built_workflow)
+            with LocalRuntime() as runtime:
+                results, run_id = runtime.execute(built_workflow)
             # Should complete without errors
             assert True
         except (TypeError, AttributeError) as e:
@@ -341,10 +336,9 @@ else:
         cycle.max_iterations(5)
         cycle.build()
 
-        runtime = LocalRuntime()
-
         # Should handle None results from exit nodes gracefully (mocked)
-        results, run_id = runtime.execute(built_workflow)
+        with LocalRuntime() as runtime:
+            results, run_id = runtime.execute(built_workflow)
 
         # Terminator should have executed and handled termination data
         assert "terminator" in results
