@@ -130,6 +130,51 @@ class CustomNode(Node):
 - **Testing**: Testable parameter contracts
 - **Isolation**: Automatic scoping prevents data leakage
 
+## Parameter Naming (v0.10.3+)
+
+### Using "metadata" as a Parameter Name
+
+You can now use `metadata` as a parameter name in custom nodes:
+
+```python
+class CustomNode(Node):
+    def get_parameters(self):
+        return {
+            "data": NodeParameter(type=str, required=True),
+            "metadata": NodeParameter(
+                type=dict,
+                required=False,
+                default=None,
+                description="User metadata (v0.10.3+)"
+            )
+        }
+
+    def run(self, data: str, metadata: dict = None, **kwargs):
+        # Access user's metadata parameter
+        user_meta = metadata
+
+        # Access node's internal metadata (different from parameter)
+        node_name = self.metadata.name
+        node_desc = self.metadata.description
+
+        return {"data": processed, "metadata": user_meta}
+```
+
+**Two types of metadata:**
+- `metadata` parameter: User-defined metadata dict (your parameter)
+- `self.metadata`: Node's internal metadata object (Core SDK)
+
+### Reserved Names
+
+The only reserved parameter name is `_node_id`:
+
+```python
+def get_parameters(self):
+    return {
+        "_node_id": NodeParameter(...)  # ❌ Reserved - do not use
+    }
+```
+
 ## Common Pitfalls
 
 ### Pitfall 1: Empty Parameter Declaration
