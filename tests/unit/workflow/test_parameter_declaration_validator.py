@@ -64,8 +64,14 @@ class BrokenGetParametersNode(Node):
         # Override the base class initialization to avoid calling get_parameters()
         # during init, so we can test the validation behavior separately
         self.node_id = "test_node"
-        self.metadata = {}
+        # Use _node_metadata directly since metadata is now a property
+        from kailash.nodes.base import NodeMetadata
+
+        self._node_metadata = NodeMetadata(
+            name="BrokenNode", description="", version="1.0.0"
+        )
         self._cached_params = None
+        self.config = {}  # Add config to avoid AttributeError
         # Don't call super().__init__() to avoid parameter validation during construction
 
     def get_parameters(self):
