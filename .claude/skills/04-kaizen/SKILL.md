@@ -22,26 +22,34 @@ Kaizen enables building sophisticated AI agents with:
 
 ### Basic Agent
 ```python
-from kaizen.base import BaseAgent
+from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import Signature, InputField, OutputField
+from dataclasses import dataclass
 
 # Define agent signature (type-safe interface)
 class SummarizeSignature(Signature):
     text: str = InputField(description="Text to summarize")
     summary: str = OutputField(description="Generated summary")
 
+# Define configuration
+@dataclass
+class SummaryConfig:
+    llm_provider: str = "openai"
+    model: str = "gpt-4"
+    temperature: float = 0.7
+
 # Create agent with signature
 class SummaryAgent(BaseAgent):
-    def __init__(self):
+    def __init__(self, config: SummaryConfig):
         super().__init__(
-            signature=SummarizeSignature,
-            instructions="Summarize the input text concisely."
+            config=config,
+            signature=SummarizeSignature()
         )
 
 # Execute
-agent = SummaryAgent()
-result = agent(text="Long text here...")
-print(result.summary)
+agent = SummaryAgent(SummaryConfig())
+result = agent.run(text="Long text here...")
+print(result['summary'])
 ```
 
 ### Pipeline Patterns (Orchestration)
@@ -79,24 +87,22 @@ result = blackboard.run(task="Optimize query", input="slow_query.sql")
 
 ## Reference Documentation
 
-### Comprehensive Guides (sdk-users/)
+### Comprehensive Guides
 
-For in-depth documentation, see `sdk-users/apps/kaizen/docs/`:
+For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 
 **Core Guides:**
-- **[BaseAgent Architecture](../../../sdk-users/apps/kaizen/docs/guides/baseagent-architecture.md)** - Complete unified agent system guide
-- **[Multi-Agent Coordination](../../../sdk-users/apps/kaizen/docs/guides/multi-agent-coordination.md)** - Google A2A protocol, 5 coordination patterns
-- **[Signature Programming](../../../sdk-users/apps/kaizen/docs/guides/signature-programming.md)** - Complete signature system guide
-- **[Control Protocol Tutorial](../../../sdk-users/apps/kaizen/docs/guides/control-protocol-tutorial.md)** - Bidirectional agent ↔ client communication
-- **[Integration Patterns](../../../sdk-users/apps/kaizen/docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP integration
+- **[BaseAgent Architecture](../../../apps/kailash-kaizen/docs/guides/baseagent-architecture.md)** - Complete unified agent system guide
+- **[Multi-Agent Coordination](../../../apps/kailash-kaizen/docs/guides/multi-agent-coordination.md)** - Google A2A protocol, 5 coordination patterns
+- **[Signature Programming](../../../apps/kailash-kaizen/docs/guides/signature-programming.md)** - Complete signature system guide
+- **[Hooks System Guide](../../../apps/kailash-kaizen/docs/guides/hooks-system-guide.md)** - Event-driven observability framework
+- **[Integration Patterns](../../../apps/kailash-kaizen/docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP integration
 
 **Reference Documentation:**
-- **[API Reference](../../../sdk-users/apps/kaizen/docs/reference/api-reference.md)** - Complete API documentation
-- **[Control Protocol API](../../../sdk-users/apps/kaizen/docs/reference/control-protocol-api.md)** - Full control protocol reference
-- **[Memory Patterns Guide](../../../sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md)** - Memory usage patterns
-- **[Strategy Selection Guide](../../../sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md)** - When to use which strategy
-- **[Configuration Guide](../../../sdk-users/apps/kaizen/docs/reference/configuration.md)** - All configuration options
-- **[Troubleshooting](../../../sdk-users/apps/kaizen/docs/reference/troubleshooting.md)** - Common issues and solutions
+- **[API Reference](../../../apps/kailash-kaizen/docs/reference/api-reference.md)** - Complete API documentation
+- **[Hooks System](../../../apps/kailash-kaizen/docs/features/hooks-system.md)** - Lifecycle event hooks reference
+- **[Configuration Guide](../../../apps/kailash-kaizen/docs/reference/configuration.md)** - All configuration options
+- **[Troubleshooting](../../../apps/kailash-kaizen/docs/reference/troubleshooting.md)** - Common issues and solutions
 
 ### Quick Start (Skills)
 - **[kaizen-quickstart-template](kaizen-quickstart-template.md)** - Quick start guide with templates
@@ -137,11 +143,12 @@ For in-depth documentation, see `sdk-users/apps/kaizen/docs/`:
 - **[kaizen-audio-processing](kaizen-audio-processing.md)** - Audio processing agents
 - **[kaizen-multimodal-pitfalls](kaizen-multimodal-pitfalls.md)** - Common pitfalls and solutions
 
-### Advanced Features (v0.2.0+)
-- **[kaizen-control-protocol](kaizen-control-protocol.md)** - **NEW** Bidirectional agent ↔ client communication
-- **[kaizen-tool-calling](kaizen-tool-calling.md)** - **NEW** Autonomous tool execution with approval workflows
-- **[kaizen-memory-system](kaizen-memory-system.md)** - **NEW** Persistent memory, learning, FAQ detection, preference adaptation (v0.5.0+)
-- **[kaizen-checkpoint-resume](kaizen-checkpoint-resume.md)** - **NEW** Checkpoint & resume for long-running agents, failure recovery (v0.5.0+)
+### Advanced Features
+- **[kaizen-control-protocol](kaizen-control-protocol.md)** - Bidirectional agent ↔ client communication
+- **[kaizen-tool-calling](kaizen-tool-calling.md)** - Autonomous tool execution with approval workflows
+- **[kaizen-memory-system](kaizen-memory-system.md)** - Persistent memory, learning, FAQ detection, preference adaptation
+- **[kaizen-checkpoint-resume](kaizen-checkpoint-resume.md)** - Checkpoint & resume for long-running agents, failure recovery
+- **[kaizen-interrupt-mechanism](kaizen-interrupt-mechanism.md)** - Graceful shutdown for autonomous agents, Ctrl+C handling, timeout/budget auto-stop
 - **[kaizen-streaming](kaizen-streaming.md)** - Streaming agent responses
 - **[kaizen-cost-tracking](kaizen-cost-tracking.md)** - Cost monitoring and optimization
 - **[kaizen-ux-helpers](kaizen-ux-helpers.md)** - UX enhancement utilities
@@ -176,12 +183,11 @@ Foundation for all Kaizen agents:
 
 ### Hooks System (Lifecycle Events)
 Event-driven framework for zero-code-change observability:
-- **What**: Lifecycle event framework for monitoring, tracing, auditing, and metrics
-- **How**: Register hooks that execute on PRE/POST lifecycle events
-- **Benefits**: Add observability without modifying agent logic
-- **Performance**: <0.01ms overhead, 100+ concurrent hooks supported
-- **Events**: PRE/POST_AGENT_LOOP, PRE/POST_TOOL_USE
-- **Use Cases**: Distributed tracing, Prometheus metrics, audit trails, policy enforcement
+- **Location**: `kaizen.core.autonomy.hooks`
+- **Usage**: Register hooks on PRE/POST lifecycle events (opt-in via `config.hooks_enabled=True`)
+- **Events**: PRE/POST_AGENT_LOOP, PRE/POST_TOOL_USE, PRE/POST_CHECKPOINT_SAVE, PRE/POST_INTERRUPT
+- **Examples**: `examples/autonomy/hooks/` (audit_trail, distributed_tracing, prometheus_metrics)
+- **Docs**: `docs/features/hooks-system.md`, `docs/guides/hooks-system-guide.md`
 
 ### Multi-Agent Patterns
 - **Supervisor-Worker**: Central coordinator with specialized workers
@@ -220,19 +226,25 @@ Use Kaizen when you need to:
 
 ### With DataFlow (Data-Driven Agents)
 ```python
-from kaizen.base import BaseAgent
+from kaizen.core.base_agent import BaseAgent
 from dataflow import DataFlow
+from dataclasses import dataclass
+
+@dataclass
+class DataAgentConfig:
+    llm_provider: str = "openai"
+    model: str = "gpt-4"
 
 # Agent that works with database
 class DataAgent(BaseAgent):
-    def __init__(self, db: DataFlow):
+    def __init__(self, config: DataAgentConfig, db: DataFlow):
         self.db = db
-        super().__init__(...)
+        super().__init__(config=config, signature=MySignature())
 ```
 
 ### With Nexus (Multi-Channel Agents)
 ```python
-from kaizen.base import BaseAgent
+from kaizen.core.base_agent import BaseAgent
 from nexus import Nexus
 
 # Deploy agents via API/CLI/MCP
@@ -243,7 +255,7 @@ nexus.run()  # Agents available via all channels
 
 ### With Core SDK (Custom Workflows)
 ```python
-from kaizen.base import BaseAgent
+from kaizen.core.base_agent import BaseAgent
 from kailash.workflow.builder import WorkflowBuilder
 
 # Embed agents in workflows

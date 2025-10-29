@@ -4,14 +4,17 @@
 
 ## Overview
 
-The hooks system provides zero-code-change observability through lifecycle events. Register hooks that execute on PRE/POST events (agent loop, tool use, LLM calls, memory operations) without modifying agent logic.
+The hooks system provides zero-code-change observability through lifecycle events. Register hooks that execute on PRE/POST events (agent loop, tool use, checkpoints) without modifying agent logic.
 
-**Performance**: <0.01ms overhead, supports 100+ concurrent hooks
+**Location**: `kaizen.core.autonomy.hooks`
+**Performance**: <5ms overhead (p95), <0.56KB memory per hook
+**Opt-in**: Enable via `config.hooks_enabled=True`
 
 ## Quick Start
 
 ```python
 from kaizen.core.autonomy.hooks import HookManager, HookEvent, HookContext, HookResult, HookPriority
+from kaizen.core.base_agent import BaseAgent
 
 # Define custom hook
 async def my_hook(context: HookContext) -> HookResult:
@@ -38,15 +41,17 @@ agent = BaseAgent(config=config, signature=signature, hook_manager=hook_manager)
 - `PRE_TOOL_USE`: Before tool is called
 - `POST_TOOL_USE`: After tool completes
 
-**LLM Operations**:
-- `PRE_LLM_CALL`: Before LLM API call
-- `POST_LLM_CALL`: After LLM response received
+**Specialist Invocation**:
+- `PRE_SPECIALIST_INVOKE`: Before specialist call
+- `POST_SPECIALIST_INVOKE`: After specialist call
 
-**Memory Operations**:
-- `PRE_MEMORY_READ`: Before memory retrieval
-- `POST_MEMORY_READ`: After memory retrieved
+**Permission Checks**:
+- `PRE_PERMISSION_CHECK`: Before permission check
+- `POST_PERMISSION_CHECK`: After permission check
 
-**Custom Events**: Define your own events for specialized workflows
+**Checkpoints**:
+- `PRE_CHECKPOINT_SAVE`: Before checkpoint save
+- `POST_CHECKPOINT_SAVE`: After checkpoint save
 
 ## HookContext
 
@@ -81,11 +86,10 @@ Control execution order with priorities:
 
 ```python
 class HookPriority(Enum):
-    HIGHEST = 1000   # Execute first (e.g., audit trails)
-    HIGH = 750       # Early execution (e.g., tracing)
-    NORMAL = 500     # Default priority
-    LOW = 250        # Late execution
-    LOWEST = 0       # Execute last
+    CRITICAL = 0     # Execute first (e.g., security, validation)
+    HIGH = 1         # Important operations (e.g., audit trails, tracing)
+    NORMAL = 2       # Default priority (e.g., logging, metrics)
+    LOW = 3          # Execute last (e.g., cleanup, optional tasks)
 ```
 
 ## HookManager
@@ -107,66 +111,43 @@ result = await manager.trigger(event_type, context)
 
 ## Builtin Hooks
 
-### 1. TracingHook
-Distributed tracing with OpenTelemetry integration.
-
-```python
-from kaizen.core.autonomy.hooks.builtin import TracingHook
-
-hook = TracingHook(
-    tracing_manager=manager,
-    events_to_trace=[HookEvent.PRE_TOOL_USE, HookEvent.POST_TOOL_USE]
-)
-agent._hook_manager.register_hook(hook)
-```
-
-### 2. MetricsHook
-Prometheus metrics collection.
-
-```python
-from kaizen.core.autonomy.hooks.builtin import MetricsHook
-
-hook = MetricsHook(metrics_manager=manager)
-agent._hook_manager.register_hook(hook)
-```
-
-### 3. LoggingHook
-Structured JSON logging for ELK Stack.
+### 1. LoggingHook
+Structured logging with event tracking.
 
 ```python
 from kaizen.core.autonomy.hooks.builtin import LoggingHook
 
-hook = LoggingHook(logging_manager=manager)
+hook = LoggingHook()
 agent._hook_manager.register_hook(hook)
 ```
 
-### 4. AuditTrailHook
-Compliance audit trails (SOC2, GDPR, HIPAA).
+### 2. MetricsHook
+Performance metrics collection.
 
 ```python
-from kaizen.core.autonomy.hooks.builtin import AuditTrailHook
+from kaizen.core.autonomy.hooks.builtin import MetricsHook
 
-hook = AuditTrailHook(audit_manager=manager)
+hook = MetricsHook()
 agent._hook_manager.register_hook(hook)
 ```
 
-### 5. ValidationHook
-Pre-execution validation and policy enforcement.
+### 3. CostTrackingHook
+Track LLM API costs per agent execution.
 
 ```python
-from kaizen.core.autonomy.hooks.builtin import ValidationHook
+from kaizen.core.autonomy.hooks.builtin import CostTrackingHook
 
-hook = ValidationHook(validators=[check_input, check_permissions])
+hook = CostTrackingHook()
 agent._hook_manager.register_hook(hook)
 ```
 
-### 6. CircuitBreakerHook
-Failure protection and rate limiting.
+### 4. PerformanceHook
+Track execution time and performance statistics.
 
 ```python
-from kaizen.core.autonomy.hooks.builtin import CircuitBreakerHook
+from kaizen.core.autonomy.hooks.builtin import PerformanceHook
 
-hook = CircuitBreakerHook(failure_threshold=5, timeout_seconds=60)
+hook = PerformanceHook()
 agent._hook_manager.register_hook(hook)
 ```
 
@@ -339,5 +320,6 @@ async def test_custom_hook():
 ## Resources
 
 - **Implementation**: `src/kaizen/core/autonomy/hooks/`
-- **Examples**: `examples/autonomy/hooks/`
-- **Tests**: `tests/unit/core/autonomy/hooks/`
+- **Examples**: `examples/autonomy/hooks/` (audit_trail_example.py, distributed_tracing_example.py, prometheus_metrics_example.py)
+- **Docs**: `docs/features/hooks-system.md`, `docs/guides/hooks-system-guide.md`
+- **Tests**: `tests/unit/core/autonomy/hooks/`, `tests/integration/autonomy/test_baseagent_hooks.py`
