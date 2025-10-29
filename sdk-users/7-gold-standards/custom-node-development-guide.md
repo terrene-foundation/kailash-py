@@ -440,7 +440,214 @@ class UserManagementNode(EnterpriseBaseNode):
         }
 ```
 
-### 2. Parameter Types and Validation
+### 2. Using "metadata" as a Parameter Name (Core SDK v0.10.3+)
+
+You can use `metadata` as a parameter name in custom nodes. This is commonly needed for database models, monitoring systems, and data pipelines.
+
+#### What "metadata" Means in Nodes
+
+Custom nodes have two distinct concepts both called "metadata":
+
+1. **User metadata parameter** - Your dict parameter named "metadata"
+2. **Node internal metadata** - The node's NodeMetadata object (name, description, version)
+
+These are separate and do not conflict.
+
+#### How to Use "metadata" as a Parameter
+
+```python
+from kailash.nodes.base import Node, NodeParameter
+from typing import Dict, Any, Optional
+
+@register_node()
+class DataProcessorNode(Node):
+    """Node that accepts user metadata parameter."""
+
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        """Declare metadata as a user parameter."""
+        return {
+            "data": NodeParameter(
+                name="data",
+                type=str,
+                required=True,
+                description="Data to process"
+            ),
+            # ✅ You can use "metadata" as a parameter name
+            "metadata": NodeParameter(
+                name="metadata",
+                type=dict,
+                required=False,
+                default=None,
+                description="User metadata dict"
+            )
+        }
+
+    def run(self, data: str, metadata: Optional[dict] = None, **kwargs) -> Dict[str, Any]:
+        """Execute with user metadata parameter."""
+        # Access user's metadata parameter
+        user_metadata = metadata
+
+        # Access node's internal metadata (different object)
+        node_name = self.metadata.name
+        node_description = self.metadata.description
+
+        # Both work independently
+        return {
+            "processed_data": data.upper(),
+            "user_metadata": user_metadata,  # Your parameter
+            "node_info": {
+                "name": node_name,  # Internal metadata
+                "description": node_description  # Internal metadata
+            }
+        }
+```
+
+#### Dual Usage Pattern
+
+When you use "metadata" as a parameter, both types are accessible:
+
+```python
+@register_node()
+class MonitoringNode(Node):
+    """Node demonstrating dual metadata usage."""
+
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        return {
+            "operation": NodeParameter(type=str, required=True),
+            "metadata": NodeParameter(
+                type=dict,
+                required=False,
+                default=None,
+                description="Monitoring metadata"
+            )
+        }
+
+    def run(self, operation: str, metadata: Optional[dict] = None, **kwargs) -> Dict[str, Any]:
+        """Execute with both metadata types."""
+        # User's metadata parameter (your dict)
+        monitoring_metadata = metadata or {}
+
+        # Node's internal metadata (NodeMetadata object)
+        node_name = self.metadata.name
+        node_version = self.metadata.version
+
+        return {
+            "operation": operation,
+            "monitoring_metadata": monitoring_metadata,  # User parameter
+            "node_metadata": {
+                "name": node_name,      # Internal NodeMetadata.name
+                "version": node_version  # Internal NodeMetadata.version
+            }
+        }
+```
+
+#### Using in Workflows
+
+```python
+from kailash.workflow.builder import WorkflowBuilder
+
+workflow = WorkflowBuilder()
+
+# Pass user metadata as a parameter
+workflow.add_node("DataProcessorNode", "processor", {
+    "data": "test_data",
+    "metadata": {
+        "source": "api",
+        "timestamp": "2025-01-01",
+        "tags": ["important", "reviewed"]
+    }
+})
+
+# Metadata flows through connections
+workflow.add_node("MonitoringNode", "monitor", {
+    "operation": "log"
+})
+
+workflow.add_connection("processor", "user_metadata", "monitor", "metadata")
+```
+
+#### Reserved Parameter Names
+
+Only one parameter name is reserved:
+
+```python
+def get_parameters(self) -> Dict[str, NodeParameter]:
+    return {
+        "data": NodeParameter(...),      # ✅ Allowed
+        "metadata": NodeParameter(...),  # ✅ Allowed (v0.10.3+)
+        "config": NodeParameter(...),    # ✅ Allowed
+        "_node_id": NodeParameter(...)   # ❌ Reserved - do not use
+    }
+```
+
+#### Common Use Cases
+
+**Database Models with Metadata Fields:**
+```python
+@register_node()
+class ArticleNode(Node):
+    """Node for articles with metadata field."""
+
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        return {
+            "title": NodeParameter(type=str, required=True),
+            "content": NodeParameter(type=str, required=True),
+            "metadata": NodeParameter(
+                type=dict,
+                required=False,
+                default=None,
+                description="Article metadata (author, tags, etc.)"
+            )
+        }
+```
+
+**Monitoring and Observability:**
+```python
+@register_node()
+class MetricsNode(Node):
+    """Node for metrics with metadata."""
+
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        return {
+            "metric_name": NodeParameter(type=str, required=True),
+            "metric_value": NodeParameter(type=float, required=True),
+            "metadata": NodeParameter(
+                type=dict,
+                required=False,
+                default={},
+                description="Metric metadata (labels, dimensions)"
+            )
+        }
+```
+
+**Data Pipeline Transformations:**
+```python
+@register_node()
+class TransformNode(Node):
+    """Node that preserves metadata through transformations."""
+
+    def get_parameters(self) -> Dict[str, NodeParameter]:
+        return {
+            "input_data": NodeParameter(type=dict, required=True),
+            "metadata": NodeParameter(
+                type=dict,
+                required=False,
+                default=None,
+                description="Data lineage metadata"
+            )
+        }
+
+    def run(self, input_data: dict, metadata: Optional[dict] = None, **kwargs) -> Dict[str, Any]:
+        """Transform data while preserving metadata."""
+        transformed = self._transform(input_data)
+
+        return {
+            "output_data": transformed,
+            "metadata": metadata  # Pass through for lineage tracking
+        }
+```
+
+### 3. Parameter Types and Validation
 
 ```python
 @register_node()
