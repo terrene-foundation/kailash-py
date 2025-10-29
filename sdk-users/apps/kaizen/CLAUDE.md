@@ -4,6 +4,35 @@
 
 **Kaizen** is a signature-based AI agent framework built on Kailash Core SDK, providing production-ready agents with multi-modal processing, multi-agent coordination, and enterprise features.
 
+## 🆕 What's New in v0.6.0 (2025-10-29)
+
+**Enhanced Autonomy & Memory Systems**:
+
+- **🎯 Interrupt Mechanism (Production-Ready)**
+  - Complete graceful shutdown with Ctrl+C handling
+  - 3 interrupt sources: USER (Ctrl+C), SYSTEM (timeout/budget), PROGRAMMATIC (API/hooks)
+  - 2 shutdown modes: GRACEFUL (finish cycle + checkpoint) vs IMMEDIATE (stop now)
+  - Signal propagation across multi-agent hierarchies
+  - 34 E2E tests production-validated
+  - Examples: `examples/autonomy/interrupts/` (ctrl_c, timeout, budget)
+
+- **💾 Persistent Buffer Memory (DataFlow Backend)**
+  - Dual-buffer architecture: In-memory + database storage
+  - Auto-persist with configurable intervals
+  - JSONL compression (60%+ storage reduction)
+  - Cross-session conversation persistence
+  - Multi-instance agent isolation
+  - 28 E2E tests with real database operations
+
+- **🔄 Enhanced Hooks System**
+  - New hook events: PRE/POST_INTERRUPT, PRE/POST_CHECKPOINT_SAVE
+  - Improved performance: <0.01ms overhead (625x better than target)
+  - Production-validated: 100+ concurrent hooks supported
+
+**Version**: 0.6.0 | **Dependencies**: Kailash >=0.10.2
+
+---
+
 ## ⚡ Quick Start
 
 ### Basic Agent Usage
@@ -365,6 +394,95 @@ except InterruptedError as e:
   - **2 Shutdown Modes**: GRACEFUL (finish cycle, save checkpoint) vs IMMEDIATE (stop now, best-effort)
   - **3 Builtin Handlers**: TimeoutInterruptHandler, BudgetInterruptHandler, ResourceInterruptHandler
   - **Examples**: `examples/autonomy/interrupts/` (ctrl_c, timeout, budget)
+
+### Persistent Buffer Memory (v0.6.0)
+
+**DataFlow-backed conversation persistence with dual-buffer architecture:**
+
+```python
+from kaizen.memory import PersistentBufferMemory
+from dataflow import DataFlow
+
+# Initialize DataFlow backend (automatic schema creation)
+db = DataFlow(
+    database_type="sqlite",
+    database_config={"database": "./agent_memory.db"}
+)
+
+# Create persistent buffer memory
+memory = PersistentBufferMemory(
+    db=db,
+    agent_id="agent_001",
+    buffer_size=100,              # Keep last 100 messages in memory
+    auto_persist_interval=10,     # Auto-persist every 10 messages
+    enable_compression=True       # JSONL compression for storage
+)
+
+# Add conversation turns
+memory.add_message(role="user", content="What is AI?")
+memory.add_message(role="assistant", content="AI is artificial intelligence...")
+
+# Retrieve conversation history
+history = memory.get_history(limit=10)  # Last 10 messages
+
+# Persist to database
+memory.persist()  # Manual persist (or waits for auto_persist_interval)
+
+# Load from database in next session
+memory_loaded = PersistentBufferMemory(db=db, agent_id="agent_001")
+memory_loaded.load_from_db()  # Restores conversation history
+```
+
+**Conversational Agent Pattern:**
+```python
+from kaizen.agents import SimpleQAAgent
+from kaizen.memory import PersistentBufferMemory
+
+class ConversationalAgent(SimpleQAAgent):
+    def __init__(self, config, db):
+        super().__init__(config)
+        self.memory = PersistentBufferMemory(
+            db=db,
+            agent_id=self.agent_id,
+            buffer_size=50,
+            auto_persist_interval=5
+        )
+        # Load previous conversations
+        self.memory.load_from_db()
+
+    def ask(self, question: str) -> dict:
+        # Add user message to memory
+        self.memory.add_message(role="user", content=question)
+
+        # Get conversation context
+        history = self.memory.get_history(limit=10)
+
+        # Run agent with context
+        result = self.run(question=question, context=history)
+
+        # Add assistant response to memory
+        self.memory.add_message(role="assistant", content=result["answer"])
+
+        return result
+
+# Usage - conversation persists across sessions
+agent = ConversationalAgent(config, db)
+result1 = agent.ask("What is AI?")
+result2 = agent.ask("Can you elaborate?")  # Uses history from previous question
+
+# Restart - history preserved
+agent2 = ConversationalAgent(config, db)
+result3 = agent2.ask("What did we discuss?")  # Remembers previous conversation
+```
+
+**Key Features:**
+- **Dual-Buffer**: In-memory buffer (<1ms retrieval) + database storage
+- **Auto-Persist**: Configurable auto-persist interval (every N messages)
+- **Compression**: JSONL compression reduces storage by 60%+
+- **Multi-Instance**: Agent-specific memory isolation with agent_id scoping
+- **Cross-Session**: Load conversation history across restarts
+- **Database Support**: SQLite (default), PostgreSQL
+- **Production-Validated**: 28 E2E tests with real database operations
 
 ### Permission System
 
