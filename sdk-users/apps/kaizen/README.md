@@ -64,6 +64,36 @@ class MyAgent(BaseAgent):
 - **Production Observability**: Complete monitoring stack (Jaeger, Prometheus, Grafana, ELK) with zero overhead
 - **Core SDK Compatible**: Seamless integration with Kailash workflows
 
+## 🆕 What's New in v0.6.0
+
+**Enhanced Autonomy & Memory Systems** (Released 2025-10-29):
+
+### Interrupt Mechanism (Production-Ready)
+Complete graceful shutdown with checkpoint preservation:
+- **3 Interrupt Sources**: USER (Ctrl+C), SYSTEM (timeout/budget), PROGRAMMATIC (API/hooks)
+- **2 Shutdown Modes**: GRACEFUL (finish cycle + checkpoint) vs IMMEDIATE (stop now)
+- **Signal Propagation**: Parent interrupts cascade to children
+- **34 E2E Tests**: Production-validated
+- **Examples**: `examples/autonomy/interrupts/` (ctrl_c, timeout, budget)
+
+### Persistent Buffer Memory (DataFlow Backend)
+Conversation persistence with dual-buffer architecture:
+- **Dual-Buffer**: In-memory buffer (<1ms retrieval) + database storage
+- **Auto-Persist**: Configurable auto-persist interval (every N messages)
+- **JSONL Compression**: 60%+ storage reduction
+- **Cross-Session**: Load conversation history across restarts
+- **Multi-Instance**: Agent-specific memory isolation
+- **28 E2E Tests**: Real database operations validated
+
+### Enhanced Hooks System
+- **New Events**: PRE/POST_INTERRUPT, PRE/POST_CHECKPOINT_SAVE
+- **Performance**: <0.01ms overhead (625x better than target)
+- **Production**: 100+ concurrent hooks supported
+
+**Version**: 0.6.0 | **Dependencies**: Kailash >=0.10.2
+
+---
+
 ## 🚀 Quick Start
 
 ### Installation
@@ -73,7 +103,7 @@ class MyAgent(BaseAgent):
 pip install kailash-kaizen
 
 # Or specific version
-pip install kailash-kaizen==0.5.0
+pip install kailash-kaizen==0.6.0
 ```
 
 ### Your First Agent (3 Steps)

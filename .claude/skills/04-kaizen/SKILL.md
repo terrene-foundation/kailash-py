@@ -7,6 +7,29 @@ description: "Kailash Kaizen - production-ready AI agent framework with signatur
 
 Kaizen is a production-ready AI agent framework built on Kailash Core SDK that provides signature-based programming and multi-agent coordination.
 
+## 🆕 v0.6.0 Highlights
+
+**Enhanced Autonomy & Memory Systems** (Released 2025-10-29):
+
+- **Interrupt Mechanism**: Complete graceful shutdown with Ctrl+C handling, timeout/budget auto-stop, checkpoint preservation
+  - 3 interrupt sources (USER, SYSTEM, PROGRAMMATIC)
+  - 2 shutdown modes (GRACEFUL, IMMEDIATE)
+  - Signal propagation across multi-agent systems
+  - 34 E2E tests production-validated
+
+- **Persistent Buffer Memory**: DataFlow-backed conversation persistence with dual-buffer architecture
+  - In-memory buffer + database storage
+  - Auto-persist (configurable intervals)
+  - JSONL compression (60%+ reduction)
+  - Cross-session persistence
+  - 28 E2E tests with real database
+
+- **Enhanced Hooks**: PRE/POST_INTERRUPT and PRE/POST_CHECKPOINT_SAVE events
+
+See **[kaizen-interrupt-mechanism](kaizen-interrupt-mechanism.md)** and **[kaizen-persistent-memory](kaizen-persistent-memory.md)** for details.
+
+---
+
 ## Overview
 
 Kaizen enables building sophisticated AI agents with:
@@ -148,7 +171,8 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 - **[kaizen-tool-calling](kaizen-tool-calling.md)** - Autonomous tool execution with approval workflows
 - **[kaizen-memory-system](kaizen-memory-system.md)** - Persistent memory, learning, FAQ detection, preference adaptation
 - **[kaizen-checkpoint-resume](kaizen-checkpoint-resume.md)** - Checkpoint & resume for long-running agents, failure recovery
-- **[kaizen-interrupt-mechanism](kaizen-interrupt-mechanism.md)** - Graceful shutdown for autonomous agents, Ctrl+C handling, timeout/budget auto-stop
+- **[kaizen-interrupt-mechanism](kaizen-interrupt-mechanism.md)** - 🆕 v0.6.0: Graceful shutdown, Ctrl+C handling, timeout/budget auto-stop, checkpoint preservation
+- **[kaizen-persistent-memory](kaizen-persistent-memory.md)** - 🆕 v0.6.0: DataFlow-backed conversation persistence, dual-buffer architecture, auto-persist
 - **[kaizen-streaming](kaizen-streaming.md)** - Streaming agent responses
 - **[kaizen-cost-tracking](kaizen-cost-tracking.md)** - Cost monitoring and optimization
 - **[kaizen-ux-helpers](kaizen-ux-helpers.md)** - UX enhancement utilities
