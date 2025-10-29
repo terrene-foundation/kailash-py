@@ -6,7 +6,6 @@ without complex workflow execution scenarios.
 """
 
 import pytest
-
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.resource_manager import (
     AdaptiveRetryStrategy,
@@ -37,13 +36,13 @@ class TestRetryPolicyBasicIntegration:
 
         # Verify retry policy engine is initialized
         assert runtime._retry_policy_engine is not None
-        assert runtime._enable_retry_coordination == True
+        assert runtime._enable_retry_coordination
 
         # Verify configuration
         config = runtime.get_retry_configuration()
         assert config is not None
         assert config["mode"] == "adaptive"
-        assert config["enable_analytics"] == True
+        assert config["enable_analytics"]
         assert config["default_strategy"]["strategy_type"] == "exponential_backoff"
 
     def test_retry_policy_with_circuit_breaker(self):
@@ -67,7 +66,7 @@ class TestRetryPolicyBasicIntegration:
         # Verify both systems are initialized and coordinated
         assert runtime._retry_policy_engine is not None
         assert runtime._circuit_breaker is not None
-        assert runtime._retry_policy_engine.enable_circuit_breaker_coordination == True
+        assert runtime._retry_policy_engine.enable_circuit_breaker_coordination
         assert runtime._retry_policy_engine.circuit_breaker is runtime._circuit_breaker
 
     def test_retry_policy_with_resource_limits(self):
@@ -94,7 +93,7 @@ class TestRetryPolicyBasicIntegration:
         # Verify coordination
         assert runtime._retry_policy_engine is not None
         assert runtime._resource_enforcer is not None
-        assert runtime._retry_policy_engine.enable_resource_limit_coordination == True
+        assert runtime._retry_policy_engine.enable_resource_limit_coordination
         assert (
             runtime._retry_policy_engine.resource_limit_enforcer
             is runtime._resource_enforcer
@@ -197,7 +196,7 @@ class TestRetryPolicyBasicIntegration:
 
         # Verify retry policy is not initialized
         assert runtime._retry_policy_engine is None
-        assert runtime._enable_retry_coordination == False
+        assert not runtime._enable_retry_coordination
 
         # Public interface should handle gracefully
         assert runtime.get_retry_policy_engine() is None
@@ -237,8 +236,8 @@ class TestRetryPolicyBasicIntegration:
         assert runtime._resource_enforcer is not None
 
         # Verify coordination
-        assert runtime._retry_policy_engine.enable_circuit_breaker_coordination == True
-        assert runtime._retry_policy_engine.enable_resource_limit_coordination == True
+        assert runtime._retry_policy_engine.enable_circuit_breaker_coordination
+        assert runtime._retry_policy_engine.enable_resource_limit_coordination
         assert runtime._retry_policy_engine.circuit_breaker is runtime._circuit_breaker
         assert (
             runtime._retry_policy_engine.resource_limit_enforcer
@@ -248,10 +247,10 @@ class TestRetryPolicyBasicIntegration:
         # Verify configuration
         config = runtime.get_retry_configuration()
         assert config["mode"] == "adaptive"
-        assert config["enable_analytics"] == True
+        assert config["enable_analytics"]
         assert config["default_strategy"]["strategy_type"] == "adaptive_retry"
-        assert config["enable_circuit_breaker_coordination"] == True
-        assert config["enable_resource_limit_coordination"] == True
+        assert config["enable_circuit_breaker_coordination"]
+        assert config["enable_resource_limit_coordination"]
 
 
 class TestRetryPolicyEngineDirectUsage:
@@ -267,7 +266,7 @@ class TestRetryPolicyEngineDirectUsage:
 
         result = await engine.execute_with_retry(successful_function)
 
-        assert result.success == True
+        assert result.success
         assert result.value == "success"
         assert result.total_attempts == 1
 
@@ -288,7 +287,7 @@ class TestRetryPolicyEngineDirectUsage:
 
         result = await engine.execute_with_retry(failing_then_succeeding_function)
 
-        assert result.success == True
+        assert result.success
         assert result.value == "success"
         assert result.total_attempts == 2
 
@@ -302,7 +301,7 @@ class TestRetryPolicyEngineDirectUsage:
 
         result = await engine.execute_with_retry(keyboard_interrupt_function)
 
-        assert result.success == False
+        assert not result.success
         assert result.total_attempts == 1
         assert isinstance(result.final_exception, KeyboardInterrupt)
 
@@ -326,7 +325,7 @@ class TestRetryPolicyEngineDirectUsage:
 
         result = await engine.execute_with_retry(learning_function)
 
-        assert result.success == True
+        assert result.success
         assert "success on attempt 2" in result.value
         assert result.total_attempts == 2
 

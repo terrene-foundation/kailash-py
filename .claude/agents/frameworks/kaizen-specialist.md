@@ -127,7 +127,8 @@ This section focuses on **enterprise AI architecture** and **advanced agent patt
 
 **Danger-Level Approval Workflows**: SAFE (auto-approved) → LOW → MEDIUM → HIGH → CRITICAL
 
-**Universal Integration (ADR-016)**: All 25 agents now support tool_registry parameter
+**MCP Auto-Connect**: All BaseAgent-derived agents automatically connect to kaizen_builtin MCP server
+- ✅ 12 Builtin Tools: File operations, HTTP requests, bash commands, web search
 - ✅ 3 Autonomous: ReActAgent, RAGResearchAgent, CodeGenerationAgent
 - ✅ 12 Single-Shot Specialized: SimpleQA, ChainOfThought, StreamingChat, SelfReflection, VisionAgent, TranscriptionAgent, MultiModalAgent, ResilientAgent, MemoryAgent, BatchProcessingAgent, HumanApprovalAgent, SupervisorAgent, CoordinatorAgent
 - ✅ 6 Coordination: ProponentAgent, OpponentAgent, JudgeAgent, ProposerAgent, VoterAgent, AggregatorAgent
@@ -135,40 +136,42 @@ This section focuses on **enterprise AI architecture** and **advanced agent patt
 
 ```python
 from kaizen.core.base_agent import BaseAgent
-from kaizen.tools import ToolRegistry
-from kaizen.tools.builtin import register_builtin_tools
 
-# Enable tools (opt-in)
-registry = ToolRegistry()
-register_builtin_tools(registry)
-
-# Works with ALL agents now
+# MCP auto-connect - tools available automatically
 agent = BaseAgent(
     config=config,
     signature=signature,
-    tool_registry=registry,  # Enables tool calling
-    mcp_servers=mcp_servers  # Optional MCP integration
+    # Optional: Add custom MCP servers
+    mcp_servers=[
+        {
+            "name": "filesystem",
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["@modelcontextprotocol/server-filesystem", "/data"]
+        }
+    ]
 )
 
-# Execute tool with approval workflow
-result = await agent.execute_tool(
-    tool_name="write_file",
-    params={"path": "/tmp/output.txt", "content": "data"},
-    store_in_memory=True  # Store in agent memory
-)
+# Discover available tools from MCP servers
+tools = await agent.discover_mcp_tools()
+# Returns: [
+#   {"name": "mcp__kaizen_builtin__read_file", ...},
+#   {"name": "mcp__kaizen_builtin__write_file", ...},
+#   {"name": "mcp__filesystem__read_file", ...},
+# ]
 
-# Tool chain (sequential execution)
-results = await agent.execute_tool_chain([
-    {"tool_name": "read_file", "params": {"path": "input.txt"}},
-    {"tool_name": "bash_command", "params": {"command": "wc -l input.txt"}},
-])
+# Execute MCP tool with approval workflow
+result = await agent.execute_mcp_tool(
+    "mcp__kaizen_builtin__write_file",
+    {"path": "/tmp/output.txt", "content": "data"}
+)
 ```
 
 **Key Features**:
-- 100% backward compatible (tool support is optional)
-- Automatic ToolExecutor creation when `tool_registry` provided
+- MCP auto-connect to kaizen_builtin server (12 tools)
+- Custom MCP servers via `mcp_servers` parameter
 - Control Protocol integration for approval workflows
-- Universal integration across all 25 agents (ADR-016)
+- Universal MCP integration across all 25 agents
 
 **Reference**: `docs/features/baseagent-tool-integration.md`, ADR-012, ADR-016, `examples/autonomy/tools/`
 
@@ -284,66 +287,233 @@ pre_agent_loop (root span)
 
 **Production-Ready Systems** for agent lifecycle management, state persistence, and execution control.
 
-#### Hook System
+#### Hooks System (Zero-Code-Change Observability)
 
-**What**: Event-driven architecture for agent lifecycle monitoring and extension
-**When**: Need to instrument, log, audit, or extend agent behavior without modifying core logic
-**How**: Register hooks that execute on lifecycle events (PRE/POST patterns)
+**What**: Lifecycle event framework for zero-code-change integration of cross-cutting concerns like monitoring, tracing, auditing, and metrics collection. Enables instrumentation without modifying agent logic.
+
+**When**: Need to monitor, audit, debug, enforce policies, or collect analytics without changing agent code.
+
+**How**: Register hooks that execute on lifecycle events (PRE/POST patterns). Pass `hook_manager` parameter to BaseAgent.
+
+**Key Benefits**:
+- ✅ **Zero code changes** - Add observability without modifying agent logic
+- ✅ **Composable** - Mix and match multiple hooks
+- ✅ **Production-ready** - Enterprise features (tracing, metrics, auditing)
+- ✅ **High performance** - <0.01ms overhead (p95), <0.56KB memory per hook
+- ✅ **100+ concurrent hooks** - Performance validated
+
+#### Hook Events
+
+| Event | When Triggered | Use Case |
+|-------|----------------|----------|
+| `PRE_AGENT_LOOP` | Before agent processes request | Input validation, tracing start |
+| `POST_AGENT_LOOP` | After agent completes | Metrics collection, tracing end |
+| `PRE_TOOL_USE` | Before agent calls a tool | Tool usage auditing |
+| `POST_TOOL_USE` | After tool execution | Tool performance tracking |
+
+#### Basic Hook Usage
 
 ```python
-from kaizen.core.autonomy.hooks import HookManager, HookEvent
-from kaizen.core.autonomy.hooks.builtin import LoggingHook, MetricsHook
+from kaizen.core.base_agent import BaseAgent
+from kaizen.core.autonomy.hooks.manager import HookManager
+from kaizen.core.autonomy.hooks.types import (
+    HookEvent,
+    HookContext,
+    HookResult,
+    HookPriority,
+)
 
-# Every BaseAgent has a hook manager
-hook_manager = agent._hook_manager
+# 1. Create hook function
+async def my_hook(context: HookContext) -> HookResult:
+    print(f"Agent {context.agent_id} is executing!")
+    return HookResult(success=True)
 
-# Use builtin hooks
-logging_hook = LoggingHook(log_level="INFO")
-metrics_hook = MetricsHook()
+# 2. Register hook
+hook_manager = HookManager()
+hook_manager.register(
+    HookEvent.PRE_AGENT_LOOP,
+    my_hook,
+    HookPriority.NORMAL
+)
 
-# Register hooks
-hook_manager.register_hook(logging_hook)  # Auto-registers for all supported events
-hook_manager.register(HookEvent.PRE_TOOL_USE, custom_hook)  # Specific event
+# 3. Attach to agent
+agent = BaseAgent(
+    config=my_config,
+    signature=my_signature,
+    hook_manager=hook_manager  # ← Hooks enabled
+)
 
-# Available events
-# - PRE_AGENT_LOOP / POST_AGENT_LOOP: Agent lifecycle
-# - PRE_TOOL_USE / POST_TOOL_USE: Tool executions
-# - PRE_LLM_CALL / POST_LLM_CALL: LLM API calls
-# - PRE_MEMORY_READ / POST_MEMORY_READ: Memory operations
+# 4. Run agent (hooks execute automatically)
+result = agent.run(question="What is AI?")
 ```
 
-**Builtin Hooks**:
-- `LoggingHook`: JSON-formatted logging
-- `MetricsHook`: Prometheus metrics collection
-- `CostTrackingHook`: Token usage and cost monitoring
-- `PerformanceProfilerHook`: Execution timing and profiling
-- `AuditHook`: Immutable audit trails
-- `TracingHook`: Distributed tracing (integrates with observability)
+#### Production Hook Examples
 
-**Custom Hooks**:
+**Distributed Tracing (OpenTelemetry)**:
 ```python
-from kaizen.core.autonomy.hooks import BaseHook, HookContext, HookResult
+class DistributedTracingHook:
+    """Integrate OpenTelemetry tracing."""
 
-class ValidationHook(BaseHook):
-    def supported_events(self) -> list[HookEvent]:
-        return [HookEvent.PRE_TOOL_USE]
+    def __init__(self, service_name: str):
+        self.service_name = service_name
+        self.active_spans = {}
+
+    async def start_span(self, context: HookContext) -> HookResult:
+        from opentelemetry import trace
+        tracer = trace.get_tracer(self.service_name)
+        span = tracer.start_span(f"agent.{context.agent_id}.loop")
+        self.active_spans[context.trace_id] = span
+        return HookResult(success=True, data={"span_started": True})
+
+    async def end_span(self, context: HookContext) -> HookResult:
+        span = self.active_spans.pop(context.trace_id)
+        span.set_attribute("agent.id", context.agent_id)
+        span.end()
+        return HookResult(success=True, data={"span_ended": True})
+
+# Usage
+tracing_hook = DistributedTracingHook("my-agent-service")
+hook_manager.register(HookEvent.PRE_AGENT_LOOP, tracing_hook.start_span, HookPriority.HIGH)
+hook_manager.register(HookEvent.POST_AGENT_LOOP, tracing_hook.end_span, HookPriority.HIGH)
+```
+
+**Prometheus Metrics**:
+```python
+class PrometheusMetricsHook:
+    """Collect Prometheus metrics."""
+
+    def __init__(self):
+        from prometheus_client import Counter, Histogram
+
+        self.loop_duration = Histogram(
+            'agent_loop_duration_seconds',
+            'Agent loop duration',
+            ['agent_id']
+        )
+        self.loop_total = Counter(
+            'agent_loop_total',
+            'Total agent loops',
+            ['agent_id']
+        )
+        self.loop_start_times = {}
+
+    async def record_start(self, context: HookContext) -> HookResult:
+        import time
+        self.loop_start_times[context.trace_id] = time.time()
+        self.loop_total.labels(agent_id=context.agent_id).inc()
+        return HookResult(success=True)
+
+    async def record_end(self, context: HookContext) -> HookResult:
+        import time
+        duration = time.time() - self.loop_start_times.pop(context.trace_id)
+        self.loop_duration.labels(agent_id=context.agent_id).observe(duration)
+        return HookResult(success=True, data={"duration": duration})
+
+# Usage
+metrics_hook = PrometheusMetricsHook()
+hook_manager.register(HookEvent.PRE_AGENT_LOOP, metrics_hook.record_start)
+hook_manager.register(HookEvent.POST_AGENT_LOOP, metrics_hook.record_end)
+```
+
+**Audit Trail (Compliance - SOC2/GDPR/HIPAA)**:
+```python
+class AuditTrailHook:
+    """Immutable audit trail for compliance."""
+
+    def __init__(self, audit_log_path: Path):
+        self.audit_log_path = audit_log_path
+        self.loop_start_times = {}
+
+    async def record_start(self, context: HookContext) -> HookResult:
+        import time
+        self.loop_start_times[context.trace_id] = time.time()
+
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "event_type": "AGENT_LOOP_START",
+            "agent_id": context.agent_id,
+            "trace_id": context.trace_id,
+            "action": "agent_execution_start",
+            "inputs": context.data.get("inputs", {}),
+        }
+
+        # Append-only (immutable)
+        with open(self.audit_log_path, "a") as f:
+            json.dump(entry, f)
+            f.write("\n")
+
+        return HookResult(success=True, data={"audit_recorded": True})
+
+# Usage
+audit_hook = AuditTrailHook(Path("/var/log/kaizen/audit.jsonl"))
+hook_manager.register(HookEvent.PRE_AGENT_LOOP, audit_hook.record_start, HookPriority.HIGHEST)
+hook_manager.register(HookEvent.POST_AGENT_LOOP, audit_hook.record_end, HookPriority.HIGHEST)
+```
+
+#### Custom Hook Classes
+
+Create reusable hook classes with `BaseHook`:
+
+```python
+from kaizen.core.autonomy.hooks.protocol import BaseHook
+
+class LoggingHook(BaseHook):
+    """Reusable logging hook."""
+
+    events = [HookEvent.PRE_AGENT_LOOP, HookEvent.POST_AGENT_LOOP]
+    priority = HookPriority.NORMAL
+
+    def __init__(self, logger_name: str):
+        super().__init__(name="logging_hook")
+        self.logger = logging.getLogger(logger_name)
 
     async def handle(self, context: HookContext) -> HookResult:
-        # Validate tool parameters
-        if context.data.get("tool_name") == "delete_file":
-            if not context.data["params"]["path"].startswith("/tmp/"):
-                return HookResult(
-                    success=False,
-                    error="delete_file only allowed in /tmp/"
-                )
+        if context.event_type == HookEvent.PRE_AGENT_LOOP:
+            self.logger.info(f"Agent {context.agent_id} starting")
+        else:
+            self.logger.info(f"Agent {context.agent_id} completed")
+
         return HookResult(success=True)
+
+# Usage (register for all events automatically)
+logging_hook = LoggingHook("my_agent")
+hook_manager.register_hook(logging_hook)  # ← Registers for both events
 ```
 
-**Key Patterns**:
-- PRE hooks can block execution by returning `success=False`
-- POST hooks receive execution results in `context.data`
-- Hook execution is async-first
-- Hooks run in registration order
+#### Hook Priority
+
+Controls execution order when multiple hooks exist for the same event:
+
+- `HIGHEST = 0` - Runs first (e.g., audit trails, authentication)
+- `HIGH = 1` - Security, compliance hooks
+- `NORMAL = 2` - Default priority
+- `LOW = 3` - Cleanup, optional logging
+- `LOWEST = 4` - Runs last
+
+#### Performance Characteristics
+
+The Hooks System is designed for production use with minimal overhead:
+
+| Metric | Target | Actual | Status |
+|--------|--------|--------|--------|
+| Hook execution overhead (p95) | <5ms | 0.008ms | ✅ **625x better** |
+| Registration overhead | <1ms | 0.038ms | ✅ **26x better** |
+| Stats tracking overhead | <0.1ms | ~0ms | ✅ Negligible |
+| Concurrent hooks supported | >50 | 100+ | ✅ Validated |
+| Memory per hook | <100KB | 0.56KB | ✅ **178x better** |
+
+**Performance validated**: 8 performance benchmarks in `tests/performance/test_hooks_performance.py`
+
+#### Key Patterns
+
+- **PRE hooks** can block execution by returning `success=False`
+- **POST hooks** receive execution results in `context.data`
+- **Hook execution** is async-first
+- **Hooks run** in priority order (HIGHEST → LOWEST)
+- **Error isolation** - One hook's failure doesn't affect others
+- **Timeout protection** - Default 5s timeout per hook
+
+**Reference**: `docs/features/hooks-system.md`, `examples/autonomy/hooks/`, `tests/unit/core/autonomy/hooks/`
 
 #### State Management
 
@@ -392,6 +562,80 @@ await state_manager.restore_checkpoint(checkpoint_id)
 - Result caching across sessions
 - A/B testing (checkpoint, try variant, restore)
 - Audit trails (track all state mutations)
+
+#### Checkpoint & Resume System
+
+**What**: Automatic checkpointing and resume for autonomous agents
+**When**: Need long-running agents to recover from failures or interruptions
+**How**: Configure automatic checkpointing with optional compression and retention policies
+
+```python
+from kaizen.agents.autonomous.base import BaseAutonomousAgent, AutonomousConfig
+from kaizen.core.autonomy.state.storage import FilesystemStorage
+from kaizen.core.autonomy.state.manager import StateManager
+from kaizen.signatures import Signature, InputField, OutputField
+
+class TaskSignature(Signature):
+    task: str = InputField(description="Task to perform")
+    result: str = OutputField(description="Result")
+
+# Configure with automatic checkpointing
+config = AutonomousConfig(
+    max_cycles=10,
+    checkpoint_frequency=5,  # Save every 5 steps
+    resume_from_checkpoint=True,  # Resume on restart
+    llm_provider="ollama",
+    model="llama3.2",
+)
+
+# Create agent with state manager
+storage = FilesystemStorage(
+    base_dir=".kaizen/checkpoints",
+    compress=True  # Enable gzip compression (>50% size reduction)
+)
+state_manager = StateManager(
+    storage=storage,
+    checkpoint_frequency=5,
+    retention_count=10  # Keep only latest 10 checkpoints
+)
+
+agent = BaseAutonomousAgent(
+    config=config,
+    signature=TaskSignature(),
+    state_manager=state_manager,
+)
+
+# Run with automatic checkpointing and resume
+result = await agent._autonomous_loop("Perform a complex task")
+```
+
+**Features**:
+- **Automatic Checkpointing**: Save state every N steps or M seconds
+- **Seamless Resume**: Continue execution from last checkpoint
+- **JSONL Compression**: Reduce checkpoint size by >50% with gzip
+- **Retention Policy**: Automatically clean up old checkpoints
+- **Hook Integration**: PRE/POST checkpoint hooks (PRE_CHECKPOINT_SAVE, POST_CHECKPOINT_SAVE)
+- **Error Recovery**: Resume after failures or interruptions
+- **Zero Configuration**: Works out-of-the-box with sensible defaults
+
+**Checkpoint Triggers**:
+- Frequency-based: `checkpoint_frequency=5` (every 5 steps)
+- Interval-based: `checkpoint_interval_seconds=30.0` (every 30 seconds)
+- Hybrid (OR logic): Both triggers active simultaneously
+
+**Storage Optimization**:
+- Compression: Enable with `compress=True` (>50% size reduction, <10ms overhead)
+- Retention: Keep latest N checkpoints with `retention_count=10`
+- Auto-cleanup: Oldest checkpoints deleted automatically
+
+**Use Cases**:
+- Long-running autonomous agents (30+ hour sessions)
+- Resume after system failures or interruptions
+- Development testing with quick iteration cycles
+- Production agents with automatic recovery
+- Cost optimization by avoiding repeated work
+
+**Reference**: `docs/features/checkpoint-resume-system.md`, `src/kaizen/agents/autonomous/base.py:192` (state capture/restore), `tests/unit/agents/autonomous/test_auto_checkpoint.py` (114 tests passing)
 
 #### Interrupt System
 
@@ -521,9 +765,7 @@ class ProductionAgent(BaseAgent):
 
 ### Permission System (Enterprise Security & Governance)
 
-**Production-Ready Framework** for fine-grained agent permission control, budget enforcement, and security policies.
-
-**Status**: Foundation complete (Week 1/10) - ExecutionContext, PermissionRule, PermissionType ready for use
+**Fine-grained agent permission control, budget enforcement, and security policies.**
 
 **What**: Policy-based permission management for tool usage, API calls, and resource access
 **When**: Need to enforce security policies, budget limits, or regulatory compliance for agent actions
@@ -857,19 +1099,6 @@ expensive_rule = TimeBasedPermissionRule(
 - **Cost Control**: Prevent budget overruns on expensive APIs
 - **Regulatory Compliance**: Audit trail for all agent actions
 - **Development vs Production**: Different permission profiles per environment
-
-#### Roadmap (Coming Soon)
-
-Week 1 ✅ **COMPLETE**: Foundation (ExecutionContext, PermissionRule, PermissionType)
-
-**Upcoming Features** (Weeks 2-10):
-- Week 2: `PermissionPolicy` (aggregate multiple rules)
-- Week 3: `ToolApprovalManager` (interactive approval workflows)
-- Week 4-5: `BudgetEnforcer` (cost tracking and limits)
-- Week 6: `PermissionAuditLogger` (compliance audit trails)
-- Week 7-8: Integration with BaseAgent (seamless permission enforcement)
-- Week 9: `RoleBasedPermissions` (RBAC support)
-- Week 10: Production validation and documentation
 
 **Reference**: `src/kaizen/core/autonomy/permissions/`, `tests/unit/core/autonomy/permissions/`, ADR-019 (Permission System)
 
@@ -1660,7 +1889,7 @@ config = VisionAgentConfig(
 agent = VisionAgent(config=config)
 
 # Analyze document image
-result = agent.analyze(
+result = agent.run(
     image="receipt.jpg",
     question="Extract total amount and items"
 )
@@ -1753,9 +1982,421 @@ chunks = agent.extract_for_rag(image="document.jpg", chunk_size=512)
 - Tool calling OPTIONAL (enhancement)
 - Includes: SimpleQA, ChainOfThought, Streaming, Vision, Transcription, Coordination patterns
 
-**Universal Tool Support**: ALL 25 agents support `tool_registry` parameter (100% backward compatible, opt-in)
+**Universal MCP Support**: ALL 25 agents support MCP auto-connect with 12 builtin tools (100% backward compatible)
 
 **Reference**: `src/kaizen/agents/`, `docs/guides/agent-selection-guide.md`, ADR-016
+
+### Pipeline Infrastructure (Composable Workflows - v0.5.0)
+
+**Composable multi-agent pipelines with `.to_agent()` for seamless integration.**
+
+**What**: Base `Pipeline` class for building composable multi-step workflows that can be converted into agents
+**When**: Multi-step workflows, sequential processing, agent composition, reusable workflow logic
+**Where**: `kaizen.orchestration.pipeline`, `kaizen.orchestration.patterns`
+
+#### Core Concepts
+
+**Pipeline Base Class**:
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+class DataProcessingPipeline(Pipeline):
+    def run(self, **inputs):
+        """Execute multi-step workflow"""
+        # Step 1: Clean data
+        cleaned = self.clean_data(inputs['data'])
+
+        # Step 2: Transform
+        transformed = self.transform(cleaned)
+
+        # Step 3: Analyze
+        analysis = self.analyze(transformed)
+
+        return {
+            "original": inputs['data'],
+            "cleaned": cleaned,
+            "transformed": transformed,
+            "analysis": analysis
+        }
+
+# Use directly
+pipeline = DataProcessingPipeline()
+result = pipeline.run(data="raw data...")
+
+# Convert to agent for composition
+agent = pipeline.to_agent(
+    name="data_processor",
+    description="Processes and analyzes data"
+)
+```
+
+**PipelineAgent Wrapper**:
+- `.to_agent()` creates `PipelineAgent` - a `BaseAgent` subclass
+- Pipelines become first-class agents with all BaseAgent capabilities
+- Can be used in multi-agent patterns, workflows, orchestrations
+
+#### SequentialPipeline (Convenience Class)
+
+```python
+from kaizen.orchestration.pipeline import SequentialPipeline
+from kaizen.agents import SimpleQAAgent, CodeGenerationAgent
+
+# Create pipeline from existing agents
+pipeline = SequentialPipeline(
+    agents=[
+        SimpleQAAgent(config),      # Step 1: Analyze task
+        CodeGenerationAgent(config)  # Step 2: Generate code
+    ]
+)
+
+# Execute pipeline (each agent's output → next agent's input)
+result = pipeline.run(task="Create a sorting function")
+
+# Access results
+print(result['final_output'])         # Last agent's output
+print(result['intermediate_results']) # All agent outputs
+
+# Convert to agent for larger orchestrations
+pipeline_agent = pipeline.to_agent(name="code_creation_pipeline")
+```
+
+#### Integration with Multi-Agent Patterns
+
+**Pipelines in SupervisorWorkerPattern**:
+```python
+from kaizen.orchestration.patterns import SupervisorWorkerPattern
+from kaizen.orchestration.pipeline import Pipeline
+
+# Define custom pipeline
+class DocumentProcessingPipeline(Pipeline):
+    def run(self, document):
+        # Multi-step document processing
+        extracted = self.extract(document)
+        validated = self.validate(extracted)
+        enriched = self.enrich(validated)
+        return {"processed_document": enriched}
+
+# Convert to agent
+doc_pipeline_agent = DocumentProcessingPipeline().to_agent(
+    name="document_processor"
+)
+
+# Use in multi-agent pattern alongside other agents
+pattern = SupervisorWorkerPattern(
+    supervisor=supervisor,
+    workers=[
+        doc_pipeline_agent,     # Pipeline wrapped as agent
+        qa_agent,               # Regular agent
+        research_agent          # Regular agent
+    ],
+    coordinator=coordinator,
+    shared_pool=shared_pool
+)
+
+# Supervisor can route tasks to pipeline just like any agent
+result = pattern.execute_task("Process this PDF report")
+```
+
+#### Composable Pipeline Patterns (Phase 3 - TODO-174)
+
+Kaizen provides **9 factory methods** on `Pipeline` class for creating production-ready coordination patterns:
+
+##### 1. Sequential Pipeline
+**When to use**: Linear step-by-step processing where each step depends on the previous
+**Factory method**: `Pipeline.sequential()`
+
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+pipeline = Pipeline.sequential(
+    agents=[extractor, transformer, loader]
+)
+result = pipeline.run(input="raw_data")
+```
+
+**A2A Integration**: None (deterministic order)
+
+---
+
+##### 2. Supervisor-Worker Pattern
+**When to use**: Task decomposition with central coordination and semantic agent selection
+**Factory method**: `Pipeline.supervisor_worker()`
+
+```python
+pipeline = Pipeline.supervisor_worker(
+    supervisor=supervisor_agent,
+    workers=[code_expert, data_expert, writing_expert],
+    selection_mode="semantic"  # A2A capability matching
+)
+
+tasks = pipeline.delegate("Process 100 documents")
+results = pipeline.aggregate_results(tasks[0]["request_id"])
+```
+
+**A2A Integration**: ✅ **Semantic worker selection** - Automatically routes tasks to best worker based on A2A capability matching
+
+---
+
+##### 3. Router (Meta-Controller) Pattern
+**When to use**: Intelligent request routing to best agent based on task requirements
+**Factory method**: `Pipeline.router()`
+
+```python
+pipeline = Pipeline.router(
+    agents=[code_agent, data_agent, writing_agent],
+    routing_strategy="semantic",  # A2A-based routing
+    error_handling="graceful"
+)
+
+result = pipeline.run(
+    task="Write a Python function to analyze data",
+    input="sales.csv"
+)
+```
+
+**A2A Integration**: ✅ **Semantic routing** - Routes each request to the best agent via A2A capability matching. Falls back to round-robin when A2A unavailable.
+
+**Common Pitfalls**:
+- Don't hardcode routing logic - use semantic routing with A2A
+- Always provide `task` parameter for best routing accuracy
+
+---
+
+##### 4. Ensemble Pattern
+**When to use**: Multi-perspective analysis where diverse viewpoints improve results
+**Factory method**: `Pipeline.ensemble()`
+
+```python
+pipeline = Pipeline.ensemble(
+    agents=[code_agent, data_agent, writing_agent, research_agent],
+    synthesizer=synthesis_agent,
+    discovery_mode="a2a",  # A2A discovery
+    top_k=3  # Select top 3 agents
+)
+
+result = pipeline.run(
+    task="Analyze codebase and suggest improvements",
+    input="repository_path"
+)
+```
+
+**A2A Integration**: ✅ **Agent discovery** - Automatically selects top-k agents with best capability matches via A2A. Synthesizer combines their perspectives.
+
+**Common Pitfalls**:
+- Set `top_k` appropriately (3-5 agents typical)
+- Ensure synthesizer can handle multiple perspectives
+- Use `discovery_mode="all"` only for small agent pools (<10)
+
+---
+
+##### 5. Blackboard Pattern
+**When to use**: Complex problems requiring iterative collaboration and dynamic specialist selection
+**Factory method**: `Pipeline.blackboard()`
+
+```python
+pipeline = Pipeline.blackboard(
+    specialists=[problem_solver, data_analyst, optimizer, validator],
+    controller=controller_agent,
+    selection_mode="semantic",  # A2A selection
+    max_iterations=5
+)
+
+result = pipeline.run(
+    task="Solve complex optimization problem",
+    input="problem_definition"
+)
+```
+
+**A2A Integration**: ✅ **Dynamic specialist selection** - Iteratively selects specialists based on evolving blackboard state using A2A. Controller determines convergence.
+
+**Common Pitfalls**:
+- Set `max_iterations` to prevent infinite loops
+- Controller must have clear convergence criteria
+- Blackboard state should be self-contained
+
+---
+
+##### 6. Consensus Pattern
+**When to use**: Democratic decision-making requiring agreement across multiple voters
+**Factory method**: `Pipeline.consensus()`
+
+```python
+pipeline = Pipeline.consensus(
+    agents=[technical_expert, business_expert, legal_expert],
+    threshold=0.67,  # 2 out of 3 must agree
+    voting_strategy="majority"
+)
+
+proposal = pipeline.create_proposal("Should we adopt AI?")
+for voter in pipeline.voters:
+    voter.vote(proposal)
+result = pipeline.determine_consensus(proposal["proposal_id"])
+```
+
+**A2A Integration**: None (voting-based decision)
+
+**Common Pitfalls**:
+- Set threshold appropriately (0.5 for majority, 1.0 for unanimous)
+- Ensure voters have sufficient context
+- Use `voting_strategy="weighted"` for expert panels
+
+---
+
+##### 7. Debate Pattern
+**When to use**: Adversarial analysis to explore tradeoffs and strengthen arguments
+**Factory method**: `Pipeline.debate()`
+
+```python
+pipeline = Pipeline.debate(
+    agents=[proponent_agent, opponent_agent],
+    rounds=3,
+    judge=judge_agent
+)
+
+result = pipeline.debate(
+    topic="Should AI be regulated?",
+    context="Considering safety and innovation"
+)
+print(f"Winner: {result['judgment']['winner']}")
+```
+
+**A2A Integration**: None (adversarial fixed roles)
+
+**Common Pitfalls**:
+- Set rounds appropriately (3-5 typical)
+- Judge must be neutral and capable
+- Provide sufficient context for informed debate
+
+---
+
+##### 8. Handoff Pattern
+**When to use**: Tier escalation where complexity determines which tier handles the task
+**Factory method**: `Pipeline.handoff()`
+
+```python
+pipeline = Pipeline.handoff(
+    agents=[tier1_agent, tier2_agent, tier3_agent]
+)
+
+result = pipeline.execute_with_handoff(
+    task="Debug complex distributed system issue",
+    max_tier=3
+)
+print(f"Handled by tier: {result['final_tier']}")
+print(f"Escalations: {result['escalation_count']}")
+```
+
+**A2A Integration**: None (tier-based escalation)
+
+**Common Pitfalls**:
+- Each tier must evaluate its capability before escalating
+- Avoid unnecessary escalations (inefficient)
+- Tier 1 should handle 70-80% of requests
+
+---
+
+##### 9. Parallel Pattern
+**When to use**: Independent tasks that can execute concurrently for 10-100x speedup
+**Factory method**: `Pipeline.parallel()`
+
+```python
+pipeline = Pipeline.parallel(
+    agents=[agent1, agent2, agent3],
+    aggregator=lambda results: {"combined": " | ".join(r["output"] for r in results)},
+    max_workers=5,
+    timeout=30.0
+)
+
+result = pipeline.run(input="test_data")
+```
+
+**A2A Integration**: None (parallel execution)
+
+**Common Pitfalls**:
+- Set `max_workers` to prevent resource exhaustion
+- Set `timeout` for long-running agents
+- Use `error_handling="graceful"` for production
+
+---
+
+#### Pattern Selection Decision Matrix
+
+| Pattern | Task Decomposition | Semantic Selection (A2A) | Parallel Execution | Iterative | Democratic | Adversarial | Tiered |
+|---------|-------------------|--------------------------|-------------------|-----------|------------|-------------|--------|
+| **Sequential** | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Supervisor-Worker** | ✅ | ✅ | Optional | ❌ | ❌ | ❌ | ❌ |
+| **Router** | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **Ensemble** | ❌ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Blackboard** | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ |
+| **Consensus** | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ | ❌ |
+| **Debate** | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ |
+| **Handoff** | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **Parallel** | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+**Quick Selection Guide**:
+- **Need A2A semantic matching?** → Router, Supervisor-Worker, Ensemble, Blackboard
+- **Need parallel execution?** → Parallel, Ensemble, Consensus
+- **Need iterative refinement?** → Blackboard, Debate
+- **Need democratic decision?** → Consensus
+- **Need adversarial analysis?** → Debate
+- **Need tier escalation?** → Handoff
+- **Need linear processing?** → Sequential
+
+#### Key Benefits
+
+**Composability**:
+- ✅ Pipelines can be nested within other pipelines
+- ✅ Pipelines can be used as workers in multi-agent patterns
+- ✅ Reuse workflow logic across different contexts
+
+**Flexibility**:
+- ✅ Mix and match: Combine pipelines with regular agents
+- ✅ Progressive enhancement: Start simple, add complexity as needed
+- ✅ Type safety: Inherits BaseAgent's signature-based I/O
+
+**Production Ready**:
+- ✅ All BaseAgent features: memory, hooks, observability, permissions
+- ✅ Full compatibility with multi-agent patterns
+- ✅ Testable: Unit test pipelines independently, then compose
+
+#### Migration from Old Patterns
+
+**Old** (agents.coordination):
+```python
+# DEPRECATED (v0.4.x and earlier)
+from kaizen.agents.coordination.sequential_pipeline import SequentialPattern
+
+pattern = SequentialPattern(agents=[...])
+# Limited to sequential patterns, no composability
+```
+
+**New** (orchestration.patterns + orchestration.pipeline):
+```python
+# CURRENT (v0.5.0+)
+from kaizen.orchestration.patterns import SequentialPipelinePattern
+from kaizen.orchestration.pipeline import SequentialPipeline, Pipeline
+
+# Option 1: Use pattern for coordination
+pattern = SequentialPipelinePattern(agents=[...])
+
+# Option 2: Use pipeline for composability
+pipeline = SequentialPipeline(agents=[...])
+agent = pipeline.to_agent()  # Now composable!
+
+# Option 3: Custom pipeline with full control
+class CustomPipeline(Pipeline):
+    def run(self, **inputs):
+        # Custom multi-step logic
+        pass
+```
+
+**Backward Compatibility**: Old imports (`kaizen.agents.coordination.*`) still work with deprecation warnings. Will be removed in v0.6.0.
+
+**Reference**:
+- Implementation: `src/kaizen/orchestration/pipeline.py`
+- Tests: `tests/unit/orchestration/test_pipeline.py`
+- Examples: `examples/orchestration/pipeline-patterns/`
+- ADR: `docs/architecture/adr/ADR-018-pipeline-pattern-architecture-phase3.md`
 
 ### A2A Capability Matching (Google A2A Protocol - Advanced)
 
@@ -1768,6 +2409,172 @@ chunks = agent.extract_for_rag(image="document.jpg", chunk_size=512)
 > **See Skills**: [`kaizen-vision-processing`](../../skills/04-kaizen/kaizen-vision-processing.md) and [`kaizen-audio-processing`](../../skills/04-kaizen/kaizen-audio-processing.md) for standard vision/audio patterns.
 
 **Key enterprise-level multi-modal insights preserved below** - these are CRITICAL for production implementations.
+
+### Single-Agent Patterns (Phase 4 - TODO-175)
+
+**NEW in v0.5.0**: Three advanced single-agent patterns for structured workflows, iterative refinement, and multi-path exploration.
+
+> **See Comprehensive Guides**:
+> - **[Planning Agent Guide](../../../sdk-users/apps/kaizen/docs/guides/planning-agent.md)** - Complete documentation
+> - **[PEV Agent Guide](../../../sdk-users/apps/kaizen/docs/guides/pev-agent.md)** - Complete documentation
+> - **[Tree-of-Thoughts Guide](../../../sdk-users/apps/kaizen/docs/guides/tree-of-thoughts-agent.md)** - Complete documentation
+> - **[Single-Agent Patterns Overview](../../../sdk-users/apps/kaizen/docs/guides/single-agent-patterns.md)** - All patterns comparison
+
+#### Planning Agent - Plan Before You Act
+**Pattern**: Generate complete plan → Validate feasibility → Execute validated plan
+
+**When to Use**:
+- Complex multi-step tasks requiring upfront planning
+- Critical operations needing validation before execution
+- Structured deliverables with clear steps and dependencies
+- Resource planning where feasibility must be checked first
+
+**Example**:
+```python
+from kaizen.agents.specialized.planning import PlanningAgent, PlanningConfig
+
+config = PlanningConfig(
+    llm_provider="openai",
+    model="gpt-4",
+    temperature=0.3,  # Low for consistent planning
+    max_plan_steps=5,
+    validation_mode="strict",  # strict, warn, off
+    enable_replanning=True
+)
+
+agent = PlanningAgent(config=config)
+result = agent.run(
+    task="Create a comprehensive research report on AI ethics",
+    context={
+        "max_sources": 5,
+        "report_length": "2000 words",
+        "focus_areas": ["privacy", "bias", "transparency"]
+    }
+)
+
+# Access three-phase results
+print(f"Plan: {len(result['plan'])} steps")
+print(f"Validation: {result['validation_result']['status']}")
+print(f"Execution: {len(result['execution_results'])} completed")
+print(f"Final: {result['final_result']}")
+```
+
+**vs ReAct**: Planning creates complete plan upfront; ReAct interleaves reasoning and action with real-time adaptation.
+
+**Reference**: `sdk-users/apps/kaizen/docs/guides/planning-agent.md`, `examples/1-single-agent/planning-agent/`
+
+#### PEV Agent - Plan, Execute, Verify, Refine
+**Pattern**: Create plan → Execute → Verify quality → Refine based on feedback (iterative loop)
+
+**When to Use**:
+- Quality-critical outputs (code generation, document writing)
+- Verification-driven workflows with measurable quality criteria
+- Iterative improvement needed to reach target quality
+- Feedback-based optimization
+
+**Example**:
+```python
+from kaizen.agents.specialized.pev import PEVAgent, PEVAgentConfig
+
+config = PEVAgentConfig(
+    llm_provider="openai",
+    model="gpt-4",
+    temperature=0.7,
+    max_iterations=5,  # Maximum refinement cycles
+    verification_strictness="medium",  # strict, medium, lenient
+    enable_error_recovery=True
+)
+
+agent = PEVAgent(config=config)
+result = agent.run(task="""
+Generate Python function with:
+- Type hints
+- Docstring
+- Error handling
+- Input validation
+- Passes pylint score > 9.0
+""")
+
+# Access iterative results
+print(f"Iterations: {len(result['refinements'])}")
+print(f"Verified: {result['verification']['passed']}")
+print(f"Issues: {result['verification'].get('issues', [])}")
+print(f"Final: {result['final_result']}")
+```
+
+**vs Planning**: PEV iteratively refines with post-execution verification; Planning validates plan before execution (single cycle).
+
+**Reference**: `sdk-users/apps/kaizen/docs/guides/pev-agent.md`, `examples/1-single-agent/pev-agent/`
+
+#### Tree-of-Thoughts Agent - Multi-Path Exploration
+**Pattern**: Generate N parallel paths → Evaluate each → Select best → Execute winner
+
+**When to Use**:
+- Multiple valid approaches exist, need to explore alternatives
+- Strategic decision-making where diverse perspectives improve outcomes
+- Creative problem-solving benefiting from alternative solutions
+- Uncertainty about optimal path
+
+**Example**:
+```python
+from kaizen.agents.specialized.tree_of_thoughts import ToTAgent, ToTAgentConfig
+
+config = ToTAgentConfig(
+    llm_provider="openai",
+    model="gpt-4",
+    temperature=0.9,  # HIGH for path diversity
+    num_paths=5,  # Generate 5 alternatives
+    evaluation_criteria="quality",  # quality, speed, creativity
+    parallel_execution=True
+)
+
+agent = ToTAgent(config=config)
+result = agent.run(task="""
+Startup with $500K needs go-to-market strategy.
+Consider: B2B enterprise, B2C freemium, platform, vertical integration.
+Recommend best strategy with reasoning.
+""")
+
+# Access multi-path results
+print(f"Paths Explored: {len(result['paths'])}")
+for i, eval in enumerate(result['evaluations'], 1):
+    print(f"Path {i}: Score {eval['score']:.2f}")
+print(f"Best Score: {result['best_path']['score']:.2f}")
+print(f"Recommendation: {result['final_result']}")
+```
+
+**vs CoT**: ToT explores multiple parallel paths; CoT follows single linear reasoning chain.
+
+**Reference**: `sdk-users/apps/kaizen/docs/guides/tree-of-thoughts-agent.md`, `examples/1-single-agent/tot-agent/`
+
+#### Single-Agent Pattern Decision Matrix
+
+| Pattern | Upfront Planning | Verification | Iteration | Multi-Path | Best For |
+|---------|-----------------|--------------|-----------|------------|----------|
+| **Planning** | ✅ Complete plan | Pre-execution | Single (or replan) | ❌ | Structured workflows, critical validation |
+| **PEV** | ✅ Initial plan | Post-execution | Multiple refine cycles | ❌ | Quality-critical, iterative refinement |
+| **ToT** | ❌ | Score-based evaluation | Single generation | ✅ N paths | Strategic decisions, alternatives |
+| **ReAct** | ❌ | Observation-based | Variable action cycles | ❌ | Dynamic, real-time adaptation |
+| **CoT** | ❌ | ❌ | Single reasoning | ❌ | Step-by-step reasoning tasks |
+| **SimpleQA** | ❌ | ❌ | Single-shot | ❌ | Simple Q&A, no workflow |
+
+**Quick Selection Guide**:
+- **Need upfront structure?** → Planning or PEV
+- **Need quality verification?** → PEV (post-execution) or Planning (pre-execution)
+- **Need multiple alternatives?** → Tree-of-Thoughts
+- **Need real-time adaptation?** → ReAct
+- **Simple reasoning task?** → Chain-of-Thought or SimpleQA
+
+**Pattern Comparison Examples**:
+
+| Task | Recommended Pattern | Reasoning |
+|------|---------------------|-----------|
+| Research report generation | **Planning** | Multi-step workflow, validation before execution |
+| Code generation with testing | **PEV** | Iterative refinement with quality verification |
+| Strategic business decision | **Tree-of-Thoughts** | Explore multiple alternatives, select best |
+| Dynamic troubleshooting | **ReAct** | Real-time observation-based adaptation |
+| Math problem solving | **Chain-of-Thought** | Step-by-step reasoning |
+| Simple question answering | **SimpleQA** | Direct answer, no workflow needed |
 
 ## UX Improvements (Apply to All New Code)
 
@@ -1835,10 +2642,10 @@ provider = OllamaVisionProvider(config=config)
 ### Pitfall 2: VisionAgent Parameter Names
 ```python
 # ❌ WRONG - TypeError
-result = agent.analyze(image="...", prompt="What do you see?")
+result = agent.run(image="...", prompt="What do you see?")
 
 # ✅ CORRECT
-result = agent.analyze(image="...", question="What do you see?")
+result = agent.run(image="...", question="What do you see?")
 ```
 
 ### Pitfall 3: Image Path Handling
@@ -1861,11 +2668,11 @@ result = provider.analyze_image(...)
 text = result['response']
 
 # VisionAgent → 'answer' key
-result = agent.analyze(...)
+result = agent.run(...)
 text = result['answer']
 
 # MultiModalAgent → signature fields
-result = agent.analyze(...)
+result = agent.run(...)
 invoice = result['invoice_number']  # Depends on signature
 ```
 
@@ -1923,7 +2730,7 @@ def test_qa_agent(simple_qa_example, assert_async_strategy, test_queries):
     agent = QAAgent(config=QAConfig())
     assert_async_strategy(agent)  # One-line assertion
 
-    result = agent.ask(test_queries["simple"])
+    result = agent.run(question=test_queries["simple"])
     assert isinstance(result, dict)
 ```
 
@@ -1942,8 +2749,8 @@ def test_qa_agent(simple_qa_example, assert_async_strategy, test_queries):
 - ✅ Let AsyncSingleShotStrategy be default (don't specify)
 - ✅ Call `self.run()` (sync interface), not `strategy.execute()`
 - ✅ Use SharedMemoryPool for multi-agent coordination
-- ✅ **Tool Calling (v0.2.0)**: Enable via `tool_registry` parameter (opt-in, all 25 agents support it)
-- ✅ **MCP Integration (v0.2.0)**: Use `mcp_servers` parameter for MCP server integration
+- ✅ **Tool Calling (v0.2.0+)**: MCP auto-connect provides 12 builtin tools automatically, use `mcp_servers` parameter for custom MCP servers
+- ✅ **MCP Integration (v0.2.0+)**: ALL agents auto-connect to kaizen_builtin MCP server with 12 tools, add custom servers via `mcp_servers` parameter
 - ✅ **Control Protocol (v0.2.0)**: Use `control_protocol` parameter for bidirectional communication
 - ✅ **Observability (v0.5.0)**: Enable via `agent.enable_observability()` when needed (opt-in, zero overhead when disabled)
 - ✅ **Hooks (v0.5.0)**: Use `agent._hook_manager` to register hooks for lifecycle events
