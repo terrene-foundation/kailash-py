@@ -105,6 +105,8 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **Observability** (v0.5.0): Complete monitoring stack (tracing, metrics, logging, audit) with zero overhead
 - **Lifecycle Infrastructure** (v0.5.0): Hooks for event-driven monitoring, State for persistence, Interrupts for graceful control
 - **Permission System** (v0.5.0+): Policy-based access control with ExecutionContext, PermissionRule, and budget enforcement
+- **Interrupt Mechanism** (v0.6.0): Complete graceful shutdown with Ctrl+C handling, timeout/budget auto-stop, checkpoint preservation
+- **Persistent Buffer Memory** (v0.6.0): Production-ready DataFlow backend for conversation persistence with dual-buffer architecture
 - **Strategy Pattern**: Pluggable execution (AsyncSingleShotStrategy is default)
 - **SharedMemoryPool**: Multi-agent coordination
 - **A2A Protocol**: Google Agent-to-Agent protocol for semantic capability matching
@@ -637,54 +639,155 @@ result = await agent._autonomous_loop("Perform a complex task")
 
 **Reference**: `docs/features/checkpoint-resume-system.md`, `src/kaizen/agents/autonomous/base.py:192` (state capture/restore), `tests/unit/agents/autonomous/test_auto_checkpoint.py` (114 tests passing)
 
-#### Interrupt System
+#### Interrupt System (v0.6.0 - Complete Implementation)
 
-**What**: Graceful execution interruption and resumption
-**When**: Need to pause agents for user input, rate limiting, or coordinated shutdown
-**How**: Use interrupt signals with handler registration
+**What**: Production-ready graceful shutdown with checkpoint preservation
+**When**: Need Ctrl+C handling, timeout/budget auto-stop, or coordinated multi-agent shutdown
+**How**: Complete interrupt mechanism with 3 sources, 2 modes, and automatic checkpoint preservation
 
+**🆕 v0.6.0 Features**:
+- ✅ **Complete Implementation**: 3 interrupt sources (USER, SYSTEM, PROGRAMMATIC)
+- ✅ **2 Shutdown Modes**: GRACEFUL (finish cycle + checkpoint) vs IMMEDIATE (stop now)
+- ✅ **Checkpoint Preservation**: Automatically saves state on interrupt for recovery
+- ✅ **Signal Propagation**: Parent agents interrupt children automatically
+- ✅ **Hook Integration**: PRE/POST_INTERRUPT hooks for custom handling
+- ✅ **34 E2E Tests**: Production-validated for autonomous workloads
+
+**Basic Usage**:
 ```python
-from kaizen.core.autonomy.interrupts import InterruptManager, InterruptSignal
+from kaizen.agents.autonomous.base import BaseAutonomousAgent
+from kaizen.agents.autonomous.config import AutonomousConfig
+from kaizen.core.autonomy.interrupts.handlers import TimeoutInterruptHandler
 
-# Every BaseAgent has an interrupt manager
-interrupt_manager = agent._interrupt_manager
-
-# Request interruption (non-blocking)
-interrupt_manager.request_interrupt(
-    signal=InterruptSignal.USER_REQUESTED,
-    reason="Awaiting user approval",
-    metadata={"approval_id": "abc123"}
+# Enable interrupts in config
+config = AutonomousConfig(
+    llm_provider="ollama",
+    model="llama3.2:1b",
+    enable_interrupts=True,              # Enable interrupt handling
+    graceful_shutdown_timeout=5.0,       # Max time for graceful shutdown
+    checkpoint_on_interrupt=True         # Save checkpoint before exit
 )
 
-# Check if interrupted
-if interrupt_manager.is_interrupted():
-    # Save state and pause
-    await state_manager.save_state(current_state)
-    return {"status": "paused", "resume_token": "xyz"}
+# Create agent with interrupt support
+agent = BaseAutonomousAgent(config=config, signature=MySignature())
 
-# Resume execution
-interrupt_manager.clear_interrupt()
+# Add timeout handler (auto-stop after 30s)
+timeout_handler = TimeoutInterruptHandler(timeout_seconds=30.0)
+agent.interrupt_manager.add_handler(timeout_handler)
 
-# Handle specific signals
-@interrupt_manager.on_signal(InterruptSignal.RATE_LIMIT)
-async def handle_rate_limit(signal_data):
-    await asyncio.sleep(signal_data["retry_after"])
-    interrupt_manager.clear_interrupt()
+# Run agent - gracefully handles Ctrl+C, timeouts, budget limits
+try:
+    result = await agent.run_autonomous(task="Analyze data")
+except InterruptedError as e:
+    print(f"Agent interrupted: {e.reason.message}")
+    checkpoint_id = e.reason.metadata.get("checkpoint_id")
+    # Resume from checkpoint in next run
 ```
 
-**Interrupt Signals**:
-- `USER_REQUESTED`: Manual pause (e.g., awaiting approval)
-- `RATE_LIMIT`: API rate limit hit
-- `BUDGET_EXCEEDED`: Cost budget exceeded
-- `TIMEOUT`: Operation timeout
-- `SHUTDOWN`: Graceful shutdown requested
-- `CUSTOM`: User-defined signals
+**3 Interrupt Sources**:
+- **USER**: Ctrl+C (SIGINT), manual interrupts via Control Protocol
+- **SYSTEM**: Timeout handlers, budget handlers, resource limits
+- **PROGRAMMATIC**: API calls, hook triggers, parent propagation
 
-**Key Patterns**:
-- Interrupts are cooperative (agent must check `is_interrupted()`)
-- Combine with StateManager for pause/resume workflows
-- Use with hooks to auto-interrupt on specific events
-- Non-blocking: `request_interrupt()` doesn't stop execution immediately
+**2 Shutdown Modes**:
+- **GRACEFUL** (default): Finish current cycle → Save checkpoint → Exit cleanly
+- **IMMEDIATE**: Stop as soon as possible (best effort, may lose cycle work)
+
+**Interrupt Handlers** (Built-in):
+```python
+from kaizen.core.autonomy.interrupts.handlers import (
+    TimeoutInterruptHandler,  # Auto-stop after timeout
+    BudgetInterruptHandler,   # Auto-stop when cost limit exceeded
+    SignalInterruptHandler    # Handle SIGINT/SIGTERM
+)
+
+# Timeout handler (30 seconds)
+timeout = TimeoutInterruptHandler(timeout_seconds=30.0)
+agent.interrupt_manager.add_handler(timeout)
+
+# Budget handler ($0.10 limit)
+budget = BudgetInterruptHandler(max_cost=0.10)
+agent.interrupt_manager.add_handler(budget)
+
+# Signal handler (Ctrl+C)
+signal_handler = SignalInterruptHandler()
+agent.interrupt_manager.add_handler(signal_handler)
+```
+
+**Checkpoint Preservation**:
+```python
+# Interrupts automatically save checkpoint with metadata
+result = await agent.run_autonomous(task="Long task")
+
+if result.get("status") == "interrupted":
+    checkpoint_id = result["checkpoint_id"]
+    reason = result["interrupt_reason"]
+
+    # Resume from checkpoint
+    agent_resumed = BaseAutonomousAgent(config=config, signature=MySignature())
+    result = await agent_resumed.run_autonomous(
+        task="Long task",
+        resume_from_checkpoint=checkpoint_id
+    )
+```
+
+**Multi-Agent Propagation**:
+```python
+# Parent interrupt propagates to all children
+parent = SupervisorAgent(config)
+child1 = WorkerAgent(config)
+child2 = WorkerAgent(config)
+
+parent.interrupt_manager.add_child(child1.interrupt_manager)
+parent.interrupt_manager.add_child(child2.interrupt_manager)
+
+# When parent interrupted, children also stop
+parent.interrupt_manager.request_interrupt(
+    source=InterruptSource.USER,
+    mode=InterruptMode.GRACEFUL,
+    reason="User requested shutdown"
+)
+# child1 and child2 also receive interrupt signal
+```
+
+**Hook Integration** (Custom Interrupt Handling):
+```python
+from kaizen.core.autonomy.hooks import HookEvent, HookContext, HookResult
+
+async def pre_interrupt_hook(context: HookContext) -> HookResult:
+    """Custom logic before interrupt"""
+    print(f"⚠️  Interrupt triggered: {context.data.get('reason')}")
+    # Send notification, log to monitoring, etc.
+    return HookResult(success=True)
+
+async def post_interrupt_hook(context: HookContext) -> HookResult:
+    """Custom logic after interrupt"""
+    checkpoint_id = context.data.get("checkpoint_id")
+    print(f"✅ Checkpoint saved: {checkpoint_id}")
+    return HookResult(success=True)
+
+# Register hooks
+hook_manager.register(HookEvent.PRE_INTERRUPT, pre_interrupt_hook)
+hook_manager.register(HookEvent.POST_INTERRUPT, post_interrupt_hook)
+```
+
+**Key Features**:
+- Interrupts are **cooperative** (agent checks at cycle boundaries)
+- **Non-blocking**: `request_interrupt()` sets flag, doesn't stop immediately
+- **Thread-safe**: Safe for concurrent multi-agent systems
+- **Resume-aware**: Checkpoints include interrupt metadata for intelligent resume
+- **Signal-safe**: Properly handles SIGINT/SIGTERM for clean process termination
+
+**Examples**:
+- `examples/autonomy/interrupts/01_ctrl_c_interrupt.py` - Ctrl+C handling
+- `examples/autonomy/interrupts/02_timeout_interrupt.py` - Timeout auto-stop
+- `examples/autonomy/interrupts/03_budget_interrupt.py` - Budget limit auto-stop
+
+**Reference**:
+- `src/kaizen/core/autonomy/interrupts/` - Complete implementation
+- `tests/e2e/autonomy/test_interrupt_mechanism.py` - 34 E2E tests
+- `docs/guides/interrupt-mechanism-guide.md` - Complete guide
+- ADR-016 - Architecture decision record
 
 #### Integration Example
 
@@ -1445,6 +1548,100 @@ relevant_insights = agent2.read_relevant(
     limit=10
 )
 ```
+
+**Persistent Buffer Memory** (v0.6.0 - Production-Ready):
+```python
+from kaizen.memory import PersistentBufferMemory
+from dataflow import DataFlow
+
+# Initialize DataFlow backend (automatic schema creation)
+db = DataFlow(
+    database_type="sqlite",
+    database_config={"database": "./agent_memory.db"}
+)
+
+# Create persistent buffer memory
+memory = PersistentBufferMemory(
+    db=db,
+    agent_id="agent_001",
+    buffer_size=100,              # Keep last 100 messages in memory
+    auto_persist_interval=10,     # Auto-persist every 10 messages
+    enable_compression=True       # JSONL compression for storage
+)
+
+# Add conversation turns
+memory.add_message(role="user", content="What is AI?")
+memory.add_message(role="assistant", content="AI is artificial intelligence...")
+
+# Retrieve conversation history
+history = memory.get_history(limit=10)  # Last 10 messages
+
+# Persist to database
+memory.persist()  # Manual persist (or waits for auto_persist_interval)
+
+# Load from database in next session
+memory_loaded = PersistentBufferMemory(db=db, agent_id="agent_001")
+memory_loaded.load_from_db()  # Restores conversation history
+```
+
+**🆕 v0.6.0 Features**:
+- ✅ **DataFlow Backend**: Zero-config database persistence with automatic schema
+- ✅ **Dual-Buffer Architecture**: In-memory buffer + database storage
+- ✅ **Auto-Persist**: Configurable auto-persist interval (every N messages)
+- ✅ **Compression**: JSONL compression for efficient storage
+- ✅ **Multi-Instance**: Agent-specific memory isolation (agent_id scoping)
+- ✅ **Cross-Session**: Load conversation history across restarts
+- ✅ **Production-Validated**: 28 E2E tests with real database operations
+
+**Key Benefits**:
+- **Fast Access**: In-memory buffer for recent messages (<1ms retrieval)
+- **Persistent**: Database storage survives restarts
+- **Automatic**: Auto-persist prevents data loss
+- **Scalable**: DataFlow handles multi-tenancy and sharding
+- **Efficient**: Compression reduces storage by 60%+
+
+**Example - Conversational Agent**:
+```python
+from kaizen.agents import SimpleQAAgent
+from kaizen.memory import PersistentBufferMemory
+
+class ConversationalAgent(SimpleQAAgent):
+    def __init__(self, config, db):
+        super().__init__(config)
+        self.memory = PersistentBufferMemory(
+            db=db,
+            agent_id=self.agent_id,
+            buffer_size=50,
+            auto_persist_interval=5
+        )
+        # Load previous conversations
+        self.memory.load_from_db()
+
+    def ask(self, question: str) -> dict:
+        # Add user message to memory
+        self.memory.add_message(role="user", content=question)
+
+        # Get conversation context
+        history = self.memory.get_history(limit=10)
+
+        # Run agent with context
+        result = self.run(question=question, context=history)
+
+        # Add assistant response to memory
+        self.memory.add_message(role="assistant", content=result["answer"])
+
+        return result
+
+# Usage - conversation persists across sessions
+agent = ConversationalAgent(config, db)
+result1 = agent.ask("What is AI?")
+result2 = agent.ask("Can you elaborate?")  # Uses history from previous question
+```
+
+**Reference**:
+- `src/kaizen/memory/persistent_buffer.py` - Implementation
+- `tests/integration/memory/test_persistent_buffer_dataflow.py` - 28 E2E tests
+- `docs/guides/persistent-memory-guide.md` - Complete guide
 
 #### Storage Backends
 
@@ -2390,7 +2587,7 @@ class CustomPipeline(Pipeline):
         pass
 ```
 
-**Backward Compatibility**: Old imports (`kaizen.agents.coordination.*`) still work with deprecation warnings. Will be removed in v0.6.0.
+**Backward Compatibility**: Old imports (`kaizen.agents.coordination.*`) were deprecated in v0.5.0 and removed in v0.6.0. Use `kaizen.orchestration.patterns` instead.
 
 **Reference**:
 - Implementation: `src/kaizen/orchestration/pipeline.py`
@@ -2756,6 +2953,8 @@ def test_qa_agent(simple_qa_example, assert_async_strategy, test_queries):
 - ✅ **Hooks (v0.5.0)**: Use `agent._hook_manager` to register hooks for lifecycle events
 - ✅ **State (v0.5.0)**: Create checkpoints before risky operations with StateManager
 - ✅ **Permissions (v0.5.0+)**: Check `ExecutionContext.can_use_tool()` before tool execution
+- ✅ **Interrupts (v0.6.0)**: Enable interrupts for autonomous agents with `enable_interrupts=True`, use handlers for timeout/budget
+- ✅ **Persistent Memory (v0.6.0)**: Use `PersistentBufferMemory` with DataFlow backend for conversation persistence across sessions
 - ✅ **Multi-Modal**: Use config objects for OllamaVisionProvider
 - ✅ **Multi-Modal**: Use 'question' for VisionAgent, 'prompt' for providers
 - ✅ **Multi-Modal**: Pass file paths, not base64 data URLs
