@@ -44,7 +44,11 @@ import yaml
 
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
-from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
+from kailash.sdk_exceptions import (
+    NodeExecutionError,
+    NodeValidationError,
+    RetryExhaustedException,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -210,17 +214,78 @@ class FetchMode(Enum):
 
 
 @dataclass
+class RetryMetrics:
+    """Tracks retry behavior for monitoring and debugging."""
+
+    def __init__(self):
+        self.total_operations = 0
+        self.total_retries = 0
+        self.failed_operations = 0
+        self.retry_histogram = defaultdict(int)  # {num_retries: count}
+        self._lock = threading.Lock()
+
+    def record_operation(self, num_retries: int, success: bool):
+        """Record a single operation with its retry count."""
+        with self._lock:
+            self.total_operations += 1
+            self.total_retries += num_retries
+            self.retry_histogram[num_retries] += 1
+
+            if not success:
+                self.failed_operations += 1
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """Get current metrics snapshot."""
+        with self._lock:
+            return {
+                "total_operations": self.total_operations,
+                "total_retries": self.total_retries,
+                "failed_operations": self.failed_operations,
+                "avg_retries_per_operation": (
+                    self.total_retries / max(self.total_operations, 1)
+                ),
+                "failure_rate": (
+                    self.failed_operations / max(self.total_operations, 1)
+                ),
+                "retry_histogram": dict(self.retry_histogram),
+            }
+
+    def reset(self):
+        """Reset all metrics."""
+        with self._lock:
+            self.total_operations = 0
+            self.total_retries = 0
+            self.failed_operations = 0
+            self.retry_histogram.clear()
+
+
+@dataclass
 class RetryConfig:
-    """Configuration for retry logic."""
+    """Configuration for retry logic with database-specific optimizations.
+
+    Attributes:
+        max_retries: Maximum number of retry attempts
+        initial_delay: Initial delay between retries (seconds)
+        max_delay: Maximum delay between retries (seconds)
+        exponential_base: Exponential backoff multiplier
+        jitter: Add random jitter to retry delays
+        retryable_errors: List of error patterns that trigger retries
+        metrics: Optional RetryMetrics instance for tracking
+        database_type: Database type for optimization hints
+    """
 
     max_retries: int = 3
     initial_delay: float = 1.0
     max_delay: float = 60.0
     exponential_base: float = 2.0
     jitter: bool = True
+    database_type: Optional[str] = None
 
     # Retryable error patterns (database-specific)
     retryable_errors: list[str] = None
+
+    # Optional metrics tracking
+    metrics: Optional[RetryMetrics] = None
 
     def __post_init__(self):
         """Initialize default retryable errors."""
@@ -262,7 +327,7 @@ class RetryConfig:
         return any(pattern.lower() in error_str for pattern in self.retryable_errors)
 
     def get_delay(self, attempt: int) -> float:
-        """Calculate delay for a retry attempt."""
+        """Calculate delay for a retry attempt with high retry rate warning."""
         delay = min(
             self.initial_delay * (self.exponential_base**attempt), self.max_delay
         )
@@ -272,7 +337,77 @@ class RetryConfig:
             jitter_amount = delay * 0.25
             delay += random.uniform(-jitter_amount, jitter_amount)
 
+        # Warn on high retry rate
+        if attempt > (self.max_retries / 2):
+            logger.warning(
+                f"High retry rate detected: {attempt}/{self.max_retries} retries needed. "
+                f"Consider using PostgreSQL for better concurrency support if using SQLite."
+            )
+
         return max(0, delay)  # Ensure non-negative
+
+    @classmethod
+    def for_database(
+        cls, database_type: str, metrics: Optional[RetryMetrics] = None
+    ) -> "RetryConfig":
+        """Create database-optimized retry configuration.
+
+        Args:
+            database_type: Database type (postgresql, mysql, sqlite)
+            metrics: Optional RetryMetrics instance for tracking
+
+        Returns:
+            RetryConfig optimized for the specified database type
+        """
+        db_type_lower = database_type.lower()
+
+        if db_type_lower == "sqlite":
+            # SQLite: Single-writer, file-level locking
+            # Needs more retries with shorter delays due to lock contention
+            return cls(
+                max_retries=10,  # Up from 3
+                initial_delay=0.5,  # Start smaller
+                max_delay=30.0,  # 30-second timeout
+                exponential_base=1.5,  # Gentler backoff
+                jitter=True,
+                database_type="sqlite",
+                metrics=metrics,
+            )
+        elif db_type_lower in ["postgresql", "postgres"]:
+            # PostgreSQL: MVCC, good concurrency handling
+            # Fewer retries needed
+            return cls(
+                max_retries=5,
+                initial_delay=0.1,  # Quick retry
+                max_delay=10.0,  # Shorter timeout
+                exponential_base=2.0,
+                jitter=True,
+                database_type="postgresql",
+                metrics=metrics,
+            )
+        elif db_type_lower == "mysql":
+            # MySQL: InnoDB with MVCC
+            # Similar to PostgreSQL
+            return cls(
+                max_retries=5,
+                initial_delay=0.2,
+                max_delay=15.0,
+                exponential_base=2.0,
+                jitter=True,
+                database_type="mysql",
+                metrics=metrics,
+            )
+        else:
+            # Default configuration
+            return cls(
+                max_retries=3,
+                initial_delay=1.0,
+                max_delay=60.0,
+                exponential_base=2.0,
+                jitter=True,
+                database_type=database_type,
+                metrics=metrics,
+            )
 
 
 @dataclass
@@ -3730,9 +3865,11 @@ class AsyncSQLDatabaseNode(AsyncNode):
             Query results
 
         Raises:
-            NodeExecutionError: After all retry attempts are exhausted
+            RetryExhaustedException: After all retry attempts are exhausted
         """
         last_error = None
+        total_wait_time = 0.0
+        retry_count = 0
 
         for attempt in range(self._retry_config.max_retries):
             try:
@@ -3761,24 +3898,42 @@ class AsyncSQLDatabaseNode(AsyncNode):
                             user_context, self.metadata.name, result
                         )
 
+                # Success - record metrics if available
+                if self._retry_config.metrics:
+                    self._retry_config.metrics.record_operation(
+                        retry_count, success=True
+                    )
+
                 return result
 
             except Exception as e:
                 last_error = e
+                retry_count = attempt + 1
 
                 # Parameter type determination is now handled during dict-to-positional conversion
                 # No special retry logic needed for parameter $11
 
                 # Check if error is retryable
                 if not self._retry_config.should_retry(e):
+                    # Not retryable - record failure and raise immediately
+                    if self._retry_config.metrics:
+                        self._retry_config.metrics.record_operation(
+                            retry_count, success=False
+                        )
                     raise
 
                 # Check if we have more attempts
                 if attempt >= self._retry_config.max_retries - 1:
+                    # No more attempts - record failure and raise
+                    if self._retry_config.metrics:
+                        self._retry_config.metrics.record_operation(
+                            retry_count, success=False
+                        )
                     raise
 
                 # Calculate delay
                 delay = self._retry_config.get_delay(attempt)
+                total_wait_time += delay
 
                 # Log retry attempt (if logging is available)
                 try:
@@ -3817,9 +3972,12 @@ class AsyncSQLDatabaseNode(AsyncNode):
                         # If reconnection fails, continue with retry loop
                         pass
 
-        # All retries exhausted
-        raise NodeExecutionError(
-            f"Query failed after {self._retry_config.max_retries} attempts: {last_error}"
+        # All retries exhausted - raise RetryExhaustedException with full context
+        raise RetryExhaustedException(
+            operation="Database query execution",
+            attempts=self._retry_config.max_retries,
+            last_error=last_error,
+            total_wait_time=total_wait_time,
         )
 
     async def _execute_many_with_retry(
@@ -3836,32 +3994,54 @@ class AsyncSQLDatabaseNode(AsyncNode):
             Number of affected rows
 
         Raises:
-            NodeExecutionError: After all retry attempts are exhausted
+            RetryExhaustedException: After all retry attempts are exhausted
         """
         last_error = None
+        total_wait_time = 0.0
+        retry_count = 0
 
         for attempt in range(self._retry_config.max_retries):
             try:
                 # Execute batch with transaction
-                return await self._execute_many_with_transaction(
+                result = await self._execute_many_with_transaction(
                     adapter=adapter,
                     query=query,
                     params_list=params_list,
                 )
 
+                # Success - record metrics if available
+                if self._retry_config.metrics:
+                    self._retry_config.metrics.record_operation(
+                        retry_count, success=True
+                    )
+
+                return result
+
             except Exception as e:
                 last_error = e
+                retry_count = attempt + 1
 
                 # Check if error is retryable
                 if not self._retry_config.should_retry(e):
+                    # Not retryable - record failure and raise immediately
+                    if self._retry_config.metrics:
+                        self._retry_config.metrics.record_operation(
+                            retry_count, success=False
+                        )
                     raise
 
                 # Check if we have more attempts
                 if attempt >= self._retry_config.max_retries - 1:
+                    # No more attempts - record failure and raise
+                    if self._retry_config.metrics:
+                        self._retry_config.metrics.record_operation(
+                            retry_count, success=False
+                        )
                     raise
 
                 # Calculate delay
                 delay = self._retry_config.get_delay(attempt)
+                total_wait_time += delay
 
                 # Wait before retry
                 await asyncio.sleep(delay)
@@ -3890,9 +4070,12 @@ class AsyncSQLDatabaseNode(AsyncNode):
                         # If reconnection fails, continue with retry loop
                         pass
 
-        # All retries exhausted
-        raise NodeExecutionError(
-            f"Batch operation failed after {self._retry_config.max_retries} attempts: {last_error}"
+        # All retries exhausted - raise RetryExhaustedException with full context
+        raise RetryExhaustedException(
+            operation="Database batch operation",
+            attempts=self._retry_config.max_retries,
+            last_error=last_error,
+            total_wait_time=total_wait_time,
         )
 
     async def _execute_many_with_transaction(
