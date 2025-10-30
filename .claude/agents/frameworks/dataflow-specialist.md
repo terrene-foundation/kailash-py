@@ -57,6 +57,14 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 | **Full Features** | `enable_model_persistence=True, auto_migrate=True` | 10-30s |
 | **With Nexus** | Always use above + `Nexus(auto_discovery=False)` | Same |
 
+### 🧪 Test Mode Configuration (v0.7.10+)
+| Use Case | Config | Cleanup Pattern |
+|----------|--------|-----------------|
+| **Auto-detection** | `db = DataFlow("postgresql://...")` | Optional cleanup |
+| **Explicit enable** | `db = DataFlow("postgresql://...", test_mode=True)` | Recommended cleanup |
+| **Global enable** | `DataFlow.enable_test_mode()` | Session-wide |
+| **With aggressive cleanup** | `db = DataFlow("postgresql://...", test_mode=True, test_mode_aggressive_cleanup=True)` | Maximum isolation |
+
 ## ⚠️ CRITICAL LEARNINGS - Read First
 
 ### ⚠️ Common Mistakes (HIGH IMPACT - Prevents 1-4 Hour Debugging)
@@ -920,11 +928,187 @@ success = await enterprise_migration_workflow(
 print(f"Migration result: {'SUCCESS' if success else 'FAILED'}")
 ```
 
-## TDD Mode & Testing
+## TDD Mode & Testing (v0.7.10+)
 
 > **See Skill**: [`dataflow-testing`](../../skills/02-dataflow/dataflow-testing.md) for TDD patterns and test fixtures.
 
-Quick note: TDD mode enables <100ms test execution with automatic rollback via savepoints.
+### Test Mode API Overview
+
+DataFlow v0.7.10+ provides a comprehensive Test Mode API for production-grade async testing with automatic connection pool management and cleanup.
+
+**Key Features**:
+- **Auto-detection**: Automatically enables test mode when pytest is detected
+- **Global control**: Enable/disable test mode across all instances
+- **Connection cleanup**: Graceful pool cleanup methods with metrics
+- **Thread-safe**: Full concurrency support with RLock protection
+- **Zero overhead**: <150ms per test with aggressive cleanup
+
+### Test Mode Configuration
+
+**Three-Level Priority System**:
+1. **Explicit parameter** (highest priority)
+   ```python
+   db = DataFlow("postgresql://...", test_mode=True)
+   ```
+
+2. **Global class method** (medium priority)
+   ```python
+   DataFlow.enable_test_mode()  # All instances use test mode
+   db = DataFlow("postgresql://...")
+   ```
+
+3. **Auto-detection** (lowest priority, default)
+   ```python
+   db = DataFlow("postgresql://...")  # Detects pytest automatically
+   ```
+
+### Cleanup Methods (Async)
+
+**cleanup_stale_pools()**: Remove pools from closed event loops
+```python
+metrics = await db.cleanup_stale_pools()
+# Returns: {
+#   'stale_pools_found': 2,
+#   'stale_pools_cleaned': 2,
+#   'cleanup_failures': 0,
+#   'cleanup_errors': [],
+#   'cleanup_duration_ms': 45.2
+# }
+```
+
+**cleanup_all_pools()**: Remove all connection pools (teardown)
+```python
+metrics = await db.cleanup_all_pools(force=False)
+# Returns: {
+#   'total_pools': 5,
+#   'pools_cleaned': 5,
+#   'cleanup_failures': 0,
+#   'cleanup_errors': [],
+#   'cleanup_duration_ms': 98.1,
+#   'forced': False
+# }
+```
+
+**get_cleanup_metrics()**: Get pool lifecycle metrics (sync)
+```python
+metrics = db.get_cleanup_metrics()
+# Returns: {
+#   'active_pools': 3,
+#   'total_pools_created': 10,
+#   'test_mode_enabled': True,
+#   'aggressive_cleanup_enabled': True,
+#   'pool_keys': [...],
+#   'event_loop_ids': [...]
+# }
+```
+
+### Recommended Fixture Pattern
+
+```python
+# tests/conftest.py
+import pytest
+from dataflow import DataFlow
+
+@pytest.fixture(scope="function")
+async def db():
+    """DataFlow with automatic cleanup."""
+    db = DataFlow("postgresql://...", test_mode=True)
+    yield db
+    await db.cleanup_all_pools()
+
+# tests/test_user.py
+@pytest.mark.asyncio
+async def test_user_create(db):
+    @db.model
+    class User:
+        id: str
+        name: str
+
+    # Test operations...
+    # Cleanup automatic via fixture
+```
+
+### Global Test Mode Pattern
+
+```python
+# tests/conftest.py
+@pytest.fixture(scope="session", autouse=True)
+def enable_test_mode():
+    DataFlow.enable_test_mode()
+    yield
+    DataFlow.disable_test_mode()
+
+# All tests inherit test mode automatically
+```
+
+### Performance Impact
+
+| Operation | Overhead | Frequency |
+|-----------|----------|-----------|
+| Test mode detection | <1ms | Once per instance |
+| `cleanup_stale_pools()` | <50ms | Per fixture |
+| `cleanup_all_pools()` | <100ms | Per fixture |
+| `get_cleanup_metrics()` | <1ms | As needed |
+
+**Total Impact**: <150ms per test (acceptable for test suites)
+
+### AsyncSQLDatabaseNode Enhancements
+
+**_cleanup_closed_loop_pools()** (async, class method):
+```python
+# Automatically removes pools from closed event loops
+count = await AsyncSQLDatabaseNode._cleanup_closed_loop_pools()
+# Returns: Number of pools cleaned
+```
+
+**clear_shared_pools()** (async, enhanced with metrics):
+```python
+# Clear all shared pools with detailed metrics
+metrics = await AsyncSQLDatabaseNode.clear_shared_pools(graceful=True)
+# Returns: {
+#   'total_pools': 10,
+#   'pools_cleaned': 10,
+#   'cleanup_failures': 0,
+#   'cleanup_errors': []
+# }
+```
+
+### Troubleshooting Common Issues
+
+**Issue: "Event loop is closed" errors**
+```python
+# Solution: Use function-scoped fixture with cleanup
+@pytest.fixture(scope="function")
+async def db():
+    db = DataFlow("postgresql://...", test_mode=True)
+    yield db
+    await db.cleanup_all_pools()
+```
+
+**Issue: Pool leaks between tests**
+```python
+# Solution: Check cleanup metrics
+metrics = await db.cleanup_all_pools()
+if metrics['cleanup_failures'] > 0:
+    print(f"⚠️ Failed cleanups: {metrics['cleanup_errors']}")
+```
+
+**Issue: "Pool attached to different loop"**
+```python
+# Solution: Use fresh event loop per test
+@pytest.fixture(scope="function")
+def event_loop():
+    policy = asyncio.get_event_loop_policy()
+    loop = policy.new_event_loop()
+    asyncio.set_event_loop(loop)
+    yield loop
+    loop.close()
+```
+
+### See Also
+- **Complete Testing Guide**: `/apps/kailash-dataflow/docs/testing/README.md`
+- **Fixture Patterns**: `/apps/kailash-dataflow/docs/testing/fixture-patterns.md`
+- **ADR-017 Quick Reference**: `/apps/kailash-dataflow/adr/ADR-017-API-QUICK-REFERENCE.md`
 
 ## Critical Limitations & Workarounds
 
@@ -1104,7 +1288,7 @@ app.register("create_user", workflow.build())
 
 **What You Keep:**
 - ✅ All CRUD operations work normally
-- ✅ All 9 generated nodes per model
+- ✅ All 11 generated nodes per model
 - ✅ Connection pooling, caching, metrics
 - ✅ Multi-channel access (API, CLI, MCP)
 
