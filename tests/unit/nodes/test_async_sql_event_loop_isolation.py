@@ -25,13 +25,28 @@ from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
 
 class TestEventLoopPoolKeyGeneration:
-    """Test event loop ID inclusion in pool keys.
+    """Test event loop ID inclusion in pool keys (PRODUCTION MODE).
 
     These tests verify that pool keys include event loop IDs to ensure
-    pools are isolated to their creating event loop.
+    pools are isolated to their creating event loop in PRODUCTION environments.
 
-    EXPECTED: All tests FAIL until Task 13 implementation complete.
+    Note: These tests force production mode to verify loop ID isolation behavior.
     """
+
+    @pytest.fixture(autouse=True)
+    def force_production_mode(self):
+        """Force production mode for these tests by mocking test environment detection."""
+        # Reset cache to ensure clean state
+        AsyncSQLDatabaseNode._reset_test_environment_cache()
+
+        # Mock _is_test_environment to return False (production mode)
+        with patch.object(
+            AsyncSQLDatabaseNode, "_is_test_environment", return_value=False
+        ):
+            yield
+
+        # Reset cache after test
+        AsyncSQLDatabaseNode._reset_test_environment_cache()
 
     @pytest.mark.asyncio
     async def test_pool_key_includes_event_loop_id(self):
@@ -186,13 +201,28 @@ class TestEventLoopPoolKeyGeneration:
 
 
 class TestEventLoopPoolValidation:
-    """Test pool validation across event loops.
+    """Test pool validation across event loops (PRODUCTION MODE).
 
     These tests verify that pools are validated before reuse to ensure
-    they belong to the current event loop.
+    they belong to the current event loop in PRODUCTION environments.
 
-    EXPECTED: All tests FAIL until Task 14 implementation complete.
+    Note: These tests force production mode to verify loop validation behavior.
     """
+
+    @pytest.fixture(autouse=True)
+    def force_production_mode(self):
+        """Force production mode for these tests by mocking test environment detection."""
+        # Reset cache to ensure clean state
+        AsyncSQLDatabaseNode._reset_test_environment_cache()
+
+        # Mock _is_test_environment to return False (production mode)
+        with patch.object(
+            AsyncSQLDatabaseNode, "_is_test_environment", return_value=False
+        ):
+            yield
+
+        # Reset cache after test
+        AsyncSQLDatabaseNode._reset_test_environment_cache()
 
     @pytest.mark.asyncio
     async def test_pool_validation_rejects_wrong_loop(self):
