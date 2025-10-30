@@ -335,8 +335,8 @@ class TestEventLoopPoolCleanup:
         }
 
         try:
-            # Run cleanup (sync method returns int)
-            removed_count = AsyncSQLDatabaseNode._cleanup_closed_loop_pools()
+            # Run cleanup (async method returns int)
+            removed_count = await AsyncSQLDatabaseNode._cleanup_closed_loop_pools()
 
             # Verify cleanup returned count
             assert isinstance(
@@ -379,8 +379,8 @@ class TestEventLoopPoolCleanup:
         }
 
         try:
-            # Run cleanup (sync method returns int)
-            removed_count = AsyncSQLDatabaseNode._cleanup_closed_loop_pools()
+            # Run cleanup (async method returns int)
+            removed_count = await AsyncSQLDatabaseNode._cleanup_closed_loop_pools()
 
             # Current loop's pool should NOT be removed
             assert (

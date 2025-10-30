@@ -1,6 +1,6 @@
 ---
 name: dataflow
-description: "Kailash DataFlow - zero-config database framework with automatic model-to-node generation. Use when asking about 'database operations', 'DataFlow', 'database models', 'CRUD operations', 'bulk operations', 'database queries', 'database migrations', 'multi-tenancy', 'multi-instance', 'database transactions', 'PostgreSQL', 'MySQL', 'SQLite', 'MongoDB', 'pgvector', 'vector search', 'document database', 'RAG', 'semantic search', 'existing database', 'database performance', 'database deployment', 'database testing', or 'TDD with databases'. DataFlow is NOT an ORM - it generates 9 workflow nodes per SQL model, 8 nodes for MongoDB, and 3 nodes for vector operations."
+description: "Kailash DataFlow - zero-config database framework with automatic model-to-node generation. Use when asking about 'database operations', 'DataFlow', 'database models', 'CRUD operations', 'bulk operations', 'database queries', 'database migrations', 'multi-tenancy', 'multi-instance', 'database transactions', 'PostgreSQL', 'MySQL', 'SQLite', 'MongoDB', 'pgvector', 'vector search', 'document database', 'RAG', 'semantic search', 'existing database', 'database performance', 'database deployment', 'database testing', or 'TDD with databases'. DataFlow is NOT an ORM - it generates 11 workflow nodes per SQL model, 8 nodes for MongoDB, and 3 nodes for vector operations."
 ---
 
 # Kailash DataFlow - Zero-Config Database Framework
@@ -11,16 +11,49 @@ DataFlow is a zero-config database framework built on Kailash Core SDK that auto
 
 DataFlow transforms database models into workflow nodes automatically, providing:
 
-- **Automatic Node Generation**: 9 nodes per model (@db.model decorator)
+- **Automatic Node Generation**: 11 nodes per model (@db.model decorator)
 - **Multi-Database Support**: PostgreSQL, MySQL, SQLite (SQL) + MongoDB (Document) + pgvector (Vector Search)
 - **Enterprise Features**: Multi-tenancy, multi-instance isolation, transactions
 - **Zero Configuration**: String IDs preserved, deferred schema operations
 - **Integration Ready**: Works with Nexus for multi-channel deployment
-- **Specialized Adapters**: SQL (9 nodes/model), Document (8 nodes), Vector (3 nodes)
+- **Specialized Adapters**: SQL (11 nodes/model), Document (8 nodes), Vector (3 nodes)
 
 ## ⚠️ Critical Updates & Bug Fixes
 
-### v0.7.3 Schema Cache + Migration Fixes (LATEST - 2025-10-26)
+### v0.7.9 CountNode + PostgreSQL ARRAY + Auto-Query Caching (LATEST - 2025-10-30)
+
+**New Features:**
+- ✅ **CountNode**: 11th auto-generated node for efficient COUNT(*) queries (10-50x faster than ListNode)
+- ✅ **PostgreSQL Native Arrays**: TEXT[], INTEGER[], REAL[] support with 2-10x performance gain
+- ✅ **Auto-Query Caching**: Redis auto-detection with in-memory LRU fallback for 5-10x throughput
+
+**CountNode Usage:**
+```python
+workflow.add_node("UserCountNode", "count_users", {"filter": {"active": True}})
+# Returns: {"count": 42} in 1-5ms vs 20-50ms with ListNode
+```
+
+**PostgreSQL ARRAY Usage:**
+```python
+@db.model
+class AgentMemory:
+    tags: List[str]  # Becomes TEXT[] on PostgreSQL
+    __dataflow__ = {'use_native_arrays': True}  # Opt-in
+```
+
+**Auto-Query Caching:**
+- Redis auto-detection on startup
+- Automatic in-memory LRU fallback if Redis unavailable
+- 5-10x throughput improvement for repeated queries
+
+**Upgrade Command:**
+```bash
+pip install --upgrade kailash-dataflow>=0.7.9
+```
+
+---
+
+### v0.7.3 Schema Cache + Migration Fixes (2025-10-26)
 
 **Performance Improvement:**
 - ✅ **Schema Cache**: Thread-safe table existence cache for 91-99% performance improvement
@@ -30,16 +63,6 @@ DataFlow transforms database models into workflow nodes automatically, providing
 **Bug Fixes:**
 - ✅ **Async-Safe Migration**: Fixed migration recording in FastAPI/async contexts
 - ✅ **Error Messages**: Enhanced error messages with contextual help
-
-**Performance Impact:**
-- First operation: ~1500ms (cache miss - migration check)
-- Cached operations: ~1ms (cache hit)
-- Multi-operation workflows: 91-99% faster
-
-**Upgrade Command:**
-```bash
-pip install --upgrade kailash-dataflow>=0.7.3
-```
 
 ---
 
@@ -115,7 +138,7 @@ from kailash.runtime.local import LocalRuntime
 # Initialize DataFlow
 db = DataFlow(connection_string="postgresql://user:pass@localhost/db")
 
-# Define model (generates 9 nodes automatically)
+# Define model (generates 11 nodes automatically)
 @db.model
 class User:
     id: str  # String IDs preserved
@@ -182,16 +205,18 @@ DataFlow is **NOT an ORM**. It's a workflow framework that:
 - Integrates seamlessly with other workflow nodes
 
 ### Automatic Node Generation
-Each `@db.model` class generates **9 nodes**:
+Each `@db.model` class generates **11 nodes**:
 1. `{Model}_Create` - Create single record
 2. `{Model}_Read` - Read by ID
 3. `{Model}_Update` - Update record
 4. `{Model}_Delete` - Delete record
 5. `{Model}_List` - List with filters
-6. `{Model}_BulkCreate` - Bulk insert
-7. `{Model}_BulkUpdate` - Bulk update
-8. `{Model}_BulkDelete` - Bulk delete
-9. `{Model}_Count` - Count records
+6. `{Model}_Upsert` - Insert or update (atomic)
+7. `{Model}_Count` - Efficient COUNT(*) queries
+8. `{Model}_BulkCreate` - Bulk insert
+9. `{Model}_BulkUpdate` - Bulk update
+10. `{Model}_BulkDelete` - Bulk delete
+11. `{Model}_BulkUpsert` - Bulk upsert
 
 ### Critical Rules
 - ✅ String IDs preserved (no UUID conversion)
@@ -202,7 +227,7 @@ Each `@db.model` class generates **9 nodes**:
 - ❌ NEVER use SQLAlchemy/Django ORM alongside DataFlow
 
 ### Database Support
-- **SQL Databases**: PostgreSQL, MySQL, SQLite (9 nodes per @db.model)
+- **SQL Databases**: PostgreSQL, MySQL, SQLite (11 nodes per @db.model)
 - **Document Database**: MongoDB with flexible schema (8 specialized nodes)
 - **Vector Search**: PostgreSQL pgvector for RAG/AI (3 vector nodes)
 - **100% Feature Parity**: SQL databases support identical workflows
@@ -249,9 +274,10 @@ workflow.add_node("User_Create", "user1", {...})
 
 ## Version Compatibility
 
-- **Current Version**: 0.7.3 (Schema cache + migration fixes)
+- **Current Version**: 0.7.9 (CountNode + PostgreSQL ARRAY + Auto-query caching)
 - **Core SDK Version**: 0.9.25+
 - **Python**: 3.8+
+- **v0.7.9**: CountNode (11th node) + PostgreSQL native arrays + auto-query caching
 - **v0.7.3**: Schema cache (91-99% faster) + async-safe migrations
 - **v0.7.0**: Bulk operations fixes (8 critical bugs)
 - **v0.6.3**: BulkDeleteNode safe mode validation fix
@@ -262,10 +288,10 @@ workflow.add_node("User_Create", "user1", {...})
 ## Multi-Database Support Matrix
 
 ### SQL Databases (DatabaseAdapter)
-- **PostgreSQL**: Full support with advanced features (asyncpg driver, pgvector extension)
+- **PostgreSQL**: Full support with advanced features (asyncpg driver, pgvector extension, native arrays)
 - **MySQL**: Full support with 100% feature parity (aiomysql driver)
 - **SQLite**: Full support for development/testing/mobile (aiosqlite + custom pooling)
-- **Nodes Generated**: 9 per @db.model (Create, Read, Update, Delete, List, BulkCreate, BulkUpdate, BulkDelete, Count)
+- **Nodes Generated**: 11 per @db.model (Create, Read, Update, Delete, List, Upsert, Count, BulkCreate, BulkUpdate, BulkDelete, BulkUpsert)
 
 ### Document Databases (MongoDBAdapter)
 - **MongoDB**: Complete NoSQL support (Motor async driver)
