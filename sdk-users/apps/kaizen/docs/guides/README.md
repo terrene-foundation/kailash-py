@@ -21,6 +21,21 @@ Learn Kaizen's signature-based programming approach - the core feature that make
 **Time investment:** 20-30 minutes
 **Prerequisites:** Completed getting started section
 
+### [Async Execution](async-execution.md)
+**Production async for FastAPI and high-throughput**
+
+Master async execution with `run_async()` for production FastAPI deployments and concurrent agent workflows. Learn when to use async vs sync, configuration patterns, and performance optimization.
+
+**What you'll learn:**
+- run_async() configuration and usage
+- FastAPI integration patterns
+- Concurrent batch processing
+- Performance benefits (10-100x speedup)
+- When to use async vs sync
+
+**Time investment:** 15-20 minutes
+**Prerequisites:** Basic agent creation knowledge
+
 ### [Enterprise Features](enterprise-features.md)
 **Production-ready AI with audit trails and compliance**
 
