@@ -351,7 +351,7 @@ class DataProcessingAgent(BaseAgent):
 
 # Usage
 async def main():
-    
+
     # 12 builtin tools enabled via MCP
 
     agent = DataProcessingAgent(DataConfig(), registry)
@@ -461,7 +461,7 @@ import pytest
 @pytest.mark.asyncio
 async def test_tool_execution():
     # Setup
-    
+
 
     # Register mock tool
     def mock_tool(param: str) -> dict:
