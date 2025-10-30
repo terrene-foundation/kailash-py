@@ -1104,7 +1104,7 @@ app.register("create_user", workflow.build())
 
 **What You Keep:**
 - ✅ All CRUD operations work normally
-- ✅ All 9 generated nodes per model
+- ✅ All 11 generated nodes per model
 - ✅ Connection pooling, caching, metrics
 - ✅ Multi-channel access (API, CLI, MCP)
 
