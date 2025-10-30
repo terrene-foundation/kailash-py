@@ -7,9 +7,10 @@ Demonstrates Redis query caching with pattern-based invalidation.
 
 import time
 
+from kailash_dataflow import DataFlow
+
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-from kailash_dataflow import DataFlow
 
 # Initialize DataFlow with Redis caching
 db = DataFlow(
