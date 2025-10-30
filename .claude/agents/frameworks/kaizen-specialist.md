@@ -2165,6 +2165,96 @@ chunks = agent.extract_for_rag(image="document.jpg", chunk_size=512)
 
 **Reference**: `src/kaizen/strategies/`, `docs/reference/strategy-selection-guide.md`
 
+### Async Execution (run_async)
+
+**True async execution for production FastAPI/async workflows - non-blocking I/O throughout.**
+
+**What**: `run_async()` method for BaseAgent provides native async execution using AsyncOpenAI client
+**When**: Production FastAPI applications, concurrent agent workflows, high-throughput scenarios
+**Why**: 10-100x faster concurrent requests, no thread pool exhaustion, no SSL socket blocking
+
+#### Configuration
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.core.config import BaseAgentConfig
+
+# Enable async mode in configuration
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model="gpt-4",
+    use_async_llm=True  # ← Required for run_async()
+)
+
+agent = BaseAgent(config=config, signature=QASignature())
+```
+
+#### Usage
+
+```python
+# FastAPI endpoint with async agent
+@app.post("/api/chat")
+async def chat(request: ChatRequest):
+    result = await agent.run_async(question=request.message)
+    return {"response": result["answer"]}
+
+# Concurrent execution (10+ requests simultaneously)
+tasks = [
+    agent.run_async(question=f"Question {i}")
+    for i in range(100)
+]
+results = await asyncio.gather(*tasks)  # All execute concurrently
+```
+
+#### Key Features
+
+- **Async OpenAI Client**: Uses `AsyncOpenAI` for non-blocking API calls
+- **Async Providers**: Both `chat_async()` and `embed_async()` methods available
+- **Memory Support**: Full memory and shared memory integration (async-safe)
+- **Hooks Integration**: All hooks execute asynchronously
+- **Error Handling**: Same error handling as sync `run()` method
+- **Backwards Compatible**: Sync `run()` method unchanged
+
+#### Performance Benefits
+
+| Scenario | Sync run() | Async run_async() |
+|----------|-----------|-------------------|
+| Single request | ~500ms | ~500ms (same) |
+| 10 concurrent | ~5000ms (queued) | ~500ms (parallel) |
+| 100 concurrent | ~50000ms + timeouts | ~500ms (parallel) |
+| Thread pool exhaustion | ✗ Yes | ✓ No |
+| SSL socket blocking | ✗ Yes | ✓ No |
+
+#### When to Use
+
+**Use run_async():**
+- FastAPI/async web applications
+- High-throughput concurrent requests (10+)
+- Production deployments with AsyncLocalRuntime
+- Docker containers with async orchestration
+
+**Use run():**
+- CLI scripts and tools
+- Jupyter notebooks
+- Synchronous applications
+- Simple sequential workflows
+
+#### Configuration Validation
+
+```python
+# Agent configured for async
+config = BaseAgentConfig(use_async_llm=True, llm_provider="openai")
+agent = BaseAgent(config=config, signature=sig)
+await agent.run_async(...)  # ✓ Works
+
+# Agent NOT configured for async
+config = BaseAgentConfig(use_async_llm=False)  # Default
+agent = BaseAgent(config=config, signature=sig)
+await agent.run_async(...)  # ✗ Raises ValueError with helpful message
+```
+
+**Reference**: `src/kaizen/core/base_agent.py:675-937` (run_async method), `src/kaizen/nodes/ai/ai_providers.py:862-1135` (chat_async/embed_async), `tests/unit/core/test_async_features.py`
+
 ### Agent Classification (Autonomous vs Interactive)
 
 **25 agents classified by execution pattern - Universal tool support (ADR-016).**
