@@ -69,6 +69,7 @@ Use specialized subagents when:
 - 💡 **Stream Large Datasets**: Use stream_query() with batch_size instead of loading entire result sets into memory
 - 💡 **Set Appropriate Timeouts**: Configure connection_timeout (5s), command_timeout (30s), and query-specific timeouts
 - 💡 **Batch Insert Optimization**: For 10K+ rows, use execute_many_async (general), COPY (PostgreSQL fastest), or UNNEST (PostgreSQL arrays)
+- 💡 **pytest-asyncio Compatibility**: AsyncSQLDatabaseNode automatically detects pytest environments and adjusts pool key generation for compatibility with function-scoped fixtures
 
 ## Keywords for Auto-Trigger
 
