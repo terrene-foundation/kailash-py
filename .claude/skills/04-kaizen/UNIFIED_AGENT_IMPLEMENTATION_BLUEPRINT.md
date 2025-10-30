@@ -573,7 +573,7 @@ class Agent:
 
     def _create_default_tool_registry(self) -> ToolRegistry:
         """Create default tool registry with builtin tools."""
-        
+
 
         # Register builtin tools
         if self._tools_config["tools"] == "all":
