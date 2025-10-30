@@ -33,6 +33,314 @@
 3. **Auto-managed fields** - created_at, updated_at handled by DataFlow
 4. **Node naming** - Always `ModelOperationNode` pattern (v0.6.0+)
 
+## 🛠️ DEVELOPER EXPERIENCE TOOLS (v0.8.0 - NEW)
+
+### ErrorEnhancer: Actionable Error Messages
+
+Automatic error enhancement with context, causes, and solutions:
+
+```python
+from dataflow import DataFlow
+
+db = DataFlow("postgresql://...")
+
+# ErrorEnhancer automatically integrated - no setup needed
+# Enhanced errors show:
+# - Error code (DF-101, DF-102, etc.)
+# - Context (node, parameters, workflow state)
+# - Root causes with probability scores
+# - Actionable solutions with code templates
+# - Documentation links
+```
+
+**Common Error Codes**:
+- **DF-101**: Missing required parameter → Shows which connection to add
+- **DF-102**: Type mismatch → Shows expected vs received types
+- **DF-103**: Auto-managed field conflict → Lists fields to remove
+- **DF-104**: Wrong node pattern (CreateNode vs UpdateNode) → Shows correct structure
+- **DF-105**: Primary key 'id' missing → Explains 'id' requirement
+- **DF-201**: Invalid connection → Shows correct output names
+- **DF-301**: Migration failed → Provides safe recovery steps
+
+**See**: `sdk-users/apps/dataflow/troubleshooting/top-10-errors.md` for complete guide
+
+---
+
+### Inspector API: Self-Service Debugging
+
+Introspection API for debugging workflows without reading source code:
+
+```python
+from dataflow.platform.inspector import Inspector
+
+inspector = Inspector(dataflow_instance)
+inspector.workflow_obj = workflow.build()
+
+# Connection Analysis (5 methods)
+connections = inspector.connections()  # List all connections
+broken = inspector.find_broken_connections()  # Find issues
+is_valid, issues = inspector.validate_connections()  # Check validity
+
+# Parameter Tracing (5 methods)
+trace = inspector.trace_parameter("create_user", "data")
+print(f"Parameter originates from: {trace.source_node}")
+deps = inspector.parameter_dependencies("create_user")  # All dependencies
+
+# Node Analysis (5 methods)
+order = inspector.execution_order()  # Topological sort
+deps = inspector.node_dependencies("create_user")  # Upstream nodes
+schema = inspector.node_schema("create_user")  # Input/output schema
+
+# Workflow Validation (3 methods)
+report = inspector.workflow_validation_report()
+if not report['is_valid']:
+    print(f"Errors: {report['errors']}")
+    print(f"Warnings: {report['warnings']}")
+    print(f"Suggestions: {report['suggestions']}")
+```
+
+**Inspector Commands for Common Issues**:
+- **"Missing parameter" error**: `inspector.trace_parameter(node_id, param)` → Find source
+- **Connection not working**: `inspector.find_broken_connections()` → Identify issues
+- **Node not executing**: `inspector.node_dependencies(node_id)` → Check upstream
+- **Wrong execution order**: `inspector.execution_order()` → See actual sequence
+- **Workflow validation**: `inspector.workflow_validation_report()` → Full diagnosis
+
+**Performance**: <1ms per method call (cached operations)
+
+---
+
+### Build-Time Validation: Catch Errors Early
+
+Build-time validation catches 80% of common configuration errors at model registration time (not runtime).
+
+**Validation Modes**:
+- **OFF**: No validation (use `skip_validation=True`)
+- **WARN**: Default mode - warns but allows (backward compatible)
+- **STRICT**: Raises errors on validation failures (recommended for new projects)
+
+**Usage**:
+```python
+from dataflow import DataFlow
+
+db = DataFlow()
+
+# Default: WARN mode (backward compatible)
+@db.model
+class User:
+    id: str  # ✅ Validates: primary key named 'id'
+    name: str
+    # Auto-validates but only warns on issues
+
+# Strict mode: Raises errors immediately
+@db.model(strict=True)
+class Product:
+    id: str  # ✅ Required primary key
+    name: str
+    price: float
+    # Raises ModelValidationError on any validation failure
+
+# Skip validation: For edge cases
+@db.model(skip_validation=True)
+class LegacyModel:
+    pk: str  # ❌ Wrong primary key name, but validation skipped
+    data: str
+```
+
+**Validation Checks**:
+- **VAL-002**: Missing primary key (error) → Add `id` field to model
+- **VAL-003**: Primary key not named 'id' (warning) → Rename to `id`
+- **VAL-004**: Auto-managed field conflict (error) → Remove `created_at`/`updated_at`
+- **VAL-005**: Invalid field type (warning) → Use SQLAlchemy-compatible types
+- **VAL-006**: Reserved field name (error) → Avoid `type`, `class`, `def`
+- **VAL-007**: Invalid naming convention (warning) → Use snake_case
+- **VAL-008**: Circular relationship (error) → Fix relationship definitions
+- **VAL-009**: Missing relationship target (error) → Ensure target model exists
+- **VAL-010**: Invalid relationship configuration (warning) → Check relationship parameters
+
+**Error Messages with Context**:
+```python
+# Example: Missing primary key
+@db.model(strict=True)
+class Order:
+    customer_id: str  # ❌ Missing 'id' field
+    total: float
+
+# Raises:
+# ModelValidationError: [VAL-002] Primary key 'id' is required
+#   Model: Order
+#   Issue: No primary key field found
+#   Solution: Add 'id' field as primary key
+#   Example:
+#     @db.model
+#     class Order:
+#         id: str
+#         customer_id: str
+#         total: float
+```
+
+**When to Use Each Mode**:
+- **OFF**: Legacy codebases, custom primary keys (advanced)
+- **WARN**: Existing projects, gradual migration
+- **STRICT**: New projects, strict validation requirements
+
+**Time Saved**: 10-30 minutes per validation error (caught at registration vs runtime)
+
+---
+
+### CLI Tools: Industry-Standard Workflow Validation
+
+Command-line validation and debugging tools matching pytest/mypy patterns for CI/CD integration.
+
+**Available Commands**:
+- **dataflow-validate**: Validate workflow structure, connections, and parameters
+- **dataflow-analyze**: Workflow metrics, complexity analysis, and execution order
+- **dataflow-generate**: Generate reports, diagrams (ASCII), and documentation
+- **dataflow-debug**: Interactive debugging with breakpoints and node inspection
+- **dataflow-perf**: Performance profiling, bottleneck detection, and recommendations
+
+**Installation**:
+```bash
+pip install kailash-dataflow
+# CLI tools installed automatically as dataflow-validate, dataflow-analyze, etc.
+```
+
+**Usage Examples**:
+
+**1. Workflow Validation**:
+```bash
+# Validate workflow structure
+dataflow-validate my_workflow.py
+
+# Validate with detailed output
+dataflow-validate my_workflow.py --output text
+
+# Auto-fix common issues
+dataflow-validate my_workflow.py --fix
+
+# JSON output for CI/CD
+dataflow-validate my_workflow.py --output json > validation.json
+```
+
+**2. Workflow Analysis**:
+```bash
+# Analyze workflow metrics
+dataflow-analyze my_workflow.py
+
+# Detailed analysis with verbosity
+dataflow-analyze my_workflow.py --verbosity 2
+
+# JSON output
+dataflow-analyze my_workflow.py --format json
+```
+
+**3. Generate Reports**:
+```bash
+# Generate HTML report
+dataflow-generate my_workflow.py report --output-dir ./reports
+
+# Generate ASCII workflow diagram
+dataflow-generate my_workflow.py diagram
+
+# Generate markdown documentation
+dataflow-generate my_workflow.py docs --output-dir ./docs
+```
+
+**4. Interactive Debugging**:
+```bash
+# Debug with breakpoint at node
+dataflow-debug my_workflow.py --breakpoint create_user
+
+# Inspect specific node
+dataflow-debug my_workflow.py --inspect-node create_user
+
+# Step-by-step execution
+dataflow-debug my_workflow.py --step
+
+# Interactive mode
+dataflow-debug my_workflow.py --interactive
+```
+
+**5. Performance Profiling**:
+```bash
+# Profile workflow execution
+dataflow-perf my_workflow.py
+
+# Detect bottlenecks
+dataflow-perf my_workflow.py --bottlenecks
+
+# Get optimization recommendations
+dataflow-perf my_workflow.py --recommend
+
+# JSON output for analysis
+dataflow-perf my_workflow.py --format json > perf.json
+```
+
+**CI/CD Integration**:
+```yaml
+# .github/workflows/validate.yml
+name: Validate DataFlow Workflows
+on: [push, pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install dependencies
+        run: pip install kailash-dataflow
+      - name: Validate workflows
+        run: |
+          dataflow-validate workflows/*.py --output json > validation.json
+      - name: Analyze workflows
+        run: |
+          dataflow-analyze workflows/*.py --format json > analysis.json
+```
+
+**Exit Codes**:
+- **0**: Success (validation passed, no errors)
+- **1**: Validation errors found
+- **2**: Tool error (invalid arguments, file not found)
+
+**Use Cases**:
+- Pre-commit validation hooks
+- CI/CD pipeline integration
+- Pre-deployment validation
+- Performance profiling and optimization
+- Documentation generation
+- Interactive debugging sessions
+
+**Time Saved**: 5-15 minutes per validation check (automated vs manual inspection)
+
+---
+
+### CreateNode vs UpdateNode Guide
+**Time Saved**: 1-2 hours per mistake (most common error)
+
+**Quick Reference**:
+- **CreateNode**: Flat fields → `{"id": "123", "name": "Alice"}`
+- **UpdateNode**: Nested structure → `{"filter": {"id": "123"}, "fields": {"name": "Alice"}}`
+
+**See**: `sdk-users/apps/dataflow/guides/create-vs-update.md` for complete side-by-side comparison with 10+ examples
+
+---
+
+### Top 10 Errors Quick Fix Guide
+**Coverage**: 90% of user issues
+**Time Saved**: 30-120 minutes per error
+
+**See**: `sdk-users/apps/dataflow/troubleshooting/top-10-errors.md`
+
+**Quick Diagnosis**:
+1. "Missing parameter" → DF-101 → Add connection or parameter
+2. "Type mismatch" → DF-102 → Check parameter types
+3. "Auto-managed field" → DF-103 → Remove created_at/updated_at
+4. "Missing 'filter'" → DF-104 → Use UpdateNode pattern
+5. "Primary key error" → DF-105 → Use 'id' not 'user_id'
+6. "Connection error" → DF-201 → Check output names
+7. "Migration failed" → DF-301 → Check schema conflicts
+
+---
+
 ## 🔧 STRING ID & CONTEXT-AWARE PATTERNS (NEW)
 
 ### String ID Support (No More Forced Integer Conversion)
