@@ -4,6 +4,35 @@
 
 **Kaizen** is a signature-based AI agent framework built on Kailash Core SDK, providing production-ready agents with multi-modal processing, multi-agent coordination, and enterprise features.
 
+## 🆕 What's New in v0.6.0 (2025-10-29)
+
+**Enhanced Autonomy & Memory Systems**:
+
+- **🎯 Interrupt Mechanism (Production-Ready)**
+  - Complete graceful shutdown with Ctrl+C handling
+  - 3 interrupt sources: USER (Ctrl+C), SYSTEM (timeout/budget), PROGRAMMATIC (API/hooks)
+  - 2 shutdown modes: GRACEFUL (finish cycle + checkpoint) vs IMMEDIATE (stop now)
+  - Signal propagation across multi-agent hierarchies
+  - 34 E2E tests production-validated
+  - Examples: `examples/autonomy/interrupts/` (ctrl_c, timeout, budget)
+
+- **💾 Persistent Buffer Memory (DataFlow Backend)**
+  - Dual-buffer architecture: In-memory + database storage
+  - Auto-persist with configurable intervals
+  - JSONL compression (60%+ storage reduction)
+  - Cross-session conversation persistence
+  - Multi-instance agent isolation
+  - 28 E2E tests with real database operations
+
+- **🔄 Enhanced Hooks System**
+  - New hook events: PRE/POST_INTERRUPT, PRE/POST_CHECKPOINT_SAVE
+  - Improved performance: <0.01ms overhead (625x better than target)
+  - Production-validated: 100+ concurrent hooks supported
+
+**Version**: 0.6.0 | **Dependencies**: Kailash >=0.10.2
+
+---
+
 ## ⚡ Quick Start
 
 ### Basic Agent Usage
@@ -50,7 +79,7 @@ print(result['answer'])  # Key is 'answer', NOT 'response'
 ### Multi-Agent Coordination
 
 ```python
-from kaizen.agents.coordination.supervisor_worker import SupervisorWorkerPattern
+from kaizen.orchestration.patterns import SupervisorWorkerPattern
 
 # Semantic capability matching (NO hardcoded if/else!)
 pattern = SupervisorWorkerPattern(supervisor, workers, coordinator, shared_pool)
@@ -64,11 +93,116 @@ best_worker = pattern.supervisor.select_worker_for_task(
 # Returns: {"worker": <DataAnalystAgent>, "score": 0.9}
 ```
 
+### Pipeline Patterns
+
+**9 composable pipeline patterns** with factory methods on `Pipeline` class:
+
+```python
+from kaizen.orchestration.pipeline import Pipeline
+
+# 1. Sequential - Linear step-by-step processing
+pipeline = Pipeline.sequential(agents=[agent1, agent2, agent3])
+
+# 2. Supervisor-Worker - Task decomposition with A2A semantic worker selection
+pipeline = Pipeline.supervisor_worker(supervisor, workers, selection_mode="semantic")
+
+# 3. Router - Intelligent routing via A2A capability matching
+pipeline = Pipeline.router(agents=[...], routing_strategy="semantic")
+
+# 4. Ensemble - Multi-perspective with A2A agent discovery (top-k)
+pipeline = Pipeline.ensemble(agents=[...], synthesizer, discovery_mode="a2a", top_k=3)
+
+# 5. Blackboard - Iterative specialist collaboration with A2A selection
+pipeline = Pipeline.blackboard(specialists=[...], controller, selection_mode="semantic", max_iterations=5)
+
+# 6. Consensus - Democratic voting for agreement
+pipeline = Pipeline.consensus(agents=[...], threshold=0.67, voting_strategy="majority")
+
+# 7. Debate - Adversarial analysis with proponent/opponent
+pipeline = Pipeline.debate(agents=[proponent, opponent], rounds=3, judge)
+
+# 8. Handoff - Tier escalation based on complexity
+pipeline = Pipeline.handoff(agents=[tier1, tier2, tier3])
+
+# 9. Parallel - Concurrent execution for 10-100x speedup
+pipeline = Pipeline.parallel(agents=[...], aggregator, max_workers=5, timeout=30)
+
+# All pipelines can be converted to BaseAgent
+agent = pipeline.to_agent(name="my_pipeline")
+```
+
+**A2A Integration** (4 patterns):
+- ✅ **Router**: Semantic routing to best agent
+- ✅ **Supervisor-Worker**: Semantic worker selection
+- ✅ **Ensemble**: Agent discovery (top-k)
+- ✅ **Blackboard**: Dynamic specialist selection
+
+### Single-Agent Patterns
+
+**3 advanced patterns for structured workflows, iterative refinement, and multi-path exploration:**
+
+```python
+# 1. Planning Agent - Plan Before You Act
+from kaizen.agents.specialized.planning import PlanningAgent, PlanningConfig
+
+agent = PlanningAgent(PlanningConfig(
+    max_plan_steps=5,
+    validation_mode="strict",  # Pre-execution validation
+    enable_replanning=True
+))
+result = agent.run(task="Create research report", context={"length": "2000 words"})
+# Three-phase: Plan → Validate → Execute
+
+# 2. PEV Agent - Plan, Execute, Verify, Refine
+from kaizen.agents.specialized.pev import PEVAgent, PEVAgentConfig
+
+agent = PEVAgent(PEVAgentConfig(
+    max_iterations=5,  # Iterative refinement cycles
+    verification_strictness="medium",  # Post-execution verification
+    enable_error_recovery=True
+))
+result = agent.run(task="Generate production-ready code")
+# Iterative: Plan → Execute → Verify → Refine (loop until verified)
+
+# 3. Tree-of-Thoughts Agent - Multi-Path Exploration
+from kaizen.agents.specialized.tree_of_thoughts import ToTAgent, ToTAgentConfig
+
+agent = ToTAgent(ToTAgentConfig(
+    num_paths=5,  # Generate 5 alternative paths
+    temperature=0.9,  # HIGH for diversity
+    evaluation_criteria="quality",
+    parallel_execution=True
+))
+result = agent.run(task="Strategic decision: choose go-to-market strategy")
+# Parallel: Generate N paths → Evaluate → Select Best → Execute
+```
+
+**Pattern Selection Guide**:
+- **Planning**: Structured workflows with validation BEFORE execution (research, compliance)
+- **PEV**: Iterative refinement with verification AFTER execution (code generation, quality-critical)
+- **Tree-of-Thoughts**: Explore multiple alternatives, select best (strategic decisions, creative tasks)
+
+**Comparison Table**:
+
+| Pattern | Planning Phase | Verification | Cycles | Best For |
+|---------|---------------|--------------|--------|----------|
+| **Planning** | ✅ Upfront | Pre-execution | 1 (or replan) | Structured workflows |
+| **PEV** | ✅ Initial | Post-execution | Multiple refine | Quality-critical |
+| **ToT** | ❌ | Score evaluation | 1 generation | Alternatives exploration |
+| **ReAct** | ❌ | Observation | Variable | Real-time adaptation |
+| **CoT** | ❌ | ❌ | 1 | Step-by-step reasoning |
+
+**See Comprehensive Guides**:
+- [Planning Agent Guide](docs/guides/planning-agent.md) - 200+ lines
+- [PEV Agent Guide](docs/guides/pev-agent.md) - 200+ lines
+- [Tree-of-Thoughts Guide](docs/guides/tree-of-thoughts-agent.md) - 200+ lines
+- [Single-Agent Patterns Overview](docs/guides/single-agent-patterns.md) - All patterns comparison
+
 ## 🎯 Core API
 
 ### Available Specialized Agents
 
-**Implemented and Production-Ready (v0.5.0):**
+**Implemented and Production-Ready:**
 ```python
 from kaizen.agents import (
     # Single-Agent Patterns (8 agents)
@@ -85,48 +219,45 @@ from kaizen.agents import (
 )
 ```
 
-### Tool Calling (NEW in v0.2.0)
+### Tool Calling
 
-**Autonomous tool execution with approval workflows - Universal Integration (All 25 Agents):**
+**MCP (Model Context Protocol) integration - Auto-connects to 12 builtin tools:**
+
 ```python
 from kaizen.core.base_agent import BaseAgent
-from kaizen.tools import ToolRegistry
-from kaizen.tools.builtin import register_builtin_tools
 
-# Setup tool registry
-registry = ToolRegistry()
-register_builtin_tools(registry)  # 12 builtin tools
-
-# Works with ALL 25 agents (ADR-016 complete)
+# MCP auto-connect - 12 builtin tools available automatically
 agent = BaseAgent(
     config=config,
-    signature=signature,
-    tool_registry=registry,  # Enable tool calling
-    mcp_servers=mcp_servers  # Optional MCP integration
+    signature=signature
+    # Optional: Add custom MCP servers
+    # mcp_servers=[{
+    #     "name": "custom-server",
+    #     "command": "python",
+    #     "args": ["-m", "custom.mcp.server"],
+    #     "transport": "stdio"
+    # }]
 )
 
-# Discover tools
-tools = await agent.discover_tools(category="file")
+# Discover tools (from kaizen_builtin MCP server)
+tools = await agent.discover_mcp_tools(server_name="kaizen_builtin")
 
 # Execute single tool
-result = await agent.execute_tool("read_file", {"path": "data.txt"})
-
-# Chain multiple tools
-results = await agent.execute_tool_chain([
-    {"tool_name": "read_file", "params": {"path": "input.txt"}},
-    {"tool_name": "write_file", "params": {"path": "output.txt", "content": "..."}}
-])
+result = await agent.execute_mcp_tool(
+    tool_name="mcp__kaizen_builtin__read_file",
+    params={"path": "data.txt"}
+)
 ```
 
-**12 Builtin Tools:**
+**12 Builtin Tools** (via kaizen_builtin MCP server):
 - **File (5)**: read_file, write_file, delete_file, list_directory, file_exists
 - **HTTP (4)**: http_get, http_post, http_put, http_delete
 - **Bash (1)**: bash_command
 - **Web (2)**: fetch_url, extract_links
 
-**Universal Support**: All 25 agents (autonomous, single-shot, coordination) now support tool_registry and mcp_servers parameters (100% backward compatible)
+**Universal Support**: All agents inherit MCP integration from BaseAgent (100% backward compatible)
 
-### Control Protocol (NEW in v0.2.0)
+### Control Protocol
 
 **Bidirectional agent ↔ client communication:**
 ```python
@@ -149,7 +280,7 @@ await agent.report_progress("Processing...", percentage=50)
 
 **4 Transports:** CLI, HTTP/SSE, stdio, memory
 
-### Observability & Performance Monitoring (NEW in v0.5.0)
+### Observability & Performance Monitoring
 
 **Production-ready observability with zero overhead (-0.06%):**
 ```python
@@ -178,9 +309,10 @@ result = agent.run(question="test")
 - **Audit Trails**: Immutable JSONL for SOC2/GDPR/HIPAA compliance
 - **Grafana Dashboards**: 10+ pre-built dashboards (UI: http://localhost:3000)
 
-**Production Validated (v0.5.0 Release):**
+**Production Validated:**
 - -0.06% overhead (essentially zero, tested with 100 real OpenAI API calls)
 - 0.57ms p95 audit latency (<10ms target, 17.5x margin)
+- 281 tests passing (Phase 3 complete)
 - Validated with real infrastructure (NO MOCKING in Tiers 2-3 tests)
 
 **Start Observability Stack:**
@@ -189,7 +321,7 @@ cd docs/observability
 docker-compose up -d  # Starts Jaeger, Prometheus, Grafana, ELK Stack
 ```
 
-### Lifecycle Infrastructure (NEW in v0.5.0)
+### Lifecycle Infrastructure
 
 **Production-ready hooks, state management, and interrupts for enterprise agents:**
 
@@ -222,23 +354,137 @@ result = agent.run(question="test")
 # Save state
 await state_manager.save_state(current_state)
 
-# 3. Interrupts - Graceful control
-agent._interrupt_manager.request_interrupt(
-    signal=InterruptSignal.USER_REQUESTED,
-    reason="Awaiting approval"
+# 3. Interrupts - Graceful shutdown for autonomous agents
+from kaizen.agents.autonomous.base import BaseAutonomousAgent
+from kaizen.agents.autonomous.config import AutonomousConfig
+from kaizen.core.autonomy.interrupts.handlers import TimeoutInterruptHandler, BudgetInterruptHandler
+
+# Enable interrupts in config
+config = AutonomousConfig(
+    llm_provider="ollama",
+    model="llama3.2:1b",
+    enable_interrupts=True,              # Enable interrupt handling
+    graceful_shutdown_timeout=5.0,       # Max time for graceful shutdown
+    checkpoint_on_interrupt=True         # Save checkpoint before exit
 )
 
-if agent._interrupt_manager.is_interrupted():
-    # Save and pause
-    await state_manager.save_state(current_state)
+# Create autonomous agent
+autonomous_agent = BaseAutonomousAgent(config=config, signature=MySignature())
+
+# Add interrupt handlers
+timeout_handler = TimeoutInterruptHandler(timeout_seconds=30.0)
+autonomous_agent.interrupt_manager.add_handler(timeout_handler)
+
+budget_handler = BudgetInterruptHandler(budget_limit=5.0)
+autonomous_agent.interrupt_manager.add_handler(budget_handler)
+
+# Run agent - gracefully handles Ctrl+C, timeouts, budget limits
+try:
+    result = await autonomous_agent.run_autonomous(task="Analyze data")
+except InterruptedError as e:
+    print(f"Agent interrupted: {e.reason.message}")
+    checkpoint_id = e.reason.metadata.get("checkpoint_id")
 ```
 
 **Key Components:**
 - **6 Builtin Hooks**: LoggingHook, MetricsHook, CostTrackingHook, PerformanceProfilerHook, AuditHook, TracingHook
 - **4 Storage Backends**: Filesystem, Redis, PostgreSQL, S3
-- **6 Interrupt Signals**: USER_REQUESTED, RATE_LIMIT, BUDGET_EXCEEDED, TIMEOUT, SHUTDOWN, CUSTOM
+- **Interrupt System**: Graceful shutdown for Ctrl+C, timeouts, budget limits with automatic checkpointing
+  - **3 Interrupt Sources**: USER (Ctrl+C/SIGTERM), SYSTEM (timeout, budget, resources), PROGRAMMATIC (API, hooks)
+  - **2 Shutdown Modes**: GRACEFUL (finish cycle, save checkpoint) vs IMMEDIATE (stop now, best-effort)
+  - **3 Builtin Handlers**: TimeoutInterruptHandler, BudgetInterruptHandler, ResourceInterruptHandler
+  - **Examples**: `examples/autonomy/interrupts/` (ctrl_c, timeout, budget)
 
-### Permission System (NEW in v0.5.0+)
+### Persistent Buffer Memory (v0.6.0)
+
+**DataFlow-backed conversation persistence with dual-buffer architecture:**
+
+```python
+from kaizen.memory import PersistentBufferMemory
+from dataflow import DataFlow
+
+# Initialize DataFlow backend (automatic schema creation)
+db = DataFlow(
+    database_type="sqlite",
+    database_config={"database": "./agent_memory.db"}
+)
+
+# Create persistent buffer memory
+memory = PersistentBufferMemory(
+    db=db,
+    agent_id="agent_001",
+    buffer_size=100,              # Keep last 100 messages in memory
+    auto_persist_interval=10,     # Auto-persist every 10 messages
+    enable_compression=True       # JSONL compression for storage
+)
+
+# Add conversation turns
+memory.add_message(role="user", content="What is AI?")
+memory.add_message(role="assistant", content="AI is artificial intelligence...")
+
+# Retrieve conversation history
+history = memory.get_history(limit=10)  # Last 10 messages
+
+# Persist to database
+memory.persist()  # Manual persist (or waits for auto_persist_interval)
+
+# Load from database in next session
+memory_loaded = PersistentBufferMemory(db=db, agent_id="agent_001")
+memory_loaded.load_from_db()  # Restores conversation history
+```
+
+**Conversational Agent Pattern:**
+```python
+from kaizen.agents import SimpleQAAgent
+from kaizen.memory import PersistentBufferMemory
+
+class ConversationalAgent(SimpleQAAgent):
+    def __init__(self, config, db):
+        super().__init__(config)
+        self.memory = PersistentBufferMemory(
+            db=db,
+            agent_id=self.agent_id,
+            buffer_size=50,
+            auto_persist_interval=5
+        )
+        # Load previous conversations
+        self.memory.load_from_db()
+
+    def ask(self, question: str) -> dict:
+        # Add user message to memory
+        self.memory.add_message(role="user", content=question)
+
+        # Get conversation context
+        history = self.memory.get_history(limit=10)
+
+        # Run agent with context
+        result = self.run(question=question, context=history)
+
+        # Add assistant response to memory
+        self.memory.add_message(role="assistant", content=result["answer"])
+
+        return result
+
+# Usage - conversation persists across sessions
+agent = ConversationalAgent(config, db)
+result1 = agent.ask("What is AI?")
+result2 = agent.ask("Can you elaborate?")  # Uses history from previous question
+
+# Restart - history preserved
+agent2 = ConversationalAgent(config, db)
+result3 = agent2.ask("What did we discuss?")  # Remembers previous conversation
+```
+
+**Key Features:**
+- **Dual-Buffer**: In-memory buffer (<1ms retrieval) + database storage
+- **Auto-Persist**: Configurable auto-persist interval (every N messages)
+- **Compression**: JSONL compression reduces storage by 60%+
+- **Multi-Instance**: Agent-specific memory isolation with agent_id scoping
+- **Cross-Session**: Load conversation history across restarts
+- **Database Support**: SQLite (default), PostgreSQL
+- **Production-Validated**: 28 E2E tests with real database operations
+
+### Permission System
 
 **Policy-based access control with budget enforcement:**
 
@@ -296,7 +542,7 @@ if context.has_budget():
 - **Pattern Matching**: Regex-based tool name matching
 - **Multi-Agent Isolation**: Per-agent permission contexts
 
-### Memory & Learning System (NEW in v0.5.0)
+### Memory & Learning System
 
 **Production-ready memory with learning capabilities for conversational agents:**
 
@@ -378,11 +624,12 @@ result = agent.run(question="What's my communication style?")
 - **ErrorCorrection**: Record errors and corrections to avoid repeat mistakes
 - **AdaptiveLearning**: Adjust strategies based on success rates
 
-**Performance (v0.5.0 validated):**
+**Performance (Production validated):**
 - <50ms retrieval (p95)
 - <100ms storage (p95)
 - 10,000+ entries per agent (SQLite)
 - Millions of entries (PostgreSQL)
+- 281 tests passing (Phase 3 complete)
 
 **Use Cases:**
 - Conversational agents with context continuity
@@ -391,7 +638,7 @@ result = agent.run(question="What's my communication style?")
 - Code generation agents that avoid past errors
 - Multi-agent systems with shared knowledge
 
-### Document Extraction & RAG (NEW in v0.5.0)
+### Document Extraction & RAG
 
 **Production-ready document extraction with RAG-optimized chunking:**
 
@@ -468,8 +715,8 @@ batch_results = agent.extract_batch(
 - **Metadata Preservation**: Original formatting, fonts, positions
 - **Cost Control**: Prefer-free mode tries Ollama first, falls back to paid
 
-**Production Validated (v0.5.0):**
-- 201 tests passing (149 unit + 34 integration + 18 E2E)
+**Production Validated:**
+- 281 tests passing (Phase 3 complete)
 - Real infrastructure testing (NO MOCKING)
 - Ollama: $0.00 cost for unlimited processing
 - OpenAI: Budget-controlled, accurate
@@ -524,6 +771,7 @@ class MyAgent(BaseAgent):
 ### Core Guides
 - **[Signature Programming](docs/guides/signature-programming.md)** - Type-safe I/O with Signatures
 - **[BaseAgent Architecture](docs/guides/baseagent-architecture.md)** - Unified agent system with strategies, memory, tools
+- **[Hooks System](docs/guides/hooks-system.md)** - Event-driven monitoring and lifecycle hooks
 - **[Multi-Agent Coordination](docs/guides/multi-agent-coordination.md)** - Google A2A protocol patterns
 - **[Integration Patterns](docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP integration
 - **[Control Protocol Tutorial](docs/guides/control-protocol-tutorial.md)** - CLI → Web migration guide
@@ -605,7 +853,7 @@ result = agent.analyze(
 
 ### Multi-Agent Coordination
 ```python
-from kaizen.agents.coordination.supervisor_worker import SupervisorWorkerPattern
+from kaizen.orchestration.patterns import SupervisorWorkerPattern
 from kaizen.agents import SimpleQAAgent, CodeGenerationAgent, RAGResearchAgent
 
 # Create worker agents
@@ -702,26 +950,28 @@ agent = SimpleQAAgent(config)  # Auto-extraction happens here
    - Unified orchestration with MultiModalAgent
    - Real infrastructure testing (NO MOCKING)
 
-4. **Multi-Agent Coordination** (`src/kaizen/agents/coordination/`)
+4. **Multi-Agent Coordination** (`src/kaizen/orchestration/`)
    - Google A2A protocol integration (100% compliant)
    - SupervisorWorkerPattern with semantic matching (production-ready)
    - 4 additional patterns: Consensus, Debate, Sequential, Handoff
    - Automatic capability discovery, no hardcoded selection
+   - Pipeline infrastructure for composable workflows
 
-5. **Observability Stack (v0.5.0)** (`src/kaizen/core/autonomy/observability/`)
+5. **Observability Stack** (`src/kaizen/core/autonomy/observability/`)
    - Distributed tracing: OpenTelemetry + Jaeger
    - Metrics collection: Prometheus with percentiles
    - Structured logging: JSON for ELK Stack
    - Audit trails: Immutable JSONL for compliance
    - Production-validated: -0.06% overhead, zero impact
 
-6. **Lifecycle Infrastructure (v0.5.0)** (`src/kaizen/core/autonomy/`)
+6. **Lifecycle Infrastructure** (`src/kaizen/core/autonomy/`)
    - Hooks: Event-driven monitoring (6 builtin hooks)
    - State: Persistent checkpoints with pluggable storage
    - Interrupts: Graceful execution control (6 signal types)
    - Thread-safe, composable, extensible
+   - 281 tests passing (Phase 3 complete)
 
-7. **Permission System (v0.5.0+)** (`src/kaizen/core/autonomy/permissions/`)
+7. **Permission System** (`src/kaizen/core/autonomy/permissions/`)
    - ExecutionContext: Thread-safe runtime state
    - PermissionRule: Pattern-based access control
    - Budget enforcement: Cost tracking and limits

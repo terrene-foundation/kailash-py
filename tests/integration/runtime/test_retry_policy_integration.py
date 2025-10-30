@@ -17,7 +17,6 @@ from typing import Any, Dict
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from kailash.runtime.local import LocalRuntime
@@ -54,13 +53,13 @@ class TestRetryPolicyRuntimeIntegration:
 
         # Verify retry policy engine is initialized
         assert runtime._retry_policy_engine is not None
-        assert runtime._enable_retry_coordination == True
+        assert runtime._enable_retry_coordination
 
         # Verify configuration
         config = runtime.get_retry_configuration()
         assert config is not None
         assert config["mode"] == "adaptive"
-        assert config["enable_analytics"] == True
+        assert config["enable_analytics"]
         assert config["default_strategy"]["strategy_type"] == "exponential_backoff"
 
     def test_retry_policy_with_circuit_breaker_coordination(self):
@@ -84,7 +83,7 @@ class TestRetryPolicyRuntimeIntegration:
         # Verify both systems are initialized and coordinated
         assert runtime._retry_policy_engine is not None
         assert runtime._circuit_breaker is not None
-        assert runtime._retry_policy_engine.enable_circuit_breaker_coordination == True
+        assert runtime._retry_policy_engine.enable_circuit_breaker_coordination
         assert runtime._retry_policy_engine.circuit_breaker is runtime._circuit_breaker
 
     def test_retry_policy_with_resource_limits_coordination(self):
@@ -111,7 +110,7 @@ class TestRetryPolicyRuntimeIntegration:
         # Verify coordination
         assert runtime._retry_policy_engine is not None
         assert runtime._resource_enforcer is not None
-        assert runtime._retry_policy_engine.enable_resource_limit_coordination == True
+        assert runtime._retry_policy_engine.enable_resource_limit_coordination
         assert (
             runtime._retry_policy_engine.resource_limit_enforcer
             is runtime._resource_enforcer
@@ -228,7 +227,7 @@ result = {'success': True, 'attempt': attempt_count}
         # Verify successful execution after retries
         assert run_id is not None
         assert "retry_test" in results
-        assert results["retry_test"]["success"] == True
+        assert results["retry_test"]["success"]
         assert results["retry_test"]["attempt"] == 3
 
         # Check retry analytics
@@ -673,15 +672,15 @@ class TestRetryPolicyEnterpriseCoordination:
         assert "adaptive_retry" in strategy_effectiveness
 
         config = runtime.get_retry_configuration()
-        assert config["enable_analytics"] == True
+        assert config["enable_analytics"]
         assert config["mode"] == "adaptive"
 
         # Verify all enterprise components are coordinated
         assert runtime._retry_policy_engine is not None
         assert runtime._circuit_breaker is not None
         assert runtime._resource_enforcer is not None
-        assert runtime._retry_policy_engine.enable_circuit_breaker_coordination == True
-        assert runtime._retry_policy_engine.enable_resource_limit_coordination == True
+        assert runtime._retry_policy_engine.enable_circuit_breaker_coordination
+        assert runtime._retry_policy_engine.enable_resource_limit_coordination
 
 
 @pytest.mark.asyncio
@@ -731,7 +730,7 @@ class TestRetryPolicyMetricsAndAnalytics:
             )
 
             results, _ = await runtime.execute_async(workflow.build())
-            assert results[f"metrics_test_{exception_type.lower()}"]["success"] == True
+            assert results[f"metrics_test_{exception_type.lower()}"]["success"]
 
         # Verify comprehensive metrics
         analytics = runtime.get_retry_analytics()
@@ -866,7 +865,7 @@ class TestRetryPolicyMetricsAndAnalytics:
         workflow.add_node("PythonCodeNode", "post_reset", {"code": post_reset_test})
 
         results, _ = await runtime.execute_async(workflow.build())
-        assert results["post_reset"]["success"] == True
+        assert results["post_reset"]["success"]
 
         # Verify new metrics
         new_metrics = runtime.get_retry_metrics_summary()

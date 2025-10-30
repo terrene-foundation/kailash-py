@@ -204,17 +204,35 @@ class Node(ABC):
             # Use _node_id for internal node identifier (namespace separation)
             # This prevents collision with user's 'id' parameter
             self._node_id = kwargs.get("_node_id", self.__class__.__name__)
-            self.metadata = kwargs.get(
-                "metadata",
-                NodeMetadata(
+
+            # FIX: Use _node_metadata internally to avoid collision with user's "metadata" parameter
+            # This allows users to have parameters named "metadata" without conflicts
+            # Type-based routing: NodeMetadata object → internal, dict → user parameter
+            metadata_value = kwargs.get("metadata")
+            if isinstance(metadata_value, NodeMetadata):
+                # Core SDK or external code providing NodeMetadata object
+                self._node_metadata = metadata_value
+            elif metadata_value is None or not isinstance(metadata_value, dict):
+                # No metadata provided or invalid type → create default NodeMetadata
+                self._node_metadata = NodeMetadata(
                     id=self._node_id,  # NodeMetadata still uses 'id' internally
                     name=kwargs.get("name", self.__class__.__name__),
                     description=kwargs.get("description", self.__doc__ or ""),
                     version=kwargs.get("version", "1.0.0"),
                     author=kwargs.get("author", ""),
                     tags=kwargs.get("tags", set()),
-                ),
-            )
+                )
+            else:
+                # User provided dict as "metadata" parameter → create default NodeMetadata,
+                # and let the dict flow through to node.config (handled in filtering below)
+                self._node_metadata = NodeMetadata(
+                    id=self._node_id,
+                    name=kwargs.get("name", self.__class__.__name__),
+                    description=kwargs.get("description", self.__doc__ or ""),
+                    version=kwargs.get("version", "1.0.0"),
+                    author=kwargs.get("author", ""),
+                    tags=kwargs.get("tags", set()),
+                )
             self.logger = logging.getLogger(f"kailash.nodes.{self._node_id}")
 
             # Filter out internal fields from config with comprehensive parameter handling
@@ -233,7 +251,9 @@ class Node(ABC):
 
             # Comprehensive parameter filtering: handle ALL potential conflicts
             # Fields that are always internal (never user parameters)
-            always_internal = {"metadata", "_node_id"}
+            # FIX: Removed "metadata" from this set to allow users to use "metadata" as parameter name
+            # The internal NodeMetadata is now stored in self._node_metadata
+            always_internal = {"_node_id"}
 
             # Fields that can be either internal or user parameters
             # Note: 'id' removed from this list - users can now use 'id' freely
@@ -265,6 +285,11 @@ class Node(ABC):
                     return True
                 # Check for other internal patterns
                 if field_name.startswith("_"):  # Private fields
+                    return True
+                # FIX: Filter out NodeMetadata objects (they're internal, not user parameters)
+                if field_name == "metadata" and isinstance(
+                    kwargs.get(field_name), NodeMetadata
+                ):
                     return True
                 return False
 
@@ -371,6 +396,64 @@ class Node(ABC):
             value: The node identifier to set
         """
         self._node_id = value
+
+    @property
+    def metadata(self) -> NodeMetadata:
+        """
+        Backward compatibility property for node metadata.
+
+        Returns the node's internal NodeMetadata object (_node_metadata).
+        This property maintains backward compatibility for code that accesses node.metadata.
+
+        The internal metadata is now _node_metadata to prevent namespace collision
+        with user's 'metadata' parameter.
+
+        Returns:
+            NodeMetadata object containing node identification and documentation
+
+        Note:
+            Users can now have parameters named "metadata" without conflicts.
+            The parameter will be in node.config['metadata'], while this property
+            returns the internal NodeMetadata object.
+        """
+        return self._node_metadata
+
+    @metadata.setter
+    def metadata(self, value: NodeMetadata | dict):
+        """
+        Setter for backward compatibility with type-based routing.
+
+        This setter routes the value based on its type:
+        - NodeMetadata object → sets internal _node_metadata (Core SDK usage)
+        - dict → sets node.config['metadata'] (user parameter)
+        - other types → raises TypeError for safety
+
+        Args:
+            value: NodeMetadata object or dict
+
+        Raises:
+            TypeError: If value is neither NodeMetadata nor dict
+
+        Example:
+            >>> # Core SDK usage
+            >>> node.metadata = NodeMetadata(name="custom")  # Routes to _node_metadata
+
+            >>> # User parameter (if node has "metadata" parameter)
+            >>> node.metadata = {"key": "value"}  # Routes to config['metadata']
+        """
+        if isinstance(value, NodeMetadata):
+            # Core SDK usage - route to internal metadata
+            self._node_metadata = value
+        elif isinstance(value, dict) or value is None:
+            # User parameter - route to config (None is valid for optional parameters)
+            self.config["metadata"] = value
+        else:
+            # Ambiguous type - raise error for safety
+            raise TypeError(
+                f"metadata must be NodeMetadata, dict, or None, got {type(value).__name__}. "
+                f"For Core SDK metadata, use NodeMetadata object. "
+                f"For user metadata parameter, use dict or None."
+            )
 
     @abstractmethod
     def get_parameters(self) -> dict[str, NodeParameter]:
@@ -586,6 +669,9 @@ class Node(ABC):
                     continue
                 # Skip validation for template expressions like ${variable_name}
                 if isinstance(value, str) and self._is_template_expression(value):
+                    continue
+                # FIX: Allow None for optional parameters (not required)
+                if value is None and not param_def.required:
                     continue
                 if not isinstance(value, param_def.type):
                     try:
