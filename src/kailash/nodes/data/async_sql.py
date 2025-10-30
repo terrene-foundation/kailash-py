@@ -41,7 +41,6 @@ from enum import Enum
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
 import yaml
-
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
@@ -2368,6 +2367,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
     # Class-level pool storage for sharing across instances
     _shared_pools: dict[str, tuple[DatabaseAdapter, int]] = {}
+    _total_pools_created: int = 0  # ADR-017: Track total pools created
     _pool_lock: Optional[asyncio.Lock] = None
 
     # TASK-141.5: Per-pool lock registry infrastructure
@@ -3332,6 +3332,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                         # Create new shared pool
                         self._adapter = await self._create_adapter()
                         self._shared_pools[self._pool_key] = (self._adapter, 1)
+                        AsyncSQLDatabaseNode._total_pools_created += 1  # ADR-017
                         logger.debug(
                             f"Created new class-level shared pool for {self.id}"
                         )
@@ -4031,53 +4032,139 @@ class AsyncSQLDatabaseNode(AsyncNode):
             return metrics
 
     @classmethod
-    def _cleanup_closed_loop_pools(cls) -> int:
-        """
-        Clean up pools from closed event loops.
+    async def _cleanup_closed_loop_pools(cls) -> int:
+        """Proactively remove pools from closed event loops.
+
+        Enhanced with ADR-017:
+        - Async-first design (proper await for pool cleanup)
+        - Detailed logging
+        - Graceful error handling
+        - Metrics tracking
 
         Returns:
-            Number of pools removed
+            int: Number of pools cleaned
         """
-        removed_count = 0
-        keys_to_remove = []
+        cleaned_count = 0
+        pools_to_remove = []
 
-        for pool_key in list(cls._shared_pools.keys()):
-            # Extract loop ID from pool key (first part before "|")
-            parts = pool_key.split("|")
-            if len(parts) > 0:
-                loop_id_str = parts[0]
+        try:
+            current_loop = asyncio.get_event_loop()
+            current_loop_id = id(current_loop)
+        except RuntimeError:
+            logger.warning("AsyncSQLDatabaseNode: No event loop available for cleanup")
+            return 0
 
-                # Check if this pool's event loop is still running
+        # Phase 1: Identify stale pools
+        for pool_key, (adapter, creation_time) in list(cls._shared_pools.items()):
+            loop_id_str = pool_key.split("|")[0]
+
+            try:
+                pool_loop_id = int(loop_id_str)
+            except (ValueError, IndexError):
+                logger.warning(
+                    f"AsyncSQLDatabaseNode: Invalid pool key format: {pool_key}"
+                )
+                continue
+
+            # Check if pool's event loop differs from current
+            if pool_loop_id != current_loop_id:
+                pools_to_remove.append(pool_key)
+                logger.debug(
+                    f"AsyncSQLDatabaseNode: Marked stale pool {pool_key} "
+                    f"(loop {pool_loop_id} != current {current_loop_id})"
+                )
+
+        # Phase 2: Cleanup stale pools
+        for pool_key in pools_to_remove:
+            try:
+                adapter, creation_time = cls._shared_pools.pop(pool_key)
+
+                # Attempt graceful close
                 try:
-                    current_loop = asyncio.get_running_loop()
-                    current_loop_id = str(id(current_loop))
+                    if hasattr(adapter, "close"):
+                        await adapter.close()
+                except Exception as close_error:
+                    logger.debug(
+                        f"AsyncSQLDatabaseNode: Could not close adapter for "
+                        f"{pool_key}: {close_error}"
+                    )
 
-                    # If loop IDs don't match and pool is stale, mark for removal
-                    if loop_id_str != current_loop_id and loop_id_str != "no_loop":
-                        keys_to_remove.append(pool_key)
-                except RuntimeError:
-                    # No current loop - mark old pools for removal
-                    if loop_id_str != "no_loop":
-                        keys_to_remove.append(pool_key)
+                cleaned_count += 1
+                logger.info(f"AsyncSQLDatabaseNode: Cleaned stale pool {pool_key}")
+            except Exception as e:
+                logger.warning(
+                    f"AsyncSQLDatabaseNode: Failed to cleanup pool {pool_key}: {e}"
+                )
 
-        # Remove stale pools
-        for key in keys_to_remove:
-            if key in cls._shared_pools:
-                del cls._shared_pools[key]
-                removed_count += 1
+        if cleaned_count > 0:
+            logger.info(f"AsyncSQLDatabaseNode: Cleaned {cleaned_count} stale pools")
 
-        return removed_count
+        return cleaned_count
 
     @classmethod
-    async def clear_shared_pools(cls) -> None:
-        """Clear all shared connection pools. Use with caution!"""
-        async with cls._get_pool_lock():
-            for pool_key, (adapter, _) in list(cls._shared_pools.items()):
-                try:
-                    await adapter.disconnect()
-                except Exception:
-                    pass  # Best effort
-            cls._shared_pools.clear()
+    async def clear_shared_pools(cls, graceful: bool = True) -> Dict[str, Any]:
+        """Clear all shared connection pools with enhanced error handling (ADR-017).
+
+        Args:
+            graceful: If True, attempts graceful close. If False, immediately removes pools.
+
+        Returns:
+            Dict[str, Any]: Cleanup metrics
+        """
+        total_pools = len(cls._shared_pools)
+        pools_cleared = 0
+        clear_failures = 0
+        clear_errors = []
+
+        if total_pools == 0:
+            return {
+                "total_pools": 0,
+                "pools_cleared": 0,
+                "clear_failures": 0,
+                "clear_errors": [],
+            }
+
+        logger.info(
+            f"AsyncSQLDatabaseNode: Clearing {total_pools} shared pools "
+            f"(graceful={graceful})"
+        )
+
+        pool_keys = list(cls._shared_pools.keys())
+
+        for pool_key in pool_keys:
+            try:
+                adapter, creation_time = cls._shared_pools.pop(pool_key)
+
+                if graceful and hasattr(adapter, "close"):
+                    try:
+                        await adapter.close()
+                        logger.debug(
+                            f"AsyncSQLDatabaseNode: Gracefully closed pool {pool_key}"
+                        )
+                    except Exception as close_error:
+                        logger.warning(
+                            f"AsyncSQLDatabaseNode: Error closing pool {pool_key}: "
+                            f"{close_error}"
+                        )
+
+                pools_cleared += 1
+            except Exception as e:
+                clear_failures += 1
+                error_msg = f"Failed to clear pool {pool_key}: {str(e)}"
+                clear_errors.append(error_msg)
+                logger.error(f"AsyncSQLDatabaseNode: {error_msg}")
+
+        logger.info(
+            f"AsyncSQLDatabaseNode: Cleared {pools_cleared}/{total_pools} pools "
+            f"({clear_failures} failures)"
+        )
+
+        return {
+            "total_pools": total_pools,
+            "pools_cleared": pools_cleared,
+            "clear_failures": clear_failures,
+            "clear_errors": clear_errors,
+        }
 
     def get_pool_info(self) -> dict[str, Any]:
         """Get information about this instance's connection pool.
