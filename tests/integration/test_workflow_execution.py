@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
 from kailash.runtime.runner import WorkflowRunner
 from kailash.workflow import Workflow
 

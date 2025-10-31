@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-
 from kailash.middleware.communication.events import (
     BaseEvent,
     EventFilter,

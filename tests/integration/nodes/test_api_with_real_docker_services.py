@@ -10,7 +10,6 @@ import time
 
 import pytest
 import requests
-
 from kailash.nodes.api import HTTPRequestNode
 from kailash.nodes.api.auth import OAuth2Node
 from kailash.nodes.api.graphql import GraphQLClientNode

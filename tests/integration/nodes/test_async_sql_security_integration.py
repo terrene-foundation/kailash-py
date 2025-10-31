@@ -1,7 +1,6 @@
 """Tests for AsyncSQLDatabaseNode security features."""
 
 import pytest
-
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode, QueryValidator
 from kailash.sdk_exceptions import (
     NodeConfigurationError,

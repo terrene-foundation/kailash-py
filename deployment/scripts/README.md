@@ -112,7 +112,7 @@ helm status kailash-user-management -n kailash-user-management
 Each environment uses specific configuration files:
 
 - `environments/development.env` - Development settings
-- `environments/staging.env` - Staging settings  
+- `environments/staging.env` - Staging settings
 - `environments/production.env` - Production settings
 
 ### Secrets Management

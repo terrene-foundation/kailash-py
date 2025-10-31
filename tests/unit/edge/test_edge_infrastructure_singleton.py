@@ -10,7 +10,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash.edge.location import (
     ComplianceZone,
     EdgeCapabilities,

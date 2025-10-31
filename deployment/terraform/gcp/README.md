@@ -69,7 +69,7 @@ gcp/
    ```bash
    # Install gcloud CLI
    curl https://sdk.cloud.google.com | bash
-   
+
    # Install Terraform
    brew install terraform  # macOS
    # or
@@ -114,7 +114,7 @@ gsutil versioning set on gs://YOUR_PROJECT_ID-terraform-state
 1. **Initialize Terraform**:
    ```bash
    cd deployment/terraform/gcp
-   
+
    # Initialize with backend config
    terraform init \
      -backend-config="bucket=YOUR_PROJECT_ID-terraform-state" \
@@ -131,7 +131,7 @@ gsutil versioning set on gs://YOUR_PROJECT_ID-terraform-state
    ```bash
    # Plan deployment
    terraform plan -var-file=environments/dev.tfvars
-   
+
    # Apply configuration
    terraform apply -var-file=environments/dev.tfvars
    ```
@@ -252,12 +252,12 @@ managed_prometheus:
    ```bash
    # Install Helm
    curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-   
+
    # Deploy ingress controller
    helm install nginx-ingress ingress-nginx/ingress-nginx \
      --namespace ingress-nginx \
      --create-namespace
-   
+
    # Deploy cert-manager
    helm install cert-manager jetstack/cert-manager \
      --namespace cert-manager \
@@ -280,7 +280,7 @@ managed_prometheus:
 1. **API not enabled**:
    ```bash
    ERROR: API [container.googleapis.com] not enabled
-   
+
    # Fix:
    gcloud services enable container.googleapis.com
    ```
@@ -289,7 +289,7 @@ managed_prometheus:
    ```bash
    # Check quotas
    gcloud compute project-info describe --project=PROJECT_ID
-   
+
    # Request increase via Console
    ```
 
@@ -297,7 +297,7 @@ managed_prometheus:
    ```bash
    # Test cluster connectivity
    kubectl cluster-info
-   
+
    # Check firewall rules
    gcloud compute firewall-rules list
    ```

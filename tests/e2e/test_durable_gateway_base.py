@@ -22,7 +22,6 @@ import asyncpg
 import httpx
 import pytest
 import pytest_asyncio
-
 from kailash.middleware.gateway.checkpoint_manager import CheckpointManager, DiskStorage
 from kailash.middleware.gateway.durable_gateway import DurableAPIGateway
 from kailash.workflow.builder import WorkflowBuilder

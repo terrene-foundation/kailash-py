@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import aiohttp
 import pytest
-
 from kailash.nodes.monitoring import HealthCheckNode
 from kailash.nodes.monitoring.health_check import HealthStatus, ServiceType
 from kailash.sdk_exceptions import NodeExecutionError

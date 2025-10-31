@@ -34,7 +34,7 @@ def create_sample_project(project_path: Path) -> None:
             """
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
-        
+
         class LegacyWorkflowRunner:
             def __init__(self):
                 # Legacy configuration patterns
@@ -46,11 +46,11 @@ def create_sample_project(project_path: Path) -> None:
                     timeout=600,
                     retry_count=3
                 )
-            
+
             def run_data_processing(self, input_data):
                 # Create workflow
                 workflow = WorkflowBuilder()
-                
+
                 # Data validation step
                 workflow.add_node("PythonCodeNode", "validate", {
                     "code": '''
@@ -61,7 +61,7 @@ def create_sample_project(project_path: Path) -> None:
                     "input_mapping": {"input_data": "input_data"},
                     "output_key": "validated_data"
                 })
-                
+
                 # Processing step
                 workflow.add_node("PythonCodeNode", "process", {
                     "code": '''
@@ -77,11 +77,11 @@ def create_sample_project(project_path: Path) -> None:
                     "input_mapping": {"validated_data": "validate.validated_data"},
                     "output_key": "processed_result"
                 })
-                
+
                 # Legacy execution pattern
                 self.runtime.execute_sync(workflow.build(), parameters={"input_data": input_data})
                 return self.runtime.get_results()
-            
+
             def cleanup(self):
                 # Manual cleanup (legacy pattern)
                 self.runtime.set_context(None)
@@ -94,14 +94,14 @@ def create_sample_project(project_path: Path) -> None:
         textwrap.dedent(
             """
         # Legacy configuration patterns
-        
+
         DEVELOPMENT_CONFIG = {
             'debug_mode': True,
             'enable_parallel': False,
             'memory_limit': 1024,
             'log_level': 'DEBUG'
         }
-        
+
         PRODUCTION_CONFIG = {
             'enable_parallel': True,
             'thread_pool_size': 32,
@@ -110,13 +110,13 @@ def create_sample_project(project_path: Path) -> None:
             'retry_count': 5,
             'cache_enabled': True
         }
-        
+
         TESTING_CONFIG = {
             'debug_mode': True,
             'thread_pool_size': 2,
             'timeout': 300
         }
-        
+
         def get_runtime_config(environment='development'):
             configs = {
                 'development': DEVELOPMENT_CONFIG,
@@ -135,7 +135,7 @@ def create_sample_project(project_path: Path) -> None:
         from kailash.runtime.local import LocalRuntime
         from kailash.access_control import UserContext
         from kailash.workflow.builder import WorkflowBuilder
-        
+
         class ModernWorkflowService:
             def __init__(self, user_id: str):
                 # Modern configuration
@@ -143,7 +143,7 @@ def create_sample_project(project_path: Path) -> None:
                     user_id=user_id,
                     roles=["data_processor", "workflow_admin"]
                 )
-                
+
                 self.runtime = LocalRuntime(
                     debug=False,
                     max_concurrency=20,
@@ -160,7 +160,7 @@ def create_sample_project(project_path: Path) -> None:
                         'backoff_factor': 2.0
                     }
                 )
-            
+
             def execute_workflow(self, workflow):
                 # Modern execution pattern
                 results, run_id = self.runtime.execute(workflow)
@@ -169,10 +169,10 @@ def create_sample_project(project_path: Path) -> None:
                     'run_id': run_id,
                     'user': self.user_context.user_id
                 }
-            
+
             def create_analytics_workflow(self):
                 workflow = WorkflowBuilder()
-                
+
                 workflow.add_node("PythonCodeNode", "analyze", {
                     "code": '''
         import datetime
@@ -187,7 +187,7 @@ def create_sample_project(project_path: Path) -> None:
         ''',
                     "output_key": "analytics"
                 })
-                
+
                 return workflow.build()
     """
         ).strip()
@@ -200,38 +200,38 @@ def create_sample_project(project_path: Path) -> None:
         import pytest
         from legacy_app import LegacyWorkflowRunner
         from modern_service import ModernWorkflowService
-        
+
         def test_legacy_workflow():
             runner = LegacyWorkflowRunner()
             result = runner.run_data_processing(["item1", "item2", "item3"])
             assert result is not None
             runner.cleanup()
-        
+
         def test_modern_workflow():
             service = ModernWorkflowService("test_user")
             workflow = service.create_analytics_workflow()
             result = service.execute_workflow(workflow)
-            
+
             assert result is not None
             assert "results" in result
             assert "run_id" in result
             assert "user" in result
             assert result["user"] == "test_user"
-        
+
         def test_data_validation():
             runner = LegacyWorkflowRunner()
-            
+
             # Test with valid data
             result = runner.run_data_processing(["valid", "data"])
             assert result is not None
-            
+
             # Test with empty data (should handle gracefully)
             try:
                 runner.run_data_processing([])
                 # Should either work or fail gracefully
             except Exception as e:
                 assert "required" in str(e).lower()
-            
+
             runner.cleanup()
     """
         ).strip()
@@ -242,25 +242,25 @@ def create_sample_project(project_path: Path) -> None:
         textwrap.dedent(
             """
         # Sample Migration Project
-        
+
         This is a sample project demonstrating LocalRuntime migration patterns.
-        
+
         ## Files
-        
+
         - `legacy_app.py` - Contains legacy LocalRuntime usage patterns
         - `config.py` - Configuration files with deprecated parameters
         - `modern_service.py` - Already modernized code (should not be changed)
         - `test_workflows.py` - Test cases for both legacy and modern patterns
-        
+
         ## Migration Notes
-        
+
         This project contains various migration scenarios:
-        
+
         1. **Legacy Configuration**: Old parameter names and patterns
         2. **Legacy Execution**: `execute_sync()` and `get_results()` patterns
         3. **Manual Resource Management**: Manual cleanup patterns
         4. **Mixed Patterns**: Some modern and some legacy code
-        
+
         The migration tools should identify and fix these issues automatically.
     """
         ).strip()

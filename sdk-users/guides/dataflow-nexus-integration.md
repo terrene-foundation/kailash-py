@@ -419,19 +419,19 @@ from dataflow.core.engine import DataFlow
 # Step 1: Initialize DataFlow FIRST with ALL features
 db = DataFlow(
     database_url="postgresql://user:pass@localhost/db",
-    
+
     # FULL FEATURES (causes slower startup)
     skip_registry=False,              # ✅ Model registry (+5s)
     enable_model_persistence=True,    # ✅ Model persistence (+2s/model)
     auto_migrate=True,                # ✅ Auto-migration (+5s)
     skip_migration=False,             # ✅ Migration tracking
     enable_schema_discovery=True,     # ✅ Schema introspection
-    
+
     # Performance features
     enable_caching=True,
     enable_metrics=True,
     connection_pool_size=50,
-    
+
     # Enterprise features
     enable_audit_log=True,           # ✅ Audit trail
     multi_tenant=True,               # ✅ Multi-tenancy

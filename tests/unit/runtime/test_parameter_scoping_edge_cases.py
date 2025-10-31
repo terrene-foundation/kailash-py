@@ -11,12 +11,12 @@ These tests ensure parameter scoping works correctly in all edge cases.
 """
 
 import pytest
-
 from kailash.nodes.base import Node
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import SwitchNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
 from tests.shared.runtime.conftest import execute_runtime
 
 

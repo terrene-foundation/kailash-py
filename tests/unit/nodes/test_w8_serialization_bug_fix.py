@@ -26,7 +26,6 @@ from typing import Any, Dict, List, Optional
 from unittest.mock import Mock, patch
 
 import pytest
-
 from kailash.nodes.base import Node
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime

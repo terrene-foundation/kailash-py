@@ -89,7 +89,7 @@ Quick Start
 
    # Configure enterprise security
    workflow = WorkflowBuilder()
-   
+
    # Multi-factor authentication
    workflow.add_node("MultiFactorAuthNode", "auth", {
        "methods": ["password", "totp", "biometric"],
@@ -112,7 +112,7 @@ Getting Started
 Choose your enterprise deployment path:
 
 1. **Edge Computing**: Start with :doc:`edge_computing` for distributed coordination
-2. **Security**: Begin with :doc:`security` for enterprise security frameworks  
+2. **Security**: Begin with :doc:`security` for enterprise security frameworks
 3. **Monitoring**: Explore :doc:`monitoring` for production observability
 4. **Compliance**: Review :doc:`compliance` for regulatory requirements
 5. **Deployment**: See :doc:`deployment` for production infrastructure

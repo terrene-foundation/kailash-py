@@ -197,13 +197,13 @@ async def _handle_completion_complete(self, params: Dict[str, Any], request_id: 
     protocol_mgr = get_protocol_manager()
     ref = params.get("ref", {})
     argument = params.get("argument", {})
-    
+
     completions = await protocol_mgr.completion.get_completions(
         ref_type=ref.get("type"),
         ref_name=ref.get("name"),
         partial=argument.get("value")
     )
-    
+
     return {
         "jsonrpc": "2.0",
         "result": {"completion": {"values": completions}},

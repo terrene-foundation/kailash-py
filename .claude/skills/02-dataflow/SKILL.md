@@ -20,7 +20,26 @@ DataFlow transforms database models into workflow nodes automatically, providing
 
 ## ⚠️ Critical Updates & Bug Fixes
 
-### v0.7.9 CountNode + PostgreSQL ARRAY + Auto-Query Caching (LATEST - 2025-10-30)
+### v0.7.11 Bulk Operations Parameter Handling (LATEST - 2025-10-31)
+
+**Bug Fix:**
+- ✅ **Parameter Conflict Resolution**: Fixed `TypeError: got multiple values for keyword argument 'model_name'` in all 4 bulk operations when workflows have global input parameters
+
+**What Was Fixed:**
+Bulk operations (BulkCreate, BulkUpdate, BulkDelete, BulkUpsert) now correctly filter `model_name` and `db_instance` from kwargs before passing to internal methods, preventing parameter conflicts when global workflow inputs are present.
+
+**Impact:**
+- All bulk operations work correctly with Nexus/AsyncLocalRuntime global parameters
+- No breaking changes - existing workflows continue working unchanged
+
+**Upgrade Command:**
+```bash
+pip install --upgrade kailash-dataflow>=0.7.11
+```
+
+---
+
+### v0.7.9 CountNode + PostgreSQL ARRAY + Auto-Query Caching (2025-10-30)
 
 **New Features:**
 - ✅ **CountNode**: 11th auto-generated node for efficient COUNT(*) queries (10-50x faster than ListNode)
@@ -170,6 +189,7 @@ user_id = results["create_user"]["result"]  # Access pattern
 - **[dataflow-queries](dataflow-queries.md)** - Query patterns and filtering
 - **[dataflow-bulk-operations](dataflow-bulk-operations.md)** - Batch operations for performance
 - **[dataflow-transactions](dataflow-transactions.md)** - Transaction management
+- **[dataflow-connection-isolation](dataflow-connection-isolation.md)** - ⚠️ CRITICAL: Connection isolation and ACID guarantees
 - **[dataflow-result-access](dataflow-result-access.md)** - Accessing results from nodes
 
 ### Advanced Features
@@ -274,9 +294,10 @@ workflow.add_node("User_Create", "user1", {...})
 
 ## Version Compatibility
 
-- **Current Version**: 0.7.9 (CountNode + PostgreSQL ARRAY + Auto-query caching)
+- **Current Version**: 0.7.11 (Bulk operations parameter handling fix)
 - **Core SDK Version**: 0.9.25+
 - **Python**: 3.8+
+- **v0.7.11**: Bulk operations parameter conflict fix (model_name/db_instance filtering)
 - **v0.7.9**: CountNode (11th node) + PostgreSQL native arrays + auto-query caching
 - **v0.7.3**: Schema cache (91-99% faster) + async-safe migrations
 - **v0.7.0**: Bulk operations fixes (8 critical bugs)

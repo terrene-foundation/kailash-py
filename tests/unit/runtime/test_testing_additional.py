@@ -14,7 +14,6 @@ from typing import Any, Dict
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from kailash.nodes.base import Node, NodeParameter
 from kailash.runtime.testing import (
     NodeTestHelper,

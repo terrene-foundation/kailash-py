@@ -63,7 +63,7 @@ data:
         }
       }
     }
-  
+
   # Security events policy (longer retention)
   security-events-policy.json: |
     {
@@ -116,7 +116,7 @@ data:
         }
       }
     }
-  
+
   # Audit logs policy (extended retention for compliance)
   audit-logs-policy.json: |
     {
@@ -177,7 +177,7 @@ data:
         }
       }
     }
-  
+
   # Metrics policy (shorter retention, optimized for time series)
   metrics-policy.json: |
     {
@@ -250,7 +250,7 @@ spec:
     spec:
       restartPolicy: OnFailure
       serviceAccountName: elasticsearch-ilm-setup
-      
+
       containers:
         - name: ilm-setup
           image: curlimages/curl:8.5.0
@@ -259,7 +259,7 @@ spec:
             - -c
             - |
               set -e
-              
+
               # Wait for Elasticsearch to be ready
               until curl -k -s -u "elastic:${ELASTICSEARCH_PASSWORD}" \
                 "https://kailash-logs-es-http:9200/_cluster/health?wait_for_status=yellow&timeout=60s" | \
@@ -267,36 +267,36 @@ spec:
                 echo "Waiting for Elasticsearch to be ready..."
                 sleep 10
               done
-              
+
               echo "Elasticsearch is ready. Setting up ILM policies..."
-              
+
               # Apply main logs policy
               curl -k -X PUT -H "Content-Type: application/json" \
                 -u "elastic:${ELASTICSEARCH_PASSWORD}" \
                 "https://kailash-logs-es-http:9200/_ilm/policy/kailash-logs-policy" \
                 -d @/policies/kailash-logs-policy.json
-              
+
               # Apply security events policy
               curl -k -X PUT -H "Content-Type: application/json" \
                 -u "elastic:${ELASTICSEARCH_PASSWORD}" \
                 "https://kailash-logs-es-http:9200/_ilm/policy/security-events-policy" \
                 -d @/policies/security-events-policy.json
-              
+
               # Apply audit logs policy
               curl -k -X PUT -H "Content-Type: application/json" \
                 -u "elastic:${ELASTICSEARCH_PASSWORD}" \
                 "https://kailash-logs-es-http:9200/_ilm/policy/audit-logs-policy" \
                 -d @/policies/audit-logs-policy.json
-              
+
               # Apply metrics policy
               curl -k -X PUT -H "Content-Type: application/json" \
                 -u "elastic:${ELASTICSEARCH_PASSWORD}" \
                 "https://kailash-logs-es-http:9200/_ilm/policy/metrics-policy" \
                 -d @/policies/metrics-policy.json
-              
+
               # Create index templates
               echo "Creating index templates..."
-              
+
               # Main logs template
               curl -k -X PUT -H "Content-Type: application/json" \
                 -u "elastic:${ELASTICSEARCH_PASSWORD}" \
@@ -338,7 +338,7 @@ spec:
                   "priority": 100,
                   "composed_of": []
                 }'
-              
+
               # Security events template
               curl -k -X PUT -H "Content-Type: application/json" \
                 -u "elastic:${ELASTICSEARCH_PASSWORD}" \
@@ -366,7 +366,7 @@ spec:
                   },
                   "priority": 200
                 }'
-              
+
               # Audit logs template
               curl -k -X PUT -H "Content-Type: application/json" \
                 -u "elastic:${ELASTICSEARCH_PASSWORD}" \
@@ -404,21 +404,21 @@ spec:
                   },
                   "priority": 300
                 }'
-              
+
               echo "ILM policies and templates created successfully!"
-          
+
           env:
             - name: ELASTICSEARCH_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: kailash-logs-es-elastic-user
                   key: elastic
-          
+
           volumeMounts:
             - name: policies
               mountPath: /policies
               readOnly: true
-          
+
           resources:
             requests:
               memory: 64Mi
@@ -426,7 +426,7 @@ spec:
             limits:
               memory: 128Mi
               cpu: 100m
-      
+
       volumes:
         - name: policies
           configMap:

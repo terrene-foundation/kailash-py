@@ -11,7 +11,7 @@ variable "aws_region" {
 variable "environment" {
   description = "Environment name (development, staging, production)"
   type        = string
-  
+
   validation {
     condition     = contains(["development", "staging", "production"], var.environment)
     error_message = "Environment must be one of: development, staging, production."
@@ -41,7 +41,7 @@ variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
   default     = "10.0.0.0/16"
-  
+
   validation {
     condition     = can(cidrhost(var.vpc_cidr, 0))
     error_message = "VPC CIDR must be a valid IPv4 CIDR block."
@@ -103,7 +103,7 @@ variable "node_groups" {
       effect = string
     })), [])
   }))
-  
+
   default = {
     general = {
       instance_types = ["m6i.large"]
@@ -143,7 +143,7 @@ variable "db_allocated_storage" {
   description = "Initial allocated storage for RDS instance (GB)"
   type        = number
   default     = 100
-  
+
   validation {
     condition     = var.db_allocated_storage >= 20
     error_message = "Allocated storage must be at least 20 GB."
@@ -172,7 +172,7 @@ variable "db_backup_retention_period" {
   description = "Backup retention period in days"
   type        = number
   default     = 7
-  
+
   validation {
     condition     = var.db_backup_retention_period >= 0 && var.db_backup_retention_period <= 35
     error_message = "Backup retention period must be between 0 and 35 days."
@@ -220,7 +220,7 @@ variable "redis_num_cache_nodes" {
   description = "Number of cache nodes"
   type        = number
   default     = 3
-  
+
   validation {
     condition     = var.redis_num_cache_nodes >= 1
     error_message = "Number of cache nodes must be at least 1."
@@ -356,7 +356,7 @@ variable "spot_allocation_strategy" {
   description = "Strategy for spot instance allocation"
   type        = string
   default     = "diversified"
-  
+
   validation {
     condition     = contains(["lowest-price", "diversified"], var.spot_allocation_strategy)
     error_message = "Spot allocation strategy must be either 'lowest-price' or 'diversified'."
@@ -381,7 +381,7 @@ variable "compliance_framework" {
   description = "Compliance framework to implement (SOC2, HIPAA, PCI-DSS)"
   type        = string
   default     = "SOC2"
-  
+
   validation {
     condition     = contains(["SOC2", "HIPAA", "PCI-DSS", "NONE"], var.compliance_framework)
     error_message = "Compliance framework must be one of: SOC2, HIPAA, PCI-DSS, NONE."
@@ -436,6 +436,6 @@ variable "application_config" {
       target_cpu_utilization_percentage = 70
     })
   })
-  
+
   default = {}
 }

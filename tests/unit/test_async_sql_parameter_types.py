@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-
 from kailash.nodes.data.async_sql import (
     AsyncSQLDatabaseNode,
     DatabaseAdapter,

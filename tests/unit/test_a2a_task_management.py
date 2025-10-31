@@ -5,7 +5,6 @@ Unit tests for A2A Task Management functionality.
 from datetime import datetime
 
 import pytest
-
 from kailash.nodes.ai.a2a import (
     A2ATask,
     Insight,

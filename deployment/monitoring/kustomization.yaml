@@ -7,32 +7,32 @@ namespace: monitoring
 resources:
   # Core monitoring namespace
   - namespace.yaml
-  
+
   # Prometheus Operator CRDs and deployment
   - https://github.com/prometheus-operator/prometheus-operator/releases/download/v0.70.0/bundle.yaml
-  
+
   # Prometheus configuration
   - prometheus/prometheus.yaml
   - prometheus/service-monitor-default.yaml
   - prometheus/prometheus-rules.yaml
-  
+
   # Grafana configuration
   - grafana/deployment.yaml
   - grafana/service.yaml
   - grafana/configmap-datasources.yaml
   - grafana/configmap-dashboards.yaml
   - grafana/configmap-dashboard-providers.yaml
-  
+
   # AlertManager configuration
   - alertmanager/alertmanager.yaml
   - alertmanager/configmap.yaml
   - alertmanager/service.yaml
-  
+
   # ServiceMonitors for various services
   - service-monitors/kube-state-metrics.yaml
   - service-monitors/node-exporter.yaml
   - service-monitors/kubelet.yaml
-  
+
   # PrometheusRules
   - rules/kubernetes-alerts.yaml
   - rules/application-alerts.yaml
@@ -74,7 +74,7 @@ patches:
       - op: replace
         path: /spec/retention
         value: 30d
-  
+
   # Add persistent volumes
   - target:
       kind: Prometheus
@@ -90,7 +90,7 @@ patches:
                 requests:
                   storage: 50Gi
               storageClassName: fast
-  
+
   # Configure Grafana ingress
   - target:
       kind: Service

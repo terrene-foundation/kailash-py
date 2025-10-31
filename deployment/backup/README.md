@@ -104,15 +104,15 @@ backup/
    ```bash
    # Create S3 bucket for backups
    aws s3 mb s3://kailash-velero-backups --region us-east-1
-   
+
    # Create cross-region bucket for DR
    aws s3 mb s3://kailash-velero-dr-backups --region us-west-2
-   
+
    # Enable versioning and encryption
    aws s3api put-bucket-versioning \
      --bucket kailash-velero-backups \
      --versioning-configuration Status=Enabled
-   
+
    aws s3api put-bucket-encryption \
      --bucket kailash-velero-backups \
      --server-side-encryption-configuration '{
@@ -130,7 +130,7 @@ backup/
    aws iam create-policy \
      --policy-name VeleroPolicy \
      --policy-document file://velero-policy.json
-   
+
    # Create service account with IRSA
    eksctl create iamserviceaccount \
      --cluster=kailash-prod \
@@ -146,10 +146,10 @@ backup/
    ```bash
    # Apply Velero configuration
    kubectl apply -k deployment/backup/
-   
+
    # Wait for Velero to be ready
    kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=velero -n velero --timeout=300s
-   
+
    # Verify installation
    velero version
    ```
@@ -158,7 +158,7 @@ backup/
    ```bash
    # Check backup storage locations
    velero backup-location get
-   
+
    # Check volume snapshot locations
    velero snapshot-location get
    ```
@@ -167,7 +167,7 @@ backup/
    ```bash
    # Create a test backup
    velero backup create test-backup --include-namespaces kailash-app --wait
-   
+
    # Check backup status
    velero backup describe test-backup
    ```
@@ -296,7 +296,7 @@ Velero exposes metrics for monitoring:
 
 ```yaml
 # Backup success rate
-rate(velero_backup_success_total[24h]) / 
+rate(velero_backup_success_total[24h]) /
 (rate(velero_backup_success_total[24h]) + rate(velero_backup_failure_total[24h]))
 
 # Backup duration

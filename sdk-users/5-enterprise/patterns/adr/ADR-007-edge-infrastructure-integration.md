@@ -43,7 +43,7 @@ We integrated edge infrastructure management directly into the existing Workflow
 class EdgeInfrastructure:
     _instance = None
     _lock = threading.Lock()
-    
+
     def __new__(cls, config=None):
         if cls._instance is None:
             with cls._lock:
@@ -58,7 +58,7 @@ class WorkflowBuilder:
     def __init__(self, edge_config=None):
         self.edge_config = edge_config
         self._edge_infrastructure = None
-        
+
     def build(self):
         if self._has_edge_nodes and self.edge_config:
             self._edge_infrastructure = EdgeInfrastructure(self.edge_config)

@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import numpy as np
 import pytest
-
 from kailash.nodes.ai.a2a import (
     A2AAgentCard,
     Capability,

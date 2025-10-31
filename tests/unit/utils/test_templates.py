@@ -1,7 +1,6 @@
 """Tests for template utilities module."""
 
 import pytest
-
 from kailash.utils.templates import NodeTemplate, TemplateManager
 
 

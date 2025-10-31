@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-
 from kailash.nodes.ai.streaming_analytics import (
     A2AMonitoringNode,
     Alert,
