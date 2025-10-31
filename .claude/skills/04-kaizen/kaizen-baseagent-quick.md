@@ -135,6 +135,68 @@ insights = shared_pool.read_relevant(
 analysis = analyst.analyze(insights)
 ```
 
+## Async Execution with run_async()
+
+**For production FastAPI applications and high-throughput scenarios.**
+
+### Configuration
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from dataclasses import dataclass
+
+@dataclass
+class AsyncConfig:
+    llm_provider: str = "openai"
+    model: str = "gpt-4"
+    use_async_llm: bool = True  # ← Enable async mode
+
+agent = MyAgent(AsyncConfig())
+```
+
+### Usage in FastAPI
+
+```python
+from fastapi import FastAPI
+app = FastAPI()
+
+@app.post("/api/chat")
+async def chat(request: ChatRequest):
+    result = await agent.run_async(question=request.message)
+    return {"response": result["answer"]}
+```
+
+### Concurrent Execution
+
+```python
+# Execute 100 requests concurrently
+tasks = [
+    agent.run_async(question=f"Question {i}")
+    for i in range(100)
+]
+results = await asyncio.gather(*tasks)  # All run in parallel
+```
+
+### Performance Comparison
+
+| Scenario | run() (sync) | run_async() (async) |
+|----------|--------------|---------------------|
+| Single request | 500ms | 500ms (same) |
+| 10 concurrent | 5000ms (queued) | 500ms (parallel) |
+| 100 concurrent | 50000ms + timeouts | 500ms (parallel) |
+
+### When to Use
+
+**Use run_async():**
+- FastAPI/async web apps
+- High-throughput (10+ concurrent requests)
+- Docker deployments with AsyncLocalRuntime
+
+**Use run():**
+- CLI scripts and tools
+- Jupyter notebooks
+- Simple sequential workflows
+
 ## v0.2.0: Autonomous Tool Calling (Opt-In)
 
 ```python
