@@ -23,6 +23,7 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - "Query patterns?" → [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md)
 - "Bulk operations?" → [`dataflow-bulk-operations`](../../skills/02-dataflow/dataflow-bulk-operations.md)
 - "Transactions?" → [`dataflow-transactions`](../../skills/02-dataflow/dataflow-transactions.md)
+- "Connection isolation?" → [`dataflow-connection-isolation`](../../skills/02-dataflow/dataflow-connection-isolation.md) ⚠️ CRITICAL
 
 **Integration**:
 - "With Nexus?" → [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-integration.md)

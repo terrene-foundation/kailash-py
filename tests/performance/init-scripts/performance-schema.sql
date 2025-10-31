@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS test_results (
     test_config JSONB,
     metrics_data JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     -- Indexes for performance
     INDEX idx_test_results_run_id (test_run_id),
     INDEX idx_test_results_type (test_type),
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS workflow_executions (
     node_execution_times JSONB,
     connection_metrics JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     -- Indexes
     INDEX idx_workflow_executions_run_id (test_run_id),
     INDEX idx_workflow_executions_type (workflow_type),
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS resource_metrics (
     active_threads INTEGER,
     gc_collections INTEGER DEFAULT 0,
     gc_time_ms DECIMAL(10,2) DEFAULT 0,
-    
+
     -- Time series partitioning
     INDEX idx_resource_metrics_run_timestamp (test_run_id, timestamp),
     INDEX idx_resource_metrics_timestamp (timestamp)
@@ -103,7 +103,7 @@ CREATE TABLE IF NOT EXISTS database_metrics (
     slow_queries INTEGER DEFAULT 0,
     deadlocks INTEGER DEFAULT 0,
     lock_waits INTEGER DEFAULT 0,
-    
+
     INDEX idx_database_metrics_run_timestamp (test_run_id, timestamp),
     INDEX idx_database_metrics_type (database_type)
 );
@@ -122,7 +122,7 @@ CREATE TABLE IF NOT EXISTS error_events (
     retry_count INTEGER DEFAULT 0,
     recovery_time DECIMAL(10,3),
     context_data JSONB,
-    
+
     INDEX idx_error_events_run_id (test_run_id),
     INDEX idx_error_events_type (error_type),
     INDEX idx_error_events_category (error_category),
@@ -143,7 +143,7 @@ CREATE TABLE IF NOT EXISTS regression_analysis (
     regression_severity VARCHAR(20), -- none, minor, major, critical
     recommendations TEXT[],
     analysis_data JSONB,
-    
+
     INDEX idx_regression_analysis_runs (baseline_run_id, current_run_id),
     INDEX idx_regression_analysis_timestamp (analysis_timestamp),
     INDEX idx_regression_analysis_severity (regression_severity)
@@ -161,7 +161,7 @@ CREATE TABLE IF NOT EXISTS test_data_large (
     metadata JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     INDEX idx_test_data_large_category (category),
     INDEX idx_test_data_large_value (value),
     INDEX idx_test_data_large_created_at (created_at),
@@ -190,7 +190,7 @@ CREATE TABLE IF NOT EXISTS customers (
     country VARCHAR(100),
     registration_date DATE DEFAULT CURRENT_DATE,
     status VARCHAR(20) DEFAULT 'active',
-    
+
     INDEX idx_customers_email (email),
     INDEX idx_customers_country (country),
     INDEX idx_customers_status (status)
@@ -202,7 +202,7 @@ CREATE TABLE IF NOT EXISTS orders (
     order_date DATE DEFAULT CURRENT_DATE,
     total_amount DECIMAL(12,2) NOT NULL,
     status VARCHAR(20) DEFAULT 'pending',
-    
+
     INDEX idx_orders_customer_id (customer_id),
     INDEX idx_orders_date (order_date),
     INDEX idx_orders_status (status),
@@ -215,7 +215,7 @@ CREATE TABLE IF NOT EXISTS order_items (
     product_name VARCHAR(255) NOT NULL,
     quantity INTEGER NOT NULL,
     unit_price DECIMAL(10,2) NOT NULL,
-    
+
     INDEX idx_order_items_order_id (order_id),
     INDEX idx_order_items_product (product_name)
 );
@@ -224,12 +224,12 @@ CREATE TABLE IF NOT EXISTS order_items (
 
 -- Insert test data
 INSERT INTO test_data_large (name, value, category, description, metadata)
-SELECT 
+SELECT
     'test_item_' || generate_series,
     (random() * 1000)::integer,
-    CASE (random() * 4)::integer 
+    CASE (random() * 4)::integer
         WHEN 0 THEN 'A'
-        WHEN 1 THEN 'B' 
+        WHEN 1 THEN 'B'
         WHEN 2 THEN 'C'
         WHEN 3 THEN 'D'
         ELSE 'E'
@@ -244,7 +244,7 @@ FROM generate_series(1, 100000); -- 100K records
 
 -- Insert customer data
 INSERT INTO customers (name, email, country, registration_date, status)
-SELECT 
+SELECT
     'Customer ' || generate_series,
     'customer' || generate_series || '@example.com',
     CASE (random() * 5)::integer
@@ -265,7 +265,7 @@ FROM generate_series(1, 10000); -- 10K customers
 
 -- Insert order data
 INSERT INTO orders (customer_id, order_date, total_amount, status)
-SELECT 
+SELECT
     (random() * 10000 + 1)::integer,
     CURRENT_DATE - (random() * 180)::integer,
     (random() * 1000 + 10)::decimal(12,2),
@@ -280,7 +280,7 @@ FROM generate_series(1, 50000); -- 50K orders
 
 -- Insert order items
 INSERT INTO order_items (order_id, product_name, quantity, unit_price)
-SELECT 
+SELECT
     (random() * 50000 + 1)::integer,
     'Product_' || (random() * 1000 + 1)::integer,
     (random() * 5 + 1)::integer,
@@ -289,7 +289,7 @@ FROM generate_series(1, 150000); -- 150K order items (avg 3 items per order)
 
 -- Create views for common queries
 CREATE OR REPLACE VIEW customer_order_summary AS
-SELECT 
+SELECT
     c.id,
     c.name,
     c.email,
@@ -303,7 +303,7 @@ LEFT JOIN orders o ON c.id = o.customer_id
 GROUP BY c.id, c.name, c.email, c.country;
 
 CREATE OR REPLACE VIEW order_performance_metrics AS
-SELECT 
+SELECT
     DATE_TRUNC('day', order_date) as order_day,
     status,
     COUNT(*) as order_count,
@@ -347,19 +347,19 @@ BEGIN
     -- Delete old test results
     DELETE FROM test_results WHERE created_at < NOW() - (days_to_keep || ' days')::INTERVAL;
     GET DIAGNOSTICS deleted_count = ROW_COUNT;
-    
+
     -- Delete old workflow executions
     DELETE FROM workflow_executions WHERE created_at < NOW() - (days_to_keep || ' days')::INTERVAL;
-    
+
     -- Delete old resource metrics
     DELETE FROM resource_metrics WHERE timestamp < NOW() - (days_to_keep || ' days')::INTERVAL;
-    
-    -- Delete old database metrics  
+
+    -- Delete old database metrics
     DELETE FROM database_metrics WHERE timestamp < NOW() - (days_to_keep || ' days')::INTERVAL;
-    
+
     -- Delete old error events
     DELETE FROM error_events WHERE timestamp < NOW() - (days_to_keep || ' days')::INTERVAL;
-    
+
     RETURN deleted_count;
 END;
 $$ LANGUAGE plpgsql;
