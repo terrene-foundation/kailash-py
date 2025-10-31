@@ -179,6 +179,297 @@ class MultiInputExample(Signature):
 "query -> answer, if(confident): sources, if(!confident): alternatives"
 ```
 
+## 🎯 Structured Outputs with OpenAI API (v0.6.3+)
+
+### What is OpenAI Structured Outputs?
+
+**New in v0.6.3:** Kaizen now supports OpenAI's Structured Outputs API with **100% schema compliance** (vs 70-85% with legacy JSON mode). This feature guarantees that LLM responses will match your signature schema exactly.
+
+**Why It Matters:**
+- **Legacy Mode** (JSON object): 70-85% compliance, may produce extra/missing fields
+- **Strict Mode** (Structured Outputs): **100% compliance**, enforced by OpenAI API
+- **Production Ready**: No manual validation needed, guaranteed type safety
+
+### Enabling Structured Outputs
+
+**Quick Start:**
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.signatures import Signature, InputField, OutputField
+from kaizen.core.config import BaseAgentConfig
+from kaizen.core.structured_output import create_structured_output_config
+
+class ProductAnalysisSignature(Signature):
+    """Structured product analysis."""
+    product_description: str = InputField(desc="Product description")
+    category: str = OutputField(desc="Product category")
+    price_range: str = OutputField(desc="Price range estimate")
+    confidence: float = OutputField(desc="Confidence score 0-1")
+
+# Enable structured outputs with strict mode
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model="gpt-4o-2024-08-06",  # Requires gpt-4o-2024-08-06+
+    provider_config=create_structured_output_config(
+        signature=ProductAnalysisSignature(),
+        strict=True,  # 100% compliance
+        name="product_analysis"
+    )
+)
+
+agent = BaseAgent(config=config, signature=ProductAnalysisSignature())
+result = agent.run(product_description="Wireless headphones with 30-hour battery")
+# Guaranteed to have: category, price_range, confidence fields
+```
+
+### Configuration Modes
+
+**Strict Mode (Recommended):**
+```python
+# 100% schema compliance with gpt-4o-2024-08-06+
+provider_config = create_structured_output_config(
+    signature=MySignature(),
+    strict=True,
+    name="my_response"
+)
+
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model="gpt-4o-2024-08-06",
+    provider_config=provider_config
+)
+```
+
+**Legacy Mode (Best-Effort):**
+```python
+# 70-85% compliance with older models
+provider_config = create_structured_output_config(
+    signature=MySignature(),
+    strict=False,
+    name="my_response"
+)
+
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model="gpt-4",  # Works with older models
+    provider_config=provider_config
+)
+```
+
+### Signature Inheritance (v0.6.3+)
+
+**New in v0.6.3:** Child signatures now **MERGE** parent fields instead of replacing them.
+
+**Parent-Child Inheritance:**
+```python
+from kaizen.signatures import Signature, InputField, OutputField
+
+class BaseConversationSignature(Signature):
+    """Parent signature with 6 output fields."""
+    conversation_text: str = InputField(desc="The conversation text")
+
+    # Parent fields (6 fields)
+    next_action: str = OutputField(desc="Next action to take")
+    extracted_fields: dict = OutputField(desc="Extracted fields")
+    conversation_context: str = OutputField(desc="Context of conversation")
+    user_intent: str = OutputField(desc="User intent")
+    system_response: str = OutputField(desc="System response")
+    confidence_level: float = OutputField(desc="Confidence level 0-1")
+
+class ReferralConversationSignature(BaseConversationSignature):
+    """Child signature EXTENDS parent with 4 additional fields."""
+
+    # Child fields (4 new fields)
+    confidence_score: float = OutputField(desc="Confidence score for referral")
+    user_identity_detected: bool = OutputField(desc="Whether user identity detected")
+    referral_needed: bool = OutputField(desc="Whether referral is needed")
+    referral_reason: str = OutputField(desc="Reason for referral")
+
+# Verify field merging
+sig = ReferralConversationSignature()
+print(f"Total output fields: {len(sig.output_fields)}")  # 10 (6 from parent + 4 from child)
+
+# Parent fields preserved
+assert "next_action" in sig.output_fields
+assert "extracted_fields" in sig.output_fields
+assert "conversation_context" in sig.output_fields
+assert "user_intent" in sig.output_fields
+assert "system_response" in sig.output_fields
+assert "confidence_level" in sig.output_fields
+
+# Child fields added
+assert "confidence_score" in sig.output_fields
+assert "user_identity_detected" in sig.output_fields
+assert "referral_needed" in sig.output_fields
+assert "referral_reason" in sig.output_fields
+```
+
+**Multi-Level Inheritance:**
+```python
+class Level1Signature(Signature):
+    """Level 1: Base signature."""
+    input1: str = InputField(desc="Level 1 input")
+    output1: str = OutputField(desc="Level 1 output")
+
+class Level2Signature(Level1Signature):
+    """Level 2: Extends Level 1."""
+    output2: str = OutputField(desc="Level 2 output")
+
+class Level3Signature(Level2Signature):
+    """Level 3: Extends Level 2."""
+    output3: str = OutputField(desc="Level 3 output")
+
+# Verify multi-level merging
+sig = Level3Signature()
+assert len(sig.output_fields) == 3  # All 3 levels merged
+assert "output1" in sig.output_fields  # From Level1
+assert "output2" in sig.output_fields  # From Level2
+assert "output3" in sig.output_fields  # From Level3
+```
+
+**Field Overriding:**
+```python
+class ParentSignature(Signature):
+    """Parent with default field."""
+    input_text: str = InputField(desc="Input text")
+    result: str = OutputField(desc="Parent result")
+
+class ChildSignature(ParentSignature):
+    """Child overrides parent field."""
+    result: str = OutputField(desc="Child result (overridden)")
+    extra: str = OutputField(desc="Extra field")
+
+sig = ChildSignature()
+assert sig.output_fields["result"]["desc"] == "Child result (overridden)"
+assert len(sig.output_fields) == 2  # Parent overridden + child extra
+```
+
+### Type Mapping
+
+Kaizen automatically converts Python types to JSON schema types:
+
+| Python Type | JSON Schema Type | Notes |
+|-------------|------------------|-------|
+| `str` | `"string"` | Basic string type |
+| `int` | `"integer"` | Whole numbers |
+| `float` | `"number"` | Decimal numbers |
+| `bool` | `"boolean"` | True/False |
+| `dict` | `"object"` | Nested objects |
+| `list` | `"array"` | Arrays of items |
+| `List[str]` | `{"type": "array", "items": {"type": "string"}}` | Typed arrays |
+| `Optional[str]` | Not in `required` | Optional fields |
+
+**Complex Types Example:**
+```python
+from typing import List, Optional
+
+class ComplexSignature(Signature):
+    """Signature with complex types."""
+    user_id: str = InputField(desc="User ID")
+
+    # Complex output types
+    tags: List[str] = OutputField(desc="List of tags")
+    metadata: dict = OutputField(desc="Nested metadata object")
+    score: float = OutputField(desc="Numeric score")
+    is_valid: bool = OutputField(desc="Validation flag")
+    notes: Optional[str] = OutputField(desc="Optional notes")
+
+# Auto-generated JSON schema:
+# {
+#     "type": "object",
+#     "properties": {
+#         "tags": {"type": "array", "items": {"type": "string"}},
+#         "metadata": {"type": "object"},
+#         "score": {"type": "number"},
+#         "is_valid": {"type": "boolean"},
+#         "notes": {"type": "string"}
+#     },
+#     "required": ["tags", "metadata", "score", "is_valid"],
+#     "additionalProperties": false
+# }
+```
+
+### Supported Models
+
+**OpenAI Structured Outputs (Strict Mode):**
+- `gpt-4o-2024-08-06` (recommended)
+- `gpt-4o-mini-2024-07-18`
+- Newer models released after August 2024
+
+**Legacy JSON Object Mode:**
+- `gpt-4` / `gpt-4-turbo`
+- `gpt-3.5-turbo`
+- Any model with JSON mode support
+
+### Real-World Example
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.signatures import Signature, InputField, OutputField
+from kaizen.core.config import BaseAgentConfig
+from kaizen.core.structured_output import create_structured_output_config
+from typing import List
+
+class SupportTicketSignature(Signature):
+    """Structured support ticket analysis."""
+    ticket_text: str = InputField(desc="Customer support ticket text")
+
+    category: str = OutputField(desc="Ticket category (technical, billing, feature_request)")
+    priority: str = OutputField(desc="Priority level (low, medium, high, urgent)")
+    sentiment: str = OutputField(desc="Customer sentiment (positive, neutral, negative)")
+    action_items: List[str] = OutputField(desc="List of action items for support team")
+    estimated_resolution_hours: int = OutputField(desc="Estimated hours to resolve")
+
+# Create agent with structured outputs
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model="gpt-4o-2024-08-06",
+    provider_config=create_structured_output_config(
+        signature=SupportTicketSignature(),
+        strict=True,
+        name="support_analysis"
+    )
+)
+
+agent = BaseAgent(config=config, signature=SupportTicketSignature())
+
+# Process ticket with guaranteed schema compliance
+result = agent.run(
+    ticket_text="My payment failed but I was still charged! This is the third time this month. Please fix ASAP!"
+)
+
+print(result)
+# {
+#     'category': 'billing',
+#     'priority': 'urgent',
+#     'sentiment': 'negative',
+#     'action_items': [
+#         'Verify payment status',
+#         'Process refund if duplicate charge',
+#         'Investigate recurring payment issue'
+#     ],
+#     'estimated_resolution_hours': 2
+# }
+```
+
+### Troubleshooting
+
+**Issue: "Workflow parameters ['provider_config'] not declared"**
+- **Cause:** Using older version of Kaizen (< 0.6.3)
+- **Solution:** `pip install --upgrade kailash-kaizen`
+
+**Issue: Child signature missing parent fields**
+- **Cause:** Using older version of Kaizen (< 0.6.3)
+- **Solution:** Upgrade to Kaizen 0.6.3+ (fixed in signature inheritance)
+
+**Issue: Model returns extra fields not in schema**
+- **Cause:** Using legacy mode (strict=False) with best-effort compliance
+- **Solution:** Switch to strict mode with supported model
+
+**Issue: "Invalid schema: additionalProperties must be false"**
+- **Cause:** OpenAI Structured Outputs requires `additionalProperties: false`
+- **Solution:** Use `strict=True` mode (automatically sets this)
+
 ## 🏗️ Implementation Patterns
 
 ### Text Processing Signatures
