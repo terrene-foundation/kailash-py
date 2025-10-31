@@ -370,6 +370,13 @@ class LLMAgentNode(Node):
                 default=True,
                 description="Use real MCP tool execution instead of mock execution",
             ),
+            "provider_config": NodeParameter(
+                name="provider_config",
+                type=dict,
+                required=False,
+                default={},
+                description="Provider-specific configuration (e.g., response_format for OpenAI Structured Outputs)",
+            ),
         }
 
     def run(self, **kwargs) -> dict[str, Any]:
@@ -608,6 +615,13 @@ class LLMAgentNode(Node):
         auto_discover_tools = kwargs.get("auto_discover_tools", False)
         rag_config = kwargs.get("rag_config", {})
         generation_config = kwargs.get("generation_config", {})
+
+        # Merge provider_config into generation_config for provider-specific parameters
+        # (e.g., response_format for OpenAI Structured Outputs)
+        provider_config = kwargs.get("provider_config", {})
+        if provider_config:
+            generation_config = {**generation_config, **provider_config}
+
         streaming = kwargs.get("streaming", False)
         timeout = kwargs.get("timeout", 120)
         max_retries = kwargs.get("max_retries", 3)
