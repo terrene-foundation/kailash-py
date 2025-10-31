@@ -181,7 +181,7 @@ graph LR
    ```bash
    # Check logs
    gh run view <run-id> --log
-   
+
    # Re-run failed jobs
    gh run rerun <run-id> --failed
    ```
@@ -198,7 +198,7 @@ graph LR
    ```bash
    # Download artifacts
    gh run download <run-id>
-   
+
    # View test reports
    open test-results/index.html
    ```
@@ -253,15 +253,15 @@ stages:
 
 build:
   stage: build
-  
+
 unit-tests:
   stage: test
   needs: ["build"]
-  
+
 integration-tests:
   stage: test
   needs: ["build"]
-  
+
 deploy:
   stage: deploy
   needs: ["unit-tests", "integration-tests"]

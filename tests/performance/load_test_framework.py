@@ -36,16 +36,15 @@ from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 from unittest.mock import Mock
 
+import docker
 import psutil
 import pymongo
 import pytest
 import redis
 import sqlalchemy as sa
-from sqlalchemy import create_engine
-
-import docker
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+from sqlalchemy import create_engine
 
 # Configure logging for performance testing
 logging.basicConfig(level=logging.INFO)
@@ -473,7 +472,7 @@ def execute(input_data):
     values = [row.get('value', 0) for row in data if 'value' in row]
     if not values:
         return {'error': 'No data available'}
-    
+
     return {
         'mean': statistics.mean(values),
         'median': statistics.median(values),
@@ -681,13 +680,13 @@ class LoadTestFramework:
                 conn.execute(
                     sa.text(
                         """
-                    INSERT INTO test_data (name, value, category) 
-                    SELECT 'test_' || generate_series, 
-                           (random() * 1000)::integer, 
-                           CASE (random() * 2)::integer 
-                               WHEN 0 THEN 'A' 
-                               WHEN 1 THEN 'B' 
-                               ELSE 'C' 
+                    INSERT INTO test_data (name, value, category)
+                    SELECT 'test_' || generate_series,
+                           (random() * 1000)::integer,
+                           CASE (random() * 2)::integer
+                               WHEN 0 THEN 'A'
+                               WHEN 1 THEN 'B'
+                               ELSE 'C'
                            END
                     FROM generate_series(1, 1000)
                 """

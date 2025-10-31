@@ -72,14 +72,14 @@ def health_check() -> dict:
 if __name__ == "__main__":
     # Graceful shutdown handling
     import signal
-    
+
     def signal_handler(signum, frame):
         print("Shutting down gracefully...")
         server.shutdown()
-    
+
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGINT, signal_handler)
-    
+
     # Start server
     server.run()
 ```
@@ -261,11 +261,11 @@ http {
     upstream mcp_websocket_servers {
         # Sticky sessions based on client IP
         ip_hash;
-        
+
         server mcp-server-1:3001 max_fails=3 fail_timeout=30s;
         server mcp-server-2:3001 max_fails=3 fail_timeout=30s;
         server mcp-server-3:3001 max_fails=3 fail_timeout=30s;
-        
+
         # Health check (requires nginx-plus or custom module)
         # health_check interval=10s fails=3 passes=2;
     }
@@ -277,7 +277,7 @@ http {
     server {
         listen 80;
         server_name api.company.com;
-        
+
         # Redirect HTTP to HTTPS
         return 301 https://$server_name$request_uri;
     }
@@ -310,11 +310,11 @@ http {
             # Proxy configuration
             proxy_pass http://mcp_websocket_servers;
             proxy_http_version 1.1;
-            
+
             # WebSocket upgrade headers
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection $connection_upgrade;
-            
+
             # Standard proxy headers
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -346,7 +346,7 @@ http {
             allow 172.16.0.0/12;
             allow 192.168.0.0/16;
             deny all;
-            
+
             proxy_pass http://mcp_websocket_servers;
         }
     }
@@ -378,7 +378,7 @@ backend mcp_websocket_servers
     balance roundrobin
     option httpchk GET /health
     http-check expect status 200
-    
+
     server mcp1 mcp-server-1:3001 check inter 10s fall 3 rise 2
     server mcp2 mcp-server-2:3001 check inter 10s fall 3 rise 2
     server mcp3 mcp-server-3:3001 check inter 10s fall 3 rise 2
@@ -386,14 +386,14 @@ backend mcp_websocket_servers
 # Frontend for WebSocket connections
 frontend mcp_websocket_frontend
     bind *:443 ssl crt /etc/ssl/certs/api.company.com.pem
-    
+
     # WebSocket upgrade detection
     acl is_websocket hdr(Upgrade) -i websocket
     acl is_websocket_conn hdr_beg(Connection) -i upgrade
-    
+
     # Route WebSocket traffic
     use_backend mcp_websocket_servers if is_websocket is_websocket_conn
-    
+
     # Rate limiting
     stick-table type ip size 100k expire 30s store http_req_rate(10s)
     http-request track-sc0 src
@@ -458,29 +458,29 @@ class EnterpriseAuth:
                 "metadata": {"type": "service", "name": "internal"}
             }
         })
-        
+
         # JWT auth for user sessions
         self.jwt_auth = JWTAuth(
             secret=os.getenv("JWT_SECRET"),
             algorithm="HS256",
             token_expiry=3600  # 1 hour
         )
-        
+
         # Role-based permissions
         self.rbac = RoleBasedAuth({
             "admin": ["tools", "resources", "admin", "metrics"],
             "operator": ["tools", "resources"],
             "readonly": ["resources"]
         })
-    
+
     async def authenticate(self, request):
         """Multi-method authentication."""
-        
+
         # Try API key first
         api_key = request.headers.get("X-API-Key")
         if api_key:
             return await self.api_auth.authenticate({"api_key": api_key})
-        
+
         # Try JWT token
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
@@ -494,10 +494,10 @@ class EnterpriseAuth:
                 }
             except jwt.InvalidTokenError:
                 pass
-        
+
         # No valid authentication
         raise AuthenticationError("Invalid or missing authentication")
-    
+
     def authorize(self, user_context, required_permission):
         """Check if user has required permission."""
         user_permissions = user_context.get("permissions", [])
@@ -509,11 +509,11 @@ auth_provider = EnterpriseAuth()
 @server.tool(required_permission="tools")
 async def secure_tool(data: str, auth_context=None) -> dict:
     """Tool that requires authentication and authorization."""
-    
+
     # Additional authorization checks
     if not auth_provider.authorize(auth_context, "tools"):
         raise PermissionError("Insufficient permissions")
-    
+
     return {"result": f"Processed: {data}", "user": auth_context.get("user_id")}
 ```
 
@@ -527,41 +527,41 @@ import ipaddress
 class SecureWebSocketTransport(WebSocketServerTransport):
     def __init__(self, allowed_networks=None, blocked_ips=None, **kwargs):
         super().__init__(**kwargs)
-        
+
         # IP allowlist/blocklist
         self.allowed_networks = [ipaddress.ip_network(net) for net in (allowed_networks or [])]
         self.blocked_ips = set(blocked_ips or [])
-        
+
         # Connection limits per IP
         self.connection_counts = {}
         self.max_connections_per_ip = 10
-    
+
     async def handle_connection(self, websocket, path):
         """Enhanced connection handling with security checks."""
-        
+
         client_ip = websocket.remote_address[0]
-        
+
         # IP blocklist check
         if client_ip in self.blocked_ips:
             await websocket.close(code=1008, reason="IP blocked")
             return
-        
+
         # IP allowlist check (if configured)
         if self.allowed_networks:
             client_addr = ipaddress.ip_address(client_ip)
             if not any(client_addr in network for network in self.allowed_networks):
                 await websocket.close(code=1008, reason="IP not allowed")
                 return
-        
+
         # Connection limit per IP
         current_connections = self.connection_counts.get(client_ip, 0)
         if current_connections >= self.max_connections_per_ip:
             await websocket.close(code=1008, reason="Too many connections")
             return
-        
+
         # Update connection count
         self.connection_counts[client_ip] = current_connections + 1
-        
+
         try:
             # Handle the connection normally
             await super().handle_connection(websocket, path)
@@ -602,7 +602,7 @@ import json
 class WebSocketMetrics:
     def __init__(self):
         self.registry = CollectorRegistry()
-        
+
         # Connection metrics
         self.connections_total = Counter(
             'websocket_connections_total',
@@ -610,14 +610,14 @@ class WebSocketMetrics:
             ['server_id'],
             registry=self.registry
         )
-        
+
         self.active_connections = Gauge(
             'websocket_active_connections',
             'Currently active WebSocket connections',
             ['server_id'],
             registry=self.registry
         )
-        
+
         # Message metrics
         self.messages_total = Counter(
             'websocket_messages_total',
@@ -625,14 +625,14 @@ class WebSocketMetrics:
             ['server_id', 'direction', 'status'],
             registry=self.registry
         )
-        
+
         self.message_duration = Histogram(
             'websocket_message_duration_seconds',
             'Time spent processing WebSocket messages',
             ['server_id', 'tool_name'],
             registry=self.registry
         )
-        
+
         # Error metrics
         self.errors_total = Counter(
             'websocket_errors_total',
@@ -640,7 +640,7 @@ class WebSocketMetrics:
             ['server_id', 'error_type'],
             registry=self.registry
         )
-        
+
         # Pool metrics
         self.pool_efficiency = Gauge(
             'websocket_pool_efficiency_percent',
@@ -655,14 +655,14 @@ class MonitoredMCPServer(MCPServer):
         super().__init__(*args, **kwargs)
         self.metrics = WebSocketMetrics()
         self.server_id = os.getenv("SERVER_ID", "unknown")
-    
+
     async def handle_websocket_connection(self, websocket, path):
         """Handle WebSocket connection with metrics."""
-        
+
         # Record connection
         self.metrics.connections_total.labels(server_id=self.server_id).inc()
         self.metrics.active_connections.labels(server_id=self.server_id).inc()
-        
+
         try:
             await super().handle_websocket_connection(websocket, path)
         except Exception as e:
@@ -676,24 +676,24 @@ class MonitoredMCPServer(MCPServer):
         finally:
             # Connection closed
             self.metrics.active_connections.labels(server_id=self.server_id).dec()
-    
+
     async def handle_tool_call(self, tool_name, params):
         """Handle tool call with timing metrics."""
-        
+
         start_time = time.time()
-        
+
         try:
             result = await super().handle_tool_call(tool_name, params)
-            
+
             # Record success
             self.metrics.messages_total.labels(
                 server_id=self.server_id,
                 direction="inbound",
                 status="success"
             ).inc()
-            
+
             return result
-            
+
         except Exception as e:
             # Record error
             self.metrics.messages_total.labels(
@@ -701,15 +701,15 @@ class MonitoredMCPServer(MCPServer):
                 direction="inbound",
                 status="error"
             ).inc()
-            
+
             error_type = type(e).__name__
             self.metrics.errors_total.labels(
                 server_id=self.server_id,
                 error_type=error_type
             ).inc()
-            
+
             raise
-            
+
         finally:
             # Record duration
             duration = time.time() - start_time
@@ -717,14 +717,14 @@ class MonitoredMCPServer(MCPServer):
                 server_id=self.server_id,
                 tool_name=tool_name
             ).observe(duration)
-    
+
     def get_metrics_handler(self):
         """Return Prometheus metrics handler."""
         from prometheus_client import generate_latest
-        
+
         def metrics_handler():
             return generate_latest(self.metrics.registry)
-        
+
         return metrics_handler
 
 # Metrics endpoint setup
@@ -739,7 +739,7 @@ class MetricsHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8')
             self.end_headers()
-            
+
             metrics_data = server.get_metrics_handler()()
             self.wfile.write(metrics_data)
         else:
@@ -762,7 +762,7 @@ from logging.handlers import RotatingFileHandler
 
 class StructuredFormatter(logging.Formatter):
     """JSON structured logging formatter."""
-    
+
     def format(self, record):
         log_entry = {
             "timestamp": datetime.utcnow().isoformat(),
@@ -773,7 +773,7 @@ class StructuredFormatter(logging.Formatter):
             "function": record.funcName,
             "line": record.lineno,
         }
-        
+
         # Add extra fields
         if hasattr(record, 'server_id'):
             log_entry['server_id'] = record.server_id
@@ -783,31 +783,31 @@ class StructuredFormatter(logging.Formatter):
             log_entry['tool_name'] = record.tool_name
         if hasattr(record, 'duration'):
             log_entry['duration'] = record.duration
-        
+
         # Add exception info
         if record.exc_info:
             log_entry['exception'] = self.formatException(record.exc_info)
-        
+
         return json.dumps(log_entry)
 
 def setup_production_logging():
     """Configure production logging."""
-    
+
     # Root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
-    
+
     # Clear existing handlers
     root_logger.handlers.clear()
-    
+
     # Structured formatter
     formatter = StructuredFormatter()
-    
+
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
-    
+
     # File handler with rotation
     file_handler = RotatingFileHandler(
         '/var/log/mcp-server.log',
@@ -816,7 +816,7 @@ def setup_production_logging():
     )
     file_handler.setFormatter(formatter)
     root_logger.addHandler(file_handler)
-    
+
     # Error file handler
     error_handler = RotatingFileHandler(
         '/var/log/mcp-server-error.log',
@@ -833,12 +833,12 @@ class LoggingMCPServer(MCPServer):
         super().__init__(*args, **kwargs)
         self.logger = logging.getLogger(self.__class__.__name__)
         self.server_id = os.getenv("SERVER_ID", "unknown")
-    
+
     async def handle_websocket_connection(self, websocket, path):
         """Handle connection with structured logging."""
-        
+
         client_ip = websocket.remote_address[0]
-        
+
         self.logger.info(
             "WebSocket connection established",
             extra={
@@ -847,12 +847,12 @@ class LoggingMCPServer(MCPServer):
                 "path": path
             }
         )
-        
+
         start_time = time.time()
-        
+
         try:
             await super().handle_websocket_connection(websocket, path)
-            
+
         except Exception as e:
             self.logger.error(
                 "WebSocket connection error",
@@ -865,7 +865,7 @@ class LoggingMCPServer(MCPServer):
                 exc_info=True
             )
             raise
-            
+
         finally:
             duration = time.time() - start_time
             self.logger.info(
@@ -876,10 +876,10 @@ class LoggingMCPServer(MCPServer):
                     "duration": duration
                 }
             )
-    
+
     async def handle_tool_call(self, tool_name, params):
         """Handle tool call with structured logging."""
-        
+
         self.logger.info(
             "Tool call started",
             extra={
@@ -888,12 +888,12 @@ class LoggingMCPServer(MCPServer):
                 "params_size": len(json.dumps(params))
             }
         )
-        
+
         start_time = time.time()
-        
+
         try:
             result = await super().handle_tool_call(tool_name, params)
-            
+
             duration = time.time() - start_time
             self.logger.info(
                 "Tool call completed",
@@ -904,9 +904,9 @@ class LoggingMCPServer(MCPServer):
                     "result_size": len(json.dumps(result))
                 }
             )
-            
+
             return result
-            
+
         except Exception as e:
             duration = time.time() - start_time
             self.logger.error(
@@ -938,11 +938,11 @@ import time
 
 class PerformanceTunedClient:
     """Performance-optimized MCP client for high-throughput scenarios."""
-    
+
     def __init__(self, server_urls, max_concurrent=50):
         self.server_urls = server_urls
         self.max_concurrent = max_concurrent
-        
+
         # Create multiple clients for load distribution
         self.clients = []
         for i, url in enumerate(server_urls):
@@ -958,31 +958,31 @@ class PerformanceTunedClient:
                 enable_metrics=True
             )
             self.clients.append(client)
-        
+
         self.client_index = 0
         self.semaphore = asyncio.Semaphore(max_concurrent)
-    
+
     def get_next_client(self):
         """Round-robin client selection."""
         client = self.clients[self.client_index]
         self.client_index = (self.client_index + 1) % len(self.clients)
         return client
-    
+
     async def call_tool_optimized(self, tool_name, params):
         """Optimized tool call with load balancing."""
-        
+
         async with self.semaphore:  # Limit concurrent calls
             client = self.get_next_client()
-            
+
             # Try primary server
             try:
                 async with client:
                     return await client.call_tool(
-                        self.server_urls[0], 
-                        tool_name, 
+                        self.server_urls[0],
+                        tool_name,
                         params
                     )
-                    
+
             except Exception as e:
                 # Failover to other servers
                 for backup_url in self.server_urls[1:]:
@@ -991,39 +991,39 @@ class PerformanceTunedClient:
                             return await client.call_tool(backup_url, tool_name, params)
                     except Exception:
                         continue
-                
+
                 # All servers failed
                 raise e
-    
+
     async def batch_call_tools(self, calls):
         """Batch process multiple tool calls efficiently."""
-        
+
         tasks = []
         for tool_name, params in calls:
             task = self.call_tool_optimized(tool_name, params)
             tasks.append(task)
-        
+
         # Process in batches to avoid overwhelming servers
         batch_size = self.max_concurrent
         results = []
-        
+
         for i in range(0, len(tasks), batch_size):
             batch = tasks[i:i + batch_size]
             batch_results = await asyncio.gather(*batch, return_exceptions=True)
             results.extend(batch_results)
-        
+
         return results
-    
+
     async def get_performance_stats(self):
         """Get performance statistics from all clients."""
-        
+
         stats = {
             "total_clients": len(self.clients),
             "server_urls": self.server_urls,
             "max_concurrent": self.max_concurrent,
             "client_stats": []
         }
-        
+
         for i, client in enumerate(self.clients):
             metrics = client.get_metrics()
             client_stats = {
@@ -1033,51 +1033,51 @@ class PerformanceTunedClient:
                 "active_connections": len(client._websocket_pools),
                 "connection_errors": metrics.get('connection_errors', 0)
             }
-            
+
             # Calculate efficiency
             hits = client_stats["pool_hits"]
             misses = client_stats["pool_misses"]
             if hits + misses > 0:
                 client_stats["pool_efficiency"] = (hits / (hits + misses)) * 100
-            
+
             stats["client_stats"].append(client_stats)
-        
+
         return stats
 
 # Usage example
 async def high_performance_example():
     """Demonstrate high-performance WebSocket usage."""
-    
+
     # Multiple server URLs for load balancing
     server_urls = [
         "wss://api1.company.com/mcp",
-        "wss://api2.company.com/mcp", 
+        "wss://api2.company.com/mcp",
         "wss://api3.company.com/mcp"
     ]
-    
+
     client = PerformanceTunedClient(server_urls, max_concurrent=100)
-    
+
     # Batch processing example
     calls = [
-        ("search", {"query": f"query_{i}"}) 
+        ("search", {"query": f"query_{i}"})
         for i in range(1000)
     ]
-    
+
     start_time = time.time()
     results = await client.batch_call_tools(calls)
     elapsed = time.time() - start_time
-    
+
     # Performance analysis
     successful = sum(1 for r in results if not isinstance(r, Exception))
     failed = len(results) - successful
-    
+
     print(f"Performance Results:")
     print(f"  Total calls: {len(calls)}")
     print(f"  Successful: {successful}")
     print(f"  Failed: {failed}")
     print(f"  Total time: {elapsed:.2f}s")
     print(f"  Calls per second: {len(calls)/elapsed:.1f}")
-    
+
     # Get detailed stats
     stats = await client.get_performance_stats()
     print(f"  Pool efficiency: {sum(s.get('pool_efficiency', 0) for s in stats['client_stats'])/len(stats['client_stats']):.1f}%")
@@ -1101,43 +1101,43 @@ from kailash.mcp_server import MCPClient
 
 class ProductionDiagnostics:
     """Comprehensive production diagnostics for WebSocket MCP."""
-    
+
     def __init__(self, server_urls):
         self.server_urls = server_urls if isinstance(server_urls, list) else [server_urls]
         self.results = {}
-    
+
     async def run_full_diagnostics(self):
         """Run complete diagnostic suite."""
-        
+
         print("=== Production WebSocket MCP Diagnostics ===\n")
-        
+
         # System diagnostics
         await self.check_system_resources()
-        
+
         # Network diagnostics
         await self.check_network_connectivity()
-        
+
         # WebSocket diagnostics
         await self.check_websocket_functionality()
-        
+
         # MCP protocol diagnostics
         await self.check_mcp_protocol()
-        
+
         # Performance diagnostics
         await self.check_performance_metrics()
-        
+
         # Generate report
         self.generate_diagnostic_report()
-    
+
     async def check_system_resources(self):
         """Check system resource utilization."""
-        
+
         print("1. System Resource Check")
-        
+
         # CPU usage
         cpu_percent = psutil.cpu_percent(interval=1)
         self.results['cpu_usage'] = cpu_percent
-        
+
         # Memory usage
         memory = psutil.virtual_memory()
         self.results['memory_usage'] = {
@@ -1145,38 +1145,38 @@ class ProductionDiagnostics:
             'available_gb': memory.available / (1024**3),
             'total_gb': memory.total / (1024**3)
         }
-        
+
         # Disk usage
         disk = psutil.disk_usage('/')
         self.results['disk_usage'] = {
             'percent': (disk.used / disk.total) * 100,
             'free_gb': disk.free / (1024**3)
         }
-        
+
         # Network connections
         connections = psutil.net_connections(kind='tcp')
         websocket_connections = [c for c in connections if c.laddr.port in [3001, 8080, 443]]
         self.results['websocket_connections'] = len(websocket_connections)
-        
+
         print(f"   CPU Usage: {cpu_percent:.1f}%")
         print(f"   Memory Usage: {memory.percent:.1f}% ({memory.available/(1024**3):.1f}GB available)")
         print(f"   Disk Usage: {(disk.used/disk.total)*100:.1f}% ({disk.free/(1024**3):.1f}GB free)")
         print(f"   WebSocket Connections: {len(websocket_connections)}")
-        
+
         if cpu_percent > 80:
             print("   ⚠️  HIGH CPU USAGE - consider scaling")
         if memory.percent > 80:
             print("   ⚠️  HIGH MEMORY USAGE - check for memory leaks")
         if (disk.used/disk.total)*100 > 90:
             print("   ⚠️  LOW DISK SPACE - clean up logs")
-        
+
         print()
-    
+
     async def check_network_connectivity(self):
         """Check network connectivity to servers."""
-        
+
         print("2. Network Connectivity Check")
-        
+
         for i, url in enumerate(self.server_urls):
             try:
                 # Parse URL
@@ -1188,11 +1188,11 @@ class ProductionDiagnostics:
                     port = 80
                 else:
                     continue
-                
+
                 if ":" in host:
                     host, port = host.split(":")
                     port = int(port)
-                
+
                 # Test TCP connection
                 start_time = time.time()
                 reader, writer = await asyncio.wait_for(
@@ -1201,90 +1201,90 @@ class ProductionDiagnostics:
                 )
                 writer.close()
                 await writer.wait_closed()
-                
+
                 latency = (time.time() - start_time) * 1000
                 print(f"   Server {i+1} ({host}:{port}): ✅ Connected ({latency:.1f}ms)")
-                
+
                 self.results[f'server_{i+1}_connectivity'] = {
                     'status': 'connected',
                     'latency_ms': latency
                 }
-                
+
             except asyncio.TimeoutError:
                 print(f"   Server {i+1} ({host}:{port}): ❌ Timeout")
                 self.results[f'server_{i+1}_connectivity'] = {'status': 'timeout'}
             except Exception as e:
                 print(f"   Server {i+1} ({host}:{port}): ❌ Error: {e}")
                 self.results[f'server_{i+1}_connectivity'] = {'status': 'error', 'error': str(e)}
-        
+
         print()
-    
+
     async def check_websocket_functionality(self):
         """Test basic WebSocket functionality."""
-        
+
         print("3. WebSocket Functionality Check")
-        
+
         for i, url in enumerate(self.server_urls):
             try:
                 print(f"   Testing {url}")
-                
+
                 # Test WebSocket upgrade
                 start_time = time.time()
                 async with websockets.connect(url, ping_interval=None) as ws:
                     connect_time = (time.time() - start_time) * 1000
-                    
+
                     # Test ping/pong
                     ping_start = time.time()
                     pong_waiter = await ws.ping()
                     await pong_waiter
                     ping_time = (time.time() - ping_start) * 1000
-                    
+
                     # Test message send/receive
                     test_message = {"type": "test", "timestamp": time.time()}
                     await ws.send(json.dumps(test_message))
-                    
+
                     try:
                         response = await asyncio.wait_for(ws.recv(), timeout=5.0)
                         message_received = True
                     except asyncio.TimeoutError:
                         message_received = False
-                    
+
                     print(f"     ✅ WebSocket upgrade: {connect_time:.1f}ms")
                     print(f"     ✅ Ping/Pong: {ping_time:.1f}ms")
                     print(f"     {'✅' if message_received else '⚠️'} Message handling: {'Working' if message_received else 'No response'}")
-                    
+
                     self.results[f'server_{i+1}_websocket'] = {
                         'status': 'working',
                         'connect_time_ms': connect_time,
                         'ping_time_ms': ping_time,
                         'message_handling': message_received
                     }
-                    
+
             except Exception as e:
                 print(f"     ❌ WebSocket test failed: {e}")
                 self.results[f'server_{i+1}_websocket'] = {'status': 'failed', 'error': str(e)}
-        
+
         print()
-    
+
     async def check_mcp_protocol(self):
         """Test MCP protocol functionality."""
-        
+
         print("4. MCP Protocol Check")
-        
+
         client = MCPClient(enable_metrics=True)
-        
+
         for i, url in enumerate(self.server_urls):
             try:
                 print(f"   Testing MCP protocol on {url}")
-                
+
                 async with client:
                     # Test tool discovery
                     start_time = time.time()
                     tools = await client.discover_tools(url)
                     discovery_time = (time.time() - start_time) * 1000
-                    
+
                     print(f"     ✅ Tool discovery: {len(tools)} tools ({discovery_time:.1f}ms)")
-                    
+
                     # Test tool execution (if tools available)
                     if tools:
                         tool_name = list(tools.keys())[0]
@@ -1292,16 +1292,16 @@ class ProductionDiagnostics:
                             start_time = time.time()
                             result = await client.call_tool(url, tool_name, {})
                             execution_time = (time.time() - start_time) * 1000
-                            
+
                             print(f"     ✅ Tool execution ({tool_name}): {execution_time:.1f}ms")
-                            
+
                             self.results[f'server_{i+1}_mcp'] = {
                                 'status': 'working',
                                 'tools_count': len(tools),
                                 'discovery_time_ms': discovery_time,
                                 'execution_time_ms': execution_time
                             }
-                            
+
                         except Exception as e:
                             print(f"     ⚠️ Tool execution failed: {e}")
                             self.results[f'server_{i+1}_mcp'] = {
@@ -1316,56 +1316,56 @@ class ProductionDiagnostics:
                             'status': 'no_tools',
                             'discovery_time_ms': discovery_time
                         }
-                        
+
             except Exception as e:
                 print(f"     ❌ MCP protocol test failed: {e}")
                 self.results[f'server_{i+1}_mcp'] = {'status': 'failed', 'error': str(e)}
-        
+
         print()
-    
+
     async def check_performance_metrics(self):
         """Check performance and connection pooling."""
-        
+
         print("5. Performance & Pool Efficiency Check")
-        
+
         client = MCPClient(
             connection_pool_config={"max_connections": 10},
             enable_metrics=True
         )
-        
+
         if self.server_urls:
             url = self.server_urls[0]  # Test with first server
-            
+
             try:
                 async with client:
                     # Make multiple calls to test pooling
                     start_time = time.time()
-                    
+
                     tasks = []
                     for i in range(5):
                         task = client.discover_tools(url)
                         tasks.append(task)
-                    
+
                     await asyncio.gather(*tasks, return_exceptions=True)
-                    
+
                     total_time = time.time() - start_time
-                    
+
                     # Check metrics
                     metrics = client.get_metrics()
                     pool_hits = metrics.get('websocket_pool_hits', 0)
                     pool_misses = metrics.get('websocket_pool_misses', 0)
-                    
+
                     if pool_hits + pool_misses > 0:
                         efficiency = (pool_hits / (pool_hits + pool_misses)) * 100
                     else:
                         efficiency = 0
-                    
+
                     print(f"   Multiple calls test: {total_time:.2f}s total")
                     print(f"   Pool hits: {pool_hits}")
                     print(f"   Pool misses: {pool_misses}")
                     print(f"   Pool efficiency: {efficiency:.1f}%")
                     print(f"   Active connections: {len(client._websocket_pools)}")
-                    
+
                     self.results['performance'] = {
                         'total_time': total_time,
                         'pool_hits': pool_hits,
@@ -1373,124 +1373,124 @@ class ProductionDiagnostics:
                         'pool_efficiency': efficiency,
                         'active_connections': len(client._websocket_pools)
                     }
-                    
+
                     if efficiency > 60:
                         print("   ✅ Good pool efficiency")
                     elif efficiency > 20:
                         print("   ⚠️ Moderate pool efficiency")
                     else:
                         print("   ❌ Poor pool efficiency - check connection settings")
-                        
+
             except Exception as e:
                 print(f"   ❌ Performance test failed: {e}")
                 self.results['performance'] = {'status': 'failed', 'error': str(e)}
-        
+
         print()
-    
+
     def generate_diagnostic_report(self):
         """Generate comprehensive diagnostic report."""
-        
+
         print("=== DIAGNOSTIC REPORT ===")
-        
+
         # System health
         cpu = self.results.get('cpu_usage', 0)
         memory = self.results.get('memory_usage', {}).get('percent', 0)
-        
+
         if cpu < 70 and memory < 70:
             print("✅ System Health: GOOD")
         elif cpu < 85 and memory < 85:
             print("⚠️ System Health: MODERATE")
         else:
             print("❌ System Health: POOR - resource constraints detected")
-        
+
         # Connectivity status
         connected_servers = sum(
             1 for key, value in self.results.items()
             if key.endswith('_connectivity') and value.get('status') == 'connected'
         )
         total_servers = len([k for k in self.results.keys() if k.endswith('_connectivity')])
-        
+
         if connected_servers == total_servers:
             print("✅ Network Connectivity: ALL SERVERS REACHABLE")
         elif connected_servers > total_servers // 2:
             print("⚠️ Network Connectivity: PARTIAL - some servers unreachable")
         else:
             print("❌ Network Connectivity: POOR - most servers unreachable")
-        
+
         # WebSocket functionality
         working_websockets = sum(
             1 for key, value in self.results.items()
             if key.endswith('_websocket') and value.get('status') == 'working'
         )
         total_websockets = len([k for k in self.results.keys() if k.endswith('_websocket')])
-        
+
         if working_websockets == total_websockets:
             print("✅ WebSocket Functionality: ALL WORKING")
         elif working_websockets > 0:
             print("⚠️ WebSocket Functionality: PARTIAL")
         else:
             print("❌ WebSocket Functionality: FAILED")
-        
+
         # MCP protocol
         working_mcp = sum(
             1 for key, value in self.results.items()
             if key.endswith('_mcp') and value.get('status') == 'working'
         )
         total_mcp = len([k for k in self.results.keys() if k.endswith('_mcp')])
-        
+
         if working_mcp == total_mcp:
             print("✅ MCP Protocol: ALL WORKING")
         elif working_mcp > 0:
             print("⚠️ MCP Protocol: PARTIAL")
         else:
             print("❌ MCP Protocol: FAILED")
-        
+
         # Performance
         perf = self.results.get('performance', {})
         efficiency = perf.get('pool_efficiency', 0)
-        
+
         if efficiency > 60:
             print("✅ Performance: OPTIMAL")
         elif efficiency > 20:
             print("⚠️ Performance: MODERATE")
         else:
             print("❌ Performance: POOR - connection pooling issues")
-        
+
         print("\n=== RECOMMENDATIONS ===")
-        
+
         # Resource recommendations
         if cpu > 80:
             print("- Scale out servers or optimize CPU-intensive operations")
         if memory > 80:
             print("- Investigate memory leaks or increase server memory")
-        
+
         # Connectivity recommendations
         if connected_servers < total_servers:
             print("- Check network connectivity to unreachable servers")
             print("- Verify firewall and security group settings")
-        
+
         # Performance recommendations
         if efficiency < 30:
             print("- Review connection pool configuration")
             print("- Check server keep-alive settings")
             print("- Consider increasing ping intervals")
-        
+
         # Export results
         with open('/var/log/mcp-diagnostics.json', 'w') as f:
             json.dump(self.results, f, indent=2)
-        
+
         print(f"\nFull diagnostic results saved to: /var/log/mcp-diagnostics.json")
 
 # Usage
 async def run_production_diagnostics():
     """Run production diagnostics."""
-    
+
     server_urls = [
         "wss://api1.company.com/mcp",
-        "wss://api2.company.com/mcp",  
+        "wss://api2.company.com/mcp",
         "wss://api3.company.com/mcp"
     ]
-    
+
     diagnostics = ProductionDiagnostics(server_urls)
     await diagnostics.run_full_diagnostics()
 
@@ -1513,43 +1513,43 @@ import logging
 
 class MCPDisasterRecovery:
     """Disaster recovery procedures for MCP WebSocket deployments."""
-    
+
     def __init__(self, backup_config):
         self.backup_config = backup_config
         self.s3_client = boto3.client('s3') if backup_config.get('s3_enabled') else None
         self.logger = logging.getLogger(__name__)
-    
+
     async def create_backup(self):
         """Create complete backup of MCP server state."""
-        
+
         timestamp = datetime.utcnow().isoformat()
         backup_data = {
             "timestamp": timestamp,
             "version": "1.0",
             "components": {}
         }
-        
+
         # Backup server configuration
         backup_data["components"]["configuration"] = await self.backup_configuration()
-        
+
         # Backup connection pool state
         backup_data["components"]["connection_pools"] = await self.backup_connection_pools()
-        
+
         # Backup metrics and monitoring data
         backup_data["components"]["metrics"] = await self.backup_metrics()
-        
+
         # Backup certificates and keys (metadata only, not actual files)
         backup_data["components"]["certificates"] = await self.backup_certificate_info()
-        
+
         # Save backup locally
         backup_filename = f"mcp-backup-{timestamp.replace(':', '-')}.json"
         local_path = f"/var/backups/{backup_filename}"
-        
+
         with open(local_path, 'w') as f:
             json.dump(backup_data, f, indent=2)
-        
+
         self.logger.info(f"Backup created: {local_path}")
-        
+
         # Upload to S3 if configured
         if self.s3_client:
             try:
@@ -1561,12 +1561,12 @@ class MCPDisasterRecovery:
                 self.logger.info(f"Backup uploaded to S3: {backup_filename}")
             except Exception as e:
                 self.logger.error(f"S3 upload failed: {e}")
-        
+
         return backup_data
-    
+
     async def backup_configuration(self):
         """Backup server configuration."""
-        
+
         config = {
             "server_settings": {
                 "host": os.getenv("WEBSOCKET_HOST", "0.0.0.0"),
@@ -1584,15 +1584,15 @@ class MCPDisasterRecovery:
                 "logging_level": os.getenv("LOG_LEVEL", "INFO")
             }
         }
-        
+
         return config
-    
+
     async def backup_connection_pools(self):
         """Backup connection pool statistics."""
-        
+
         # In a real implementation, this would backup pool state
         # from running servers via API calls
-        
+
         pool_data = {
             "pool_statistics": {
                 "total_pools": 0,
@@ -1605,15 +1605,15 @@ class MCPDisasterRecovery:
                 "cleanup_interval": 300
             }
         }
-        
+
         return pool_data
-    
+
     async def backup_metrics(self):
         """Backup metrics and monitoring data."""
-        
+
         # This would connect to Prometheus/metrics endpoint
         # and backup recent metrics data
-        
+
         metrics_data = {
             "collection_time": datetime.utcnow().isoformat(),
             "metrics": {
@@ -1622,12 +1622,12 @@ class MCPDisasterRecovery:
                 "websocket_errors_total": 0
             }
         }
-        
+
         return metrics_data
-    
+
     async def backup_certificate_info(self):
         """Backup certificate information (not the actual certificates)."""
-        
+
         cert_info = {
             "ssl_enabled": bool(os.getenv("SSL_ENABLED", "true")),
             "certificate_paths": {
@@ -1636,147 +1636,147 @@ class MCPDisasterRecovery:
             },
             "expiry_check_needed": True
         }
-        
+
         return cert_info
-    
+
     async def restore_from_backup(self, backup_file):
         """Restore MCP server from backup."""
-        
+
         self.logger.info(f"Starting restore from backup: {backup_file}")
-        
+
         try:
             with open(backup_file, 'r') as f:
                 backup_data = json.load(f)
-            
+
             # Restore configuration
             await self.restore_configuration(backup_data["components"]["configuration"])
-            
+
             # Restore connection pool settings
             await self.restore_connection_pool_config(backup_data["components"]["connection_pools"])
-            
+
             # Validate certificates
             await self.validate_certificates(backup_data["components"]["certificates"])
-            
+
             self.logger.info("Restore completed successfully")
             return True
-            
+
         except Exception as e:
             self.logger.error(f"Restore failed: {e}")
             return False
-    
+
     async def restore_configuration(self, config_data):
         """Restore server configuration."""
-        
+
         self.logger.info("Restoring server configuration")
-        
+
         # In a real implementation, this would update environment variables
         # or configuration files and restart services
-        
+
         server_settings = config_data["server_settings"]
         auth_settings = config_data["authentication"]
         monitoring_settings = config_data["monitoring"]
-        
+
         # Update environment variables (example)
         os.environ["WEBSOCKET_HOST"] = server_settings["host"]
         os.environ["WEBSOCKET_PORT"] = str(server_settings["port"])
         os.environ["MAX_CONNECTIONS"] = str(server_settings["max_connections"])
-        
+
         self.logger.info("Configuration restored")
-    
+
     async def restore_connection_pool_config(self, pool_data):
         """Restore connection pool configuration."""
-        
+
         self.logger.info("Restoring connection pool configuration")
-        
+
         pool_config = pool_data["pool_configuration"]
-        
+
         # Update pool settings
         os.environ["POOL_MAX_CONNECTIONS"] = str(pool_config["max_connections"])
         os.environ["POOL_CONNECTION_TIMEOUT"] = str(pool_config["connection_timeout"])
         os.environ["POOL_CLEANUP_INTERVAL"] = str(pool_config["cleanup_interval"])
-        
+
         self.logger.info("Connection pool configuration restored")
-    
+
     async def validate_certificates(self, cert_info):
         """Validate SSL certificates are present and valid."""
-        
+
         if not cert_info["ssl_enabled"]:
             self.logger.info("SSL not enabled, skipping certificate validation")
             return
-        
+
         cert_file = cert_info["certificate_paths"]["cert_file"]
         key_file = cert_info["certificate_paths"]["key_file"]
-        
+
         # Check if certificate files exist
         import os
         if not os.path.exists(cert_file):
             self.logger.error(f"Certificate file not found: {cert_file}")
             raise FileNotFoundError(f"Certificate file not found: {cert_file}")
-        
+
         if not os.path.exists(key_file):
             self.logger.error(f"Key file not found: {key_file}")
             raise FileNotFoundError(f"Key file not found: {key_file}")
-        
+
         # Check certificate expiry
         try:
             import ssl
             import socket
             from datetime import datetime
-            
+
             context = ssl.create_default_context()
             context.check_hostname = False
             context.verify_mode = ssl.CERT_NONE
-            
+
             # This is a simplified check - in production you'd use proper certificate parsing
             self.logger.info("Certificate files validated successfully")
-            
+
         except Exception as e:
             self.logger.warning(f"Certificate validation warning: {e}")
-    
+
     async def automated_backup_schedule(self):
         """Run automated backup on schedule."""
-        
+
         while True:
             try:
                 # Create daily backup
                 await self.create_backup()
-                
+
                 # Clean up old backups (keep last 7 days)
                 await self.cleanup_old_backups(days=7)
-                
+
                 # Wait 24 hours
                 await asyncio.sleep(24 * 60 * 60)
-                
+
             except Exception as e:
                 self.logger.error(f"Automated backup failed: {e}")
                 # Wait 1 hour before retrying
                 await asyncio.sleep(60 * 60)
-    
+
     async def cleanup_old_backups(self, days=7):
         """Clean up backups older than specified days."""
-        
+
         cutoff_date = datetime.utcnow() - timedelta(days=days)
-        
+
         # Clean up local backups
         import glob
         backup_files = glob.glob("/var/backups/mcp-backup-*.json")
-        
+
         for backup_file in backup_files:
             try:
                 # Extract timestamp from filename
                 filename = os.path.basename(backup_file)
                 timestamp_str = filename.replace("mcp-backup-", "").replace(".json", "")
                 timestamp_str = timestamp_str.replace("-", ":")
-                
+
                 file_date = datetime.fromisoformat(timestamp_str)
-                
+
                 if file_date < cutoff_date:
                     os.remove(backup_file)
                     self.logger.info(f"Removed old backup: {backup_file}")
-                    
+
             except Exception as e:
                 self.logger.warning(f"Failed to clean up backup {backup_file}: {e}")
-        
+
         # Clean up S3 backups if configured
         if self.s3_client:
             try:
@@ -1784,7 +1784,7 @@ class MCPDisasterRecovery:
                     Bucket=self.backup_config['s3_bucket'],
                     Prefix='mcp-backups/'
                 )
-                
+
                 for obj in response.get('Contents', []):
                     if obj['LastModified'].replace(tzinfo=None) < cutoff_date:
                         self.s3_client.delete_object(
@@ -1792,7 +1792,7 @@ class MCPDisasterRecovery:
                             Key=obj['Key']
                         )
                         self.logger.info(f"Removed old S3 backup: {obj['Key']}")
-                        
+
             except Exception as e:
                 self.logger.error(f"S3 cleanup failed: {e}")
 

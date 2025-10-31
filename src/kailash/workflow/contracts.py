@@ -21,7 +21,6 @@ from typing import Any, Dict, List, Optional, Union
 import jsonschema
 from jsonschema import Draft7Validator
 from jsonschema import ValidationError as JsonSchemaError
-
 from kailash.sdk_exceptions import WorkflowValidationError
 
 

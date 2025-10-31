@@ -8,7 +8,6 @@ import os
 import tempfile
 
 import pytest
-
 from kailash.nodes.validation import (
     CodeValidationNode,
     ValidationTestSuiteExecutorNode,

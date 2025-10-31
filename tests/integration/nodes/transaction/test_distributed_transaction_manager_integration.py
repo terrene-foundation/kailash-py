@@ -14,7 +14,6 @@ import asyncpg
 import pytest
 import pytest_asyncio
 import redis
-
 from kailash.nodes.transaction.distributed_transaction_manager import (
     AvailabilityLevel,
     ConsistencyLevel,
@@ -24,6 +23,7 @@ from kailash.nodes.transaction.distributed_transaction_manager import (
     TransactionRequirements,
     TransactionStatus,
 )
+
 from tests.utils.docker_config import (
     ensure_docker_services,
     get_postgres_connection_string,

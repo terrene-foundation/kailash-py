@@ -18,7 +18,6 @@ from typing import Any, Dict
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from kailash.mcp_server.auth import APIKeyAuth, BasicAuth
 from kailash.mcp_server.errors import MCPError, MCPErrorCode
 from kailash.mcp_server.server import MCPServer, MCPServerBase

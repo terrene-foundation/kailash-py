@@ -12,7 +12,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 
 import pytest
-
 from kailash.edge.compliance import ComplianceRouter
 from kailash.edge.discovery import EdgeDiscovery, EdgeSelectionStrategy
 from kailash.edge.location import (

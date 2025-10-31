@@ -191,7 +191,7 @@ for i, file in enumerate(latest_files[:5]):  # Show last 5 results
     try:
         with open(file) as f:
             data = json.load(f)
-        
+
         if isinstance(data, dict) and 'total_workflows' in data:
             print(f'{i+1}. {file.name}')
             print(f'   Workflows: {data[\"total_workflows\"]}')

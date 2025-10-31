@@ -5,7 +5,6 @@ import time
 from unittest.mock import patch
 
 import pytest
-
 from kailash.nodes.monitoring import DeadlockDetectorNode
 from kailash.nodes.monitoring.deadlock_detector import (
     DeadlockType,

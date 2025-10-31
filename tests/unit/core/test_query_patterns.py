@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
-
 from kailash.core.ml.query_patterns import (
     PatternLearningOptimizer,
     PredictedQuery,

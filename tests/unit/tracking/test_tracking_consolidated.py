@@ -1,7 +1,6 @@
 """Consolidated tests for tracking functionality."""
 
 import pytest
-
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics, TaskRun, TaskStatus

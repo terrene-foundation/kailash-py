@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from kailash.edge.coordination.raft import (
     AppendEntriesRequest,
     AppendEntriesResponse,

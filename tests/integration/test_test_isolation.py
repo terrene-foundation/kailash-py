@@ -1,7 +1,6 @@
 """Test to verify test isolation is working correctly."""
 
 import pytest
-
 from kailash.nodes.base import Node, NodeRegistry
 from kailash.nodes.data.async_connection import AsyncConnectionManager
 

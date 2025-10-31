@@ -115,7 +115,7 @@ from kailash.monitoring.metrics import MetricType
 # Counter - Always increasing (errors, requests)
 MetricType.COUNTER
 
-# Gauge - Current value (memory usage, active users)  
+# Gauge - Current value (memory usage, active users)
 MetricType.GAUGE
 
 # Timer - Duration measurements (response time)
@@ -132,7 +132,7 @@ from kailash.monitoring.alerts import AlertSeverity
 
 AlertSeverity.INFO      # Informational
 AlertSeverity.WARNING   # Warning condition
-AlertSeverity.ERROR     # Error condition  
+AlertSeverity.ERROR     # Error condition
 AlertSeverity.CRITICAL  # Critical issue
 ```
 
@@ -150,7 +150,7 @@ validation = get_validation_metrics()
 validation.get_success_rate()     # Success percentage
 validation.get_cache_hit_rate()   # Cache efficiency
 
-# Security metrics  
+# Security metrics
 security = get_security_metrics()
 security.get_violation_rate()     # Violations per minute
 security.get_critical_violations() # Critical violation count
@@ -169,7 +169,7 @@ performance.get_p95_response_time() # 95th percentile response time
 condition="> 10"        # More than 10 failures
 condition="> 0.05"      # More than 5% error rate
 
-# Less than threshold  
+# Less than threshold
 condition="< 0.8"       # Cache hit rate below 80%
 condition="< 1000"      # Revenue below $1000/min
 
@@ -270,7 +270,7 @@ workflow_rules = [
         time_window=timedelta(minutes=10)
     ),
     AlertRule(
-        name="slow_workflows", 
+        name="slow_workflows",
         description="Workflows running slowly",
         severity=AlertSeverity.WARNING,
         metric_name="response_time",
@@ -289,7 +289,7 @@ security_rules = [
         name="sql_injection_detected",
         description="SQL injection attempts",
         severity=AlertSeverity.CRITICAL,
-        metric_name="sql_injection_attempts", 
+        metric_name="sql_injection_attempts",
         condition="> 0",
         threshold=0,
         notification_interval=timedelta(minutes=1)  # Immediate alerts
@@ -323,7 +323,7 @@ performance_rules = [
         name="high_cpu_usage",
         description="CPU usage high",
         severity=AlertSeverity.WARNING,
-        metric_name="cpu_usage", 
+        metric_name="cpu_usage",
         condition="> 80",
         threshold=80  # 80% CPU usage
     ),
@@ -377,9 +377,9 @@ print(prometheus_data)
 def get_dashboard_metrics():
     """Get metrics for custom dashboard."""
     validation = get_validation_metrics()
-    security = get_security_metrics() 
+    security = get_security_metrics()
     performance = get_performance_metrics()
-    
+
     return {
         "validation": {
             "success_rate": validation.get_success_rate(),
@@ -436,7 +436,7 @@ all_alerts = alert_manager.get_all_alerts()
 
 # Filter by time period
 recent_alerts = [
-    alert for alert in all_alerts 
+    alert for alert in all_alerts
     if alert.created_at > datetime.now(UTC) - timedelta(hours=24)
 ]
 
@@ -459,7 +459,7 @@ business_collector = MetricsCollector(max_series=50)
 
 # Define custom metrics
 business_collector.create_metric(
-    "revenue_per_minute", 
+    "revenue_per_minute",
     MetricType.GAUGE,
     "Revenue generated per minute",
     "USD"
@@ -467,7 +467,7 @@ business_collector.create_metric(
 
 business_collector.create_metric(
     "active_users",
-    MetricType.GAUGE, 
+    MetricType.GAUGE,
     "Number of active users"
 )
 
@@ -521,19 +521,19 @@ def setup_production_monitoring():
     try:
         # Initialize
         alert_manager = AlertManager(get_metrics_registry())
-        
+
         # Add rules
         from kailash.monitoring.alerts import create_default_alert_rules
         for rule in create_default_alert_rules():
             alert_manager.add_rule(rule)
-        
+
         # Add notifications with fallback
         alert_manager.add_notification_channel(LogNotificationChannel())
-        
+
         # Start monitoring
         alert_manager.start()
         logger.info("Monitoring started")
-        
+
         # Cleanup on exit
         def cleanup():
             try:
@@ -541,10 +541,10 @@ def setup_production_monitoring():
                 logger.info("Monitoring stopped")
             except Exception as e:
                 logger.error(f"Error stopping monitoring: {e}")
-        
+
         atexit.register(cleanup)
         return alert_manager
-        
+
     except Exception as e:
         logger.error(f"Failed to setup monitoring: {e}")
         return None
@@ -560,17 +560,17 @@ def system_health():
     """System health check for load balancers."""
     validation = get_validation_metrics()
     security = get_security_metrics()
-    
+
     # Check validation health (last 5 minutes)
     success_rate = validation.get_success_rate(timedelta(minutes=5))
     if success_rate < 0.9:
         return {"healthy": False, "reason": f"Low success rate: {success_rate:.1%}"}
-    
+
     # Check security health
     violations = security.get_critical_violations(timedelta(minutes=5))
     if violations > 0:
         return {"healthy": False, "reason": f"Security violations: {violations}"}
-    
+
     return {"healthy": True, "success_rate": f"{success_rate:.1%}"}
 
 # Example usage
@@ -621,7 +621,7 @@ else:
    registry = get_metrics_registry()
    collectors = registry.get_all_collectors()
    print(f"Registered collectors: {list(collectors.keys())}")
-   
+
    validation = get_validation_metrics()
    total = validation.get_metric("validation_total")
    print(f"Total validations: {total.get_latest_value() if total else 'None'}")
@@ -632,7 +632,7 @@ else:
    # Check alert rules
    for rule_name, rule in alert_manager.rules.items():
        print(f"Rule: {rule_name}, Enabled: {rule.enabled}")
-   
+
    # Check metric values vs thresholds
    metric = validation.get_metric("validation_failure")
    if metric:
@@ -644,7 +644,7 @@ else:
    ```python
    # Test notification channels
    test_alert = Alert("test", "test", AlertSeverity.INFO, "Test", "Test alert")
-   
+
    for channel in alert_manager.notification_channels:
        result = channel.send_notification(test_alert, {})
        print(f"{type(channel).__name__}: {'✅' if result else '❌'}")
@@ -676,10 +676,10 @@ else:
        time_window=timedelta(minutes=1),  # Very responsive
        # ...
    )
-   
+
    # Longer windows for trend analysis
    AlertRule(
-       name="degrading_performance", 
+       name="degrading_performance",
        time_window=timedelta(hours=1),   # Look at trends
        # ...
    )

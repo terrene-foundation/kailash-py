@@ -20,7 +20,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
 import pytest
-
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import ResourceLimitExceededError
 from kailash.workflow.builder import WorkflowBuilder
@@ -516,7 +515,7 @@ result = {
                     "connection_string": "postgresql://test:test@localhost:5432/test_db",
                     "query": """
                     WITH report_data AS (
-                        SELECT 
+                        SELECT
                             'production_load_test' as report_type,
                             NOW() as generated_at,
                             random() * 100 as metric_value

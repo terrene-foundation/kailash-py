@@ -123,16 +123,16 @@ Async context manager for TDD test execution with automatic cleanup.
 async def test_with_context(tdd_test_context):
     """Test using basic TDD context"""
     context = tdd_test_context
-    
+
     # Direct database access
     connection = context.connection
     result = await connection.fetchval("SELECT 1")
     assert result == 1
-    
+
     # Context info
     print(f"Test ID: {context.test_id}")
     print(f"Savepoint: {context.savepoint_name}")
-    
+
     # Automatic cleanup on exit
 ```
 
@@ -146,19 +146,19 @@ DataFlow instance optimized for TDD testing.
 async def test_with_dataflow(tdd_dataflow):
     """Test using TDD-optimized DataFlow"""
     df = tdd_dataflow
-    
+
     @df.model
     class TestModel:
         name: str
         value: int = 0
-    
+
     # Fast table creation (existing_schema_mode=True)
     df.create_tables()
-    
+
     # Standard DataFlow operations
     result = await df.TestModel.create({"name": "test", "value": 42})
     assert result["success"] is True
-    
+
     # Automatic cleanup via TDD infrastructure
 ```
 
@@ -177,7 +177,7 @@ Fast database connection for TDD tests using savepoint isolation.
 async def test_with_fast_db(fast_test_db):
     """Test using fast database connection"""
     connection = fast_test_db
-    
+
     # Sub-100ms database operations
     await connection.execute("""
         CREATE TEMP TABLE test_table (
@@ -185,12 +185,12 @@ async def test_with_fast_db(fast_test_db):
             data TEXT
         )
     """)
-    
+
     await connection.execute(
-        "INSERT INTO test_table (data) VALUES ($1)", 
+        "INSERT INTO test_table (data) VALUES ($1)",
         "test data"
     )
-    
+
     count = await connection.fetchval("SELECT COUNT(*) FROM test_table")
     assert count == 1
 ```
@@ -211,11 +211,11 @@ Enhanced TDD context with full performance optimization.
 async def test_enhanced_performance(enhanced_tdd_context):
     """Test with all performance optimizations enabled"""
     context = enhanced_tdd_context
-    
+
     # Performance metrics available
     metrics = context.metrics
     assert metrics.setup_time_ms < 10  # Setup under 10ms
-    
+
     # All optimizations enabled
     assert context.preheated_pool is True
     assert context.cached_schema is True
@@ -238,16 +238,16 @@ DataFlow instance with preheated connection pool for maximum performance.
 async def test_preheated_performance(preheated_dataflow):
     """Test with preheated connection pool"""
     df, pool_stats = preheated_dataflow
-    
+
     # Connection immediately available
     assert pool_stats["preheated"] is True
     assert pool_stats["acquisition_time_ms"] < 5
-    
+
     # Normal DataFlow operations at maximum speed
     @df.model
     class FastModel:
         name: str
-    
+
     df.create_tables()
     result = await df.FastModel.create({"name": "fast test"})
     assert result["success"] is True
@@ -263,11 +263,11 @@ Pre-cached test models for immediate use without DDL overhead.
 async def test_cached_models(cached_schema_models):
     """Test with pre-cached model schemas"""
     User, Product, Order, cache_stats = cached_schema_models
-    
+
     # Models immediately available
     assert cache_stats["cache_hits"] > 0
     assert cache_stats["ddl_operations"] == 0
-    
+
     # Standard model usage
     user_data = {"name": "Alice", "email": "alice@example.com"}
     # These would work with actual DataFlow instance:
@@ -293,16 +293,16 @@ Thread-safe parallel test execution support.
 async def test_parallel_safe(parallel_test_execution):
     """Test designed for parallel execution"""
     context, isolation_id, resource_manager = parallel_test_execution
-    
+
     # Each parallel test gets unique isolation
     assert isolation_id.startswith("iso_")
     assert context.isolation_level == "SERIALIZABLE"
-    
+
     # Resource allocation for deadlock prevention
     if resource_manager.allocate("database_table_users"):
         # Safe to operate on users table
         pass
-    
+
     # Automatic resource cleanup
 ```
 
@@ -321,15 +321,15 @@ Simplified parallel-safe execution context.
 async def test_simple_parallel(tdd_parallel_safe):
     """Simple parallel-safe test"""
     context, unique_id = tdd_parallel_safe
-    
+
     # Unique context for this parallel execution
     assert unique_id.startswith("parallel_")
     assert len(unique_id) == 21  # parallel_ + 12 char hex
-    
+
     # Safe for concurrent execution
     connection = context.connection
     table_name = f"test_table_{unique_id.split('_')[1]}"
-    
+
     await connection.execute(f"""
         CREATE TEMP TABLE {table_name} (
             id SERIAL PRIMARY KEY,
@@ -352,15 +352,15 @@ Test execution with real-time performance monitoring.
 async def test_with_monitoring(performance_monitored_test):
     """Test with performance monitoring"""
     monitor, metrics_collector, alert_handler = performance_monitored_test
-    
+
     # Measure specific operations
     with metrics_collector.measure("database_operation"):
         # Database work here
         pass
-    
+
     # Check performance metrics
     assert metrics_collector.current_metrics.duration_ms < 100
-    
+
     # Check for performance alerts
     alerts = alert_handler.get_alerts()
     assert len(alerts) == 0  # No performance issues
@@ -379,13 +379,13 @@ Simple performance tracking for validation.
 def test_performance_validation(tdd_performance_tracker):
     """Validate test performance targets"""
     import time
-    
+
     start = time.time()
     # Test operations
     time.sleep(0.05)  # 50ms work
-    
+
     duration_ms = (time.time() - start) * 1000
-    
+
     # Automatic performance tracking
     # Warning logged if test exceeds 100ms
     assert duration_ms < 100
@@ -409,17 +409,17 @@ Test execution with memory optimization and leak detection.
 async def test_memory_efficient(memory_optimized_test):
     """Test with memory optimization"""
     optimizer, tracker, cleanup_manager = memory_optimized_test
-    
+
     # Track memory usage
     with tracker.track():
         # Memory-intensive operations
         data = list(range(10000))
         processed = [x * 2 for x in data]
-    
+
     # Validate memory usage
     delta_mb = tracker.get_memory_delta()
     assert delta_mb < 5.0  # Under 5MB increase
-    
+
     # Manual cleanup if needed
     cleanup_manager.force_cleanup()
 ```
@@ -442,15 +442,15 @@ Complete benchmark environment with all optimizations.
 async def test_complete_benchmark(comprehensive_tdd_benchmark):
     """Comprehensive performance benchmark"""
     benchmark_context = comprehensive_tdd_benchmark
-    
+
     # All optimizations enabled
     assert benchmark_context.optimizations_enabled["connection_pooling"] is True
     assert benchmark_context.optimizations_enabled["schema_caching"] is True
     assert benchmark_context.optimizations_enabled["parallel_execution"] is True
-    
+
     # Performance validation
     assert benchmark_context.validate_performance_target(100.0)
-    
+
     # Comprehensive reporting
     report = benchmark_context.get_comprehensive_report()
     assert report["target_achieved"] is True
@@ -476,15 +476,15 @@ Pre-populated test data for scenarios requiring existing relationships.
 async def test_with_seeded_data(tdd_seeded_data):
     """Test with pre-populated data"""
     context, data, models = tdd_seeded_data
-    
+
     # Access seeded data
     users = data["users"]        # 3 users
     products = data["products"]  # 5 products
     orders = data["orders"]      # 3 orders
-    
+
     assert len(users) == 3
     assert all(user["email"].endswith("@example.com") for user in users)
-    
+
     # Access models for additional operations
     User = models["User"]
     Product = models["Product"]
@@ -737,7 +737,7 @@ async def resilient_tdd_context():
    # AVOID
    def test_mixed_approach(clean_database, tdd_test_context):
        pass
-   
+
    # PREFER
    @pytest.mark.asyncio
    async def test_tdd_only(tdd_test_context):

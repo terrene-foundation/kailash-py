@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 import requests
-
 from kailash.nodes.base import Node, NodeParameter, register_node
 
 
