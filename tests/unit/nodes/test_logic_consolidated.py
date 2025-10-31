@@ -1,6 +1,7 @@
 """Consolidated tests for logic operation nodes."""
 
 import pytest
+
 from kailash.nodes.logic.async_operations import AsyncMergeNode, AsyncSwitchNode
 from kailash.nodes.logic.operations import MergeNode, SwitchNode
 

@@ -1,6 +1,7 @@
 """Unit tests for EmbeddingGeneratorNode node."""
 
 import pytest
+
 from kailash.nodes.ai import EmbeddingGeneratorNode
 
 

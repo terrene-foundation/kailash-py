@@ -8,6 +8,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.secret_provider import (
     AWSSecretProvider,

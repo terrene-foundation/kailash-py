@@ -8,6 +8,7 @@ Feature: Added 'logging' and 'io' to ALLOWED_MODULES and ALLOWED_ASYNC_MODULES
 """
 
 import pytest
+
 from kailash.nodes.code.async_python import AsyncPythonCodeNode
 
 

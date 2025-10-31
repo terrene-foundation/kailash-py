@@ -9,9 +9,10 @@ import json
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-from kailash.nodes.ai.llm_agent import LLMAgentNode
 from openai.types.chat import ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion_message_tool_call import Function
+
+from kailash.nodes.ai.llm_agent import LLMAgentNode
 
 
 class TestMCPPydanticFix:

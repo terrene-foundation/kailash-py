@@ -24,6 +24,7 @@ from typing import Dict
 
 import pytest
 import pytest_asyncio
+
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder

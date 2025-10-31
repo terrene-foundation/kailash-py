@@ -12,12 +12,13 @@ import json
 from unittest.mock import MagicMock, patch
 
 import pytest
-from kailash.nodes.ai.llm_agent import LLMAgentNode
 from openai.types.chat import (
     ChatCompletion,
     ChatCompletionMessage,
     ChatCompletionMessageToolCall,
 )
+
+from kailash.nodes.ai.llm_agent import LLMAgentNode
 
 
 class TestLLMAgentMCPPydanticBug:

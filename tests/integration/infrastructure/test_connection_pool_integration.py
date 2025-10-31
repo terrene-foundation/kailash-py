@@ -7,6 +7,7 @@ import time
 from typing import Any, Dict, List
 
 import pytest
+
 from kailash.nodes.data.workflow_connection_pool import WorkflowConnectionPool
 from kailash.runtime import LocalRuntime
 from kailash.workflow import Workflow

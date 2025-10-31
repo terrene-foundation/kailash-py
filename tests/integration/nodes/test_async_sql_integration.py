@@ -4,6 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from kailash.nodes.data.async_sql import (
     AsyncSQLDatabaseNode,
     DatabaseConfig,

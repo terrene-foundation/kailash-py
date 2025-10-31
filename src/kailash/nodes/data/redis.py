@@ -9,6 +9,7 @@ import logging
 from typing import Any, Dict, List, Optional, Union
 
 import redis
+
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeExecutionError
 

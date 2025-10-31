@@ -26,6 +26,7 @@ from typing import Any, Dict, List, Optional, Set, Union
 from uuid import uuid4
 
 import bcrypt
+
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import SQLDatabaseNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
