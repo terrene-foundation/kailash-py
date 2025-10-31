@@ -19,7 +19,7 @@ fi
 
 echo "📋 Starting services..."
 echo "  • AI Registry (port 8001)"
-echo "  • User Management (port 8002)" 
+echo "  • User Management (port 8002)"
 echo "  • Example App (port 8003)"
 echo "  • Enterprise Gateway (port 8000)"
 echo "  • PostgreSQL (port 5432)"

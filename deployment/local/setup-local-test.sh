@@ -37,54 +37,54 @@ log_error() {
 # Check prerequisites
 check_prerequisites() {
     log_info "Checking prerequisites..."
-    
+
     local required_tools=("docker" "kubectl")
     local missing_tools=()
-    
+
     for tool in "${required_tools[@]}"; do
         if ! command -v "$tool" &> /dev/null; then
             missing_tools+=("$tool")
         fi
     done
-    
+
     if [[ ${#missing_tools[@]} -gt 0 ]]; then
         log_error "Missing required tools: ${missing_tools[*]}"
         log_error "Please install them first"
         exit 1
     fi
-    
+
     # Check for Kind
     if ! command -v kind &> /dev/null; then
         log_warning "Kind not found. Installing..."
         install_kind
     fi
-    
+
     # Check if Docker is running
     if ! docker info &> /dev/null; then
         log_error "Docker is not running. Please start Docker."
         exit 1
     fi
-    
+
     log_success "All prerequisites satisfied"
 }
 
 # Install Kind
 install_kind() {
     log_info "Installing Kind..."
-    
+
     local os=$(uname -s | tr '[:upper:]' '[:lower:]')
     local arch=$(uname -m)
-    
+
     # Convert arch names
     case "$arch" in
         x86_64) arch="amd64" ;;
         aarch64|arm64) arch="arm64" ;;
     esac
-    
+
     # Download Kind
     local kind_version="v0.20.0"
     local download_url="https://github.com/kubernetes-sigs/kind/releases/download/${kind_version}/kind-${os}-${arch}"
-    
+
     if curl -Lo /tmp/kind "$download_url" && chmod +x /tmp/kind; then
         sudo mv /tmp/kind /usr/local/bin/kind
         log_success "Kind installed successfully"
@@ -97,7 +97,7 @@ install_kind() {
 # Create Kind cluster
 create_kind_cluster() {
     log_info "Creating Kind cluster: $CLUSTER_NAME"
-    
+
     # Check if cluster already exists
     if kind get clusters | grep -q "^$CLUSTER_NAME$"; then
         log_warning "Cluster $CLUSTER_NAME already exists"
@@ -110,7 +110,7 @@ create_kind_cluster() {
             return
         fi
     fi
-    
+
     # Create cluster with config
     if kind create cluster --config "$PROJECT_ROOT/deployment/local/kind-config.yaml"; then
         log_success "Kind cluster created successfully"
@@ -118,11 +118,11 @@ create_kind_cluster() {
         log_error "Failed to create Kind cluster"
         exit 1
     fi
-    
+
     # Set kubeconfig
     kind get kubeconfig --name "$CLUSTER_NAME" > "$KUBECONFIG_PATH"
     export KUBECONFIG="$KUBECONFIG_PATH"
-    
+
     log_info "Waiting for cluster to be ready..."
     kubectl wait --for=condition=Ready nodes --all --timeout=300s
 }
@@ -130,10 +130,10 @@ create_kind_cluster() {
 # Install Calico CNI for network policy support
 install_calico() {
     log_info "Installing Calico CNI for network policy support..."
-    
+
     # Install Tigera Calico operator
     kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.26.1/manifests/tigera-operator.yaml || true
-    
+
     # Configure Calico
     cat <<EOF | kubectl apply -f -
 apiVersion: operator.tigera.io/v1
@@ -155,59 +155,59 @@ metadata:
   name: default
 spec: {}
 EOF
-    
+
     # Wait for Calico to be ready
     log_info "Waiting for Calico to be ready..."
     kubectl wait --for=condition=Ready pods -n calico-system --all --timeout=300s || true
-    
+
     log_success "Calico CNI installed"
 }
 
 # Deploy CIS benchmark configurations
 deploy_cis_configs() {
     log_info "Deploying CIS benchmark configurations..."
-    
+
     # Create necessary directories in the cluster
     for node in $(kubectl get nodes -o name | cut -d/ -f2); do
         log_info "Configuring node: $node"
-        
+
         # Copy audit policy
         docker cp "$PROJECT_ROOT/deployment/security/cis-benchmarks/api-server/audit-policy.yaml" "$node:/etc/kubernetes/audit/"
-        
+
         # Copy encryption config
         docker cp "$PROJECT_ROOT/deployment/security/cis-benchmarks/api-server/encryption-config.yaml" "$node:/etc/kubernetes/encryption/"
     done
-    
+
     log_success "CIS configurations deployed"
 }
 
 # Deploy network policies
 deploy_network_policies() {
     log_info "Deploying network policies..."
-    
+
     # Create test namespaces
     kubectl create namespace kailash-system --dry-run=client -o yaml | kubectl apply -f -
     kubectl create namespace kailash-user-management --dry-run=client -o yaml | kubectl apply -f -
     kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
-    
+
     # Label namespaces
     kubectl label namespace kailash-system name=kailash-system --overwrite
     kubectl label namespace kailash-user-management name=kailash-user-management --overwrite
     kubectl label namespace monitoring name=monitoring --overwrite
     kubectl label namespace default name=default --overwrite
-    
+
     # Apply network policies
     kubectl apply -f "$PROJECT_ROOT/deployment/security/network-policies/00-default-deny.yaml"
     kubectl apply -f "$PROJECT_ROOT/deployment/security/network-policies/03-application-policies.yaml"
     kubectl apply -f "$PROJECT_ROOT/deployment/security/network-policies/04-monitoring-policies.yaml"
-    
+
     log_success "Network policies deployed"
 }
 
 # Deploy test applications
 deploy_test_apps() {
     log_info "Deploying test applications..."
-    
+
     # Deploy a simple nginx app
     cat <<EOF | kubectl apply -f -
 apiVersion: apps/v1
@@ -252,7 +252,7 @@ spec:
   - port: 80
     targetPort: 80
 EOF
-    
+
     # Deploy PostgreSQL mock
     cat <<EOF | kubectl apply -f -
 apiVersion: apps/v1
@@ -302,7 +302,7 @@ spec:
   - port: 5432
     targetPort: 5432
 EOF
-    
+
     # Deploy Redis mock
     cat <<EOF | kubectl apply -f -
 apiVersion: apps/v1
@@ -347,32 +347,32 @@ spec:
   - port: 6379
     targetPort: 6379
 EOF
-    
+
     log_info "Waiting for test applications to be ready..."
     kubectl wait --for=condition=available deployment/test-app --timeout=300s
     kubectl wait --for=condition=available deployment/postgres --timeout=300s
     kubectl wait --for=condition=available deployment/redis --timeout=300s
-    
+
     log_success "Test applications deployed"
 }
 
 # Test network policies
 test_network_policies() {
     log_info "Testing network policies..."
-    
+
     # Run network policy tests
     "$PROJECT_ROOT/deployment/security/scripts/test-network-policies.sh" || true
-    
+
     log_success "Network policy tests completed"
 }
 
 # Deploy Vault in dev mode for testing
 deploy_vault_dev() {
     log_info "Deploying Vault in dev mode for testing..."
-    
+
     # Create Vault namespace
     kubectl create namespace vault-system --dry-run=client -o yaml | kubectl apply -f -
-    
+
     # Deploy Vault in dev mode
     cat <<EOF | kubectl apply -f -
 apiVersion: v1
@@ -420,32 +420,32 @@ spec:
             memory: "512Mi"
             cpu: "500m"
 EOF
-    
+
     log_info "Waiting for Vault to be ready..."
     kubectl wait --for=condition=available deployment/vault -n vault-system --timeout=300s
-    
+
     # Deploy External Secrets Operator
     kubectl apply -f "$PROJECT_ROOT/deployment/security/secrets-management/external-secrets/operator.yaml"
-    
+
     log_success "Vault and External Secrets Operator deployed"
 }
 
 # Run all security tests
 run_security_tests() {
     log_info "Running security tests..."
-    
+
     echo
     log_info "=== CIS Benchmark Validation ==="
     "$PROJECT_ROOT/deployment/security/scripts/validate-configs.sh"
-    
+
     echo
     log_info "=== Network Policy Tests ==="
     # Network policy tests already run above
-    
+
     echo
     log_info "=== Secrets Management Tests ==="
     "$PROJECT_ROOT/deployment/security/scripts/test-secrets.sh" || true
-    
+
     log_success "All security tests completed"
 }
 
@@ -453,28 +453,28 @@ run_security_tests() {
 show_cluster_info() {
     log_info "Cluster Information:"
     echo
-    
+
     log_info "Nodes:"
     kubectl get nodes
     echo
-    
+
     log_info "Namespaces:"
     kubectl get namespaces
     echo
-    
+
     log_info "Network Policies:"
     kubectl get networkpolicies --all-namespaces
     echo
-    
+
     log_info "Pods:"
     kubectl get pods --all-namespaces
     echo
-    
+
     log_info "Access the cluster:"
     echo "export KUBECONFIG=$KUBECONFIG_PATH"
     echo "kubectl get nodes"
     echo
-    
+
     log_success "Local test environment is ready!"
 }
 
@@ -490,7 +490,7 @@ cleanup() {
 main() {
     log_info "Setting up local Kubernetes test environment"
     echo "============================================="
-    
+
     check_prerequisites
     create_kind_cluster
     install_calico
@@ -501,7 +501,7 @@ main() {
     deploy_vault_dev
     run_security_tests
     show_cluster_info
-    
+
     echo "============================================="
     log_success "Local test environment setup completed!"
     echo

@@ -19,7 +19,7 @@ The Kailash ecosystem has evolved into a sophisticated two-tier architecture:
 ### **Tier 2: App Framework** (`apps/`)
 **Complete domain-specific applications built on Core SDK**
 - **kailash-dataflow**: Zero-config database framework with enterprise power
-- **kailash-nexus**: Multi-channel platform (API, CLI, MCP) with unified sessions  
+- **kailash-nexus**: Multi-channel platform (API, CLI, MCP) with unified sessions
 - **kailash-mcp**: Enterprise MCP platform with auth, multi-tenancy, compliance
 
 ## 🎯 Decision Matrix
@@ -106,7 +106,7 @@ from nexus import Nexus
 app = Nexus(
     title="E-commerce Platform",
     enable_api=True,    # REST API
-    enable_cli=True,    # Command-line interface  
+    enable_cli=True,    # Command-line interface
     enable_mcp=True,    # AI agent integration
     channels_synced=True # Unified sessions across channels
 )
@@ -130,7 +130,7 @@ mcp = EnterpriseMCP(
 | **Feature** | **Core SDK** | **kailash-dataflow** | **kailash-nexus** | **kailash-mcp** |
 |-------------|--------------|----------------------|-------------------|----------------|
 | **Database CRUD** | Manual setup | ✅ Zero-config | ✅ Built-in | ⚠️ Limited |
-| **Multi-channel** | Custom build | ❌ Database-only | ✅ Native | ⚠️ MCP-only |  
+| **Multi-channel** | Custom build | ❌ Database-only | ✅ Native | ⚠️ MCP-only |
 | **AI Integration** | ✅ Full control | ⚠️ Basic | ✅ Advanced | ✅ Native |
 | **Enterprise Security** | Manual config | ✅ Built-in | ✅ Production | ✅ Maximum |
 | **Custom Nodes** | ✅ Native | ⚠️ Limited | ✅ Supported | ⚠️ MCP-focused |
@@ -143,7 +143,7 @@ mcp = EnterpriseMCP(
 ```
 Requirements:
 - Product catalog management
-- Order processing workflows  
+- Order processing workflows
 - Customer support AI
 - Admin dashboard
 - Mobile API
@@ -152,7 +152,7 @@ Decision: kailash-nexus + kailash-dataflow
 Rationale: Multi-channel needs + database operations
 ```
 
-### **Scenario 2: Custom AI Pipeline** 
+### **Scenario 2: Custom AI Pipeline**
 ```
 Requirements:
 - Proprietary ML models
@@ -168,7 +168,7 @@ Rationale: Unique workflow requiring full control
 ```
 Requirements:
 - PDF/Word document ingestion
-- AI content extraction  
+- AI content extraction
 - Compliance tracking
 - Multi-tenant isolation
 
@@ -220,8 +220,8 @@ app = Nexus(dataflow_integration=db, custom_workflows=[workflow])
 class CustomDatabase:
     def __init__(self):
         self.connection = psycopg2.connect(...)  # Manual connection
-        
-# DON'T: Manual workflow orchestration  
+
+# DON'T: Manual workflow orchestration
 def manual_workflow():
     result1 = call_api()
     result2 = process_with_ai(result1)  # No error handling
@@ -249,7 +249,7 @@ workflow.add_node("UserCreateNode", "save_result", {...})
 - Extend with Core SDK only when necessary
 - Leverage zero-config patterns where possible
 
-### **2. Gradual Complexity** 
+### **2. Gradual Complexity**
 - Begin with simple framework setup
 - Add custom nodes incrementally
 - Scale to Core SDK when framework constraints hit
@@ -274,14 +274,14 @@ workflow.add_node("UserCreateNode", "save_result", {...})
 
 ### **App Frameworks**
 - **kailash-dataflow**: 10,000+ operations/second
-- **kailash-nexus**: 500+ concurrent channels  
+- **kailash-nexus**: 500+ concurrent channels
 - **kailash-mcp**: Enterprise-grade security overhead
 - **Memory**: 50-100MB base (includes enterprise features)
 
 ## 🎯 Quick Decision Guide
 
 **Need database operations?** → **kailash-dataflow**
-**Need multi-channel platform?** → **kailash-nexus**  
+**Need multi-channel platform?** → **kailash-nexus**
 **Need enterprise MCP?** → **kailash-mcp**
 **Need custom workflows?** → **Core SDK**
 **Need rapid prototyping?** → **App Framework first**
@@ -294,7 +294,7 @@ workflow.add_node("UserCreateNode", "save_result", {...})
 1. **Start with frameworks** - Most needs are already solved
 2. **Measure twice, build once** - Framework constraints vs custom control
 3. **Security first** - App Frameworks have enterprise security built-in
-4. **Performance testing** - Both tiers support high-throughput scenarios  
+4. **Performance testing** - Both tiers support high-throughput scenarios
 5. **Migration planning** - Design for evolution from framework to custom
 
 **Remember**: The goal is shipping working software quickly. App Frameworks accelerate 80% of use cases, Core SDK handles the remaining 20% that need custom solutions.

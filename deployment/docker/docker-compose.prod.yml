@@ -65,7 +65,7 @@ services:
   redis:
     restart: always
     command: >
-      redis-server 
+      redis-server
       --requirepass ${REDIS_PASSWORD}
       --appendonly yes
       --maxmemory 512mb

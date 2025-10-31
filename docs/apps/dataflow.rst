@@ -66,7 +66,7 @@ Quick Start
 
    # DataFlow automatically generates 9 workflow nodes:
    # UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode,
-   # UserListNode, UserBulkCreateNode, UserBulkUpdateNode, 
+   # UserListNode, UserBulkCreateNode, UserBulkUpdateNode,
    # UserBulkDeleteNode, UserBulkUpsertNode
 
 **Using Generated Nodes in Workflows:**
@@ -78,13 +78,13 @@ Quick Start
 
    # Create workflow using generated nodes
    workflow = WorkflowBuilder()
-   
+
    # Create a user
    workflow.add_node("UserCreateNode", "create_user", {
-       "name": "John Doe", 
+       "name": "John Doe",
        "email": "john@example.com"
    })
-   
+
    # Read the user
    workflow.add_node("UserReadNode", "read_user", {
        "conditions": {"name": "John Doe"}
@@ -93,7 +93,7 @@ Quick Start
    # Execute the workflow
    runtime = LocalRuntime()
    results, run_id = runtime.execute(workflow.build())
-   
+
    print(f"Created user: {results['create_user']}")
    print(f"Found user: {results['read_user']}")
 
@@ -109,13 +109,13 @@ Quick Start
            {"name": "Carol White", "email": "carol@example.com"}
        ]
    })
-   
+
    # Bulk update with conditions
    workflow.add_node("UserBulkUpdateNode", "bulk_update", {
        "conditions": {"active": False},
        "data": {"active": True}
    })
-   
+
    # Execute bulk operations
    results, run_id = runtime.execute(workflow.build())
    print(f"Bulk created: {results['bulk_create']}")
@@ -130,10 +130,10 @@ Quick Start
    query.filter({"department": {"$in": ["engineering", "sales"]}})
    query.sort({"created_at": -1})
    query.limit(10)
-   
+
    # Convert to workflow node
    workflow.add_node("UserListNode", "filtered_users", query.to_params())
-   
+
    results, run_id = runtime.execute(workflow.build())
    users = results["filtered_users"]
 
@@ -145,12 +145,12 @@ Advanced Features
 .. code-block:: python
 
    # Configure with connection string
-   db = DataFlow("postgresql://user:pass@localhost/dbname", 
+   db = DataFlow("postgresql://user:pass@localhost/dbname",
                 pool_size=20, max_overflow=10)
-   
+
    # Or with explicit configuration
    from dataflow.core.config import DataFlowConfig
-   
+
    config = DataFlowConfig(
        database_url="postgresql://user:pass@localhost/dbname",
        pool_size=20,
@@ -170,14 +170,14 @@ Advanced Features
        id: int
        name: str
        email: str
-   
-   @db.model  
+
+   @db.model
    class Post:
        id: int
        title: str
        content: str
        author_id: int  # Foreign key to User
-   
+
    # Use in workflows with proper relationships
    workflow = WorkflowBuilder()
    workflow.add_node("UserCreateNode", "create_author", {
@@ -195,10 +195,10 @@ Advanced Features
 
    # DataFlow handles schema automatically
    db = DataFlow("postgresql://...", auto_migrate=True)
-   
+
    # Or manage schema manually
    db = DataFlow("postgresql://...", auto_migrate=False, existing_schema_mode=True)
-   
+
    # Get schema information
    models = db.list_models()
    model_info = db.get_model_info("User")
@@ -217,11 +217,11 @@ DataFlow provides MongoDB-style query builder that generates optimized SQL:
    query = User.query_builder()
    query.filter({
        "age": {"$gt": 18, "$lt": 65},           # age > 18 AND age < 65
-       "name": {"$regex": "^John"},             # name LIKE 'John%'  
+       "name": {"$regex": "^John"},             # name LIKE 'John%'
        "department": {"$in": ["eng", "sales"]}, # department IN ('eng', 'sales')
        "status": {"$ne": "inactive"}            # status != 'inactive'
    })
-   
+
    # Use in workflow
    workflow.add_node("UserListNode", "filtered_users", query.to_params())
 

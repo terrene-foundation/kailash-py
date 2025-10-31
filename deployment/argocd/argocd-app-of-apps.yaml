@@ -9,16 +9,16 @@ metadata:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
-  
+
   source:
     repoURL: https://github.com/your-org/kailash-template
     targetRevision: main
     path: deployment/argocd/applications
-  
+
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
-  
+
   syncPolicy:
     automated:
       prune: true
@@ -34,7 +34,7 @@ spec:
         duration: 5s
         factor: 2
         maxDuration: 3m
-  
+
   revisionHistoryLimit: 10
 ---
 # ArgoCD Project for Kailash applications
@@ -45,7 +45,7 @@ metadata:
   namespace: argocd
 spec:
   description: Kailash Platform Applications
-  
+
   sourceRepos:
     - https://github.com/your-org/kailash-template
     - https://github.com/your-org/kailash-config
@@ -53,7 +53,7 @@ spec:
     - https://prometheus-community.github.io/helm-charts
     - https://kubernetes.github.io/ingress-nginx
     - https://charts.jetstack.io
-  
+
   destinations:
     - namespace: 'kailash-*'
       server: https://kubernetes.default.svc
@@ -65,7 +65,7 @@ spec:
       server: https://kubernetes.default.svc
     - namespace: 'vault-system'
       server: https://kubernetes.default.svc
-  
+
   clusterResourceWhitelist:
     - group: ''
       kind: Namespace
@@ -79,11 +79,11 @@ spec:
       kind: ClusterIssuer
     - group: 'networking.k8s.io'
       kind: IngressClass
-  
+
   namespaceResourceWhitelist:
     - group: '*'
       kind: '*'
-  
+
   roles:
     - name: admin
       policies:
@@ -91,7 +91,7 @@ spec:
         - p, proj:kailash:admin, repositories, *, *, allow
       groups:
         - kailash:admins
-    
+
     - name: developer
       policies:
         - p, proj:kailash:developer, applications, get, kailash/*, allow
@@ -101,7 +101,7 @@ spec:
         - p, proj:kailash:developer, exec, create, kailash/*, allow
       groups:
         - kailash:developers
-    
+
     - name: readonly
       policies:
         - p, proj:kailash:readonly, applications, get, kailash/*, allow
