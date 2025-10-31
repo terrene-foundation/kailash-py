@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 import pytest
+
 from kailash.nodes.data.async_sql import (
     AsyncSQLDatabaseNode,
     CircuitBreakerState,

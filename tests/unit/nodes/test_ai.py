@@ -1,6 +1,7 @@
 """Tests for AI nodes."""
 
 import pytest
+
 from kailash.nodes.ai.agents import (
     ChatAgent,
     FunctionCallingAgent,

@@ -1,6 +1,7 @@
 """Integration tests for intelligent merge strategies with conditional execution."""
 
 import pytest
+
 from kailash.nodes.logic.intelligent_merge import IntelligentMergeNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder

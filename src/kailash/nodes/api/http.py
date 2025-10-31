@@ -12,6 +12,8 @@ from typing import Any
 
 import aiohttp
 import requests
+from pydantic import BaseModel
+
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
@@ -20,7 +22,6 @@ from kailash.utils.resource_manager import (
     ResourcePool,
     managed_resource,
 )
-from pydantic import BaseModel
 
 
 class HTTPMethod(str, Enum):

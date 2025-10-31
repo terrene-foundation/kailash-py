@@ -6,6 +6,7 @@ import time
 from unittest.mock import Mock
 
 import pytest
+
 from kailash.utils.resource_manager import (
     AsyncResourcePool,
     ResourcePool,

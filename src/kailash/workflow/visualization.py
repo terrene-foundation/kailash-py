@@ -8,6 +8,7 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 import networkx as nx
+
 from kailash.tracking.manager import TaskManager
 from kailash.workflow.graph import Workflow
 

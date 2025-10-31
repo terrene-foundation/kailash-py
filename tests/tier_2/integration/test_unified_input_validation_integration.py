@@ -43,9 +43,6 @@ sys.path.insert(
     str(Path(__file__).parent.parent.parent.parent / "apps" / "kailash-nexus" / "src"),
 )
 
-from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
-
 # Import Nexus and validation
 from nexus import Nexus
 from nexus.validation import (
@@ -56,6 +53,9 @@ from nexus.validation import (
     validate_workflow_inputs,
     validate_workflow_name,
 )
+
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 # ============================================================================
 # Test Fixtures

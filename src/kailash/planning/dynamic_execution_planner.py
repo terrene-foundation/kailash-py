@@ -10,6 +10,7 @@ from collections import defaultdict, deque
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import networkx as nx
+
 from kailash.analysis.conditional_branch_analyzer import ConditionalBranchAnalyzer
 from kailash.workflow.graph import Workflow
 

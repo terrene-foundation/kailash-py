@@ -14,6 +14,7 @@ from datetime import datetime
 from typing import Any, Dict
 
 import pytest
+
 from kailash.middleware.communication.ai_chat import AIChatMiddleware, ChatSession
 from kailash.middleware.communication.events import (
     EventStream,

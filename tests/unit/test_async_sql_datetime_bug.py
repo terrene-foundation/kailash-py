@@ -248,6 +248,7 @@ class TestAsyncSQLDatetimeSerialization:
         """Test datetime serialization when using dataframe format."""
         try:
             import pandas as pd
+
             from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
             node = AsyncSQLDatabaseNode(
