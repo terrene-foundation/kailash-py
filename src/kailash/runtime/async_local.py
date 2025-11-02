@@ -24,7 +24,6 @@ from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import networkx as nx
-
 from kailash.nodes.base import Node
 from kailash.nodes.base_async import AsyncNode
 from kailash.resources import ResourceRegistry
