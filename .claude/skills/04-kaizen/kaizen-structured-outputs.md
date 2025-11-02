@@ -1,13 +1,13 @@
 # Kaizen Structured Outputs
 
-**Version**: 0.6.3+
-**Feature**: OpenAI Structured Outputs API with 100% schema compliance
+**Version**: 0.6.5+
+**Feature**: OpenAI Structured Outputs API with 100% schema compliance and intelligent validation
 
 ---
 
 ## Overview
 
-Kaizen provides first-class support for OpenAI's Structured Outputs API, enabling 100% reliable JSON schema compliance with supported models. This guide covers configuration, signature inheritance, and integration patterns.
+Kaizen provides first-class support for OpenAI's Structured Outputs API with comprehensive type introspection, enabling 100% reliable JSON schema compliance. The framework supports all 10 Python typing patterns with intelligent strict mode validation and automatic fallback for incompatible types. This guide covers configuration, type system, signature inheritance, and integration patterns.
 
 ---
 
@@ -289,6 +289,97 @@ agent = BaseAgent(config=config, signature=MySignature())
 
 ---
 
+## Type System & Introspection
+
+### Supported Type Patterns (10 Total)
+
+Kaizen's TypeIntrospector provides comprehensive runtime type checking and JSON schema generation for all Python typing constructs:
+
+| Python Type | JSON Schema | Runtime Validation | Strict Mode Compatible |
+|-------------|-------------|-------------------|----------------------|
+| `str` | `{"type": "string"}` | ✅ | ✅ |
+| `int` | `{"type": "integer"}` | ✅ | ✅ |
+| `float` | `{"type": "number"}` | ✅ | ✅ |
+| `bool` | `{"type": "boolean"}` | ✅ | ✅ |
+| `Literal["A", "B"]` | `{"type": "string", "enum": ["A", "B"]}` | ✅ | ✅ |
+| `Union[str, int]` | `{"oneOf": [...]}` | ✅ | ⚠️ Not compatible |
+| `Optional[str]` | `{"type": "string"}` (not required) | ✅ | ✅ |
+| `List[str]` | `{"type": "array", "items": {"type": "string"}}` | ✅ | ✅ |
+| `Dict[str, int]` | `{"type": "object", "additionalProperties": {...}}` | ✅ | ⚠️ Not compatible |
+| `TypedDict` | `{"type": "object", "properties": {...}}` | ✅ | ✅ |
+
+### TypeIntrospector Class
+
+The TypeIntrospector handles all type-to-schema conversion and runtime validation:
+
+```python
+from kaizen.core.type_introspector import TypeIntrospector
+from typing import Literal, Optional, List
+
+# Check type compatibility
+type_annotation = Literal["A", "B", "C"]
+is_literal = TypeIntrospector.is_literal_type(type_annotation)  # True
+
+# Validate value against type
+value = "A"
+is_valid, error = TypeIntrospector.validate_value_against_type(value, type_annotation)
+# (True, None)
+
+# Convert type to JSON schema
+schema = TypeIntrospector.type_to_json_schema(type_annotation, "Category field")
+# {"type": "string", "enum": ["A", "B", "C"], "description": "Category field"}
+
+# Check strict mode compatibility
+compatible, reason = TypeIntrospector.is_strict_mode_compatible(type_annotation)
+# (True, "")
+```
+
+### Intelligent Strict Mode Validation
+
+OpenAI's strict mode has specific constraints. Kaizen automatically validates types and provides actionable guidance:
+
+**Incompatible Types**:
+- `Union[str, int]` - Produces `oneOf` which is not allowed
+- `Dict[str, Any]` - Requires `additionalProperties: true` which is not allowed
+
+**Auto-Fallback** (default behavior):
+```python
+from kaizen.core.structured_output import create_structured_output_config
+
+class FlexibleSignature(Signature):
+    """Signature with Dict[str, Any] - incompatible with strict mode."""
+    data: Dict[str, Any] = OutputField(desc="Flexible data")
+
+# Auto-fallback to strict=False with clear warning
+config = create_structured_output_config(
+    signature=FlexibleSignature(),
+    strict=True,           # Requests strict mode
+    auto_fallback=True     # Automatically falls back if incompatible (default)
+)
+# Logs: "OpenAI strict mode incompatibility detected: Field 'data' (Dict[str, Any]):
+# requires additionalProperties, not allowed in strict mode. Auto-falling back to strict=False mode."
+
+# Result: {"type": "json_object", "schema": {...}}  # Legacy mode
+```
+
+**Strict Validation** (raise errors):
+```python
+# Disable auto-fallback to get validation errors
+config = create_structured_output_config(
+    signature=FlexibleSignature(),
+    strict=True,
+    auto_fallback=False  # Raise error instead of fallback
+)
+# Raises ValueError with recommendations:
+# "OpenAI strict mode incompatibility detected:
+#   - Field 'data' (Dict[str, Any]): requires additionalProperties, not allowed in strict mode
+#
+# Recommendations:
+#   1. Use strict=False for flexible schemas (70-85% compliance)
+#   2. Replace Dict[str, Any] with List[str] or TypedDict
+#   3. Replace Union types with separate Optional fields"
+```
+
 ## Type Mapping
 
 Kaizen automatically converts Python types to JSON schema types:
@@ -299,10 +390,11 @@ Kaizen automatically converts Python types to JSON schema types:
 | `int` | `"integer"` | Whole numbers |
 | `float` | `"number"` | Decimal numbers |
 | `bool` | `"boolean"` | True/False |
-| `dict` | `"object"` | Nested objects |
-| `list` | `"array"` | Arrays of items |
+| `dict` | `"object"` | Nested objects (generic) |
+| `list` | `"array"` | Arrays of items (generic) |
 | `List[str]` | `{"type": "array", "items": {"type": "string"}}` | Typed arrays |
 | `Optional[str]` | Not in `required` | Optional fields |
+| `Literal["A", "B"]` | `{"type": "string", "enum": ["A", "B"]}` | Enum-like constraints |
 
 ### Complex Type Example
 
@@ -339,11 +431,23 @@ class ComplexSignature(Signature):
 
 ## Troubleshooting
 
+### Issue: TypeError with Literal type validation
+
+**Cause**: Using older version of Kaizen (< 0.6.5)
+
+**Error**: `TypeError: Subscripted generics cannot be used with class and instance checks`
+
+**Solution**: Upgrade to Kaizen 0.6.5+ (fixed with TypeIntrospector)
+
+```bash
+pip install --upgrade kailash-kaizen
+```
+
 ### Issue: "Workflow parameters ['provider_config'] not declared"
 
 **Cause**: Using older version of Kaizen (< 0.6.3)
 
-**Solution**: Upgrade to Kaizen 0.6.3+
+**Solution**: Upgrade to Kaizen 0.6.5+
 
 ```bash
 pip install --upgrade kailash-kaizen
@@ -351,22 +455,48 @@ pip install --upgrade kailash-kaizen
 
 ### Issue: "Invalid schema: additionalProperties must be false"
 
-**Cause**: OpenAI Structured Outputs requires `additionalProperties: false`
+**Cause**: Using Dict[str, Any] or similar type incompatible with strict mode
 
-**Solution**: Use `strict=True` mode (automatically sets this)
+**Solution**: Use auto-fallback (default) or replace with compatible type
 
 ```python
-config = create_structured_output_config(signature, strict=True)
+# Option 1: Auto-fallback (default, recommended)
+config = create_structured_output_config(
+    signature,
+    strict=True,
+    auto_fallback=True  # Automatically uses strict=False if incompatible
+)
+
+# Option 2: Use compatible types
+class FixedSignature(Signature):
+    # Replace Dict[str, Any] with TypedDict
+    class MetadataDict(TypedDict):
+        field1: str
+        field2: int
+
+    metadata: MetadataDict = OutputField(desc="Structured metadata")
 ```
 
 ### Issue: Child signature missing parent fields
 
 **Cause**: Using older version of Kaizen (< 0.6.3)
 
-**Solution**: Upgrade to Kaizen 0.6.3+ (fixed in signature inheritance)
+**Solution**: Upgrade to Kaizen 0.6.5+ (fixed in signature inheritance)
 
 ```bash
 pip install --upgrade kailash-kaizen
+```
+
+### Issue: Custom system prompt ignored
+
+**Cause**: Using older version of Kaizen (< 0.6.5) without callback pattern
+
+**Solution**: Upgrade to Kaizen 0.6.5+ and override `_generate_system_prompt()`
+
+```python
+class CustomAgent(BaseAgent):
+    def _generate_system_prompt(self) -> str:
+        return "Your custom prompt here"
 ```
 
 ### Issue: Model returns extra fields not in schema
@@ -395,14 +525,15 @@ config = BaseAgentConfig(
 
 ### `create_structured_output_config()`
 
-Create OpenAI-compatible structured output configuration.
+Create OpenAI-compatible structured output configuration with intelligent validation.
 
 **Signature:**
 ```python
 def create_structured_output_config(
     signature: Any,
     strict: bool = True,
-    name: str = "response"
+    name: str = "response",
+    auto_fallback: bool = True
 ) -> Dict[str, Any]
 ```
 
@@ -410,18 +541,31 @@ def create_structured_output_config(
 - `signature` (Signature): Kaizen signature instance to convert to JSON schema
 - `strict` (bool): Use strict mode (100% compliance) vs legacy mode (best-effort). Default: `True`
 - `name` (str): Schema name for OpenAI API. Default: `"response"`
+- `auto_fallback` (bool): Automatically fall back to `strict=False` if types are incompatible with strict mode. Default: `True`
 
 **Returns:**
 - `Dict[str, Any]`: Provider config dict for BaseAgentConfig
+
+**Raises:**
+- `ValueError`: If `strict=True` but signature has incompatible types and `auto_fallback=False`
 
 **Example:**
 ```python
 from kaizen.core.structured_output import create_structured_output_config
 
+# With auto-fallback (recommended)
 provider_config = create_structured_output_config(
     signature=MySignature(),
     strict=True,
-    name="my_analysis"
+    name="my_analysis",
+    auto_fallback=True  # Falls back to strict=False if types incompatible
+)
+
+# Strict validation (raise errors)
+provider_config = create_structured_output_config(
+    signature=MySignature(),
+    strict=True,
+    auto_fallback=False  # Raises ValueError on incompatible types
 )
 ```
 
@@ -454,30 +598,55 @@ print(schema)
 
 ## Best Practices
 
-1. **Use Strict Mode for Production**
-   - Guarantees 100% schema compliance
-   - Eliminates need for manual validation
-   - Supported by latest OpenAI models
+1. **Use Strict Mode with Auto-Fallback for Production**
+   - Guarantees 100% schema compliance when types are compatible
+   - Auto-fallback provides graceful degradation for incompatible types
+   - Clear warnings guide you to fix type issues
+   ```python
+   config = create_structured_output_config(
+       signature,
+       strict=True,
+       auto_fallback=True  # Recommended
+   )
+   ```
 
-2. **Design Signatures First**
+2. **Choose Compatible Types for Strict Mode**
+   - ✅ Use: `Literal`, `Optional`, `List[T]`, `TypedDict`, basic types
+   - ⚠️ Avoid: `Union[T, U]` (except `Optional`), `Dict[str, Any]`
+   - Use TypeIntrospector to validate compatibility:
+   ```python
+   compatible, reason = TypeIntrospector.is_strict_mode_compatible(field_type)
+   if not compatible:
+       print(f"Warning: {reason}")
+   ```
+
+3. **Design Signatures First**
    - Define clear, typed signatures before implementation
    - Use inheritance to share common fields across agents
    - Leverage Python type hints for automatic schema generation
+   - Validate types early with TypeIntrospector
 
-3. **Test Inheritance Chains**
+4. **Test Inheritance Chains**
    - Verify child signatures merge all parent fields
    - Check field overriding behavior matches expectations
    - Use multi-level inheritance for complex domain models
+   - Test that all 10 typing patterns work correctly
 
-4. **Handle Optional Fields**
+5. **Handle Optional Fields**
    - Use `Optional[Type]` for optional fields
    - Optional fields won't be in `required` list
    - Model may return None or omit optional fields
 
-5. **Validate Complex Types**
+6. **Use Extension Points for Custom Prompts**
+   - Override `_generate_system_prompt()` for domain-specific instructions
+   - Callback pattern ensures your overrides are used
+   - No circular dependencies or complex setup needed
+
+7. **Validate Complex Types**
    - Test nested objects and arrays with real data
    - Verify typed lists (List[str]) generate correct schemas
-   - Use unit tests to catch schema generation issues
+   - Use TypeIntrospector.validate_value_against_type() in tests
+   - Catch schema generation issues early
 
 ---
 
@@ -567,19 +736,67 @@ agent = BaseAgent(config=config, signature=sig)
 
 ---
 
+## Extension Points
+
+### Custom System Prompts
+
+Override the default system prompt generation in BaseAgent subclasses using the callback pattern:
+
+```python
+from kaizen.core.base_agent import BaseAgent
+
+class CustomPromptAgent(BaseAgent):
+    """Agent with custom system prompt."""
+
+    def _generate_system_prompt(self) -> str:
+        """Override to provide custom prompt logic."""
+        return """You are a medical assistant AI.
+
+IMPORTANT: Always advise users to consult a doctor for medical decisions.
+
+Your role is to provide general health information only, not diagnoses."""
+
+# The callback pattern automatically uses your custom prompt
+agent = CustomPromptAgent(config=config, signature=signature)
+# WorkflowGenerator receives _generate_system_prompt as callback
+# Custom prompt is used in workflow generation
+```
+
+**How It Works**:
+1. BaseAgent passes `_generate_system_prompt` method as callback to WorkflowGenerator
+2. WorkflowGenerator calls the callback when building workflows
+3. Your override is used instead of the default signature-based prompt
+4. No circular dependencies - clean callback pattern
+
+**Use Cases**:
+- Domain-specific instructions (medical, legal, financial)
+- Compliance requirements (disclaimers, safety warnings)
+- Custom formatting preferences
+- Integration with external prompt management systems
+
+---
+
 ## Version History
 
-### v0.6.3 (Current)
+### v0.6.5 (Current)
+- ✅ TypeIntrospector: Comprehensive type introspection for all 10 Python typing patterns
+- ✅ Intelligent strict mode validation with auto-fallback for incompatible types
+- ✅ Extension point callback pattern for custom system prompts
+- ✅ Literal type validation fix (no more TypeError crashes)
+- ✅ Clear error messages with actionable recommendations
+- ✅ Zero breaking changes (100% backward compatible)
+
+### v0.6.3
 - ✅ OpenAI Structured Outputs API support (strict mode)
 - ✅ Signature inheritance field merging (MERGE not REPLACE)
 - ✅ provider_config nested dict preservation
 - ✅ LLMAgentNode provider_config parameter support
-- ✅ Comprehensive test coverage (29 new tests)
 
 ### v0.6.2 (Legacy)
 - ❌ No OpenAI Structured Outputs support
 - ❌ Signature inheritance replaced parent fields
 - ❌ provider_config blocked by workflow validation
+- ❌ Literal type validation crashes
 
 ---
 
