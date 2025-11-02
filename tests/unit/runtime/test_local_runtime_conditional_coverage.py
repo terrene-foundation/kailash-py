@@ -9,6 +9,7 @@ import json
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+
 from kailash.analysis.conditional_branch_analyzer import ConditionalBranchAnalyzer
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import MergeNode, SwitchNode

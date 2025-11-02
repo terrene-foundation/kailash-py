@@ -15,7 +15,6 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 import numpy as np
-
 from kailash.access_control import (
     AccessControlManager,
     NodePermission,

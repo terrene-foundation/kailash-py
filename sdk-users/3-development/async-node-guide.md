@@ -15,7 +15,7 @@ class MyAsyncNode(AsyncNode):
         # Your async logic here
         result = await some_async_operation()
         return {"result": result}
-    
+
     # ❌ WRONG: Don't implement run()
     def run(self, **kwargs):
         # This will raise NotImplementedError!
@@ -68,7 +68,7 @@ def get_parameters(self) -> Dict[str, NodeParameter]:
             required=False,
             description="Value to process"
         ),
-        
+
         # ❌ WRONG: Missing type field
         "value": NodeParameter(
             name="value",
@@ -88,7 +88,7 @@ from kailash.nodes.base import NodeParameter, register_node
 @register_node()
 class ExampleAsyncNode(AsyncNode):
     """Example async node showing correct implementation."""
-    
+
     def get_parameters(self) -> Dict[str, NodeParameter]:
         return {
             "action": NodeParameter(
@@ -105,15 +105,15 @@ class ExampleAsyncNode(AsyncNode):
                 description="Data to process"
             )
         }
-    
+
     async def async_run(self, **kwargs) -> Dict[str, Any]:
         """Implement async logic here."""
         action = kwargs.get("action")
         data = kwargs.get("data", {})
-        
+
         # Async operation
         await asyncio.sleep(0.1)  # Simulate async work
-        
+
         return {
             "success": True,
             "action": action,
@@ -124,13 +124,13 @@ class ExampleAsyncNode(AsyncNode):
 @pytest.mark.asyncio
 async def test_example_async_node():
     node = ExampleAsyncNode()
-    
+
     # ✅ CORRECT: Use execute_async in async test
     result = await node.execute_async(
         action="process",
         data={"key": "value"}
     )
-    
+
     assert result["success"] is True
     assert result["action"] == "process"
 ```
@@ -211,19 +211,19 @@ from unittest.mock import AsyncMock
 async def test_async_node():
     """Proper async node testing pattern."""
     node = MyAsyncNode()
-    
+
     # Mock async dependencies
     node.some_async_method = AsyncMock(return_value="mocked")
-    
+
     # Execute with execute_async
     result = await node.execute_async(
         param1="value1",
         param2="value2"
     )
-    
+
     # Assertions
     assert result["success"] is True
-    
+
     # Verify async method was called
     node.some_async_method.assert_called_once()
 ```

@@ -16,32 +16,32 @@ resource "azurerm_kubernetes_cluster" "main" {
     enable_auto_scaling = var.default_node_pool.enable_auto_scaling
     min_count           = var.default_node_pool.enable_auto_scaling ? var.default_node_pool.min_count : null
     max_count           = var.default_node_pool.enable_auto_scaling ? var.default_node_pool.max_count : null
-    
+
     # Availability zones
     availability_zones = var.default_node_pool.availability_zones
-    
+
     # Node configuration
     node_labels = var.default_node_pool.node_labels
     node_taints = var.default_node_pool.node_taints
-    
+
     # Network configuration
     vnet_subnet_id = var.vnet_subnet_id
-    
+
     # Host encryption
     enable_host_encryption = var.enable_host_encryption
-    
+
     # Pod configuration
     max_pods = 30
-    
+
     # OS configuration
     os_disk_size_gb = 100
     os_disk_type    = "Managed"
-    
+
     # Update configuration
     upgrade_settings {
       max_surge = "33%"
     }
-    
+
     # Enable FIPS
     fips_enabled = var.fips_enabled
   }
@@ -86,18 +86,18 @@ resource "azurerm_kubernetes_cluster" "main" {
     http_application_routing {
       enabled = var.enable_http_application_routing
     }
-    
+
     # Azure Policy
     azure_policy {
       enabled = var.enable_azure_policy
     }
-    
+
     # Monitoring
     oms_agent {
       enabled                    = var.enable_oms_agent
       log_analytics_workspace_id = var.log_analytics_workspace_id
     }
-    
+
     # Key Vault Secrets Provider
     azure_keyvault_secrets_provider {
       enabled                  = var.enable_key_vault_secrets_provider
@@ -135,7 +135,7 @@ resource "azurerm_kubernetes_cluster" "main" {
           hours = allowed.value.hours
         }
       }
-      
+
       dynamic "not_allowed" {
         for_each = maintenance_window.value.not_allowed
         content {
@@ -156,7 +156,7 @@ resource "azurerm_kubernetes_cluster" "main" {
     for_each = var.admin_username != null ? [1] : []
     content {
       admin_username = var.admin_username
-      
+
       ssh_key {
         key_data = var.ssh_key
       }
@@ -174,40 +174,40 @@ resource "azurerm_kubernetes_cluster_node_pool" "additional" {
   kubernetes_cluster_id = azurerm_kubernetes_cluster.main.id
   vm_size              = each.value.vm_size
   node_count           = each.value.enable_auto_scaling ? null : each.value.node_count
-  
+
   # Auto-scaling
   enable_auto_scaling = each.value.enable_auto_scaling
   min_count          = each.value.enable_auto_scaling ? each.value.min_count : null
   max_count          = each.value.enable_auto_scaling ? each.value.max_count : null
-  
+
   # Availability zones
   availability_zones = each.value.availability_zones
-  
+
   # Node configuration
   node_labels = each.value.node_labels
   node_taints = each.value.node_taints
-  
+
   # Network
   vnet_subnet_id = var.vnet_subnet_id
-  
+
   # Pod configuration
   max_pods = each.value.max_pods
-  
+
   # OS disk
   os_disk_size_gb = each.value.os_disk_size_gb
   os_disk_type    = each.value.os_disk_type
-  
+
   # Host encryption
   enable_host_encryption = var.enable_host_encryption
-  
+
   # FIPS
   fips_enabled = var.fips_enabled
-  
+
   # Update configuration
   upgrade_settings {
     max_surge = "33%"
   }
-  
+
   tags = var.tags
 }
 

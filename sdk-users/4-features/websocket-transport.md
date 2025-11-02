@@ -27,8 +27,8 @@ client = MCPClient()
 async with client:
     # Automatically detects WebSocket URLs and uses appropriate transport
     result = await client.call_tool(
-        "ws://localhost:3001/mcp", 
-        "search", 
+        "ws://localhost:3001/mcp",
+        "search",
         {"query": "WebSocket transport"}
     )
     print(f"Result: {result}")
@@ -53,10 +53,10 @@ client = MCPClient(
 async with client:
     # First call creates and pools connection
     result1 = await client.call_tool("ws://api.example.com/mcp", "task1", {"data": "test"})
-    
+
     # Second call reuses pooled connection (much faster!)
     result2 = await client.call_tool("ws://api.example.com/mcp", "task2", {"data": "test"})
-    
+
     # Check pool efficiency
     metrics = client.get_metrics()
     print(f"Pool hits: {metrics.get('websocket_pool_hits', 0)}")
@@ -76,12 +76,12 @@ client = MCPClient(
         "max_connections": 50,        # Maximum pooled connections (per URL)
         "connection_timeout": 30.0,   # How long to wait for connection establishment
         "pool_cleanup_interval": 300, # How often to clean up stale connections (seconds)
-        
+
         # Connection management
         "keep_alive": True,           # Keep connections alive between requests
         "ping_interval": 20.0,        # WebSocket ping frequency (seconds)
         "ping_timeout": 10.0,         # How long to wait for pong response
-        
+
         # Performance tuning
         "max_idle_time": 600,         # Close connections idle for 10+ minutes
         "connection_retry_delay": 1.0, # Delay between connection attempts
@@ -99,36 +99,36 @@ from kailash.mcp_server import MCPClient
 
 async def analyze_pool_performance():
     """Demonstrate connection pool performance benefits."""
-    
+
     # Client with pooling enabled
     pooled_client = MCPClient(
         connection_pool_config={"max_connections": 10},
         enable_metrics=True
     )
-    
+
     # Client without pooling (for comparison)
     non_pooled_client = MCPClient(
         connection_pool_config={"max_connections": 0},  # Disable pooling
         enable_metrics=True
     )
-    
+
     url = "ws://localhost:3001/mcp"
     calls = 10
-    
+
     # Test with pooling
     async with pooled_client:
         start_time = time.time()
         tasks = [pooled_client.call_tool(url, "test", {"id": i}) for i in range(calls)]
         await asyncio.gather(*tasks)
         pooled_time = time.time() - start_time
-    
+
     # Test without pooling
     async with non_pooled_client:
         start_time = time.time()
         tasks = [non_pooled_client.call_tool(url, "test", {"id": i}) for i in range(calls)]
         await asyncio.gather(*tasks)
         non_pooled_time = time.time() - start_time
-    
+
     # Performance comparison
     improvement = ((non_pooled_time - pooled_time) / non_pooled_time) * 100
     print(f"Performance Improvement with Pooling:")
@@ -152,16 +152,16 @@ from kailash.mcp_server import MCPClient
 secure_client = MCPClient()
 transport = WebSocketTransport(
     url="wss://secure-api.example.com/mcp",  # Always use wss:// in production
-    
+
     # Security settings
     allow_localhost=False,           # Block localhost connections
     skip_security_validation=False,  # Always validate URLs
-    
+
     # Connection security
     subprotocols=["mcp-v1"],        # Specific protocol version
     ping_interval=30.0,             # Heartbeat every 30 seconds
     ping_timeout=10.0,              # Fail fast on connection issues
-    
+
     # Message limits
     max_message_size=5 * 1024 * 1024,  # 5MB message limit
 )
@@ -207,12 +207,12 @@ logger = logging.getLogger(__name__)
 
 async def resilient_websocket_calls():
     """Demonstrate built-in error recovery."""
-    
+
     client = MCPClient(
         retry_strategy="exponential",  # Built-in exponential backoff
         connection_pool_config={"max_connections": 5}
     )
-    
+
     try:
         async with client:
             # This will automatically retry on connection failures
@@ -222,11 +222,11 @@ async def resilient_websocket_calls():
                 {"data": "critical_operation"}
             )
             return result
-            
+
     except ConnectionError as e:
         logger.error(f"Connection failed after retries: {e}")
         # Pool automatically clears bad connections
-        
+
     except TransportError as e:
         logger.error(f"Transport error: {e}")
         # Handle specific transport issues
@@ -237,11 +237,11 @@ async def resilient_websocket_calls():
 ```python
 async def custom_error_handling():
     """Implement custom error handling logic."""
-    
+
     client = MCPClient(enable_metrics=True)
     max_retries = 3
     base_delay = 1.0
-    
+
     for attempt in range(max_retries):
         try:
             async with client:
@@ -251,25 +251,25 @@ async def custom_error_handling():
                     {"data": "important"}
                 )
                 return result
-                
+
         except TransportError as e:
             if "websocket" in str(e).lower():
                 logger.warning(f"WebSocket error (attempt {attempt + 1}): {e}")
-                
+
                 # Clear stale connections for this URL
                 await client._remove_connection_from_pool(url)
-                
+
                 if attempt < max_retries - 1:
                     # Exponential backoff with jitter
                     delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
                     await asyncio.sleep(delay)
                     continue
             raise
-            
+
         except Exception as e:
             logger.error(f"Unexpected error: {e}")
             raise
-    
+
     raise Exception("Max retries exceeded")
 ```
 
@@ -291,10 +291,10 @@ async with client:
     # Make some WebSocket calls
     for i in range(5):
         await client.call_tool(f"ws://api{i%2}.example.com/mcp", "test", {"id": i})
-    
+
     # Analyze metrics
     metrics = client.get_metrics()
-    
+
     print("WebSocket Performance Metrics:")
     print(f"  Pool hits: {metrics.get('websocket_pool_hits', 0)}")
     print(f"  Pool misses: {metrics.get('websocket_pool_misses', 0)}")
@@ -302,7 +302,7 @@ async with client:
     print(f"  Total bytes sent: {metrics.get('bytes_sent', 0)}")
     print(f"  Total bytes received: {metrics.get('bytes_received', 0)}")
     print(f"  Connection errors: {metrics.get('connection_errors', 0)}")
-    
+
     # Pool efficiency calculation
     hits = metrics.get('websocket_pool_hits', 0)
     misses = metrics.get('websocket_pool_misses', 0)
@@ -319,43 +319,43 @@ from collections import defaultdict
 
 class WebSocketMetricsCollector:
     """Custom metrics collector for WebSocket operations."""
-    
+
     def __init__(self):
         self.metrics = defaultdict(int)
         self.timings = defaultdict(list)
-    
+
     async def timed_call(self, client, url, tool, params):
         """Make a timed WebSocket call with metrics collection."""
         start_time = time.time()
-        
+
         try:
             result = await client.call_tool(url, tool, params)
-            
+
             # Record success metrics
             duration = time.time() - start_time
             self.timings[url].append(duration)
             self.metrics[f"{url}_success"] += 1
             self.metrics["total_success"] += 1
-            
+
             return result
-            
+
         except Exception as e:
             # Record error metrics
             self.metrics[f"{url}_error"] += 1
             self.metrics["total_errors"] += 1
             raise
-    
+
     def get_summary(self):
         """Get performance summary."""
         summary = {"metrics": dict(self.metrics)}
-        
+
         # Calculate timing statistics
         for url, times in self.timings.items():
             if times:
                 summary[f"{url}_avg_time"] = sum(times) / len(times)
                 summary[f"{url}_min_time"] = min(times)
                 summary[f"{url}_max_time"] = max(times)
-        
+
         return summary
 
 # Usage
@@ -367,7 +367,7 @@ async with client:
     for i in range(10):
         url = f"ws://api{i%3}.example.com/mcp"
         await collector.timed_call(client, url, "test", {"id": i})
-    
+
     # Print performance summary
     summary = collector.get_summary()
     print(json.dumps(summary, indent=2))
@@ -388,11 +388,11 @@ upstream websocket_mcp_servers {
 server {
     listen 443 ssl;
     server_name api.company.com;
-    
+
     # SSL configuration
     ssl_certificate /etc/ssl/certs/api.company.com.crt;
     ssl_certificate_key /etc/ssl/private/api.company.com.key;
-    
+
     # WebSocket proxy configuration
     location /mcp {
         proxy_pass http://websocket_mcp_servers;
@@ -403,7 +403,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+
         # WebSocket specific timeouts
         proxy_read_timeout 86400;
         proxy_send_timeout 86400;
@@ -436,7 +436,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    
+
   mcp-server-2:
     image: company/mcp-server:latest
     ports:
@@ -477,13 +477,13 @@ from kailash.mcp_server.errors import TransportError
 
 async def diagnose_websocket_issues():
     """Comprehensive WebSocket diagnostics."""
-    
+
     print("=== WebSocket Diagnostic Tool ===")
-    
+
     # Test 1: Basic connectivity
     url = "ws://localhost:3001"
     print(f"\n1. Testing basic connectivity to {url}")
-    
+
     try:
         async with websockets.connect(url, ping_interval=None) as ws:
             await ws.send('{"method": "ping"}')
@@ -491,7 +491,7 @@ async def diagnose_websocket_issues():
             print(f"   ✅ Basic WebSocket connectivity works: {response[:50]}...")
     except Exception as e:
         print(f"   ❌ Basic connectivity failed: {e}")
-    
+
     # Test 2: MCP client connectivity
     print(f"\n2. Testing MCP client connectivity")
     try:
@@ -506,7 +506,7 @@ async def diagnose_websocket_issues():
             print(f"   ⚠️  Transport error (may be server issue): {e}")
     except Exception as e:
         print(f"   ⚠️  Connection error (may be server down): {e}")
-    
+
     # Test 3: Connection pooling
     print(f"\n3. Testing connection pooling")
     try:
@@ -518,19 +518,19 @@ async def diagnose_websocket_issues():
             # Make multiple calls to same URL
             for i in range(3):
                 await client.call_tool(url, "ping", {"id": i})
-            
+
             metrics = client.get_metrics()
             hits = metrics.get('websocket_pool_hits', 0)
             misses = metrics.get('websocket_pool_misses', 0)
-            
+
             if hits > 0:
                 print(f"   ✅ Connection pooling works: {hits} hits, {misses} misses")
             else:
                 print(f"   ⚠️  Pooling may not be working: {hits} hits, {misses} misses")
-                
+
     except Exception as e:
         print(f"   ❌ Pooling test failed: {e}")
-    
+
     # Test 4: Security validation
     print(f"\n4. Testing security validation")
     try:
@@ -555,30 +555,30 @@ asyncio.run(diagnose_websocket_issues())
 ```python
 async def websocket_performance_troubleshooting():
     """Identify WebSocket performance issues."""
-    
+
     client = MCPClient(
         connection_pool_config={"max_connections": 10},
         enable_metrics=True
     )
-    
+
     print("=== WebSocket Performance Analysis ===")
-    
+
     async with client:
         # Baseline test
         url = "ws://localhost:3001/mcp"
         start_time = time.time()
-        
+
         await client.call_tool(url, "ping", {})
         first_call_time = time.time() - start_time
-        
+
         # Pooled call test
         start_time = time.time()
         await client.call_tool(url, "ping", {})
         second_call_time = time.time() - start_time
-        
+
         print(f"First call (creates connection): {first_call_time:.3f}s")
         print(f"Second call (uses pool): {second_call_time:.3f}s")
-        
+
         if second_call_time < first_call_time * 0.5:
             print("✅ Connection pooling is working effectively")
         elif second_call_time < first_call_time * 0.8:
@@ -586,16 +586,16 @@ async def websocket_performance_troubleshooting():
         else:
             print("❌ Connection pooling may not be working")
             print("   Check: server keeps connections alive, network latency")
-        
+
         # Pool efficiency check
         metrics = client.get_metrics()
         hits = metrics.get('websocket_pool_hits', 0)
         misses = metrics.get('websocket_pool_misses', 0)
-        
+
         if hits + misses > 0:
             efficiency = (hits / (hits + misses)) * 100
             print(f"Pool efficiency: {efficiency:.1f}%")
-            
+
             if efficiency > 50:
                 print("✅ Good pool efficiency")
             else:
@@ -616,7 +616,7 @@ high_throughput_config = {
     "pool_cleanup_interval": 120, # More frequent cleanup
 }
 
-# For low-latency applications  
+# For low-latency applications
 low_latency_config = {
     "max_connections": 20,     # Fewer connections, more reuse
     "connection_timeout": 30.0, # Longer timeout for stability
@@ -646,7 +646,7 @@ async def robust_websocket_client():
         retry_strategy="exponential",
         connection_pool_config={"max_connections": 10}
     )
-    
+
     try:
         async with client:
             return await client.call_tool(url, tool, params)
@@ -673,14 +673,14 @@ websocket_active_connections = prometheus_client.Gauge('websocket_active_connect
 async def update_metrics(client):
     """Update Prometheus metrics."""
     metrics = client.get_metrics()
-    
+
     hits = metrics.get('websocket_pool_hits', 0)
     misses = metrics.get('websocket_pool_misses', 0)
-    
+
     if hits + misses > 0:
         efficiency = (hits / (hits + misses)) * 100
         websocket_pool_efficiency.set(efficiency)
-    
+
     websocket_active_connections.set(len(client._websocket_pools))
 ```
 

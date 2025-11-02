@@ -165,30 +165,30 @@ output "connection_info" {
   description = "Connection information for various services"
   value = {
     aks_connect = "az aks get-credentials --resource-group ${azurerm_resource_group.main.name} --name ${module.aks.cluster_name}"
-    
+
     postgresql = {
       host     = module.postgresql.fqdn
       port     = 5432
       database = "kailash"
       ssl_mode = "require"
     }
-    
+
     redis = {
       host = module.redis.hostname
       port = module.redis.ssl_port
       ssl  = true
     }
-    
+
     storage = {
       account_name = module.storage.storage_account_names[0]
       containers   = module.storage.container_names
     }
-    
+
     acr = {
       login_server = azurerm_container_registry.main.login_server
       login_command = "az acr login --name ${azurerm_container_registry.main.name}"
     }
-    
+
     key_vault = {
       name = azurerm_key_vault.main.name
       uri  = azurerm_key_vault.main.vault_uri

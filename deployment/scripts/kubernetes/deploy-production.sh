@@ -37,32 +37,32 @@ log_error() {
 # Check prerequisites
 check_prerequisites() {
     log_info "Checking prerequisites..."
-    
+
     # Check kubectl
     if ! command -v kubectl &> /dev/null; then
         log_error "kubectl is not installed or not in PATH"
         exit 1
     fi
-    
+
     # Check cluster connectivity
     if ! kubectl cluster-info &> /dev/null; then
         log_error "Cannot connect to Kubernetes cluster"
         exit 1
     fi
-    
+
     # Check if manifests directory exists
     if [[ ! -d "$MANIFESTS_DIR" ]]; then
         log_error "Manifests directory not found: $MANIFESTS_DIR"
         exit 1
     fi
-    
+
     log_success "Prerequisites check passed"
 }
 
 # Create namespace if it doesn't exist
 create_namespace() {
     log_info "Creating/updating namespace..."
-    
+
     if kubectl get namespace "$NAMESPACE" &> /dev/null; then
         log_info "Namespace $NAMESPACE already exists"
     else
@@ -74,7 +74,7 @@ create_namespace() {
 # Deploy secrets
 deploy_secrets() {
     log_info "Deploying secrets..."
-    
+
     # Check if secrets already exist
     if kubectl get secret user-management-secrets -n "$NAMESPACE" &> /dev/null; then
         log_warning "Secrets already exist, skipping creation"
@@ -108,13 +108,13 @@ deploy_rbac() {
 deploy_storage() {
     log_info "Deploying persistent storage..."
     kubectl apply -f "$MANIFESTS_DIR/pvc.yaml"
-    
+
     # Wait for PVCs to be bound
     log_info "Waiting for PVCs to be bound..."
     kubectl wait --for=condition=Bound pvc/user-management-data -n "$NAMESPACE" --timeout=300s
     kubectl wait --for=condition=Bound pvc/postgresql-data -n "$NAMESPACE" --timeout=300s
     kubectl wait --for=condition=Bound pvc/redis-data -n "$NAMESPACE" --timeout=300s
-    
+
     log_success "Persistent storage deployed and bound"
 }
 
@@ -122,13 +122,13 @@ deploy_storage() {
 deploy_applications() {
     log_info "Deploying applications..."
     kubectl apply -f "$MANIFESTS_DIR/deployment.yaml"
-    
+
     # Wait for deployments to be ready
     log_info "Waiting for deployments to be ready..."
     kubectl wait --for=condition=Available deployment/user-management-app -n "$NAMESPACE" --timeout=600s
     kubectl wait --for=condition=Available deployment/postgresql -n "$NAMESPACE" --timeout=300s
     kubectl wait --for=condition=Available deployment/redis -n "$NAMESPACE" --timeout=300s
-    
+
     log_success "Applications deployed successfully"
 }
 
@@ -156,29 +156,29 @@ deploy_autoscaling() {
 # Verify deployment
 verify_deployment() {
     log_info "Verifying deployment..."
-    
+
     # Check pod status
     log_info "Checking pod status..."
     kubectl get pods -n "$NAMESPACE" -o wide
-    
+
     # Check service status
     log_info "Checking service status..."
     kubectl get svc -n "$NAMESPACE"
-    
+
     # Check ingress status
     log_info "Checking ingress status..."
     kubectl get ingress -n "$NAMESPACE"
-    
+
     # Check HPA status
     log_info "Checking HPA status..."
     kubectl get hpa -n "$NAMESPACE"
-    
+
     # Health check
     log_info "Performing health check..."
-    
+
     # Wait for service to be ready
     sleep 30
-    
+
     # Try to access health endpoint
     SERVICE_IP=$(kubectl get svc user-management-service -n "$NAMESPACE" -o jsonpath='{.spec.clusterIP}')
     if kubectl run temp-pod --rm -i --restart=Never --image=curlimages/curl -- curl -f "http://$SERVICE_IP:8000/health" &> /dev/null; then
@@ -191,13 +191,13 @@ verify_deployment() {
 # Get access information
 get_access_info() {
     log_info "Getting access information..."
-    
+
     # External LoadBalancer IP
     EXTERNAL_IP=$(kubectl get svc user-management-external -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "Pending")
-    
+
     # Ingress information
     INGRESS_HOST=$(kubectl get ingress user-management-ingress -n "$NAMESPACE" -o jsonpath='{.spec.rules[0].host}' 2>/dev/null || echo "Not configured")
-    
+
     echo
     log_success "=== DEPLOYMENT COMPLETED ==="
     echo "Environment: $ENVIRONMENT"
@@ -221,7 +221,7 @@ get_access_info() {
 # Cleanup function for failed deployments
 cleanup_on_failure() {
     log_error "Deployment failed. Cleaning up..."
-    
+
     # Remove resources in reverse order
     kubectl delete -f "$MANIFESTS_DIR/hpa.yaml" --ignore-not-found=true
     kubectl delete -f "$MANIFESTS_DIR/ingress.yaml" --ignore-not-found=true
@@ -230,7 +230,7 @@ cleanup_on_failure() {
     kubectl delete -f "$MANIFESTS_DIR/pvc.yaml" --ignore-not-found=true
     kubectl delete -f "$MANIFESTS_DIR/rbac.yaml" --ignore-not-found=true
     kubectl delete -f "$MANIFESTS_DIR/configmap.yaml" --ignore-not-found=true
-    
+
     log_info "Cleanup completed"
     exit 1
 }
@@ -240,10 +240,10 @@ main() {
     log_info "Starting production deployment of Kailash User Management System"
     log_info "Environment: $ENVIRONMENT"
     log_info "Namespace: $NAMESPACE"
-    
+
     # Set trap for cleanup on failure
     trap cleanup_on_failure ERR
-    
+
     # Confirmation prompt for production
     echo
     log_warning "You are about to deploy to PRODUCTION environment!"
@@ -253,7 +253,7 @@ main() {
         log_info "Deployment cancelled"
         exit 0
     fi
-    
+
     # Run deployment steps
     check_prerequisites
     create_namespace
@@ -267,7 +267,7 @@ main() {
     deploy_autoscaling
     verify_deployment
     get_access_info
-    
+
     log_success "Production deployment completed successfully!"
 }
 

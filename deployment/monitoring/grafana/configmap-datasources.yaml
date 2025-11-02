@@ -29,7 +29,7 @@ data:
           prometheusType: Prometheus
           prometheusVersion: 2.48.0
         editable: false
-      
+
       # AlertManager datasource
       - name: AlertManager
         type: alertmanager
@@ -39,7 +39,7 @@ data:
         jsonData:
           implementation: prometheus
         editable: false
-      
+
       # Loki datasource (if using Loki for logs)
       - name: Loki
         type: loki
@@ -54,7 +54,7 @@ data:
               name: TraceID
               url: "$${__value.raw}"
         editable: false
-      
+
       # Tempo datasource (if using Tempo for traces)
       - name: Tempo
         type: tempo
@@ -74,7 +74,7 @@ data:
           nodeGraph:
             enabled: true
         editable: false
-      
+
       # CloudWatch datasource (for AWS)
       - name: CloudWatch
         type: cloudwatch
@@ -84,7 +84,7 @@ data:
           authType: default
           defaultRegion: us-east-1
         editable: false
-      
+
       # PostgreSQL datasource (for custom queries)
       - name: PostgreSQL
         type: postgres
@@ -100,7 +100,7 @@ data:
           postgresVersion: 1500
           timescaledb: false
         editable: false
-      
+
       # Redis datasource
       - name: Redis
         type: redis-datasource

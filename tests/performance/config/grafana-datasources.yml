@@ -12,7 +12,7 @@ datasources:
       timeInterval: 5s
       queryTimeout: 60s
       httpMethod: GET
-    
+
   - name: Elasticsearch
     type: elasticsearch
     access: proxy

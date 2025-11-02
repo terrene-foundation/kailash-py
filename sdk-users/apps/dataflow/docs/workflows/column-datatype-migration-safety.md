@@ -34,7 +34,7 @@ class Product:
     active: bool = True
 
 # Evolution: Safe type conversions
-@db.model  
+@db.model
 class Product:
     name: str
     price: Decimal      # SAFE: int -> Decimal (no precision loss)
@@ -53,12 +53,12 @@ class Product:
 class Measurement:
     # All these conversions are SAFE (widening)
     small_int: int      # smallint -> integer -> bigint
-    price: Decimal      # integer -> numeric/decimal  
+    price: Decimal      # integer -> numeric/decimal
     temperature: float  # real -> double precision
     percentage: float   # integer -> float (safe widening)
 ```
 
-#### String Type Expansion  
+#### String Type Expansion
 ```python
 @db.model
 class Article:
@@ -77,7 +77,7 @@ class Configuration:
     settings: dict      # Becomes JSONB with GIN indexes
     features: list      # Becomes JSONB array
     metadata: dict = {} # JSONB with default empty object
-    
+
     __dataflow__ = {
         'postgresql': {
             'jsonb_gin_indexes': ['settings', 'features'],
@@ -98,7 +98,7 @@ class FinancialRecord:
     # MEDIUM: May require precision analysis
     amount: Decimal     # float -> decimal (check precision)
     rate: float         # decimal -> float (may lose precision)
-    
+
     __dataflow__ = {
         'type_migrations': {
             'amount': {
@@ -120,12 +120,12 @@ class UserProfile:
     # MEDIUM: String to JSONB conversion
     preferences_json: str = None    # Legacy text field
     preferences: dict = None        # New JSONB field
-    
+
     __dataflow__ = {
         'migration_strategy': 'dual_column',  # Keep both during transition
         'data_migration': {
             'from_field': 'preferences_json',
-            'to_field': 'preferences', 
+            'to_field': 'preferences',
             'converter': 'parse_json_safe',
             'fallback_value': '{}'
         }
@@ -140,7 +140,7 @@ class Customer:
     email: str
     # MEDIUM: Adding NOT NULL to existing nullable column
     phone: str          # nullable -> NOT NULL (requires data validation)
-    
+
     __dataflow__ = {
         'nullability_migrations': {
             'phone': {
@@ -163,11 +163,11 @@ class SensorData:
     # HIGH RISK: Potential precision/data loss
     # value: float    # OLD: double precision
     # value: int      # NEW: integer (HIGH RISK - precision loss)
-    
+
     # SAFER APPROACH: Add new column first
     value_float: float = None    # Keep original
     value_rounded: int = None    # Add new field
-    
+
     __dataflow__ = {
         'high_risk_migrations': {
             'value_conversion': {
@@ -192,11 +192,11 @@ class SensorData:
 class Account:
     id: int
     name: str
-    
+
     # Phase 1: Add new column alongside old
     balance_cents: int = None      # Legacy integer (cents)
     balance_decimal: Decimal = None # New decimal field
-    
+
     __dataflow__ = {
         'migration_phases': [
             {
@@ -205,13 +205,13 @@ class Account:
                 'operations': ['ADD_COLUMN balance_decimal']
             },
             {
-                'phase': 2, 
+                'phase': 2,
                 'description': 'Migrate data from cents to decimal',
                 'operations': ['UPDATE balance_decimal = balance_cents::decimal / 100']
             },
             {
                 'phase': 3,
-                'description': 'Validate data consistency', 
+                'description': 'Validate data consistency',
                 'operations': ['SELECT * WHERE balance_cents/100 != balance_decimal']
             },
             {
@@ -232,7 +232,7 @@ class Product:
     name: str
     # Direct type conversion with safety checks
     price: Decimal      # Converting from float to decimal
-    
+
     __dataflow__ = {
         'in_place_conversions': {
             'price': {
@@ -240,7 +240,7 @@ class Product:
                 'to_type': 'NUMERIC(10,2)',
                 'safety_checks': [
                     'data_range_validation',
-                    'precision_loss_detection', 
+                    'precision_loss_detection',
                     'null_value_handling'
                 ],
                 'conversion_sql': 'ALTER TABLE products ALTER COLUMN price TYPE NUMERIC(10,2)',
@@ -257,7 +257,7 @@ class Product:
 class EventLog:
     timestamp: datetime
     event_data: dict    # Converting large text field to JSONB
-    
+
     __dataflow__ = {
         'batch_conversions': {
             'event_data': {
@@ -267,8 +267,8 @@ class EventLog:
                 'progress_tracking': True,
                 'pause_on_error': True,
                 'conversion_logic': '''
-                    UPDATE event_logs 
-                    SET event_data = event_data_text::jsonb 
+                    UPDATE event_logs
+                    SET event_data = event_data_text::jsonb
                     WHERE id BETWEEN $1 AND $2
                 '''
             }
@@ -285,22 +285,22 @@ from dataflow.migrations import TypeSafetyAnalyzer
 
 class TypeSafetyValidator:
     """Validates type conversions before migration"""
-    
+
     @staticmethod
     def analyze_conversion(db, table, column, from_type, to_type):
         """Comprehensive type conversion analysis"""
-        
+
         analyzer = TypeSafetyAnalyzer(db)
-        
+
         # Data range analysis
         data_analysis = analyzer.analyze_column_data(table, column)
-        
+
         # Compatibility check
         compatibility = analyzer.check_type_compatibility(from_type, to_type)
-        
+
         # Performance impact
         performance = analyzer.estimate_conversion_time(table, column)
-        
+
         return {
             'safety_level': compatibility.safety_level,
             'data_loss_risk': compatibility.data_loss_risk,
@@ -331,11 +331,11 @@ print(f"Estimated Time: {analysis['conversion_time_estimate']}s")
 ```python
 class PostMigrationValidator:
     """Validates data integrity after type conversions"""
-    
+
     @staticmethod
     async def validate_conversion(db, table, column, conversion_log):
         """Comprehensive post-conversion validation"""
-        
+
         validation_results = {
             'data_integrity': await db.execute_query(f'''
                 SELECT COUNT(*) as total_rows,
@@ -343,24 +343,24 @@ class PostMigrationValidator:
                        COUNT(DISTINCT {column}) as distinct_values
                 FROM {table}
             '''),
-            
+
             'type_consistency': await db.execute_query(f'''
                 SELECT pg_typeof({column}) as actual_type
                 FROM {table} LIMIT 1
             '''),
-            
+
             'constraint_validation': await db.execute_query(f'''
-                SELECT conname, consrc 
-                FROM pg_constraint 
+                SELECT conname, consrc
+                FROM pg_constraint
                 WHERE conrelid = '{table}'::regclass
                 AND conkey = ARRAY[(
-                    SELECT attnum FROM pg_attribute 
-                    WHERE attrelid = '{table}'::regclass 
+                    SELECT attnum FROM pg_attribute
+                    WHERE attrelid = '{table}'::regclass
                     AND attname = '{column}'
                 )]
             ''')
         }
-        
+
         return validation_results
 
 # Usage after migration
@@ -382,7 +382,7 @@ class PostgreSQLOptimized:
     metadata: dict                  # JSONB with GIN index
     location: str                   # Can use GEOGRAPHY/GEOMETRY with PostGIS
     search_vector: str = None       # TSVECTOR for full-text search
-    
+
     __dataflow__ = {
         'postgresql': {
             'column_types': {
@@ -411,7 +411,7 @@ class PostgreSQLOptimized:
 class AdvancedMigrations:
     name: str
     data: dict
-    
+
     __dataflow__ = {
         'postgresql': {
             'advanced_migrations': {
@@ -441,13 +441,13 @@ class AdvancedMigrations:
 class EnterpriseModel:
     name: str
     value: Decimal      # Type change preserves enterprise features
-    
+
     __dataflow__ = {
         'multi_tenant': True,       # Preserved during type migrations
         'soft_delete': True,        # Preserved during type migrations
         'audit_log': True,         # All type changes logged
         'versioned': True,         # Version tracking maintained
-        
+
         'migration_preservation': {
             'tenant_isolation': True,      # Type changes respect tenancy
             'audit_trail': True,           # Log all type conversions
@@ -527,14 +527,14 @@ migration_plan = {
 ```python
 async def monitor_type_migration():
     """Monitor type conversion progress"""
-    
+
     progress = await db.get_migration_progress()
-    
+
     print(f"Migration: {progress.operation}")
     print(f"Progress: {progress.percent_complete}%")
     print(f"Estimated remaining: {progress.time_remaining_seconds}s")
     print(f"Rows processed: {progress.rows_processed}/{progress.total_rows}")
-    
+
     if progress.errors:
         print(f"Errors encountered: {len(progress.errors)}")
         for error in progress.errors:
@@ -558,7 +558,7 @@ print(f"Lock wait time: {metrics.lock_wait_time_ms}ms")
 ## 🎯 Next Steps
 
 - **[Migration Orchestration Engine](migration-orchestration-engine.md)**: Central coordination system
-- **[Auto-Migration System](auto-migration.md)**: Interactive migration workflows  
+- **[Auto-Migration System](auto-migration.md)**: Interactive migration workflows
 - **[Production Deployment](../production/deployment.md)**: Production migration strategies
 - **[Database Optimization](../advanced/database-optimization.md)**: Performance tuning
 
