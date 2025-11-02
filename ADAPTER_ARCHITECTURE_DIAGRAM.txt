@@ -1,0 +1,324 @@
+# DataFlow + Kailash Adapter Architecture
+
+## Complete System Architecture
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                           USER APPLICATION LAYER                                 │
+│                                                                                   │
+│  from dataflow import DataFlow                                                   │
+│  from kailash.workflow.builder import WorkflowBuilder                           │
+│  from kailash.runtime import LocalRuntime                                        │
+│                                                                                   │
+│  db = DataFlow("postgresql://localhost/mydb")                                   │
+│                                                                                   │
+│  @db.model                                                                       │
+│  class User:                                                                     │
+│      id: str                                                                     │
+│      name: str                                                                   │
+│                                                                                   │
+│  workflow.add_node("UserCreateNode", "create", {...})                           │
+│  runtime.execute(workflow.build())                                              │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        │ @db.model decorator
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                        DATAFLOW FRAMEWORK LAYER                                  │
+│                   (apps/kailash-dataflow/src/dataflow/)                         │
+│                                                                                   │
+│  ┌────────────────────────────────────────────────────────────────────────┐    │
+│  │                   DataFlow Instance (core.py)                           │    │
+│  │  ┌──────────────────────────────────────────────────────────────────┐  │    │
+│  │  │  Model Registration:                                              │  │    │
+│  │  │  - Parse @db.model class annotations                              │  │    │
+│  │  │  - Generate 11 nodes per model (Create, Read, Update, etc.)      │  │    │
+│  │  │  - Store node registry                                             │  │    │
+│  │  └──────────────────────────────────────────────────────────────────┘  │    │
+│  │  ┌──────────────────────────────────────────────────────────────────┐  │    │
+│  │  │  Schema Management:                                               │  │    │
+│  │  │  - Check if table exists                                          │  │    │
+│  │  │  - Run auto-migration if needed                                   │  │    │
+│  │  │  - Schema cache for performance                                   │  │    │
+│  │  └──────────────────────────────────────────────────────────────────┘  │    │
+│  │                                                                          │    │
+│  │  Uses ↓                                                                 │    │
+│  └────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                   │
+│  ┌────────────────────────────────────────────────────────────────────────┐    │
+│  │              DataFlow Adapters (adapters/base.py)                       │    │
+│  │  ┌──────────────────────────────────────────────────────────────────┐  │    │
+│  │  │  BaseAdapter (ABC)                                                │  │    │
+│  │  │  ├── adapter_type → "sql"                                         │  │    │
+│  │  │  ├── database_type → "postgresql"/"mysql"/"sqlite"                │  │    │
+│  │  │  ├── connect() → None                                             │  │    │
+│  │  │  ├── disconnect() → None                                          │  │    │
+│  │  │  └── supports_feature(feature) → bool                             │  │    │
+│  │  └──────────────────────────────────────────────────────────────────┘  │    │
+│  │  ┌──────────────────────────────────────────────────────────────────┐  │    │
+│  │  │  DatabaseAdapter (extends BaseAdapter)                            │  │    │
+│  │  │  ├── execute_query(query, params) → List[Dict]                   │  │    │
+│  │  │  ├── execute_transaction(queries) → List[Any]                     │  │    │
+│  │  │  ├── get_table_schema(table) → Dict                               │  │    │
+│  │  │  ├── create_table(name, schema) → None                            │  │    │
+│  │  │  ├── drop_table(name) → None                                      │  │    │
+│  │  │  └── format_query(query, params) → Tuple[str, List]              │  │    │
+│  │  └──────────────────────────────────────────────────────────────────┘  │    │
+│  │                                                                          │    │
+│  │  Implementations:                                                       │    │
+│  │  ├── PostgreSQLAdapter (asyncpg, $1/$2 params)                         │    │
+│  │  ├── MySQLAdapter (aiomysql, %s params)                                │    │
+│  │  └── SQLiteAdapter (aiosqlite, ? params)                               │    │
+│  │                                                                          │    │
+│  │  Purpose: Schema operations (DDL) - CREATE TABLE, migrations           │    │
+│  │  NOT used for query execution!                                          │    │
+│  └────────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        │ Generated nodes execute via
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                      KAILASH WORKFLOW LAYER                                      │
+│                      (src/kailash/workflow/)                                     │
+│                                                                                   │
+│  ┌────────────────────────────────────────────────────────────────────────┐    │
+│  │                   WorkflowBuilder                                       │    │
+│  │  workflow.add_node("UserCreateNode", "create", {...})                  │    │
+│  │  └── Stores node instances in workflow graph                           │    │
+│  └────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                   │
+│  ┌────────────────────────────────────────────────────────────────────────┐    │
+│  │                   LocalRuntime / AsyncLocalRuntime                      │    │
+│  │  runtime.execute(workflow.build())                                     │    │
+│  │  └── Executes nodes in dependency order                                │    │
+│  └────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                   │
+│                            Nodes execute ↓                                       │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                    KAILASH DATABASE NODE LAYER                                   │
+│               (src/kailash/nodes/data/async_sql.py)                             │
+│                                                                                   │
+│  ┌────────────────────────────────────────────────────────────────────────┐    │
+│  │              AsyncSQLDatabaseNode (AsyncNode)                           │    │
+│  │  ┌──────────────────────────────────────────────────────────────────┐  │    │
+│  │  │  async def execute_async(inputs):                                 │  │    │
+│  │  │      1. Parse SQL query and parameters                            │  │    │
+│  │  │      2. Get/create database adapter                               │  │    │
+│  │  │      3. Execute query via adapter.execute()                       │  │    │
+│  │  │      4. Return results with formatting                            │  │    │
+│  │  └──────────────────────────────────────────────────────────────────┘  │    │
+│  │                                                                          │    │
+│  │  Creates ↓                                                              │    │
+│  └────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                   │
+│  ┌────────────────────────────────────────────────────────────────────────┐    │
+│  │         Kailash DatabaseAdapter (ABC in async_sql.py)                   │    │
+│  │  ┌──────────────────────────────────────────────────────────────────┐  │    │
+│  │  │  @abstractmethod                                                  │  │    │
+│  │  │  async def execute(                                               │  │    │
+│  │  │      query: str,                                                  │  │    │
+│  │  │      params: Optional[Union[tuple, dict]] = None,                │  │    │
+│  │  │      fetch_mode: FetchMode = FetchMode.ALL,                      │  │    │
+│  │  │      fetch_size: Optional[int] = None,                           │  │    │
+│  │  │      transaction: Optional[Any] = None,                          │  │    │
+│  │  │      **kwargs  ← INCLUDES TIMEOUT                                │  │    │
+│  │  │  ) -> Any                                                         │  │    │
+│  │  └──────────────────────────────────────────────────────────────────┘  │    │
+│  │  ┌──────────────────────────────────────────────────────────────────┐  │    │
+│  │  │  @abstractmethod                                                  │  │    │
+│  │  │  async def execute_many(query, params_list) → None               │  │    │
+│  │  │  async def begin_transaction() → Any                             │  │    │
+│  │  │  async def commit_transaction(tx) → None                         │  │    │
+│  │  │  async def rollback_transaction(tx) → None                       │  │    │
+│  │  └──────────────────────────────────────────────────────────────────┘  │    │
+│  │                                                                          │    │
+│  │  Implementations:                                                       │    │
+│  │  ├── PostgreSQLAdapter (asyncpg connection pool)                       │    │
+│  │  ├── MySQLAdapter (aiomysql connection pool)                           │    │
+│  │  └── SQLiteAdapter (aiosqlite with custom pooling)                     │    │
+│  │                                                                          │    │
+│  │  Purpose: Query execution (DML) - SELECT, INSERT, UPDATE, DELETE       │    │
+│  │  Features: Connection pooling, timeout, retry, transaction mgmt         │    │
+│  └────────────────────────────────────────────────────────────────────────┘    │
+│                                                                                   │
+│  ┌────────────────────────────────────────────────────────────────────────┐    │
+│  │              EnterpriseConnectionPool (Optional)                        │    │
+│  │  ┌──────────────────────────────────────────────────────────────────┐  │    │
+│  │  │  async def execute_query(query, params, **kwargs):                │  │    │
+│  │  │      result = await self._adapter.execute(                        │  │    │
+│  │  │          query, params, **kwargs  ← Passes timeout               │  │    │
+│  │  │      )                                                             │  │    │
+│  │  │      return result                                                 │  │    │
+│  │  └──────────────────────────────────────────────────────────────────┘  │    │
+│  │                                                                          │    │
+│  │  Features: Health checks, metrics, adaptive pool sizing                │    │
+│  │  Enterprise wrappers: EnterprisePostgreSQLAdapter, etc.                │    │
+│  └────────────────────────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+                                        ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         DATABASE LAYER                                           │
+│                                                                                   │
+│  ┌──────────────┐      ┌──────────────┐      ┌──────────────┐                 │
+│  │  PostgreSQL  │      │    MySQL     │      │   SQLite     │                 │
+│  │   asyncpg    │      │   aiomysql   │      │  aiosqlite   │                 │
+│  └──────────────┘      └──────────────┘      └──────────────┘                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+
+## Key Architectural Points
+
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                      TWO SEPARATE ADAPTER HIERARCHIES                            │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                   │
+│  DataFlow Adapters                      Kailash Adapters                        │
+│  ══════════════════                      ═══════════════                        │
+│                                                                                   │
+│  Location:                               Location:                              │
+│  apps/kailash-dataflow/                  src/kailash/nodes/data/               │
+│    src/dataflow/adapters/                  async_sql.py                         │
+│                                                                                   │
+│  Base: BaseAdapter                       Base: DatabaseAdapter (ABC)            │
+│                                                                                   │
+│  Purpose: Schema operations (DDL)        Purpose: Query execution (DML)         │
+│                                                                                   │
+│  Methods:                                Methods:                               │
+│  • execute_query(query, params)          • execute(query, params, **kwargs)     │
+│  • create_table(name, schema)            • execute_many(query, params_list)     │
+│  • get_table_schema(table)               • begin_transaction()                  │
+│  • execute_transaction(queries)          • commit_transaction(tx)               │
+│  • format_query(query, params)           • rollback_transaction(tx)             │
+│                                                                                   │
+│  Return Types:                           Return Types:                          │
+│  • List[Dict] (always)                   • Any (flexible with FetchMode)        │
+│  • No fetch modes                        • Supports ONE/ALL/MANY/ITERATOR       │
+│                                                                                   │
+│  Timeout Support: ❌ NO                  Timeout Support: ✅ YES via **kwargs   │
+│                                                                                   │
+│  Used By:                                Used By:                               │
+│  • DataFlow model registration           • AsyncSQLDatabaseNode                 │
+│  • Auto-migration system                 • EnterpriseConnectionPool             │
+│  • Schema discovery                      • All DataFlow-generated nodes         │
+│                                                                                   │
+│  Database Libraries:                     Database Libraries:                    │
+│  • asyncpg (PostgreSQL)                  • asyncpg (PostgreSQL)                 │
+│  • aiomysql (MySQL)                      • aiomysql (MySQL)                     │
+│  • aiosqlite (SQLite)                    • aiosqlite (SQLite)                   │
+│                                                                                   │
+└─────────────────────────────────────────────────────────────────────────────────┘
+
+
+## Integration Flow
+
+User Code:
+  @db.model class User: ...
+        │
+        ▼
+  DataFlow Layer:
+    • Registers model
+    • Uses DataFlow adapter to check/create schema
+    • Generates 11 workflow nodes (UserCreateNode, etc.)
+        │
+        ▼
+  Workflow Layer:
+    workflow.add_node("UserCreateNode", "create", {...})
+    runtime.execute(workflow.build())
+        │
+        ▼
+  Node Execution:
+    UserCreateNode.execute_async(inputs)
+      └── Wraps AsyncSQLDatabaseNode
+            │
+            ▼
+  Query Execution:
+    AsyncSQLDatabaseNode:
+      • Creates Kailash adapter (NOT DataFlow adapter)
+      • Calls adapter.execute(query, params, timeout=...)
+      • Returns results
+            │
+            ▼
+  Database:
+    PostgreSQL/MySQL/SQLite via connection pool
+
+
+## Why Two Adapter Hierarchies?
+
+┌───────────────────────────────────────────────────────────────────────┐
+│                    SEPARATION OF CONCERNS                              │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  Schema Management (DataFlow)    Query Execution (Kailash)            │
+│  ───────────────────────────     ───────────────────────              │
+│                                                                         │
+│  Concerns:                       Concerns:                            │
+│  • Table creation                • Fast query execution               │
+│  • Schema migration              • Connection pooling                 │
+│  • Type mapping                  • Timeout handling                   │
+│  • Constraint validation         • Retry logic                        │
+│  • Feature detection             • Transaction management             │
+│  • Model introspection           • Result formatting                  │
+│                                                                         │
+│  Optimization for:               Optimization for:                    │
+│  • Infrequent operations         • High-frequency operations          │
+│  • One-time setup                • Concurrent requests                │
+│  • Schema accuracy               • Low latency                        │
+│                                  • Resource efficiency                │
+│                                                                         │
+└───────────────────────────────────────────────────────────────────────┘
+
+
+## Critical Interface Difference
+
+DataFlow PostgreSQLAdapter:
+  async def execute_query(self, query: str, params: List[Any] = None) → List[Dict]
+                                                     ↑
+                                              NO **kwargs
+                                              NO timeout parameter
+
+Kailash PostgreSQLAdapter:
+  async def execute(self, query: str, params: Optional[Union[tuple, dict]] = None,
+                    fetch_mode: FetchMode = FetchMode.ALL, **kwargs) → Any
+                                                                ↑
+                                                         Accepts timeout!
+
+Result: DataFlow adapters CANNOT be passed to EnterpriseConnectionPool
+
+
+## The "Bug" That Isn't
+
+❌ MISCONCEPTION:
+  "DataFlow adapters should have execute() with timeout parameter"
+
+✅ REALITY:
+  DataFlow adapters are schema-focused, not query-focused.
+  Query execution uses Kailash adapters internally.
+  The architectural separation is intentional and correct.
+
+❌ HYPOTHETICAL MISUSE:
+  from dataflow.adapters.postgresql import PostgreSQLAdapter
+  pool = EnterpriseConnectionPool(adapter_class=PostgreSQLAdapter)
+  # Would fail: missing execute() method
+
+✅ CORRECT USAGE:
+  db = DataFlow("postgresql://...")
+  @db.model
+  class User: ...
+  workflow.add_node("UserCreateNode", ...)
+  runtime.execute(workflow.build())
+  # DataFlow creates workflow nodes that use Kailash adapters internally
+
+
+## Summary
+
+┌───────────────────────────────────────────────────────────────────────┐
+│  ✅ Current architecture is CORRECT                                   │
+│  ✅ Two adapter hierarchies serve different purposes                  │
+│  ✅ Integration happens at workflow layer, not adapter layer          │
+│  ✅ No code changes needed                                            │
+│  ✅ Documentation updates sufficient                                  │
+│  ✅ All DataFlow databases (PostgreSQL, MySQL, SQLite) work correctly │
+└───────────────────────────────────────────────────────────────────────┘
