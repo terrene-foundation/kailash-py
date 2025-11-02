@@ -21,7 +21,7 @@ async_db = AsyncSQLDatabaseNode(
     share_pool=True,         # Enable connection sharing
     validate_queries=True,   # Security validation
     allow_admin=False,       # Restrict admin operations
-    timeout=30.0            # Query timeout
+    command_timeout=60.0     # Pool-level timeout for all queries (default: 60s)
 )
 ```
 
