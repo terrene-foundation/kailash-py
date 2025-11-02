@@ -14,7 +14,7 @@ metadata:
     argocd-image-updater.argoproj.io/kailash.helm.image-tag: image.tag
 spec:
   project: kailash
-  
+
   source:
     repoURL: https://github.com/your-org/kailash-template
     targetRevision: main
@@ -28,11 +28,11 @@ spec:
           value: "3"
         - name: image.pullPolicy
           value: IfNotPresent
-  
+
   destination:
     server: https://kubernetes.default.svc
     namespace: kailash-prod
-  
+
   syncPolicy:
     automated:
       prune: true
@@ -46,13 +46,13 @@ spec:
         duration: 5s
         factor: 2
         maxDuration: 3m
-  
+
   revisionHistoryLimit: 10
-  
+
   # Health checks
   health:
     progressDeadlineSeconds: 600
-  
+
   # Ignore differences in generated fields
   ignoreDifferences:
     - group: apps
@@ -76,7 +76,7 @@ metadata:
     environment: staging
 spec:
   project: kailash
-  
+
   source:
     repoURL: https://github.com/your-org/kailash-template
     targetRevision: develop
@@ -85,18 +85,18 @@ spec:
       valueFiles:
         - values.yaml
         - values-staging.yaml
-  
+
   destination:
     server: https://kubernetes.default.svc
     namespace: kailash-staging
-  
+
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-  
+
   revisionHistoryLimit: 5
 ---
 # Development environment
@@ -111,7 +111,7 @@ metadata:
     environment: dev
 spec:
   project: kailash
-  
+
   source:
     repoURL: https://github.com/your-org/kailash-template
     targetRevision: develop
@@ -123,11 +123,11 @@ spec:
       parameters:
         - name: replicaCount
           value: "1"
-  
+
   destination:
     server: https://kubernetes.default.svc
     namespace: kailash-dev
-  
+
   syncPolicy:
     automated:
       prune: true
@@ -136,5 +136,5 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ApplyOutOfSyncOnly=true
-  
+
   revisionHistoryLimit: 3

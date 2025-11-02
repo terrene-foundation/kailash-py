@@ -95,7 +95,7 @@ class LoadTestingDemo:
 
 🎯  TESTING SCENARIOS:
    • Baseline Performance: Normal load conditions (100-5000 workflows)
-   • Stress Testing: Extreme load conditions (up to 10,000 workflows) 
+   • Stress Testing: Extreme load conditions (up to 10,000 workflows)
    • Database Stress: Connection pool exhaustion and recovery
    • Resource Pressure: Memory and CPU limitation testing
    • Failure Recovery: Circuit breaker and retry validation
@@ -184,7 +184,7 @@ class LoadTestingDemo:
                     f"""
    📊 BASELINE RESULTS ({level} concurrent):
       • Success Rate: {(metrics.successful_workflows/metrics.total_workflows)*100:.1f}%
-      • Throughput: {metrics.throughput:.2f} workflows/sec  
+      • Throughput: {metrics.throughput:.2f} workflows/sec
       • Avg Latency: {metrics.avg_latency:.3f}s
       • P99 Latency: {metrics.p99_latency:.3f}s
       • Peak Memory: {metrics.peak_memory_mb:.1f} MB
@@ -227,7 +227,7 @@ class LoadTestingDemo:
             """
 🗄️  DATABASE STRESS SCENARIOS:
    • Connection Pool Exhaustion: Exceed available connections
-   • Query Timeout Simulation: Handle slow database responses  
+   • Query Timeout Simulation: Handle slow database responses
    • Multi-Database Load: Test PostgreSQL, MySQL, Redis simultaneously
    • Recovery Testing: Validate graceful degradation and recovery
         """
@@ -443,7 +443,7 @@ class LoadTestingDemo:
    • Latency Change: {regression_analysis['latency_change_percent']:+.1f}%
    • Memory Change: {regression_analysis['memory_change_percent']:+.1f}%
    • Error Rate Change: {regression_analysis['error_rate_change_percent']:+.1f}%
-   
+
    • Regression Detected: {'Yes' if regression_analysis['performance_regression_detected'] else 'No'}
    • Severity: {regression_analysis['regression_severity'].title()}
                 """
@@ -599,7 +599,7 @@ class LoadTestingDemo:
 
 🎯 PRODUCTION-READY FEATURES:
    • 24-hour endurance testing capability
-   • Automated performance baseline establishment  
+   • Automated performance baseline establishment
    • Circuit breaker and retry policy validation
    • Memory leak detection and analysis
    • Database query performance optimization

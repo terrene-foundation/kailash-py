@@ -10,7 +10,7 @@ metadata:
 spec:
   mode: daemonset
   serviceAccount: opentelemetry-collector
-  
+
   # Resource configuration
   resources:
     requests:
@@ -19,13 +19,13 @@ spec:
     limits:
       memory: 512Mi
       cpu: 200m
-  
+
   # Security context
   securityContext:
     runAsUser: 0
     runAsGroup: 0
     fsGroup: 0
-  
+
   # Volumes for host metrics collection
   volumes:
     - name: hostfs
@@ -37,7 +37,7 @@ spec:
     - name: sys
       hostPath:
         path: /sys
-  
+
   volumeMounts:
     - name: hostfs
       mountPath: /hostfs
@@ -49,7 +49,7 @@ spec:
     - name: sys
       mountPath: /host/sys
       readOnly: true
-  
+
   # Environment variables
   env:
     - name: KUBE_NODE_NAME
@@ -59,7 +59,7 @@ spec:
           fieldPath: spec.nodeName
     - name: OTEL_RESOURCE_ATTRIBUTES
       value: "k8s.cluster.name=kailash-prod,k8s.node.name=$(KUBE_NODE_NAME)"
-  
+
   # Affinity configuration
   affinity:
     nodeAffinity:
@@ -70,7 +70,7 @@ spec:
                 operator: In
                 values:
                   - linux
-  
+
   # Tolerations for all nodes
   tolerations:
     - operator: Exists
@@ -79,7 +79,7 @@ spec:
       effect: NoExecute
     - operator: Exists
       effect: PreferNoSchedule
-  
+
   # Configuration
   config: |
     receivers:
@@ -90,7 +90,7 @@ spec:
             endpoint: 0.0.0.0:4317
           http:
             endpoint: 0.0.0.0:4318
-      
+
       # Jaeger receivers
       jaeger:
         protocols:
@@ -102,11 +102,11 @@ spec:
             endpoint: 0.0.0.0:6831
           thrift_binary:
             endpoint: 0.0.0.0:6832
-      
+
       # Zipkin receiver
       zipkin:
         endpoint: 0.0.0.0:9411
-      
+
       # Prometheus receiver for metrics scraping
       prometheus:
         config:
@@ -115,7 +115,7 @@ spec:
             external_labels:
               cluster: "kailash-prod"
               environment: "production"
-          
+
           scrape_configs:
             # Kubernetes API server
             - job_name: 'kubernetes-apiservers'
@@ -130,7 +130,7 @@ spec:
                 - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
                   action: keep
                   regex: default;kubernetes;https
-            
+
             # Kubelet metrics
             - job_name: 'kubernetes-nodes'
               kubernetes_sd_configs:
@@ -149,7 +149,7 @@ spec:
                   regex: (.+)
                   target_label: __metrics_path__
                   replacement: /api/v1/nodes/${1}/proxy/metrics
-            
+
             # cAdvisor metrics
             - job_name: 'kubernetes-cadvisor'
               kubernetes_sd_configs:
@@ -168,7 +168,7 @@ spec:
                   regex: (.+)
                   target_label: __metrics_path__
                   replacement: /api/v1/nodes/${1}/proxy/metrics/cadvisor
-      
+
       # Host metrics receiver
       hostmetrics:
         collection_interval: 30s
@@ -195,17 +195,17 @@ spec:
             mute_process_name_error: true
             mute_process_exe_error: true
             mute_process_io_error: true
-      
+
       # Kubernetes cluster receiver
       k8s_cluster:
         collection_interval: 30s
         node_conditions_to_report: [Ready, MemoryPressure, DiskPressure, PIDPressure]
         allocatable_types_to_report: [cpu, memory, storage]
-      
+
       # Kubernetes events receiver
       k8s_events:
         auth_type: serviceAccount
-      
+
       # Filelog receiver for container logs
       filelog:
         include:
@@ -225,7 +225,7 @@ spec:
               parse_from: attributes.time
               layout_type: gotime
               layout: '2006-01-02T15:04:05.999999999Z07:00'
-          
+
           # Parse Docker format
           - type: regex_parser
             id: parser-docker
@@ -235,7 +235,7 @@ spec:
               parse_from: attributes.time
               layout_type: gotime
               layout: '2006-01-02T15:04:05.999999999Z07:00'
-          
+
           # Parse containerd format
           - type: regex_parser
             id: parser-containerd
@@ -245,20 +245,20 @@ spec:
               parse_from: attributes.time
               layout_type: gotime
               layout: '2006-01-02T15:04:05.999999999Z07:00'
-    
+
     processors:
       # Memory limiter to prevent OOM
       memory_limiter:
         limit_mib: 400
         spike_limit_mib: 100
         check_interval: 5s
-      
+
       # Batch processor for performance
       batch:
         send_batch_size: 1024
         timeout: 1s
         send_batch_max_size: 2048
-      
+
       # Resource processor to add cluster information
       resource:
         attributes:
@@ -271,7 +271,7 @@ spec:
           - key: k8s.cluster.name
             value: "kailash-prod"
             action: upsert
-      
+
       # Kubernetes attributes processor
       k8sattributes:
         auth_type: "serviceAccount"
@@ -295,7 +295,7 @@ spec:
                 name: k8s.pod.uid
           - sources:
               - from: connection
-      
+
       # Transform processor for log enhancement
       transform:
         log_statements:
@@ -306,16 +306,16 @@ spec:
               - set(attributes["log.level"], "ERROR") where IsMatch(body, "(?i)(error|exception|fail)")
               - set(attributes["log.level"], "WARN") where IsMatch(body, "(?i)(warn|warning)")
               - set(attributes["log.level"], "DEBUG") where IsMatch(body, "(?i)debug")
-              
+
               # Add service name from k8s labels
               - set(attributes["service.name"], attributes["k8s.deployment.name"]) where attributes["k8s.deployment.name"] != nil
               - set(attributes["service.name"], attributes["k8s.pod.name"]) where attributes["service.name"] == nil
-      
+
       # Probabilistic sampler for traces
       probabilistic_sampler:
         hash_seed: 22
         sampling_percentage: 10
-      
+
       # Span metrics processor
       spanmetrics:
         metrics_exporter: prometheus
@@ -326,14 +326,14 @@ spec:
           - name: http.status_code
         dimensions_cache_size: 1000
         aggregation_temporality: "AGGREGATION_TEMPORALITY_CUMULATIVE"
-    
+
     exporters:
       # Jaeger exporter for traces
       jaeger:
         endpoint: kailash-jaeger-collector.tracing.svc.cluster.local:14250
         tls:
           insecure: true
-      
+
       # Prometheus exporter for metrics
       prometheus:
         endpoint: "0.0.0.0:8889"
@@ -341,7 +341,7 @@ spec:
         const_labels:
           cluster: "kailash-prod"
           environment: "production"
-      
+
       # Prometheus remote write exporter
       prometheusremotewrite:
         endpoint: "http://prometheus.monitoring.svc.cluster.local:9090/api/v1/write"
@@ -350,7 +350,7 @@ spec:
         external_labels:
           cluster: "kailash-prod"
           environment: "production"
-      
+
       # Loki exporter for logs
       loki:
         endpoint: "http://loki-gateway.logging.svc.cluster.local/loki/api/v1/push"
@@ -369,7 +369,7 @@ spec:
           resource:
             service.name: "service_name"
             service.instance.id: "service_instance_id"
-      
+
       # Elasticsearch exporter for logs
       elasticsearch:
         endpoints: ["https://kailash-logs-es-http.logging.svc.cluster.local:9200"]
@@ -386,7 +386,7 @@ spec:
               number_of_shards: 1
               number_of_replicas: 1
               codec: "best_compression"
-      
+
       # OTLP exporter for external systems
       otlp:
         endpoint: "external-otel-collector:4317"
@@ -395,28 +395,28 @@ spec:
         compression: gzip
         headers:
           api-key: "your-api-key"
-      
+
       # Debug exporter (disable in production)
       # logging:
       #   loglevel: debug
-    
+
     extensions:
       # Health check extension
       health_check:
         endpoint: 0.0.0.0:13133
-      
+
       # pprof extension for debugging
       pprof:
         endpoint: 0.0.0.0:1777
-      
+
       # zpages extension for debugging
       zpages:
         endpoint: 0.0.0.0:55679
-      
+
       # Memory ballast extension
       memory_ballast:
         size_mib: 64
-    
+
     service:
       extensions: [health_check, pprof, zpages, memory_ballast]
       pipelines:
@@ -425,19 +425,19 @@ spec:
           receivers: [otlp, jaeger, zipkin]
           processors: [memory_limiter, k8sattributes, resource, batch, probabilistic_sampler, spanmetrics]
           exporters: [jaeger]
-        
+
         # Metrics pipeline
         metrics:
           receivers: [otlp, prometheus, hostmetrics, k8s_cluster]
           processors: [memory_limiter, k8sattributes, resource, batch]
           exporters: [prometheus, prometheusremotewrite]
-        
+
         # Logs pipeline
         logs:
           receivers: [otlp, filelog, k8s_events]
           processors: [memory_limiter, k8sattributes, resource, transform, batch]
           exporters: [loki, elasticsearch]
-      
+
       telemetry:
         logs:
           level: "info"
@@ -596,7 +596,7 @@ spec:
           port: 6832  # Jaeger UDP binary
         - protocol: TCP
           port: 9411  # Zipkin
-    
+
     # Allow monitoring
     - from:
         - namespaceSelector:
@@ -607,7 +607,7 @@ spec:
           port: 8889  # Prometheus metrics
         - protocol: TCP
           port: 13133 # Health check
-  
+
   egress:
     # Allow connection to Jaeger
     - to:
@@ -617,7 +617,7 @@ spec:
       ports:
         - protocol: TCP
           port: 14250
-    
+
     # Allow connection to Prometheus
     - to:
         - namespaceSelector:
@@ -626,7 +626,7 @@ spec:
       ports:
         - protocol: TCP
           port: 9090
-    
+
     # Allow connection to Loki
     - to:
         - namespaceSelector:
@@ -635,7 +635,7 @@ spec:
       ports:
         - protocol: TCP
           port: 3100
-    
+
     # Allow connection to Elasticsearch
     - to:
         - namespaceSelector:
@@ -644,7 +644,7 @@ spec:
       ports:
         - protocol: TCP
           port: 9200
-    
+
     # Allow DNS and Kubernetes API
     - to: []
       ports:

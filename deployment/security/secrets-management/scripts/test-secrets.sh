@@ -39,24 +39,24 @@ log_error() {
 # Check prerequisites
 check_prerequisites() {
     log_info "Checking prerequisites..."
-    
+
     if ! command -v kubectl &> /dev/null; then
         log_error "kubectl not found"
         exit 1
     fi
-    
+
     if ! kubectl cluster-info &> /dev/null; then
         log_error "Cannot connect to Kubernetes cluster"
         exit 1
     fi
-    
+
     log_success "Prerequisites satisfied"
 }
 
 # Test Vault connectivity
 test_vault_connectivity() {
     log_info "Testing Vault connectivity..."
-    
+
     # Check if Vault pods are running
     if kubectl get pods -n "$VAULT_NAMESPACE" -l app.kubernetes.io/name=vault | grep -q "Running"; then
         log_success "Vault pods are running"
@@ -64,11 +64,11 @@ test_vault_connectivity() {
         log_error "Vault pods are not running"
         return 1
     fi
-    
+
     # Test Vault status
     if kubectl exec -n "$VAULT_NAMESPACE" vault-0 -- vault status &> /dev/null; then
         local vault_status=$(kubectl exec -n "$VAULT_NAMESPACE" vault-0 -- vault status -format=json | jq -r '.sealed')
-        
+
         if [[ "$vault_status" == "false" ]]; then
             log_success "Vault is unsealed and accessible"
         else
@@ -84,12 +84,12 @@ test_vault_connectivity() {
 # Test Vault authentication
 test_vault_authentication() {
     log_info "Testing Vault authentication..."
-    
+
     # Test root token access (if available)
     if kubectl get secret vault-init -n "$VAULT_NAMESPACE" &> /dev/null; then
         local root_token
         root_token=$(kubectl get secret vault-init -n "$VAULT_NAMESPACE" -o jsonpath='{.data.root-token}' | base64 -d)
-        
+
         if kubectl exec -n "$VAULT_NAMESPACE" vault-0 -- vault auth -method=token token="$root_token" &> /dev/null; then
             log_success "Root token authentication works"
         else
@@ -98,7 +98,7 @@ test_vault_authentication() {
     else
         log_warning "Vault init secret not found - cannot test root token"
     fi
-    
+
     # Test Kubernetes auth method
     if kubectl exec -n "$VAULT_NAMESPACE" vault-0 -- vault auth list | grep -q "kubernetes/"; then
         log_success "Kubernetes auth method is enabled"
@@ -110,11 +110,11 @@ test_vault_authentication() {
 # Test secret engines
 test_secret_engines() {
     log_info "Testing Vault secret engines..."
-    
+
     # Test KV v2 engine
     if kubectl exec -n "$VAULT_NAMESPACE" vault-0 -- vault secrets list | grep -q "kv/"; then
         log_success "KV v2 secret engine is enabled"
-        
+
         # Test reading a secret
         if kubectl exec -n "$VAULT_NAMESPACE" vault-0 -- vault kv get kv/database/postgres &> /dev/null; then
             log_success "Can read secrets from KV engine"
@@ -129,7 +129,7 @@ test_secret_engines() {
 # Test External Secrets Operator
 test_external_secrets_operator() {
     log_info "Testing External Secrets Operator..."
-    
+
     # Check if ESO is deployed
     if kubectl get deployment external-secrets -n "$ESO_NAMESPACE" &> /dev/null; then
         if kubectl get pods -n "$ESO_NAMESPACE" -l app.kubernetes.io/name=external-secrets | grep -q "Running"; then
@@ -142,7 +142,7 @@ test_external_secrets_operator() {
         log_error "External Secrets Operator is not deployed"
         return 1
     fi
-    
+
     # Check webhook
     if kubectl get deployment external-secrets-webhook -n "$ESO_NAMESPACE" &> /dev/null; then
         if kubectl get pods -n "$ESO_NAMESPACE" -l app.kubernetes.io/name=external-secrets-webhook | grep -q "Running"; then
@@ -158,15 +158,15 @@ test_external_secrets_operator() {
 # Test secret stores
 test_secret_stores() {
     log_info "Testing secret stores..."
-    
+
     # Check cluster secret store
     if kubectl get clustersecretstore vault-backend &> /dev/null; then
         log_success "Vault cluster secret store exists"
-        
+
         # Check store status
         local store_status
         store_status=$(kubectl get clustersecretstore vault-backend -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
-        
+
         if [[ "$store_status" == "True" ]]; then
             log_success "Vault cluster secret store is ready"
         else
@@ -175,7 +175,7 @@ test_secret_stores() {
     else
         log_error "Vault cluster secret store not found"
     fi
-    
+
     # Check service account
     if kubectl get serviceaccount external-secrets-vault -n "$ESO_NAMESPACE" &> /dev/null; then
         log_success "External Secrets service account exists"
@@ -187,38 +187,38 @@ test_secret_stores() {
 # Test external secrets
 test_external_secrets() {
     log_info "Testing external secrets..."
-    
+
     local external_secrets=(
         "postgres-credentials"
         "redis-credentials"
         "application-secrets"
     )
-    
+
     for external_secret in "${external_secrets[@]}"; do
         if kubectl get externalsecret "$external_secret" -n "$APP_NAMESPACE" &> /dev/null; then
             log_success "External secret exists: $external_secret"
-            
+
             # Check external secret status
             local status
             status=$(kubectl get externalsecret "$external_secret" -n "$APP_NAMESPACE" -o jsonpath='{.status.conditions[0].status}' 2>/dev/null || echo "Unknown")
-            
+
             if [[ "$status" == "True" ]]; then
                 log_success "External secret is synced: $external_secret"
             else
                 log_warning "External secret status: $external_secret = $status"
             fi
-            
+
             # Check if target secret was created
             local target_secret
             target_secret=$(kubectl get externalsecret "$external_secret" -n "$APP_NAMESPACE" -o jsonpath='{.spec.target.name}' 2>/dev/null || echo "")
-            
+
             if [[ -n "$target_secret" ]] && kubectl get secret "$target_secret" -n "$APP_NAMESPACE" &> /dev/null; then
                 log_success "Target secret created: $target_secret"
-                
+
                 # Check secret data
                 local secret_keys
                 secret_keys=$(kubectl get secret "$target_secret" -n "$APP_NAMESPACE" -o jsonpath='{.data}' | jq -r 'keys[]' 2>/dev/null | wc -l || echo "0")
-                
+
                 if [[ "$secret_keys" -gt 0 ]]; then
                     log_success "Target secret has $secret_keys keys: $target_secret"
                 else
@@ -236,13 +236,13 @@ test_external_secrets() {
 # Test secret access from application
 test_secret_access() {
     log_info "Testing secret access from application..."
-    
+
     # Create a test pod that uses secrets
     local test_pod_name="secret-test-pod"
-    
+
     # Clean up any existing test pod
     kubectl delete pod "$test_pod_name" -n "$APP_NAMESPACE" --ignore-not-found=true
-    
+
     # Create test pod
     cat <<EOF | kubectl apply -f -
 apiVersion: v1
@@ -278,28 +278,28 @@ spec:
           key: secret-key
           optional: true
 EOF
-    
+
     # Wait for pod to be ready
     if kubectl wait --for=condition=Ready pod "$test_pod_name" -n "$APP_NAMESPACE" --timeout=60s &> /dev/null; then
         log_success "Test pod is ready"
-        
+
         # Test environment variables
         local env_vars
         env_vars=$(kubectl exec "$test_pod_name" -n "$APP_NAMESPACE" -- env | grep -E "(DATABASE_URL|REDIS_URL|APP_SECRET_KEY)" | wc -l)
-        
+
         if [[ "$env_vars" -gt 0 ]]; then
             log_success "Application can access $env_vars secret environment variables"
         else
             log_warning "Application cannot access secret environment variables"
         fi
-        
+
         # Test specific secrets
         if kubectl exec "$test_pod_name" -n "$APP_NAMESPACE" -- sh -c 'test -n "$DATABASE_URL"' &> /dev/null; then
             log_success "Database connection string is available"
         else
             log_warning "Database connection string is not available"
         fi
-        
+
         if kubectl exec "$test_pod_name" -n "$APP_NAMESPACE" -- sh -c 'test -n "$REDIS_URL"' &> /dev/null; then
             log_success "Redis connection string is available"
         else
@@ -308,7 +308,7 @@ EOF
     else
         log_error "Test pod failed to start"
     fi
-    
+
     # Cleanup test pod
     kubectl delete pod "$test_pod_name" -n "$APP_NAMESPACE" --ignore-not-found=true
 }
@@ -316,11 +316,11 @@ EOF
 # Test secret rotation
 test_secret_rotation() {
     log_info "Testing secret rotation..."
-    
+
     # Check refresh intervals
     local refresh_intervals
     refresh_intervals=$(kubectl get externalsecrets -n "$APP_NAMESPACE" -o jsonpath='{.items[*].spec.refreshInterval}' | tr ' ' '\n' | sort -u)
-    
+
     if [[ -n "$refresh_intervals" ]]; then
         log_success "External secrets have refresh intervals configured:"
         echo "$refresh_intervals" | while read -r interval; do
@@ -329,11 +329,11 @@ test_secret_rotation() {
     else
         log_warning "No refresh intervals found on external secrets"
     fi
-    
+
     # Check for dynamic credentials (short refresh intervals)
     local dynamic_secrets
     dynamic_secrets=$(kubectl get externalsecrets -n "$APP_NAMESPACE" -o json | jq -r '.items[] | select(.spec.refreshInterval | contains("300s") or contains("5m")) | .metadata.name' 2>/dev/null || echo "")
-    
+
     if [[ -n "$dynamic_secrets" ]]; then
         log_success "Dynamic secrets found (5min refresh):"
         echo "$dynamic_secrets" | while read -r secret; do
@@ -347,18 +347,18 @@ test_secret_rotation() {
 # Test monitoring and metrics
 test_monitoring() {
     log_info "Testing monitoring and metrics..."
-    
+
     # Check if metrics services exist
     if kubectl get service external-secrets-metrics -n "$ESO_NAMESPACE" &> /dev/null; then
         log_success "External Secrets metrics service exists"
     else
         log_warning "External Secrets metrics service not found"
     fi
-    
+
     # Check for Vault metrics
     if kubectl get service vault -n "$VAULT_NAMESPACE" &> /dev/null; then
         log_success "Vault service exists"
-        
+
         # Test metrics endpoint (if accessible)
         if kubectl exec -n "$VAULT_NAMESPACE" vault-0 -- wget -q -O - http://localhost:8200/v1/sys/metrics?format=prometheus 2>/dev/null | head -1 | grep -q "vault_"; then
             log_success "Vault metrics endpoint is accessible"
@@ -373,9 +373,9 @@ test_monitoring() {
 # Generate test report
 generate_report() {
     log_info "Generating test report..."
-    
+
     local report_file="/tmp/secrets-test-report-$(date +%Y%m%d_%H%M%S).txt"
-    
+
     cat > "$report_file" << EOF
 Secrets Management Test Report
 =============================
@@ -406,7 +406,7 @@ Recommendations:
 - Implement secret rotation policies
 - Review and audit secret access regularly
 EOF
-    
+
     log_success "Test report generated: $report_file"
     cat "$report_file"
 }
@@ -414,23 +414,23 @@ EOF
 # Display status
 show_status() {
     log_info "Current secrets management status:"
-    
+
     echo
     log_info "Vault Pods:"
     kubectl get pods -n "$VAULT_NAMESPACE" -l app.kubernetes.io/name=vault 2>/dev/null || log_warning "Vault not deployed"
-    
+
     echo
     log_info "External Secrets Operator:"
     kubectl get pods -n "$ESO_NAMESPACE" 2>/dev/null || log_warning "External Secrets Operator not deployed"
-    
+
     echo
     log_info "Secret Stores:"
     kubectl get clustersecretstores,secretstores --all-namespaces 2>/dev/null || log_warning "No secret stores found"
-    
+
     echo
     log_info "External Secrets:"
     kubectl get externalsecrets --all-namespaces 2>/dev/null || log_warning "No external secrets found"
-    
+
     echo
     log_info "Generated Secrets:"
     kubectl get secrets --all-namespaces | grep -E "(postgres-secret|redis-secret|kailash-app-secrets)" || log_warning "No generated secrets found"
@@ -440,7 +440,7 @@ show_status() {
 main() {
     log_info "Starting secrets management testing"
     echo "========================================"
-    
+
     check_prerequisites
     test_vault_connectivity
     test_vault_authentication
@@ -451,10 +451,10 @@ main() {
     test_secret_access
     test_secret_rotation
     test_monitoring
-    
+
     show_status
     generate_report
-    
+
     echo "========================================"
     if [[ $ERRORS -eq 0 ]]; then
         log_success "All secrets management tests passed!"

@@ -9,14 +9,14 @@ metadata:
     app.kubernetes.io/component: logging
 spec:
   version: 8.11.3
-  
+
   # High availability configuration
   nodeSets:
     - name: master
       count: 3
       config:
         node.roles: ["master"]
-        cluster.initial_master_nodes: 
+        cluster.initial_master_nodes:
           - kailash-logs-es-master-0
           - kailash-logs-es-master-1
           - kailash-logs-es-master-2
@@ -24,7 +24,7 @@ spec:
         xpack.security.transport.ssl.enabled: true
         xpack.security.http.ssl.enabled: true
         xpack.monitoring.collection.enabled: true
-      
+
       podTemplate:
         metadata:
           labels:
@@ -43,12 +43,12 @@ spec:
               env:
                 - name: ES_JAVA_OPTS
                   value: "-Xms2g -Xmx2g"
-          
+
           securityContext:
             fsGroup: 1000
             runAsUser: 1000
             runAsNonRoot: true
-          
+
           affinity:
             podAntiAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
@@ -57,7 +57,7 @@ spec:
                       elasticsearch.k8s.elastic.co/cluster-name: kailash-logs
                       elasticsearch.k8s.elastic.co/node-master: "true"
                   topologyKey: kubernetes.io/hostname
-      
+
       volumeClaimTemplates:
         - metadata:
             name: elasticsearch-data
@@ -68,7 +68,7 @@ spec:
               requests:
                 storage: 30Gi
             storageClassName: fast-ssd
-    
+
     - name: data
       count: 3
       config:
@@ -78,7 +78,7 @@ spec:
         xpack.security.http.ssl.enabled: true
         indices.memory.index_buffer_size: "20%"
         thread_pool.write.queue_size: 1000
-      
+
       podTemplate:
         metadata:
           labels:
@@ -97,12 +97,12 @@ spec:
               env:
                 - name: ES_JAVA_OPTS
                   value: "-Xms4g -Xmx4g"
-          
+
           securityContext:
             fsGroup: 1000
             runAsUser: 1000
             runAsNonRoot: true
-          
+
           affinity:
             podAntiAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
@@ -111,7 +111,7 @@ spec:
                       elasticsearch.k8s.elastic.co/cluster-name: kailash-logs
                       elasticsearch.k8s.elastic.co/node-data: "true"
                   topologyKey: kubernetes.io/hostname
-      
+
       volumeClaimTemplates:
         - metadata:
             name: elasticsearch-data
@@ -122,13 +122,13 @@ spec:
               requests:
                 storage: 100Gi
             storageClassName: fast-ssd
-  
+
   # TLS configuration
   http:
     tls:
       selfSignedCertificate:
         disabled: false
-  
+
   # Service configuration
   transport:
     tls:
@@ -148,31 +148,31 @@ metadata:
 spec:
   version: 8.11.3
   count: 2
-  
+
   elasticsearchRef:
     name: kailash-logs
-  
+
   config:
     server.publicBaseUrl: https://kibana.yourdomain.com
     xpack.security.enabled: true
     xpack.encryptedSavedObjects.encryptionKey: changeme-32-character-encryption-key
     xpack.reporting.encryptionKey: changeme-32-character-encryption-key
     xpack.security.encryptionKey: changeme-32-character-encryption-key
-    
+
     # APM integration
     xpack.apm.enabled: true
     apm_oss.indexPattern: "apm-*"
-    
+
     # Security configuration
     xpack.security.session.idleTimeout: "1h"
     xpack.security.session.lifespan: "8h"
-    
+
     # Monitoring
     monitoring.ui.container.elasticsearch.enabled: true
-    
+
     # Index lifecycle management
     xpack.ilm.enabled: true
-  
+
   podTemplate:
     metadata:
       labels:
@@ -191,12 +191,12 @@ spec:
           env:
             - name: NODE_OPTIONS
               value: "--max-old-space-size=1800"
-      
+
       securityContext:
         fsGroup: 1000
         runAsUser: 1000
         runAsNonRoot: true
-      
+
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
