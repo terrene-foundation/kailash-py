@@ -802,7 +802,9 @@ class EnterpriseConnectionPool:
                 )
 
             # Perform simple query
-            await self.execute_query("SELECT 1", timeout=5)
+            # Note: Pool-level command_timeout already provides timeout protection
+            # No need for explicit timeout parameter here
+            await self.execute_query("SELECT 1")
 
             latency = (time.time() - start_time) * 1000
 

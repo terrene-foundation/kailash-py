@@ -24,26 +24,23 @@
 
 ### Automatic Health Checks
 ```python
-from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode, HealthCheckConfig
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-# Configure health monitoring
-health_config = HealthCheckConfig(
-    enabled=True,
-    interval=30.0,  # Check every 30 seconds
-    timeout=5.0,    # Health check timeout
-    query="SELECT 1",  # Simple health check query
-    failure_threshold=3,  # Mark unhealthy after 3 failures
-    recovery_threshold=2  # Mark healthy after 2 successes
-)
-
+# Configure node with health monitoring
+# Health checks use pool-level command_timeout for timeout protection
 node = AsyncSQLDatabaseNode(
     name="monitored_db",
     database_type="postgresql",
     host="db.production.internal",
     database="prod_app",
-    health_check_config=health_config,
+    command_timeout=60.0,  # Pool-level timeout for all queries (including health checks)
+    enable_health_checks=True,  # Enable automatic health monitoring
     share_pool=True
 )
+
+# Health checks run automatically using "SELECT 1" query
+# Pool-level command_timeout provides timeout protection
+# No need for per-query timeout parameters
 
 # Monitor pool health
 health_status = await node.get_pool_health()
@@ -280,24 +277,24 @@ result = await node.async_run(
 
 ## Query Timeout & Cancellation [Built-in]
 
-### Granular Timeout Control
+### Pool-Level Timeout Control
 ```python
-# Different timeout levels
+# Configure pool-level timeout for all queries
 node = AsyncSQLDatabaseNode(
     database_type="postgresql",
     host="localhost",
     database="myapp",
-    connection_timeout=5.0,    # Connection establishment
-    command_timeout=30.0,      # Default query timeout
-    pool_timeout=10.0,         # Acquiring connection from pool
-    network_timeout=60.0       # Network-level timeout
+    connection_timeout=5.0,    # Connection establishment timeout
+    command_timeout=30.0,      # Pool-level timeout applied to ALL queries
+    pool_timeout=10.0,         # Timeout for acquiring connection from pool
 )
 
-# Override timeout for specific queries
+# All queries inherit the pool-level command_timeout
+# For longer-running queries, configure appropriate command_timeout at node creation
 result = await node.async_run(
     query="SELECT * FROM generate_large_report(:params)",
-    params={"year": 2024},
-    timeout=300.0  # 5 minutes for this specific query
+    params={"year": 2024}
+    # No per-query timeout parameter - use pool-level command_timeout
 )
 
 # Cancellable operations
@@ -696,13 +693,13 @@ workflow.add_node("ConditionalNode", "check_data", {
     "condition": "input.result.data.count > 0"
 })
 
-# Step 3: Heavy transformation with custom timeout
+# Step 3: Heavy transformation with pool-level timeout
 workflow.add_node("AsyncSQLDatabaseNode", "transform", {
     "database_type": "postgresql",
     "connection_name": "analytics_db",
     "query": "CALL process_daily_aggregates(:date)",
     "params": {"date": "2024-01-01"},
-    "timeout": 1800.0,  # 30 minutes
+    "command_timeout": 1800.0,  # 30 minutes - pool-level timeout for long-running operations
     "transaction_mode": "none"  # Stored proc handles its own transactions
 })
 

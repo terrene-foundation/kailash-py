@@ -1097,13 +1097,14 @@ db = DataFlow("postgresql://user:password@localhost:5432/mydb")
 # With SSL/TLS
 db = DataFlow("postgresql://user:password@localhost:5432/mydb?sslmode=require")
 
-# With custom connection pool
+# With custom connection pool and timeout
 db = DataFlow(
     "postgresql://user:password@localhost:5432/mydb",
     pool_size=20,
     max_overflow=30,
     pool_recycle=3600,
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    command_timeout=60  # Query execution timeout (default: 60s)
 )
 
 # Read replica configuration
@@ -1135,7 +1136,8 @@ db = DataFlow(
     pool_size=15,
     max_overflow=25,
     pool_recycle=3600,
-    connect_timeout=10,
+    connect_timeout=10,          # Connection establishment timeout
+    command_timeout=60,           # Query execution timeout (default: 60s)
     charset="utf8mb4"
 )
 

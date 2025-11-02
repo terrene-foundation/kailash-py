@@ -65,9 +65,9 @@ Use specialized subagents when:
 ## Quick Tips
 
 - 💡 **Use Connection Pooling**: Enable share_pool=True for production to reuse connections and improve performance
-- 💡 **Implement Health Checks**: Configure health_check_config with interval and failure_threshold for automatic monitoring
+- 💡 **Implement Health Checks**: Enable automatic health monitoring with enable_health_checks=True (uses pool-level command_timeout)
 - 💡 **Stream Large Datasets**: Use stream_query() with batch_size instead of loading entire result sets into memory
-- 💡 **Set Appropriate Timeouts**: Configure connection_timeout (5s), command_timeout (30s), and query-specific timeouts
+- 💡 **Set Pool-Level Timeout**: Configure command_timeout at node creation (default: 60s) - applies to ALL queries including health checks
 - 💡 **Batch Insert Optimization**: For 10K+ rows, use execute_many_async (general), COPY (PostgreSQL fastest), or UNNEST (PostgreSQL arrays)
 - 💡 **pytest-asyncio Compatibility**: AsyncSQLDatabaseNode automatically detects pytest environments and adjusts pool key generation for compatibility with function-scoped fixtures
 
