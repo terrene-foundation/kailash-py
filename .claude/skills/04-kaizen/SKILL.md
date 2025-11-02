@@ -178,7 +178,7 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 - **[kaizen-ux-helpers](kaizen-ux-helpers.md)** - UX enhancement utilities
 
 ### Observability & Monitoring
-- **[kaizen-observability-hooks](kaizen-observability-hooks.md)** - Lifecycle event hooks and hook management system
+- **[kaizen-observability-hooks](kaizen-observability-hooks.md)** - Lifecycle event hooks, hook management, and production security (RBAC, isolation, metrics auth)
 - **[kaizen-observability-tracing](kaizen-observability-tracing.md)** - Distributed tracing with OpenTelemetry and Jaeger
 - **[kaizen-observability-metrics](kaizen-observability-metrics.md)** - Prometheus metrics collection with p50/p95/p99 percentiles
 - **[kaizen-observability-logging](kaizen-observability-logging.md)** - Structured JSON logging for ELK Stack integration
@@ -206,10 +206,12 @@ Foundation for all Kaizen agents:
 - **Hooks System**: Zero-code-change observability and lifecycle management
 
 ### Hooks System (Lifecycle Events)
-Event-driven framework for zero-code-change observability:
-- **Location**: `kaizen.core.autonomy.hooks`
+Event-driven framework for zero-code-change observability with production security:
+- **Location**: `kaizen.core.autonomy.hooks`, `kaizen.core.autonomy.hooks.security`
 - **Usage**: Register hooks on PRE/POST lifecycle events (opt-in via `config.hooks_enabled=True`)
 - **Events**: PRE/POST_AGENT_LOOP, PRE/POST_TOOL_USE, PRE/POST_CHECKPOINT_SAVE, PRE/POST_INTERRUPT
+- **Production Security**: RBAC authorization, Ed25519 signature verification, process isolation with resource limits, API key authentication for metrics, sensitive data redaction, rate limiting, input validation, audit trails
+- **Compliance**: PCI DSS 4.0, HIPAA § 164.312, GDPR Article 32, SOC2
 - **Examples**: `examples/autonomy/hooks/` (audit_trail, distributed_tracing, prometheus_metrics)
 - **Docs**: `docs/features/hooks-system.md`, `docs/guides/hooks-system-guide.md`
 
@@ -237,6 +239,7 @@ Use Kaizen when you need to:
 - Track costs and performance of AI agents
 - Add zero-code-change observability to agents (hooks system)
 - Monitor, trace, and audit agent behavior in production
+- Secure agent observability with RBAC, process isolation, and compliance controls
 - Create production-ready agentic applications
 
 **Use Pipeline Patterns When:**
