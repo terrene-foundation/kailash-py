@@ -8,7 +8,6 @@ method in AsyncLocalRuntime (unless explicitly documented as runtime-specific).
 import inspect
 
 import pytest
-
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 
