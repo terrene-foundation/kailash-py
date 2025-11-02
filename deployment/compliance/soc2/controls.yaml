@@ -20,20 +20,20 @@ data:
       - privileged_access_management: implemented
       - access_review_frequency: quarterly
       - failed_login_monitoring: enabled
-    
+
     controls:
       kubernetes:
         - rbac_enabled: true
         - pod_security_standards: restricted
         - network_policies: required
         - service_mesh_mTLS: enabled
-      
+
       monitoring:
         - audit_logging: comprehensive
         - access_attempts: logged
         - privileged_operations: monitored
         - anomaly_detection: enabled
-    
+
     evidence:
       - access_control_matrix
       - rbac_configurations
@@ -49,20 +49,20 @@ data:
       - key_management: "hardware_security_module"
       - data_classification: implemented
       - secure_disposal: "NIST 800-88"
-    
+
     controls:
       kubernetes:
         - secrets_encryption: enabled
         - storage_encryption: required
         - network_encryption: enforced
         - certificate_management: automated
-      
+
       cloud:
         - kms_integration: required
         - backup_encryption: enabled
         - transit_encryption: enforced
         - key_rotation: automated
-    
+
     evidence:
       - encryption_policies
       - key_management_procedures
@@ -77,14 +77,14 @@ data:
       - visitor_management: enforced
       - asset_tracking: comprehensive
       - environmental_monitoring: enabled
-    
+
     controls:
       datacenter:
         - biometric_access: required
         - security_cameras: 24x7
         - environmental_sensors: deployed
         - fire_suppression: automated
-      
+
       cloud:
         - infrastructure_isolation: enforced
         - hypervisor_security: enabled
@@ -99,14 +99,14 @@ data:
       - patch_management: automated
       - penetration_testing: quarterly
       - security_assessments: annual
-    
+
     controls:
       scanning:
         - container_scanning: enabled
         - infrastructure_scanning: continuous
         - dependency_scanning: automated
         - configuration_scanning: enforced
-      
+
       remediation:
         - critical_patches: "24_hours"
         - high_patches: "7_days"
@@ -121,14 +121,14 @@ data:
       - network_segmentation: enforced
       - traffic_monitoring: continuous
       - data_export_controls: enabled
-    
+
     controls:
       network:
         - zero_trust_architecture: implemented
         - micro_segmentation: enabled
         - traffic_inspection: deep_packet
         - anomaly_detection: ml_based
-      
+
       data:
         - classification_tagging: automated
         - export_monitoring: real_time
@@ -143,14 +143,14 @@ data:
       - behavioral_analysis: enabled
       - threat_intelligence: integrated
       - incident_response: automated
-    
+
     controls:
       runtime_security:
         - container_runtime_protection: enabled
         - process_monitoring: comprehensive
         - file_integrity_monitoring: enabled
         - network_behavior_analysis: active
-      
+
       threat_detection:
         - ml_anomaly_detection: deployed
         - threat_hunting: automated
@@ -166,14 +166,14 @@ data:
       - performance_monitoring: continuous
       - scalability_testing: regular
       - disaster_recovery: tested
-    
+
     controls:
       infrastructure:
         - auto_scaling: enabled
         - load_balancing: multi_region
         - health_checks: comprehensive
         - failover_automation: tested
-      
+
       monitoring:
         - sla_tracking: real_time
         - performance_metrics: detailed
@@ -188,14 +188,14 @@ data:
       - recovery_testing: quarterly
       - rpo_target: "1_hour"
       - rto_target: "4_hours"
-    
+
     controls:
       backup:
         - automated_backups: daily
         - cross_region_replication: enabled
         - backup_encryption: required
         - integrity_verification: automated
-      
+
       recovery:
         - disaster_recovery_plan: documented
         - failover_procedures: automated
@@ -211,14 +211,14 @@ data:
       - processing_controls: automated
       - output_verification: enabled
       - error_handling: robust
-    
+
     controls:
       application:
         - input_sanitization: enforced
         - business_logic_validation: implemented
         - transaction_integrity: guaranteed
         - audit_trails: comprehensive
-      
+
       data:
         - schema_validation: strict
         - referential_integrity: enforced
@@ -234,14 +234,14 @@ data:
       - access_controls: granular
       - confidentiality_agreements: executed
       - data_handling_procedures: documented
-    
+
     controls:
       protection:
         - data_labeling: automated
         - access_restrictions: enforced
         - usage_monitoring: continuous
         - breach_detection: real_time
-      
+
       compliance:
         - regulatory_mapping: maintained
         - privacy_controls: implemented
@@ -257,14 +257,14 @@ data:
       - consent_mechanisms: implemented
       - data_subject_rights: supported
       - privacy_by_design: enforced
-    
+
     controls:
       privacy:
         - consent_tracking: automated
         - data_minimization: enforced
         - purpose_limitation: implemented
         - retention_policies: automated
-      
+
       rights:
         - access_requests: automated
         - rectification_procedures: implemented

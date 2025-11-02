@@ -62,7 +62,7 @@ node_pools = {
       env      = "prod"
     }
   }
-  
+
   general = {
     machine_type  = "n2-standard-8"
     min_count     = 3
@@ -80,7 +80,7 @@ node_pools = {
       env      = "prod"
     }
   }
-  
+
   memory = {
     machine_type  = "n2-highmem-4"
     min_count     = 0
@@ -102,7 +102,7 @@ node_pools = {
       env      = "prod"
     }
   }
-  
+
   spot = {
     machine_type  = "n2-standard-4"
     min_count     = 0
@@ -196,7 +196,7 @@ alert_policies = {
       duration = "300s"
     }]
   }
-  
+
   high_memory = {
     display_name = "High Memory Usage"
     conditions = [{
@@ -205,7 +205,7 @@ alert_policies = {
       duration = "300s"
     }]
   }
-  
+
   pod_crash_looping = {
     display_name = "Pod Crash Looping"
     conditions = [{
@@ -214,7 +214,7 @@ alert_policies = {
       duration = "600s"
     }]
   }
-  
+
   disk_usage = {
     display_name = "High Disk Usage"
     conditions = [{
@@ -223,7 +223,7 @@ alert_policies = {
       duration = "300s"
     }]
   }
-  
+
   database_connections = {
     display_name = "High Database Connections"
     conditions = [{
@@ -244,7 +244,7 @@ uptime_checks = {
     use_ssl      = true
     period       = "60s"
   }
-  
+
   api = {
     display_name = "API Endpoint"
     host         = "api.yourdomain.com"

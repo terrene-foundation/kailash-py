@@ -315,10 +315,10 @@ client = MCPClient(
 async with client:
     # First call creates connection and pools it
     result1 = await client.call_tool("ws://api.example.com/mcp", "search", {"query": "AI"})
-    
+
     # Second call reuses pooled connection (faster)
     result2 = await client.call_tool("ws://api.example.com/mcp", "analyze", {"data": result1})
-    
+
     # Pool automatically manages connection lifecycle
 ```
 
@@ -331,12 +331,12 @@ from kailash.mcp_server.errors import TransportError, ConnectionError
 try:
     async with client:
         result = await client.call_tool("wss://unreliable.example.com/mcp", "process", {"data": "test"})
-        
+
 except TransportError as e:
     if "connection" in str(e).lower():
         print(f"Connection failed: {e}")
         # Implement retry logic
-        
+
 except ConnectionError as e:
     print(f"WebSocket connection error: {e}")
     # Connection was dropped, will be cleaned from pool
@@ -352,7 +352,7 @@ client = MCPClient(enable_metrics=True)
 async with client:
     # Make some calls
     await client.call_tool("ws://api.example.com/mcp", "test", {})
-    
+
     # Get connection metrics
     metrics = client.get_metrics()
     print(f"Pool hits: {metrics.get('websocket_pool_hits', 0)}")
@@ -381,7 +381,7 @@ client_config = {
 
 # For development/testing only
 dev_config = {
-    "transport": "websocket", 
+    "transport": "websocket",
     "url": "ws://localhost:3001/mcp",
     "allow_localhost": True,          # OK for development
     "skip_security_validation": True  # Only for testing

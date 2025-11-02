@@ -62,7 +62,7 @@ spec:
         - namespaceSelector:
             matchLabels:
               name: logging
-    
+
     # Allow ingress access to Kibana
     - from:
         - namespaceSelector:
@@ -71,7 +71,7 @@ spec:
       ports:
         - protocol: TCP
           port: 5601
-    
+
     # Allow Filebeat from all namespaces
     - from: []
       ports:
@@ -79,7 +79,7 @@ spec:
           port: 5044  # Logstash beats input
         - protocol: TCP
           port: 5000  # Logstash TCP input
-    
+
     # Allow monitoring
     - from:
         - namespaceSelector:
@@ -94,14 +94,14 @@ spec:
           port: 9600  # Logstash metrics
         - protocol: TCP
           port: 5066  # Filebeat metrics
-  
+
   egress:
     # Allow communication within logging namespace
     - to:
         - namespaceSelector:
             matchLabels:
               name: logging
-    
+
     # Allow DNS resolution
     - to: []
       ports:
@@ -109,7 +109,7 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    
+
     # Allow external connections for index templates and license
     - to: []
       ports:
@@ -149,7 +149,7 @@ spec:
         - namespaceSelector:
             matchLabels:
               name: tracing
-    
+
     # Allow traces from all application namespaces
     - from: []
       ports:
@@ -169,7 +169,7 @@ spec:
           port: 6831   # Jaeger compact
         - protocol: UDP
           port: 6832   # Jaeger binary
-    
+
     # Allow ingress access to Jaeger UI
     - from:
         - namespaceSelector:
@@ -178,7 +178,7 @@ spec:
       ports:
         - protocol: TCP
           port: 16686
-    
+
     # Allow monitoring
     - from:
         - namespaceSelector:
@@ -193,14 +193,14 @@ spec:
           port: 8888   # OTEL collector metrics
         - protocol: TCP
           port: 8889   # OTEL prometheus exporter
-  
+
   egress:
     # Allow communication within tracing namespace
     - to:
         - namespaceSelector:
             matchLabels:
               name: tracing
-    
+
     # Allow connection to Elasticsearch in logging namespace
     - to:
         - namespaceSelector:
@@ -209,7 +209,7 @@ spec:
       ports:
         - protocol: TCP
           port: 9200
-    
+
     # Allow connection to Prometheus in monitoring namespace
     - to:
         - namespaceSelector:
@@ -218,7 +218,7 @@ spec:
       ports:
         - protocol: TCP
           port: 9090
-    
+
     # Allow DNS resolution
     - to: []
       ports:
@@ -226,7 +226,7 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
-    
+
     # Allow Kubernetes API access
     - to: []
       ports:

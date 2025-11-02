@@ -473,7 +473,7 @@ def execute(input_data):
     values = [row.get('value', 0) for row in data if 'value' in row]
     if not values:
         return {'error': 'No data available'}
-    
+
     return {
         'mean': statistics.mean(values),
         'median': statistics.median(values),
@@ -681,13 +681,13 @@ class LoadTestFramework:
                 conn.execute(
                     sa.text(
                         """
-                    INSERT INTO test_data (name, value, category) 
-                    SELECT 'test_' || generate_series, 
-                           (random() * 1000)::integer, 
-                           CASE (random() * 2)::integer 
-                               WHEN 0 THEN 'A' 
-                               WHEN 1 THEN 'B' 
-                               ELSE 'C' 
+                    INSERT INTO test_data (name, value, category)
+                    SELECT 'test_' || generate_series,
+                           (random() * 1000)::integer,
+                           CASE (random() * 2)::integer
+                               WHEN 0 THEN 'A'
+                               WHEN 1 THEN 'B'
+                               ELSE 'C'
                            END
                     FROM generate_series(1, 1000)
                 """
