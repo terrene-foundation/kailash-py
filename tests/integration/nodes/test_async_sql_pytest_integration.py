@@ -14,9 +14,8 @@ import os
 from typing import Any, Dict
 
 import pytest
-from sqlalchemy import Column, Integer, String, Text
-
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+from sqlalchemy import Column, Integer, String, Text
 
 # Global pool metrics to track across tests
 _pool_creation_count = 0

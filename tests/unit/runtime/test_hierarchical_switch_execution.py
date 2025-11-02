@@ -6,7 +6,6 @@ import asyncio
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from kailash.analysis import ConditionalBranchAnalyzer
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import SwitchNode
