@@ -45,7 +45,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import networkx as nx
 import psutil
-
 from kailash.nodes import Node
 from kailash.runtime.base import BaseRuntime
 from kailash.runtime.compatibility_reporter import CompatibilityReporter
