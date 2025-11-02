@@ -11,16 +11,16 @@ spec:
   replicas: 2  # High availability
   retention: 15d
   retentionSize: 45GB
-  
+
   # Service account with RBAC permissions
   serviceAccountName: prometheus
-  
+
   # Security context
   securityContext:
     runAsNonRoot: true
     runAsUser: 65534
     fsGroup: 65534
-  
+
   # Resource requirements
   resources:
     requests:
@@ -29,7 +29,7 @@ spec:
     limits:
       cpu: 2000m
       memory: 8Gi
-  
+
   # Persistent storage
   storage:
     volumeClaimTemplate:
@@ -39,27 +39,27 @@ spec:
           requests:
             storage: 50Gi
         storageClassName: fast
-  
+
   # Service monitor selector
   serviceMonitorSelector:
     matchLabels:
       prometheus: kailash
-  
+
   # Probe selector
   probeSelector:
     matchLabels:
       prometheus: kailash
-  
+
   # Rule selector
   ruleSelector:
     matchLabels:
       prometheus: kailash
-  
+
   # Pod monitor selector
   podMonitorSelector:
     matchLabels:
       prometheus: kailash
-  
+
   # AlertManager configuration
   alerting:
     alertmanagers:
@@ -67,34 +67,34 @@ spec:
         name: alertmanager-operated
         port: web
         pathPrefix: /
-  
+
   # Additional scrape configs
   additionalScrapeConfigs:
     name: additional-scrape-configs
     key: prometheus-additional.yaml
-  
+
   # External labels
   externalLabels:
     cluster: kailash
     environment: production
     region: us-central1
-  
+
   # Query configuration
   queryLogFile: /prometheus/query.log
-  
+
   # Web configuration
   web:
     pageTitle: "Kailash Prometheus"
-  
+
   # Enable admin API for debugging (disable in production)
   enableAdminAPI: false
-  
+
   # WAL compression
   walCompression: true
-  
+
   # Prometheus version
   version: v2.48.0
-  
+
   # Pod anti-affinity for HA
   affinity:
     podAntiAffinity:
@@ -106,14 +106,14 @@ spec:
                 values:
                   - prometheus
           topologyKey: kubernetes.io/hostname
-  
+
   # Tolerations for dedicated nodes
   tolerations:
     - key: monitoring
       operator: Equal
       value: "true"
       effect: NoSchedule
-  
+
   # Node selector
   nodeSelector:
     workload: monitoring
@@ -203,7 +203,7 @@ stringData:
         - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
           action: keep
           regex: default;kubernetes;https
-    
+
     # Scrape config for node metrics
     - job_name: 'kubernetes-nodes'
       kubernetes_sd_configs:
@@ -215,7 +215,7 @@ stringData:
       relabel_configs:
         - action: labelmap
           regex: __meta_kubernetes_node_label_(.+)
-    
+
     # Scrape config for cAdvisor
     - job_name: 'kubernetes-cadvisor'
       kubernetes_sd_configs:

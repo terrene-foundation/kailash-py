@@ -140,13 +140,13 @@ data:
   policy.yaml: |
     # Multi-factor authentication required
     mfa_required: true
-    
+
     # Role-based access control
     rbac_enabled: true
-    
+
     # Privileged access management
     pam_required: true
-    
+
     # Access review frequency
     access_review_days: 90
 ```
@@ -184,11 +184,11 @@ spec:
     - persistentVolumeClaim
     - secret
     - configMap
-  
+
   # Security context requirements
   runAsUser:
     rule: MustRunAsNonRoot
-  
+
   # Host network restrictions
   hostNetwork: false
   hostPorts:
@@ -327,7 +327,7 @@ spec:
               ./scan-soc2-controls.sh
               ./scan-hipaa-safeguards.sh
               ./scan-iso27001-controls.sh
-              
+
               # Upload results
               aws s3 cp results/ s3://compliance-evidence/ --recursive
 ```
@@ -416,7 +416,7 @@ class TestSOC2Compliance:
         assert check_rbac_enabled()
         assert check_mfa_required()
         assert check_privileged_access_logging()
-    
+
     def test_cc6_2_data_protection(self):
         """Test data transmission and disposal controls"""
         assert check_encryption_in_transit()
@@ -429,7 +429,7 @@ class TestHIPAACompliance:
         assert check_security_officer_assigned()
         assert check_workforce_training_completed()
         assert check_incident_response_procedures()
-    
+
     def test_technical_safeguards(self):
         """Test HIPAA technical safeguards"""
         assert check_access_control_implementation()
@@ -513,23 +513,23 @@ from compliance_framework import ComplianceReporter
 
 def generate_monthly_report():
     reporter = ComplianceReporter()
-    
+
     # SOC2 status
     soc2_status = reporter.get_soc2_status()
-    
+
     # HIPAA status
     hipaa_status = reporter.get_hipaa_status()
-    
+
     # ISO27001 status
     iso_status = reporter.get_iso27001_status()
-    
+
     # Generate PDF report
     report = reporter.create_report(
         frameworks=[soc2_status, hipaa_status, iso_status],
         period=datetime.now().strftime("%Y-%m"),
         template="monthly-compliance-report.html"
     )
-    
+
     return report
 ```
 

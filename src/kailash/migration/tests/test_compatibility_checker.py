@@ -33,14 +33,14 @@ def temp_project_dir():
                 """
             from kailash.runtime.local import LocalRuntime
             from kailash.workflow.builder import WorkflowBuilder
-            
+
             # Legacy configuration
             runtime = LocalRuntime(
                 enable_parallel=True,
                 thread_pool_size=10,
                 debug_mode=True
             )
-            
+
             # Legacy method usage
             workflow = WorkflowBuilder().build()
             runtime.execute_sync(workflow)
@@ -58,7 +58,7 @@ def temp_project_dir():
                 'timeout': 300,
                 'log_level': 'DEBUG'
             }
-            
+
             def get_runtime():
                 from kailash.runtime.local import LocalRuntime
                 return LocalRuntime(**RUNTIME_CONFIG)
@@ -71,7 +71,7 @@ def temp_project_dir():
                 """
             from kailash.runtime.local import LocalRuntime
             from kailash.access_control import UserContext
-            
+
             # Modern configuration
             user_context = UserContext(user_id="test")
             runtime = LocalRuntime(
@@ -91,7 +91,7 @@ def temp_project_dir():
             textwrap.dedent(
                 """
             from kailash.runtime.local import LocalRuntime
-            
+
             # More deprecated usage
             runtime = LocalRuntime(
                 enable_parallel=False,

@@ -42,7 +42,7 @@ locals {
   project_id   = var.project_id
   region       = var.region
   cluster_name = "${var.project_name}-${var.environment}"
-  
+
   common_labels = {
     project     = var.project_name
     environment = var.environment
@@ -58,18 +58,18 @@ module "vpc" {
   project_id   = local.project_id
   region       = local.region
   network_name = "${local.cluster_name}-vpc"
-  
+
   # CIDR ranges for different environments
   primary_cidr     = var.vpc_cidr
   pods_cidr        = var.pods_cidr
   services_cidr    = var.services_cidr
   master_cidr      = var.master_cidr
-  
+
   # Enable required APIs
   enable_flow_logs        = true
   enable_private_google_access = true
   enable_cloud_nat        = true
-  
+
   labels = local.common_labels
 }
 
@@ -80,20 +80,20 @@ module "gke" {
   project_id     = local.project_id
   location       = var.regional_cluster ? local.region : var.zones[0]
   cluster_name   = local.cluster_name
-  
+
   # Network configuration
   network         = module.vpc.network_name
   subnetwork      = module.vpc.subnet_name
   pods_range      = module.vpc.pods_range_name
   services_range  = module.vpc.services_range_name
   master_ipv4_cidr_block = var.master_cidr
-  
+
   # Cluster configuration
   kubernetes_version      = var.kubernetes_version
   release_channel        = var.release_channel
   regional               = var.regional_cluster
   zones                  = var.zones
-  
+
   # Security settings
   enable_private_nodes      = true
   enable_private_endpoint   = false # Set to true for fully private cluster
@@ -101,7 +101,7 @@ module "gke" {
   enable_shielded_nodes     = true
   enable_workload_identity  = true
   enable_binary_authorization = true
-  
+
   # Features
   enable_horizontal_pod_autoscaling = true
   enable_vertical_pod_autoscaling   = true
@@ -112,24 +112,24 @@ module "gke" {
     min_memory_gb = var.min_memory_gb
     max_memory_gb = var.max_memory_gb
   }
-  
+
   # Node pools configuration
   node_pools = var.node_pools
-  
+
   # Monitoring and logging
   enable_stackdriver_kubernetes_engine_monitoring = true
   logging_config = ["SYSTEM_COMPONENTS", "WORKLOADS", "API_SERVER"]
   monitoring_config = ["SYSTEM_COMPONENTS", "WORKLOADS", "API_SERVER"]
-  
+
   # Maintenance window
   maintenance_window = {
     start_time = var.maintenance_window_start
     end_time   = var.maintenance_window_end
     recurrence = var.maintenance_window_recurrence
   }
-  
+
   labels = local.common_labels
-  
+
   depends_on = [module.vpc]
 }
 
@@ -140,14 +140,14 @@ module "cloud_sql" {
   project_id   = local.project_id
   region       = local.region
   name         = "${local.cluster_name}-db"
-  
+
   # Database configuration
   database_version = var.database_version
   tier            = var.database_tier
-  
+
   # High availability
   availability_type = var.database_availability_type
-  
+
   # Backup configuration
   backup_configuration = {
     enabled                        = true
@@ -158,21 +158,21 @@ module "cloud_sql" {
     retained_backups              = 30
     retention_unit                = "COUNT"
   }
-  
+
   # Network configuration
   network = module.vpc.network_self_link
   private_ip_enabled = true
   require_ssl = true
-  
+
   # Database flags for security and performance
   database_flags = var.database_flags
-  
+
   # Users and databases
   databases = var.databases
   users     = var.database_users
-  
+
   labels = local.common_labels
-  
+
   depends_on = [module.vpc]
 }
 
@@ -183,30 +183,30 @@ module "memorystore" {
   project_id = local.project_id
   region     = local.region
   name       = "${local.cluster_name}-redis"
-  
+
   # Redis configuration
   tier           = var.redis_tier
   memory_size_gb = var.redis_memory_size_gb
   redis_version  = var.redis_version
-  
+
   # Network configuration
   network = module.vpc.network_self_link
-  
+
   # High availability
   replica_count = var.redis_tier == "STANDARD_HA" ? var.redis_replica_count : 0
   read_replicas_mode = var.redis_read_replicas_mode
-  
+
   # Redis configuration parameters
   redis_configs = var.redis_configs
-  
+
   # Maintenance window
   maintenance_window = {
     day_of_week = var.redis_maintenance_window_day
     start_time  = var.redis_maintenance_window_time
   }
-  
+
   labels = local.common_labels
-  
+
   depends_on = [module.vpc]
 }
 
@@ -216,7 +216,7 @@ module "gcs" {
 
   project_id = local.project_id
   location   = local.region
-  
+
   # Bucket configurations
   buckets = {
     # Application data bucket
@@ -234,7 +234,7 @@ module "gcs" {
       versioning = true
       encryption_key = var.kms_key_name
     }
-    
+
     # Backup bucket
     "${local.cluster_name}-backups" = {
       storage_class = "NEARLINE"
@@ -249,7 +249,7 @@ module "gcs" {
       versioning = true
       encryption_key = var.kms_key_name
     }
-    
+
     # Logs bucket
     "${local.cluster_name}-logs" = {
       storage_class = "STANDARD"
@@ -266,10 +266,10 @@ module "gcs" {
       encryption_key = var.kms_key_name
     }
   }
-  
+
   # Uniform bucket-level access
   uniform_bucket_level_access = true
-  
+
   labels = local.common_labels
 }
 
@@ -279,10 +279,10 @@ module "iam" {
 
   project_id   = local.project_id
   cluster_name = module.gke.cluster_name
-  
+
   # Workload Identity configuration
   workload_identity_namespace = local.project_id
-  
+
   # Service accounts for different workloads
   service_accounts = {
     # Application service account
@@ -298,7 +298,7 @@ module "iam" {
       ]
       k8s_namespaces = ["default", "kailash-system"]
     }
-    
+
     # Vault service account
     "vault" = {
       display_name = "HashiCorp Vault"
@@ -309,7 +309,7 @@ module "iam" {
       ]
       k8s_namespaces = ["vault-system"]
     }
-    
+
     # External Secrets Operator
     "external-secrets" = {
       display_name = "External Secrets Operator"
@@ -318,7 +318,7 @@ module "iam" {
       ]
       k8s_namespaces = ["external-secrets-system"]
     }
-    
+
     # Monitoring service account
     "monitoring" = {
       display_name = "Monitoring Stack"
@@ -330,7 +330,7 @@ module "iam" {
       k8s_namespaces = ["monitoring"]
     }
   }
-  
+
   depends_on = [module.gke]
 }
 
@@ -340,25 +340,25 @@ module "monitoring" {
 
   project_id   = local.project_id
   cluster_name = module.gke.cluster_name
-  
+
   # Monitoring workspace
   create_workspace = var.create_monitoring_workspace
   workspace_name   = "${local.cluster_name}-monitoring"
-  
+
   # Alert policies
   alert_policies = var.alert_policies
-  
+
   # Uptime checks
   uptime_checks = var.uptime_checks
-  
+
   # Custom dashboards
   dashboards = var.monitoring_dashboards
-  
+
   # Notification channels
   notification_channels = var.notification_channels
-  
+
   labels = local.common_labels
-  
+
   depends_on = [module.gke]
 }
 
@@ -388,7 +388,7 @@ resource "kubernetes_namespace" "namespaces" {
       name = each.value
     })
   }
-  
+
   depends_on = [module.gke]
 }
 

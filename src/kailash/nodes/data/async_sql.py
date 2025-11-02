@@ -42,7 +42,6 @@ from enum import Enum
 from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
 import yaml
-
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
@@ -1323,6 +1322,15 @@ class MySQLAdapter(DatabaseAdapter):
             async with conn.cursor() as cursor:
                 await cursor.execute(query, params)
 
+                # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
+                query_type = query.strip().upper().split()[0] if query.strip() else ""
+
+                if query_type in ("DELETE", "UPDATE", "INSERT"):
+                    # Capture rowcount for DML operations
+                    rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+                    # Use list format to match PostgreSQL adapter
+                    return [{"rows_affected": rowcount}]
+
                 if fetch_mode == FetchMode.ONE:
                     row = await cursor.fetchone()
                     if row and cursor.description:
@@ -1351,6 +1359,18 @@ class MySQLAdapter(DatabaseAdapter):
             async with self._pool.acquire() as conn:
                 async with conn.cursor() as cursor:
                     await cursor.execute(query, params)
+
+                    # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
+                    query_type = (
+                        query.strip().upper().split()[0] if query.strip() else ""
+                    )
+
+                    if query_type in ("DELETE", "UPDATE", "INSERT"):
+                        # Capture rowcount for DML operations
+                        rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+                        await conn.commit()  # Commit DML operations
+                        # Use list format to match PostgreSQL adapter
+                        return [{"rows_affected": rowcount}]
 
                     if fetch_mode == FetchMode.ONE:
                         row = await cursor.fetchone()
@@ -1529,6 +1549,15 @@ class SQLiteAdapter(DatabaseAdapter):
             db = transaction
             cursor = await db.execute(query, params or [])
 
+            # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
+            query_type = query.strip().upper().split()[0] if query.strip() else ""
+
+            if query_type in ("DELETE", "UPDATE", "INSERT"):
+                # Capture rowcount for DML operations
+                rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+                # Use list format to match PostgreSQL/MySQL adapters
+                return [{"rows_affected": rowcount}]
+
             if fetch_mode == FetchMode.ONE:
                 row = await cursor.fetchone()
                 result = self._convert_row(dict(row)) if row else None
@@ -1544,7 +1573,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 result = []
 
             # Check if this was an INSERT and capture lastrowid for SQLite
-            if query.strip().upper().startswith("INSERT") and (
+            if query_type == "INSERT" and (
                 not result or result == [] or result is None
             ):
                 # For INSERT without RETURNING, capture lastrowid
@@ -1559,6 +1588,16 @@ class SQLiteAdapter(DatabaseAdapter):
                 # Use shared connection for memory databases
                 db = await self._get_connection()
                 cursor = await db.execute(query, params or [])
+
+                # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
+                query_type = query.strip().upper().split()[0] if query.strip() else ""
+
+                if query_type in ("DELETE", "UPDATE", "INSERT"):
+                    # Capture rowcount for DML operations
+                    rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+                    await db.commit()
+                    # Use list format to match PostgreSQL/MySQL adapters
+                    return [{"rows_affected": rowcount}]
 
                 if fetch_mode == FetchMode.ONE:
                     row = await cursor.fetchone()
@@ -1575,9 +1614,7 @@ class SQLiteAdapter(DatabaseAdapter):
                     result = []
 
                 # Check if this was an INSERT and capture lastrowid for SQLite
-                if query.strip().upper().startswith("INSERT") and (
-                    not result or result == []
-                ):
+                if query_type == "INSERT" and (not result or result == []):
                     # For INSERT without RETURNING, capture lastrowid
                     lastrowid = (
                         cursor.lastrowid if hasattr(cursor, "lastrowid") else None
@@ -1594,11 +1631,25 @@ class SQLiteAdapter(DatabaseAdapter):
                     db.row_factory = self._aiosqlite.Row
                     cursor = await db.execute(query, params or [])
 
+                    # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
+                    query_type = (
+                        query.strip().upper().split()[0] if query.strip() else ""
+                    )
+
+                    if query_type in ("DELETE", "UPDATE", "INSERT"):
+                        # Capture rowcount for DML operations
+                        rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+                        await db.commit()
+                        # Use list format to match PostgreSQL/MySQL adapters
+                        return [{"rows_affected": rowcount}]
+
                     if fetch_mode == FetchMode.ONE:
                         row = await cursor.fetchone()
+                        await db.commit()
                         return self._convert_row(dict(row)) if row else None
                     elif fetch_mode == FetchMode.ALL:
                         rows = await cursor.fetchall()
+                        await db.commit()
                         return [self._convert_row(dict(row)) for row in rows]
                     elif fetch_mode == FetchMode.MANY:
                         if not fetch_size:
@@ -1609,9 +1660,7 @@ class SQLiteAdapter(DatabaseAdapter):
                         result = []
 
                     # Check if this was an INSERT and capture lastrowid for SQLite
-                    if query.strip().upper().startswith("INSERT") and (
-                        not result or result == []
-                    ):
+                    if query_type == "INSERT" and (not result or result == []):
                         # For INSERT without RETURNING, capture lastrowid
                         lastrowid = (
                             cursor.lastrowid if hasattr(cursor, "lastrowid") else None

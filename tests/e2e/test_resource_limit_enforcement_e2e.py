@@ -516,7 +516,7 @@ result = {
                     "connection_string": "postgresql://test:test@localhost:5432/test_db",
                     "query": """
                     WITH report_data AS (
-                        SELECT 
+                        SELECT
                             'production_load_test' as report_type,
                             NOW() as generated_at,
                             random() * 100 as metric_value

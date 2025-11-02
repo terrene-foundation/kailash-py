@@ -58,7 +58,7 @@ locals {
   resource_group_name = "${var.project_name}-${var.environment}-rg"
   cluster_name        = "${var.project_name}-${var.environment}-aks"
   location            = var.location
-  
+
   common_tags = merge(var.tags, {
     project     = var.project_name
     environment = var.environment
@@ -81,10 +81,10 @@ module "vnet" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   vnet_name           = "${local.cluster_name}-vnet"
-  
+
   # Address spaces
   address_space = [var.vnet_cidr]
-  
+
   # Subnets
   subnets = {
     aks-nodes = {
@@ -121,13 +121,13 @@ module "vnet" {
       }
     }
   }
-  
+
   # Network Security Groups
   enable_network_security_groups = true
-  
+
   # DDoS Protection
   enable_ddos_protection = var.enable_ddos_protection
-  
+
   tags = local.common_tags
 }
 
@@ -138,19 +138,19 @@ module "aks" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   cluster_name        = local.cluster_name
-  
+
   # Kubernetes version
   kubernetes_version = var.kubernetes_version
-  
+
   # Network configuration
   vnet_subnet_id = module.vnet.subnet_ids["aks-nodes"]
   network_plugin = "azure"
   network_policy = "calico"
-  
+
   # Service CIDR (internal Kubernetes services)
   service_cidr   = var.service_cidr
   dns_service_ip = var.dns_service_ip
-  
+
   # Default node pool
   default_node_pool = {
     name                = "system"
@@ -166,32 +166,32 @@ module "aks" {
     }
     node_taints = ["CriticalAddonsOnly=true:NoSchedule"]
   }
-  
+
   # Additional node pools
   node_pools = var.node_pools
-  
+
   # Identity and RBAC
   identity_type = "SystemAssigned"
   rbac_enabled  = true
-  
+
   # Azure AD integration
   azure_ad_enabled = var.azure_ad_enabled
   admin_group_ids  = var.admin_group_ids
-  
+
   # Add-ons
   enable_http_application_routing = false
   enable_azure_policy            = true
   enable_oms_agent               = true
   log_analytics_workspace_id     = azurerm_log_analytics_workspace.main.id
-  
+
   # Security
   enable_host_encryption = true
   private_cluster_enabled = var.private_cluster_enabled
   authorized_ip_ranges    = var.authorized_ip_ranges
-  
+
   # Maintenance window
   maintenance_window = var.maintenance_window
-  
+
   # Auto-scaler profile
   auto_scaler_profile = {
     balance_similar_node_groups      = true
@@ -209,9 +209,9 @@ module "aks" {
     scale_down_unready              = "20m"
     scale_down_utilization_threshold = 0.5
   }
-  
+
   tags = local.common_tags
-  
+
   depends_on = [module.vnet]
 }
 
@@ -222,7 +222,7 @@ resource "azurerm_log_analytics_workspace" "main" {
   resource_group_name = azurerm_resource_group.main.name
   sku                 = "PerGB2018"
   retention_in_days   = var.log_retention_days
-  
+
   tags = local.common_tags
 }
 
@@ -233,35 +233,35 @@ module "postgresql" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   server_name         = "${local.cluster_name}-postgresql"
-  
+
   # PostgreSQL configuration
   postgresql_version = var.postgresql_version
   sku_name          = var.postgresql_sku_name
   storage_mb        = var.postgresql_storage_mb
-  
+
   # High availability
   zone_redundant = var.postgresql_zone_redundant
-  
+
   # Backup configuration
   backup_retention_days        = var.postgresql_backup_retention_days
   geo_redundant_backup_enabled = var.postgresql_geo_redundant_backup
-  
+
   # Network configuration
   delegated_subnet_id = module.vnet.subnet_ids["postgresql"]
   private_dns_zone_id = azurerm_private_dns_zone.postgresql.id
-  
+
   # Databases and users
   databases = var.postgresql_databases
-  
+
   # Server parameters
   postgresql_configurations = var.postgresql_configurations
-  
+
   # Security
   ssl_enforcement_enabled       = true
   ssl_minimal_tls_version      = "TLS1_2"
-  
+
   tags = local.common_tags
-  
+
   depends_on = [module.vnet]
 }
 
@@ -272,19 +272,19 @@ module "redis" {
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   redis_name          = "${local.cluster_name}-redis"
-  
+
   # Redis configuration
   capacity       = var.redis_capacity
   family         = var.redis_family
   sku_name       = var.redis_sku_name
-  
+
   # Network configuration
   subnet_id = module.vnet.subnet_ids["aks-nodes"]
-  
+
   # Redis configuration
   enable_non_ssl_port = false
   minimum_tls_version = "1.2"
-  
+
   redis_configuration = merge(
     {
       maxmemory_policy       = "allkeys-lru"
@@ -295,15 +295,15 @@ module "redis" {
     },
     var.redis_configuration
   )
-  
+
   # Zones for redundancy
   zones = var.redis_sku_name == "Premium" ? var.availability_zones : []
-  
+
   # Patch schedule
   patch_schedule = var.redis_patch_schedule
-  
+
   tags = local.common_tags
-  
+
   depends_on = [module.vnet]
 }
 
@@ -313,7 +313,7 @@ module "storage" {
 
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
-  
+
   storage_accounts = {
     "${replace(local.cluster_name, "-", "")}data" = {
       account_tier             = "Standard"
@@ -321,7 +321,7 @@ module "storage" {
       account_kind            = "StorageV2"
       enable_https_traffic_only = true
       min_tls_version         = "TLS1_2"
-      
+
       containers = [
         {
           name                  = "backups"
@@ -332,15 +332,15 @@ module "storage" {
           container_access_type = "private"
         }
       ]
-      
+
       lifecycle_rules = [
         {
           name    = "archiveoldbackups"
           enabled = true
           prefix_match = ["backups/"]
-          
+
           blob_types = ["blockBlob"]
-          
+
           tier_to_cool_after_days    = 30
           tier_to_archive_after_days = 90
           delete_after_days          = 365
@@ -348,7 +348,7 @@ module "storage" {
       ]
     }
   }
-  
+
   # Network rules
   network_rules = {
     default_action = "Deny"
@@ -356,7 +356,7 @@ module "storage" {
     ip_rules       = var.storage_allowed_ips
     subnet_ids     = [module.vnet.subnet_ids["aks-nodes"]]
   }
-  
+
   tags = local.common_tags
 }
 
@@ -367,21 +367,21 @@ resource "azurerm_key_vault" "main" {
   resource_group_name = azurerm_resource_group.main.name
   tenant_id           = data.azurerm_client_config.current.tenant_id
   sku_name            = "standard"
-  
+
   enabled_for_deployment          = true
   enabled_for_disk_encryption     = true
   enabled_for_template_deployment = true
   enable_rbac_authorization       = true
   purge_protection_enabled        = true
   soft_delete_retention_days      = 90
-  
+
   network_acls {
     default_action = "Deny"
     bypass         = "AzureServices"
     ip_rules       = var.keyvault_allowed_ips
     virtual_network_subnet_ids = [module.vnet.subnet_ids["aks-nodes"]]
   }
-  
+
   tags = local.common_tags
 }
 
@@ -392,18 +392,18 @@ resource "azurerm_container_registry" "main" {
   location            = azurerm_resource_group.main.location
   sku                 = var.acr_sku
   admin_enabled       = false
-  
+
   georeplications = var.acr_sku == "Premium" ? var.acr_georeplications : []
-  
+
   retention_policy {
     days    = var.acr_retention_days
     enabled = true
   }
-  
+
   trust_policy {
     enabled = var.acr_sku == "Premium" ? true : false
   }
-  
+
   tags = local.common_tags
 }
 
@@ -429,20 +429,20 @@ module "monitoring" {
   resource_group_name    = azurerm_resource_group.main.name
   location              = azurerm_resource_group.main.location
   log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
-  
+
   # Application Insights
   create_application_insights = var.create_application_insights
   application_insights_name   = "${local.cluster_name}-insights"
-  
+
   # Action Groups
   action_groups = var.action_groups
-  
+
   # Metric Alerts
   metric_alerts = var.metric_alerts
-  
+
   # Log Alerts
   log_alerts = var.log_alerts
-  
+
   tags = local.common_tags
 }
 
@@ -474,7 +474,7 @@ resource "kubernetes_namespace" "namespaces" {
       name = each.value
     })
   }
-  
+
   depends_on = [module.aks]
 }
 

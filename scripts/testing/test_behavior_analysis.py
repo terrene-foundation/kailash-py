@@ -11,7 +11,6 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import numpy as np
 import pytest
-
 from kailash.nodes.security.behavior_analysis import BehaviorAnalysisNode
 
 

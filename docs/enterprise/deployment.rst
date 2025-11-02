@@ -25,7 +25,7 @@ Quick Example
 
    # Kubernetes deployment example
    from kailash.runtime.kubernetes import KubernetesRuntime
-   
+
    runtime = KubernetesRuntime(
        namespace="production",
        replicas=3,

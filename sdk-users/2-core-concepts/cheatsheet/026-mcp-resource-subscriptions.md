@@ -187,11 +187,11 @@ manager = ResourceSubscriptionManager()
 # Add data enrichment
 enrichment_transformer = DataEnrichmentTransformer()
 enrichment_transformer.add_enrichment(
-    "file_size_mb", 
+    "file_size_mb",
     lambda data: len(str(data.get('content', ''))) / 1024 / 1024
 )
 enrichment_transformer.add_enrichment(
-    "last_accessed", 
+    "last_accessed",
     lambda data: get_last_access_time(data.get('uri'))
 )
 
@@ -298,13 +298,13 @@ server = MCPServer(
 ```
 
 **Configuration Options:**
-- `compression_threshold`: Minimum message size to compress (bytes) 
+- `compression_threshold`: Minimum message size to compress (bytes)
 - `compression_level`: Gzip compression level (1=fast, 9=best compression)
 - `enable_websocket_compression`: Enable/disable compression globally
 
 **Performance Benefits:**
 - 60-80% bandwidth reduction for large JSON payloads
-- Improved performance on slower network connections  
+- Improved performance on slower network connections
 - Reduced server egress costs in cloud deployments
 - Automatic adaptation based on message size
 
@@ -351,7 +351,7 @@ services:
     image: redis:alpine
     ports:
       - "6379:6379"
-  
+
   mcp-server-1:
     build: .
     environment:
@@ -362,7 +362,7 @@ services:
       - "3001:3001"
     depends_on:
       - redis
-  
+
   mcp-server-2:
     build: .
     environment:
@@ -437,15 +437,15 @@ from kailash.mcp_server.subscriptions import ResourceSubscriptionManager
 class CustomSubscriptionManager(ResourceSubscriptionManager):
     async def process_resource_change(self, change):
         """Custom change processing with business logic."""
-        
+
         # Add custom validation
         if change.uri.startswith("sensitive://"):
             # Special handling for sensitive resources
             await self._handle_sensitive_change(change)
-        
+
         # Call parent implementation
         await super().process_resource_change(change)
-    
+
     async def _handle_sensitive_change(self, change):
         """Custom handling for sensitive resources."""
         # Log security event
@@ -470,18 +470,18 @@ class MCPClient:
         self.uri = uri
         self.websocket = None
         self.subscriptions = {}
-        
+
     async def connect(self):
         self.websocket = await websockets.connect(self.uri)
         await self._initialize()
-    
+
     async def _initialize(self):
         await self._send_request("initialize", {
             "protocolVersion": "2024-11-05",
             "capabilities": {"resources": {"subscribe": True}},
             "clientInfo": {"name": "python-client", "version": "1.0.0"}
         })
-    
+
     async def subscribe(self, uri_pattern):
         response = await self._send_request("resources/subscribe", {
             "uri": uri_pattern
@@ -489,7 +489,7 @@ class MCPClient:
         subscription_id = response["result"]["subscriptionId"]
         self.subscriptions[subscription_id] = uri_pattern
         return subscription_id
-    
+
     async def _send_request(self, method, params):
         request = {
             "jsonrpc": "2.0",
@@ -500,7 +500,7 @@ class MCPClient:
         await self.websocket.send(json.dumps(request))
         response = await self.websocket.recv()
         return json.loads(response)
-    
+
     async def listen_for_notifications(self):
         async for message in self.websocket:
             data = json.loads(message)
@@ -511,10 +511,10 @@ class MCPClient:
 async def main():
     client = MCPClient("ws://localhost:3001")
     await client.connect()
-    
+
     # Subscribe to resources
     await client.subscribe("file://*.json")
-    
+
     # Listen for changes
     async for notification in client.listen_for_notifications():
         print(f"Resource changed: {notification['params']['uri']}")
@@ -534,10 +534,10 @@ class MCPClient {
         this.subscriptions = new Map();
         this.requestId = 0;
     }
-    
+
     async connect() {
         this.ws = new WebSocket(this.uri);
-        
+
         return new Promise((resolve) => {
             this.ws.on('open', async () => {
                 await this.initialize();
@@ -545,7 +545,7 @@ class MCPClient {
             });
         });
     }
-    
+
     async initialize() {
         await this.sendRequest('initialize', {
             protocolVersion: '2024-11-05',
@@ -553,17 +553,17 @@ class MCPClient {
             clientInfo: { name: 'nodejs-client', version: '1.0.0' }
         });
     }
-    
+
     async subscribe(uriPattern) {
         const response = await this.sendRequest('resources/subscribe', {
             uri: uriPattern
         });
-        
+
         const subscriptionId = response.result.subscriptionId;
         this.subscriptions.set(subscriptionId, uriPattern);
         return subscriptionId;
     }
-    
+
     async sendRequest(method, params) {
         const request = {
             jsonrpc: '2.0',
@@ -571,7 +571,7 @@ class MCPClient {
             method,
             params
         };
-        
+
         return new Promise((resolve) => {
             const handler = (data) => {
                 const message = JSON.parse(data);
@@ -580,12 +580,12 @@ class MCPClient {
                     resolve(message);
                 }
             };
-            
+
             this.ws.on('message', handler);
             this.ws.send(JSON.stringify(request));
         });
     }
-    
+
     onNotification(callback) {
         this.ws.on('message', (data) => {
             const message = JSON.parse(data);
@@ -600,10 +600,10 @@ class MCPClient {
 async function main() {
     const client = new MCPClient('ws://localhost:3001');
     await client.connect();
-    
+
     // Subscribe to resources
     await client.subscribe('config://*');
-    
+
     // Listen for notifications
     client.onNotification((notification) => {
         console.log('Resource changed:', notification.params.uri);
@@ -680,7 +680,7 @@ def user_data_resource(user_id):
     current_user = get_current_user()  # From auth context
     if current_user["id"] != user_id and not current_user.get("is_admin"):
         raise PermissionError("Access denied")
-    
+
     return load_user_data(user_id)
 
 # Pattern-based access control
@@ -725,35 +725,35 @@ class BatchingSubscriptionManager(ResourceSubscriptionManager):
         self.batch_timeout = batch_timeout
         self._pending_changes = []
         self._batch_task = None
-    
+
     async def process_resource_change(self, change):
         """Batch resource changes for efficiency."""
         self._pending_changes.append(change)
-        
+
         if len(self._pending_changes) >= self.batch_size:
             await self._flush_batch()
         elif not self._batch_task:
             self._batch_task = asyncio.create_task(
                 self._auto_flush_batch()
             )
-    
+
     async def _auto_flush_batch(self):
         """Auto-flush batch after timeout."""
         await asyncio.sleep(self.batch_timeout)
         await self._flush_batch()
-    
+
     async def _flush_batch(self):
         """Flush pending changes."""
         if not self._pending_changes:
             return
-        
+
         changes = self._pending_changes.copy()
         self._pending_changes.clear()
-        
+
         if self._batch_task:
             self._batch_task.cancel()
             self._batch_task = None
-        
+
         # Process all changes
         for change in changes:
             await super().process_resource_change(change)
@@ -776,15 +776,15 @@ server = MCPServer(
 def monitor_subscriptions():
     """Monitor subscription memory usage."""
     manager = server.subscription_manager
-    
+
     metrics = {
         "active_subscriptions": len(manager._subscriptions),
         "connections": len(manager._connection_subscriptions),
         "patterns": len(manager._pattern_index)
     }
-    
+
     logger.info(f"Subscription metrics: {metrics}")
-    
+
     # Alert if memory usage is high
     if metrics["active_subscriptions"] > 10000:
         logger.warning("High subscription count detected")
@@ -799,7 +799,7 @@ def monitor_subscriptions():
    # Check server configuration
    assert server.enable_subscriptions is True
    assert server.subscription_manager is not None
-   
+
    # Verify WebSocket transport
    assert server.transport == "websocket"
    ```
@@ -809,10 +809,10 @@ def monitor_subscriptions():
    # Verify subscription exists
    subscription = server.subscription_manager.get_subscription(sub_id)
    assert subscription is not None
-   
+
    # Check URI pattern matching
    assert subscription.matches_uri("file:///test.json")
-   
+
    # Verify notification callback is set
    assert server.subscription_manager._notification_callback is not None
    ```
@@ -823,7 +823,7 @@ def monitor_subscriptions():
    metrics = server.subscription_manager.get_metrics()
    print(f"Subscriptions: {metrics['active_subscriptions']}")
    print(f"Notifications sent: {metrics['notifications_sent']}")
-   
+
    # Check for subscription leaks
    if metrics['active_subscriptions'] > expected_count:
        # Cleanup orphaned subscriptions
@@ -837,12 +837,12 @@ def monitor_subscriptions():
    # Verify field selection is enabled
    subscription = manager.get_subscription(sub_id)
    assert subscription.fields is not None
-   
+
    # Check field path validity
    test_data = {"user": {"profile": {"name": "test"}}}
    result = subscription.apply_field_selection(test_data)
    assert "user.profile.name" in str(result)
-   
+
    # Debug field selection
    print(f"Requested fields: {subscription.fields}")
    print(f"Fragments: {subscription.fragments}")
@@ -853,13 +853,13 @@ def monitor_subscriptions():
    # Check pipeline configuration
    pipeline = manager.transformation_pipeline
    assert len(pipeline.transformers) > 0
-   
+
    # Test individual transformers
    for transformer in pipeline.transformers:
        if transformer.enabled:
            test_result = await transformer.transform(test_data, {})
            print(f"Transformer {transformer.id}: {test_result}")
-   
+
    # Check transformation errors
    if hasattr(pipeline, '_last_error'):
        print(f"Pipeline error: {pipeline._last_error}")
@@ -870,12 +870,12 @@ def monitor_subscriptions():
    # Check batch results
    result = await manager.create_batch_subscriptions(batch_data, conn_id)
    print(f"Success rate: {result['total_created']}/{result['total_requested']}")
-   
+
    # Examine individual failures
    for item in result['results']:
        if item['status'] == 'failed':
            print(f"Failed subscription: {item['name']} - {item['error']}")
-   
+
    # Verify connection limits
    active_subs = await manager.get_connection_subscriptions(conn_id)
    print(f"Active subscriptions for connection: {len(active_subs)}")
@@ -886,13 +886,13 @@ def monitor_subscriptions():
    # Check compression configuration
    assert server.enable_websocket_compression is True
    assert server.compression_threshold > 0
-   
+
    # Monitor compression effectiveness
    stats = server.get_compression_stats()
    print(f"Messages compressed: {stats['messages_compressed']}")
    print(f"Average compression ratio: {stats['avg_compression_ratio']}")
    print(f"Total bandwidth saved: {stats['bytes_saved']}")
-   
+
    # Debug compression decisions
    message_size = len(json.dumps(large_notification))
    should_compress = message_size > server.compression_threshold
@@ -907,19 +907,19 @@ def monitor_subscriptions():
        print("Redis connection: OK")
    except Exception as e:
        print(f"Redis connection failed: {e}")
-   
+
    # Monitor instance health
    stats = manager.get_distributed_stats()
    print(f"Live instances: {len(stats['other_instances'])}")
    print(f"Distributed subscriptions: {stats['total_distributed_subscriptions']}")
-   
+
    # Check heartbeat status
    for instance_id in stats['other_instances']:
        last_heartbeat = await manager.redis_client.hget(
            f"mcp:instances:{instance_id}", "last_heartbeat"
        )
        print(f"Instance {instance_id} last heartbeat: {last_heartbeat}")
-   
+
    # Verify subscription replication
    local_subs = set(manager._subscriptions.keys())
    redis_subs = await manager.redis_client.smembers(
@@ -970,8 +970,8 @@ print(f"Subscription stats: {debug_info['subscriptions']}")
 class ResourceSubscriptionManager:
     # Basic subscription management
     async def create_subscription(
-        self, 
-        connection_id: str, 
+        self,
+        connection_id: str,
         uri_pattern: str,
         user_context: Optional[Dict[str, Any]] = None,
         cursor: Optional[str] = None,
@@ -979,26 +979,26 @@ class ResourceSubscriptionManager:
         fragments: Optional[Dict[str, List[str]]] = None  # Fragment definitions
     ) -> str:
         """Create a new resource subscription."""
-    
+
     async def remove_subscription(
-        self, 
-        subscription_id: str, 
+        self,
+        subscription_id: str,
         connection_id: str
     ) -> bool:
         """Remove a subscription."""
-    
+
     async def process_resource_change(
-        self, 
+        self,
         change: ResourceChange
     ) -> None:
         """Process and notify about resource changes."""
-    
+
     async def cleanup_connection(
-        self, 
+        self,
         connection_id: str
     ) -> int:
         """Clean up all subscriptions for a connection."""
-    
+
     # Phase 2: Batch operations
     async def create_batch_subscriptions(
         self,
@@ -1007,7 +1007,7 @@ class ResourceSubscriptionManager:
         user_context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Create multiple subscriptions in a single batch operation."""
-    
+
     async def remove_batch_subscriptions(
         self,
         subscription_ids: List[str],
@@ -1019,14 +1019,14 @@ class ResourceSubscriptionManager:
 class TransformationPipeline:
     def add_transformer(self, transformer: ResourceTransformer) -> None:
         """Add a transformer to the pipeline."""
-    
+
     def remove_transformer(self, transformer_id: str) -> bool:
         """Remove a transformer from the pipeline."""
-    
+
     async def apply(
-        self, 
-        resource_data: Dict[str, Any], 
-        uri: str, 
+        self,
+        resource_data: Dict[str, Any],
+        uri: str,
         subscription: ResourceSubscription
     ) -> Dict[str, Any]:
         """Apply all transformations to resource data."""
@@ -1034,8 +1034,8 @@ class TransformationPipeline:
 class ResourceTransformer(ABC):
     @abstractmethod
     async def transform(
-        self, 
-        resource_data: Dict[str, Any], 
+        self,
+        resource_data: Dict[str, Any],
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
         """Transform resource data."""
@@ -1052,13 +1052,13 @@ class DistributedSubscriptionManager(ResourceSubscriptionManager):
         instance_timeout: int = 90
     ):
         """Initialize distributed subscription manager."""
-    
+
     async def initialize(self) -> None:
         """Initialize Redis connections and start background tasks."""
-    
+
     async def shutdown(self) -> None:
         """Shutdown distributed coordination."""
-    
+
     def get_distributed_stats(self) -> Dict[str, Any]:
         """Get statistics about distributed subscription state."""
 ```
@@ -1203,7 +1203,7 @@ Resource subscriptions provide **real-time notifications** with comprehensive Ph
 
 ### Phase 1: Foundation
 - **Real-time notifications** via WebSocket transport
-- **Wildcard pattern matching** for flexible resource selection  
+- **Wildcard pattern matching** for flexible resource selection
 - **Cursor-based pagination** for efficient resource listing
 - **Enterprise security** with authentication, authorization, and rate limiting
 - **Performance optimization** with connection pooling and memory management

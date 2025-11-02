@@ -99,12 +99,12 @@ spec:
         runAsUser: 65534
         runAsGroup: 65534
         fsGroup: 65534
-      
+
       containers:
         - name: velero
           image: velero/velero:v1.12.2
           imagePullPolicy: IfNotPresent
-          
+
           command:
             - /velero
           args:
@@ -121,7 +121,7 @@ spec:
             - --garbage-collection-frequency=1h
             - --plugin-dir=/plugins
             - --features=EnableCSI
-          
+
           env:
             - name: VELERO_NAMESPACE
               valueFrom:
@@ -141,7 +141,7 @@ spec:
               value: /credentials/cloud
             - name: ALIBABA_CLOUD_CREDENTIALS_FILE
               value: /credentials/cloud
-          
+
           volumeMounts:
             - name: cloud-credentials
               mountPath: /credentials
@@ -149,12 +149,12 @@ spec:
               mountPath: /plugins
             - name: scratch
               mountPath: /scratch
-          
+
           ports:
             - name: http-monitoring
               containerPort: 8085
               protocol: TCP
-          
+
           livenessProbe:
             failureThreshold: 3
             httpGet:
@@ -165,7 +165,7 @@ spec:
             periodSeconds: 30
             successThreshold: 1
             timeoutSeconds: 5
-          
+
           readinessProbe:
             failureThreshold: 3
             httpGet:
@@ -176,7 +176,7 @@ spec:
             periodSeconds: 5
             successThreshold: 1
             timeoutSeconds: 5
-          
+
           resources:
             requests:
               memory: 128Mi
@@ -184,7 +184,7 @@ spec:
             limits:
               memory: 512Mi
               cpu: 500m
-          
+
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -194,7 +194,7 @@ spec:
             runAsNonRoot: true
             runAsUser: 65534
             runAsGroup: 65534
-      
+
       # Init container for AWS plugin
       initContainers:
         - name: velero-plugin-for-aws
@@ -203,7 +203,7 @@ spec:
           volumeMounts:
             - mountPath: /target
               name: plugins
-          
+
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -213,7 +213,7 @@ spec:
             runAsNonRoot: true
             runAsUser: 65534
             runAsGroup: 65534
-      
+
       volumes:
         - name: cloud-credentials
           secret:
@@ -222,7 +222,7 @@ spec:
           emptyDir: {}
         - name: scratch
           emptyDir: {}
-      
+
       restartPolicy: Always
       terminationGracePeriodSeconds: 30
 
@@ -368,13 +368,13 @@ spec:
           port: 443
         - protocol: TCP
           port: 80
-    
+
     # Allow Kubernetes API access
     - to: []
       ports:
         - protocol: TCP
           port: 6443
-    
+
     # Allow DNS
     - to: []
       ports:
