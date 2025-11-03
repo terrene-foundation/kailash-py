@@ -205,6 +205,51 @@ Foundation for all Kaizen agents:
 - **Memory**: State management across invocations
 - **Hooks System**: Zero-code-change observability and lifecycle management
 
+### Autonomy Infrastructure (6 Subsystems)
+
+**1. Hooks System** - Event-driven observability framework
+- Zero-code-change monitoring via lifecycle events (PRE/POST hooks)
+- 6 builtin hooks: Logging, Metrics, Cost, Performance, Audit, Tracing
+- Production security: RBAC, Ed25519 signatures, process isolation, rate limiting
+- Performance: <0.01ms overhead (625x better than 10ms target)
+- See: `docs/guides/hooks-system-guide.md`
+
+**2. Checkpoint System** - Persistent state management
+- Save/load/fork agent state for failure recovery and experimentation
+- 4 storage backends: Filesystem, Redis, PostgreSQL, S3
+- Automatic compression and incremental checkpoints
+- State manager with deduplication and versioning
+- See: `docs/guides/state-persistence-guide.md`
+
+**3. Interrupt Mechanism** - Graceful shutdown and execution control
+- 3 interrupt sources: USER (Ctrl+C), SYSTEM (timeout/budget), PROGRAMMATIC (API)
+- 2 shutdown modes: GRACEFUL (finish cycle + checkpoint) vs IMMEDIATE (stop now)
+- Signal propagation across multi-agent hierarchies
+- 34 E2E tests production-validated, examples in `examples/autonomy/interrupts/`
+- See: `docs/guides/interrupt-mechanism-guide.md`
+
+**4. Memory System** - 3-tier hierarchical storage (Hot/Warm/Cold)
+- Hot tier: In-memory buffer (<1ms retrieval, last 100 messages)
+- Warm tier: Database (10-50ms, agent-specific history with JSONL compression)
+- Cold tier: Object storage (100ms+, long-term archival with S3/MinIO)
+- DataFlow-backed with auto-persist and cross-session continuity
+- 28 E2E tests with real database operations
+- See: `docs/guides/memory-and-learning-system.md`
+
+**5. Planning Agents** - Structured workflow orchestration
+- PlanningAgent: Plan before you act (pre-execution validation)
+- PEVAgent: Plan, Execute, Verify, Refine (iterative refinement)
+- Multi-step decomposition, validation, and replanning
+- Best for: Research, compliance, code generation
+- See: `docs/guides/planning-agents-guide.md`
+
+**6. Meta-Controller Routing** - Intelligent task delegation
+- A2A-based semantic capability matching (no hardcoded if/else)
+- Automatic agent discovery, ranking, and selection
+- Fallback strategies and load balancing
+- Integrated with Router, Ensemble, and Supervisor-Worker patterns
+- See: `docs/guides/meta-controller-routing-guide.md`
+
 ### Hooks System (Lifecycle Events)
 Event-driven framework for zero-code-change observability with production security:
 - **Location**: `kaizen.core.autonomy.hooks`, `kaizen.core.autonomy.hooks.security`
