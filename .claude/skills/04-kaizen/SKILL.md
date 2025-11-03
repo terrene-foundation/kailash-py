@@ -122,6 +122,7 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 - **[Integration Patterns](../../../apps/kailash-kaizen/docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP integration
 
 **Reference Documentation:**
+- **[Example Gallery](../../../apps/kailash-kaizen/examples/autonomy/EXAMPLE_GALLERY.md)** - 15 production-ready autonomy examples with learning paths (Tool Calling, Planning, Meta-Controller, Memory, Checkpoints, Interrupts, Full Integration)
 - **[API Reference](../../../apps/kailash-kaizen/docs/reference/api-reference.md)** - Complete API documentation
 - **[Hooks System](../../../apps/kailash-kaizen/docs/features/hooks-system.md)** - Lifecycle event hooks reference
 - **[Configuration Guide](../../../apps/kailash-kaizen/docs/reference/configuration.md)** - All configuration options
