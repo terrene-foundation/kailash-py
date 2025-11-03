@@ -67,6 +67,11 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **[Integration Patterns](../../../sdk-users/apps/kaizen/docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP
 - **[Troubleshooting](../../../sdk-users/apps/kaizen/docs/reference/troubleshooting.md)** - Common errors
 
+### Autonomy System Guides (NEW - v0.6.0)
+- **[Autonomy System Overview](../../../sdk-users/apps/kaizen/docs/guides/autonomy-system-overview.md)** - Complete autonomy infrastructure guide (6 subsystems)
+- **[Planning Agents Guide](../../../sdk-users/apps/kaizen/docs/guides/planning-agents-guide.md)** - PlanningAgent & PEVAgent patterns with decision matrix
+- **[Meta-Controller Routing Guide](../../../sdk-users/apps/kaizen/docs/guides/meta-controller-routing-guide.md)** - A2A-based intelligent task delegation
+
 ### By Use Case
 | Need | Documentation |
 |------|---------------|
@@ -79,6 +84,9 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 | Custom transports | `sdk-users/apps/kaizen/docs/guides/custom-transports.md` |
 | Migration guide | `sdk-users/apps/kaizen/docs/guides/migrating-to-control-protocol.md` |
 | Ollama local LLM | `sdk-users/apps/kaizen/docs/guides/ollama-quickstart.md` |
+| **Autonomy infrastructure (NEW)** | `sdk-users/apps/kaizen/docs/guides/autonomy-system-overview.md` |
+| **Planning agents (NEW)** | `sdk-users/apps/kaizen/docs/guides/planning-agents-guide.md` |
+| **Intelligent routing (NEW)** | `sdk-users/apps/kaizen/docs/guides/meta-controller-routing-guide.md` |
 | Multi-modal (vision/audio) | `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` |
 | Memory patterns | `sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md` |
 | Strategy selection | `sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md` |
