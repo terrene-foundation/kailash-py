@@ -95,6 +95,7 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 | Signature programming | `sdk-users/apps/kaizen/docs/guides/signature-programming.md` |
 | Integration patterns | `sdk-users/apps/kaizen/docs/guides/integration-patterns.md` |
 | Troubleshooting | `sdk-users/apps/kaizen/docs/reference/troubleshooting.md` |
+| Performance benchmarks | `apps/kailash-kaizen/docs/benchmarks/BENCHMARK_GUIDE.md` |
 | Complete API reference | `sdk-users/apps/kaizen/docs/reference/api-reference.md` |
 | Complete guide | `sdk-users/apps/kaizen/README.md` |
 | Working examples | `apps/kailash-kaizen/examples/` |
