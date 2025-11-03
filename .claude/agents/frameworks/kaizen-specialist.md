@@ -99,8 +99,9 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 
 ### Key Concepts
 - **Signature-Based Programming**: Type-safe I/O with InputField/OutputField
-- **Structured Outputs** (v0.6.3): OpenAI Structured Outputs API support with 100% schema compliance (gpt-4o-2024-08-06+)
-- **Signature Inheritance** (v0.6.3): Child signatures merge parent fields (10 total = 6 parent + 4 child)
+- **Structured Outputs** (v0.6.6): OpenAI Structured Outputs API with 100% schema compliance. Supports strict mode (100% compliance, gpt-4o-2024-08-06+) and legacy mode (70-85% best-effort, all models). Fixed in v0.6.6: Legacy mode now returns correct OpenAI format.
+- **Signature Inheritance** (v0.6.5): Child signatures merge parent fields with proper type validation
+- **Extension Points** (v0.6.5): Custom system prompts via callback pattern enabling subclass method overrides without circular dependencies
 - **BaseAgent**: Unified agent system with lazy initialization, auto-generates A2A capability cards
 - **Autonomous Tool Calling** (v0.2.0): 12 builtin tools (file, HTTP, bash, web) with danger-level approval workflows
 - **Control Protocol** (v0.2.0): Bidirectional agent ↔ client communication (CLI, HTTP/SSE, stdio, memory transports)
