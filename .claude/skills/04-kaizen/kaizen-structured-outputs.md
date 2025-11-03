@@ -1,7 +1,8 @@
 # Kaizen Structured Outputs
 
-**Version**: 0.6.5+
+**Version**: 0.6.6+
 **Feature**: OpenAI Structured Outputs API with 100% schema compliance and intelligent validation
+**Fixed in v0.6.6**: Legacy mode now returns correct OpenAI format
 
 ---
 
@@ -92,14 +93,24 @@ config = BaseAgentConfig(
 
 ### Legacy Mode (Best-Effort)
 
-**70-85% reliability** with older models
+**70-85% reliability** with older models or incompatible types
+
+**When to use:**
+- Using older OpenAI models (gpt-3.5-turbo, gpt-4, etc.)
+- Signature has types incompatible with strict mode (Dict[str, Any], Union)
+- You want fallback compatibility across model versions
+
+**How it works:**
+- Returns `{"type": "json_object"}` only (no schema parameter)
+- Schema enforcement happens via system prompt automatically
+- OpenAI returns any valid JSON (not 100% guaranteed to match schema)
 
 ```python
 # Legacy mode configuration
 provider_config = create_structured_output_config(
     signature=MySignature(),
     strict=False,  # Best-effort JSON object mode
-    name="my_response"
+    name="my_response"  # Name is ignored in legacy mode
 )
 
 config = BaseAgentConfig(
@@ -109,17 +120,33 @@ config = BaseAgentConfig(
 )
 ```
 
-**Generated Format:**
+**Generated Format (Fixed in v0.6.6):**
+```python
+{
+    "type": "json_object"  # ✅ CORRECT: No schema key per OpenAI spec
+}
+# Schema enforcement via system prompt (handled automatically by BaseAgent)
+```
+
+**⚠️ Before v0.6.6 (WRONG - caused JSON_PARSE_FAILED errors):**
 ```python
 {
     "type": "json_object",
-    "schema": {
-        "type": "object",
-        "properties": {...},
-        "required": [...]
-    }
+    "schema": {...}  # ❌ WRONG: OpenAI ignored this parameter
 }
+# OpenAI returned plain text instead of JSON → BaseAgent.run() failed
+# Fixed in v0.6.6: Now works reliably
 ```
+
+**Strict Mode vs Legacy Mode:**
+| Feature | Strict (`strict=True`) | Legacy (`strict=False`) |
+|---------|------------------------|-------------------------|
+| **Reliability** | 100% schema compliance | 70-85% best-effort |
+| **Models** | gpt-4o-2024-08-06+ | All OpenAI models |
+| **Format** | `json_schema` with strict:true | `json_object` only |
+| **Schema Enforcement** | OpenAI API (constrained sampling) | System prompt (LLM prompt) |
+| **Compatible Types** | str, int, float, bool, List[T], Optional[T], Literal, TypedDict | All types including Dict[str, Any], Union |
+| **Use Case** | Production (guaranteed structure) | Legacy models or flexible schemas |
 
 ---
 
