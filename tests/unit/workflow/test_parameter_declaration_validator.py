@@ -1,7 +1,6 @@
 """Test Parameter Declaration Validator - addresses gold standard issue #2."""
 
 import pytest
-
 from kailash.nodes.base import Node, NodeParameter
 from kailash.workflow.validation import (
     IssueSeverity,
