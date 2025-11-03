@@ -187,6 +187,7 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 
 ### Testing & Quality
 - **[kaizen-testing-patterns](kaizen-testing-patterns.md)** - Testing AI agents
+- **[Performance Benchmarks](../../../apps/kailash-kaizen/docs/benchmarks/BENCHMARK_GUIDE.md)** - Measure Kaizen performance across 7 key areas (initialization, execution, memory, tool calling, interrupts, checkpoints, multi-agent)
 
 ## Key Concepts
 

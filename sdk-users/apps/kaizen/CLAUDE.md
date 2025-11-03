@@ -786,6 +786,7 @@ class MyAgent(BaseAgent):
 - **[Memory Patterns Guide](docs/reference/memory-patterns-guide.md)** - Memory usage patterns
 - **[Strategy Selection Guide](docs/reference/strategy-selection-guide.md)** - When to use which strategy
 - **[Configuration Guide](docs/reference/configuration.md)** - Environment configuration
+- **[Performance Benchmarks](../../../apps/kailash-kaizen/docs/benchmarks/BENCHMARK_GUIDE.md)** - Measure performance across 7 key areas with statistical rigor (p50/p95/p99 percentiles)
 - **[Troubleshooting](docs/reference/troubleshooting.md)** - Common issues
 
 ### Examples
