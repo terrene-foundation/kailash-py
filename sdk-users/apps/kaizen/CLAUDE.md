@@ -789,6 +789,7 @@ class MyAgent(BaseAgent):
 - **[Troubleshooting](docs/reference/troubleshooting.md)** - Common issues
 
 ### Examples
+- **[Autonomy Example Gallery](../../../apps/kailash-kaizen/examples/autonomy/EXAMPLE_GALLERY.md)** - 15 production-ready autonomy examples with learning paths (Tool Calling, Planning, Meta-Controller, Memory, Checkpoints, Interrupts, Full Integration)
 - **[Single-Agent Patterns](../../../apps/kailash-kaizen/examples/1-single-agent/)** - 10 basic patterns
 - **[Multi-Agent Patterns](../../../apps/kailash-kaizen/examples/2-multi-agent/)** - 6 coordination patterns
 - **[Enterprise Workflows](../../../apps/kailash-kaizen/examples/3-enterprise-workflows/)** - 5 production patterns

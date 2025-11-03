@@ -53,6 +53,7 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 ### Primary References (SDK Users)
 - **[CLAUDE.md](../../../sdk-users/apps/kaizen/CLAUDE.md)** - Quick reference for using Kaizen
 - **[README.md](../../../sdk-users/apps/kaizen/README.md)** - Complete Kaizen user guide
+- **[Example Gallery](../../../apps/kailash-kaizen/examples/autonomy/EXAMPLE_GALLERY.md)** - 15 production-ready autonomy examples with learning paths (Tool Calling, Planning, Meta-Controller, Memory, Checkpoints, Interrupts, Full Integration)
 - **[Examples](../../examples/)** - 35+ working implementations
 
 ### Critical API References
