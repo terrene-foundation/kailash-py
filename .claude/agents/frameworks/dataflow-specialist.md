@@ -1,6 +1,6 @@
 ---
 name: dataflow-specialist
-description: Zero-config database framework specialist for Kailash DataFlow implementation (v0.4.6+). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
+description: Zero-config database framework specialist for Kailash DataFlow implementation (v0.8.0+). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
 ---
 
 # DataFlow Specialist Agent
@@ -168,9 +168,17 @@ When encountering apparent "limitations":
 
 ### DataFlow Architecture & Philosophy
 - **Not an ORM**: Workflow-native database framework, not traditional ORM
-- **PostgreSQL + SQLite Full Parity**: Both databases fully supported with identical functionality
-- **Automatic Node Generation**: Each `@db.model` creates 9 node types automatically
+- **PostgreSQL + MySQL + SQLite Full Parity**: All databases fully supported with identical functionality
+- **Automatic Node Generation**: Each `@db.model` creates 11 node types automatically (v0.8.0+)
+  - CRUD: CreateNode, ReadNode, UpdateNode, DeleteNode
+  - Query: ListNode, CountNode (v0.8.0+)
+  - Advanced: UpsertNode (v0.8.0+)
+  - Bulk: BulkCreateNode, BulkUpdateNode, BulkDeleteNode, BulkUpsertNode
 - **Datetime Auto-Conversion (v0.6.4+)**: ISO 8601 strings automatically converted to datetime objects
+- **ErrorEnhancer System (v0.8.0+)**: Rich, actionable error messages with DF-XXX codes, context, causes, and solutions
+- **Inspector System (v0.8.0+)**: Workflow introspection and debugging tools
+- **Schema Cache (v0.7.3+)**: 91-99% performance improvement for multi-operation workflows
+- **PostgreSQL Native Arrays (v0.8.0+)**: 2-10x faster with TEXT[], INTEGER[], REAL[] support
 - **6-Level Write Protection**: Comprehensive protection system (Global, Connection, Model, Operation, Field, Runtime)
 - **Migration System**: Auto-migration with schema state management and performance tracking
 - **Enterprise-Grade**: Built-in caching, multi-tenancy, distributed transactions
@@ -198,6 +206,741 @@ When encountering apparent "limitations":
 > **Note**: For basic patterns (setup, CRUD, queries), see the [DataFlow Skills](../../skills/02-dataflow/) - 24 Skills covering common operations.
 
 This section focuses on **enterprise-level patterns** and **production complexity**.
+
+## 🚨 ErrorEnhancer System (v0.8.0+)
+
+DataFlow uses **ErrorEnhancer** to transform Python exceptions into rich, actionable error messages with solutions.
+
+### Key Features
+- **Error Code**: DF-XXX format for quick lookup
+- **Context**: What node, parameter, or operation failed
+- **Causes**: Why the error occurred (3-5 possible reasons)
+- **Solutions**: How to fix it (with code examples)
+- **Documentation link**: Detailed explanation
+
+### Error Categories (60+ error types)
+
+| Category | Code Range | Examples |
+|----------|------------|----------|
+| Parameter errors | DF-1XX | Missing parameter, type mismatch, validation |
+| Connection errors | DF-2XX | Missing connection, circular, type mismatch |
+| Migration errors | DF-3XX | Schema errors, table not found, constraints |
+| Configuration errors | DF-4XX | Database URL, environment variables |
+| Runtime errors | DF-5XX | Event loop, timeouts, resources |
+| Model errors | DF-6XX | Primary key, field types |
+| Node errors | DF-7XX | Not found, generation failed |
+| Workflow errors | DF-8XX | Build failed, cycles, structure |
+
+### Basic Usage
+
+**Example: Missing Parameter Error**
+```python
+# ❌ This raises DF-101: Missing Required Parameter
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Alice"  # Missing "id" parameter
+})
+
+# Error message shows:
+# - Error Code: DF-101
+# - Missing parameter: "id"
+# - 3 solutions with code examples
+# - Link to docs
+
+# ✅ Correct: Include all required parameters
+workflow.add_node("UserCreateNode", "create", {
+    "id": "user-123",
+    "name": "Alice",
+    "email": "alice@example.com"
+})
+```
+
+### Common Errors
+
+**DF-301: Migration Schema Error**
+```python
+# Raised when: Auto-migration detects schema incompatibility
+# Solution: Use existing_schema_mode or fix model definition
+
+db = DataFlow(url, existing_schema_mode=True)  # Use existing schema
+```
+
+**DF-401: Invalid Database URL**
+```python
+# Raised when: Database URL format is invalid
+# Solution: Use correct format
+
+# ✅ Correct formats:
+db = DataFlow("postgresql://user:pass@localhost:5432/mydb")
+db = DataFlow("mysql://user:pass@localhost:3306/mydb")
+db = DataFlow("sqlite:///path/to/database.db")
+```
+
+**DF-601: Invalid Primary Key**
+```python
+# Raised when: Primary key is not named "id"
+# Solution: Always use "id" as primary key name
+
+# ❌ WRONG
+@db.model
+class User:
+    user_id: str  # FAILS - DataFlow requires 'id'
+
+# ✅ CORRECT
+@db.model
+class User:
+    id: str  # Required - must be exactly 'id'
+```
+
+### Documentation Reference
+- Comprehensive Guide: `sdk-users/apps/dataflow/guides/error-handling.md`
+- Common Errors: `sdk-users/apps/dataflow/troubleshooting/common-errors.md`
+
+## 🔍 Inspector System (v0.8.0+)
+
+DataFlow includes **Inspector** for debugging and analyzing workflow structure before execution.
+
+### Key Capabilities
+1. **Connection Analysis**: List connections, find broken connections, trace connection chains
+2. **Parameter Tracing**: Trace parameters back to source, track transformations
+3. **Workflow Validation**: Validate connections and detect circular dependencies
+4. **Visual Inspection**: Rich formatted output for debugging
+
+### Basic Usage
+
+```python
+from dataflow.platform.inspector import Inspector
+from kailash.workflow.builder import WorkflowBuilder
+
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create", {"id": "user-123", "name": "Alice"})
+workflow.add_node("UserReadNode", "read", {"id": "user-123"})
+workflow.add_connection("create", "id", "read", "id")
+
+# Inspect workflow structure
+inspector = Inspector(workflow)
+
+# List all connections
+connections = inspector.connections()
+print(f"Found {len(connections)} connections")
+
+# Trace parameter back to source
+trace = inspector.trace_parameter("read", "id")
+print(trace.show())  # Shows: create.id → read.id
+
+# Validate connections
+validation = inspector.validate_connections()
+if not validation["is_valid"]:
+    print(f"Found {len(validation['errors'])} connection errors")
+```
+
+### Common Debugging Scenarios
+
+**Debug missing data parameters**
+```python
+# Issue: Node not receiving expected data
+inspector = Inspector(workflow)
+
+# Check if parameter is connected
+trace = inspector.trace_parameter("process_user", "user_data")
+if trace.source is None:
+    print("Parameter 'user_data' is not connected!")
+else:
+    print(f"Data flows from: {trace.source}")
+```
+
+**Find broken connections**
+```python
+# Validate all connections
+validation = inspector.validate_connections()
+
+for error in validation["errors"]:
+    print(f"Broken connection: {error['from_node']}.{error['from_param']} → {error['to_node']}.{error['to_param']}")
+    print(f"Reason: {error['reason']}")
+```
+
+**Trace complex parameter transformations**
+```python
+# Trace parameter through multiple nodes
+trace = inspector.trace_parameter("final_node", "processed_data")
+
+# Show full chain
+for step in trace.chain:
+    print(f"Step {step['index']}: {step['node']}.{step['parameter']}")
+```
+
+### CLI Usage (Advanced)
+
+```bash
+# Interactive debugging mode
+dataflow inspect workflow.json
+
+# Trace specific parameter
+dataflow inspect workflow.json --trace process_user.user_data
+
+# Validate connections only
+dataflow inspect workflow.json --validate-only
+```
+
+### Documentation Reference
+- Comprehensive Debugging Guide: `sdk-users/apps/dataflow/guides/inspector-debugging-guide.md`
+- 12+ common debugging scenarios with solutions
+- Inspector API reference with all methods
+- CLI usage examples and interactive mode
+
+## 🔄 UpsertNode with Custom Conflict Fields (v0.8.0+)
+
+### What is UpsertNode?
+
+**UpsertNode** performs "upsert" operations (INSERT if record doesn't exist, UPDATE if it does) in a single atomic operation. **v0.8.0+** adds `conflict_on` parameter for custom conflict detection.
+
+### Key Features
+- **Atomic operation**: Single database query for INSERT or UPDATE
+- **Custom conflict fields**: Specify any unique field(s) for conflict detection (v0.8.0+)
+- **Cross-database**: Works identically on PostgreSQL, MySQL, and SQLite
+- **Natural keys**: Use email, SKU, or composite keys instead of just `id`
+- **Return metadata**: Tells you whether INSERT or UPDATE occurred
+
+### Basic Usage
+
+```python
+from dataflow import DataFlow
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
+db = DataFlow("postgresql://...")
+
+@db.model
+class User:
+    id: str
+    email: str
+    name: str
+
+workflow = WorkflowBuilder()
+workflow.add_node("UserUpsertNode", "upsert", {
+    "where": {"id": "user-123"},
+    "update": {"name": "Alice Updated"},
+    "create": {"id": "user-123", "email": "alice@example.com", "name": "Alice"}
+})
+
+runtime = AsyncLocalRuntime()
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+
+# Check what happened
+print(results["upsert"]["created"])  # True = inserted, False = updated
+print(results["upsert"]["action"])   # "created" or "updated"
+```
+
+### Custom Conflict Fields (v0.8.0+)
+
+**Use any unique field(s) for conflict detection**, not just `id`. Perfect for natural keys like email, SKU, or composite keys.
+
+**Single Field Conflict**
+```python
+# Upsert based on email (natural key)
+@db.model
+class User:
+    id: str
+    email: str  # Unique field
+    name: str
+
+workflow.add_node("UserUpsertNode", "upsert", {
+    "where": {"email": "alice@example.com"},
+    "conflict_on": ["email"],  # NEW: Conflict on email
+    "update": {"name": "Alice Updated"},
+    "create": {
+        "id": "user-123",
+        "email": "alice@example.com",
+        "name": "Alice"
+    }
+})
+
+# First run: INSERT (email doesn't exist)
+# Second run: UPDATE (email exists)
+```
+
+**Composite Key Conflict**
+```python
+# Upsert based on multiple fields (composite key)
+@db.model
+class OrderItem:
+    id: str
+    order_id: str
+    product_id: str
+    quantity: int
+
+workflow.add_node("OrderItemUpsertNode", "upsert", {
+    "where": {"order_id": "order-123", "product_id": "prod-456"},
+    "conflict_on": ["order_id", "product_id"],  # Composite key
+    "update": {"quantity": 10},
+    "create": {
+        "id": "item-789",
+        "order_id": "order-123",
+        "product_id": "prod-456",
+        "quantity": 5
+    }
+})
+```
+
+### Parameter Reference
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `where` | dict | Yes | Fields to identify the record |
+| `update` | dict | No | Fields to update if record exists |
+| `create` | dict | No | Fields to create if record doesn't exist |
+| `conflict_on` | list | No | Fields for conflict detection (defaults to `where` keys) |
+
+### Common Patterns
+
+**Pattern 1: Email-based User Upsert**
+```python
+# Ensure user exists with updated data
+workflow.add_node("UserUpsertNode", "upsert", {
+    "where": {"email": user_email},
+    "conflict_on": ["email"],
+    "update": {"last_login": datetime.now(), "name": user_name},
+    "create": {"id": user_id, "email": user_email, "name": user_name}
+})
+```
+
+**Pattern 2: Idempotent API Requests**
+```python
+# Ensure request is only processed once
+workflow.add_node("RequestUpsertNode", "upsert", {
+    "where": {"request_id": req_id},
+    "conflict_on": ["request_id"],
+    "update": {},  # Don't update if exists
+    "create": {"id": id, "request_id": req_id, "data": req_data}
+})
+
+if results["upsert"]["created"]:
+    # Process the request
+    pass
+else:
+    # Request already processed
+    pass
+```
+
+## 🔢 CountNode - Efficient Count Queries (v0.8.0+)
+
+### What is CountNode?
+
+**CountNode** performs efficient `SELECT COUNT(*) FROM table WHERE filters` queries without fetching actual records. Automatically generated for all SQL models.
+
+### Key Features
+- **High performance**: 10-50x faster than ListNode workaround (1-5ms vs 20-50ms)
+- **No data transfer**: Only count value returned, no records
+- **Filter support**: Supports MongoDB-style filters (same as ListNode)
+- **Cross-database**: Works identically on PostgreSQL, MySQL, and SQLite
+- **Zero overhead**: Minimal memory usage (<1KB)
+
+### Basic Usage
+
+```python
+from dataflow import DataFlow
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
+db = DataFlow("postgresql://...")
+
+@db.model
+class User:
+    id: str
+    email: str
+    name: str
+    active: bool
+
+# Count all records
+workflow = WorkflowBuilder()
+workflow.add_node("UserCountNode", "count_all", {})
+
+runtime = AsyncLocalRuntime()
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+print(results["count_all"]["count"])  # 1523
+```
+
+### Count with Filters
+
+```python
+# Count active users
+workflow.add_node("UserCountNode", "count_active", {
+    "filter": {"active": True}
+})
+
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+print(results["count_active"]["count"])  # 842
+
+# Count with complex filters
+workflow.add_node("UserCountNode", "count_complex", {
+    "filter": {
+        "active": True,
+        "email": {"$like": "%@example.com"}
+    }
+})
+```
+
+### Performance Comparison
+
+**ListNode Workaround** (Deprecated):
+```python
+# ❌ SLOW: Fetches all records to count (20-50ms)
+workflow.add_node("UserListNode", "count_users", {"limit": 10000})
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+count = len(results["count_users"])  # Fetched 10,000 records!
+```
+
+**CountNode** (Recommended):
+```python
+# ✅ FAST: Uses COUNT(*) query (1-5ms)
+workflow.add_node("UserCountNode", "count_users", {})
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+count = results["count_users"]["count"]  # Only count value
+```
+
+**Performance Metrics**:
+- Query time: 1-5ms (vs. 20-50ms with ListNode)
+- Memory usage: <1KB (vs. 1-10MB with ListNode)
+- Network transfer: 8 bytes (vs. 100KB-10MB with ListNode)
+
+### Common Patterns
+
+**Pattern 1: Session Statistics**
+```python
+# Count active sessions for each user
+workflow.add_node("SessionCountNode", "count_sessions", {
+    "filter": {"user_id": user_id, "active": True}
+})
+
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+if results["count_sessions"]["count"] > 5:
+    print(f"Warning: {results['count_sessions']['count']} active sessions")
+```
+
+**Pattern 2: Metrics Dashboard**
+```python
+# Build real-time dashboard metrics
+workflow.add_node("OrderCountNode", "total_orders", {})
+workflow.add_node("OrderCountNode", "pending_orders", {
+    "filter": {"status": "pending"}
+})
+workflow.add_node("OrderCountNode", "completed_orders", {
+    "filter": {"status": "completed"}
+})
+
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+metrics = {
+    "total": results["total_orders"]["count"],
+    "pending": results["pending_orders"]["count"],
+    "completed": results["completed_orders"]["count"]
+}
+```
+
+## 🔢 PostgreSQL Native Arrays (v0.8.0+)
+
+### What Are Native Arrays?
+
+PostgreSQL native arrays (TEXT[], INTEGER[], REAL[]) provide **2-10x faster performance** compared to JSON string storage, with built-in indexing support (GIN/GiST) and PostgreSQL-specific operators.
+
+### Key Features
+- **Native PostgreSQL arrays**: TEXT[], INTEGER[], REAL[] instead of JSONB
+- **Opt-in feature flag**: Backward compatible, enable per-model with `__dataflow__`
+- **Cross-database validated**: Error if used on MySQL/SQLite
+- **Performance gains**: 2-10x faster queries with native array operators
+- **Index support**: GIN/GiST indexes for array columns
+
+### Basic Usage
+
+```python
+from dataflow import DataFlow
+from typing import List
+
+db = DataFlow("postgresql://...")
+
+@db.model
+class AgentMemory:
+    id: str
+    tags: List[str]
+    scores: List[int]
+    ratings: List[float]
+
+    __dataflow__ = {
+        'use_native_arrays': True  # Opt-in to PostgreSQL native arrays
+    }
+
+# Generates PostgreSQL schema:
+# CREATE TABLE agent_memorys (
+#     id TEXT PRIMARY KEY,
+#     tags TEXT[],      -- Native array instead of JSONB
+#     scores INTEGER[],  -- Native array
+#     ratings REAL[]     -- Native array
+# )
+```
+
+### Supported Array Types
+
+| Python Type | PostgreSQL Type | Element Type |
+|-------------|-----------------|--------------|
+| `List[str]` | `TEXT[]` | Text strings |
+| `List[int]` | `INTEGER[]` | Integers |
+| `List[float]` | `REAL[]` | Floating point |
+| `Optional[List[str]]` | `TEXT[] NULL` | Nullable arrays |
+
+**Unsupported** (defaults to JSONB):
+- `List[dict]`, `List[List[...]]` (nested), custom types
+
+### CRUD Operations
+
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime import AsyncLocalRuntime
+
+workflow = WorkflowBuilder()
+
+# Create with array values
+workflow.add_node("AgentMemoryCreateNode", "create", {
+    "id": "mem-001",
+    "tags": ["medical", "urgent", "ai"],
+    "scores": [85, 92, 78],
+    "ratings": [4.5, 4.8, 4.2]
+})
+
+# Update array values
+workflow.add_node("AgentMemoryUpdateNode", "update", {
+    "filter": {"id": "mem-001"},
+    "fields": {
+        "tags": ["medical", "urgent", "ai", "reviewed"]
+    }
+})
+
+# Query with array operators
+workflow.add_node("AgentMemoryListNode", "find", {
+    "filter": {"tags": {"$contains": "medical"}}
+})
+
+runtime = AsyncLocalRuntime()
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+```
+
+### PostgreSQL Array Operators
+
+DataFlow provides MongoDB-style syntax for PostgreSQL array operators:
+
+**Contains Operator (@>)**
+```python
+# Find records where tags contain "medical"
+workflow.add_node("AgentMemoryListNode", "find_medical", {
+    "filter": {"tags": {"$contains": "medical"}}
+})
+# SQL: WHERE tags @> ARRAY['medical']
+```
+
+**Overlap Operator (&&)**
+```python
+# Find records where tags overlap with ["medical", "urgent"]
+workflow.add_node("AgentMemoryListNode", "find_urgent", {
+    "filter": {"tags": {"$overlap": ["medical", "urgent"]}}
+})
+# SQL: WHERE tags && ARRAY['medical', 'urgent']
+```
+
+**Any Operator (= ANY)**
+```python
+# Find records where any score is >= 90
+workflow.add_node("AgentMemoryListNode", "high_scores", {
+    "filter": {"scores": {"$any": {"$gte": 90}}}
+})
+# SQL: WHERE 90 <= ANY(scores)
+```
+
+### Performance Optimization
+
+**Query Performance**
+
+**Before (JSON string storage)**:
+```python
+tags: str  # Manual encoding: ",".join(tags)
+# Query: WHERE tags LIKE '%medical%'  # Slow, no index
+# Time: ~50ms for 10k rows
+```
+
+**After (Native arrays)**:
+```python
+tags: List[str]  # Native PostgreSQL array
+# Query: WHERE tags @> ARRAY['medical']  # Fast, GIN index
+# Time: ~5ms for 10k rows (10x faster!)
+```
+
+### Best Practices
+
+**When to Use Native Arrays**:
+- ✅ PostgreSQL production databases
+- ✅ Large tables (>10k rows) with frequent array queries
+- ✅ Need for array-specific operators (@>, &&, ANY)
+- ✅ Performance-critical applications
+
+**When NOT to Use Native Arrays**:
+- ❌ Cross-database compatibility required (MySQL, SQLite)
+- ❌ Small tables (<1k rows) with infrequent queries
+- ❌ Nested arrays or complex element types
+- ❌ Development phase (use default JSONB for flexibility)
+
+## 🚀 Schema Cache (v0.7.3+)
+
+### What It Is
+
+The schema cache is a thread-safe table existence cache that eliminates redundant migration checks, providing **91-99% performance improvement** for multi-operation workflows.
+
+### Key Features
+- **Thread-safe**: RLock protection for multi-threaded apps (FastAPI, Flask, Gunicorn)
+- **Configurable**: TTL, size limits, and validation
+- **Automatic invalidation**: Cache cleared on schema changes
+- **Low overhead**: <1KB per cached table
+
+### Performance Characteristics
+- **Cache miss** (first check): ~1500ms
+- **Cache hit** (subsequent): ~1ms
+- **Improvement**: 91-99% faster for multi-operation workflows
+
+### Configuration
+
+```python
+from dataflow import DataFlow
+
+# Default (cache enabled, no TTL)
+db = DataFlow("postgresql://...")
+
+# Custom configuration
+db = DataFlow(
+    "postgresql://...",
+    schema_cache_enabled=True,      # Enable/disable cache
+    schema_cache_ttl=300,            # TTL in seconds (None = no expiration)
+    schema_cache_max_size=10000,    # Max cached tables
+    schema_cache_validation=False,  # Schema checksum validation
+)
+
+# Disable cache (for debugging)
+db = DataFlow("postgresql://...", schema_cache_enabled=False)
+```
+
+### Usage (Automatic)
+
+```python
+# Cache works automatically - no code changes needed
+db = DataFlow("postgresql://...")
+
+@db.model
+class User:
+    id: str
+    name: str
+
+# First operation: Cache miss (~1500ms)
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create", {
+    "id": "user-1",
+    "name": "Alice"
+})
+runtime = LocalRuntime()
+results, _ = runtime.execute(workflow.build())
+
+# Subsequent operations: Cache hit (~1ms)
+workflow2 = WorkflowBuilder()
+workflow2.add_node("UserCreateNode", "create2", {
+    "id": "user-2",
+    "name": "Bob"
+})
+results2, _ = runtime.execute(workflow2.build())  # 99% faster!
+```
+
+### Cache Methods (Advanced)
+
+```python
+# Clear all cache entries
+db._schema_cache.clear()
+
+# Get cache performance statistics
+metrics = db._schema_cache.get_metrics()
+print(f"Hits: {metrics['hits']}")
+print(f"Misses: {metrics['misses']}")
+print(f"Hit rate: {metrics['hit_rate']:.2%}")
+print(f"Cached tables: {metrics['cached_tables']}")
+```
+
+### Thread Safety
+
+The schema cache is fully thread-safe for multi-threaded applications:
+
+```python
+from dataflow import DataFlow
+from concurrent.futures import ThreadPoolExecutor
+
+db = DataFlow("postgresql://...")
+
+@db.model
+class User:
+    id: str
+    name: str
+
+def create_user(user_id: str):
+    workflow = WorkflowBuilder()
+    workflow.add_node("UserCreateNode", "create", {
+        "id": user_id,
+        "name": f"User {user_id}"
+    })
+    runtime = LocalRuntime()
+    return runtime.execute(workflow.build())
+
+# Safe for concurrent execution
+with ThreadPoolExecutor(max_workers=10) as executor:
+    futures = [executor.submit(create_user, f"user-{i}") for i in range(100)]
+    results = [f.result() for f in futures]
+```
+
+All cache operations are protected by RLock, ensuring safe concurrent access from FastAPI endpoints, Flask workers, or Gunicorn processes.
+
+## 🔧 String ID Preservation & Multi-Instance Isolation (v0.4.7+)
+
+### String ID Preservation
+
+**No forced integer conversion** - String/UUID IDs preserved exactly.
+
+```python
+# ✅ CORRECT - String IDs preserved
+@db.model
+class Session:
+    id: str  # Explicitly string
+    user_id: str
+
+# Creates with string ID preserved
+workflow.add_node("SessionCreateNode", "create", {
+    "id": "sess-uuid-123",  # Stays as string
+    "user_id": "user-456"
+})
+```
+
+### Multi-Instance Isolation
+
+Each DataFlow instance maintains separate context - nodes are bound to the correct instance.
+
+```python
+# Each instance is independent
+dev_db = DataFlow("sqlite:///dev.db")
+prod_db = DataFlow("postgresql://prod...")
+
+@dev_db.model
+class User:
+    name: str
+
+@prod_db.model
+class User:  # Same name, different instance - works!
+    name: str
+    email: str
+
+# Nodes bound to correct instance
+dev_node = dev_db._nodes["UserCreateNode"]()
+prod_node = prod_db._nodes["UserCreateNode"]()
+# dev_node.dataflow_instance is dev_db ✓
+# prod_node.dataflow_instance is prod_db ✓
+```
 
 ### Automatic Datetime Conversion (v0.6.4+)
 
@@ -388,7 +1131,11 @@ workflow.add_node(result['generated_nodes']['User']['create'], 'create_user', {.
 
 > **See Skills**: [`dataflow-crud-operations`](../../skills/02-dataflow/dataflow-crud-operations.md) and [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md) for complete CRUD and query examples.
 
-Quick reference: 9 nodes auto-generated per model (Create, Read, Update, Delete, List, BulkCreate, BulkUpdate, BulkDelete, BulkUpsert).
+Quick reference: **11 nodes auto-generated per model** (v0.8.0+):
+- **CRUD**: CreateNode, ReadNode, UpdateNode, DeleteNode
+- **Query**: ListNode, CountNode (v0.8.0+)
+- **Advanced**: UpsertNode (v0.8.0+)
+- **Bulk**: BulkCreateNode, BulkUpdateNode, BulkDeleteNode, BulkUpsertNode
 
 **v0.7.1 Update - BulkUpsertNode:**
 - Fully implemented in v0.7.1 (previous versions had stub implementation)
@@ -1113,20 +1860,25 @@ def event_loop():
 
 ## Critical Limitations & Workarounds
 
-### PostgreSQL Array Types (Still Limited)
+### PostgreSQL Array Types (v0.8.0+ - FULLY SUPPORTED!)
 ```python
-# ❌ AVOID - PostgreSQL List[str] fields cause parameter type issues
+# ✅ SUPPORTED (v0.8.0+) - Native PostgreSQL arrays with opt-in flag
 @db.model
 class BlogPost:
     title: str
-    tags: List[str] = []  # CAUSES ERRORS - avoid array types
+    content: str
+    tags: List[str]  # Fully supported with __dataflow__ flag!
 
-# ✅ WORKAROUND - Use JSON field or separate table
+    __dataflow__ = {
+        'use_native_arrays': True  # Opt-in for PostgreSQL native arrays
+    }
+
+# ⚠️ For cross-database compatibility (MySQL, SQLite)
 @db.model
 class BlogPost:
     title: str
-    content: str  # v0.4.0: Now unlimited with TEXT fix!
-    tags_json: Dict[str, Any] = {}  # Store as JSON object
+    content: str
+    tags_json: Dict[str, Any] = {}  # Use JSON for cross-DB support
 ```
 
 ### JSON Field Behavior
