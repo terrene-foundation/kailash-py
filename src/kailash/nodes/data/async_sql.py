@@ -1473,6 +1473,123 @@ class PostgreSQLAdapter(DatabaseAdapter):
             await self._pool.release(conn)
 
 
+class MySQLTransactionContext:
+    """
+    Context manager for guaranteed MySQL transaction cleanup.
+
+    Ensures that transactions are always committed or rolled back,
+    and connections are always released back to the pool.
+
+    Usage:
+        async with MySQLTransactionContext(pool) as ctx:
+            await adapter.execute(query, transaction=ctx)
+            await ctx.commit()  # Explicit commit
+        # Auto-rollback if exception occurs
+        # Connection always released
+
+    Features:
+    - Automatic rollback on exception
+    - Defensive commit if no action taken
+    - Guaranteed connection release
+    - Double commit/rollback protection
+    - Exposes connection for use with execute()
+    """
+
+    def __init__(self, pool):
+        """
+        Initialize transaction context.
+
+        Args:
+            pool: The aiomysql connection pool
+        """
+        self._pool = pool
+        self._conn = None
+        self._committed = False
+        self._rolled_back = False
+
+    async def __aenter__(self):
+        """Acquire connection and start transaction."""
+        self._conn = await self._pool.acquire()
+        await self._conn.begin()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Guarantee commit/rollback and connection release."""
+        try:
+            if exc_type is not None:
+                # Exception occurred - rollback
+                if not self._rolled_back and not self._committed:
+                    await self._conn.rollback()
+                    self._rolled_back = True
+            else:
+                # No exception - commit if not already done
+                if not self._committed and not self._rolled_back:
+                    # Defensive commit
+                    await self._conn.commit()
+                    self._committed = True
+        finally:
+            # Always release connection back to pool
+            if self._conn:
+                await self._pool.release(self._conn)
+
+        # Don't suppress exceptions
+        return False
+
+    async def commit(self) -> None:
+        """
+        Explicitly commit the transaction.
+
+        Raises:
+            RuntimeError: If transaction already committed or rolled back
+        """
+        if self._committed:
+            raise RuntimeError("Transaction already committed. Cannot commit twice.")
+        if self._rolled_back:
+            raise RuntimeError(
+                "Transaction already rolled back. Cannot commit after rollback."
+            )
+
+        await self._conn.commit()
+        self._committed = True
+
+    async def rollback(self) -> None:
+        """
+        Explicitly rollback the transaction.
+
+        Raises:
+            RuntimeError: If transaction already committed or rolled back
+        """
+        if self._committed:
+            raise RuntimeError(
+                "Transaction already committed. Cannot rollback after commit."
+            )
+        if self._rolled_back:
+            raise RuntimeError(
+                "Transaction already rolled back. Cannot rollback twice."
+            )
+
+        await self._conn.rollback()
+        self._rolled_back = True
+
+    @property
+    def connection(self):
+        """
+        Expose underlying connection for use with execute().
+
+        Returns:
+            The aiomysql connection
+        """
+        return self._conn
+
+    def __iter__(self):
+        """
+        Support tuple unpacking for backward compatibility.
+
+        Allows: conn, tx = transaction_ctx
+        """
+        return iter((self._conn, None))
+
+
 class MySQLAdapter(DatabaseAdapter):
     """MySQL adapter using aiomysql."""
 
@@ -1515,7 +1632,11 @@ class MySQLAdapter(DatabaseAdapter):
         # Use transaction connection if provided, otherwise get from pool
         # Note: parameter_types is only used by PostgreSQL adapter
         if transaction:
-            conn = transaction
+            # Support both MySQLTransactionContext and legacy connection format
+            if isinstance(transaction, MySQLTransactionContext):
+                conn = transaction.connection
+            else:
+                conn = transaction
             async with conn.cursor() as cursor:
                 await cursor.execute(query, params)
 
@@ -1616,20 +1737,202 @@ class MySQLAdapter(DatabaseAdapter):
                     await conn.commit()
 
     async def begin_transaction(self) -> Any:
-        """Begin a transaction."""
-        conn = await self._pool.acquire()
-        await conn.begin()
-        return conn
+        """
+        Begin a transaction.
+
+        Returns:
+            MySQLTransactionContext: Context manager for transaction
+
+        Note:
+            The returned context manager supports both:
+            - Context manager pattern: async with ctx: ...
+            - Tuple unpacking: conn, tx = ctx (backward compatibility)
+        """
+        # Create context manager and enter it
+        ctx = MySQLTransactionContext(self._pool)
+        await ctx.__aenter__()
+        return ctx
 
     async def commit_transaction(self, transaction: Any) -> None:
-        """Commit a transaction."""
-        await transaction.commit()
-        await self._pool.release(transaction)
+        """
+        Commit a transaction.
+
+        Supports both new context manager and legacy connection format.
+
+        Args:
+            transaction: Either MySQLTransactionContext or raw connection
+        """
+        # Support both new context and legacy connection format
+        if isinstance(transaction, MySQLTransactionContext):
+            # New context manager - commit and exit
+            await transaction.commit()
+            await transaction.__aexit__(None, None, None)
+        else:
+            # Legacy connection format - for backward compatibility
+            await transaction.commit()
+            await self._pool.release(transaction)
 
     async def rollback_transaction(self, transaction: Any) -> None:
-        """Rollback a transaction."""
-        await transaction.rollback()
-        await self._pool.release(transaction)
+        """
+        Rollback a transaction.
+
+        Supports both new context manager and legacy connection format.
+
+        Args:
+            transaction: Either MySQLTransactionContext or raw connection
+        """
+        # Support both new context and legacy connection format
+        if isinstance(transaction, MySQLTransactionContext):
+            # New context manager - rollback and exit
+            await transaction.rollback()
+            await transaction.__aexit__(Exception, None, None)
+        else:
+            # Legacy connection format - for backward compatibility
+            await transaction.rollback()
+            await self._pool.release(transaction)
+
+
+class SQLiteTransactionContext:
+    """
+    Context manager for guaranteed SQLite transaction cleanup.
+
+    Ensures transactions are always committed or rolled back before connection release,
+    preventing "cannot commit transaction - SQL statements in progress" errors.
+
+    Key features:
+    - Defensive commit/rollback with state tracking
+    - Handles both memory databases (shared connection) and file databases (new connections)
+    - Guaranteed cleanup via __aexit__
+    - Double commit/rollback protection
+    - Memory database connections are NOT closed (shared)
+    - File database connections are always closed
+
+    Usage:
+        async with SQLiteTransactionContext(adapter, is_memory_db) as ctx:
+            result = await ctx.connection.execute("SELECT ...")
+            await ctx.commit()
+
+    Architecture:
+    - Memory databases use shared connection from adapter._get_connection()
+    - File databases create new connections with aiosqlite.connect()
+    - BEGIN transaction started in __aenter__
+    - Defensive commit/rollback in __aexit__
+    - File database connections closed in finally block
+    """
+
+    def __init__(self, adapter, is_memory_db: bool):
+        """
+        Initialize SQLite transaction context.
+
+        Args:
+            adapter: SQLiteAdapter instance providing connection access
+            is_memory_db: True if :memory: database (shared connection), False if file database
+        """
+        self._adapter = adapter
+        self._is_memory_db = is_memory_db
+        self._conn = None
+        self._committed = False
+        self._rolled_back = False
+
+    async def __aenter__(self):
+        """
+        Enter context: acquire connection and start transaction.
+
+        For memory databases:
+        - Use shared connection from adapter._get_connection()
+        - Connection persists across transactions
+
+        For file databases:
+        - Create new connection with aiosqlite.connect()
+        - Connection closed after transaction
+
+        Returns:
+            self: Transaction context with connection attribute
+        """
+        if self._is_memory_db:
+            # Use shared connection for memory databases
+            self._conn = await self._adapter._get_connection()
+        else:
+            # Create new connection for file databases
+            self._conn = await self._adapter._aiosqlite.connect(self._adapter._db_path)
+            self._conn.row_factory = self._adapter._aiosqlite.Row
+
+        # Start transaction
+        await self._conn.execute("BEGIN")
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """
+        Exit context: guarantee commit/rollback and connection cleanup.
+
+        Flow:
+        1. If exception occurred: rollback (if not already rolled back)
+        2. If no exception: defensive commit (if not already committed)
+        3. Close file database connections (but NOT shared memory connections)
+
+        This ensures:
+        - No transactions left in progress
+        - No connection leaks
+        - Shared memory connections remain alive
+
+        Args:
+            exc_type: Exception type if raised in context
+            exc_val: Exception value if raised in context
+            exc_tb: Exception traceback if raised in context
+
+        Returns:
+            False: Propagate exceptions (do not suppress)
+        """
+        try:
+            if exc_type is not None:
+                # Exception occurred - rollback if not already done
+                if not self._rolled_back and not self._committed:
+                    await self._conn.rollback()
+                    self._rolled_back = True
+            else:
+                # No exception - defensive commit if not already done
+                if not self._committed and not self._rolled_back:
+                    await self._conn.commit()
+                    self._committed = True
+        finally:
+            # Close file database connections, but NOT shared memory connections
+            if not self._is_memory_db and self._conn:
+                await self._conn.close()
+
+        return False  # Propagate exceptions
+
+    async def commit(self):
+        """
+        Explicitly commit the transaction.
+
+        Sets committed flag to prevent double-commit in __aexit__.
+        """
+        if not self._committed and not self._rolled_back:
+            await self._conn.commit()
+            self._committed = True
+
+    async def rollback(self):
+        """
+        Explicitly rollback the transaction.
+
+        Sets rolled_back flag to prevent double-rollback in __aexit__.
+        """
+        if not self._rolled_back and not self._committed:
+            await self._conn.rollback()
+            self._rolled_back = True
+
+    @property
+    def connection(self):
+        """Access the underlying connection for queries."""
+        return self._conn
+
+    def __iter__(self):
+        """
+        Iterator protocol support for tuple unpacking.
+
+        Allows: conn, tx = SQLiteTransactionContext(adapter, is_memory_db)
+        """
+        return iter((self._conn, None))
 
 
 class SQLiteAdapter(DatabaseAdapter):
@@ -1742,18 +2045,28 @@ class SQLiteAdapter(DatabaseAdapter):
     ) -> Any:
         """Execute query and return results."""
         if transaction:
-            # Use existing transaction connection
-            db = transaction
+            # Support both SQLiteTransactionContext and legacy connection format
+            if isinstance(transaction, SQLiteTransactionContext):
+                db = transaction.connection
+            else:
+                db = transaction
             cursor = await db.execute(query, params or [])
 
             # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
             query_type = query.strip().upper().split()[0] if query.strip() else ""
 
             if query_type in ("DELETE", "UPDATE", "INSERT"):
-                # Capture rowcount for DML operations
-                rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
-                # Use list format to match PostgreSQL/MySQL adapters
-                return [{"rows_affected": rowcount}]
+                # Check if query has RETURNING clause (case-insensitive)
+                has_returning = "RETURNING" in query.upper()
+
+                if not has_returning:
+                    # Simple DML without RETURNING - just return rowcount
+                    rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+                    # Close cursor before returning (required for SQLite transaction commits)
+                    await cursor.close()
+                    # Use list format to match PostgreSQL/MySQL adapters
+                    return [{"rows_affected": rowcount}]
+                # else: Fall through to fetch logic to consume RETURNING data
 
             if fetch_mode == FetchMode.ONE:
                 row = await cursor.fetchone()
@@ -1776,8 +2089,12 @@ class SQLiteAdapter(DatabaseAdapter):
                 # For INSERT without RETURNING, capture lastrowid
                 lastrowid = cursor.lastrowid if hasattr(cursor, "lastrowid") else None
                 if lastrowid is not None:
+                    # Close cursor before returning (required for SQLite transaction commits)
+                    await cursor.close()
                     return {"lastrowid": lastrowid}
 
+            # Close cursor before returning (required for SQLite transaction commits)
+            await cursor.close()
             return result
         else:
             # Create new connection for non-transactional queries
@@ -1877,8 +2194,12 @@ class SQLiteAdapter(DatabaseAdapter):
     ) -> None:
         """Execute query multiple times with different parameters."""
         if transaction:
-            # Use existing transaction connection
-            await transaction.executemany(query, params_list)
+            # Support both SQLiteTransactionContext and legacy connection format
+            if isinstance(transaction, SQLiteTransactionContext):
+                db = transaction.connection
+            else:
+                db = transaction
+            await db.executemany(query, params_list)
             # Don't commit here - let transaction handling do it
         else:
             # Create new connection for non-transactional queries
@@ -1894,32 +2215,63 @@ class SQLiteAdapter(DatabaseAdapter):
                     await db.commit()
 
     async def begin_transaction(self) -> Any:
-        """Begin a transaction."""
-        if self._is_memory_db:
-            # Use shared connection for memory databases
-            db = await self._get_connection()
-            await db.execute("BEGIN")
-            return db
-        else:
-            # Create new connection for file databases
-            db = await self._aiosqlite.connect(self._db_path)
-            db.row_factory = self._aiosqlite.Row
-            await db.execute("BEGIN")
-            return db
+        """
+        Begin a transaction.
+
+        Returns:
+            SQLiteTransactionContext: Context manager for transaction
+
+        Note:
+            The returned context manager supports both:
+            - Context manager pattern: async with ctx: ...
+            - Tuple unpacking: conn, tx = ctx (backward compatibility)
+        """
+        # Create context manager and enter it
+        ctx = SQLiteTransactionContext(self, self._is_memory_db)
+        await ctx.__aenter__()
+        return ctx
 
     async def commit_transaction(self, transaction: Any) -> None:
-        """Commit a transaction."""
-        await transaction.commit()
-        # Don't close shared memory connections
-        if not self._is_memory_db:
-            await transaction.close()
+        """
+        Commit a transaction.
+
+        Supports both new context manager and legacy connection format.
+
+        Args:
+            transaction: Either SQLiteTransactionContext or raw connection
+        """
+        # Support both new context and legacy connection format
+        if isinstance(transaction, SQLiteTransactionContext):
+            # New context manager - commit and exit
+            await transaction.commit()
+            await transaction.__aexit__(None, None, None)
+        else:
+            # Legacy connection format - for backward compatibility
+            await transaction.commit()
+            # Don't close shared memory connections
+            if not self._is_memory_db:
+                await transaction.close()
 
     async def rollback_transaction(self, transaction: Any) -> None:
-        """Rollback a transaction."""
-        await transaction.rollback()
-        # Don't close shared memory connections
-        if not self._is_memory_db:
-            await transaction.close()
+        """
+        Rollback a transaction.
+
+        Supports both new context manager and legacy connection format.
+
+        Args:
+            transaction: Either SQLiteTransactionContext or raw connection
+        """
+        # Support both new context and legacy connection format
+        if isinstance(transaction, SQLiteTransactionContext):
+            # New context manager - rollback and exit
+            await transaction.rollback()
+            await transaction.__aexit__(Exception, None, None)
+        else:
+            # Legacy connection format - for backward compatibility
+            await transaction.rollback()
+            # Don't close shared memory connections
+            if not self._is_memory_db:
+                await transaction.close()
 
 
 class DatabaseConfigManager:
