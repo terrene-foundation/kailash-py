@@ -1226,6 +1226,52 @@ expensive_rule = TimeBasedPermissionRule(
 **When**: Need to coordinate multiple agents for complex tasks requiring diverse perspectives or specialized skills
 **How**: Use `Pipeline` factory methods for instant pattern creation with A2A semantic matching
 
+#### Multi-Runtime Orchestration Scaling (Enterprise)
+
+**Scaling Decision Tree** for distributed multi-agent systems:
+
+```
+Agent Count         | Deployment          | Use
+-------------------|---------------------|------------------------------------------
+< 10 agents        | Single process      | Basic multi-agent patterns (see Skills)
+10-100 agents      | Single process      | OrchestrationRuntime (task routing)
+100+ agents        | Distributed/multi-  | AgentRegistry (capability discovery)
+                   | process/multi-node  |
+```
+
+**OrchestrationRuntime (10-100 agents, single process)**:
+- Task routing: semantic, round-robin, random strategies
+- Agent-level health checks with real LLM inference
+- Per-agent and runtime-wide budget tracking
+- Use when: Task distribution within single runtime/process
+
+**AgentRegistry (100+ agents, distributed systems)** - **🆕 v0.6.4**:
+- Multi-runtime coordination across processes/machines
+- O(1) capability-based discovery with semantic matching
+- Event broadcasting (6 event types for cross-runtime coordination)
+- Health monitoring with automatic deregistration
+- Status management (ACTIVE, UNHEALTHY, DEGRADED, OFFLINE)
+- Use when: Centralized coordination across distributed deployments
+
+**See**: [`kaizen-agent-registry`](../../skills/04-kaizen/kaizen-agent-registry.md) skill for AgentRegistry patterns, configuration, and distributed coordination examples.
+
+**Integration Pattern** (use both together):
+```python
+from kaizen.orchestration import OrchestrationRuntime, AgentRegistry
+
+# Local task routing
+runtime = OrchestrationRuntime(config=runtime_config)
+await runtime.register_agent(agent)
+
+# Global agent discovery across runtimes
+registry = AgentRegistry(config=registry_config)
+await registry.register_agent(agent, runtime_id="runtime_1")
+
+# Route tasks locally, discover agents globally
+selected = await runtime.route_task(task)  # Within runtime
+all_agents = await registry.find_agents_by_capability("code generation")  # Across runtimes
+```
+
 #### Available Patterns
 
 **Pattern Library (9 Patterns)**:
