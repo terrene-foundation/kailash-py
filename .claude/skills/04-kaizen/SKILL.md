@@ -1,6 +1,6 @@
 ---
 name: kaizen
-description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'Planning agent', 'PEV agent', 'Tree-of-Thoughts', 'pipeline patterns', 'supervisor-worker', 'router pattern', 'ensemble pattern', 'blackboard pattern', 'parallel execution', 'agent-to-agent communication', 'A2A protocol', 'streaming agents', 'agent testing', 'agent memory', or 'agentic workflows'."
+description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'Planning agent', 'PEV agent', 'Tree-of-Thoughts', 'pipeline patterns', 'supervisor-worker', 'router pattern', 'ensemble pattern', 'blackboard pattern', 'parallel execution', 'agent-to-agent communication', 'A2A protocol', 'streaming agents', 'agent testing', 'agent memory', 'agentic workflows', 'AgentRegistry', 'OrchestrationRuntime', 'distributed agents', 'agent registry', '100+ agents', 'capability discovery', 'fault tolerance', or 'health monitoring'."
 ---
 
 # Kailash Kaizen - AI Agent Framework
@@ -27,6 +27,20 @@ Kaizen is a production-ready AI agent framework built on Kailash Core SDK that p
 - **Enhanced Hooks**: PRE/POST_INTERRUPT and PRE/POST_CHECKPOINT_SAVE events
 
 See **[kaizen-interrupt-mechanism](kaizen-interrupt-mechanism.md)** and **[kaizen-persistent-memory](kaizen-persistent-memory.md)** for details.
+
+## 🆕 v0.6.4 Highlights
+
+**Distributed Agent Coordination** (Released 2025-11-06):
+
+- **AgentRegistry**: Centralized agent lifecycle management for 100+ agent distributed systems
+  - Multi-runtime coordination across processes/machines
+  - O(1) capability-based discovery with semantic matching
+  - Event broadcasting (6 event types for cross-runtime coordination)
+  - Health monitoring with automatic deregistration
+  - Status management (ACTIVE, UNHEALTHY, DEGRADED, OFFLINE)
+  - 27 unit + 12 integration + 6 E2E tests (100% coverage)
+
+See **[kaizen-agent-registry](kaizen-agent-registry.md)** for details.
 
 ---
 
@@ -147,6 +161,7 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 - **[kaizen-supervisor-worker](kaizen-supervisor-worker.md)** - Supervisor-worker coordination
 - **[kaizen-a2a-protocol](kaizen-a2a-protocol.md)** - Agent-to-agent communication
 - **[kaizen-shared-memory](kaizen-shared-memory.md)** - Shared memory between agents
+- **[kaizen-agent-registry](kaizen-agent-registry.md)** - 🆕 v0.6.4: Distributed agent coordination for 100+ agent systems with O(1) capability discovery, health monitoring, and event broadcasting
 
 **Pipeline Patterns** (9 Composable Patterns):
 - **Ensemble**: Multi-perspective collaboration with A2A discovery + synthesis
