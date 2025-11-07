@@ -991,6 +991,154 @@ class DatabaseAdapter(ABC):
         pass
 
 
+async def _reset_connection(conn) -> None:
+    """
+    Pool reset callback for catching leaked transactions.
+
+    Safety net to prevent "dirty" connections from being returned to pool.
+    Called by asyncpg when a connection is released back to the pool.
+
+    Args:
+        conn: The asyncpg connection being returned to pool
+    """
+    # Check if connection has an open transaction
+    if conn.is_in_transaction():
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            "Connection released to pool with open transaction - rolling back. "
+            "This indicates a transaction was not properly committed or rolled back."
+        )
+        # Force rollback to clean up leaked transaction
+        try:
+            # Get the current transaction and rollback
+            # Note: asyncpg connections track transaction state internally
+            # We need to rollback the entire transaction chain
+            await conn.execute("ROLLBACK")
+        except Exception as e:
+            logger.error(f"Error rolling back leaked transaction: {e}")
+
+
+class PostgreSQLTransactionContext:
+    """
+    Context manager for guaranteed PostgreSQL transaction cleanup.
+
+    Ensures that transactions are always committed or rolled back,
+    and connections are always released back to the pool.
+
+    Usage:
+        async with PostgreSQLTransactionContext(pool) as ctx:
+            await adapter.execute(query, transaction=ctx)
+            await ctx.commit()  # Explicit commit
+        # Auto-rollback if exception occurs
+        # Connection always released
+
+    Features:
+    - Automatic rollback on exception
+    - Defensive commit if no action taken
+    - Guaranteed connection release
+    - Double commit/rollback protection
+    - Exposes connection for use with execute()
+    """
+
+    def __init__(self, pool):
+        """
+        Initialize transaction context.
+
+        Args:
+            pool: The asyncpg connection pool
+        """
+        self._pool = pool
+        self._conn = None
+        self._tx = None
+        self._committed = False
+        self._rolled_back = False
+
+    async def __aenter__(self):
+        """Acquire connection and start transaction."""
+        self._conn = await self._pool.acquire()
+        self._tx = self._conn.transaction()
+        await self._tx.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Guarantee commit/rollback and connection release."""
+        try:
+            if exc_type is not None:
+                # Exception occurred - rollback
+                if not self._rolled_back and not self._committed:
+                    await self._tx.rollback()
+                    self._rolled_back = True
+            else:
+                # No exception - commit if not already done
+                if not self._committed and not self._rolled_back:
+                    # Defensive commit
+                    await self._tx.commit()
+                    self._committed = True
+        finally:
+            # Always release connection back to pool
+            if self._conn:
+                await self._pool.release(self._conn)
+
+        # Don't suppress exceptions
+        return False
+
+    async def commit(self) -> None:
+        """
+        Explicitly commit the transaction.
+
+        Raises:
+            RuntimeError: If transaction already committed or rolled back
+        """
+        if self._committed:
+            raise RuntimeError("Transaction already committed. Cannot commit twice.")
+        if self._rolled_back:
+            raise RuntimeError(
+                "Transaction already rolled back. Cannot commit after rollback."
+            )
+
+        await self._tx.commit()
+        self._committed = True
+
+    async def rollback(self) -> None:
+        """
+        Explicitly rollback the transaction.
+
+        Raises:
+            RuntimeError: If transaction already committed or rolled back
+        """
+        if self._committed:
+            raise RuntimeError(
+                "Transaction already committed. Cannot rollback after commit."
+            )
+        if self._rolled_back:
+            raise RuntimeError(
+                "Transaction already rolled back. Cannot rollback twice."
+            )
+
+        await self._tx.rollback()
+        self._rolled_back = True
+
+    @property
+    def connection(self):
+        """
+        Expose underlying connection for use with execute().
+
+        Returns:
+            The asyncpg connection
+        """
+        return self._conn
+
+    def __iter__(self):
+        """
+        Support tuple unpacking for backward compatibility.
+
+        Allows: conn, tx = transaction_ctx
+        """
+        return iter((self._conn, self._tx))
+
+
 class PostgreSQLAdapter(DatabaseAdapter):
     """PostgreSQL adapter using asyncpg."""
 
@@ -1017,6 +1165,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
             max_size=self.config.max_pool_size,
             timeout=self.config.pool_timeout,
             command_timeout=self.config.command_timeout,
+            reset=_reset_connection,  # Safety net for leaked transactions
         )
 
     async def disconnect(self) -> None:
@@ -1122,7 +1271,11 @@ class PostgreSQLAdapter(DatabaseAdapter):
         # Execute query on appropriate connection
         if transaction:
             # Use transaction connection
-            conn, tx = transaction
+            # Support both PostgreSQLTransactionContext and legacy tuple format
+            if isinstance(transaction, PostgreSQLTransactionContext):
+                conn = transaction.connection
+            else:
+                conn, tx = transaction
 
             # For UPDATE/DELETE queries without RETURNING, use execute() to get affected rows
             query_upper = query.upper()
@@ -1251,7 +1404,11 @@ class PostgreSQLAdapter(DatabaseAdapter):
 
         if transaction:
             # Use transaction connection
-            conn, tx = transaction
+            # Support both PostgreSQLTransactionContext and legacy tuple format
+            if isinstance(transaction, PostgreSQLTransactionContext):
+                conn = transaction.connection
+            else:
+                conn, tx = transaction
             await conn.executemany(query_converted, converted_params)
         else:
             # Use pool connection
@@ -1259,23 +1416,61 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 await conn.executemany(query_converted, converted_params)
 
     async def begin_transaction(self) -> Any:
-        """Begin a transaction."""
-        conn = await self._pool.acquire()
-        tx = conn.transaction()
-        await tx.start()
-        return (conn, tx)
+        """
+        Begin a transaction.
+
+        Returns:
+            PostgreSQLTransactionContext: Context manager for transaction
+
+        Note:
+            The returned context manager supports both:
+            - Context manager pattern: async with ctx: ...
+            - Tuple unpacking: conn, tx = ctx (backward compatibility)
+        """
+        # Create context manager and enter it
+        ctx = PostgreSQLTransactionContext(self._pool)
+        await ctx.__aenter__()
+        return ctx
 
     async def commit_transaction(self, transaction: Any) -> None:
-        """Commit a transaction."""
-        conn, tx = transaction
-        await tx.commit()
-        await self._pool.release(conn)
+        """
+        Commit a transaction.
+
+        Supports both new context manager and legacy tuple format.
+
+        Args:
+            transaction: Either PostgreSQLTransactionContext or (conn, tx) tuple
+        """
+        # Support both new context and legacy tuple format
+        if isinstance(transaction, PostgreSQLTransactionContext):
+            # New context manager - commit and exit
+            await transaction.commit()
+            await transaction.__aexit__(None, None, None)
+        else:
+            # Legacy tuple format (conn, tx) - for backward compatibility
+            conn, tx = transaction
+            await tx.commit()
+            await self._pool.release(conn)
 
     async def rollback_transaction(self, transaction: Any) -> None:
-        """Rollback a transaction."""
-        conn, tx = transaction
-        await tx.rollback()
-        await self._pool.release(conn)
+        """
+        Rollback a transaction.
+
+        Supports both new context manager and legacy tuple format.
+
+        Args:
+            transaction: Either PostgreSQLTransactionContext or (conn, tx) tuple
+        """
+        # Support both new context and legacy tuple format
+        if isinstance(transaction, PostgreSQLTransactionContext):
+            # New context manager - rollback and exit
+            await transaction.rollback()
+            await transaction.__aexit__(None, None, None)
+        else:
+            # Legacy tuple format (conn, tx) - for backward compatibility
+            conn, tx = transaction
+            await tx.rollback()
+            await self._pool.release(conn)
 
 
 class MySQLAdapter(DatabaseAdapter):

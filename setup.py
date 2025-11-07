@@ -13,7 +13,7 @@ with open(os.path.join(this_directory, "README.md"), encoding="utf-8") as f:
 # Package configuration
 setup(
     name="kailash",
-    version="0.10.8",
+    version="0.10.9",
     author="Terrene Foundation",
     author_email="info@terrene.foundation",
     description="Python SDK for the Kailash container-node architecture",
