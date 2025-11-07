@@ -811,9 +811,23 @@ class OpenAIProvider(UnifiedAIProvider):
 
             # Format response
             choice = response.choices[0]
+            content = choice.message.content
+
+            # OpenAI Structured Outputs: Parse JSON when response_format is used
+            # This ensures content is a dict (not JSON string) for signature validation
+            if request_params.get("response_format") and content:
+                try:
+                    import json
+
+                    parsed_content = json.loads(content)
+                    content = parsed_content
+                except (json.JSONDecodeError, TypeError):
+                    # Keep original string if parsing fails (graceful degradation)
+                    pass
+
             return {
                 "id": response.id,
-                "content": choice.message.content,
+                "content": content,  # Now dict when response_format used, string otherwise
                 "role": choice.message.role,
                 "model": response.model,
                 "created": response.created,
