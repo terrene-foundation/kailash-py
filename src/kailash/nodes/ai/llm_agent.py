@@ -620,7 +620,11 @@ class LLMAgentNode(Node):
         # (e.g., response_format for OpenAI Structured Outputs)
         provider_config = kwargs.get("provider_config", {})
         if provider_config:
-            generation_config = {**generation_config, **provider_config}
+            # Nest provider_config under response_format (OpenAI expects nested structure)
+            generation_config = {
+                **generation_config,
+                "response_format": provider_config,
+            }
 
         streaming = kwargs.get("streaming", False)
         timeout = kwargs.get("timeout", 120)
