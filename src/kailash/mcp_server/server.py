@@ -2706,6 +2706,95 @@ class MCPServer:
         finally:
             self._running = False
 
+    async def run_async(self):
+        """Run the enhanced MCP server asynchronously.
+
+        This is the async equivalent of run(), supporting all transport types.
+        Can be used with asyncio.create_task() for non-blocking execution.
+
+        Example:
+            server = MCPServer("my_server", transport="stdio")
+            server_task = asyncio.create_task(server.run_async())
+        """
+        if self._mcp is None:
+            self._init_mcp()
+
+        # Record server start time
+        self.config.update({"server.start_time": time.time()})
+
+        # Log enhanced server startup
+        logger.info(f"Starting enhanced MCP server (async): {self.name}")
+        logger.info(f"Transport: {self.transport}")
+        logger.info("Features enabled:")
+        logger.info(f"  - Cache: {self.cache.enabled if self.cache else False}")
+        logger.info(f"  - Metrics: {self.metrics.enabled if self.metrics else False}")
+        logger.info(f"  - Authentication: {self.auth_manager is not None}")
+        logger.info(f"  - HTTP Transport: {self.enable_http_transport}")
+        logger.info(f"  - SSE Transport: {self.enable_sse_transport}")
+        logger.info(f"  - Streaming: {self.enable_streaming}")
+        logger.info(f"  - Circuit Breaker: {self.circuit_breaker is not None}")
+        logger.info(f"  - Error Aggregation: {self.error_aggregator is not None}")
+        logger.info(f"  - Service Discovery: {self.enable_discovery}")
+
+        logger.info("Server configuration:")
+        logger.info(f"  - Tools registered: {len(self._tool_registry)}")
+        logger.info(f"  - Resources registered: {len(self._resource_registry)}")
+        logger.info(f"  - Prompts registered: {len(self._prompt_registry)}")
+        logger.info(f"  - Transport timeout: {self.transport_timeout}s")
+        logger.info(f"  - Max request size: {self.max_request_size} bytes")
+
+        self._running = True
+
+        try:
+            # Perform health check before starting
+            health = self.health_check()
+            if health["status"] != "healthy":
+                logger.warning(f"Server health check shows issues: {health['issues']}")
+
+            # Run server based on transport type
+            if self.transport == "websocket":
+                logger.info(
+                    f"Starting WebSocket server (async) on {self.websocket_host}:{self.websocket_port}..."
+                )
+                await self._run_websocket()
+            else:
+                # Default to stdio transport
+                logger.info("Starting MCP server in STDIO mode (async)...")
+                await self.run_stdio()
+
+        except KeyboardInterrupt:
+            logger.info("Server stopped by user")
+        except Exception as e:
+            logger.error(f"Server error: {e}")
+
+            # Record error if aggregator is enabled
+            if self.error_aggregator:
+                error = MCPError(
+                    f"Server startup/runtime error: {str(e)}",
+                    error_code=MCPErrorCode.SERVER_UNAVAILABLE,
+                    cause=e,
+                )
+                self.error_aggregator.record_error(error)
+
+            raise
+        finally:
+            logger.info("Shutting down enhanced MCP server (async)...")
+
+            # Clean up active sessions
+            if self._active_sessions:
+                logger.info(f"Terminating {len(self._active_sessions)} active sessions")
+                self._active_sessions.clear()
+
+            # Log final stats
+            if self.metrics and self.metrics.enabled:
+                final_stats = self.get_server_stats()
+                logger.info(
+                    f"Final server statistics: {final_stats.get('metrics', {})}"
+                )
+
+            self._running = False
+            logger.info(f"Enhanced MCP server '{self.name}' stopped (async)")
+
 
 class SimpleMCPServer(MCPServerBase):
     """Simple MCP Server for prototyping and development.
