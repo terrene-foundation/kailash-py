@@ -12,32 +12,6 @@
    - **For Python scripts**: Load dotenv at top of file.
    - **NEVER run tests/scripts without checking .env first** - assume ALL API keys exist there
 
-## ⚡ Critical Patterns
-
-### SwitchNode + Dot Notation (Execution Mode Dependent)
-
-SwitchNode outputs are **mutually exclusive** - `true_output` and `false_output` are never both populated.
-
-**✅ skip_branches mode** (recommended): Dot notation works perfectly
-```python
-workflow.add_connection("switch", "true_output.score", "processor", "score")
-runtime = LocalRuntime(conditional_execution="skip_branches")
-# Inactive branch automatically skipped - dot notation safe
-```
-
-**⚠️ route_data mode**: Avoid dot notation on SwitchNode outputs
-```python
-# ❌ WRONG - fails when true_output is None
-workflow.add_connection("switch", "true_output.score", "processor", "score")
-runtime = LocalRuntime(conditional_execution="route_data")
-
-# ✅ CORRECT - connect full output, handle None in code
-workflow.add_connection("switch", "true_output", "processor", "data")
-# In processor: score = data.get('score') if data else None
-```
-
-**Why**: Accessing `None.field_name` fails navigation. Runtime skips this in `skip_branches` mode but executes all nodes in `route_data` mode.
-
 ## 🏗️ Documentation
 
 ### Core SDK (`sdk-users/`)
