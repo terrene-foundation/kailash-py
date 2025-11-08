@@ -1,0 +1,2372 @@
+# DataFlow Error Catalog
+#
+# Comprehensive error definitions with contexts, causes, and solutions
+# for all 60 DataFlow error codes (DF-101 to DF-805)
+#
+# Structure:
+# - error_code: Unique identifier (e.g., DF-101)
+# - category: Error category (parameter, connection, migration, etc.)
+# - severity: critical, high, medium, low
+# - pattern: Regex pattern to match error messages
+# - title: Short error title
+# - description: Detailed error explanation
+# - contexts: List of context fields to extract
+# - causes: List of possible root causes
+# - solutions: List of actionable solutions with code examples
+# - docs_url: Link to documentation
+# - auto_fix: Whether auto-fix is available
+
+# =============================================================================
+# DF-1xx: Parameter Errors (10 errors)
+# =============================================================================
+
+DF-101:
+  category: parameter
+  severity: high
+  pattern: "Missing required parameter '(.+)'"
+  title: "Missing Required Parameter"
+  description: "A required parameter was not provided to a DataFlow node"
+  contexts:
+    - node_id
+    - parameter_name
+    - node_type
+  causes:
+    - "Connection not established from previous node"
+    - "Parameter name mismatch in connection mapping"
+    - "Empty input passed to workflow execution"
+    - "Previous node didn't produce expected output"
+    - "Workflow inputs missing required field"
+  solutions:
+    - description: "Add connection to provide the missing parameter"
+      code_example: |
+        workflow.add_connection(
+            "source_node",
+            "output_field",
+            "target_node",
+            "parameter_name"
+        )
+      auto_fixable: false
+    - description: "Check that source node produces the expected output"
+      code_example: |
+        from dataflow.platform import Inspector
+        inspector = Inspector(workflow)
+        print(inspector.node("source_node").connections_out)
+      auto_fixable: false
+    - description: "Verify workflow inputs contain required data"
+      code_example: |
+        runtime.execute(
+            workflow.build(),
+            inputs={"parameter_name": value}
+        )
+      auto_fixable: false
+    - description: "Use Inspector to verify parameter requirements"
+      code_example: |
+        inspector.node("target_node").input_params
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-101"
+  auto_fix: false
+
+DF-102:
+  category: parameter
+  severity: high
+  pattern: "Parameter type mismatch: expected (.+), got (.+)"
+  title: "Parameter Type Mismatch"
+  description: "A parameter received a value of the wrong type"
+  contexts:
+    - node_id
+    - parameter_name
+    - expected_type
+    - received_type
+    - received_value
+  causes:
+    - "Source node returns different type than expected"
+    - "Type coercion failed during connection mapping"
+    - "Dot notation navigating to wrong field type"
+    - "JSON deserialization produced unexpected type"
+    - "String value when dict/list expected (common with CreateNode vs UpdateNode confusion)"
+  solutions:
+    - description: "Use correct node parameter pattern (CreateNode = flat fields, UpdateNode = filter + fields)"
+      code_example: |
+        # CreateNode (flat fields)
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user_123",
+            "name": "Alice"
+        })
+
+        # UpdateNode (filter + fields structure)
+        workflow.add_node("UserUpdateNode", "update", {
+            "filter": {"id": "user_123"},
+            "fields": {"name": "Alice Updated"}
+        })
+      auto_fixable: false
+    - description: "Add type conversion in PythonCode node"
+      code_example: |
+        workflow.add_node("PythonCodeNode", "convert", {
+            "code": "output = {'result': str(input_value)}"
+        })
+      auto_fixable: false
+    - description: "Verify connection dot notation navigates to correct type"
+      code_example: |
+        # Correct: Navigate to dict field
+        workflow.add_connection(
+            "source", "output.user_data",
+            "target", "user_info"
+        )
+      auto_fixable: false
+    - description: "Check source node output type"
+      code_example: |
+        inspector.node("source_node").output_params
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-102"
+  auto_fix: false
+
+DF-103:
+  category: parameter
+  severity: medium
+  pattern: "Invalid datetime format"
+  title: "Invalid Datetime Format"
+  description: "A datetime parameter received a value in an incorrect format"
+  contexts:
+    - node_id
+    - parameter_name
+    - received_value
+    - expected_format
+  causes:
+    - "String datetime not in ISO 8601 format"
+    - "Timezone information missing or incorrect"
+    - "Date-only string when datetime expected"
+    - "Unix timestamp when ISO string expected"
+  solutions:
+    - description: "Use ISO 8601 datetime format (YYYY-MM-DDTHH:MM:SS)"
+      code_example: |
+        from datetime import datetime
+
+        # Correct ISO format
+        dt = datetime.now().isoformat()  # "2025-10-30T12:00:00"
+
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user_123",
+            "created_at": dt
+        })
+      auto_fixable: false
+    - description: "Convert Unix timestamp to ISO format"
+      code_example: |
+        from datetime import datetime
+
+        timestamp = 1698667200
+        iso_dt = datetime.fromtimestamp(timestamp).isoformat()
+      auto_fixable: false
+    - description: "Add timezone information for aware datetimes"
+      code_example: |
+        from datetime import datetime, timezone
+
+        dt = datetime.now(timezone.utc).isoformat()
+        # "2025-10-30T12:00:00+00:00"
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-103"
+  auto_fix: false
+
+DF-104:
+  category: parameter
+  severity: high
+  pattern: "Auto-managed field conflict: '(.+)'"
+  title: "Auto-Managed Field Conflict"
+  description: "Attempt to manually set an auto-managed field (created_at, updated_at, id)"
+  contexts:
+    - node_id
+    - field_name
+    - operation
+  causes:
+    - "Manually including 'created_at' or 'updated_at' in CreateNode parameters"
+    - "Manually including 'updated_at' in UpdateNode parameters"
+    - "Trying to override auto-generated ID field"
+    - "Including auto-managed fields in bulk operations"
+  solutions:
+    - description: "Remove auto-managed fields from parameters (DataFlow handles them automatically)"
+      code_example: |
+        # ❌ WRONG - includes auto-managed fields
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user_123",
+            "name": "Alice",
+            "created_at": datetime.now(),  # Don't include!
+            "updated_at": datetime.now()   # Don't include!
+        })
+
+        # ✅ CORRECT - let DataFlow manage timestamps
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user_123",
+            "name": "Alice"
+            # created_at and updated_at added automatically
+        })
+      auto_fixable: true
+    - description: "For UpdateNode, only include fields you want to change"
+      code_example: |
+        # ✅ CORRECT - updated_at handled automatically
+        workflow.add_node("UserUpdateNode", "update", {
+            "filter": {"id": "user_123"},
+            "fields": {"name": "Alice Updated"}
+            # updated_at set to CURRENT_TIMESTAMP automatically
+        })
+      auto_fixable: false
+    - description: "Read guide on auto-managed fields"
+      code_example: |
+        # Auto-managed fields in DataFlow:
+        # - created_at: Set on CREATE, never updated
+        # - updated_at: Set on CREATE and UPDATE
+        # - id: Generated if not provided (UUID4)
+
+        # See: https://docs.kailash.ai/dataflow/guides/auto-managed-fields
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-104"
+  auto_fix: true
+
+DF-105:
+  category: parameter
+  severity: high
+  pattern: "Missing required field: '(.+)'"
+  title: "Missing Required Field"
+  description: "A required field was not provided in the operation parameters"
+  contexts:
+    - node_id
+    - field_name
+    - operation
+    - model_name
+  causes:
+    - "Required field not included in CreateNode parameters"
+    - "Primary key 'id' missing from CreateNode (MUST use 'id', not 'user_id' or 'model_id')"
+    - "Missing required fields in BulkCreateNode data array"
+    - "Required field not in UpdateNode 'fields' dict"
+  solutions:
+    - description: "Include all required fields in operation parameters"
+      code_example: |
+        # CreateNode requires 'id' field (CRITICAL!)
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user_123",  # MUST be named 'id'
+            "name": "Alice",
+            "email": "alice@example.com"
+        })
+      auto_fixable: false
+    - description: "CRITICAL: Primary key MUST be named 'id' (not user_id, model_id, etc.)"
+      code_example: |
+        # ❌ WRONG - using 'user_id' as primary key
+        @db.model
+        class User:
+            user_id: str  # WRONG!
+            name: str
+
+        # ✅ CORRECT - primary key must be 'id'
+        @db.model
+        class User:
+            id: str  # CORRECT!
+            name: str
+
+        # See: https://docs.kailash.ai/dataflow/guides/primary-key-convention
+      auto_fixable: false
+    - description: "Check model definition for required fields"
+      code_example: |
+        inspector.model("User").required_fields
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-105"
+  auto_fix: false
+
+DF-106:
+  category: parameter
+  severity: medium
+  pattern: "Parameter name mismatch"
+  title: "Parameter Name Mismatch"
+  description: "Connection parameter name doesn't match target node parameter"
+  contexts:
+    - source_node
+    - target_node
+    - parameter_name
+    - available_params
+  causes:
+    - "Typo in connection parameter mapping"
+    - "Using output field name that doesn't exist"
+    - "Target parameter name changed but connection not updated"
+    - "Case sensitivity mismatch (user_id vs userId)"
+  solutions:
+    - description: "Use Inspector to verify available parameters"
+      code_example: |
+        inspector.node("source_node").output_params
+        inspector.node("target_node").input_params
+      auto_fixable: false
+    - description: "Fix parameter name in connection"
+      code_example: |
+        workflow.add_connection(
+            "source_node",
+            "correct_output_name",  # Check output_params
+            "target_node",
+            "correct_input_name"    # Check input_params
+        )
+      auto_fixable: false
+    - description: "Use dot notation to navigate nested fields"
+      code_example: |
+        workflow.add_connection(
+            "source", "output.nested.field",
+            "target", "input_param"
+        )
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-106"
+  auto_fix: false
+
+DF-107:
+  category: parameter
+  severity: low
+  pattern: "Empty parameter value"
+  title: "Empty Parameter Value"
+  description: "A parameter received an empty value (empty string, empty list, None)"
+  contexts:
+    - node_id
+    - parameter_name
+    - received_value
+  causes:
+    - "Source node produced empty result"
+    - "Filter query matched no records"
+    - "Optional parameter not provided"
+    - "Default value not set for optional field"
+  solutions:
+    - description: "Add validation before passing to node"
+      code_example: |
+        workflow.add_node("PythonCodeNode", "validate", {
+            "code": "if not input_value: raise ValueError('Input cannot be empty')\noutput = input_value"
+        })
+      auto_fixable: false
+    - description: "Provide default value in connection mapping"
+      code_example: |
+        workflow.add_node("PythonCodeNode", "default", {
+            "code": "output = input_value or 'default_value'"
+        })
+      auto_fixable: false
+    - description: "Handle empty values in node logic"
+      code_example: |
+        # CreateNode with optional fields
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user_123",
+            "name": "Alice",
+            "bio": ""  # Empty string allowed for optional fields
+        })
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-107"
+  auto_fix: false
+
+DF-108:
+  category: parameter
+  severity: high
+  pattern: "Invalid parameter structure"
+  title: "Invalid Parameter Structure"
+  description: "Parameter structure doesn't match expected format (e.g., UpdateNode requires 'filter' + 'fields')"
+  contexts:
+    - node_id
+    - parameter_name
+    - expected_structure
+    - received_structure
+  causes:
+    - "Using CreateNode pattern on UpdateNode (flat fields instead of filter + fields)"
+    - "Using UpdateNode pattern on CreateNode (filter + fields when flat expected)"
+    - "Missing 'filter' key in UpdateNode parameters"
+    - "Missing 'fields' key in UpdateNode parameters"
+  solutions:
+    - description: "Use correct parameter pattern for node type"
+      code_example: |
+        # CreateNode: Flat fields
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user_123",
+            "name": "Alice",
+            "email": "alice@example.com"
+        })
+
+        # UpdateNode: filter + fields structure
+        workflow.add_node("UserUpdateNode", "update", {
+            "filter": {"id": "user_123"},
+            "fields": {"name": "Alice Updated"}
+        })
+
+        # DeleteNode: filter only
+        workflow.add_node("UserDeleteNode", "delete", {
+            "filter": {"id": "user_123"}
+        })
+
+        # ListNode: optional filters, limit, offset
+        workflow.add_node("UserListNode", "list", {
+            "filters": {"status": "active"},
+            "limit": 20,
+            "offset": 0
+        })
+      auto_fixable: false
+    - description: "Read CreateNode vs UpdateNode guide"
+      code_example: |
+        # See detailed guide:
+        # https://docs.kailash.ai/dataflow/guides/create-vs-update-nodes
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-108"
+  auto_fix: false
+
+DF-109:
+  category: parameter
+  severity: medium
+  pattern: "Parameter validation failed"
+  title: "Parameter Validation Failed"
+  description: "Parameter value failed validation (e.g., negative value for positive field, invalid email format)"
+  contexts:
+    - node_id
+    - parameter_name
+    - validation_rule
+    - received_value
+  causes:
+    - "Value doesn't match field constraints (e.g., negative age, invalid email)"
+    - "String length exceeds maximum allowed"
+    - "Numeric value out of allowed range"
+    - "Invalid enum value"
+  solutions:
+    - description: "Validate value before passing to node"
+      code_example: |
+        workflow.add_node("PythonCodeNode", "validate", {
+            "code": "import re\nemail = input_email\nif not re.match(r'^[^@]+@[^@]+\\.[^@]+$', email):\n    raise ValueError(f'Invalid email: {email}')\noutput = email"
+        })
+      auto_fixable: false
+    - description: "Check field constraints in model definition"
+      code_example: |
+        inspector.model("User").field_constraints
+      auto_fixable: false
+    - description: "Use proper validation patterns"
+      code_example: |
+        # Email validation
+        import re
+        email_valid = bool(re.match(r'^[^@]+@[^@]+\.[^@]+$', email))
+
+        # Age validation
+        if age < 0 or age > 150:
+            raise ValueError("Age must be between 0 and 150")
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-109"
+  auto_fix: false
+
+DF-110:
+  category: parameter
+  severity: low
+  pattern: "Unexpected parameter"
+  title: "Unexpected Parameter"
+  description: "A parameter was provided that the node doesn't accept"
+  contexts:
+    - node_id
+    - parameter_name
+    - node_type
+    - accepted_params
+  causes:
+    - "Extra parameter not defined in model schema"
+    - "Typo in parameter name"
+    - "Using parameter from different node type"
+    - "Parameter removed from model but still in workflow"
+  solutions:
+    - description: "Remove unexpected parameter from node"
+      code_example: |
+        # Check accepted parameters
+        inspector.node("UserCreateNode").input_params
+
+        # Remove unexpected parameter
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user_123",
+            "name": "Alice"
+            # Remove unknown_field
+        })
+      auto_fixable: false
+    - description: "Verify model schema defines the field"
+      code_example: |
+        @db.model
+        class User:
+            id: str
+            name: str
+            email: str
+            # Add missing field here if needed
+      auto_fixable: false
+    - description: "Check for typos in parameter names"
+      code_example: |
+        # ❌ WRONG
+        {"user_name": "Alice"}  # Typo
+
+        # ✅ CORRECT
+        {"name": "Alice"}
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-110"
+  auto_fix: false
+
+# =============================================================================
+# DF-2xx: Connection Errors (10 errors)
+# =============================================================================
+
+DF-201:
+  category: connection
+  severity: high
+  pattern: "Missing connection"
+  title: "Missing Connection"
+  description: "Required connection between nodes is missing"
+  contexts:
+    - source_node
+    - target_node
+    - required_parameter
+  causes:
+    - "Connection not established between dependent nodes"
+    - "Target node expecting input but no connection exists"
+    - "Connection removed but dependency still exists"
+    - "Workflow missing required data flow path"
+  solutions:
+    - description: "Add connection to provide required data"
+      code_example: |
+        workflow.add_connection(
+            "source_node",
+            "output_param",
+            "target_node",
+            "input_param"
+        )
+      auto_fixable: false
+    - description: "Use Inspector to identify missing connections"
+      code_example: |
+        inspector.node("target_node").connections_in
+        inspector.node("source_node").connections_out
+      auto_fixable: false
+    - description: "Provide data via workflow inputs if no source node exists"
+      code_example: |
+        runtime.execute(
+            workflow.build(),
+            inputs={"required_parameter": value}
+        )
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-201"
+  auto_fix: false
+
+DF-202:
+  category: connection
+  severity: high
+  pattern: "Connection type mismatch"
+  title: "Connection Type Mismatch"
+  description: "Source output type doesn't match target input type"
+  contexts:
+    - source_node
+    - source_param
+    - source_type
+    - target_node
+    - target_param
+    - target_type
+  causes:
+    - "Source produces dict but target expects string"
+    - "Source produces list but target expects single item"
+    - "Dot notation navigation fails due to type mismatch"
+    - "JSON serialization/deserialization type change"
+  solutions:
+    - description: "Add type conversion node between source and target"
+      code_example: |
+        workflow.add_node("PythonCodeNode", "convert", {
+            "code": "output = str(input_value)"  # or dict, list, etc.
+        })
+        workflow.add_connection("source", "output", "convert", "input_value")
+        workflow.add_connection("convert", "output", "target", "input_param")
+      auto_fixable: false
+    - description: "Use dot notation to extract correct type from nested structure"
+      code_example: |
+        # If source outputs {"user": {"id": "123", "name": "Alice"}}
+        workflow.add_connection(
+            "source", "output.user.id",  # Extract string
+            "target", "user_id"
+        )
+      auto_fixable: false
+    - description: "Check source output type with Inspector"
+      code_example: |
+        inspector.node("source_node").output_params
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-202"
+  auto_fix: false
+
+DF-203:
+  category: connection
+  severity: high
+  pattern: "Dot notation navigation failed"
+  title: "Dot Notation Navigation Failed"
+  description: "Failed to navigate nested structure using dot notation (e.g., output.user.name)"
+  contexts:
+    - source_node
+    - source_param
+    - dot_path
+    - navigation_error
+  causes:
+    - "Accessing field on None value (e.g., None.field_name)"
+    - "Field doesn't exist in nested structure"
+    - "Typo in dot notation path"
+    - "SwitchNode output is None for inactive branch (route_data mode)"
+  solutions:
+    - description: "CRITICAL: Avoid dot notation on SwitchNode outputs in route_data mode"
+      code_example: |
+        # ❌ WRONG - dot notation on SwitchNode (route_data mode)
+        runtime = LocalRuntime(conditional_execution="route_data")
+        workflow.add_connection(
+            "switch", "true_output.score",  # FAILS if false branch taken
+            "processor", "score"
+        )
+
+        # ✅ CORRECT - use skip_branches mode OR connect full output
+        runtime = LocalRuntime(conditional_execution="skip_branches")
+        workflow.add_connection(
+            "switch", "true_output.score",  # Safe with skip_branches
+            "processor", "score"
+        )
+
+        # See: CLAUDE.md - SwitchNode + Dot Notation pattern
+      auto_fixable: false
+    - description: "Verify nested structure exists before navigation"
+      code_example: |
+        workflow.add_node("PythonCodeNode", "check", {
+            "code": "if input_data is None or 'user' not in input_data:\n    raise ValueError('Missing user field')\noutput = input_data['user']['name']"
+        })
+      auto_fixable: false
+    - description: "Use Inspector to verify output structure"
+      code_example: |
+        inspector.node("source_node").output_params
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-203"
+  auto_fix: false
+
+DF-204:
+  category: connection
+  severity: high
+  pattern: "Circular connection"
+  title: "Circular Connection"
+  description: "Circular dependency detected in workflow connections"
+  contexts:
+    - source_node
+    - target_node
+    - cycle_path
+  causes:
+    - "Node A depends on Node B, and Node B depends on Node A"
+    - "Multi-hop circular dependency (A → B → C → A)"
+    - "Accidental self-loop connection"
+    - "Incorrect connection direction"
+  solutions:
+    - description: "Remove circular connection to break cycle"
+      code_example: |
+        # Identify cycle using Inspector
+        inspector.workflow().dependencies
+
+        # Remove problematic connection
+        # workflow.remove_connection(...)  # If API exists
+      auto_fixable: false
+    - description: "Reorder workflow to establish correct data flow"
+      code_example: |
+        # ❌ WRONG - circular
+        # A → B → C → A
+
+        # ✅ CORRECT - linear flow
+        # A → B → C → D
+      auto_fixable: false
+    - description: "Use cyclic workflow pattern if intentional"
+      code_example: |
+        # For intentional cycles, use enable_cycles=True
+        runtime = LocalRuntime(enable_cycles=True)
+
+        # See: CLAUDE.md - Cyclic workflows pattern
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-204"
+  auto_fix: false
+
+DF-205:
+  category: connection
+  severity: medium
+  pattern: "Invalid source parameter"
+  title: "Invalid Source Parameter"
+  description: "Source parameter doesn't exist in source node"
+  contexts:
+    - source_node
+    - source_param
+    - available_params
+  causes:
+    - "Typo in source parameter name"
+    - "Source node doesn't produce the specified output"
+    - "Parameter name changed but connection not updated"
+    - "Wrong node used as source"
+  solutions:
+    - description: "Check available source parameters with Inspector"
+      code_example: |
+        inspector.node("source_node").output_params
+      auto_fixable: false
+    - description: "Fix parameter name in connection"
+      code_example: |
+        # Check output_params first, then use correct name
+        workflow.add_connection(
+            "source_node",
+            "correct_output_name",  # Must match output_params
+            "target_node",
+            "input_param"
+        )
+      auto_fixable: false
+    - description: "Verify source node type and outputs"
+      code_example: |
+        inspector.node("source_node").node_type
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-205"
+  auto_fix: false
+
+DF-206:
+  category: connection
+  severity: medium
+  pattern: "Invalid target parameter"
+  title: "Invalid Target Parameter"
+  description: "Target parameter doesn't exist in target node"
+  contexts:
+    - target_node
+    - target_param
+    - available_params
+  causes:
+    - "Typo in target parameter name"
+    - "Target node doesn't accept the specified input"
+    - "Parameter name changed but connection not updated"
+    - "Wrong node used as target"
+  solutions:
+    - description: "Check available target parameters with Inspector"
+      code_example: |
+        inspector.node("target_node").input_params
+      auto_fixable: false
+    - description: "Fix parameter name in connection"
+      code_example: |
+        # Check input_params first, then use correct name
+        workflow.add_connection(
+            "source_node",
+            "output_param",
+            "target_node",
+            "correct_input_name"  # Must match input_params
+        )
+      auto_fixable: false
+    - description: "Verify target node type and inputs"
+      code_example: |
+        inspector.node("target_node").node_type
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-206"
+  auto_fix: false
+
+DF-207:
+  category: connection
+  severity: low
+  pattern: "Connection already exists"
+  title: "Duplicate Connection"
+  description: "Connection between the same source and target parameters already exists"
+  contexts:
+    - source_node
+    - source_param
+    - target_node
+    - target_param
+  causes:
+    - "Duplicate add_connection() call"
+    - "Connection added multiple times in workflow construction"
+    - "Workflow reused without clearing previous connections"
+  solutions:
+    - description: "Remove duplicate connection call"
+      code_example: |
+        # Only add connection once
+        workflow.add_connection(
+            "source", "output",
+            "target", "input"
+        )
+        # Don't repeat the same connection
+      auto_fixable: true
+    - description: "Check existing connections before adding"
+      code_example: |
+        inspector.node("target").connections_in
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-207"
+  auto_fix: true
+
+DF-208:
+  category: connection
+  severity: medium
+  pattern: "Incompatible connection"
+  title: "Incompatible Connection"
+  description: "Connection violates node contract or constraints"
+  contexts:
+    - source_node
+    - target_node
+    - constraint_violated
+  causes:
+    - "Connecting to node that doesn't accept connections"
+    - "Exceeding maximum input connections for node"
+    - "Violating node-specific connection rules"
+  solutions:
+    - description: "Check node connection constraints"
+      code_example: |
+        inspector.node("target_node").connection_constraints
+      auto_fixable: false
+    - description: "Verify node supports multiple inputs (if needed)"
+      code_example: |
+        inspector.node("target_node").max_inputs
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-208"
+  auto_fix: false
+
+DF-209:
+  category: connection
+  severity: medium
+  pattern: "Missing input connection"
+  title: "Missing Input Connection"
+  description: "Node requires input connection but none provided"
+  contexts:
+    - node_id
+    - required_inputs
+  causes:
+    - "Node requires input but no connections established"
+    - "Workflow incomplete - missing data source"
+    - "Input not provided via workflow inputs"
+  solutions:
+    - description: "Add connection to provide required input"
+      code_example: |
+        workflow.add_connection(
+            "source_node",
+            "output",
+            "target_node",
+            "required_input"
+        )
+      auto_fixable: false
+    - description: "Provide input via workflow inputs"
+      code_example: |
+        runtime.execute(
+            workflow.build(),
+            inputs={"required_input": value}
+        )
+      auto_fixable: false
+    - description: "Check required inputs with Inspector"
+      code_example: |
+        inspector.node("target_node").required_inputs
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-209"
+  auto_fix: false
+
+DF-210:
+  category: connection
+  severity: low
+  pattern: "Unused connection"
+  title: "Unused Connection"
+  description: "Connection exists but target node doesn't use the input"
+  contexts:
+    - source_node
+    - target_node
+    - unused_param
+  causes:
+    - "Connection to wrong target parameter"
+    - "Target node logic doesn't use the input"
+    - "Leftover connection from previous workflow version"
+  solutions:
+    - description: "Remove unused connection"
+      code_example: |
+        # Remove connection if not needed
+        # workflow.remove_connection(...)  # If API exists
+      auto_fixable: false
+    - description: "Verify connection is to correct parameter"
+      code_example: |
+        inspector.node("target_node").input_params
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-210"
+  auto_fix: false
+
+# =============================================================================
+# DF-3xx: Migration Errors (8 errors)
+# =============================================================================
+
+DF-301:
+  category: migration
+  severity: critical
+  pattern: "Schema migration failed"
+  title: "Schema Migration Failed"
+  description: "Failed to migrate database schema to match model definition"
+  contexts:
+    - model_name
+    - operation
+    - error_message
+  causes:
+    - "Schema conflict with existing database schema"
+    - "Migration lock held by another process"
+    - "Database connection lost during migration"
+    - "Invalid model schema definition"
+    - "Insufficient database permissions"
+  solutions:
+    - description: "Clear schema cache and retry migration"
+      code_example: |
+        db._schema_cache.clear()
+        # Then retry operation
+      auto_fixable: true
+    - description: "Check for migration locks"
+      code_example: |
+        # Check if another process holds migration lock
+        # Release stale locks if necessary
+      auto_fixable: false
+    - description: "Verify database connection and permissions"
+      code_example: |
+        # Test database connection
+        db.test_connection()
+
+        # Verify CREATE TABLE permissions
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-301"
+  auto_fix: true
+
+DF-302:
+  category: migration
+  severity: high
+  pattern: "Table not found"
+  title: "Table Not Found"
+  description: "Database table doesn't exist for the model"
+  contexts:
+    - table_name
+    - model_name
+    - database_url
+  causes:
+    - "Model registered but table not created"
+    - "Table dropped manually outside DataFlow"
+    - "Wrong database connection URL"
+    - "Schema cache stale after external table drop"
+  solutions:
+    - description: "Enable auto-migration to create missing table"
+      code_example: |
+        db = DataFlow(
+            database_url,
+            auto_migrate=True  # Automatically create tables
+        )
+      auto_fixable: true
+    - description: "Manually create table using model definition"
+      code_example: |
+        # DataFlow will create table on first use
+        await db.initialize()
+      auto_fixable: false
+    - description: "Verify correct database connection"
+      code_example: |
+        # Check database URL
+        print(db.database_url)
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-302"
+  auto_fix: true
+
+DF-303:
+  category: migration
+  severity: medium
+  pattern: "Column not found"
+  title: "Column Not Found"
+  description: "Database column doesn't exist for model field"
+  contexts:
+    - table_name
+    - column_name
+    - field_name
+  causes:
+    - "Model field added but table not migrated"
+    - "Column dropped manually outside DataFlow"
+    - "Schema cache stale after external schema change"
+    - "Typo in field name"
+  solutions:
+    - description: "Run schema migration to add missing column"
+      code_example: |
+        # Clear schema cache to force migration check
+        db._schema_cache.clear()
+
+        # Next operation will trigger migration
+      auto_fixable: true
+    - description: "Verify field name matches model definition"
+      code_example: |
+        @db.model
+        class User:
+            id: str
+            name: str  # Check field name spelling
+            email: str
+      auto_fixable: false
+    - description: "Use existing_schema_mode if schema is managed externally"
+      code_example: |
+        db = DataFlow(
+            database_url,
+            existing_schema_mode=True  # Don't modify schema
+        )
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-303"
+  auto_fix: true
+
+DF-304:
+  category: migration
+  severity: high
+  pattern: "Constraint violation"
+  title: "Database Constraint Violation"
+  description: "Operation violates database constraint (unique, foreign key, not null, check)"
+  contexts:
+    - constraint_type
+    - column_name
+    - value
+    - error_message
+  causes:
+    - "Duplicate value for unique column (e.g., duplicate 'id')"
+    - "NULL value for NOT NULL column"
+    - "Foreign key reference to non-existent record"
+    - "Check constraint violation"
+  solutions:
+    - description: "For unique constraint: ensure unique values"
+      code_example: |
+        # Use unique IDs
+        import uuid
+
+        workflow.add_node("UserCreateNode", "create", {
+            "id": str(uuid.uuid4()),  # Always unique
+            "email": "alice@example.com"
+        })
+      auto_fixable: false
+    - description: "For NOT NULL constraint: provide required value"
+      code_example: |
+        # Include all required fields
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user_123",
+            "name": "Alice",  # Required field
+            "email": "alice@example.com"
+        })
+      auto_fixable: false
+    - description: "For foreign key constraint: verify referenced record exists"
+      code_example: |
+        # Create referenced record first
+        workflow.add_node("OrganizationCreateNode", "create_org", {
+            "id": "org_456"
+        })
+        workflow.add_node("UserCreateNode", "create_user", {
+            "id": "user_123",
+            "organization_id": "org_456"  # Must exist
+        })
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-304"
+  auto_fix: false
+
+DF-305:
+  category: migration
+  severity: high
+  pattern: "Migration rollback failed"
+  title: "Migration Rollback Failed"
+  description: "Failed to rollback migration after error"
+  contexts:
+    - model_name
+    - migration_step
+    - rollback_error
+  causes:
+    - "Database connection lost during rollback"
+    - "Partial schema changes can't be reverted"
+    - "Rollback logic error"
+  solutions:
+    - description: "Manually inspect and fix database schema"
+      code_example: |
+        # Connect to database and inspect schema
+        # DROP TABLE if needed and recreate
+
+        # Then clear schema cache
+        db._schema_cache.clear()
+      auto_fixable: false
+    - description: "Restore from database backup"
+      code_example: |
+        # If available, restore from backup
+        # Then retry migration
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-305"
+  auto_fix: false
+
+DF-306:
+  category: migration
+  severity: medium
+  pattern: "Schema sync error"
+  title: "Schema Sync Error"
+  description: "Model schema doesn't match database schema"
+  contexts:
+    - model_name
+    - expected_schema
+    - actual_schema
+    - differences
+  causes:
+    - "Model definition changed but database not migrated"
+    - "External schema changes not reflected in model"
+    - "Schema cache out of sync"
+  solutions:
+    - description: "Clear schema cache and retry"
+      code_example: |
+        db._schema_cache.clear()
+      auto_fixable: true
+    - description: "Enable auto-migration"
+      code_example: |
+        db = DataFlow(
+            database_url,
+            auto_migrate=True
+        )
+      auto_fixable: false
+    - description: "Update model definition to match database"
+      code_example: |
+        # If database schema is correct, update model
+        @db.model
+        class User:
+            id: str
+            name: str
+            # Add missing fields here
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-306"
+  auto_fix: true
+
+DF-307:
+  category: migration
+  severity: medium
+  pattern: "Alembic error"
+  title: "Alembic Migration Error"
+  description: "Error in Alembic migration system (if used)"
+  contexts:
+    - migration_file
+    - error_message
+  causes:
+    - "Alembic migration script error"
+    - "Migration version conflict"
+    - "Alembic not initialized"
+  solutions:
+    - description: "DataFlow uses built-in migration (Alembic not required)"
+      code_example: |
+        # DataFlow handles migrations automatically
+        db = DataFlow(database_url, auto_migrate=True)
+
+        # No Alembic configuration needed
+      auto_fixable: false
+    - description: "If using Alembic externally, check migration scripts"
+      code_example: |
+        # Verify Alembic migration scripts
+        # alembic upgrade head
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-307"
+  auto_fix: false
+
+DF-308:
+  category: migration
+  severity: critical
+  pattern: "Database connection error"
+  title: "Database Connection Error"
+  description: "Failed to connect to database"
+  contexts:
+    - database_url
+    - error_message
+  causes:
+    - "Invalid database URL"
+    - "Database server not running"
+    - "Incorrect credentials"
+    - "Network connectivity issue"
+    - "Database not created"
+  solutions:
+    - description: "Verify database URL format"
+      code_example: |
+        # PostgreSQL
+        db = DataFlow("postgresql://user:password@localhost:5432/dbname")
+
+        # MySQL
+        db = DataFlow("mysql://user:password@localhost:3306/dbname")
+
+        # SQLite
+        db = DataFlow("sqlite:///path/to/database.db")
+      auto_fixable: false
+    - description: "Test database connection"
+      code_example: |
+        # Try connecting with psql/mysql client
+        # psql -h localhost -U user -d dbname
+      auto_fixable: false
+    - description: "Check database server status"
+      code_example: |
+        # PostgreSQL
+        # sudo systemctl status postgresql
+
+        # MySQL
+        # sudo systemctl status mysql
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-308"
+  auto_fix: false
+
+# =============================================================================
+# DF-4xx: Configuration Errors (8 errors)
+# =============================================================================
+
+DF-401:
+  category: configuration
+  severity: high
+  pattern: "Invalid database URL"
+  title: "Invalid Database URL"
+  description: "Database URL format is invalid or malformed"
+  contexts:
+    - database_url
+    - error_message
+  causes:
+    - "Missing protocol (postgresql://, mysql://, sqlite://)"
+    - "Invalid host/port format"
+    - "Missing database name"
+    - "Special characters not URL-encoded"
+  solutions:
+    - description: "Use correct database URL format"
+      code_example: |
+        # PostgreSQL
+        "postgresql://user:password@localhost:5432/dbname"
+
+        # MySQL
+        "mysql://user:password@localhost:3306/dbname"
+
+        # SQLite (file)
+        "sqlite:///path/to/database.db"
+
+        # SQLite (in-memory)
+        ":memory:"
+      auto_fixable: false
+    - description: "URL-encode special characters in password"
+      code_example: |
+        from urllib.parse import quote_plus
+
+        password = "p@ssw0rd!"
+        encoded = quote_plus(password)
+        url = f"postgresql://user:{encoded}@localhost/dbname"
+      auto_fixable: false
+    - description: "Load database URL from environment variable"
+      code_example: |
+        import os
+        from dotenv import load_dotenv
+
+        load_dotenv()
+        database_url = os.getenv("DATABASE_URL")
+        db = DataFlow(database_url)
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-401"
+  auto_fix: false
+
+DF-402:
+  category: configuration
+  severity: high
+  pattern: "Multi-instance isolation violated"
+  title: "Multi-Instance Isolation Violated"
+  description: "Multiple DataFlow instances interfering with each other"
+  contexts:
+    - instance_1
+    - instance_2
+    - conflict
+  causes:
+    - "Global state shared between instances"
+    - "Node registry conflict"
+    - "Schema cache shared incorrectly"
+  solutions:
+    - description: "Use separate DataFlow instances for different databases"
+      code_example: |
+        # Correct: Each instance is independent
+        dev_db = DataFlow("sqlite:///dev.db")
+        prod_db = DataFlow("postgresql://prod...")
+
+        @dev_db.model
+        class User:
+            id: str
+            name: str
+
+        @prod_db.model
+        class User:  # Same name, different instance - OK!
+            id: str
+            name: str
+            email: str
+      auto_fixable: false
+    - description: "Don't reuse DataFlow variable for different databases"
+      code_example: |
+        # ❌ WRONG - reusing variable
+        db = DataFlow("sqlite:///dev.db")
+        # Later...
+        db = DataFlow("postgresql://prod...")  # Overwrites!
+
+        # ✅ CORRECT - separate variables
+        dev_db = DataFlow("sqlite:///dev.db")
+        prod_db = DataFlow("postgresql://prod...")
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-402"
+  auto_fix: false
+
+DF-403:
+  category: configuration
+  severity: medium
+  pattern: "Invalid configuration parameter"
+  title: "Invalid Configuration Parameter"
+  description: "Configuration parameter has invalid value or type"
+  contexts:
+    - parameter_name
+    - parameter_value
+    - expected_type
+  causes:
+    - "Wrong type for parameter (e.g., string instead of boolean)"
+    - "Value out of allowed range"
+    - "Unknown parameter name"
+  solutions:
+    - description: "Check DataFlow configuration parameters"
+      code_example: |
+        db = DataFlow(
+            database_url,
+            auto_migrate=True,             # Boolean
+            schema_cache_enabled=True,     # Boolean
+            schema_cache_ttl=300,          # Integer (seconds)
+            schema_cache_max_size=10000,   # Integer
+            pool_size=20,                  # Integer
+            max_overflow=30                # Integer
+        )
+      auto_fixable: false
+    - description: "Use valid parameter values"
+      code_example: |
+        # ❌ WRONG
+        db = DataFlow(url, auto_migrate="yes")  # String instead of bool
+
+        # ✅ CORRECT
+        db = DataFlow(url, auto_migrate=True)
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-403"
+  auto_fix: false
+
+DF-404:
+  category: configuration
+  severity: low
+  pattern: "Profile not found"
+  title: "Configuration Profile Not Found"
+  description: "Requested configuration profile doesn't exist"
+  contexts:
+    - profile_name
+    - available_profiles
+  causes:
+    - "Typo in profile name"
+    - "Profile not defined"
+  solutions:
+    - description: "Use available configuration profiles"
+      code_example: |
+        # DataFlow currently uses direct configuration
+        # No predefined profiles yet
+        db = DataFlow(
+            database_url,
+            auto_migrate=True,
+            schema_cache_enabled=True
+        )
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-404"
+  auto_fix: false
+
+DF-405:
+  category: configuration
+  severity: medium
+  pattern: "Config validation failed"
+  title: "Configuration Validation Failed"
+  description: "Configuration parameters failed validation"
+  contexts:
+    - validation_errors
+  causes:
+    - "Conflicting configuration parameters"
+    - "Invalid parameter combination"
+  solutions:
+    - description: "Check parameter compatibility"
+      code_example: |
+        # Example: Some parameters may be mutually exclusive
+        # Review DataFlow configuration documentation
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-405"
+  auto_fix: false
+
+DF-406:
+  category: configuration
+  severity: medium
+  pattern: "Environment variable missing"
+  title: "Required Environment Variable Missing"
+  description: "Required environment variable not set"
+  contexts:
+    - variable_name
+  causes:
+    - ".env file not loaded"
+    - "Environment variable not exported"
+    - "Wrong variable name"
+  solutions:
+    - description: "Load environment variables from .env file"
+      code_example: |
+        from dotenv import load_dotenv
+        import os
+
+        load_dotenv()  # Load .env file
+
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            raise ValueError("DATABASE_URL not set")
+
+        db = DataFlow(database_url)
+      auto_fixable: false
+    - description: "Create .env file with required variables"
+      code_example: |
+        # .env file
+        DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+        JWT_SECRET=your-secret-key-here
+      auto_fixable: false
+    - description: "Export environment variable in shell"
+      code_example: |
+        # Bash
+        export DATABASE_URL="postgresql://localhost/dbname"
+
+        # Or set in shell profile (.bashrc, .zshrc)
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-406"
+  auto_fix: false
+
+DF-407:
+  category: configuration
+  severity: low
+  pattern: "Security config error"
+  title: "Security Configuration Error"
+  description: "Security-related configuration issue"
+  contexts:
+    - security_issue
+  causes:
+    - "Weak or missing JWT secret"
+    - "Debug mode enabled in production"
+    - "Insecure defaults"
+  solutions:
+    - description: "Use strong secrets in production"
+      code_example: |
+        import secrets
+
+        # Generate strong secret
+        jwt_secret = secrets.token_urlsafe(32)
+        print(f"JWT_SECRET={jwt_secret}")
+
+        # Add to .env file (never commit!)
+      auto_fixable: false
+    - description: "Disable debug mode in production"
+      code_example: |
+        import os
+
+        debug = os.getenv("DEBUG", "false").lower() == "true"
+        # debug should be False in production
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-407"
+  auto_fix: false
+
+DF-408:
+  category: configuration
+  severity: low
+  pattern: "Monitoring config error"
+  title: "Monitoring Configuration Error"
+  description: "Monitoring or observability configuration issue"
+  contexts:
+    - monitoring_component
+    - error_message
+  causes:
+    - "Metrics endpoint not configured"
+    - "Health check configuration invalid"
+  solutions:
+    - description: "Configure health monitoring"
+      code_example: |
+        from dataflow.platform.health import HealthMonitor
+
+        monitor = HealthMonitor(db)
+        health = await monitor.check_health()
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-408"
+  auto_fix: false
+
+# =============================================================================
+# DF-5xx: Runtime Errors (8 errors)
+# =============================================================================
+
+DF-501:
+  category: runtime
+  severity: critical
+  pattern: "Event loop closed"
+  title: "Event Loop Closed"
+  description: "AsyncLocalRuntime used in synchronous context or event loop closed prematurely"
+  contexts:
+    - node_id
+    - execution_mode
+  causes:
+    - "Using AsyncLocalRuntime without await"
+    - "Event loop closed before node execution complete"
+    - "Mixing sync and async execution patterns"
+    - "Sequential test execution with shared event loop"
+  solutions:
+    - description: "Use LocalRuntime for synchronous execution"
+      code_example: |
+        from kailash.runtime import LocalRuntime
+
+        runtime = LocalRuntime()
+        results, run_id = runtime.execute(workflow.build())
+      auto_fixable: true
+    - description: "Use AsyncLocalRuntime with proper async context"
+      code_example: |
+        from kailash.runtime import AsyncLocalRuntime
+
+        runtime = AsyncLocalRuntime()
+        results, run_id = await runtime.execute_workflow_async(
+            workflow.build(),
+            inputs={}
+        )
+      auto_fixable: false
+    - description: "Use autouse fixture for async cleanup in tests"
+      code_example: |
+        import pytest
+
+        @pytest.fixture(autouse=True)
+        async def cleanup_dataflow_instances():
+            instances = []
+            yield instances
+            # Clean up async resources
+            for db in instances:
+                if hasattr(db, '_async_sql_node_cache'):
+                    for node in db._async_sql_node_cache.values():
+                        await node.close()
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-501"
+  auto_fix: true
+
+DF-502:
+  category: runtime
+  severity: high
+  pattern: "Async runtime error"
+  title: "Async Runtime Error"
+  description: "Error in async workflow execution"
+  contexts:
+    - node_id
+    - error_message
+  causes:
+    - "Async node execution failed"
+    - "Concurrent execution limit exceeded"
+    - "Resource exhaustion in async pool"
+  solutions:
+    - description: "Configure async runtime limits"
+      code_example: |
+        runtime = AsyncLocalRuntime(
+            max_concurrent_nodes=10,  # Limit concurrent execution
+            enable_cycles=True
+        )
+      auto_fixable: false
+    - description: "Check node async compatibility"
+      code_example: |
+        # Verify node supports async execution
+        # Use AsyncSQLDatabaseNode for database operations
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-502"
+  auto_fix: false
+
+DF-503:
+  category: runtime
+  severity: medium
+  pattern: "Node execution timeout"
+  title: "Node Execution Timeout"
+  description: "Node execution exceeded timeout limit"
+  contexts:
+    - node_id
+    - timeout_seconds
+  causes:
+    - "Long-running database query"
+    - "Network request timeout"
+    - "Infinite loop in PythonCode node"
+  solutions:
+    - description: "Increase timeout for long-running operations"
+      code_example: |
+        # Configure runtime timeout
+        runtime = LocalRuntime(
+            timeout=300  # 5 minutes
+        )
+      auto_fixable: false
+    - description: "Optimize slow database query"
+      code_example: |
+        # Add indexes to improve query performance
+        # Reduce result set with filters and limit
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-503"
+  auto_fix: false
+
+DF-504:
+  category: runtime
+  severity: high
+  pattern: "Workflow execution failed"
+  title: "Workflow Execution Failed"
+  description: "Overall workflow execution failed"
+  contexts:
+    - workflow_id
+    - failed_node
+    - error_message
+  causes:
+    - "Node execution error"
+    - "Connection validation failed"
+    - "Runtime error in node logic"
+  solutions:
+    - description: "Enable debug mode to see detailed execution trace"
+      code_example: |
+        runtime = LocalRuntime(debug=True)
+        results, run_id = runtime.execute(workflow.build())
+      auto_fixable: false
+    - description: "Use Inspector to validate workflow before execution"
+      code_example: |
+        from dataflow.platform import Inspector
+
+        inspector = Inspector(workflow)
+        issues = inspector.validate_workflow()
+        if issues:
+            print(f"Validation issues: {issues}")
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-504"
+  auto_fix: false
+
+DF-505:
+  category: runtime
+  severity: medium
+  pattern: "Resource exhaustion"
+  title: "Resource Exhaustion Error"
+  description: "System resources exhausted during execution"
+  contexts:
+    - resource_type
+    - current_usage
+    - limit
+  causes:
+    - "Too many concurrent connections"
+    - "Memory limit exceeded"
+    - "Database connection pool exhausted"
+  solutions:
+    - description: "Configure connection pool limits"
+      code_example: |
+        db = DataFlow(
+            database_url,
+            pool_size=20,      # Max pool size
+            max_overflow=10    # Extra connections
+        )
+      auto_fixable: false
+    - description: "Reduce concurrent operations"
+      code_example: |
+        runtime = AsyncLocalRuntime(
+            max_concurrent_nodes=5  # Reduce concurrency
+        )
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-505"
+  auto_fix: false
+
+DF-506:
+  category: runtime
+  severity: high
+  pattern: "Connection pool error"
+  title: "Connection Pool Error"
+  description: "Database connection pool error"
+  contexts:
+    - pool_status
+    - error_message
+  causes:
+    - "All connections in use"
+    - "Connection leak (not released)"
+    - "Pool configuration too small"
+  solutions:
+    - description: "Increase pool size"
+      code_example: |
+        db = DataFlow(
+            database_url,
+            pool_size=30,      # Increase pool
+            max_overflow=20
+        )
+      auto_fixable: false
+    - description: "Ensure connections are properly closed"
+      code_example: |
+        # DataFlow handles connection management
+        # No manual connection closing needed
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-506"
+  auto_fix: false
+
+DF-507:
+  category: runtime
+  severity: high
+  pattern: "Transaction error"
+  title: "Transaction Error"
+  description: "Database transaction failed or rolled back"
+  contexts:
+    - operation
+    - error_message
+  causes:
+    - "Transaction deadlock"
+    - "Constraint violation during transaction"
+    - "Connection lost during transaction"
+  solutions:
+    - description: "Implement retry logic for transient errors"
+      code_example: |
+        from dataflow.platform.resilience import CircuitBreaker
+
+        breaker = CircuitBreaker(
+            failure_threshold=5,
+            timeout=60,
+            expected_exception=Exception
+        )
+
+        @breaker
+        def execute_with_retry():
+            return runtime.execute(workflow.build())
+      auto_fixable: false
+    - description: "Check for constraint violations before transaction"
+      code_example: |
+        # Validate data before database operation
+        # Use UpsertNode instead of CreateNode for idempotency
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-507"
+  auto_fix: false
+
+DF-508:
+  category: runtime
+  severity: medium
+  pattern: "Runtime configuration error"
+  title: "Runtime Configuration Error"
+  description: "Invalid runtime configuration parameter"
+  contexts:
+    - parameter_name
+    - parameter_value
+  causes:
+    - "Invalid conditional_execution mode"
+    - "Invalid connection_validation mode"
+    - "Incompatible runtime parameters"
+  solutions:
+    - description: "Use valid runtime configuration"
+      code_example: |
+        from kailash.runtime import LocalRuntime
+
+        runtime = LocalRuntime(
+            debug=True,
+            enable_cycles=True,
+            conditional_execution="skip_branches",  # or "route_data"
+            connection_validation="strict"          # or "warn", "off"
+        )
+      auto_fixable: false
+    - description: "Check runtime configuration documentation"
+      code_example: |
+        # See CLAUDE.md for runtime configuration patterns
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-508"
+  auto_fix: false
+
+# =============================================================================
+# DF-6xx: Model Errors (6 errors)
+# =============================================================================
+
+DF-601:
+  category: model
+  severity: critical
+  pattern: "Primary key not 'id'"
+  title: "Primary Key Not Named 'id'"
+  description: "Model primary key must be named 'id' (not user_id, model_id, etc.)"
+  contexts:
+    - model_name
+    - primary_key_field
+  causes:
+    - "Using 'user_id', 'agent_id', or other field name instead of 'id'"
+    - "Misunderstanding DataFlow primary key convention"
+    - "Migrating from SQLAlchemy/Django ORM with different convention"
+  solutions:
+    - description: "CRITICAL: Rename primary key field to 'id'"
+      code_example: |
+        # ❌ WRONG - primary key not named 'id'
+        @db.model
+        class User:
+            user_id: str  # WRONG!
+            name: str
+
+        # ✅ CORRECT - primary key must be 'id'
+        @db.model
+        class User:
+            id: str  # CORRECT!
+            name: str
+      auto_fixable: false
+    - description: "Read primary key convention guide"
+      code_example: |
+        # DataFlow requires primary key to be named 'id'
+        # This is a fundamental convention that enables:
+        # - Automatic node generation
+        # - Connection mapping
+        # - Multi-instance isolation
+
+        # See: https://docs.kailash.ai/dataflow/guides/primary-key-convention
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-601"
+  auto_fix: false
+
+DF-602:
+  category: model
+  severity: high
+  pattern: "CreateNode vs UpdateNode confusion"
+  title: "CreateNode vs UpdateNode Pattern Confusion"
+  description: "Using wrong parameter pattern for node type (CreateNode = flat fields, UpdateNode = filter + fields)"
+  contexts:
+    - node_type
+    - received_structure
+    - expected_structure
+  causes:
+    - "Using CreateNode parameter pattern on UpdateNode"
+    - "Using UpdateNode parameter pattern on CreateNode"
+    - "Not understanding node parameter structure differences"
+  solutions:
+    - description: "Use correct parameter pattern for each node type"
+      code_example: |
+        # CreateNode: Flat fields (no filter)
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user_123",
+            "name": "Alice",
+            "email": "alice@example.com"
+        })
+
+        # UpdateNode: filter + fields structure
+        workflow.add_node("UserUpdateNode", "update", {
+            "filter": {"id": "user_123"},  # Which record to update
+            "fields": {"name": "Alice Updated"}  # Fields to update
+        })
+
+        # DeleteNode: filter only
+        workflow.add_node("UserDeleteNode", "delete", {
+            "filter": {"id": "user_123"}
+        })
+
+        # UpsertNode: where + update + create
+        workflow.add_node("UserUpsertNode", "upsert", {
+            "where": {"id": "user_123"},
+            "update": {"name": "Alice Updated"},
+            "create": {"id": "user_123", "name": "Alice", "email": "alice@example.com"}
+        })
+      auto_fixable: false
+    - description: "Read CreateNode vs UpdateNode guide"
+      code_example: |
+        # See comprehensive guide:
+        # https://docs.kailash.ai/dataflow/guides/create-vs-update-nodes
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-602"
+  auto_fix: false
+
+DF-603:
+  category: model
+  severity: high
+  pattern: "Model not registered"
+  title: "Model Not Registered"
+  description: "Model not registered with DataFlow instance"
+  contexts:
+    - model_name
+    - dataflow_instance
+  causes:
+    - "Forgot @db.model decorator"
+    - "Using model from different DataFlow instance"
+    - "Model defined but not decorated"
+  solutions:
+    - description: "Register model with @db.model decorator"
+      code_example: |
+        from dataflow import DataFlow
+
+        db = DataFlow(database_url)
+
+        @db.model  # REQUIRED!
+        class User:
+            id: str
+            name: str
+            email: str
+
+        # Model now registered - nodes auto-generated
+      auto_fixable: false
+    - description: "Ensure using correct DataFlow instance"
+      code_example: |
+        # ❌ WRONG - using model from different instance
+        dev_db = DataFlow("sqlite:///dev.db")
+        prod_db = DataFlow("postgresql://prod...")
+
+        @dev_db.model
+        class User:
+            id: str
+
+        # Trying to use dev User model with prod_db - ERROR!
+
+        # ✅ CORRECT - register model with correct instance
+        @prod_db.model
+        class User:
+            id: str
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-603"
+  auto_fix: false
+
+DF-604:
+  category: model
+  severity: medium
+  pattern: "Invalid model definition"
+  title: "Invalid Model Definition"
+  description: "Model class definition is invalid or incomplete"
+  contexts:
+    - model_name
+    - validation_error
+  causes:
+    - "Missing type annotations on fields"
+    - "Using unsupported field types"
+    - "Missing class definition"
+    - "Syntax error in model definition"
+  solutions:
+    - description: "Use proper type annotations"
+      code_example: |
+        from dataflow import DataFlow
+        from typing import List, Optional
+        from datetime import datetime
+
+        db = DataFlow(database_url)
+
+        @db.model
+        class User:
+            # Required fields (must have type annotation)
+            id: str
+            name: str
+            email: str
+
+            # Optional fields
+            bio: Optional[str]
+            tags: List[str]
+            created_at: datetime
+      auto_fixable: false
+    - description: "Check supported field types"
+      code_example: |
+        # Supported types:
+        # - str, int, float, bool
+        # - datetime
+        # - Optional[T]
+        # - List[str], List[int], List[float]
+        # - dict (stored as JSON)
+
+        # Unsupported types:
+        # - Custom classes (use dict + manual serialization)
+        # - Complex nested types
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-604"
+  auto_fix: false
+
+DF-605:
+  category: model
+  severity: medium
+  pattern: "Relationship error"
+  title: "Model Relationship Error"
+  description: "Error in model relationship definition (foreign keys, references)"
+  contexts:
+    - model_name
+    - relationship_field
+    - error_message
+  causes:
+    - "Foreign key field not defined"
+    - "Referenced model not registered"
+    - "Circular relationship without proper handling"
+  solutions:
+    - description: "Define foreign key fields explicitly"
+      code_example: |
+        @db.model
+        class Organization:
+            id: str
+            name: str
+
+        @db.model
+        class User:
+            id: str
+            name: str
+            organization_id: str  # Foreign key to Organization
+      auto_fixable: false
+    - description: "Ensure referenced model is registered first"
+      code_example: |
+        # Register Organization before User
+        @db.model
+        class Organization:
+            id: str
+            name: str
+
+        @db.model
+        class User:
+            id: str
+            organization_id: str  # References Organization
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-605"
+  auto_fix: false
+
+DF-606:
+  category: model
+  severity: medium
+  pattern: "Field type error"
+  title: "Model Field Type Error"
+  description: "Field type annotation is invalid or unsupported"
+  contexts:
+    - model_name
+    - field_name
+    - field_type
+  causes:
+    - "Using unsupported type annotation"
+    - "Missing type annotation"
+    - "Type annotation syntax error"
+  solutions:
+    - description: "Use supported type annotations"
+      code_example: |
+        from typing import List, Optional
+        from datetime import datetime
+
+        @db.model
+        class User:
+            id: str                    # ✅ Supported
+            name: str                  # ✅ Supported
+            age: int                   # ✅ Supported
+            score: float               # ✅ Supported
+            active: bool               # ✅ Supported
+            tags: List[str]            # ✅ Supported
+            metadata: dict             # ✅ Supported (as JSON)
+            bio: Optional[str]         # ✅ Supported
+            created_at: datetime       # ✅ Supported
+      auto_fixable: false
+    - description: "Convert unsupported types to supported ones"
+      code_example: |
+        # ❌ WRONG - custom class
+        class Address:
+            street: str
+            city: str
+
+        @db.model
+        class User:
+            id: str
+            address: Address  # Not supported
+
+        # ✅ CORRECT - use dict
+        @db.model
+        class User:
+            id: str
+            address: dict  # Store as JSON
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-606"
+  auto_fix: false
+
+# =============================================================================
+# DF-7xx: Node Errors (5 errors)
+# =============================================================================
+
+DF-701:
+  category: node
+  severity: high
+  pattern: "Node not found"
+  title: "Node Not Found"
+  description: "Referenced node doesn't exist in workflow or registry"
+  contexts:
+    - node_id
+    - available_nodes
+  causes:
+    - "Typo in node ID"
+    - "Node not added to workflow"
+    - "Wrong node type name (e.g., 'CreateUserNode' instead of 'UserCreateNode')"
+    - "Model not registered (nodes not generated)"
+  solutions:
+    - description: "Verify node ID spelling"
+      code_example: |
+        # Check exact node ID used in add_node
+        workflow.add_node("UserCreateNode", "create_user", {...})
+
+        # Use same ID in connections
+        workflow.add_connection(
+            "create_user",  # Must match exactly
+            "output",
+            "target",
+            "input"
+        )
+      auto_fixable: false
+    - description: "Use correct node naming convention (ModelOperationNode)"
+      code_example: |
+        # ❌ WRONG - incorrect naming
+        workflow.add_node("CreateUserNode", ...)  # WRONG!
+
+        # ✅ CORRECT - ModelOperationNode pattern
+        workflow.add_node("UserCreateNode", ...)  # CORRECT!
+
+        # Node naming: {ModelName}{Operation}Node
+        # Examples:
+        # - UserCreateNode
+        # - OrderUpdateNode
+        # - ProductDeleteNode
+      auto_fixable: false
+    - description: "Verify model is registered"
+      code_example: |
+        # Model must be registered for nodes to be generated
+        @db.model
+        class User:
+            id: str
+
+        # Now UserCreateNode, UserReadNode, etc. are available
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-701"
+  auto_fix: false
+
+DF-702:
+  category: node
+  severity: high
+  pattern: "Invalid node type"
+  title: "Invalid Node Type"
+  description: "Node type is not recognized or supported"
+  contexts:
+    - node_type
+    - available_types
+  causes:
+    - "Typo in node type name"
+    - "Using non-existent node type"
+    - "Missing model registration"
+  solutions:
+    - description: "Use valid node types from registered models"
+      code_example: |
+        # For each @db.model, these nodes are auto-generated:
+        # - {Model}CreateNode
+        # - {Model}ReadNode
+        # - {Model}UpdateNode
+        # - {Model}DeleteNode
+        # - {Model}ListNode
+        # - {Model}UpsertNode
+        # - {Model}BulkCreateNode
+        # - {Model}BulkUpdateNode
+        # - {Model}BulkDeleteNode
+        # - {Model}CountNode
+        # - {Model}BulkUpsertNode
+
+        workflow.add_node("UserCreateNode", "create", {...})
+      auto_fixable: false
+    - description: "Check registered models"
+      code_example: |
+        # List available models
+        print(db._models.keys())
+
+        # Each model has 11 auto-generated nodes
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-702"
+  auto_fix: false
+
+DF-703:
+  category: node
+  severity: high
+  pattern: "Node generation failed"
+  title: "Node Generation Failed"
+  description: "Failed to generate nodes for model"
+  contexts:
+    - model_name
+    - generation_error
+  causes:
+    - "Invalid model definition"
+    - "Model registration error"
+    - "Missing model metadata"
+  solutions:
+    - description: "Verify model definition is valid"
+      code_example: |
+        @db.model
+        class User:
+            id: str  # Primary key required
+            name: str
+            # All fields must have type annotations
+      auto_fixable: false
+    - description: "Check model registration logs"
+      code_example: |
+        # Enable debug logging
+        import logging
+        logging.basicConfig(level=logging.DEBUG)
+
+        # Then register model
+        @db.model
+        class User:
+            id: str
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-703"
+  auto_fix: false
+
+DF-704:
+  category: node
+  severity: medium
+  pattern: "Duplicate node ID"
+  title: "Duplicate Node ID"
+  description: "Multiple nodes with the same ID in workflow"
+  contexts:
+    - node_id
+    - node_type_1
+    - node_type_2
+  causes:
+    - "Using same node ID twice"
+    - "Copy-paste error in workflow construction"
+  solutions:
+    - description: "Use unique node IDs"
+      code_example: |
+        # ❌ WRONG - duplicate ID
+        workflow.add_node("UserCreateNode", "create", {...})
+        workflow.add_node("UserUpdateNode", "create", {...})  # Same ID!
+
+        # ✅ CORRECT - unique IDs
+        workflow.add_node("UserCreateNode", "create_user", {...})
+        workflow.add_node("UserUpdateNode", "update_user", {...})
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-704"
+  auto_fix: false
+
+DF-705:
+  category: node
+  severity: medium
+  pattern: "Node initialization failed"
+  title: "Node Initialization Failed"
+  description: "Failed to initialize node instance"
+  contexts:
+    - node_type
+    - error_message
+  causes:
+    - "Invalid node parameters"
+    - "Missing required configuration"
+    - "DataFlow instance not available"
+  solutions:
+    - description: "Verify node parameters are valid"
+      code_example: |
+        # Check node parameter requirements
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user_123",  # Required
+            "name": "Alice"
+        })
+      auto_fixable: false
+    - description: "Ensure DataFlow instance is accessible"
+      code_example: |
+        # Nodes need access to DataFlow instance
+        # Verify db instance is in scope
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-705"
+  auto_fix: false
+
+# =============================================================================
+# DF-8xx: Workflow Errors (5 errors)
+# =============================================================================
+
+DF-801:
+  category: workflow
+  severity: high
+  pattern: "Workflow build failed"
+  title: "Workflow Build Failed"
+  description: "Failed to build workflow (workflow.build() error)"
+  contexts:
+    - workflow_id
+    - error_message
+  causes:
+    - "Invalid workflow structure"
+    - "Missing required nodes"
+    - "Connection validation failed"
+    - "Circular dependency without enable_cycles=True"
+  solutions:
+    - description: "Use Inspector to validate workflow before building"
+      code_example: |
+        from dataflow.platform import Inspector
+
+        inspector = Inspector(workflow)
+        issues = inspector.validate_workflow()
+        if issues:
+            print(f"Validation issues: {issues}")
+        else:
+            built_workflow = workflow.build()
+      auto_fixable: false
+    - description: "Check for circular dependencies"
+      code_example: |
+        # Enable cycles if intentional
+        runtime = LocalRuntime(enable_cycles=True)
+
+        # Or fix circular connections
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-801"
+  auto_fix: false
+
+DF-802:
+  category: workflow
+  severity: medium
+  pattern: "Workflow validation failed"
+  title: "Workflow Validation Failed"
+  description: "Workflow structure validation failed"
+  contexts:
+    - validation_errors
+  causes:
+    - "Disconnected nodes"
+    - "Invalid connections"
+    - "Missing required inputs"
+    - "Type mismatches"
+  solutions:
+    - description: "Use Inspector to identify validation issues"
+      code_example: |
+        from dataflow.platform import Inspector
+
+        inspector = Inspector(workflow)
+
+        # Check workflow structure
+        issues = inspector.validate_workflow()
+        print(issues)
+
+        # Check specific nodes
+        node_info = inspector.node("node_id")
+        print(node_info.connections_in)
+        print(node_info.connections_out)
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-802"
+  auto_fix: false
+
+DF-803:
+  category: workflow
+  severity: high
+  pattern: "Cyclic dependency"
+  title: "Cyclic Dependency in Workflow"
+  description: "Workflow contains circular dependency without enable_cycles=True"
+  contexts:
+    - cycle_path
+  causes:
+    - "Node A depends on Node B, Node B depends on Node A"
+    - "Multi-hop circular dependency"
+    - "Intentional cycle without proper configuration"
+  solutions:
+    - description: "Enable cycles if intentional"
+      code_example: |
+        from kailash.runtime import LocalRuntime
+
+        runtime = LocalRuntime(enable_cycles=True)
+
+        # See CLAUDE.md for cyclic workflow patterns
+      auto_fixable: false
+    - description: "Remove circular connection if unintentional"
+      code_example: |
+        # Use Inspector to identify cycle
+        inspector.workflow().dependencies
+
+        # Remove problematic connection
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-803"
+  auto_fix: false
+
+DF-804:
+  category: workflow
+  severity: medium
+  pattern: "Invalid workflow structure"
+  title: "Invalid Workflow Structure"
+  description: "Workflow structure doesn't meet requirements"
+  contexts:
+    - structure_issue
+  causes:
+    - "No nodes in workflow"
+    - "No connections in workflow"
+    - "Disconnected subgraphs"
+  solutions:
+    - description: "Ensure workflow has nodes and connections"
+      code_example: |
+        workflow = WorkflowBuilder()
+
+        # Add at least one node
+        workflow.add_node("UserCreateNode", "create", {...})
+
+        # Add connections if needed
+        workflow.add_connection("source", "output", "target", "input")
+
+        # Build
+        built = workflow.build()
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-804"
+  auto_fix: false
+
+DF-805:
+  category: workflow
+  severity: low
+  pattern: "Workflow serialization failed"
+  title: "Workflow Serialization Failed"
+  description: "Failed to serialize workflow for storage or transmission"
+  contexts:
+    - serialization_error
+  causes:
+    - "Non-serializable node parameters"
+    - "Custom objects in parameters"
+  solutions:
+    - description: "Use JSON-serializable parameters"
+      code_example: |
+        # ❌ WRONG - non-serializable object
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user_123",
+            "data": some_custom_object  # Not serializable
+        })
+
+        # ✅ CORRECT - JSON-serializable types
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user_123",
+            "data": {"key": "value"}  # dict is serializable
+        })
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/dataflow/errors/df-805"
+  auto_fix: false
