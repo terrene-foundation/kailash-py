@@ -105,7 +105,95 @@ workflow.add_node("data_processor", PythonCodeNode.from_function(
 
 ```
 
-## Retry Logic Pattern
+## Database-Specific Retry Configuration
+```python
+from kailash.nodes.data.async_sql import RetryConfig, RetryMetrics
+from kailash.sdk_exceptions import RetryExhaustedException
+
+# Use database-optimized retry settings
+# SQLite: 10 retries, 30s timeout (file-level locking)
+sqlite_config = RetryConfig.for_database("sqlite")
+
+# PostgreSQL: 5 retries, 10s timeout (MVCC)
+postgres_config = RetryConfig.for_database("postgresql")
+
+# MySQL: 5 retries, 15s timeout (InnoDB MVCC)
+mysql_config = RetryConfig.for_database("mysql")
+
+# Apply to AsyncSQLNode
+from kailash.nodes.data import AsyncSQLNode
+
+node = AsyncSQLNode(
+    node_id="db_query",
+    query="SELECT * FROM users WHERE active = :active",
+    retry_config=sqlite_config  # Database-specific optimization
+)
+```
+
+## Handling Retry Exhaustion
+```python
+from kailash.sdk_exceptions import RetryExhaustedException
+
+try:
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(workflow, parameters={
+        "db_query": {"active": True}
+    })
+    print("✅ Query executed successfully")
+
+except RetryExhaustedException as e:
+    # Raised when all retry attempts are exhausted
+    print(f"❌ Operation: {e.operation}")
+    print(f"❌ Attempts: {e.attempts}")
+    print(f"❌ Last error: {e.last_error}")
+    print(f"❌ Total wait time: {e.total_wait_time:.2f}s")
+
+    # Take corrective action
+    if "database is locked" in str(e.last_error):
+        print("💡 Consider switching to PostgreSQL for better concurrency")
+    elif "connection" in str(e.last_error).lower():
+        print("💡 Check database connection settings")
+
+except Exception as e:
+    print(f"❌ Unexpected error: {e}")
+```
+
+## Monitoring Retry Behavior
+```python
+from kailash.nodes.data.async_sql import RetryConfig, RetryMetrics
+
+# Create metrics tracker
+metrics = RetryMetrics()
+
+# Attach to retry config
+config = RetryConfig.for_database("sqlite", metrics=metrics)
+
+# Use in node
+node = AsyncSQLNode(
+    node_id="db_query",
+    query="INSERT INTO orders (id, amount) VALUES (:id, :amount)",
+    retry_config=config
+)
+
+# After workflow execution, check metrics
+snapshot = metrics.get_metrics()
+print(f"Total operations: {snapshot['total_operations']}")
+print(f"Total retries: {snapshot['total_retries']}")
+print(f"Failed operations: {snapshot['failed_operations']}")
+print(f"Average retries: {snapshot['avg_retries_per_operation']:.2f}")
+print(f"Failure rate: {snapshot['failure_rate']:.2%}")
+print(f"Retry distribution: {snapshot['retry_histogram']}")
+
+# Example output:
+# Total operations: 100
+# Total retries: 45
+# Failed operations: 2
+# Average retries: 0.45
+# Failure rate: 2.00%
+# Retry distribution: {0: 55, 1: 30, 2: 10, 3: 3, 5: 2}
+```
+
+## Retry Logic Pattern (Manual)
 ```python
 import time
 

@@ -1125,7 +1125,7 @@ wheels = [
 
 [[package]]
 name = "kailash"
-version = "0.10.1"
+version = "0.10.10"
 source = { editable = "." }
 dependencies = [
     { name = "aiofiles" },
