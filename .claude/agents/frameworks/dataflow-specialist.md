@@ -207,106 +207,88 @@ When encountering apparent "limitations":
 
 This section focuses on **enterprise-level patterns** and **production complexity**.
 
-## 🚨 ErrorEnhancer System (v0.8.0+)
+## 🚨 Error Handling with ErrorEnhancer (NEW in v0.4.7+)
 
-DataFlow uses **ErrorEnhancer** to transform Python exceptions into rich, actionable error messages with solutions.
+DataFlow includes **ErrorEnhancer** to transform Python exceptions into rich, actionable error messages with solutions.
 
-### Key Features
-- **Error Code**: DF-XXX format for quick lookup
-- **Context**: What node, parameter, or operation failed
-- **Causes**: Why the error occurred (3-5 possible reasons)
-- **Solutions**: How to fix it (with code examples)
-- **Documentation link**: Detailed explanation
+**Key Features**:
+- **DF-XXX Error Codes**: Standardized error codes for quick lookup
+- **Context-Aware Messages**: What, why, and how to fix
+- **Multiple Solutions**: 3-5 possible fixes with code examples
+- **Performance Modes**: FULL (development), MINIMAL (staging), DISABLED (production)
+- **Pattern Caching**: 90%+ cache hit rate for repeated errors
 
-### Error Categories (60+ error types)
-
-| Category | Code Range | Examples |
-|----------|------------|----------|
-| Parameter errors | DF-1XX | Missing parameter, type mismatch, validation |
-| Connection errors | DF-2XX | Missing connection, circular, type mismatch |
-| Migration errors | DF-3XX | Schema errors, table not found, constraints |
-| Configuration errors | DF-4XX | Database URL, environment variables |
-| Runtime errors | DF-5XX | Event loop, timeouts, resources |
-| Model errors | DF-6XX | Primary key, field types |
-| Node errors | DF-7XX | Not found, generation failed |
-| Workflow errors | DF-8XX | Build failed, cycles, structure |
-
-### Basic Usage
-
-**Example: Missing Parameter Error**
+**Example Enhanced Error**:
 ```python
-# ❌ This raises DF-101: Missing Required Parameter
+# Code that triggers error
 workflow.add_node("UserCreateNode", "create", {
-    "name": "Alice"  # Missing "id" parameter
+    "name": "Alice"  # Missing 'id' field
 })
 
-# Error message shows:
-# - Error Code: DF-101
-# - Missing parameter: "id"
-# - 3 solutions with code examples
-# - Link to docs
+# Enhanced error output
+DF-101: Missing Required Parameter
 
-# ✅ Correct: Include all required parameters
-workflow.add_node("UserCreateNode", "create", {
-    "id": "user-123",
-    "name": "Alice",
-    "email": "alice@example.com"
-})
+Error: Field 'id' is required for CREATE operations
+
+Context:
+- Node: UserCreateNode
+- Operation: CREATE
+- Model: User
+- Missing Parameter: id
+
+Causes:
+1. Missing 'id' field in data dictionary
+2. Typo in field name (e.g., 'user_id' instead of 'id')
+3. Data structure doesn't match model schema
+
+Solutions:
+1. Add 'id' field to your data:
+   data = {"id": "user-123", "name": "Alice"}
+
+2. Check model definition for required fields
+3. Use Inspector to validate workflow structure
+
+Documentation: https://docs.kailash.dev/dataflow/errors/DF-101
 ```
 
-### Common Errors
-
-**DF-301: Migration Schema Error**
+**Performance Modes**:
 ```python
-# Raised when: Auto-migration detects schema incompatibility
-# Solution: Use existing_schema_mode or fix model definition
+from dataflow import DataFlow
 
-db = DataFlow(url, existing_schema_mode=True)  # Use existing schema
+# Development: Full error enhancement (default)
+db = DataFlow(url, error_enhancement_mode="FULL")
+
+# Staging: Minimal overhead
+db = DataFlow(url, error_enhancement_mode="MINIMAL")
+
+# Production: Disabled for performance
+db = DataFlow(url, error_enhancement_mode="DISABLED")
 ```
 
-**DF-401: Invalid Database URL**
-```python
-# Raised when: Database URL format is invalid
-# Solution: Use correct format
+**Common Error Codes**:
+- **DF-101**: Missing Required Parameter → Add missing field to data dictionary
+- **DF-201**: Connection Type Mismatch → Check parameter types in connections
+- **DF-301**: Migration Failed → Review schema changes and constraints
+- **DF-401**: Database URL Invalid → Verify connection string format
+- **DF-501**: Event Loop Closed → Use AsyncLocalRuntime in async contexts
+- **DF-601**: Primary Key Missing → Ensure model has 'id' field
+- **DF-701**: Node Not Found → Check node name spelling and case
+- **DF-801**: Workflow Build Failed → Validate all connections before .build()
 
-# ✅ Correct formats:
-db = DataFlow("postgresql://user:pass@localhost:5432/mydb")
-db = DataFlow("mysql://user:pass@localhost:3306/mydb")
-db = DataFlow("sqlite:///path/to/database.db")
-```
+**File Reference**: `src/dataflow/core/error_enhancer.py:1-756` (60+ methods)
 
-**DF-601: Invalid Primary Key**
-```python
-# Raised when: Primary key is not named "id"
-# Solution: Always use "id" as primary key name
-
-# ❌ WRONG
-@db.model
-class User:
-    user_id: str  # FAILS - DataFlow requires 'id'
-
-# ✅ CORRECT
-@db.model
-class User:
-    id: str  # Required - must be exactly 'id'
-```
-
-### Documentation Reference
-- Comprehensive Guide: `sdk-users/apps/dataflow/guides/error-handling.md`
-- Common Errors: `sdk-users/apps/dataflow/troubleshooting/common-errors.md`
-
-## 🔍 Inspector System (v0.8.0+)
+## 🔍 Inspector - Workflow Introspection (NEW in v0.4.7+)
 
 DataFlow includes **Inspector** for debugging and analyzing workflow structure before execution.
 
-### Key Capabilities
-1. **Connection Analysis**: List connections, find broken connections, trace connection chains
-2. **Parameter Tracing**: Trace parameters back to source, track transformations
-3. **Workflow Validation**: Validate connections and detect circular dependencies
-4. **Visual Inspection**: Rich formatted output for debugging
+**Key Features**:
+- **Connection Analysis**: List connections, find broken connections, trace chains
+- **Parameter Tracing**: Trace parameters back to source, track transformations
+- **Workflow Validation**: Validate connections and detect circular dependencies
+- **Visual Inspection**: Rich formatted output for debugging
+- **30+ Methods**: Comprehensive introspection API
 
-### Basic Usage
-
+**Basic Usage**:
 ```python
 from dataflow.platform.inspector import Inspector
 from kailash.workflow.builder import WorkflowBuilder
@@ -333,59 +315,131 @@ if not validation["is_valid"]:
     print(f"Found {len(validation['errors'])} connection errors")
 ```
 
-### Common Debugging Scenarios
+**Common Debugging Scenarios**:
 
-**Debug missing data parameters**
+**Scenario 1: Missing Data Parameter**
 ```python
-# Issue: Node not receiving expected data
+# Problem: Parameter 'id' is None in node 'read'
 inspector = Inspector(workflow)
+trace = inspector.trace_parameter("read", "id")
 
-# Check if parameter is connected
-trace = inspector.trace_parameter("process_user", "user_data")
-if trace.source is None:
-    print("Parameter 'user_data' is not connected!")
-else:
-    print(f"Data flows from: {trace.source}")
+# Inspector shows:
+# create.id (source) → read.id (destination)
+# Value: "user-123" (confirmed data flow)
+# If value is None, Inspector shows where connection breaks
 ```
 
-**Find broken connections**
+**Scenario 2: Broken Connection**
 ```python
-# Validate all connections
-validation = inspector.validate_connections()
+# Problem: Connection not working as expected
+inspector = Inspector(workflow)
+broken = inspector.find_broken_connections()
 
-for error in validation["errors"]:
-    print(f"Broken connection: {error['from_node']}.{error['from_param']} → {error['to_node']}.{error['to_param']}")
-    print(f"Reason: {error['reason']}")
+# Shows all connections with type mismatches or missing sources
+for conn in broken:
+    print(f"Broken: {conn['source']} → {conn['target']}")
+    print(f"Reason: {conn['error']}")
 ```
 
-**Trace complex parameter transformations**
+**Scenario 3: Circular Dependency**
 ```python
-# Trace parameter through multiple nodes
-trace = inspector.trace_parameter("final_node", "processed_data")
+# Problem: Workflow hangs due to circular dependency
+inspector = Inspector(workflow)
+cycles = inspector.detect_cycles()
 
-# Show full chain
-for step in trace.chain:
-    print(f"Step {step['index']}: {step['node']}.{step['parameter']}")
+if cycles:
+    print(f"Found {len(cycles)} circular dependencies:")
+    for cycle in cycles:
+        print(f"  Cycle: {' → '.join(cycle)}")
 ```
 
-### CLI Usage (Advanced)
+**File Reference**: `src/dataflow/platform/inspector.py:1-3540` (30+ methods)
 
+**Quick Reference Guide**: `sdk-users/apps/dataflow/guides/inspector-debugging-guide.md` (12+ scenarios)
+
+## 🔧 CLI Commands (NEW in v0.4.7+)
+
+DataFlow includes 5 CLI commands for workflow analysis, debugging, and generation.
+
+**Available Commands**:
+1. **analyze**: Analyze workflow structure and dependencies
+2. **debug**: Debug workflow issues with detailed diagnostics
+3. **generate**: Generate node code from models
+4. **perf**: Performance analysis and profiling
+5. **validate**: Validate workflow structure before execution
+
+**Command 1: Analyze**
 ```bash
-# Interactive debugging mode
-dataflow inspect workflow.json
+# Analyze workflow structure
+dataflow analyze my_workflow.py
 
-# Trace specific parameter
-dataflow inspect workflow.json --trace process_user.user_data
-
-# Validate connections only
-dataflow inspect workflow.json --validate-only
+# Output:
+# Workflow Analysis Report
+# - Nodes: 15
+# - Connections: 23
+# - Cycles: 0
+# - Validation: PASSED
+# - Estimated Runtime: ~2.5s
 ```
 
-### Documentation Reference
-- Comprehensive Debugging Guide: `sdk-users/apps/dataflow/guides/inspector-debugging-guide.md`
-- 12+ common debugging scenarios with solutions
-- Inspector API reference with all methods
-- CLI usage examples and interactive mode
+**Command 2: Debug**
+```bash
+# Debug workflow with detailed diagnostics
+dataflow debug my_workflow.py --node "user_create"
+
+# Output:
+# Node Debug Report: user_create
+# - Type: UserCreateNode
+# - Parameters: id, name, email
+# - Connections: 3 outgoing, 0 incoming
+# - Validation: PASSED
+# - Potential Issues: None
+```
+
+**Command 3: Generate**
+```bash
+# Generate node code from model
+dataflow generate User --output nodes/
+
+# Generates:
+# - nodes/user_create_node.py
+# - nodes/user_read_node.py
+# - nodes/user_update_node.py
+# - nodes/user_delete_node.py
+# - nodes/user_list_node.py
+```
+
+**Command 4: Perf**
+```bash
+# Analyze workflow performance
+dataflow perf my_workflow.py --profile
+
+# Output:
+# Performance Analysis Report
+# - Total Runtime: 1.8s
+# - Node Timings:
+#   - user_create: 0.5s (28%)
+#   - user_read: 0.3s (17%)
+#   - email_send: 1.0s (55%)
+# - Bottlenecks: email_send (optimize email API calls)
+```
+
+**Command 5: Validate**
+```bash
+# Validate workflow before execution
+dataflow validate my_workflow.py --strict
+
+# Output:
+# Workflow Validation Report
+# - Structure: PASSED
+# - Connections: PASSED (23 connections)
+# - Parameters: PASSED (all required parameters present)
+# - Types: PASSED (all type constraints satisfied)
+# - Cycles: PASSED (no circular dependencies)
+# - Overall: PASSED ✓
+```
+
+**File Reference**: `src/dataflow/cli/*.py` (5 command files)
 
 ## 🔄 UpsertNode with Custom Conflict Fields (v0.8.0+)
 
@@ -1858,6 +1912,139 @@ def event_loop():
 - **Fixture Patterns**: `/apps/kailash-dataflow/docs/testing/fixture-patterns.md`
 - **ADR-017 Quick Reference**: `/apps/kailash-dataflow/adr/ADR-017-API-QUICK-REFERENCE.md`
 
+## 📊 Performance Characteristics (Updated v0.4.7+)
+
+DataFlow Phase 1A/1B improvements significantly reduce overhead while maintaining functionality.
+
+**Instance Creation**:
+- **Before v0.4.7**: ~700ms per DataFlow instance
+- **After v0.4.7**: <50ms per instance (14x faster)
+- **Improvement**: 93% reduction via schema cache and deferred operations
+
+**CRUD Operations**:
+- **First operation** (cache miss): ~1500ms with migration checks
+- **Subsequent operations** (cache hit): ~1ms (99% faster)
+- **Improvement**: 91-99% via schema cache (v0.7.3+)
+
+**Memory Overhead**:
+- **Per instance**: ~20MB with models + <1KB per cached table
+- **Schema cache**: <1KB per cached table
+- **Connection pools**: Shared across instances (event loop isolated)
+
+**Schema Operations**:
+- **Model registration**: Synchronous, instant
+- **Table creation**: Deferred to first use (not registration)
+- **Migration checks**: Cached, 91-99% improvement after first check
+
+**Error Enhancement Overhead**:
+- **FULL mode**: <5ms per error (development)
+- **MINIMAL mode**: <1ms per error (staging)
+- **DISABLED mode**: 0ms (production)
+
+**Inspector Overhead**:
+- **Workflow analysis**: <10ms for 100-node workflows
+- **Parameter tracing**: <1ms per trace
+- **Connection validation**: <5ms for 500 connections
+
+**CLI Commands Overhead**:
+- **analyze**: <50ms for complex workflows
+- **debug**: <100ms with full diagnostics
+- **validate**: <25ms for structure checks
+
+## 🐛 Debugging Tips (Updated v0.4.7+)
+
+DataFlow Phase 1A/1B introduces enhanced debugging tools beyond basic inspection.
+
+**Step 1: Use Inspector First**
+```python
+from dataflow.platform.inspector import Inspector
+
+# ALWAYS start with Inspector
+inspector = Inspector(workflow)
+
+# Quick health check
+validation = inspector.validate_connections()
+if not validation["is_valid"]:
+    print(f"Found {len(validation['errors'])} errors")
+    for error in validation["errors"]:
+        print(f"  - {error}")
+```
+
+**Step 2: Check Error Codes**
+```python
+# Enhanced errors show DF-XXX codes
+try:
+    results = runtime.execute(workflow.build())
+except Exception as e:
+    if "DF-" in str(e):
+        # Extract error code and lookup solution
+        error_code = str(e).split(":")[0]
+        print(f"Error code: {error_code}")
+        print(f"Documentation: https://docs.kailash.dev/dataflow/errors/{error_code}")
+```
+
+**Step 3: Use CLI Commands**
+```bash
+# Validate workflow structure
+dataflow validate my_workflow.py --strict
+
+# Debug specific node
+dataflow debug my_workflow.py --node "problematic_node"
+
+# Analyze performance bottlenecks
+dataflow perf my_workflow.py --profile
+```
+
+**Step 4: Verify Node-Instance Coupling**
+```python
+# Check node-instance coupling (rare issue)
+node = db._nodes["UserCreateNode"]()
+print(f"Bound to: {node.dataflow_instance}")
+print(f"Correct: {node.dataflow_instance is db}")
+```
+
+**Step 5: Verify String ID Preservation**
+```python
+# Verify string ID preservation (rare issue)
+results = runtime.execute(workflow.build())
+print(f"ID type: {type(results['create_user']['id'])}")
+print(f"ID value: {results['create_user']['id']}")
+```
+
+**Common Debugging Patterns**:
+
+**Pattern 1: Connection Issues**
+```python
+# Use Inspector to trace parameter flow
+inspector = Inspector(workflow)
+trace = inspector.trace_parameter("target_node", "missing_param")
+
+if trace.source is None:
+    print("Parameter not connected! Add connection:")
+    print(f"  workflow.add_connection(source_node, 'param', 'target_node', 'missing_param')")
+```
+
+**Pattern 2: Type Mismatches**
+```python
+# Inspector shows type mismatches in connections
+validation = inspector.validate_connections()
+for error in validation["errors"]:
+    if "type mismatch" in error["reason"].lower():
+        print(f"Type mismatch: {error['from_node']}.{error['from_param']} → {error['to_node']}.{error['to_param']}")
+        print(f"Expected: {error['expected_type']}, Got: {error['actual_type']}")
+```
+
+**Pattern 3: Performance Issues**
+```bash
+# Use CLI perf command to identify bottlenecks
+dataflow perf my_workflow.py --profile --output report.json
+
+# Analyze report:
+# - Long-running nodes
+# - Network-bound operations
+# - Database query optimization opportunities
+```
+
 ## Critical Limitations & Workarounds
 
 ### PostgreSQL Array Types (v0.8.0+ - FULLY SUPPORTED!)
@@ -1920,6 +2107,127 @@ db = DataFlow(
     existing_schema_mode=True  # Use existing schema
 )
 ```
+
+## 🔧 Troubleshooting Common Issues (NEW in v0.4.7+)
+
+DataFlow Phase 1A/1B provides diagnostic tools to resolve issues quickly.
+
+**Issue 1: Workflow Builds But Produces No Results**
+
+**Symptoms**: `runtime.execute(workflow.build())` succeeds but results are empty or None.
+
+**Solution**:
+```python
+# Step 1: Use Inspector to validate connections
+inspector = Inspector(workflow)
+validation = inspector.validate_connections()
+
+if not validation["is_valid"]:
+    print("Connection errors found:")
+    for error in validation["errors"]:
+        print(f"  - {error}")
+
+# Step 2: Use CLI validate command
+# dataflow validate my_workflow.py --strict
+```
+
+**Issue 2: Missing Parameter Error (DF-101)**
+
+**Symptoms**: Error shows "DF-101: Missing Required Parameter"
+
+**Solution**:
+```python
+# ErrorEnhancer shows exactly which parameter is missing
+# Follow the 3 solutions provided in error message:
+
+# Solution 1: Add missing parameter
+data = {
+    "id": "user-123",  # <- ADD THIS
+    "name": "Alice",
+    "email": "alice@example.com"
+}
+
+# Solution 2: Check model definition
+# Verify all required fields are present
+
+# Solution 3: Use Inspector to validate
+inspector = Inspector(workflow)
+trace = inspector.trace_parameter("create", "id")
+```
+
+**Issue 3: Slow First Operation**
+
+**Symptoms**: First database operation takes ~1500ms, subsequent operations are fast.
+
+**Solution**:
+```python
+# This is expected behavior! Schema cache causes this pattern:
+# - First operation: Cache miss (~1500ms) - includes migration checks
+# - Subsequent operations: Cache hit (~1ms) - 99% faster
+
+# To verify schema cache is working:
+metrics = db._schema_cache.get_metrics()
+print(f"Hit rate: {metrics['hit_rate']:.2%}")  # Should be >90% after warm-up
+```
+
+**Issue 4: Event Loop Closed Errors**
+
+**Symptoms**: "Event loop is closed" or "Pool attached to different loop"
+
+**Solution**:
+```python
+# Use test mode with automatic cleanup
+db = DataFlow("postgresql://...", test_mode=True)
+
+# In pytest fixture:
+@pytest.fixture(scope="function")
+async def db():
+    db = DataFlow("postgresql://...", test_mode=True)
+    yield db
+    await db.cleanup_all_pools()  # Clean up after each test
+```
+
+**Issue 5: Connection Type Mismatch (DF-201)**
+
+**Symptoms**: Error shows "DF-201: Connection Type Mismatch"
+
+**Solution**:
+```python
+# ErrorEnhancer shows expected vs actual types
+# Use Inspector to trace the issue:
+
+inspector = Inspector(workflow)
+validation = inspector.validate_connections()
+
+for error in validation["errors"]:
+    if "type mismatch" in error["reason"].lower():
+        print(f"Mismatch: {error['from_node']}.{error['from_param']}")
+        print(f"Expected: {error['expected_type']}")
+        print(f"Got: {error['actual_type']}")
+        # Fix the type in the source node
+```
+
+**Quick Diagnostic Commands**:
+```bash
+# Full workflow validation
+dataflow validate my_workflow.py --strict
+
+# Debug specific node
+dataflow debug my_workflow.py --node "problematic_node"
+
+# Analyze performance
+dataflow perf my_workflow.py --profile
+
+# Check workflow structure
+dataflow analyze my_workflow.py
+```
+
+**Troubleshooting Flowchart**:
+1. **Start**: Is workflow executing at all? → NO → Check error message for DF-XXX code
+2. **Results empty?** → YES → Use Inspector to validate connections
+3. **Slow performance?** → YES → Use `dataflow perf` to identify bottlenecks
+4. **Type errors?** → YES → Use Inspector to check connection types
+5. **Event loop errors?** → YES → Enable test_mode with cleanup
 
 ## Key Rules
 
