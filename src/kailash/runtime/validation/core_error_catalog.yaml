@@ -1,0 +1,311 @@
+# Core SDK Error Catalog
+# Structured knowledge base for Core SDK runtime errors with actionable solutions
+# Version: 1.0
+# Coverage: Core SDK runtime, async operations, workflows, connections, parameters
+
+# ============================================================================
+# RUNTIME ERRORS (KS-501 to KS-503)
+# ============================================================================
+
+KS-501:
+  name: "Runtime Execution Error"
+  pattern: "execution.*failed|runtime.*error|node.*failed"
+  category: "runtime"
+  severity: "error"
+  causes:
+    - "Node execution raised an exception during runtime"
+    - "Invalid parameters provided to node"
+    - "Resource unavailable during execution"
+    - "Database connection failed during operation"
+  solutions:
+    - description: "Enable debug mode to see detailed error information"
+      code_template: |
+        runtime = LocalRuntime(debug=True)
+        results, run_id = runtime.execute(workflow.build())
+      auto_fixable: false
+    - description: "Check node parameters are valid"
+      code_template: |
+        # Verify parameters match node requirements
+        inspector = Inspector(workflow)
+        node_info = inspector.node("node_id")
+        print(node_info.input_params)
+      auto_fixable: false
+    - description: "Ensure required resources are available"
+      code_template: |
+        # Check database connectivity
+        # Check file system access
+        # Check network connectivity
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/core/errors/ks-501"
+
+KS-502:
+  name: "Async Runtime Error"
+  pattern: "event loop|asyncio|async.*error|loop.*running"
+  category: "runtime"
+  severity: "error"
+  causes:
+    - "Event loop is already running when trying to create another"
+    - "Mixing sync and async code incorrectly"
+    - "AsyncLocalRuntime used in sync context"
+    - "Thread pool exhaustion in async runtime"
+  solutions:
+    - description: "Use AsyncLocalRuntime for async contexts"
+      code_template: |
+        from kailash.runtime import AsyncLocalRuntime
+
+        runtime = AsyncLocalRuntime()
+        results, run_id = await runtime.execute_workflow_async(
+            workflow.build(),
+            inputs={}
+        )
+      auto_fixable: false
+    - description: "Use LocalRuntime for sync contexts"
+      code_template: |
+        from kailash.runtime import LocalRuntime
+
+        runtime = LocalRuntime()
+        results, run_id = runtime.execute(workflow.build())
+      auto_fixable: false
+    - description: "Configure thread pool for mixed workloads"
+      code_template: |
+        runtime = AsyncLocalRuntime(max_concurrent_nodes=10)
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/core/errors/ks-502"
+
+KS-503:
+  name: "Workflow Execution Failed"
+  pattern: "workflow.*failed|execution.*stopped|build.*error"
+  category: "runtime"
+  severity: "error"
+  causes:
+    - "Workflow structure is invalid"
+    - "Circular dependencies detected in workflow"
+    - "Missing required connections between nodes"
+    - "Node validation failed before execution"
+  solutions:
+    - description: "Validate workflow before execution"
+      code_template: |
+        runtime.validate_workflow(workflow.build())
+      auto_fixable: false
+    - description: "Check workflow structure with Inspector"
+      code_template: |
+        from kailash.inspector import Inspector
+
+        inspector = Inspector(workflow)
+        validation = inspector.validate_connections()
+        if not validation["is_valid"]:
+            print(validation["errors"])
+      auto_fixable: false
+    - description: "Ensure workflow.build() is called"
+      code_template: |
+        # WRONG: runtime.execute(workflow)
+        # CORRECT: runtime.execute(workflow.build())
+        results, run_id = runtime.execute(workflow.build())
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/core/errors/ks-503"
+
+# ============================================================================
+# CONNECTION ERRORS (KS-504)
+# ============================================================================
+
+KS-504:
+  name: "Connection Validation Error"
+  pattern: "connection.*failed|invalid.*connection|parameter.*mismatch"
+  category: "connection"
+  severity: "error"
+  causes:
+    - "Parameter type mismatch between connected nodes"
+    - "Missing required connection"
+    - "Invalid parameter name in connection"
+    - "Source node doesn't produce specified output"
+  solutions:
+    - description: "Verify parameter types match between nodes"
+      code_template: |
+        # Check source output type
+        source_info = inspector.node("source_id")
+        print(source_info.output_params)
+
+        # Check target input type
+        target_info = inspector.node("target_id")
+        print(target_info.input_params)
+      auto_fixable: false
+    - description: "Check connection parameter names are correct"
+      code_template: |
+        workflow.add_connection(
+            "source_id", "output_param",
+            "target_id", "input_param"
+        )
+      auto_fixable: false
+    - description: "Review workflow structure with Inspector.connections()"
+      code_template: |
+        connections = inspector.connections()
+        for conn in connections:
+            print(f"{conn['source']} -> {conn['target']}")
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/core/errors/ks-504"
+
+# ============================================================================
+# PARAMETER ERRORS (KS-505)
+# ============================================================================
+
+KS-505:
+  name: "Parameter Validation Error"
+  pattern: "parameter.*invalid|type.*error|missing.*parameter"
+  category: "parameter"
+  severity: "error"
+  causes:
+    - "Invalid parameter type provided to node"
+    - "Missing required parameter"
+    - "Parameter value out of valid range"
+    - "Parameter format doesn't match expected structure"
+  solutions:
+    - description: "Check parameter type matches node requirements"
+      code_template: |
+        # Verify parameter type
+        node_info = inspector.node("node_id")
+        expected_type = node_info.input_params["param_name"]["type"]
+        print(f"Expected type: {expected_type}")
+      auto_fixable: false
+    - description: "Ensure all required parameters are provided"
+      code_template: |
+        workflow.add_node("NodeType", "node_id", {
+            "required_param": value,
+            # Include all required parameters
+        })
+      auto_fixable: false
+    - description: "Verify parameter value is within valid range"
+      code_template: |
+        # Check parameter constraints in node documentation
+        node_info = inspector.node("node_id")
+        print(node_info.input_params)
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/core/errors/ks-505"
+
+# ============================================================================
+# NODE EXECUTION ERRORS (KS-506)
+# ============================================================================
+
+KS-506:
+  name: "Node Execution Error"
+  pattern: "node.*execution|node.*failed|execution.*error"
+  category: "node"
+  severity: "error"
+  causes:
+    - "Node implementation raised an exception"
+    - "External service called by node is unavailable"
+    - "File or resource not found during node execution"
+    - "Permission denied for node operation"
+  solutions:
+    - description: "Check external dependencies are available"
+      code_template: |
+        # Verify service connectivity
+        # Check file paths exist
+        # Verify permissions
+      auto_fixable: false
+    - description: "Review node implementation for errors"
+      code_template: |
+        # Enable detailed logging
+        import logging
+        logging.basicConfig(level=logging.DEBUG)
+      auto_fixable: false
+    - description: "Use try-except in custom nodes"
+      code_template: |
+        from kailash.nodes.base import Node
+
+        class CustomNode(Node):
+            async def execute(self, **params):
+                try:
+                    result = await risky_operation()
+                    return {"result": result}
+                except Exception as e:
+                    logger.error(f"Operation failed: {e}")
+                    raise NodeExecutionError(f"Failed: {e}")
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/core/errors/ks-506"
+
+# ============================================================================
+# TIMEOUT ERRORS (KS-507)
+# ============================================================================
+
+KS-507:
+  name: "Operation Timeout"
+  pattern: "timeout|timed.*out|operation.*timeout"
+  category: "runtime"
+  severity: "error"
+  causes:
+    - "Operation took longer than configured timeout"
+    - "External service not responding within timeout"
+    - "Resource contention or blocking operation"
+    - "Network latency exceeds timeout threshold"
+  solutions:
+    - description: "Increase timeout duration if operation legitimately takes longer"
+      code_template: |
+        runtime = LocalRuntime(timeout=120)  # 2 minutes
+        results, run_id = runtime.execute(workflow.build())
+      auto_fixable: false
+    - description: "Check external service availability and response times"
+      code_template: |
+        # Test external service connectivity
+        # Monitor response times
+        # Consider service degradation
+      auto_fixable: false
+    - description: "Review node implementation for blocking operations"
+      code_template: |
+        # Use async operations for I/O
+        # Avoid blocking calls in async context
+        # Consider using AsyncLocalRuntime
+      auto_fixable: false
+    - description: "Consider using async operations for long-running tasks"
+      code_template: |
+        from kailash.runtime import AsyncLocalRuntime
+
+        runtime = AsyncLocalRuntime(
+            timeout=180,
+            max_concurrent_nodes=5
+        )
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/core/errors/ks-507"
+
+# ============================================================================
+# RESOURCE EXHAUSTION ERRORS (KS-508)
+# ============================================================================
+
+KS-508:
+  name: "Resource Exhaustion"
+  pattern: "out.*of.*memory|resource.*exhausted|too.*many.*connections"
+  category: "runtime"
+  severity: "error"
+  causes:
+    - "Too much data loaded into memory at once"
+    - "Connection pool exhausted"
+    - "Thread pool exhausted in async runtime"
+    - "File handle limit exceeded"
+  solutions:
+    - description: "Use pagination for large datasets"
+      code_template: |
+        # Process data in batches
+        workflow.add_node("DataListNode", "list", {
+            "limit": 100,
+            "offset": 0
+        })
+      auto_fixable: false
+    - description: "Configure connection pool size"
+      code_template: |
+        # For database operations
+        db = DataFlow(url, pool_size=20, max_overflow=30)
+      auto_fixable: false
+    - description: "Limit concurrent operations"
+      code_template: |
+        runtime = AsyncLocalRuntime(max_concurrent_nodes=10)
+      auto_fixable: false
+    - description: "Use streaming for large data processing"
+      code_template: |
+        # Process data in chunks
+        # Use generators for large datasets
+        # Avoid loading all data into memory
+      auto_fixable: false
+  docs_url: "https://docs.kailash.ai/core/errors/ks-508"
+
+# ============================================================================
+# END OF ERROR CATALOG
+# ============================================================================
