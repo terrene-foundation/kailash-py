@@ -25,6 +25,7 @@ from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import networkx as nx
+
 from kailash.nodes.base import Node
 from kailash.nodes.base_async import AsyncNode
 from kailash.resources import ResourceRegistry
@@ -156,9 +157,9 @@ class ExecutionContext:
 
         for conn_id, conn in list(self.connections.items()):
             try:
-                if hasattr(conn, 'close'):
+                if hasattr(conn, "close"):
                     await conn.close()
-                elif hasattr(conn, 'disconnect'):
+                elif hasattr(conn, "disconnect"):
                     await conn.disconnect()
                 logger.debug(f"Released connection: {conn_id}")
             except Exception as e:
@@ -178,7 +179,7 @@ class ExecutionContext:
         return {
             "connection_count": len(self.connections),
             "connections": list(self.connections.keys()),
-            "active": not self._cleaned_up
+            "active": not self._cleaned_up,
         }
 
     async def cancel_all_tasks(self) -> None:
@@ -202,7 +203,9 @@ class ExecutionContext:
 
         # Log any errors (besides CancelledError)
         for i, result in enumerate(results):
-            if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
+            if isinstance(result, Exception) and not isinstance(
+                result, asyncio.CancelledError
+            ):
                 logger.warning(f"Task {i} raised error during cancellation: {result}")
 
         logger.info("All tasks cancelled successfully")
@@ -515,9 +518,13 @@ class AsyncLocalRuntime(LocalRuntime):
             if env_timeout:
                 try:
                     self.execution_timeout = int(env_timeout)
-                    logger.info(f"Using DATAFLOW_EXECUTION_TIMEOUT={self.execution_timeout}s from environment")
+                    logger.info(
+                        f"Using DATAFLOW_EXECUTION_TIMEOUT={self.execution_timeout}s from environment"
+                    )
                 except ValueError:
-                    logger.warning(f"Invalid DATAFLOW_EXECUTION_TIMEOUT='{env_timeout}', using default 300s")
+                    logger.warning(
+                        f"Invalid DATAFLOW_EXECUTION_TIMEOUT='{env_timeout}', using default 300s"
+                    )
                     self.execution_timeout = 300
             else:
                 self.execution_timeout = 300  # 5 minute default
@@ -696,10 +703,12 @@ class AsyncLocalRuntime(LocalRuntime):
                 logger.debug(f"Executing with timeout={self.execution_timeout}s")
                 tracker_result = await asyncio.wait_for(
                     self._execute_workflow_internal(workflow, inputs, context, run_id),
-                    timeout=self.execution_timeout
+                    timeout=self.execution_timeout,
                 )
             else:
-                tracker_result = await self._execute_workflow_internal(workflow, inputs, context, run_id)
+                tracker_result = await self._execute_workflow_internal(
+                    workflow, inputs, context, run_id
+                )
 
             # Update total execution time
             total_time = time.time() - start_time
@@ -749,11 +758,7 @@ class AsyncLocalRuntime(LocalRuntime):
                 logger.warning(f"Error during context cleanup: {cleanup_error}")
 
     async def _execute_workflow_internal(
-        self,
-        workflow,
-        inputs: Dict[str, Any],
-        context: ExecutionContext,
-        run_id: str
+        self, workflow, inputs: Dict[str, Any], context: ExecutionContext, run_id: str
     ):
         """
         Internal workflow execution (extracted for timeout wrapping).
@@ -799,9 +804,7 @@ class AsyncLocalRuntime(LocalRuntime):
                     workflow, context, execution_plan
                 )
             else:
-                tracker_result = await self._execute_sync_workflow(
-                    workflow, context
-                )
+                tracker_result = await self._execute_sync_workflow(workflow, context)
 
         return tracker_result
 
