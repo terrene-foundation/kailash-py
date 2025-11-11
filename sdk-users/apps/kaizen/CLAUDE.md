@@ -93,6 +93,51 @@ best_worker = pattern.supervisor.select_worker_for_task(
 # Returns: {"worker": <DataAnalystAgent>, "score": 0.9}
 ```
 
+### OpenAI Structured Outputs
+
+**Guarantee LLM responses match your signature** with 100% schema compliance:
+
+```python
+from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
+from kaizen.core.structured_output import create_structured_output_config
+from kaizen.signatures import Signature, InputField, OutputField
+
+# Define signature
+class AnalysisSignature(Signature):
+    input_text: str = InputField(desc="Text to analyze")
+    category: str = OutputField(desc="Classification category")
+    confidence: float = OutputField(desc="Confidence 0-1")
+
+# Enable structured outputs (strict mode)
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model="gpt-4o-2024-08-06",  # Required for strict mode
+    provider_config=create_structured_output_config(
+        signature=AnalysisSignature(),
+        strict=True,  # 100% schema compliance
+        name="analysis"
+    )
+)
+
+agent = BaseAgent(config=config, signature=AnalysisSignature())
+result = agent.run(input_text="Sample text")
+
+# Response guaranteed to have all fields with correct types
+print(result['category'])      # Always present, always string
+print(result['confidence'])    # Always present, always float
+```
+
+**How It Works:**
+- OpenAI returns JSON as a dict object (pre-parsed, not a string)
+- Both `AsyncSingleShotStrategy` and `SingleShotStrategy` detect dict responses automatically
+- Dict responses are returned directly without string parsing - transparent to users
+
+**Modes:**
+- **Strict Mode** (`strict=True`): 100% compliance, requires `gpt-4o-2024-08-06+`
+- **Legacy Mode** (`strict=False`): ~70-85% compliance, works with all models
+
+**Learn More:** [Structured Outputs Guide](docs/guides/signature-programming.md)
+
 ### Pipeline Patterns
 
 **9 composable pipeline patterns** with factory methods on `Pipeline` class:
