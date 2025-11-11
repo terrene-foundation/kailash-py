@@ -94,6 +94,53 @@ Conversation persistence with dual-buffer architecture:
 
 ---
 
+## 🎯 OpenAI Structured Outputs
+
+**Guaranteed schema compliance** with OpenAI's Structured Outputs API - ensure LLM responses always match your signature's structure.
+
+### Usage
+
+```python
+from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
+from kaizen.core.structured_output import create_structured_output_config
+from kaizen.signatures import Signature, InputField, OutputField
+
+# Define signature
+class ProductAnalysisSignature(Signature):
+    product_description: str = InputField(desc="Product to analyze")
+    category: str = OutputField(desc="Product category")
+    price_range: str = OutputField(desc="Price estimate")
+    confidence: float = OutputField(desc="Confidence 0-1")
+
+# Enable structured outputs
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model="gpt-4o-2024-08-06",  # Required for strict mode
+    provider_config=create_structured_output_config(
+        signature=ProductAnalysisSignature(),
+        strict=True,  # 100% schema compliance
+        name="product_analysis"
+    )
+)
+
+agent = BaseAgent(config=config, signature=ProductAnalysisSignature())
+result = agent.run(product_description="Wireless headphones")
+
+# Response guaranteed to have all fields
+print(result['category'])      # Always present
+print(result['price_range'])   # Always present
+print(result['confidence'])    # Always present, correct type
+```
+
+### Modes
+
+- **Strict Mode** (`strict=True`): 100% schema compliance, requires `gpt-4o-2024-08-06+`
+- **Legacy Mode** (`strict=False`): Best-effort compliance (~70-85%), works with all models
+
+**Learn More**: [Structured Outputs Guide](docs/guides/signature-programming.md)
+
+---
+
 ## 🚀 Quick Start
 
 ### Installation
