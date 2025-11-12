@@ -958,8 +958,28 @@ class AsyncLocalRuntime(LocalRuntime):
         node_outputs: Dict[str, Any],
         context_inputs: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Prepare inputs for sync node execution."""
-        inputs = context_inputs.copy()
+        """Prepare inputs for sync node execution with proper parameter scoping."""
+
+        # Get all node IDs for filtering
+        node_ids_in_graph = set(workflow.graph.nodes())
+
+        # Start with empty inputs (not copying all variables)
+        inputs = {}
+
+        # Filter and unwrap parameters from context_inputs
+        for key, value in context_inputs.items():
+            if key == node_id:
+                # ✅ FIX: Unwrap node-specific parameters
+                if isinstance(value, dict):
+                    inputs.update(value)
+                else:
+                    logger.warning(
+                        f"Node-specific parameter for '{node_id}' is not a dict: {type(value)}"
+                    )
+            elif key not in node_ids_in_graph:
+                # ✅ Include workflow-level parameters (not meant for specific nodes)
+                inputs[key] = value
+            # ✅ Skip parameters meant for other nodes
 
         # Add outputs from predecessor nodes using proper connection mapping
         for predecessor in workflow.graph.predecessors(node_id):
@@ -1158,8 +1178,28 @@ class AsyncLocalRuntime(LocalRuntime):
         tracker: AsyncExecutionTracker,
         context: ExecutionContext,
     ) -> Dict[str, Any]:
-        """Prepare inputs for async node execution."""
-        inputs = context.variables.copy()
+        """Prepare inputs for async node execution with proper parameter scoping."""
+
+        # Get all node IDs for filtering
+        node_ids_in_graph = set(workflow.graph.nodes())
+
+        # Start with empty inputs (not copying all variables)
+        inputs = {}
+
+        # Filter and unwrap parameters from context.variables
+        for key, value in context.variables.items():
+            if key == node_id:
+                # ✅ FIX: Unwrap node-specific parameters
+                if isinstance(value, dict):
+                    inputs.update(value)
+                else:
+                    logger.warning(
+                        f"Node-specific parameter for '{node_id}' is not a dict: {type(value)}"
+                    )
+            elif key not in node_ids_in_graph:
+                # ✅ Include workflow-level parameters (not meant for specific nodes)
+                inputs[key] = value
+            # ✅ Skip parameters meant for other nodes
 
         # Add outputs from predecessor nodes
         for predecessor in workflow.graph.predecessors(node_id):
