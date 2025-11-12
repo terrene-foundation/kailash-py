@@ -98,11 +98,14 @@ class MultiInputExample(Signature):
 
 **Key Features:**
 - Inherit from `Signature` base class
-- Use `InputField(desc="...")` for inputs
-- Use `OutputField(desc="...")` for outputs
+- Use `InputField(desc="...")` or `InputField(description="...")` for inputs (both work)
+- Use `OutputField(desc="...")` or `OutputField(description="...")` for outputs (both work)
 - Add type annotations for clarity (`str`, `float`, `list`, etc.)
 - Provide field descriptions for better AI understanding
 - Support default values for optional inputs
+
+> **📝 Note on Parameter Names**
+> Both `desc=` and `description=` parameters work identically - they are aliases. Use whichever you prefer for consistency with your codebase. Examples in this guide use `desc=` for brevity, but `description=` is equally valid.
 
 ### Basic Patterns (String-based - Legacy)
 
