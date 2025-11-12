@@ -217,6 +217,45 @@ class CircuitBreakerOpenError(RuntimeException):
     """
 
 
+class RetryExhaustedException(RuntimeException):
+    """Raised when all retry attempts are exhausted for an operation.
+
+    This exception is raised when an operation fails after all configured retry
+    attempts have been exhausted. It provides detailed information about the
+    failure and retry attempts made.
+
+    This typically occurs when:
+    - Database connection cannot be established after multiple retries
+    - SQLite database remains locked beyond retry timeout
+    - PostgreSQL server is unavailable after retry period
+    - Network errors persist beyond retry attempts
+
+    Attributes:
+        operation: Description of the operation that failed
+        attempts: Number of retry attempts made
+        last_error: The final error that caused the failure
+        total_wait_time: Total time spent waiting between retries (seconds)
+    """
+
+    def __init__(
+        self,
+        operation: str,
+        attempts: int,
+        last_error: Exception,
+        total_wait_time: float = None,
+    ):
+        self.operation = operation
+        self.attempts = attempts
+        self.last_error = last_error
+        self.total_wait_time = total_wait_time
+
+        message = f"{operation} failed after {attempts} retry attempts. Last error: {last_error}"
+        if total_wait_time is not None:
+            message += f" (Total wait time: {total_wait_time:.2f}s)"
+
+        super().__init__(message)
+
+
 # Task tracking exceptions
 class TaskException(KailashException):
     """Base exception for task tracking errors."""

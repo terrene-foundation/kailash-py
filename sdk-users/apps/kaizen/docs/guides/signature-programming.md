@@ -256,6 +256,44 @@ config = BaseAgentConfig(
 )
 ```
 
+### Response Handling
+
+OpenAI structured outputs return pre-parsed dict responses. The framework handles this automatically:
+
+```python
+# OpenAI returns dict directly for structured outputs
+response = {
+    "category": "Electronics",
+    "price_range": "$200-$400",
+    "confidence": 0.95
+}
+
+# BaseAgent automatically detects dict responses and returns them directly
+result = agent.run(product_description="Wireless headphones")
+
+# Access fields directly - no JSON parsing needed
+print(result['category'])        # "Electronics"
+print(result['price_range'])     # "$200-$400"
+print(result['confidence'])      # 0.95
+```
+
+**How It Works:**
+- OpenAI structured outputs return JSON as a dict object (not a string)
+- Both `AsyncSingleShotStrategy` and `SingleShotStrategy` detect dict responses
+- Dict responses are returned directly without string parsing
+- This is transparent to users - no code changes needed
+
+**Traditional vs Structured Outputs:**
+```python
+# Traditional (string response, needs parsing)
+response = '{"category": "Electronics", ...}'  # String
+result = json.loads(response)  # Manual parsing
+
+# Structured Outputs (dict response, pre-parsed)
+response = {"category": "Electronics", ...}  # Dict
+result = response  # Already parsed, use directly
+```
+
 ### Signature Inheritance (v0.6.3+)
 
 **New in v0.6.3:** Child signatures now **MERGE** parent fields instead of replacing them.

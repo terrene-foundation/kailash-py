@@ -1,8 +1,8 @@
 # Kaizen Structured Outputs
 
-**Version**: 0.6.6+
 **Feature**: OpenAI Structured Outputs API with 100% schema compliance and intelligent validation
-**Fixed in v0.6.6**: Legacy mode now returns correct OpenAI format
+**Response Handling**: Dict responses from OpenAI are automatically detected and handled by strategies
+**Compatibility**: Requires Kaizen 0.6.3+, works with both `AsyncSingleShotStrategy` and `SingleShotStrategy`
 
 ---
 
@@ -120,23 +120,51 @@ config = BaseAgentConfig(
 )
 ```
 
-**Generated Format (Fixed in v0.6.6):**
+**Generated Format:**
 ```python
 {
-    "type": "json_object"  # ✅ CORRECT: No schema key per OpenAI spec
+    "type": "json_object"  # Schema enforcement via system prompt
 }
-# Schema enforcement via system prompt (handled automatically by BaseAgent)
 ```
 
-**⚠️ Before v0.6.6 (WRONG - caused JSON_PARSE_FAILED errors):**
+---
+
+## Response Handling
+
+OpenAI structured outputs return **dict responses** (pre-parsed JSON), not strings. The framework handles this automatically.
+
+### How It Works
+
 ```python
-{
-    "type": "json_object",
-    "schema": {...}  # ❌ WRONG: OpenAI ignored this parameter
-}
-# OpenAI returned plain text instead of JSON → BaseAgent.run() failed
-# Fixed in v0.6.6: Now works reliably
+# OpenAI returns dict directly (not a string)
+response = {"category": "Electronics", "price_range": "$200-$400", "confidence": 0.95}
+
+# Strategies auto-detect dict responses and return them without parsing
+result = agent.run(product_description="Wireless headphones")
+
+# Access fields directly - no JSON parsing needed
+print(result['category'])      # "Electronics"
+print(result['confidence'])    # 0.95
 ```
+
+**Key Points:**
+- Dict responses are detected automatically by `parse_result()` in both strategies
+- No code changes needed - transparent to users
+- Works with both strict mode and legacy mode
+- Both string responses (traditional) and dict responses (structured outputs) work seamlessly
+
+**Comparison:**
+```python
+# Traditional (string response, needs parsing)
+response = '{"category": "..."}'  # String
+result = json.loads(response)     # Manual parsing
+
+# Structured Outputs (dict response, pre-parsed)
+response = {"category": "..."}    # Dict
+result = response                 # Already parsed
+```
+
+---
 
 **Strict Mode vs Legacy Mode:**
 | Feature | Strict (`strict=True`) | Legacy (`strict=False`) |
