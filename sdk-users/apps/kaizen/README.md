@@ -40,7 +40,7 @@ class MyConfig:
 
 # 2. Define signature (type-safe I/O)
 class MySignature(Signature):
-    question: str = InputField(desc="User question")
+    question: str = InputField(desc="User question")  # 'description=' also works
     answer: str = OutputField(desc="Agent answer")
 
 # 3. Extend BaseAgent (87% less code, production-ready)
