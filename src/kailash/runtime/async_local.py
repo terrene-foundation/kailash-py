@@ -16,6 +16,7 @@ Key Features:
 
 import asyncio
 import logging
+import os
 import time
 import weakref
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +25,7 @@ from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import networkx as nx
+
 from kailash.nodes.base import Node
 from kailash.nodes.base_async import AsyncNode
 from kailash.resources import ResourceRegistry
@@ -84,7 +86,15 @@ class ExecutionMetrics:
 
 
 class ExecutionContext:
-    """Context passed through workflow execution with resource access."""
+    """
+    Context passed through workflow execution with resource access.
+
+    Enhanced with production features:
+    - Connection lifecycle management
+    - Task tracking and cancellation
+    - Resource usage monitoring
+    - Cleanup guarantees
+    """
 
     def __init__(self, resource_registry: Optional[ResourceRegistry] = None):
         self.resource_registry = resource_registry
@@ -92,6 +102,17 @@ class ExecutionContext:
         self.metrics = ExecutionMetrics()
         self.start_time = time.time()
         self._weak_refs: Dict[str, weakref.ref] = {}
+
+        # Connection lifecycle (P0 Component 1: Connection Lifecycle Management)
+        self.connections: Dict[str, Any] = {}
+        self._connection_locks: Dict[str, asyncio.Lock] = {}
+
+        # Task tracking (P0 Component 1: Task Cancellation)
+        self.tasks: List[asyncio.Task] = []
+        self._tasks_lock = asyncio.Lock()
+
+        # Cleanup state
+        self._cleaned_up = False
 
     def set_variable(self, key: str, value: Any) -> None:
         """Set a context variable accessible to all nodes."""
@@ -112,6 +133,121 @@ class ExecutionContext:
         )
 
         return await self.resource_registry.get_resource(name)
+
+    async def acquire_connections(self) -> None:
+        """
+        Acquire database connections for workflow execution.
+
+        P0 Component 1: Explicit connection acquisition.
+        """
+        # Placeholder for future connection pooling integration
+        # Currently no explicit acquisition needed as connections are lazy
+        logger.debug("Connection acquisition (placeholder for future pooling)")
+
+    async def release_connections(self) -> None:
+        """
+        Release all database connections.
+
+        P0 Component 1: Connection cleanup in finally blocks.
+        """
+        if not self.connections:
+            return
+
+        logger.debug(f"Releasing {len(self.connections)} connections")
+
+        for conn_id, conn in list(self.connections.items()):
+            try:
+                if hasattr(conn, "close"):
+                    await conn.close()
+                elif hasattr(conn, "disconnect"):
+                    await conn.disconnect()
+                logger.debug(f"Released connection: {conn_id}")
+            except Exception as e:
+                logger.warning(f"Error releasing connection {conn_id}: {e}")
+
+        self.connections.clear()
+
+    def get_connection_state(self) -> Dict[str, Any]:
+        """
+        Get current connection state.
+
+        P0 Component 1: Connection state tracking.
+
+        Returns:
+            Dictionary with connection state information
+        """
+        return {
+            "connection_count": len(self.connections),
+            "connections": list(self.connections.keys()),
+            "active": not self._cleaned_up,
+        }
+
+    async def cancel_all_tasks(self) -> None:
+        """
+        Cancel all running tasks gracefully.
+
+        P0 Component 1: Task cancellation.
+        """
+        if not self.tasks:
+            return
+
+        logger.info(f"Cancelling {len(self.tasks)} running tasks")
+
+        # Cancel all tasks
+        for task in self.tasks:
+            if not task.done():
+                task.cancel()
+
+        # Wait for cancellation to complete
+        results = await asyncio.gather(*self.tasks, return_exceptions=True)
+
+        # Log any errors (besides CancelledError)
+        for i, result in enumerate(results):
+            if isinstance(result, Exception) and not isinstance(
+                result, asyncio.CancelledError
+            ):
+                logger.warning(f"Task {i} raised error during cancellation: {result}")
+
+        logger.info("All tasks cancelled successfully")
+
+    async def cleanup(self) -> None:
+        """
+        Cleanup all resources (idempotent).
+
+        P0 Component 1: Cleanup guarantees.
+        Safe to call multiple times.
+        """
+        if self._cleaned_up:
+            logger.debug("ExecutionContext already cleaned up, skipping")
+            return
+
+        logger.debug("Cleaning up ExecutionContext")
+
+        try:
+            # Cancel running tasks first
+            await self.cancel_all_tasks()
+        except Exception as e:
+            logger.warning(f"Error cancelling tasks during cleanup: {e}")
+
+        try:
+            # Release connections
+            await self.release_connections()
+        except Exception as e:
+            logger.warning(f"Error releasing connections during cleanup: {e}")
+
+        self._cleaned_up = True
+        logger.debug("ExecutionContext cleanup complete")
+
+    # Context manager support (P0 Component 1: Connection Lifecycle)
+    async def __aenter__(self):
+        """Enter async context manager."""
+        await self.acquire_connections()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Exit async context manager."""
+        await self.cleanup()
+        return False
 
 
 class WorkflowAnalyzer:
@@ -348,6 +484,7 @@ class AsyncLocalRuntime(LocalRuntime):
         enable_analysis: bool = True,
         enable_profiling: bool = True,
         thread_pool_size: int = 4,
+        execution_timeout: Optional[int] = None,
         **kwargs,
     ):
         """
@@ -359,6 +496,7 @@ class AsyncLocalRuntime(LocalRuntime):
             enable_analysis: Whether to analyze workflows for optimization
             enable_profiling: Whether to collect detailed performance metrics
             thread_pool_size: Size of thread pool for sync node execution
+            execution_timeout: Workflow execution timeout in seconds (default: 300 or DATAFLOW_EXECUTION_TIMEOUT env var)
             **kwargs: Additional arguments passed to LocalRuntime
         """
         # Ensure async is enabled
@@ -369,6 +507,27 @@ class AsyncLocalRuntime(LocalRuntime):
         self.max_concurrent_nodes = max_concurrent_nodes
         self.enable_analysis = enable_analysis
         self.enable_profiling = enable_profiling
+
+        # P0 Component 1: Timeout Protection
+        # Priority: execution_timeout param > DATAFLOW_EXECUTION_TIMEOUT env var > 300s default
+        if execution_timeout is not None:
+            self.execution_timeout = execution_timeout
+        else:
+            # Try to read from environment variable
+            env_timeout = os.getenv("DATAFLOW_EXECUTION_TIMEOUT")
+            if env_timeout:
+                try:
+                    self.execution_timeout = int(env_timeout)
+                    logger.info(
+                        f"Using DATAFLOW_EXECUTION_TIMEOUT={self.execution_timeout}s from environment"
+                    )
+                except ValueError:
+                    logger.warning(
+                        f"Invalid DATAFLOW_EXECUTION_TIMEOUT='{env_timeout}', using default 300s"
+                    )
+                    self.execution_timeout = 300
+            else:
+                self.execution_timeout = 300  # 5 minute default
 
         # Workflow analyzer
         self.analyzer = (
@@ -387,7 +546,8 @@ class AsyncLocalRuntime(LocalRuntime):
         self._max_concurrent = max_concurrent_nodes
 
         logger.info(
-            f"AsyncLocalRuntime initialized with max_concurrent_nodes={max_concurrent_nodes}"
+            f"AsyncLocalRuntime initialized with max_concurrent_nodes={max_concurrent_nodes}, "
+            f"execution_timeout={self.execution_timeout}s"
         )
 
     @property
@@ -492,7 +652,13 @@ class AsyncLocalRuntime(LocalRuntime):
         context: Optional[ExecutionContext] = None,
     ) -> Tuple[Dict[str, Any], str]:
         """
-        Execute workflow with native async support.
+        Execute workflow with native async support and production safeguards.
+
+        P0 Component 1 Features:
+        - Timeout protection (configurable via execution_timeout)
+        - Connection lifecycle management
+        - Task cancellation on timeout
+        - Cleanup guarantees
 
         This method provides first-class async execution with:
         - Concurrent node execution where dependencies allow
@@ -506,11 +672,16 @@ class AsyncLocalRuntime(LocalRuntime):
             context: Optional execution context
 
         Returns:
-            Tuple of (results dict, run_id) - SAME AS LocalRuntime.execute()
+            Tuple of (results dict, run_id) - For compatibility with tests
             - results: Dictionary mapping node_id -> node output
             - run_id: Unique execution identifier
 
+        Note:
+            Returns tuple for compatibility with LocalRuntime.execute() pattern.
+            Existing tests may expect dict - use results, run_id = await execute_workflow_async()
+
         Raises:
+            asyncio.TimeoutError: If execution exceeds configured timeout
             WorkflowExecutionError: If execution fails
         """
         start_time = time.time()
@@ -526,47 +697,18 @@ class AsyncLocalRuntime(LocalRuntime):
         context.variables.update(inputs)
 
         try:
-            # Check for conditional workflow with skip_branches mode
-            # Only use conditional execution approach if skip_branches is enabled
-            if (
-                self._has_conditional_patterns(workflow)
-                and self.conditional_execution == "skip_branches"
-            ):
-                logger.info(
-                    "Conditional workflow with skip_branches mode detected, using conditional execution"
-                )
-                # Use inherited conditional execution from ConditionalExecutionMixin
-                tracker_result = await self._execute_conditional_approach(
-                    workflow=workflow,
-                    parameters=inputs,
-                    task_manager=None,
-                    run_id=run_id,
-                    workflow_context=None,
+            # P0 Component 1: Timeout Protection
+            # Wrap execution with timeout if configured
+            if self.execution_timeout and self.execution_timeout > 0:
+                logger.debug(f"Executing with timeout={self.execution_timeout}s")
+                tracker_result = await asyncio.wait_for(
+                    self._execute_workflow_internal(workflow, inputs, context, run_id),
+                    timeout=self.execution_timeout,
                 )
             else:
-                # Regular execution path
-                # Analyze workflow if enabled
-                execution_plan = None
-                if self.analyzer:
-                    execution_plan = self.analyzer.analyze(workflow)
-                    logger.info(
-                        f"Execution plan: {execution_plan.max_concurrent_nodes} max concurrent, "
-                        f"{len(execution_plan.execution_levels)} levels"
-                    )
-
-                # Choose execution strategy based on analysis
-                if execution_plan and execution_plan.is_fully_async:
-                    tracker_result = await self._execute_fully_async_workflow(
-                        workflow, context, execution_plan
-                    )
-                elif execution_plan and execution_plan.has_async_nodes:
-                    tracker_result = await self._execute_mixed_workflow(
-                        workflow, context, execution_plan
-                    )
-                else:
-                    tracker_result = await self._execute_sync_workflow(
-                        workflow, context
-                    )
+                tracker_result = await self._execute_workflow_internal(
+                    workflow, inputs, context, run_id
+                )
 
             # Update total execution time
             total_time = time.time() - start_time
@@ -574,7 +716,7 @@ class AsyncLocalRuntime(LocalRuntime):
 
             logger.info(f"Workflow execution completed in {total_time:.2f}s")
 
-            # Extract plain results dict (consistent with LocalRuntime)
+            # Extract plain results dict
             # Conditional approach (skip_branches mode) returns plain dict, other methods return tracker wrapper
             if (
                 self._has_conditional_patterns(workflow)
@@ -590,13 +732,81 @@ class AsyncLocalRuntime(LocalRuntime):
                     else tracker_result
                 )
 
-            # Return same structure as LocalRuntime.execute(): (results, run_id)
-            return results, run_id
+            # P0 Component 1: Return tuple (results, run_id) for consistency
+            # This matches LocalRuntime.execute() return structure
+            return (results, run_id)
+
+        except asyncio.TimeoutError:
+            # P0 Component 1: Task cancellation on timeout
+            logger.error(f"Workflow execution timeout after {self.execution_timeout}s")
+            context.metrics.error_count += 1
+            # Cancel running tasks
+            await context.cancel_all_tasks()
+            raise  # Re-raise TimeoutError
 
         except Exception as e:
             logger.error(f"Workflow execution failed: {e}")
             context.metrics.error_count += 1
             raise WorkflowExecutionError(f"Async execution failed: {e}") from e
+
+        finally:
+            # P0 Component 1: Cleanup guarantees
+            # Always cleanup connections and resources
+            try:
+                await context.cleanup()
+            except Exception as cleanup_error:
+                logger.warning(f"Error during context cleanup: {cleanup_error}")
+
+    async def _execute_workflow_internal(
+        self, workflow, inputs: Dict[str, Any], context: ExecutionContext, run_id: str
+    ):
+        """
+        Internal workflow execution (extracted for timeout wrapping).
+
+        P0 Component 1: Separated from execute_workflow_async to enable
+        timeout protection via asyncio.wait_for().
+        """
+        # Check for conditional workflow with skip_branches mode
+        # Only use conditional execution approach if skip_branches is enabled
+        if (
+            self._has_conditional_patterns(workflow)
+            and self.conditional_execution == "skip_branches"
+        ):
+            logger.info(
+                "Conditional workflow with skip_branches mode detected, using conditional execution"
+            )
+            # Use inherited conditional execution from ConditionalExecutionMixin
+            tracker_result = await self._execute_conditional_approach(
+                workflow=workflow,
+                parameters=inputs,
+                task_manager=None,
+                run_id=run_id,
+                workflow_context=None,
+            )
+        else:
+            # Regular execution path
+            # Analyze workflow if enabled
+            execution_plan = None
+            if self.analyzer:
+                execution_plan = self.analyzer.analyze(workflow)
+                logger.info(
+                    f"Execution plan: {execution_plan.max_concurrent_nodes} max concurrent, "
+                    f"{len(execution_plan.execution_levels)} levels"
+                )
+
+            # Choose execution strategy based on analysis
+            if execution_plan and execution_plan.is_fully_async:
+                tracker_result = await self._execute_fully_async_workflow(
+                    workflow, context, execution_plan
+                )
+            elif execution_plan and execution_plan.has_async_nodes:
+                tracker_result = await self._execute_mixed_workflow(
+                    workflow, context, execution_plan
+                )
+            else:
+                tracker_result = await self._execute_sync_workflow(workflow, context)
+
+        return tracker_result
 
     async def _execute_fully_async_workflow(
         self, workflow, context: ExecutionContext, execution_plan: ExecutionPlan
@@ -748,8 +958,28 @@ class AsyncLocalRuntime(LocalRuntime):
         node_outputs: Dict[str, Any],
         context_inputs: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Prepare inputs for sync node execution."""
-        inputs = context_inputs.copy()
+        """Prepare inputs for sync node execution with proper parameter scoping."""
+
+        # Get all node IDs for filtering
+        node_ids_in_graph = set(workflow.graph.nodes())
+
+        # Start with empty inputs (not copying all variables)
+        inputs = {}
+
+        # Filter and unwrap parameters from context_inputs
+        for key, value in context_inputs.items():
+            if key == node_id:
+                # ✅ FIX: Unwrap node-specific parameters
+                if isinstance(value, dict):
+                    inputs.update(value)
+                else:
+                    logger.warning(
+                        f"Node-specific parameter for '{node_id}' is not a dict: {type(value)}"
+                    )
+            elif key not in node_ids_in_graph:
+                # ✅ Include workflow-level parameters (not meant for specific nodes)
+                inputs[key] = value
+            # ✅ Skip parameters meant for other nodes
 
         # Add outputs from predecessor nodes using proper connection mapping
         for predecessor in workflow.graph.predecessors(node_id):
@@ -948,8 +1178,28 @@ class AsyncLocalRuntime(LocalRuntime):
         tracker: AsyncExecutionTracker,
         context: ExecutionContext,
     ) -> Dict[str, Any]:
-        """Prepare inputs for async node execution."""
-        inputs = context.variables.copy()
+        """Prepare inputs for async node execution with proper parameter scoping."""
+
+        # Get all node IDs for filtering
+        node_ids_in_graph = set(workflow.graph.nodes())
+
+        # Start with empty inputs (not copying all variables)
+        inputs = {}
+
+        # Filter and unwrap parameters from context.variables
+        for key, value in context.variables.items():
+            if key == node_id:
+                # ✅ FIX: Unwrap node-specific parameters
+                if isinstance(value, dict):
+                    inputs.update(value)
+                else:
+                    logger.warning(
+                        f"Node-specific parameter for '{node_id}' is not a dict: {type(value)}"
+                    )
+            elif key not in node_ids_in_graph:
+                # ✅ Include workflow-level parameters (not meant for specific nodes)
+                inputs[key] = value
+            # ✅ Skip parameters meant for other nodes
 
         # Add outputs from predecessor nodes
         for predecessor in workflow.graph.predecessors(node_id):
