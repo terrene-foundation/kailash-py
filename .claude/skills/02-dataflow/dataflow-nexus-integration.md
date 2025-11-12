@@ -10,7 +10,6 @@ Critical configuration patterns to prevent startup blocking when integrating Dat
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `CRITICAL`
-> SDK Version: `0.9.25+ / DataFlow 0.6.0 / Nexus 0.1.5+`
 > Related Skills: [`nexus-quickstart`](#), [`dataflow-models`](#), [`dataflow-existing-database`](#)
 > Related Subagents: `dataflow-specialist`, `nexus-specialist`
 
@@ -385,13 +384,6 @@ nexus.run(port=8000)
 - Test startup time - should be <2 seconds
 - Monitor slow query threshold
 - Use read-only mode for analytics APIs
-
-## Version Notes
-
-- **v0.9.25+**: Multi-instance isolation fixed
-- **v0.4.0+**: Deferred schema operations
-- **v0.1.5+** (Nexus): DataFlow integration support
-- **CRITICAL FIX**: Blocking issue documented and resolved
 
 ## Keywords for Auto-Trigger
 
