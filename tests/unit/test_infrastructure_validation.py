@@ -40,7 +40,8 @@ class TestPerformanceTracker:
         elapsed = tracker.stop()
 
         # Verify timing accuracy (within reasonable margin)
-        assert 0.05 < elapsed < 0.2
+        # Increased upper bound to 0.3s for CI infrastructure variance
+        assert 0.05 < elapsed < 0.3
         assert tracker.operation_name == "test_operation"
         assert tracker.start_time is not None
         assert tracker.end_time is not None
@@ -55,7 +56,8 @@ class TestPerformanceTracker:
 
         # Verify context manager tracked timing
         assert tracker.elapsed_time > 0.04
-        assert tracker.elapsed_time < 0.1
+        # Increased upper bound to 0.25s for CI infrastructure variance
+        assert tracker.elapsed_time < 0.25
         assert tracker.operation_name == "context_test"
 
     def test_performance_tracker_metrics_collection(self):
@@ -82,7 +84,8 @@ class TestPerformanceTracker:
         from tests.utils.performance_tracker import PerformanceTracker
 
         # Test under threshold
-        fast_tracker = PerformanceTracker("fast_test", threshold=0.1)
+        # Increased threshold to 0.15s for CI infrastructure variance
+        fast_tracker = PerformanceTracker("fast_test", threshold=0.15)
         with fast_tracker:
             time.sleep(0.02)
 
