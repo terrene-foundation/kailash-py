@@ -108,7 +108,7 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **When NOT to use**: Simple workflows (Core SDK), database apps (DataFlow), multi-channel platforms (Nexus)
 
 ### Key Concepts
-- **Signature-Based Programming**: Type-safe I/O with InputField/OutputField
+- **Signature-Based Programming**: Type-safe I/O with InputField/OutputField. Both `description=` and `desc=` parameters are supported (aliases) - use either based on preference.
 - **Structured Outputs**: OpenAI Structured Outputs API with 100% schema compliance. Use `create_structured_output_config()` with `provider_config`. Strict mode (100% compliance, gpt-4o-2024-08-06+) returns dict responses - strategies auto-detect and handle transparently. Legacy mode (70-85% best-effort, all models). **Provider Compatibility**: OpenAI supports `json_schema` (strict) and `json_object` (legacy); Ollama/Anthropic do NOT support structured outputs API. **Implementation**: `provider_config` IS the `response_format` - pass entire dict from `create_structured_output_config()` directly; `llm_agent.py` assigns it to `generation_config["response_format"]` without nested key extraction.
 - **Signature Inheritance** (v0.6.5): Child signatures merge parent fields with proper type validation
 - **Extension Points** (v0.6.5): Custom system prompts via callback pattern enabling subclass method overrides without circular dependencies

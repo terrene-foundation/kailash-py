@@ -24,7 +24,7 @@ from kaizen.core.structured_output import create_structured_output_config
 
 class ProductAnalysisSignature(Signature):
     """Structured product analysis."""
-    product_description: str = InputField(desc="Product description")
+    product_description: str = InputField(desc="Product description")  # 'description=' also works
     category: str = OutputField(desc="Product category")
     price_range: str = OutputField(desc="Price range estimate")
     confidence: float = OutputField(desc="Confidence score 0-1")
