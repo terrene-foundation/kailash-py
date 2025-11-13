@@ -794,7 +794,7 @@ class MyConfig:
 
 # 2. Define signature (inputs/outputs)
 class MySignature(Signature):
-    question: str = InputField(desc="User input")
+    question: str = InputField(desc="User input")  # 'description=' also works
     answer: str = OutputField(desc="Agent output")
 
 # 3. Extend BaseAgent
