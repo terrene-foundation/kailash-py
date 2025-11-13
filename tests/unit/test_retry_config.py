@@ -13,7 +13,6 @@ import time
 from unittest.mock import Mock
 
 import pytest
-
 from kailash.nodes.data.async_sql import RetryConfig, RetryMetrics
 from kailash.sdk_exceptions import RetryExhaustedException
 
