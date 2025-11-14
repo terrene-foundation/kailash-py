@@ -3256,6 +3256,100 @@ data = self.extract_list(result, "actual_key_name", default=[])
 ### Multi-Modal API Errors
 **See**: `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` - Common Pitfalls section
 
+### Provider Compatibility for Structured Outputs
+
+**CRITICAL**: Ollama does NOT support OpenAI Structured Outputs API. Use OpenAI for agents requiring structured outputs.
+
+**Affected Agents**:
+- `PlanningAgent` - Uses `List[PlanStep]` schema
+- `PEVAgent` - Uses `List[Refinement]` schema
+- `ToTAgent` - Uses `List[ToTNode]` schema
+- `MetaController` - Uses complex routing schemas
+
+**Symptoms with Ollama**:
+```python
+# Test times out after 60-120s
+# JSON_PARSE_FAILED errors
+# Ollama tries to generate matching JSON but can't comply with strict schema
+```
+
+**Solution**:
+```python
+# WRONG (will timeout with complex schemas)
+agent = PlanningAgent(
+    llm_provider="ollama",
+    model="llama3.1:8b-instruct-q8_0"
+)
+
+# RIGHT (100% schema compliance)
+agent = PlanningAgent(
+    llm_provider="openai",
+    model="gpt-4o-mini"  # Supports structured outputs
+)
+```
+
+**Provider Support Matrix**:
+- ✅ **OpenAI**: Full support for `json_schema` (strict mode) and `json_object` (legacy)
+- ❌ **Ollama**: NO support for structured outputs API
+- ❌ **Anthropic**: NO support for structured outputs API
+
+**When to Use OpenAI vs Ollama**:
+- **OpenAI** (REQUIRED): Agents with complex schemas (`List[T]`, nested Pydantic models)
+- **Ollama** (OK): Simple agents with string/dict outputs, basic RAG, simple QA
+
+**Cost Impact**:
+- OpenAI gpt-4o-mini: ~$0.001-0.01 per test
+- Ollama: Free (local inference)
+
+**Test Configuration**:
+```python
+# For E2E tests with structured outputs
+pytestmark = [
+    pytest.mark.e2e,
+    pytest.mark.asyncio,
+    pytest.mark.skipif(
+        not os.getenv("OPENAI_API_KEY"),
+        reason="OPENAI_API_KEY required for structured outputs"
+    ),
+]
+```
+
+### pytest-asyncio Version Compatibility
+
+**CRITICAL**: pytest-asyncio version affects async test execution. Use 0.21.1 for E2E tests.
+
+**Issue**: pytest-asyncio 1.x forces `Mode.STRICT` even with `asyncio_mode = auto` in pytest.ini
+- Version 1.2.0+: Ignores `asyncio_mode = auto`, enforces STRICT mode
+- Version 0.23.0: `AttributeError: 'Package' object has no attribute 'obj'`
+- Version 0.21.1: ✅ Works correctly with E2E tests
+
+**Solution**:
+```bash
+pip install pytest-asyncio==0.21.1
+```
+
+**pytest.ini Configuration**:
+```ini
+[pytest]
+asyncio_mode = auto
+asyncio_default_fixture_loop_scope = function
+asyncio_default_test_loop_scope = function
+```
+
+**Known Side Effect**:
+- Unit test `test_edge_state_machine.py` fails with pytest-asyncio 0.21.1
+- Error: `AttributeError: 'FixtureDef' object has no attribute 'unittest'`
+- E2E tests are higher priority - unit test issue deferred
+
+**Test Markers**:
+```python
+# E2E tests work with pytest-asyncio 0.21.1
+pytestmark = [
+    pytest.mark.e2e,
+    pytest.mark.asyncio,  # Async mode auto-detected
+]
+```
+
 ## Examples Directory
 
 **Location**: `apps/kailash-kaizen/examples/`
