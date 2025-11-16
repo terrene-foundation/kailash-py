@@ -5,12 +5,11 @@ description: "CountNode for efficient COUNT(*) queries with 10-50x performance i
 
 # DataFlow CountNode - Efficient Counting
 
-11th auto-generated node for efficient `COUNT(*)` queries with 10-50x performance improvement over ListNode (v0.7.9+).
+11th auto-generated node for efficient `COUNT(*)` queries with 10-50x performance improvement over ListNode.
 
 > **Skill Metadata**
 > Category: `dataflow/nodes`
 > Priority: `HIGH`
-> SDK Version: `0.7.9+ / DataFlow 0.7.9`
 > Related Skills: [`dataflow-crud-operations`](#), [`dataflow-queries`](#), [`dataflow-performance`](#)
 > Related Subagents: `dataflow-specialist` (performance optimization)
 
@@ -18,13 +17,13 @@ description: "CountNode for efficient COUNT(*) queries with 10-50x performance i
 
 - **Performance**: 10-50x faster than ListNode workaround
 - **Query Type**: Uses `SELECT COUNT(*)` instead of fetching all records
-- **Auto-Generated**: 11th node per @db.model (v0.7.9+)
+- **Auto-Generated**: 11th node per @db.model
 - **MongoDB Support**: Optimized `.count_documents()` for MongoDB
 - **Filter Support**: All MongoDB-style operators ($eq, $ne, $gt, $in, etc.)
 
 ## ⚠️ CRITICAL: Performance Comparison
 
-### Before CountNode (v0.7.8 and earlier)
+### Before CountNode
 ```python
 # ❌ SLOW - Fetches all records to count (20-50ms for 10,000 records)
 workflow.add_node("UserListNode", "count_users", {
@@ -36,7 +35,7 @@ workflow.add_node("UserListNode", "count_users", {
 count = len(results["count_users"])  # Retrieved 10,000 records!
 ```
 
-### After CountNode (v0.7.9+)
+### After CountNode
 ```python
 # ✅ FAST - Uses COUNT(*) query (1-5ms regardless of record count)
 workflow.add_node("UserCountNode", "count_users", {
@@ -388,16 +387,6 @@ workflow.add_node("OrderListNode", "debug_list", {
 workflow.add_node("OrderCountNode", "count", {
     "filter": {"status": "pending"}
 })
-```
-
-## Version Compatibility
-
-- **DataFlow 0.7.9+**: CountNode auto-generated (11th node)
-- **DataFlow 0.7.8 and earlier**: No CountNode (use ListNode workaround)
-
-**Upgrade Command:**
-```bash
-pip install --upgrade kailash-dataflow>=0.7.9
 ```
 
 ## Related Resources

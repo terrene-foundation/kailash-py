@@ -5,30 +5,28 @@ description: "UpsertNode with custom conflict fields (conflict_on parameter) for
 
 # DataFlow UpsertNode - Custom Conflict Fields
 
-Atomic insert-or-update operations with custom conflict detection using the `conflict_on` parameter (v0.8.0+).
+Atomic insert-or-update operations with custom conflict detection using the `conflict_on` parameter.
 
 > **Skill Metadata**
 > Category: `dataflow/nodes`
 > Priority: `HIGH`
-> SDK Version: `0.8.0+ / DataFlow 0.8.0`
 > Related Skills: [`dataflow-crud-operations`](#), [`dataflow-bulk-operations`](#)
 > Related Subagents: `dataflow-specialist` (complex upserts)
 
 ## Quick Reference
 
-- **conflict_on Parameter**: Specify custom conflict detection fields (v0.8.0+)
+- **conflict_on Parameter**: Specify custom conflict detection fields
 - **Natural Keys**: Use business identifiers like email, username, SKU
 - **Composite Keys**: Multiple fields for unique constraints
 - **Atomic Operation**: Single database round-trip
 - **PostgreSQL/MySQL/SQLite**: Full support across all SQL databases
 
-## ⚠️ CRITICAL: conflict_on Parameter (v0.8.0+)
+## ⚠️ CRITICAL: conflict_on Parameter
 
-**Before v0.8.0:** Upsert only detected conflicts on `id` field
-**v0.8.0+:** Use `conflict_on` to specify custom fields for conflict detection
+Use `conflict_on` to specify custom fields for conflict detection beyond the default `id` field.
 
 ```python
-# ✅ CORRECT (v0.8.0+) - Custom conflict field
+# ✅ CORRECT - Custom conflict field
 workflow.add_node("UserUpsertNode", "upsert", {
     "where": {"email": "alice@example.com"},
     "conflict_on": ["email"],  # ← Detect conflicts on email
@@ -40,7 +38,7 @@ workflow.add_node("UserUpsertNode", "upsert", {
     }
 })
 
-# ❌ WRONG (v0.7.x and earlier) - Only supports id-based conflicts
+# ❌ WRONG - Missing conflict_on when using non-id field
 workflow.add_node("UserUpsertNode", "upsert", {
     "where": {"id": "user-123"},  # ← Must use id
     "update": {"name": "Alice Updated"},
@@ -372,16 +370,6 @@ workflow.add_node("OrderItemUpsertNode", "upsert", {
     "conflict_on": ["order_id", "product_id"],
     ...
 })
-```
-
-## Version Compatibility
-
-- **DataFlow 0.8.0+**: Full conflict_on support
-- **DataFlow 0.7.x and earlier**: Only id-based conflicts
-
-**Upgrade Command:**
-```bash
-pip install --upgrade kailash-dataflow>=0.8.0
 ```
 
 ## Related Resources

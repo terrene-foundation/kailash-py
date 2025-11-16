@@ -1,11 +1,11 @@
 # DataFlow Dynamic Updates with PythonCodeNode
 
-**New in Core SDK v0.9.28**: Multi-output PythonCodeNode enables natural, intuitive dynamic update patterns.
+**Multi-output PythonCodeNode** enables natural, intuitive dynamic update patterns.
 
 ## TL;DR
 
 ```python
-# NEW (Core SDK v0.9.28+): Multi-output pattern
+# NEW: Multi-output pattern
 workflow.add_node("PythonCodeNode", "prepare", {
     "code": """
 filter_data = {"id": summary_id}
@@ -22,9 +22,9 @@ workflow.add_connection("prepare", "edited_by_user", "update", "edited_by_user")
 
 ## What Changed
 
-**Core SDK v0.9.28** enables PythonCodeNode to export multiple variables without nesting in `result`.
+**PythonCodeNode** now supports exporting multiple variables without nesting in `result`.
 
-### Before (v0.9.27 and earlier)
+### Before (Legacy Pattern)
 ```python
 # Forced to nest everything in 'result'
 result = {
@@ -33,7 +33,7 @@ result = {
 }
 ```
 
-### After (v0.9.28+)
+### After (Current Pattern)
 ```python
 # Natural variable definitions
 filter_data = {"id": summary_id}
@@ -90,7 +90,7 @@ result = await runtime.execute_workflow_async(workflow.build(), {
 
 ## Backward Compatibility
 
-Old patterns still work 100%:
+Legacy patterns still work 100%:
 
 ```python
 # This still works fine
@@ -105,11 +105,6 @@ workflow.add_connection("prepare", "result.fields", "update", "fields")
 ✅ Matches developer mental model
 ✅ Less nesting, cleaner code
 ✅ Full DataFlow benefits retained (no SQL needed!)
-
-## Requirements
-
-- Core SDK >= v0.9.28
-- DataFlow >= v0.6.6
 
 ## See Also
 
