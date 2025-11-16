@@ -10,13 +10,12 @@ Run multiple isolated DataFlow instances (dev/prod) with proper context separati
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `MEDIUM`
-> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-models`](#), [`dataflow-connection-config`](#)
 > Related Subagents: `dataflow-specialist`
 
 ## Quick Reference
 
-- **Context Isolation**: Each instance maintains separate models (v0.4.0+)
+- **Context Isolation**: Each instance maintains separate models
 - **String IDs**: Preserved per instance
 - **Pattern**: Dev + prod instances with different configs
 
@@ -67,30 +66,28 @@ print(f"Prod models: {list(db_prod.models.keys())}")  # ['ProdModel']
 
 ## Common Mistakes
 
-### Mistake 1: Context Leaks (Pre-v0.4.0)
+### Mistake 1: Not Using Instance-Specific Decorators
 
 ```python
-# OLD ISSUE - models leaked between instances
+# Wrong - attempting to share models between instances
 db1 = DataFlow("sqlite:///db1.db")
 db2 = DataFlow("postgresql://db2")
 
-@db1.model
-class Model1:
-    name: str
-# Model1 leaked to db2!  # Fixed in v0.4.0+
+# Attempting to use a generic @model decorator
+# This would cause ambiguity about which instance owns the model
 ```
 
-**Fix: Upgrade to v0.4.0+**
+**Fix: Use Instance-Specific Decorators**
 
 ```python
-# v0.4.0+ - proper isolation
+# Correct - proper isolation with instance-specific decorators
 db1 = DataFlow("sqlite:///db1.db")
 db2 = DataFlow("postgresql://db2")
 
 @db1.model
 class Model1:
     name: str
-# Model1 only in db1 - isolated
+# Model1 only in db1 - properly isolated
 ```
 
 ## Documentation References
@@ -104,8 +101,8 @@ class Model1:
 
 ## Quick Tips
 
-- v0.4.0+ has proper context isolation
 - Each instance maintains separate models
+- Proper context isolation enforced
 - String IDs preserved per instance
 - Use different configs per environment
 
