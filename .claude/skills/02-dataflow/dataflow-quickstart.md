@@ -10,7 +10,6 @@ Zero-config database framework built on Core SDK with automatic node generation 
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `CRITICAL`
-> SDK Version: `0.9.25+` (DataFlow v0.6.0+)
 > Related Skills: [`workflow-quickstart`](../../01-core-sdk/workflow-quickstart.md), [`dataflow-models`](dataflow-models.md), [`dataflow-queries`](dataflow-queries.md)
 > Related Subagents: `dataflow-specialist` (enterprise features, migrations), `nexus-specialist` (DataFlow+Nexus integration)
 
@@ -116,7 +115,7 @@ db = DataFlow("postgresql://user:password@localhost:5432/database")
 # MySQL (web hosting, existing infrastructure)
 db = DataFlow("mysql://user:password@localhost:3306/database")
 
-# Special characters in passwords supported (v0.9.4+)
+# Special characters in passwords supported
 db = DataFlow("postgresql://admin:MySecret#123$@localhost/db")
 ```
 
@@ -316,17 +315,8 @@ Use `nexus-specialist` when:
 - 💡 **Zero-config first**: Start with `DataFlow()` - no configuration needed
 - 💡 **9 nodes per model**: Remember - Create, Read, Update, Delete, List, Bulk(Create/Update/Delete/Upsert)
 - 💡 **MongoDB queries**: Use familiar syntax that works across all SQL databases (PostgreSQL/MySQL/SQLite)
-- 💡 **String IDs**: Fully supported - no forced integer conversion (v0.5.0+)
+- 💡 **String IDs**: Fully supported - no forced integer conversion
 - 💡 **Existing databases**: Use `existing_schema_mode=True` for safety
 - 💡 **Nexus integration**: Set `skip_registry=True` + `auto_discovery=False` to avoid blocking
-
-## Version Notes
-
-- **v0.6.0**: MongoDB document database + PostgreSQL pgvector support
-- **v0.5.6**: MySQL support with 100% feature parity, BaseAdapter hierarchy
-- **v0.5.4**: Multi-node workflow threading bug fixed
-- **v0.5.0**: String ID support, multi-instance isolation
-- **v0.4.6**: TEXT fields (unlimited content), improved parameter types
-- **v0.4.5**: Enterprise migration system with 8 safety components
 
 <!-- Trigger Keywords: DataFlow tutorial, DataFlow quick start, @db.model, DataFlow setup, database framework, how to use DataFlow, DataFlow installation, DataFlow guide, zero-config database, automatic node generation, DataFlow example, start with DataFlow -->
