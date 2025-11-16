@@ -17,137 +17,137 @@ DataFlow transforms database models into workflow nodes automatically, providing
 - **Zero Configuration**: String IDs preserved, deferred schema operations
 - **Integration Ready**: Works with Nexus for multi-channel deployment
 - **Specialized Adapters**: SQL (11 nodes/model), Document (8 nodes), Vector (3 nodes)
+L
+## 🛠️ Developer Experience Tools
 
-## ⚠️ Critical Updates & Bug Fixes
+### Enhanced Error System
 
-### v0.7.11 Bulk Operations Parameter Handling (LATEST - 2025-10-31)
+DataFlow provides comprehensive error enhancement across all database operations, strict mode validation for build-time error prevention, and an intelligent debug agent for automated error diagnosis.
 
-**Bug Fix:**
-- ✅ **Parameter Conflict Resolution**: Fixed `TypeError: got multiple values for keyword argument 'model_name'` in all 4 bulk operations when workflows have global input parameters
+#### Error Enhancement
 
-**What Was Fixed:**
-Bulk operations (BulkCreate, BulkUpdate, BulkDelete, BulkUpsert) now correctly filter `model_name` and `db_instance` from kwargs before passing to internal methods, preventing parameter conflicts when global workflow inputs are present.
+**What It Is**: Automatic transformation of Python exceptions into rich, actionable error messages with context, root causes, and solutions.
 
-**Impact:**
-- All bulk operations work correctly with Nexus/AsyncLocalRuntime global parameters
-- No breaking changes - existing workflows continue working unchanged
+**All DataFlow errors include**:
+- **Error codes**: DF-XXX format (DataFlow) or KS-XXX (Core SDK)
+- **Context**: Node, parameters, workflow state
+- **Root causes**: Why the error occurred (3-5 possibilities with probability scores)
+- **Solutions**: How to fix it (with code examples)
 
-**Upgrade Command:**
-```bash
-pip install --upgrade kailash-dataflow>=0.7.11
+**Example**:
+```python
+# Missing parameter error shows:
+# - Error Code: DF-101
+# - Missing parameter: "id"
+# - 3 solutions with code examples
+# - Link to documentation
+
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Alice"  # Missing "id" - error enhanced automatically
+})
 ```
+
+**Error Categories**:
+- **DF-1XX**: Parameter errors (missing, type mismatch, validation)
+- **DF-2XX**: Connection errors (missing, circular, type mismatch)
+- **DF-3XX**: Migration errors (schema, constraints)
+- **DF-4XX**: Configuration errors (database URL, auth)
+- **DF-5XX**: Runtime errors (timeouts, resources)
+
+**Architecture**:
+```python
+# BaseErrorEnhancer - Shared abstraction
+# ├─ CoreErrorEnhancer - KS-501 to KS-508 (Core SDK)
+# └─ DataFlowErrorEnhancer - DF-XXX codes (DataFlow)
+```
+
+#### Strict Mode Validation
+
+**What It Is**: Build-time validation system with 4 layers to catch errors before workflow execution.
+
+**Validation Layers**:
+1. **Model Validation** - Primary keys, auto-fields, reserved fields, field types
+2. **Parameter Validation** - Required parameters, types, values, CreateNode structure
+3. **Connection Validation** - Source/target nodes, type compatibility, dot notation
+4. **Workflow Validation** - Structure, circular dependencies
+
+**Configuration**:
+```python
+from dataflow import DataFlow
+from dataflow.validation.strict_mode import StrictModeConfig
+
+config = StrictModeConfig(
+    enabled=True,
+    validate_models=True,
+    validate_parameters=True,
+    validate_connections=True,
+    validate_workflows=True,
+    fail_fast=True,   # Stop on first error
+    verbose=False     # Minimal output
+)
+
+db = DataFlow("postgresql://...", strict_mode_config=config)
+```
+
+**When to Use**:
+- ✅ Development: Catch errors early
+- ✅ CI/CD: Validate workflows before deployment
+- ✅ Production: Prevent invalid workflow execution
+
+**Documentation**:
+- HOW-TO Guide: [`dataflow-strict-mode`](dataflow-strict-mode.md)
+- Architecture Guide: [`dataflow-validation-layers`](dataflow-validation-layers.md)
+
+#### Debug Agent
+
+**What It Is**: Intelligent error analysis system that automatically diagnoses errors and provides ranked, actionable solutions.
+
+**5-Stage Pipeline**:
+1. **Capture** - Stack traces, context, error chains
+2. **Categorize** - 50+ patterns across 5 categories (PARAMETER, CONNECTION, MIGRATION, RUNTIME, CONFIGURATION)
+3. **Analyze** - Inspector integration for workflow analysis
+4. **Suggest** - 60+ solution templates with relevance scoring
+5. **Format** - CLI (color-coded), JSON (machine-readable), dict (programmatic)
+
+**Usage**:
+```python
+from dataflow.debug.debug_agent import DebugAgent
+from dataflow.debug.knowledge_base import KnowledgeBase
+from dataflow.platform.inspector import Inspector
+
+# Initialize once (singleton pattern)
+kb = KnowledgeBase("patterns.yaml", "solutions.yaml")
+inspector = Inspector(db)
+debug_agent = DebugAgent(kb, inspector)
+
+# Debug errors automatically
+try:
+    runtime.execute(workflow.build())
+except Exception as e:
+    report = debug_agent.debug(e, max_solutions=5, min_relevance=0.3)
+    print(report.to_cli_format())  # Rich terminal output
+```
+
+**Output Formats**:
+```python
+# CLI format (color-coded, ANSI)
+print(report.to_cli_format())
+
+# JSON format (machine-readable)
+json_output = report.to_json()
+
+# Dictionary format (programmatic)
+data = report.to_dict()
+```
+
+**Performance**: 5-50ms per error, 92%+ confidence for known patterns
+
+**Documentation**:
+- Skill Guide: [`dataflow-debug-agent`](dataflow-debug-agent.md)
+- User Guide: `docs/guides/debug-agent-user-guide.md`
+- Developer Guide: `docs/guides/debug-agent-developer-guide.md`
 
 ---
-
-### v0.7.9 CountNode + PostgreSQL ARRAY + Auto-Query Caching (2025-10-30)
-
-**New Features:**
-- ✅ **CountNode**: 11th auto-generated node for efficient COUNT(*) queries (10-50x faster than ListNode)
-- ✅ **PostgreSQL Native Arrays**: TEXT[], INTEGER[], REAL[] support with 2-10x performance gain
-- ✅ **Auto-Query Caching**: Redis auto-detection with in-memory LRU fallback for 5-10x throughput
-
-**CountNode Usage:**
-```python
-workflow.add_node("UserCountNode", "count_users", {"filter": {"active": True}})
-# Returns: {"count": 42} in 1-5ms vs 20-50ms with ListNode
-```
-
-**PostgreSQL ARRAY Usage:**
-```python
-@db.model
-class AgentMemory:
-    tags: List[str]  # Becomes TEXT[] on PostgreSQL
-    __dataflow__ = {'use_native_arrays': True}  # Opt-in
-```
-
-**Auto-Query Caching:**
-- Redis auto-detection on startup
-- Automatic in-memory LRU fallback if Redis unavailable
-- 5-10x throughput improvement for repeated queries
-
-**Upgrade Command:**
-```bash
-pip install --upgrade kailash-dataflow>=0.7.9
-```
-
----
-
-### v0.7.3 Schema Cache + Migration Fixes (2025-10-26)
-
-**Performance Improvement:**
-- ✅ **Schema Cache**: Thread-safe table existence cache for 91-99% performance improvement
-- ✅ **Cache Metrics**: Observable metrics for monitoring cache performance
-- ✅ **Automatic Management**: Configurable TTL, size limits, LRU eviction
-
-**Bug Fixes:**
-- ✅ **Async-Safe Migration**: Fixed migration recording in FastAPI/async contexts
-- ✅ **Error Messages**: Enhanced error messages with contextual help
-
----
-
-### v0.7.0 Bulk Operations Fixes (2025-10-24)
-
-**8 Critical bugs fixed in bulk operations:**
-
-1. **BUG-001**: BulkUpsertNode silent INSERT failure (CRITICAL) - Fixed in v0.7.0
-2. **BUG-002**: Parameter serialization (conflict_fields) - Fixed in v0.7.0
-3. **BUG-003**: BulkCreateNode count reporting - Fixed in v0.7.0
-4. **BUG-004**: BulkUpsertNode UPDATE not working - Fixed in v0.7.0
-5. **BUG-005**: BulkDeleteNode $in operator not converting to SQL IN - Fixed in v0.7.0
-6. **BUG-006**: BulkUpdateNode $in operator not converting to SQL IN - Fixed in v0.7.0
-7. **BUG-007**: Empty $in list causes SQL syntax error - Fixed in v0.7.0
-8. **BUG-008**: Empty $nin list not handled - Fixed in v0.7.0
-
-**Key Fixes:**
-- ✅ **UPDATE Operations**: BulkUpsertNode now correctly updates existing records using PostgreSQL `xmax` detection
-- ✅ **MongoDB Operators**: All bulk operations support `$in`, `$nin`, `$gt`, `$gte`, `$lt`, `$lte`, `$ne`
-- ✅ **Empty List Handling**: `{"id": {"$in": []}}` now works correctly (matches nothing)
-- ✅ **Code Quality**: 160 lines eliminated via shared helper function
-
-**Test Coverage**: 57/57 tests passing (100%)
-
-**Upgrade Command:**
-```bash
-pip install --upgrade kailash-dataflow>=0.7.0
-```
-
----
-
-### v0.6.2-v0.6.3 Truthiness Bug Pattern (FIXED)
-Two critical bugs caused by Python truthiness checks on empty dicts:
-
-**v0.6.2 - ListNode Filter Operators:**
-- **Bug:** `if filter_dict:` at nodes.py:1810 evaluated to False for empty dict {}
-- **Impact:** ALL MongoDB-style filter operators ($ne, $nin, $in, $not) were broken
-- **Fix:** Changed to `if "filter" in kwargs:`
-- **Result:** All filter operators now work correctly
-
-**v0.6.3 - BulkDeleteNode Safe Mode:**
-- **Bug:** `not filter_conditions` at bulk_delete.py:177 evaluated to True for empty dict {}
-- **Impact:** Safe mode incorrectly rejected valid empty filter operations
-- **Fix:** Changed to `"filter" not in validated_inputs`
-- **Result:** Consistent validation logic
-
-### Pattern to Avoid
-❌ **NEVER use truthiness checks on filter/data parameters:**
-```python
-if filter_dict:  # BAD - empty dict {} is falsy!
-if not filter_dict:  # BAD - empty dict {} is falsy!
-```
-
-✅ **ALWAYS use key existence checks:**
-```python
-if "filter" in kwargs:  # GOOD
-if "filter" not in validated_inputs:  # GOOD
-```
-
-### Affected Versions
-- ❌ v0.5.4 - v0.6.1: Broken filter operators
-- ✅ v0.6.2+: All filter operators work correctly
-- ✅ v0.6.3+: BulkDelete safe mode fixed
-- ✅ v0.7.0+: All bulk operations fully functional with MongoDB operators
-
-## 🛠️ Developer Experience Tools (v0.8.0)
 
 ### Build-Time Validation: Catch Errors Early
 **Validation Modes**: OFF, WARN (default), STRICT
@@ -436,7 +436,10 @@ user_id = results["create_user"]["result"]  # Access pattern
 - **[create-vs-update guide](../../../sdk-users/apps/dataflow/guides/create-vs-update.md)** - CreateNode vs UpdateNode comprehensive guide
 - **[top-10-errors](../../../sdk-users/apps/dataflow/troubleshooting/top-10-errors.md)** - Quick fix guide for 90% of issues
 - **[dataflow-gotchas](dataflow-gotchas.md)** - Common pitfalls and solutions
-- **ErrorEnhancer**: Automatic error enhancement (integrated in DataFlow engine)
+- **[dataflow-strict-mode](dataflow-strict-mode.md)** - Strict mode validation HOW-TO guide (Week 9)
+- **[dataflow-validation-layers](dataflow-validation-layers.md)** - 4-layer validation architecture (Week 9)
+- **[dataflow-debug-agent](dataflow-debug-agent.md)** - Intelligent error analysis with 5-stage pipeline (Week 10)
+- **ErrorEnhancer**: Automatic error enhancement (integrated in DataFlow engine) - Enhanced in Week 7
 - **Inspector API**: Self-service debugging (18 introspection methods)
 - **CLI Tools**: Industry-standard command-line validation and debugging tools (5 commands)
 
@@ -468,6 +471,8 @@ Each `@db.model` class generates **11 nodes**:
 - ✅ Deferred schema operations (safe for Docker/FastAPI)
 - ✅ Multi-instance isolation (one DataFlow per database)
 - ✅ Result access: `results["node_id"]["result"]`
+- ❌ NEVER use truthiness checks on filter/data parameters (empty dict `{}` is falsy)
+- ❌ ALWAYS use key existence checks: `if "filter" in kwargs` instead of `if kwargs.get("filter")`
 - ❌ NEVER use direct SQL when DataFlow nodes exist
 - ❌ NEVER use SQLAlchemy/Django ORM alongside DataFlow
 
@@ -516,20 +521,6 @@ db = DataFlow(connection_string="...")
 workflow = WorkflowBuilder()
 workflow.add_node("User_Create", "user1", {...})
 ```
-
-## Version Compatibility
-
-- **Current Version**: 0.7.11 (Bulk operations parameter handling fix)
-- **Core SDK Version**: 0.9.25+
-- **Python**: 3.8+
-- **v0.7.11**: Bulk operations parameter conflict fix (model_name/db_instance filtering)
-- **v0.7.9**: CountNode (11th node) + PostgreSQL native arrays + auto-query caching
-- **v0.7.3**: Schema cache (91-99% faster) + async-safe migrations
-- **v0.7.0**: Bulk operations fixes (8 critical bugs)
-- **v0.6.3**: BulkDeleteNode safe mode validation fix
-- **v0.6.2**: ListNode filter operators fix ($ne, $nin, $in, $not)
-- **v0.6.0**: MongoDB document database + PostgreSQL pgvector support
-- **Architecture**: BaseAdapter hierarchy with SQL, Document, and Vector adapters
 
 ## Multi-Database Support Matrix
 

@@ -10,7 +10,6 @@ Performance tuning for DataFlow applications with connection pooling, caching, a
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `MEDIUM`
-> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-bulk-operations`](#), [`dataflow-queries`](#), [`dataflow-connection-config`](#)
 > Related Subagents: `dataflow-specialist` (advanced optimization)
 
@@ -130,7 +129,7 @@ workflow.add_node("UserListNode", "names_only", {
 })
 ```
 
-### 6. Schema Cache (v0.7.3+)
+### 6. Schema Cache
 
 Thread-safe table existence cache eliminating redundant migration checks, providing 91-99% performance improvement for multi-operation workflows.
 

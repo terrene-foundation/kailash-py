@@ -10,14 +10,13 @@ Automatic error enhancement with DF-XXX codes, context, root causes, and actiona
 > **Skill Metadata**
 > Category: `dataflow/dx`
 > Priority: `CRITICAL`
-> SDK Version: `0.8.0+ / DataFlow 0.8.0`
 > Related Skills: [`dataflow-inspector`](#), [`dataflow-validation`](#), [`top-10-errors`](#)
 > Related Subagents: `dataflow-specialist` (complex errors), `testing-specialist` (test errors)
 
 ## Quick Reference
 
 - **60+ Error Codes**: DF-1XX (parameters) through DF-8XX (runtime)
-- **Automatic Integration**: Built into DataFlow engine (v0.8.0+)
+- **Automatic Integration**: Built into DataFlow engine
 - **Rich Context**: Node, parameters, workflow state, stack traces
 - **Actionable Solutions**: Code templates with variable substitution
 - **Color-Coded Output**: Emojis and formatting for readability
@@ -25,7 +24,7 @@ Automatic error enhancement with DF-XXX codes, context, root causes, and actiona
 
 ## ⚠️ CRITICAL: ErrorEnhancer is Automatic
 
-ErrorEnhancer is **automatically integrated** into DataFlow v0.8.0+. You do NOT need to:
+ErrorEnhancer is **automatically integrated** into DataFlow. You do NOT need to:
 - ❌ Import ErrorEnhancer manually
 - ❌ Wrap code in try/except to enable it
 - ❌ Configure error enhancement
@@ -113,12 +112,12 @@ High-level workflow validation and execution errors.
 
 ErrorEnhancer transforms basic Python exceptions into rich error messages:
 
-### Before ErrorEnhancer (v0.7.x)
+### Before ErrorEnhancer
 ```python
 KeyError: 'data'
 ```
 
-### After ErrorEnhancer (v0.8.0+)
+### After ErrorEnhancer
 ```
 🔴 DF-101: Missing Required Parameter 'data'
 
@@ -417,16 +416,6 @@ ErrorEnhancer has **negligible performance impact**:
 - **Build-time**: <1ms overhead per model
 - **Runtime**: Only activates on exceptions (no overhead for successful executions)
 - **Memory**: <100KB for error catalog
-
-## Version Compatibility
-
-- **DataFlow 0.8.0+**: ErrorEnhancer fully integrated
-- **DataFlow 0.7.x and earlier**: No ErrorEnhancer (basic Python exceptions)
-
-**Upgrade Command:**
-```bash
-pip install --upgrade kailash-dataflow>=0.8.0
-```
 
 ## Related Resources
 

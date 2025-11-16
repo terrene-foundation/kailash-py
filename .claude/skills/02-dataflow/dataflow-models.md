@@ -10,7 +10,6 @@ Define database models using the `@db.model` decorator that automatically genera
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `CRITICAL`
-> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-quickstart`](#), [`dataflow-crud-operations`](#), [`dataflow-queries`](#), [`dataflow-bulk-operations`](#)
 > Related Subagents: `dataflow-specialist` (complex models, enterprise features)
 
@@ -47,7 +46,7 @@ class User:
     created_at: datetime = None
     updated_at: datetime = None
 
-# String ID model (NEW in v0.4.0)
+# String ID model
 @db.model
 class Session:
     id: str  # String IDs preserved throughout
@@ -84,7 +83,7 @@ class Session:
 
 | Python Type | SQL Type | Notes |
 |------------|----------|-------|
-| `str` | VARCHAR/TEXT | Use TEXT for unlimited content (v0.4.0+) |
+| `str` | VARCHAR/TEXT | Use TEXT for unlimited content |
 | `int` | INTEGER/BIGINT | Auto-detect size |
 | `float` | FLOAT/DOUBLE | Precision configurable |
 | `bool` | BOOLEAN | INTEGER in SQLite |
@@ -151,7 +150,7 @@ class Session:
     id: int = None  # Will fail for string IDs like "session-uuid"
 ```
 
-**Fix: Use String Type for String IDs (v0.4.0+)**
+**Fix: Use String Type for String IDs**
 
 ```python
 # Correct - string IDs fully supported
@@ -184,20 +183,19 @@ class Product:
 ### Mistake 4: Unlimited Text in VARCHAR
 
 ```python
-# Wrong - would limit content (pre-v0.4.0 issue)
+# Wrong - would limit content
 @db.model
 class Article:
     content: str  # Was VARCHAR(255), now TEXT
 ```
 
-**Fix: Now Automatic - TEXT Type (v0.4.0+)**
+**Fix: Now Automatic - TEXT Type**
 
 ```python
 # Correct - TEXT with unlimited content
 @db.model
 class Article:
     content: str  # Automatically TEXT (no length limit)
-    # Fixed in v0.4.0 - no more VARCHAR(255) limits
 ```
 
 ## Related Patterns
@@ -314,7 +312,7 @@ workflow.add_node("OrderCreateNode", "create_order", {
 })
 ```
 
-### Example 3: String ID Session Model (NEW v0.4.0)
+### Example 3: String ID Session Model
 
 ```python
 @db.model
@@ -345,8 +343,8 @@ workflow.add_node("SsoSessionReadNode", "read_session_alt", {
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | `AttributeError: 'User' object has no attribute...` | Missing type hint | Add type hint to field: `name: str` |
-| `ValueError: String ID cannot be converted to int` | Pre-v0.4.0 limitation | Upgrade to DataFlow 0.6.0 for string ID support |
-| `DataError: value too long for type character varying(255)` | Pre-v0.4.0 VARCHAR limits | Fixed in v0.4.0 - now uses TEXT type automatically |
+| `ValueError: String ID cannot be converted to int` | Model defined with wrong ID type | Use `id: str` for string IDs |
+| `DataError: value too long for type character varying(255)` | Text field size limitation | DataFlow now uses TEXT type automatically for unlimited content |
 | `Model not found in registry` | Model defined after initialization | Define models before using in workflows |
 | `TypeError: Field() missing required positional argument` | Incorrect Field syntax | Use `Field(...)` not `field(...)` |
 
@@ -354,19 +352,12 @@ workflow.add_node("SsoSessionReadNode", "read_session_alt", {
 
 - Always use type hints for all fields
 - Use `Decimal` for currency, not `float`
-- String IDs fully supported (v0.4.0+) - no conversion
-- TEXT type now default (v0.4.0+) - unlimited content
+- String IDs fully supported - no conversion
+- TEXT type now default - unlimited content
 - Add `__dataflow__` for enterprise features
 - Default values make fields optional
 - `None` default for auto-populated fields
 - Use `List[T]` and `dict` for complex data
-
-## Version Notes
-
-- **v0.4.0+**: String ID support - no forced integer conversion
-- **v0.4.0+**: TEXT type for strings - no VARCHAR(255) limits
-- **v0.4.0+**: DateTime serialization fixed - use native datetime objects
-- **v0.9.25+**: Multi-instance isolation - separate dev/prod contexts
 
 ## Keywords for Auto-Trigger
 
