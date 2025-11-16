@@ -67,6 +67,22 @@ jobs:
           eval "$(pyenv init -)"
         fi
 
+        # Add Homebrew to PATH for gcc/gfortran (needed for scipy/numpy compilation)
+        if [ -d "/opt/homebrew/bin" ]; then
+          export PATH="/opt/homebrew/bin:$PATH"
+          echo "Added /opt/homebrew/bin to PATH (Apple Silicon)"
+        elif [ -d "/usr/local/bin" ]; then
+          export PATH="/usr/local/bin:$PATH"
+          echo "Added /usr/local/bin to PATH (Intel Mac)"
+        fi
+
+        # Verify gfortran is available
+        if command -v gfortran &> /dev/null; then
+          echo "✓ gfortran found: $(which gfortran)"
+        else
+          echo "⚠️  gfortran not found - scipy/numpy compilation may fail"
+        fi
+
         uv sync --frozen
         uv pip install pytest-cov
 
