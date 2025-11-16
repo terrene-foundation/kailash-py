@@ -185,10 +185,65 @@ result = await agent.execute_mcp_tool(
 **Key Features**:
 - MCP auto-connect to kaizen_builtin server (12 tools)
 - Custom MCP servers via `mcp_servers` parameter
+- **Automatic workflow integration** - tools automatically exposed to LLM (v0.6.0+)
 - Control Protocol integration for approval workflows
 - Universal MCP integration across all 25 agents
 
-**Reference**: `docs/features/baseagent-tool-integration.md`, ADR-012, ADR-016, `examples/autonomy/tools/`
+**Automatic Tool Discovery (v0.6.0+)**:
+When creating a BaseAgent, MCP tools are automatically discovered and passed to the LLM during workflow generation. No manual configuration required.
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.core.config import BaseAgentConfig
+
+# Step 1: Create agent with MCP servers
+agent = BaseAgent(
+    config=BaseAgentConfig(llm_provider="openai", model="gpt-4o-mini"),
+    signature=YourSignature(),
+    mcp_servers=[{
+        "name": "filesystem",
+        "command": "npx",
+        "args": ["@modelcontextprotocol/server-filesystem", "/data"]
+    }]
+)
+
+# Step 2: Run agent - tools automatically available to LLM
+result = await agent.run(question="Read /data/file.txt")
+```
+
+**How It Works**:
+1. **Initialization**: BaseAgent passes itself to WorkflowGenerator (base_agent.py:354-360)
+2. **Discovery**: WorkflowGenerator calls `agent.discover_mcp_tools()` (workflow_generator.py:210-252)
+3. **Conversion**: Tools converted to provider format via `tool_formatters.py`
+4. **Integration**: Tools passed to LLMAgentNode via `node_config["tools"]`
+
+**Provider Support**:
+- OpenAI: Full support (function calling format)
+- Anthropic: Full support (tool use format)
+- Ollama: Partial support (provider-dependent)
+
+**Tool Format Conversion** (src/kaizen/core/tool_formatters.py):
+```python
+from kaizen.core.tool_formatters import get_tools_for_provider
+
+# MCP format from agent.discover_mcp_tools()
+mcp_tools = [{"name": "mcp__filesystem__read_file", "description": "...", "inputSchema": {...}}]
+
+# Automatically converted to provider format
+openai_tools = get_tools_for_provider(mcp_tools, "openai")
+# Returns: [{"type": "function", "function": {"name": "...", "parameters": {...}}}]
+
+anthropic_tools = get_tools_for_provider(mcp_tools, "anthropic")
+# Returns: [{"name": "...", "description": "...", "input_schema": {...}}]
+```
+
+**Benefits**:
+- Zero-configuration tool exposure
+- Provider-agnostic (automatic format conversion)
+- Type-safe (schema validation via MCP inputSchema)
+- Extensible (custom MCP servers supported)
+
+**Reference**: `docs/features/baseagent-tool-integration.md`, ADR-012, ADR-016, `examples/autonomy/tools/`, `src/kaizen/core/tool_formatters.py`, `src/kaizen/core/workflow_generator.py:210-252`
 
 ### Control Protocol (v0.2.0 - Bidirectional Communication)
 
