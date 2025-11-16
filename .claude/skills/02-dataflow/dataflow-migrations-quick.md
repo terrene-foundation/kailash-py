@@ -10,7 +10,6 @@ Automatic schema migrations with safety controls for development and production.
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-models`](#), [`dataflow-existing-database`](#)
 > Related Subagents: `dataflow-specialist` (complex migrations, production safety)
 
@@ -18,7 +17,7 @@ Automatic schema migrations with safety controls for development and production.
 
 - **Development**: `auto_migrate=True` (default) - safe, preserves data
 - **Production**: `auto_migrate=False` + manual migrations
-- **Enterprise**: Full migration system (v0.4.5+) with risk assessment
+- **Enterprise**: Full migration system with risk assessment
 - **Safety**: auto_migrate ALWAYS preserves existing data
 
 ## Core Pattern
@@ -78,7 +77,7 @@ db = DataFlow(
 # Schema changes require manual migration
 ```
 
-### Enterprise Mode (v0.4.5+)
+### Enterprise Mode
 
 ```python
 from dataflow.migrations.risk_assessment_engine import RiskAssessmentEngine
@@ -123,7 +122,7 @@ class User:
 ### Remove Column
 
 ```python
-# Use Column Removal Manager (v0.4.5+)
+# Use Column Removal Manager
 from dataflow.migrations.column_removal_manager import ColumnRemovalManager
 
 remover = ColumnRemovalManager(connection_manager)
@@ -195,7 +194,7 @@ db_prod = DataFlow(
 - auto_migrate=True safe for development (preserves data)
 - Always provide defaults for NOT NULL columns
 - Use existing_schema_mode=True for production
-- Enterprise system available for complex migrations (v0.4.5+)
+- Enterprise system available for complex migrations
 - Test migrations on staging before production
 
 ## Keywords for Auto-Trigger
