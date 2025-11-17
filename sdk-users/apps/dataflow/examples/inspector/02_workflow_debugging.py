@@ -8,10 +8,10 @@ Run this example:
     python sdk-users/apps/dataflow/examples/inspector/02_workflow_debugging.py
 """
 
+from kailash.workflow.builder import WorkflowBuilder
+
 from dataflow import DataFlow
 from dataflow.platform.inspector import Inspector
-
-from kailash.workflow.builder import WorkflowBuilder
 
 
 def main():
