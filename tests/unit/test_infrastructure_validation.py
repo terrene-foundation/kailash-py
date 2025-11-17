@@ -84,8 +84,9 @@ class TestPerformanceTracker:
         from tests.utils.performance_tracker import PerformanceTracker
 
         # Test under threshold
-        # Increased threshold to 0.15s for CI infrastructure variance
-        fast_tracker = PerformanceTracker("fast_test", threshold=0.15)
+        # Increased threshold to 0.5s for CI infrastructure variance
+        # CI runners can have significant timing variance due to CPU contention
+        fast_tracker = PerformanceTracker("fast_test", threshold=0.5)
         with fast_tracker:
             time.sleep(0.02)
 
