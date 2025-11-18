@@ -11,11 +11,11 @@ Fix: Changed `fields=auto_managed_fields, model_name=...` to `field_name=", ".jo
 
 import asyncio
 
-from kailash.runtime import AsyncLocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
-
 from dataflow import DataFlow
 from dataflow.exceptions import DataFlowError
+
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 async def test_auto_managed_field_fix():
