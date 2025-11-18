@@ -143,6 +143,25 @@ workflow.add_node("UserUpdateNode", "update", {
 - **Pattern**: Create new `LocalRuntime()` for each `workflow.build()` execution
 - **Impact**: This prevents event loop conflicts, especially with async operations
 
+**4a. Async Context Usage (v0.9.1 Critical)**
+- ❌ WRONG: Using `auto_migrate=True` in FastAPI/async contexts (causes deadlock in v0.9.1)
+- ✅ CORRECT: Use `AsyncLocalRuntime()` + disable auto-migration in async contexts
+- **v0.9.1 Workaround** (temporary until v0.9.2 fix):
+  ```python
+  # FastAPI/Async contexts
+  db = DataFlow(
+      "postgresql://localhost/db",
+      auto_migrate=False,        # CRITICAL: Prevents deadlock
+      migration_enabled=False     # CRITICAL: Prevents deadlock
+  )
+
+  runtime = AsyncLocalRuntime()  # Use async runtime
+  results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+  ```
+- **Root Cause**: v0.9.1 migration system uses sync runtime in async contexts (verified at `connection_adapter.py:43`)
+- **Fix**: v0.9.2+ will include async context detection - workaround no longer needed
+- **Impact**: Prevents production deadlocks in FastAPI/async deployments (High priority)
+
 **5. Performance Expectations**
 - ❌ MISUNDERSTANDING: "DataFlow is slow - queries take 400-500ms"
 - ✅ REALITY: Performance is network-dependent, not DataFlow limitation
