@@ -236,6 +236,96 @@ workflow.add_node("OrderCreateNode", "create", {
 })
 ```
 
+## Async Usage (FastAPI, Async Workflows)
+
+### Basic Pattern
+
+```python
+from dataflow import DataFlow
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
+# Initialize DataFlow
+db = DataFlow("postgresql://localhost:5432/mydb")
+
+@db.model
+class User:
+    id: str
+    name: str
+    email: str
+
+# IMPORTANT: Use AsyncLocalRuntime in async contexts
+async def create_user():
+    workflow = WorkflowBuilder()
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "name": "Alice",
+        "email": "alice@example.com"
+    })
+
+    # ✅ Use AsyncLocalRuntime for async contexts
+    runtime = AsyncLocalRuntime()
+    results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs={})
+    return results["create"]["id"]
+```
+
+### FastAPI Integration (v0.9.1 Workaround)
+
+**CRITICAL**: DataFlow v0.9.1 has a known async deadlock issue in migration system. Workaround required until v0.9.2 release.
+
+```python
+from fastapi import FastAPI
+from dataflow import DataFlow
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
+app = FastAPI()
+
+# ⚠️ v0.9.1 WORKAROUND: Disable auto-migration in async contexts
+db = DataFlow(
+    "postgresql://localhost:5432/mydb",
+    auto_migrate=False,        # CRITICAL: Prevents deadlock
+    migration_enabled=False     # CRITICAL: Prevents deadlock
+)
+
+@db.model
+class User:
+    id: str
+    name: str
+    email: str
+
+# IMPORTANT: Manually create tables ONCE before running FastAPI
+# Run this separately (NOT in async context):
+# python -c "from dataflow import DataFlow; db = DataFlow('postgresql://...'); ..."
+
+@app.post("/users")
+async def create_user(name: str, email: str):
+    workflow = WorkflowBuilder()
+    workflow.add_node("UserCreateNode", "create", {
+        "id": f"user-{uuid.uuid4()}",
+        "name": name,
+        "email": email
+    })
+
+    runtime = AsyncLocalRuntime()
+    results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+    return results["create"]
+```
+
+**Why This Workaround is Needed**:
+- v0.9.1 migration system uses sync runtime in async contexts
+- Causes deadlock when `auto_migrate=True` in FastAPI/async apps
+- **Fix coming in v0.9.2** with async context detection
+
+**What the Fix Will Look Like** (v0.9.2+):
+```python
+# After v0.9.2 release - NO workaround needed!
+db = DataFlow(
+    "postgresql://localhost:5432/mydb",
+    auto_migrate=True  # ✅ Will work in async contexts
+)
+```
+
 ## DataFlow + Nexus Integration
 
 **CRITICAL**: Use these settings to avoid blocking/slow startup:
@@ -252,7 +342,9 @@ app = Nexus(auto_discovery=False)  # CRITICAL: Prevents blocking
 db = DataFlow(
     "postgresql://user:pass@localhost/db",
     skip_registry=True,           # CRITICAL: Prevents 5-10s delay
-    enable_model_persistence=False  # Fast startup
+    enable_model_persistence=False,  # Fast startup
+    auto_migrate=False,           # v0.9.1: Prevents async deadlock
+    migration_enabled=False        # v0.9.1: Prevents async deadlock
 )
 
 # Step 3: Define models
