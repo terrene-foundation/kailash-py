@@ -1295,10 +1295,13 @@ Agent Count         | Deployment          | Use
 ```
 
 **OrchestrationRuntime (10-100 agents, single process)**:
-- Task routing: semantic, round-robin, random strategies
-- Agent-level health checks with real LLM inference
-- Per-agent and runtime-wide budget tracking
-- Use when: Task distribution within single runtime/process
+- **Multi-agent orchestration**: Task routing with semantic, round-robin, random strategies
+- **Programmatic workflow execution**: AsyncLocalRuntime integration for Core SDK workflows with level-based parallelism
+- **Health monitoring**: Agent-level health checks with real LLM inference
+- **Budget enforcement**: Per-agent and runtime-wide budget tracking
+- Use when:
+  - Task distribution across multiple agents within single runtime/process
+  - Executing programmatic workflows (WorkflowBuilder) with async concurrency control
 
 **AgentRegistry (100+ agents, distributed systems)** - **🆕 v0.6.4**:
 - Multi-runtime coordination across processes/machines
