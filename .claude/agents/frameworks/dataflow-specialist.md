@@ -143,24 +143,27 @@ workflow.add_node("UserUpdateNode", "update", {
 - **Pattern**: Create new `LocalRuntime()` for each `workflow.build()` execution
 - **Impact**: This prevents event loop conflicts, especially with async operations
 
-**4a. Async Context Usage (v0.9.1 Critical)**
-- ❌ WRONG: Using `auto_migrate=True` in FastAPI/async contexts (causes deadlock in v0.9.1)
-- ✅ CORRECT: Use `AsyncLocalRuntime()` + disable auto-migration in async contexts
-- **v0.9.1 Workaround** (temporary until v0.9.2 fix):
+**4a. Async Context Usage (v0.9.5+ Fixed)**
+- ✅ FIXED: v0.9.5+ automatically detects async contexts and uses appropriate runtime
+- **No workarounds needed** - All DataFlow components now auto-detect async event loops
+- **Pattern**: Use `auto_migrate=True` safely in FastAPI/async contexts (works in v0.9.5+):
   ```python
-  # FastAPI/Async contexts
+  # FastAPI/Async contexts - Works in v0.9.5+
   db = DataFlow(
       "postgresql://localhost/db",
-      auto_migrate=False,        # CRITICAL: Prevents deadlock
-      migration_enabled=False     # CRITICAL: Prevents deadlock
+      auto_migrate=True  # ✅ Now safe! Auto-detects async context
   )
 
-  runtime = AsyncLocalRuntime()  # Use async runtime
-  results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+  # All components automatically use AsyncLocalRuntime when needed
   ```
-- **Root Cause**: v0.9.1 migration system uses sync runtime in async contexts (verified at `connection_adapter.py:43`)
-- **Fix**: v0.9.2+ will include async context detection - workaround no longer needed
-- **Impact**: Prevents production deadlocks in FastAPI/async deployments (High priority)
+- **What Changed**: All 18 hardcoded `LocalRuntime()` instances now use async context detection
+- **Fixed Locations**: ModelRegistry, migration system, schema inspectors, gateway integration, testing utilities
+- **Impact**: No more production deadlocks in FastAPI/async deployments (Fixed in v0.9.5)
+
+**Historical Context (v0.9.1-v0.9.4)**:
+- **Old Issue**: Using `auto_migrate=True` caused deadlocks in FastAPI/async contexts
+- **Old Workaround**: Disable auto-migration and manually use `AsyncLocalRuntime()`
+- **Resolution**: v0.9.5 fixed all async deadlock bugs - workaround no longer needed
 
 **5. Performance Expectations**
 - ❌ MISUNDERSTANDING: "DataFlow is slow - queries take 400-500ms"
