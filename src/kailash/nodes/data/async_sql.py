@@ -44,11 +44,7 @@ from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 import yaml
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
-from kailash.sdk_exceptions import (
-    NodeExecutionError,
-    NodeValidationError,
-    RetryExhaustedException,
-)
+from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -214,78 +210,17 @@ class FetchMode(Enum):
 
 
 @dataclass
-class RetryMetrics:
-    """Tracks retry behavior for monitoring and debugging."""
-
-    def __init__(self):
-        self.total_operations = 0
-        self.total_retries = 0
-        self.failed_operations = 0
-        self.retry_histogram = defaultdict(int)  # {num_retries: count}
-        self._lock = threading.Lock()
-
-    def record_operation(self, num_retries: int, success: bool):
-        """Record a single operation with its retry count."""
-        with self._lock:
-            self.total_operations += 1
-            self.total_retries += num_retries
-            self.retry_histogram[num_retries] += 1
-
-            if not success:
-                self.failed_operations += 1
-
-    def get_metrics(self) -> Dict[str, Any]:
-        """Get current metrics snapshot."""
-        with self._lock:
-            return {
-                "total_operations": self.total_operations,
-                "total_retries": self.total_retries,
-                "failed_operations": self.failed_operations,
-                "avg_retries_per_operation": (
-                    self.total_retries / max(self.total_operations, 1)
-                ),
-                "failure_rate": (
-                    self.failed_operations / max(self.total_operations, 1)
-                ),
-                "retry_histogram": dict(self.retry_histogram),
-            }
-
-    def reset(self):
-        """Reset all metrics."""
-        with self._lock:
-            self.total_operations = 0
-            self.total_retries = 0
-            self.failed_operations = 0
-            self.retry_histogram.clear()
-
-
-@dataclass
 class RetryConfig:
-    """Configuration for retry logic with database-specific optimizations.
-
-    Attributes:
-        max_retries: Maximum number of retry attempts
-        initial_delay: Initial delay between retries (seconds)
-        max_delay: Maximum delay between retries (seconds)
-        exponential_base: Exponential backoff multiplier
-        jitter: Add random jitter to retry delays
-        retryable_errors: List of error patterns that trigger retries
-        metrics: Optional RetryMetrics instance for tracking
-        database_type: Database type for optimization hints
-    """
+    """Configuration for retry logic."""
 
     max_retries: int = 3
     initial_delay: float = 1.0
     max_delay: float = 60.0
     exponential_base: float = 2.0
     jitter: bool = True
-    database_type: Optional[str] = None
 
     # Retryable error patterns (database-specific)
     retryable_errors: list[str] = None
-
-    # Optional metrics tracking
-    metrics: Optional[RetryMetrics] = None
 
     def __post_init__(self):
         """Initialize default retryable errors."""
@@ -327,7 +262,7 @@ class RetryConfig:
         return any(pattern.lower() in error_str for pattern in self.retryable_errors)
 
     def get_delay(self, attempt: int) -> float:
-        """Calculate delay for a retry attempt with high retry rate warning."""
+        """Calculate delay for a retry attempt."""
         delay = min(
             self.initial_delay * (self.exponential_base**attempt), self.max_delay
         )
@@ -337,77 +272,7 @@ class RetryConfig:
             jitter_amount = delay * 0.25
             delay += random.uniform(-jitter_amount, jitter_amount)
 
-        # Warn on high retry rate
-        if attempt > (self.max_retries / 2):
-            logger.warning(
-                f"High retry rate detected: {attempt}/{self.max_retries} retries needed. "
-                f"Consider using PostgreSQL for better concurrency support if using SQLite."
-            )
-
         return max(0, delay)  # Ensure non-negative
-
-    @classmethod
-    def for_database(
-        cls, database_type: str, metrics: Optional[RetryMetrics] = None
-    ) -> "RetryConfig":
-        """Create database-optimized retry configuration.
-
-        Args:
-            database_type: Database type (postgresql, mysql, sqlite)
-            metrics: Optional RetryMetrics instance for tracking
-
-        Returns:
-            RetryConfig optimized for the specified database type
-        """
-        db_type_lower = database_type.lower()
-
-        if db_type_lower == "sqlite":
-            # SQLite: Single-writer, file-level locking
-            # Needs more retries with shorter delays due to lock contention
-            return cls(
-                max_retries=10,  # Up from 3
-                initial_delay=0.5,  # Start smaller
-                max_delay=30.0,  # 30-second timeout
-                exponential_base=1.5,  # Gentler backoff
-                jitter=True,
-                database_type="sqlite",
-                metrics=metrics,
-            )
-        elif db_type_lower in ["postgresql", "postgres"]:
-            # PostgreSQL: MVCC, good concurrency handling
-            # Fewer retries needed
-            return cls(
-                max_retries=5,
-                initial_delay=0.1,  # Quick retry
-                max_delay=10.0,  # Shorter timeout
-                exponential_base=2.0,
-                jitter=True,
-                database_type="postgresql",
-                metrics=metrics,
-            )
-        elif db_type_lower == "mysql":
-            # MySQL: InnoDB with MVCC
-            # Similar to PostgreSQL
-            return cls(
-                max_retries=5,
-                initial_delay=0.2,
-                max_delay=15.0,
-                exponential_base=2.0,
-                jitter=True,
-                database_type="mysql",
-                metrics=metrics,
-            )
-        else:
-            # Default configuration
-            return cls(
-                max_retries=3,
-                initial_delay=1.0,
-                max_delay=60.0,
-                exponential_base=2.0,
-                jitter=True,
-                database_type=database_type,
-                metrics=metrics,
-            )
 
 
 @dataclass
@@ -1126,154 +991,6 @@ class DatabaseAdapter(ABC):
         pass
 
 
-async def _reset_connection(conn) -> None:
-    """
-    Pool reset callback for catching leaked transactions.
-
-    Safety net to prevent "dirty" connections from being returned to pool.
-    Called by asyncpg when a connection is released back to the pool.
-
-    Args:
-        conn: The asyncpg connection being returned to pool
-    """
-    # Check if connection has an open transaction
-    if conn.is_in_transaction():
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.warning(
-            "Connection released to pool with open transaction - rolling back. "
-            "This indicates a transaction was not properly committed or rolled back."
-        )
-        # Force rollback to clean up leaked transaction
-        try:
-            # Get the current transaction and rollback
-            # Note: asyncpg connections track transaction state internally
-            # We need to rollback the entire transaction chain
-            await conn.execute("ROLLBACK")
-        except Exception as e:
-            logger.error(f"Error rolling back leaked transaction: {e}")
-
-
-class PostgreSQLTransactionContext:
-    """
-    Context manager for guaranteed PostgreSQL transaction cleanup.
-
-    Ensures that transactions are always committed or rolled back,
-    and connections are always released back to the pool.
-
-    Usage:
-        async with PostgreSQLTransactionContext(pool) as ctx:
-            await adapter.execute(query, transaction=ctx)
-            await ctx.commit()  # Explicit commit
-        # Auto-rollback if exception occurs
-        # Connection always released
-
-    Features:
-    - Automatic rollback on exception
-    - Defensive commit if no action taken
-    - Guaranteed connection release
-    - Double commit/rollback protection
-    - Exposes connection for use with execute()
-    """
-
-    def __init__(self, pool):
-        """
-        Initialize transaction context.
-
-        Args:
-            pool: The asyncpg connection pool
-        """
-        self._pool = pool
-        self._conn = None
-        self._tx = None
-        self._committed = False
-        self._rolled_back = False
-
-    async def __aenter__(self):
-        """Acquire connection and start transaction."""
-        self._conn = await self._pool.acquire()
-        self._tx = self._conn.transaction()
-        await self._tx.start()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Guarantee commit/rollback and connection release."""
-        try:
-            if exc_type is not None:
-                # Exception occurred - rollback
-                if not self._rolled_back and not self._committed:
-                    await self._tx.rollback()
-                    self._rolled_back = True
-            else:
-                # No exception - commit if not already done
-                if not self._committed and not self._rolled_back:
-                    # Defensive commit
-                    await self._tx.commit()
-                    self._committed = True
-        finally:
-            # Always release connection back to pool
-            if self._conn:
-                await self._pool.release(self._conn)
-
-        # Don't suppress exceptions
-        return False
-
-    async def commit(self) -> None:
-        """
-        Explicitly commit the transaction.
-
-        Raises:
-            RuntimeError: If transaction already committed or rolled back
-        """
-        if self._committed:
-            raise RuntimeError("Transaction already committed. Cannot commit twice.")
-        if self._rolled_back:
-            raise RuntimeError(
-                "Transaction already rolled back. Cannot commit after rollback."
-            )
-
-        await self._tx.commit()
-        self._committed = True
-
-    async def rollback(self) -> None:
-        """
-        Explicitly rollback the transaction.
-
-        Raises:
-            RuntimeError: If transaction already committed or rolled back
-        """
-        if self._committed:
-            raise RuntimeError(
-                "Transaction already committed. Cannot rollback after commit."
-            )
-        if self._rolled_back:
-            raise RuntimeError(
-                "Transaction already rolled back. Cannot rollback twice."
-            )
-
-        await self._tx.rollback()
-        self._rolled_back = True
-
-    @property
-    def connection(self):
-        """
-        Expose underlying connection for use with execute().
-
-        Returns:
-            The asyncpg connection
-        """
-        return self._conn
-
-    def __iter__(self):
-        """
-        Support tuple unpacking for backward compatibility.
-
-        Allows: conn, tx = transaction_ctx
-        """
-        return iter((self._conn, self._tx))
-
-
 class PostgreSQLAdapter(DatabaseAdapter):
     """PostgreSQL adapter using asyncpg."""
 
@@ -1300,7 +1017,6 @@ class PostgreSQLAdapter(DatabaseAdapter):
             max_size=self.config.max_pool_size,
             timeout=self.config.pool_timeout,
             command_timeout=self.config.command_timeout,
-            reset=_reset_connection,  # Safety net for leaked transactions
         )
 
     async def disconnect(self) -> None:
@@ -1406,11 +1122,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
         # Execute query on appropriate connection
         if transaction:
             # Use transaction connection
-            # Support both PostgreSQLTransactionContext and legacy tuple format
-            if isinstance(transaction, PostgreSQLTransactionContext):
-                conn = transaction.connection
-            else:
-                conn, tx = transaction
+            conn, tx = transaction
 
             # For UPDATE/DELETE queries without RETURNING, use execute() to get affected rows
             query_upper = query.upper()
@@ -1539,11 +1251,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
 
         if transaction:
             # Use transaction connection
-            # Support both PostgreSQLTransactionContext and legacy tuple format
-            if isinstance(transaction, PostgreSQLTransactionContext):
-                conn = transaction.connection
-            else:
-                conn, tx = transaction
+            conn, tx = transaction
             await conn.executemany(query_converted, converted_params)
         else:
             # Use pool connection
@@ -1551,178 +1259,23 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 await conn.executemany(query_converted, converted_params)
 
     async def begin_transaction(self) -> Any:
-        """
-        Begin a transaction.
-
-        Returns:
-            PostgreSQLTransactionContext: Context manager for transaction
-
-        Note:
-            The returned context manager supports both:
-            - Context manager pattern: async with ctx: ...
-            - Tuple unpacking: conn, tx = ctx (backward compatibility)
-        """
-        # Create context manager and enter it
-        ctx = PostgreSQLTransactionContext(self._pool)
-        await ctx.__aenter__()
-        return ctx
+        """Begin a transaction."""
+        conn = await self._pool.acquire()
+        tx = conn.transaction()
+        await tx.start()
+        return (conn, tx)
 
     async def commit_transaction(self, transaction: Any) -> None:
-        """
-        Commit a transaction.
-
-        Supports both new context manager and legacy tuple format.
-
-        Args:
-            transaction: Either PostgreSQLTransactionContext or (conn, tx) tuple
-        """
-        # Support both new context and legacy tuple format
-        if isinstance(transaction, PostgreSQLTransactionContext):
-            # New context manager - commit and exit
-            await transaction.commit()
-            await transaction.__aexit__(None, None, None)
-        else:
-            # Legacy tuple format (conn, tx) - for backward compatibility
-            conn, tx = transaction
-            await tx.commit()
-            await self._pool.release(conn)
+        """Commit a transaction."""
+        conn, tx = transaction
+        await tx.commit()
+        await self._pool.release(conn)
 
     async def rollback_transaction(self, transaction: Any) -> None:
-        """
-        Rollback a transaction.
-
-        Supports both new context manager and legacy tuple format.
-
-        Args:
-            transaction: Either PostgreSQLTransactionContext or (conn, tx) tuple
-        """
-        # Support both new context and legacy tuple format
-        if isinstance(transaction, PostgreSQLTransactionContext):
-            # New context manager - rollback and exit
-            await transaction.rollback()
-            await transaction.__aexit__(None, None, None)
-        else:
-            # Legacy tuple format (conn, tx) - for backward compatibility
-            conn, tx = transaction
-            await tx.rollback()
-            await self._pool.release(conn)
-
-
-class MySQLTransactionContext:
-    """
-    Context manager for guaranteed MySQL transaction cleanup.
-
-    Ensures that transactions are always committed or rolled back,
-    and connections are always released back to the pool.
-
-    Usage:
-        async with MySQLTransactionContext(pool) as ctx:
-            await adapter.execute(query, transaction=ctx)
-            await ctx.commit()  # Explicit commit
-        # Auto-rollback if exception occurs
-        # Connection always released
-
-    Features:
-    - Automatic rollback on exception
-    - Defensive commit if no action taken
-    - Guaranteed connection release
-    - Double commit/rollback protection
-    - Exposes connection for use with execute()
-    """
-
-    def __init__(self, pool):
-        """
-        Initialize transaction context.
-
-        Args:
-            pool: The aiomysql connection pool
-        """
-        self._pool = pool
-        self._conn = None
-        self._committed = False
-        self._rolled_back = False
-
-    async def __aenter__(self):
-        """Acquire connection and start transaction."""
-        self._conn = await self._pool.acquire()
-        await self._conn.begin()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Guarantee commit/rollback and connection release."""
-        try:
-            if exc_type is not None:
-                # Exception occurred - rollback
-                if not self._rolled_back and not self._committed:
-                    await self._conn.rollback()
-                    self._rolled_back = True
-            else:
-                # No exception - commit if not already done
-                if not self._committed and not self._rolled_back:
-                    # Defensive commit
-                    await self._conn.commit()
-                    self._committed = True
-        finally:
-            # Always release connection back to pool
-            if self._conn:
-                await self._pool.release(self._conn)
-
-        # Don't suppress exceptions
-        return False
-
-    async def commit(self) -> None:
-        """
-        Explicitly commit the transaction.
-
-        Raises:
-            RuntimeError: If transaction already committed or rolled back
-        """
-        if self._committed:
-            raise RuntimeError("Transaction already committed. Cannot commit twice.")
-        if self._rolled_back:
-            raise RuntimeError(
-                "Transaction already rolled back. Cannot commit after rollback."
-            )
-
-        await self._conn.commit()
-        self._committed = True
-
-    async def rollback(self) -> None:
-        """
-        Explicitly rollback the transaction.
-
-        Raises:
-            RuntimeError: If transaction already committed or rolled back
-        """
-        if self._committed:
-            raise RuntimeError(
-                "Transaction already committed. Cannot rollback after commit."
-            )
-        if self._rolled_back:
-            raise RuntimeError(
-                "Transaction already rolled back. Cannot rollback twice."
-            )
-
-        await self._conn.rollback()
-        self._rolled_back = True
-
-    @property
-    def connection(self):
-        """
-        Expose underlying connection for use with execute().
-
-        Returns:
-            The aiomysql connection
-        """
-        return self._conn
-
-    def __iter__(self):
-        """
-        Support tuple unpacking for backward compatibility.
-
-        Allows: conn, tx = transaction_ctx
-        """
-        return iter((self._conn, None))
+        """Rollback a transaction."""
+        conn, tx = transaction
+        await tx.rollback()
+        await self._pool.release(conn)
 
 
 class MySQLAdapter(DatabaseAdapter):
@@ -1767,11 +1320,7 @@ class MySQLAdapter(DatabaseAdapter):
         # Use transaction connection if provided, otherwise get from pool
         # Note: parameter_types is only used by PostgreSQL adapter
         if transaction:
-            # Support both MySQLTransactionContext and legacy connection format
-            if isinstance(transaction, MySQLTransactionContext):
-                conn = transaction.connection
-            else:
-                conn = transaction
+            conn = transaction
             async with conn.cursor() as cursor:
                 await cursor.execute(query, params)
 
@@ -1872,202 +1421,20 @@ class MySQLAdapter(DatabaseAdapter):
                     await conn.commit()
 
     async def begin_transaction(self) -> Any:
-        """
-        Begin a transaction.
-
-        Returns:
-            MySQLTransactionContext: Context manager for transaction
-
-        Note:
-            The returned context manager supports both:
-            - Context manager pattern: async with ctx: ...
-            - Tuple unpacking: conn, tx = ctx (backward compatibility)
-        """
-        # Create context manager and enter it
-        ctx = MySQLTransactionContext(self._pool)
-        await ctx.__aenter__()
-        return ctx
+        """Begin a transaction."""
+        conn = await self._pool.acquire()
+        await conn.begin()
+        return conn
 
     async def commit_transaction(self, transaction: Any) -> None:
-        """
-        Commit a transaction.
-
-        Supports both new context manager and legacy connection format.
-
-        Args:
-            transaction: Either MySQLTransactionContext or raw connection
-        """
-        # Support both new context and legacy connection format
-        if isinstance(transaction, MySQLTransactionContext):
-            # New context manager - commit and exit
-            await transaction.commit()
-            await transaction.__aexit__(None, None, None)
-        else:
-            # Legacy connection format - for backward compatibility
-            await transaction.commit()
-            await self._pool.release(transaction)
+        """Commit a transaction."""
+        await transaction.commit()
+        await self._pool.release(transaction)
 
     async def rollback_transaction(self, transaction: Any) -> None:
-        """
-        Rollback a transaction.
-
-        Supports both new context manager and legacy connection format.
-
-        Args:
-            transaction: Either MySQLTransactionContext or raw connection
-        """
-        # Support both new context and legacy connection format
-        if isinstance(transaction, MySQLTransactionContext):
-            # New context manager - rollback and exit
-            await transaction.rollback()
-            await transaction.__aexit__(Exception, None, None)
-        else:
-            # Legacy connection format - for backward compatibility
-            await transaction.rollback()
-            await self._pool.release(transaction)
-
-
-class SQLiteTransactionContext:
-    """
-    Context manager for guaranteed SQLite transaction cleanup.
-
-    Ensures transactions are always committed or rolled back before connection release,
-    preventing "cannot commit transaction - SQL statements in progress" errors.
-
-    Key features:
-    - Defensive commit/rollback with state tracking
-    - Handles both memory databases (shared connection) and file databases (new connections)
-    - Guaranteed cleanup via __aexit__
-    - Double commit/rollback protection
-    - Memory database connections are NOT closed (shared)
-    - File database connections are always closed
-
-    Usage:
-        async with SQLiteTransactionContext(adapter, is_memory_db) as ctx:
-            result = await ctx.connection.execute("SELECT ...")
-            await ctx.commit()
-
-    Architecture:
-    - Memory databases use shared connection from adapter._get_connection()
-    - File databases create new connections with aiosqlite.connect()
-    - BEGIN transaction started in __aenter__
-    - Defensive commit/rollback in __aexit__
-    - File database connections closed in finally block
-    """
-
-    def __init__(self, adapter, is_memory_db: bool):
-        """
-        Initialize SQLite transaction context.
-
-        Args:
-            adapter: SQLiteAdapter instance providing connection access
-            is_memory_db: True if :memory: database (shared connection), False if file database
-        """
-        self._adapter = adapter
-        self._is_memory_db = is_memory_db
-        self._conn = None
-        self._committed = False
-        self._rolled_back = False
-
-    async def __aenter__(self):
-        """
-        Enter context: acquire connection and start transaction.
-
-        For memory databases:
-        - Use shared connection from adapter._get_connection()
-        - Connection persists across transactions
-
-        For file databases:
-        - Create new connection with aiosqlite.connect()
-        - Connection closed after transaction
-
-        Returns:
-            self: Transaction context with connection attribute
-        """
-        if self._is_memory_db:
-            # Use shared connection for memory databases
-            self._conn = await self._adapter._get_connection()
-        else:
-            # Create new connection for file databases
-            self._conn = await self._adapter._aiosqlite.connect(self._adapter._db_path)
-            self._conn.row_factory = self._adapter._aiosqlite.Row
-
-        # Start transaction
-        await self._conn.execute("BEGIN")
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """
-        Exit context: guarantee commit/rollback and connection cleanup.
-
-        Flow:
-        1. If exception occurred: rollback (if not already rolled back)
-        2. If no exception: defensive commit (if not already committed)
-        3. Close file database connections (but NOT shared memory connections)
-
-        This ensures:
-        - No transactions left in progress
-        - No connection leaks
-        - Shared memory connections remain alive
-
-        Args:
-            exc_type: Exception type if raised in context
-            exc_val: Exception value if raised in context
-            exc_tb: Exception traceback if raised in context
-
-        Returns:
-            False: Propagate exceptions (do not suppress)
-        """
-        try:
-            if exc_type is not None:
-                # Exception occurred - rollback if not already done
-                if not self._rolled_back and not self._committed:
-                    await self._conn.rollback()
-                    self._rolled_back = True
-            else:
-                # No exception - defensive commit if not already done
-                if not self._committed and not self._rolled_back:
-                    await self._conn.commit()
-                    self._committed = True
-        finally:
-            # Close file database connections, but NOT shared memory connections
-            if not self._is_memory_db and self._conn:
-                await self._conn.close()
-
-        return False  # Propagate exceptions
-
-    async def commit(self):
-        """
-        Explicitly commit the transaction.
-
-        Sets committed flag to prevent double-commit in __aexit__.
-        """
-        if not self._committed and not self._rolled_back:
-            await self._conn.commit()
-            self._committed = True
-
-    async def rollback(self):
-        """
-        Explicitly rollback the transaction.
-
-        Sets rolled_back flag to prevent double-rollback in __aexit__.
-        """
-        if not self._rolled_back and not self._committed:
-            await self._conn.rollback()
-            self._rolled_back = True
-
-    @property
-    def connection(self):
-        """Access the underlying connection for queries."""
-        return self._conn
-
-    def __iter__(self):
-        """
-        Iterator protocol support for tuple unpacking.
-
-        Allows: conn, tx = SQLiteTransactionContext(adapter, is_memory_db)
-        """
-        return iter((self._conn, None))
+        """Rollback a transaction."""
+        await transaction.rollback()
+        await self._pool.release(transaction)
 
 
 class SQLiteAdapter(DatabaseAdapter):
@@ -2084,6 +1451,9 @@ class SQLiteAdapter(DatabaseAdapter):
         self._db_path = config.connection_string or config.database or ":memory:"
         self._is_memory_db = self._db_path == ":memory:"
         self._connection = None
+        # Transaction nesting support (for SQLite nested transaction bug fix)
+        self._transaction_depth = 0
+        self._savepoint_counter = 0
         # Import aiosqlite on init
         try:
             import aiosqlite
@@ -2180,28 +1550,18 @@ class SQLiteAdapter(DatabaseAdapter):
     ) -> Any:
         """Execute query and return results."""
         if transaction:
-            # Support both SQLiteTransactionContext and legacy connection format
-            if isinstance(transaction, SQLiteTransactionContext):
-                db = transaction.connection
-            else:
-                db = transaction
+            # Use existing transaction connection
+            db = transaction
             cursor = await db.execute(query, params or [])
 
             # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
             query_type = query.strip().upper().split()[0] if query.strip() else ""
 
             if query_type in ("DELETE", "UPDATE", "INSERT"):
-                # Check if query has RETURNING clause (case-insensitive)
-                has_returning = "RETURNING" in query.upper()
-
-                if not has_returning:
-                    # Simple DML without RETURNING - just return rowcount
-                    rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
-                    # Close cursor before returning (required for SQLite transaction commits)
-                    await cursor.close()
-                    # Use list format to match PostgreSQL/MySQL adapters
-                    return [{"rows_affected": rowcount}]
-                # else: Fall through to fetch logic to consume RETURNING data
+                # Capture rowcount for DML operations
+                rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+                # Use list format to match PostgreSQL/MySQL adapters
+                return [{"rows_affected": rowcount}]
 
             if fetch_mode == FetchMode.ONE:
                 row = await cursor.fetchone()
@@ -2224,12 +1584,8 @@ class SQLiteAdapter(DatabaseAdapter):
                 # For INSERT without RETURNING, capture lastrowid
                 lastrowid = cursor.lastrowid if hasattr(cursor, "lastrowid") else None
                 if lastrowid is not None:
-                    # Close cursor before returning (required for SQLite transaction commits)
-                    await cursor.close()
                     return {"lastrowid": lastrowid}
 
-            # Close cursor before returning (required for SQLite transaction commits)
-            await cursor.close()
             return result
         else:
             # Create new connection for non-transactional queries
@@ -2329,12 +1685,8 @@ class SQLiteAdapter(DatabaseAdapter):
     ) -> None:
         """Execute query multiple times with different parameters."""
         if transaction:
-            # Support both SQLiteTransactionContext and legacy connection format
-            if isinstance(transaction, SQLiteTransactionContext):
-                db = transaction.connection
-            else:
-                db = transaction
-            await db.executemany(query, params_list)
+            # Use existing transaction connection
+            await transaction.executemany(query, params_list)
             # Don't commit here - let transaction handling do it
         else:
             # Create new connection for non-transactional queries
@@ -2351,37 +1703,70 @@ class SQLiteAdapter(DatabaseAdapter):
 
     async def begin_transaction(self) -> Any:
         """
-        Begin a transaction.
+        Begin a transaction with nested transaction support.
+
+        SQLite Nested Transaction Fix:
+        - First call: BEGIN (outer transaction)
+        - Nested calls: SAVEPOINT sp_N (nested transactions)
+
+        This prevents "cannot start a transaction within a transaction" error
+        that occurs when BEGIN is called while already in a transaction.
 
         Returns:
-            SQLiteTransactionContext: Context manager for transaction
-
-        Note:
-            The returned context manager supports both:
-            - Context manager pattern: async with ctx: ...
-            - Tuple unpacking: conn, tx = ctx (backward compatibility)
+            tuple: (connection, savepoint_name or None, transaction_depth)
         """
-        # Create context manager and enter it
-        ctx = SQLiteTransactionContext(self, self._is_memory_db)
-        await ctx.__aenter__()
-        return ctx
+        if self._is_memory_db:
+            # Use shared connection for memory databases
+            db = await self._get_connection()
+        else:
+            # Create new connection for file databases
+            db = await self._aiosqlite.connect(self._db_path)
+            db.row_factory = self._aiosqlite.Row
+
+        # Check current transaction depth
+        if self._transaction_depth == 0:
+            # First transaction - use BEGIN
+            await db.execute("BEGIN")
+            self._transaction_depth += 1
+            return (db, None, self._transaction_depth)
+        else:
+            # Nested transaction - use SAVEPOINT
+            self._savepoint_counter += 1
+            savepoint_name = f"sp_{self._savepoint_counter}"
+            await db.execute(f"SAVEPOINT {savepoint_name}")
+            self._transaction_depth += 1
+            return (db, savepoint_name, self._transaction_depth)
 
     async def commit_transaction(self, transaction: Any) -> None:
         """
-        Commit a transaction.
+        Commit a transaction or release a savepoint.
 
-        Supports both new context manager and legacy connection format.
+        SQLite Nested Transaction Fix:
+        - If savepoint: RELEASE SAVEPOINT sp_N
+        - If outer transaction: COMMIT
 
         Args:
-            transaction: Either SQLiteTransactionContext or raw connection
+            transaction: tuple of (connection, savepoint_name or None, depth)
         """
-        # Support both new context and legacy connection format
-        if isinstance(transaction, SQLiteTransactionContext):
-            # New context manager - commit and exit
-            await transaction.commit()
-            await transaction.__aexit__(None, None, None)
+        # Handle both old API (just connection) and new API (tuple)
+        if isinstance(transaction, tuple):
+            db, savepoint_name, depth = transaction
+
+            if savepoint_name:
+                # Nested transaction - release savepoint
+                await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+            else:
+                # Outer transaction - commit
+                await db.commit()
+
+            # Decrement transaction depth
+            self._transaction_depth -= 1
+
+            # Close connection if not memory database and depth is 0
+            if not self._is_memory_db and self._transaction_depth == 0:
+                await db.close()
         else:
-            # Legacy connection format - for backward compatibility
+            # Old API - just commit (backward compatibility)
             await transaction.commit()
             # Don't close shared memory connections
             if not self._is_memory_db:
@@ -2389,20 +1774,35 @@ class SQLiteAdapter(DatabaseAdapter):
 
     async def rollback_transaction(self, transaction: Any) -> None:
         """
-        Rollback a transaction.
+        Rollback a transaction or rollback to a savepoint.
 
-        Supports both new context manager and legacy connection format.
+        SQLite Nested Transaction Fix:
+        - If savepoint: ROLLBACK TO SAVEPOINT sp_N
+        - If outer transaction: ROLLBACK
 
         Args:
-            transaction: Either SQLiteTransactionContext or raw connection
+            transaction: tuple of (connection, savepoint_name or None, depth)
         """
-        # Support both new context and legacy connection format
-        if isinstance(transaction, SQLiteTransactionContext):
-            # New context manager - rollback and exit
-            await transaction.rollback()
-            await transaction.__aexit__(Exception, None, None)
+        # Handle both old API (just connection) and new API (tuple)
+        if isinstance(transaction, tuple):
+            db, savepoint_name, depth = transaction
+
+            if savepoint_name:
+                # Nested transaction - rollback to savepoint
+                await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+            else:
+                # Outer transaction - rollback
+                await db.rollback()
+
+            # Decrement transaction depth
+            self._transaction_depth -= 1
+
+            # Close connection if not memory database and depth is 0
+            if not self._is_memory_db and self._transaction_depth == 0:
+                await db.close()
         else:
-            # Legacy connection format - for backward compatibility
+            # Old API - just rollback (backward compatibility)
             await transaction.rollback()
             # Don't close shared memory connections
             if not self._is_memory_db:
@@ -4620,11 +4020,9 @@ class AsyncSQLDatabaseNode(AsyncNode):
             Query results
 
         Raises:
-            RetryExhaustedException: After all retry attempts are exhausted
+            NodeExecutionError: After all retry attempts are exhausted
         """
         last_error = None
-        total_wait_time = 0.0
-        retry_count = 0
 
         for attempt in range(self._retry_config.max_retries):
             try:
@@ -4653,42 +4051,24 @@ class AsyncSQLDatabaseNode(AsyncNode):
                             user_context, self.metadata.name, result
                         )
 
-                # Success - record metrics if available
-                if self._retry_config.metrics:
-                    self._retry_config.metrics.record_operation(
-                        retry_count, success=True
-                    )
-
                 return result
 
             except Exception as e:
                 last_error = e
-                retry_count = attempt + 1
 
                 # Parameter type determination is now handled during dict-to-positional conversion
                 # No special retry logic needed for parameter $11
 
                 # Check if error is retryable
                 if not self._retry_config.should_retry(e):
-                    # Not retryable - record failure and raise immediately
-                    if self._retry_config.metrics:
-                        self._retry_config.metrics.record_operation(
-                            retry_count, success=False
-                        )
                     raise
 
                 # Check if we have more attempts
                 if attempt >= self._retry_config.max_retries - 1:
-                    # No more attempts - record failure and raise
-                    if self._retry_config.metrics:
-                        self._retry_config.metrics.record_operation(
-                            retry_count, success=False
-                        )
                     raise
 
                 # Calculate delay
                 delay = self._retry_config.get_delay(attempt)
-                total_wait_time += delay
 
                 # Log retry attempt (if logging is available)
                 try:
@@ -4727,12 +4107,9 @@ class AsyncSQLDatabaseNode(AsyncNode):
                         # If reconnection fails, continue with retry loop
                         pass
 
-        # All retries exhausted - raise RetryExhaustedException with full context
-        raise RetryExhaustedException(
-            operation="Database query execution",
-            attempts=self._retry_config.max_retries,
-            last_error=last_error,
-            total_wait_time=total_wait_time,
+        # All retries exhausted
+        raise NodeExecutionError(
+            f"Query failed after {self._retry_config.max_retries} attempts: {last_error}"
         )
 
     async def _execute_many_with_retry(
@@ -4749,54 +4126,32 @@ class AsyncSQLDatabaseNode(AsyncNode):
             Number of affected rows
 
         Raises:
-            RetryExhaustedException: After all retry attempts are exhausted
+            NodeExecutionError: After all retry attempts are exhausted
         """
         last_error = None
-        total_wait_time = 0.0
-        retry_count = 0
 
         for attempt in range(self._retry_config.max_retries):
             try:
                 # Execute batch with transaction
-                result = await self._execute_many_with_transaction(
+                return await self._execute_many_with_transaction(
                     adapter=adapter,
                     query=query,
                     params_list=params_list,
                 )
 
-                # Success - record metrics if available
-                if self._retry_config.metrics:
-                    self._retry_config.metrics.record_operation(
-                        retry_count, success=True
-                    )
-
-                return result
-
             except Exception as e:
                 last_error = e
-                retry_count = attempt + 1
 
                 # Check if error is retryable
                 if not self._retry_config.should_retry(e):
-                    # Not retryable - record failure and raise immediately
-                    if self._retry_config.metrics:
-                        self._retry_config.metrics.record_operation(
-                            retry_count, success=False
-                        )
                     raise
 
                 # Check if we have more attempts
                 if attempt >= self._retry_config.max_retries - 1:
-                    # No more attempts - record failure and raise
-                    if self._retry_config.metrics:
-                        self._retry_config.metrics.record_operation(
-                            retry_count, success=False
-                        )
                     raise
 
                 # Calculate delay
                 delay = self._retry_config.get_delay(attempt)
-                total_wait_time += delay
 
                 # Wait before retry
                 await asyncio.sleep(delay)
@@ -4825,12 +4180,9 @@ class AsyncSQLDatabaseNode(AsyncNode):
                         # If reconnection fails, continue with retry loop
                         pass
 
-        # All retries exhausted - raise RetryExhaustedException with full context
-        raise RetryExhaustedException(
-            operation="Database batch operation",
-            attempts=self._retry_config.max_retries,
-            last_error=last_error,
-            total_wait_time=total_wait_time,
+        # All retries exhausted
+        raise NodeExecutionError(
+            f"Batch operation failed after {self._retry_config.max_retries} attempts: {last_error}"
         )
 
     async def _execute_many_with_transaction(
