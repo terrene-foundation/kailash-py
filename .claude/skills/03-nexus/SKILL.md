@@ -7,24 +7,18 @@ description: "Kailash Nexus - zero-config multi-channel platform for deploying w
 
 Nexus is a zero-config multi-channel platform built on Kailash Core SDK that deploys workflows as API + CLI + MCP simultaneously.
 
-## Overview
+## Features
 
 Nexus transforms workflows into a complete platform with:
 
-- **Zero Configuration**: Deploy workflows instantly without boilerplate
+- **Zero Configuration**: Deploy workflows instantly without boilerplate code
 - **Multi-Channel Access**: API, CLI, and MCP from single deployment
 - **Unified Sessions**: Consistent session management across all channels
-- **Enterprise Features**: Health monitoring, plugins, event system
-- **DataFlow Integration**: Automatic CRUD API generation
-- **Production Ready**: Deployment patterns, monitoring, troubleshooting
-
-**Latest Release: v1.1.0** (2025-10-24)
-- ✅ All 10 stub implementations fixed with production-ready solutions
-- ✅ Correct channel initialization flow (Nexus owns it, not ChannelManager)
-- ✅ Proper workflow registration (single path through `Nexus.register()`)
-- ✅ Event logging system (v1.0) with real-time broadcasting planned (v1.1)
-- ✅ Plugin validation improvements
-- ✅ 248/248 unit tests passing
+- **Enterprise Features**: Health monitoring, plugins, event system, comprehensive logging
+- **DataFlow Integration**: Automatic CRUD API generation from database models
+- **Production Ready**: Deployment patterns, monitoring, troubleshooting guides
+- **FastAPI Alternative**: Workflow-based platform without manual route definition
+- **Async-First**: Uses AsyncLocalRuntime by default for optimal performance
 
 ## Quick Start
 
@@ -80,7 +74,7 @@ nexus.run(port=8000)
 
 ### Zero-Config Platform
 Nexus eliminates boilerplate:
-- **No FastAPI routes** - Automatic API generation
+- **No FastAPI routes** - Automatic API generation from workflows
 - **No CLI arg parsing** - Automatic CLI creation
 - **No MCP server setup** - Automatic MCP integration
 - **Unified deployment** - One command for all channels
@@ -104,6 +98,8 @@ Production-ready capabilities:
 - Plugin system for extensibility
 - Event system for integrations
 - Comprehensive logging and metrics
+- Correct channel initialization flow
+- Proper workflow registration
 
 ## When to Use This Skill
 
@@ -195,6 +191,7 @@ nexus.run(
 - ✅ Leverage unified sessions across channels
 - ✅ Enable health monitoring in production
 - ✅ Use plugins for custom behavior
+- ✅ Nexus uses AsyncLocalRuntime by default (correct for Docker)
 - ❌ NEVER mix FastAPI routes with Nexus
 - ❌ NEVER implement manual API/CLI/MCP servers when Nexus can do it
 - ❌ NEVER skip health checks in production
@@ -223,15 +220,6 @@ nexus.run(host="0.0.0.0", port=8000, workers=4)
 # Deploy multiple Nexus instances behind nginx/traefik
 docker-compose up --scale nexus=3
 ```
-
-## Version Compatibility
-
-- **Current Version**: v1.1.0 (2025-10-24)
-- **Core SDK Version**: 0.9.28+
-- **DataFlow Version**: 0.6.6+
-- **Python**: 3.8+
-
-**v1.1.0 Breaking Changes**: None (all improvements are internal)
 
 ## Channel Comparison
 

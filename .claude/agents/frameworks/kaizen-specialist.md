@@ -53,6 +53,7 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 ### Primary References (SDK Users)
 - **[CLAUDE.md](../../../sdk-users/apps/kaizen/CLAUDE.md)** - Quick reference for using Kaizen
 - **[README.md](../../../sdk-users/apps/kaizen/README.md)** - Complete Kaizen user guide
+- **[Example Gallery](../../../apps/kailash-kaizen/examples/autonomy/EXAMPLE_GALLERY.md)** - 15 production-ready autonomy examples with learning paths (Tool Calling, Planning, Meta-Controller, Memory, Checkpoints, Interrupts, Full Integration)
 - **[Examples](../../examples/)** - 35+ working implementations
 
 ### Critical API References
@@ -67,6 +68,11 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **[Integration Patterns](../../../sdk-users/apps/kaizen/docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP
 - **[Troubleshooting](../../../sdk-users/apps/kaizen/docs/reference/troubleshooting.md)** - Common errors
 
+### Autonomy System Guides (NEW - v0.6.0)
+- **[Autonomy System Overview](../../../sdk-users/apps/kaizen/docs/guides/autonomy-system-overview.md)** - Complete autonomy infrastructure guide (6 subsystems)
+- **[Planning Agents Guide](../../../sdk-users/apps/kaizen/docs/guides/planning-agents-guide.md)** - PlanningAgent & PEVAgent patterns with decision matrix
+- **[Meta-Controller Routing Guide](../../../sdk-users/apps/kaizen/docs/guides/meta-controller-routing-guide.md)** - A2A-based intelligent task delegation
+
 ### By Use Case
 | Need | Documentation |
 |------|---------------|
@@ -79,6 +85,9 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 | Custom transports | `sdk-users/apps/kaizen/docs/guides/custom-transports.md` |
 | Migration guide | `sdk-users/apps/kaizen/docs/guides/migrating-to-control-protocol.md` |
 | Ollama local LLM | `sdk-users/apps/kaizen/docs/guides/ollama-quickstart.md` |
+| **Autonomy infrastructure (NEW)** | `sdk-users/apps/kaizen/docs/guides/autonomy-system-overview.md` |
+| **Planning agents (NEW)** | `sdk-users/apps/kaizen/docs/guides/planning-agents-guide.md` |
+| **Intelligent routing (NEW)** | `sdk-users/apps/kaizen/docs/guides/meta-controller-routing-guide.md` |
 | Multi-modal (vision/audio) | `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` |
 | Memory patterns | `sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md` |
 | Strategy selection | `sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md` |
@@ -86,6 +95,7 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 | Signature programming | `sdk-users/apps/kaizen/docs/guides/signature-programming.md` |
 | Integration patterns | `sdk-users/apps/kaizen/docs/guides/integration-patterns.md` |
 | Troubleshooting | `sdk-users/apps/kaizen/docs/reference/troubleshooting.md` |
+| Performance benchmarks | `apps/kailash-kaizen/docs/benchmarks/BENCHMARK_GUIDE.md` |
 | Complete API reference | `sdk-users/apps/kaizen/docs/reference/api-reference.md` |
 | Complete guide | `sdk-users/apps/kaizen/README.md` |
 | Working examples | `apps/kailash-kaizen/examples/` |
@@ -99,7 +109,7 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 
 ### Key Concepts
 - **Signature-Based Programming**: Type-safe I/O with InputField/OutputField. Both `description=` and `desc=` parameters are supported (aliases) - use either based on preference.
-- **Structured Outputs**: OpenAI Structured Outputs API with 100% schema compliance. Use `create_structured_output_config()` with `provider_config`. Strict mode (100% compliance, gpt-4o-2024-08-06+) returns dict responses - strategies auto-detect and handle transparently. Legacy mode (70-85% best-effort, all models).
+- **Structured Outputs**: OpenAI Structured Outputs API with 100% schema compliance. Use `create_structured_output_config()` with `provider_config`. Strict mode (100% compliance, gpt-4o-2024-08-06+) returns dict responses - strategies auto-detect and handle transparently. Legacy mode (70-85% best-effort, all models). **Provider Compatibility**: OpenAI supports `json_schema` (strict) and `json_object` (legacy); Ollama/Anthropic do NOT support structured outputs API. **Implementation**: `provider_config` IS the `response_format` - pass entire dict from `create_structured_output_config()` directly; `llm_agent.py` assigns it to `generation_config["response_format"]` without nested key extraction.
 - **Signature Inheritance** (v0.6.5): Child signatures merge parent fields with proper type validation
 - **Extension Points** (v0.6.5): Custom system prompts via callback pattern enabling subclass method overrides without circular dependencies
 - **BaseAgent**: Unified agent system with lazy initialization, auto-generates A2A capability cards
@@ -175,10 +185,65 @@ result = await agent.execute_mcp_tool(
 **Key Features**:
 - MCP auto-connect to kaizen_builtin server (12 tools)
 - Custom MCP servers via `mcp_servers` parameter
+- **Automatic workflow integration** - tools automatically exposed to LLM (v0.6.0+)
 - Control Protocol integration for approval workflows
 - Universal MCP integration across all 25 agents
 
-**Reference**: `docs/features/baseagent-tool-integration.md`, ADR-012, ADR-016, `examples/autonomy/tools/`
+**Automatic Tool Discovery (v0.6.0+)**:
+When creating a BaseAgent, MCP tools are automatically discovered and passed to the LLM during workflow generation. No manual configuration required.
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.core.config import BaseAgentConfig
+
+# Step 1: Create agent with MCP servers
+agent = BaseAgent(
+    config=BaseAgentConfig(llm_provider="openai", model="gpt-4o-mini"),
+    signature=YourSignature(),
+    mcp_servers=[{
+        "name": "filesystem",
+        "command": "npx",
+        "args": ["@modelcontextprotocol/server-filesystem", "/data"]
+    }]
+)
+
+# Step 2: Run agent - tools automatically available to LLM
+result = await agent.run(question="Read /data/file.txt")
+```
+
+**How It Works**:
+1. **Initialization**: BaseAgent passes itself to WorkflowGenerator (base_agent.py:354-360)
+2. **Discovery**: WorkflowGenerator calls `agent.discover_mcp_tools()` (workflow_generator.py:210-252)
+3. **Conversion**: Tools converted to provider format via `tool_formatters.py`
+4. **Integration**: Tools passed to LLMAgentNode via `node_config["tools"]`
+
+**Provider Support**:
+- OpenAI: Full support (function calling format)
+- Anthropic: Full support (tool use format)
+- Ollama: Partial support (provider-dependent)
+
+**Tool Format Conversion** (src/kaizen/core/tool_formatters.py):
+```python
+from kaizen.core.tool_formatters import get_tools_for_provider
+
+# MCP format from agent.discover_mcp_tools()
+mcp_tools = [{"name": "mcp__filesystem__read_file", "description": "...", "inputSchema": {...}}]
+
+# Automatically converted to provider format
+openai_tools = get_tools_for_provider(mcp_tools, "openai")
+# Returns: [{"type": "function", "function": {"name": "...", "parameters": {...}}}]
+
+anthropic_tools = get_tools_for_provider(mcp_tools, "anthropic")
+# Returns: [{"name": "...", "description": "...", "input_schema": {...}}]
+```
+
+**Benefits**:
+- Zero-configuration tool exposure
+- Provider-agnostic (automatic format conversion)
+- Type-safe (schema validation via MCP inputSchema)
+- Extensible (custom MCP servers supported)
+
+**Reference**: `docs/features/baseagent-tool-integration.md`, ADR-012, ADR-016, `examples/autonomy/tools/`, `src/kaizen/core/tool_formatters.py`, `src/kaizen/core/workflow_generator.py:210-252`
 
 ### Control Protocol (v0.2.0 - Bidirectional Communication)
 
@@ -1215,6 +1280,55 @@ expensive_rule = TimeBasedPermissionRule(
 **What**: Pre-built patterns for common multi-agent coordination scenarios
 **When**: Need to coordinate multiple agents for complex tasks requiring diverse perspectives or specialized skills
 **How**: Use `Pipeline` factory methods for instant pattern creation with A2A semantic matching
+
+#### Multi-Runtime Orchestration Scaling (Enterprise)
+
+**Scaling Decision Tree** for distributed multi-agent systems:
+
+```
+Agent Count         | Deployment          | Use
+-------------------|---------------------|------------------------------------------
+< 10 agents        | Single process      | Basic multi-agent patterns (see Skills)
+10-100 agents      | Single process      | OrchestrationRuntime (task routing)
+100+ agents        | Distributed/multi-  | AgentRegistry (capability discovery)
+                   | process/multi-node  |
+```
+
+**OrchestrationRuntime (10-100 agents, single process)**:
+- **Multi-agent orchestration**: Task routing with semantic, round-robin, random strategies
+- **Programmatic workflow execution**: AsyncLocalRuntime integration for Core SDK workflows with level-based parallelism
+- **Health monitoring**: Agent-level health checks with real LLM inference
+- **Budget enforcement**: Per-agent and runtime-wide budget tracking
+- Use when:
+  - Task distribution across multiple agents within single runtime/process
+  - Executing programmatic workflows (WorkflowBuilder) with async concurrency control
+
+**AgentRegistry (100+ agents, distributed systems)** - **🆕 v0.6.4**:
+- Multi-runtime coordination across processes/machines
+- O(1) capability-based discovery with semantic matching
+- Event broadcasting (6 event types for cross-runtime coordination)
+- Health monitoring with automatic deregistration
+- Status management (ACTIVE, UNHEALTHY, DEGRADED, OFFLINE)
+- Use when: Centralized coordination across distributed deployments
+
+**See**: [`kaizen-agent-registry`](../../skills/04-kaizen/kaizen-agent-registry.md) skill for AgentRegistry patterns, configuration, and distributed coordination examples.
+
+**Integration Pattern** (use both together):
+```python
+from kaizen.orchestration import OrchestrationRuntime, AgentRegistry
+
+# Local task routing
+runtime = OrchestrationRuntime(config=runtime_config)
+await runtime.register_agent(agent)
+
+# Global agent discovery across runtimes
+registry = AgentRegistry(config=registry_config)
+await registry.register_agent(agent, runtime_id="runtime_1")
+
+# Route tasks locally, discover agents globally
+selected = await runtime.route_task(task)  # Within runtime
+all_agents = await registry.find_agents_by_capability("code generation")  # Across runtimes
+```
 
 #### Available Patterns
 
@@ -3031,6 +3145,111 @@ def test_qa_agent(simple_qa_example, assert_async_strategy, test_queries):
 
 **When to Use:** Always use standardized fixtures for unit tests to ensure consistency and reduce boilerplate.
 
+### E2E Testing for Autonomous Agents
+
+**E2E (End-to-End) tests validate complete autonomous agent workflows with real infrastructure:**
+
+**What E2E Tests Are:**
+- **Real LLM inference** using Ollama llama3.2:1b (FREE, no API costs)
+- **Real database** operations with DataFlow (SQLite/PostgreSQL)
+- **Real tools** execution (file system, HTTP, bash commands)
+- **NO MOCKING** (Tier 3 testing strategy - real infrastructure only)
+
+**How to Run E2E Tests:**
+
+```bash
+# Run all E2E tests
+pytest tests/e2e/autonomy/ -v
+
+# Run specific autonomy system
+pytest tests/e2e/autonomy/test_tool_calling_e2e.py -v       # Tool calling
+pytest tests/e2e/autonomy/test_planning_e2e.py -v           # Planning agents
+pytest tests/e2e/autonomy/test_meta_controller_e2e.py -v    # Meta-controller
+pytest tests/e2e/autonomy/test_memory_e2e.py -v             # Memory system
+pytest tests/e2e/autonomy/checkpoints/ -v                   # Checkpoint system
+
+# Prerequisites: Install and start Ollama
+ollama pull llama3.2:1b  # First time only
+pytest tests/e2e/autonomy/ -v
+```
+
+**Writing E2E Tests:**
+
+```python
+import pytest
+from kaizen.agents.autonomous.base import BaseAutonomousAgent
+from kaizen.agents.autonomous.config import AutonomousConfig
+from kaizen.signatures import Signature, InputField, OutputField
+
+class TaskSignature(Signature):
+    task: str = InputField(description="Task to perform")
+    result: str = OutputField(description="Task result")
+
+@pytest.mark.e2e  # Mark as E2E test
+@pytest.mark.asyncio  # Async test
+async def test_autonomous_workflow():
+    """Test autonomous agent with real LLM."""
+
+    # 1. Create config with Ollama (FREE)
+    config = AutonomousConfig(
+        llm_provider="ollama",
+        model="llama3.2:1b",
+        enable_interrupts=True,
+        checkpoint_on_interrupt=True
+    )
+
+    # 2. Create agent
+    agent = BaseAutonomousAgent(config=config, signature=TaskSignature())
+
+    # 3. Execute with real LLM
+    result = await agent.run_autonomous(task="Analyze data file")
+
+    # 4. Validate results
+    assert result is not None
+    assert "result" in result
+    assert len(result["result"]) > 0
+```
+
+**Key E2E Testing Patterns:**
+
+1. **Always use Ollama** for E2E tests (FREE, no API costs)
+2. **Always mark with @pytest.mark.e2e** for test discovery
+3. **Always use real infrastructure** (NO MOCKING)
+4. **Always clean up** resources in teardown
+
+**Available E2E Test Suites:**
+
+| Test Suite | File | Tests | What It Validates |
+|------------|------|-------|-------------------|
+| **Tool Calling** | `test_tool_calling_e2e.py` | 4 | File/HTTP/bash tools with permission policies and approval workflows |
+| **Planning** | `test_planning_e2e.py` | 3 | Planning/PEV/ToT agents with multi-step decomposition |
+| **Meta-Controller** | `test_meta_controller_e2e.py` | 3 | Semantic routing, fallback strategies, task decomposition |
+| **Memory** | `test_memory_e2e.py` | 4 | Hot/warm/cold tier persistence, multi-hour conversations |
+| **Checkpoints** | `checkpoints/` | 3 | Auto-checkpoint creation, resume from checkpoint, compression |
+
+**Prerequisites:**
+
+**Required:**
+- Ollama installed and running (`ollama serve`)
+- Model downloaded (`ollama pull llama3.2:1b`)
+- SQLite (included with Python)
+
+**Optional:**
+- PostgreSQL (for production-like memory tests)
+- OpenAI API key (for quality validation)
+
+**Cost Analysis:**
+
+**E2E Tests Cost**: $0.00
+- Ollama LLM: FREE (local inference)
+- SQLite: FREE (local database)
+- No API calls to paid services
+
+If using OpenAI for quality validation:
+- Use `gpt-4o-mini` ($0.15/1M input, $0.60/1M output)
+- Budget: <$20 for full E2E suite
+- Cost tracking built into tests
+
 ## Critical Rules
 
 ### ALWAYS
@@ -3094,6 +3313,100 @@ data = self.extract_list(result, "actual_key_name", default=[])
 
 ### Multi-Modal API Errors
 **See**: `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` - Common Pitfalls section
+
+### Provider Compatibility for Structured Outputs
+
+**CRITICAL**: Ollama does NOT support OpenAI Structured Outputs API. Use OpenAI for agents requiring structured outputs.
+
+**Affected Agents**:
+- `PlanningAgent` - Uses `List[PlanStep]` schema
+- `PEVAgent` - Uses `List[Refinement]` schema
+- `ToTAgent` - Uses `List[ToTNode]` schema
+- `MetaController` - Uses complex routing schemas
+
+**Symptoms with Ollama**:
+```python
+# Test times out after 60-120s
+# JSON_PARSE_FAILED errors
+# Ollama tries to generate matching JSON but can't comply with strict schema
+```
+
+**Solution**:
+```python
+# WRONG (will timeout with complex schemas)
+agent = PlanningAgent(
+    llm_provider="ollama",
+    model="llama3.1:8b-instruct-q8_0"
+)
+
+# RIGHT (100% schema compliance)
+agent = PlanningAgent(
+    llm_provider="openai",
+    model="gpt-4o-mini"  # Supports structured outputs
+)
+```
+
+**Provider Support Matrix**:
+- ✅ **OpenAI**: Full support for `json_schema` (strict mode) and `json_object` (legacy)
+- ❌ **Ollama**: NO support for structured outputs API
+- ❌ **Anthropic**: NO support for structured outputs API
+
+**When to Use OpenAI vs Ollama**:
+- **OpenAI** (REQUIRED): Agents with complex schemas (`List[T]`, nested Pydantic models)
+- **Ollama** (OK): Simple agents with string/dict outputs, basic RAG, simple QA
+
+**Cost Impact**:
+- OpenAI gpt-4o-mini: ~$0.001-0.01 per test
+- Ollama: Free (local inference)
+
+**Test Configuration**:
+```python
+# For E2E tests with structured outputs
+pytestmark = [
+    pytest.mark.e2e,
+    pytest.mark.asyncio,
+    pytest.mark.skipif(
+        not os.getenv("OPENAI_API_KEY"),
+        reason="OPENAI_API_KEY required for structured outputs"
+    ),
+]
+```
+
+### pytest-asyncio Version Compatibility
+
+**CRITICAL**: pytest-asyncio version affects async test execution. Use 0.21.1 for E2E tests.
+
+**Issue**: pytest-asyncio 1.x forces `Mode.STRICT` even with `asyncio_mode = auto` in pytest.ini
+- Version 1.2.0+: Ignores `asyncio_mode = auto`, enforces STRICT mode
+- Version 0.23.0: `AttributeError: 'Package' object has no attribute 'obj'`
+- Version 0.21.1: ✅ Works correctly with E2E tests
+
+**Solution**:
+```bash
+pip install pytest-asyncio==0.21.1
+```
+
+**pytest.ini Configuration**:
+```ini
+[pytest]
+asyncio_mode = auto
+asyncio_default_fixture_loop_scope = function
+asyncio_default_test_loop_scope = function
+```
+
+**Known Side Effect**:
+- Unit test `test_edge_state_machine.py` fails with pytest-asyncio 0.21.1
+- Error: `AttributeError: 'FixtureDef' object has no attribute 'unittest'`
+- E2E tests are higher priority - unit test issue deferred
+
+**Test Markers**:
+```python
+# E2E tests work with pytest-asyncio 0.21.1
+pytestmark = [
+    pytest.mark.e2e,
+    pytest.mark.asyncio,  # Async mode auto-detected
+]
+```
 
 ## Examples Directory
 

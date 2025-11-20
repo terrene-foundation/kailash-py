@@ -151,6 +151,212 @@ hook = PerformanceHook()
 agent._hook_manager.register_hook(hook)
 ```
 
+## Production Security
+
+### Authorization (RBAC)
+
+Role-based access control for hook registration:
+
+```python
+from kaizen.core.autonomy.hooks.security import (
+    AuthorizedHookManager,
+    HookPrincipal,
+    HookPermission,
+)
+
+# Create principal with specific permissions
+admin = HookPrincipal(
+    identity="admin@company.com",
+    permissions={
+        HookPermission.REGISTER_HOOK,
+        HookPermission.UNREGISTER_HOOK,
+        HookPermission.TRIGGER_HOOKS,
+    }
+)
+
+# Use authorized manager
+manager = AuthorizedHookManager()
+await manager.register(
+    event=HookEvent.POST_AGENT_LOOP,
+    handler=my_hook,
+    principal=admin  # Authorization required
+)
+```
+
+### Secure Hook Loading
+
+Ed25519 cryptographic signature verification for filesystem hooks:
+
+```python
+from kaizen.core.autonomy.hooks.security import SecureHookManager, HookSignature
+from cryptography.hazmat.primitives.asymmetric import ed25519
+
+# Generate keys (one-time setup)
+private_key = ed25519.Ed25519PrivateKey.generate()
+public_key = private_key.public_key()
+
+# Sign hook
+signature = HookSignature.sign(
+    hook_path="/path/to/hook.py",
+    private_key=private_key,
+    signer_id="security-team"
+)
+
+# Secure manager with signature verification
+manager = SecureHookManager(
+    trusted_signers=["security-team"],
+    public_keys={"security-team": public_key}
+)
+await manager.discover_from_filesystem()  # Only signed hooks loaded
+```
+
+### Metrics Authentication
+
+API key authentication + IP whitelisting for metrics endpoints:
+
+```python
+from kaizen.core.autonomy.hooks.security import SecureMetricsEndpoint
+
+endpoint = SecureMetricsEndpoint(
+    api_keys=["monitoring-key-abc123"],
+    ip_whitelist=["10.0.0.0/8"],
+    rate_limit_per_minute=100
+)
+endpoint.start(host="0.0.0.0", port=9090)
+
+# Clients must provide API key:
+# curl -H "X-API-Key: monitoring-key-abc123" http://localhost:9090/metrics
+```
+
+### Sensitive Data Redaction
+
+Auto-redact API keys, passwords, PII from logs:
+
+```python
+from kaizen.core.autonomy.hooks.builtin import LoggingHook
+
+hook = LoggingHook(
+    redact_sensitive=True,  # Auto-redact patterns
+    custom_patterns=[r"AUTH_TOKEN=[\w-]+"]
+)
+
+# Automatically redacts:
+# - API keys (Bearer, AWS, OpenAI)
+# - Passwords
+# - Credit cards
+# - SSNs
+# - Emails
+# - Phone numbers
+```
+
+### Hook Execution Isolation
+
+Process-level isolation with resource limits:
+
+```python
+from kaizen.core.autonomy.hooks.security import IsolatedHookManager, ResourceLimits
+
+# Define resource limits
+limits = ResourceLimits(
+    max_memory_mb=100,
+    max_cpu_seconds=5,
+    max_file_size_mb=10
+)
+
+# Isolated manager
+manager = IsolatedHookManager(limits=limits, enable_isolation=True)
+
+# Hooks execute in separate processes
+# Prevents malicious hooks from crashing agent
+```
+
+**Platform Support**:
+- Unix/Linux: Full resource limits + process isolation
+- Windows: Process isolation only (OS limitation)
+
+### Rate Limiting
+
+Prevent DoS via hook registration flooding:
+
+```python
+from kaizen.core.autonomy.hooks.security import RateLimitedHookManager
+
+manager = RateLimitedHookManager(
+    max_registrations_per_minute=10,
+    tracking_window_seconds=60
+)
+
+# Registrations beyond limit are rejected
+# Security audit logs track violations
+```
+
+### Input Validation
+
+Block code injection, XSS, path traversal:
+
+```python
+from kaizen.core.autonomy.hooks.security import validate_hook_context
+
+validated_context = validate_hook_context(context)
+
+# Automatically blocks:
+# - Code injection (<script>, eval(), SQL injection)
+# - XSS attempts
+# - Path traversal attacks
+# - Oversized fields (> 100KB)
+# - Invalid agent IDs
+```
+
+### Audit Trail
+
+Comprehensive logging for forensic analysis:
+
+```python
+# Built into AuthorizedHookManager
+# Logs all operations with:
+# - Timestamp
+# - Principal identity
+# - Action performed
+# - Result (success/failure)
+# - Metadata
+
+# Example audit log:
+# {
+#   "timestamp": "2025-11-02T15:30:45Z",
+#   "principal": "admin@company.com",
+#   "action": "REGISTER_HOOK",
+#   "result": "SUCCESS",
+#   "metadata": {"hook_name": "MetricsHook"}
+# }
+```
+
+### Production Security Configuration
+
+Combine all security features:
+
+```python
+from kaizen.core.autonomy.hooks.security import (
+    AuthorizedHookManager,
+    ResourceLimits,
+    IsolatedHookExecutor,
+)
+
+class ProductionHookManager(AuthorizedHookManager):
+    def __init__(self):
+        super().__init__()
+        self.limits = ResourceLimits(max_memory_mb=100, max_cpu_seconds=5)
+        self.executor = IsolatedHookExecutor(self.limits)
+        self.enable_isolation = True
+        self.enable_rate_limiting = True
+        self.enable_input_validation = True
+        self.enable_audit_logging = True
+
+# Production manager with all security features
+manager = ProductionHookManager()
+```
+
+**Compliance**: PCI DSS 4.0, HIPAA § 164.312, GDPR Article 32, SOC2
+
 ## Custom Hooks
 
 ### Async Hook Function
