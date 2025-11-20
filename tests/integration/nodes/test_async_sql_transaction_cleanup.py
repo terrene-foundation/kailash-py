@@ -17,13 +17,13 @@ Prerequisites:
 import asyncio
 
 import pytest
+
 from kailash.nodes.data.async_sql import (
     DatabaseConfig,
     DatabaseType,
     FetchMode,
     PostgreSQLAdapter,
 )
-
 from tests.utils.docker_config import DATABASE_CONFIG
 
 
