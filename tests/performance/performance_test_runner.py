@@ -24,7 +24,6 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
-import docker
 import yaml
 from load_test_framework import (
     LoadTestConfig,
@@ -33,6 +32,8 @@ from load_test_framework import (
     run_full_performance_suite,
     run_quick_performance_test,
 )
+
+import docker
 
 # Configure logging
 logging.basicConfig(

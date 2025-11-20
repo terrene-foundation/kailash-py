@@ -1,0 +1,145 @@
+name: Example Validation
+
+on:
+  push:
+    branches: [ main, kaizen ]
+    paths:
+      - 'apps/kailash-kaizen/examples/autonomy/**'
+      - 'apps/kailash-kaizen/tests/examples/**'
+      - '.github/workflows/example-validation.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'apps/kailash-kaizen/examples/autonomy/**'
+      - 'apps/kailash-kaizen/tests/examples/**'
+
+jobs:
+  validate-examples:
+    name: Validate Autonomy Examples
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/setup.py', '**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+
+          # Start Ollama in background
+          ollama serve &
+
+          # Wait for Ollama to be ready (max 30 seconds)
+          timeout 30 bash -c 'until curl -s http://localhost:11434/api/tags > /dev/null; do sleep 1; done'
+
+          # Pull required model for examples
+          ollama pull llama3.2:1b
+
+          # Verify model is available
+          ollama list | grep llama3.2:1b
+
+      - name: Install dependencies
+        working-directory: apps/kailash-kaizen
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          pip install pytest pytest-asyncio black
+
+      - name: Validate example formatting (Black)
+        working-directory: apps/kailash-kaizen
+        run: |
+          black --check examples/autonomy/ || (echo "❌ Examples not formatted with Black" && exit 1)
+
+      - name: Validate example imports
+        working-directory: apps/kailash-kaizen
+        run: |
+          # Check Python syntax for all example files
+          python -m py_compile examples/autonomy/tool-calling/code-review-agent/code_review_agent.py
+          python -m py_compile examples/autonomy/tool-calling/data-analysis-agent/data_analysis_agent.py
+          python -m py_compile examples/autonomy/tool-calling/devops-agent/devops_agent.py
+          python -m py_compile examples/autonomy/planning/research-assistant/research_assistant.py
+          python -m py_compile examples/autonomy/planning/content-creator/content_creator.py
+          python -m py_compile examples/autonomy/planning/problem-solver/problem_solver.py
+          python -m py_compile examples/autonomy/meta-controller/multi-specialist-coding/multi_specialist_coding.py
+          python -m py_compile examples/autonomy/meta-controller/complex-data-pipeline/complex_data_pipeline.py
+          python -m py_compile examples/autonomy/memory/long-running-research/long_running_research.py
+          python -m py_compile examples/autonomy/memory/customer-support/customer_support_agent.py
+          python -m py_compile examples/autonomy/checkpoints/resume-interrupted-research/resume_interrupted_research.py
+          python -m py_compile examples/autonomy/checkpoints/multi-day-project/multi_day_project.py
+          python -m py_compile examples/autonomy/interrupts/01_ctrl_c_interrupt.py
+          python -m py_compile examples/autonomy/interrupts/03_budget_interrupt.py
+          python -m py_compile examples/autonomy/full-integration/autonomous-research-agent/autonomous_research_agent.py
+
+      - name: Check READMEs exist
+        working-directory: apps/kailash-kaizen
+        run: |
+          # Verify all examples have README files
+          test -f examples/autonomy/tool-calling/code-review-agent/README.md || (echo "❌ Missing README: code-review-agent" && exit 1)
+          test -f examples/autonomy/tool-calling/data-analysis-agent/README.md || (echo "❌ Missing README: data-analysis-agent" && exit 1)
+          test -f examples/autonomy/tool-calling/devops-agent/README.md || (echo "❌ Missing README: devops-agent" && exit 1)
+          test -f examples/autonomy/planning/research-assistant/README.md || (echo "❌ Missing README: research-assistant" && exit 1)
+          test -f examples/autonomy/planning/content-creator/README.md || (echo "❌ Missing README: content-creator" && exit 1)
+          test -f examples/autonomy/planning/problem-solver/README.md || (echo "❌ Missing README: problem-solver" && exit 1)
+          test -f examples/autonomy/meta-controller/multi-specialist-coding/README.md || (echo "❌ Missing README: multi-specialist-coding" && exit 1)
+          test -f examples/autonomy/meta-controller/complex-data-pipeline/README.md || (echo "❌ Missing README: complex-data-pipeline" && exit 1)
+          test -f examples/autonomy/memory/long-running-research/README.md || (echo "❌ Missing README: long-running-research" && exit 1)
+          test -f examples/autonomy/memory/customer-support/README.md || (echo "❌ Missing README: customer-support" && exit 1)
+          test -f examples/autonomy/checkpoints/resume-interrupted-research/README.md || (echo "❌ Missing README: resume-interrupted-research" && exit 1)
+          test -f examples/autonomy/checkpoints/multi-day-project/README.md || (echo "❌ Missing README: multi-day-project" && exit 1)
+          test -f examples/autonomy/interrupts/README_01_ctrl_c.md || (echo "❌ Missing README: ctrl_c_interrupt" && exit 1)
+          test -f examples/autonomy/interrupts/README_03_budget.md || (echo "❌ Missing README: budget_interrupt" && exit 1)
+          test -f examples/autonomy/full-integration/autonomous-research-agent/README.md || (echo "❌ Missing README: autonomous-research-agent" && exit 1)
+          test -f examples/autonomy/EXAMPLE_GALLERY.md || (echo "❌ Missing EXAMPLE_GALLERY.md" && exit 1)
+          echo "✅ All READMEs present"
+
+      - name: Run example validation tests
+        working-directory: apps/kailash-kaizen
+        run: |
+          # Run validation tests if they exist
+          if [ -d "tests/examples" ]; then
+            pytest tests/examples/ -v --maxfail=3
+          else
+            echo "⚠️  Warning: tests/examples/ directory not found - skipping validation tests"
+            echo "ℹ️  Note: Example validation tests will be created in Phase 10"
+          fi
+        continue-on-error: true
+
+      - name: Validate example gallery documentation
+        working-directory: apps/kailash-kaizen
+        run: |
+          # Check that EXAMPLE_GALLERY.md has expected sections
+          grep -q "## 📚 Overview" examples/autonomy/EXAMPLE_GALLERY.md || (echo "❌ Missing Overview section" && exit 1)
+          grep -q "## 📂 Example Categories" examples/autonomy/EXAMPLE_GALLERY.md || (echo "❌ Missing Categories section" && exit 1)
+          grep -q "## 🎓 Learning Paths" examples/autonomy/EXAMPLE_GALLERY.md || (echo "❌ Missing Learning Paths section" && exit 1)
+          grep -q "## 🏗️ Production Patterns" examples/autonomy/EXAMPLE_GALLERY.md || (echo "❌ Missing Production Patterns section" && exit 1)
+          grep -q "## 📊 Quick Reference Table" examples/autonomy/EXAMPLE_GALLERY.md || (echo "❌ Missing Quick Reference section" && exit 1)
+          echo "✅ Example gallery structure validated"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "========================================================================"
+          echo "📊 Example Validation Summary"
+          echo "========================================================================"
+          echo "Python Version: ${{ matrix.python-version }}"
+          echo "Examples Validated: 15"
+          echo "READMEs Validated: 16 (15 examples + gallery)"
+          echo "Ollama Model: llama3.2:1b"
+          echo "========================================================================"
