@@ -7,17 +7,18 @@ description: "Kailash Core SDK fundamentals including workflow creation, node pa
 
 Comprehensive guide to Kailash Core SDK fundamentals for workflow automation and integration.
 
-## Overview
+## Features
 
-The Core SDK provides the foundational building blocks for creating custom workflows with fine-grained control. This skill collection covers:
+The Core SDK provides the foundational building blocks for creating custom workflows with fine-grained control:
 
-- **Workflow Creation**: Building workflows from scratch
-- **Node Patterns**: Using the 110+ available nodes
-- **Connections**: Linking nodes and passing data
-- **Runtime Execution**: Running workflows synchronously and asynchronously
-- **Parameter Passing**: Managing data flow between nodes
-- **Error Handling**: Robust error management patterns
-- **Advanced Features**: Cyclic workflows, async patterns, MCP integration
+- **110+ Workflow Nodes**: Pre-built nodes for AI, API, database, file operations, logic, and more
+- **WorkflowBuilder API**: String-based workflow construction with type safety
+- **Dual Runtime Support**: AsyncLocalRuntime (Docker/FastAPI) and LocalRuntime (CLI/scripts)
+- **Advanced Patterns**: Cyclic workflows, conditional execution, error handling
+- **MCP Integration**: Built-in Model Context Protocol support
+- **Parameter Passing**: Flexible data flow between nodes
+- **Zero Configuration**: Auto-detection of runtime context
+- **Production Ready**: Enterprise features including monitoring, validation, and debugging
 
 ## Quick Start
 
@@ -60,16 +61,41 @@ results, run_id = runtime.execute(workflow.build())
 - Never `workflow.execute(runtime)` - always `runtime.execute(workflow.build())`
 
 ### Runtime Selection
-- **AsyncLocalRuntime**: For Docker/FastAPI (async contexts)
-- **LocalRuntime**: For CLI/scripts (sync contexts)
-- **get_runtime()**: Auto-detection helper
+- **AsyncLocalRuntime**: For Docker/FastAPI (async contexts) - async-first, no threading, 10-100x faster
+- **LocalRuntime**: For CLI/scripts (sync contexts) - synchronous execution with thread support
+- **get_runtime()**: Auto-detection helper that selects appropriate runtime based on context
 
-### Critical Rules
+Both runtimes return identical structure: `(results, run_id)` tuple.
+
+### Runtime Architecture
+Both LocalRuntime and AsyncLocalRuntime inherit from BaseRuntime with shared capabilities:
+
+**BaseRuntime Foundation**:
+- 29 configuration parameters (debug, enable_cycles, conditional_execution, connection_validation, etc.)
+- Execution metadata management
+- Common initialization and validation modes (strict, warn, off)
+
+**Shared Mixins**:
+- **CycleExecutionMixin**: Cyclic workflow execution with validation
+- **ValidationMixin**: Workflow structure validation (5 methods)
+- **ConditionalExecutionMixin**: Conditional execution and branching with SwitchNode support
+
+**AsyncLocalRuntime-Specific**:
+- WorkflowAnalyzer for optimal execution strategy
+- Level-based parallelism for concurrent execution
+- Thread pool for sync nodes without blocking
+- Semaphore control to prevent resource exhaustion
+
+## Critical Rules
+
 - ✅ ALWAYS: `runtime.execute(workflow.build())`
 - ✅ String-based nodes: `workflow.add_node("NodeName", "id", {})`
 - ✅ 4-parameter connections: `(source_id, source_param, target_id, target_param)`
+- ✅ Docker/FastAPI: Use AsyncLocalRuntime (mandatory)
+- ✅ CLI/Scripts: Use LocalRuntime
 - ❌ NEVER: `workflow.execute(runtime)`
 - ❌ NEVER: Instance-based nodes
+- ❌ NEVER: Use LocalRuntime in Docker (causes hangs)
 
 ## When to Use This Skill
 
@@ -85,13 +111,13 @@ Use this skill when you need to:
 
 ## Related Skills
 
-- **[02-dataflow](../02-dataflow/SKILL.md)** - Database operations framework
-- **[03-nexus](../03-nexus/SKILL.md)** - Multi-channel platform framework
-- **[04-kaizen](../04-kaizen/SKILL.md)** - AI agent framework
+- **[02-dataflow](../02-dataflow/SKILL.md)** - Database operations framework built on Core SDK
+- **[03-nexus](../03-nexus/SKILL.md)** - Multi-channel platform framework built on Core SDK
+- **[04-kaizen](../04-kaizen/SKILL.md)** - AI agent framework built on Core SDK
 - **[06-cheatsheets](../06-cheatsheets/SKILL.md)** - Quick reference patterns
-- **[08-nodes-reference](../08-nodes-reference/SKILL.md)** - Node reference
-- **[09-workflow-patterns](../09-workflow-patterns/SKILL.md)** - Workflow templates
-- **[17-gold-standards](../17-gold-standards/SKILL.md)** - Best practices and standards
+- **[08-nodes-reference](../08-nodes-reference/SKILL.md)** - Complete node reference
+- **[09-workflow-patterns](../09-workflow-patterns/SKILL.md)** - Industry workflow templates
+- **[17-gold-standards](../17-gold-standards/SKILL.md)** - Mandatory best practices
 
 ## Support
 
