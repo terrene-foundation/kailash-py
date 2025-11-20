@@ -16,8 +16,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import numpy as np
-from kaizen.nodes.ai.llm_agent import LLMAgentNode
-
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
@@ -121,8 +119,6 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         baseline_period: timedelta = timedelta(days=30),
         anomaly_threshold: float = 0.8,
         learning_enabled: bool = True,
-        ai_analysis: bool = True,
-        ai_model: str = "ollama:llama3.2:3b",
         ml_model: Optional[str] = None,  # Add ml_model for compatibility
         max_profile_history: int = 10000,
         **kwargs,
@@ -134,8 +130,7 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             baseline_period: Period for establishing user behavior baseline
             anomaly_threshold: Threshold for anomaly detection (0-1)
             learning_enabled: Enable continuous learning from user behavior
-            ai_analysis: Enable AI-powered behavior analysis
-            ai_model: AI model for advanced analysis
+            ml_model: Model type for analysis (default: "statistical")
             max_profile_history: Maximum history items per user profile
             **kwargs: Additional node parameters
         """
@@ -143,24 +138,11 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         self.baseline_period = baseline_period
         self.anomaly_threshold = anomaly_threshold
         self.learning_enabled = learning_enabled
-        self.ai_analysis = ai_analysis
-        self.ai_model = ai_model
         self.ml_model = ml_model or "statistical"  # Default to statistical model
         self.max_profile_history = max_profile_history
 
         # Initialize parent classes
         super().__init__(name=name, **kwargs)
-
-        # Initialize AI agent for advanced analysis
-        if self.ai_analysis:
-            self.ai_agent = LLMAgentNode(
-                name=f"{name}_ai_agent",
-                provider="ollama",
-                model=ai_model.replace("ollama:", ""),
-                temperature=0.2,
-            )
-        else:
-            self.ai_agent = None
 
         # Initialize security event and audit logging
         self.security_event_node = SecurityEventNode(name=f"{name}_security_events")
@@ -181,7 +163,6 @@ class BehaviorAnalysisNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "anomalies_detected": 0,
             "users_analyzed": 0,
             "profiles_updated": 0,
-            "ai_analyses": 0,
             "false_positives": 0,
         }
         self.analysis_times = []  # Track analysis times for averaging
@@ -880,15 +861,6 @@ This is an automated security alert from the Behavior Analysis System.
             # Generate behavior summary
             behavior_summary = self._generate_behavior_summary(profile, recent_activity)
 
-            # AI-powered analysis if enabled
-            ai_insights = None
-            if self.ai_analysis and recent_activity:
-                ai_insights = self._ai_analyze_behavior(
-                    user_id, profile, recent_activity, anomalies
-                )
-                if ai_insights:
-                    self.analysis_stats["ai_analyses"] += 1
-
             # Update baseline if learning is enabled
             if self.learning_enabled and not anomalies:
                 self._update_profile_baseline(profile, recent_activity)
@@ -926,7 +898,6 @@ This is an automated security alert from the Behavior Analysis System.
                 "anomaly_factors": list(set(anomaly_factors)),
                 "risk_level": risk_level,
                 "behavior_summary": behavior_summary,
-                "ai_insights": ai_insights,
                 "profile_updated": self.learning_enabled and not anomalies,
             }
 
@@ -1516,133 +1487,6 @@ This is an automated security alert from the Behavior Analysis System.
             "last_updated": profile.updated_at.isoformat(),
         }
 
-    def _ai_analyze_behavior(
-        self,
-        user_id: str,
-        profile: UserBehaviorProfile,
-        recent_activity: List[Dict[str, Any]],
-        detected_anomalies: List[BehaviorAnomaly],
-    ) -> Optional[Dict[str, Any]]:
-        """Use AI to analyze behavior patterns.
-
-        Args:
-            user_id: User ID
-            profile: User behavior profile
-            recent_activity: Recent activity
-            detected_anomalies: Detected anomalies
-
-        Returns:
-            AI analysis insights or None if failed
-        """
-        if not self.ai_agent:
-            return None
-
-        try:
-            # Prepare data for AI analysis
-            profile_summary = {
-                "login_times": profile.login_times[-50:],  # Last 50 login times
-                "locations": dict(
-                    list(profile.locations.items())[:10]
-                ),  # Top 10 locations
-                "devices": dict(list(profile.devices.items())[:10]),  # Top 10 devices
-                "avg_session_duration": (
-                    statistics.mean(profile.session_durations)
-                    if profile.session_durations
-                    else 0
-                ),
-                "failed_logins": profile.failed_logins,
-                "unusual_activities": profile.unusual_activities,
-            }
-
-            anomaly_summary = [
-                {
-                    "type": anomaly.anomaly_type,
-                    "severity": anomaly.severity,
-                    "confidence": anomaly.confidence,
-                    "description": anomaly.description,
-                }
-                for anomaly in detected_anomalies
-            ]
-
-            # Create AI analysis prompt
-            prompt = f"""
-You are a cybersecurity expert analyzing user behavior for potential threats.
-
-USER: {user_id}
-
-BEHAVIOR PROFILE:
-{json.dumps(profile_summary, indent=2)}
-
-RECENT ACTIVITY:
-{json.dumps(recent_activity[:10], indent=2)}  # Last 10 activities
-
-DETECTED ANOMALIES:
-{json.dumps(anomaly_summary, indent=2)}
-
-TASK:
-Analyze this user's behavior for potential security risks. Consider:
-1. Pattern consistency with baseline
-2. Potential insider threat indicators
-3. Account compromise indicators
-4. False positive likelihood
-5. Recommended actions
-
-RESPONSE FORMAT:
-{{
-  "risk_assessment": "low|medium|high|critical",
-  "threat_likelihood": 0.0-1.0,
-  "primary_concerns": ["concern1", "concern2"],
-  "false_positive_probability": 0.0-1.0,
-  "recommended_actions": ["action1", "action2"],
-  "analysis_summary": "detailed analysis"
-}}
-"""
-
-            # Run AI analysis
-            ai_response = self.ai_agent.execute(
-                provider="ollama",
-                model=self.ai_model.replace("ollama:", ""),
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            # Parse AI response
-            return self._parse_ai_behavior_response(ai_response)
-
-        except Exception as e:
-            self.log_with_context("WARNING", f"AI behavior analysis failed: {e}")
-            return None
-
-    def _parse_ai_behavior_response(
-        self, ai_response: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
-        """Parse AI behavior analysis response.
-
-        Args:
-            ai_response: Response from AI agent
-
-        Returns:
-            Parsed insights or None if parsing failed
-        """
-        try:
-            content = ai_response.get("result", {}).get("content", "")
-            if not content:
-                return None
-
-            # Try to parse JSON response
-            import re
-
-            json_match = re.search(r"\{.*\}", content, re.DOTALL)
-            if json_match:
-                insights = json.loads(json_match.group())
-                return insights
-
-        except Exception as e:
-            self.log_with_context(
-                "WARNING", f"Failed to parse AI behavior response: {e}"
-            )
-
-        return None
-
     def _update_profile_baseline(
         self, profile: UserBehaviorProfile, activity: List[Dict[str, Any]]
     ) -> None:
@@ -2082,7 +1926,6 @@ RESPONSE FORMAT:
             "baseline_period_days": self.baseline_period.days,
             "anomaly_threshold": self.anomaly_threshold,
             "learning_enabled": self.learning_enabled,
-            "ai_analysis_enabled": self.ai_analysis,
             "total_user_profiles": len(self.user_profiles),
             "detector_count": len(self.anomaly_detectors),
             "avg_analysis_time_ms": avg_time,
