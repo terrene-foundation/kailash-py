@@ -17,7 +17,6 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 from kailash.access_control import AccessDecision, UserContext
 from kailash.access_control.managers import AccessControlManager
-from kailash.nodes.ai.llm_agent import LLMAgentNode
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
@@ -244,17 +243,6 @@ class ABACPermissionEvaluatorNode(SecurityMixin, PerformanceMixin, LoggingMixin,
 
         # Initialize parent classes
         super().__init__(name=name, **kwargs)
-
-        # Initialize AI agent for complex policy evaluation
-        if self.ai_reasoning:
-            self.ai_agent = LLMAgentNode(
-                name=f"{name}_ai_agent",
-                provider="ollama",
-                model=ai_model.replace("ollama:", ""),
-                temperature=0.1,  # Low temperature for consistent policy evaluation
-            )
-        else:
-            self.ai_agent = None
 
         # Initialize audit logging
         self.audit_log_node = AuditLogNode(name=f"{name}_audit_log")
@@ -845,12 +833,6 @@ class ABACPermissionEvaluatorNode(SecurityMixin, PerformanceMixin, LoggingMixin,
                 "timestamp": datetime.now(UTC).isoformat(),
             }
 
-        # If no policy matched, try AI reasoning for complex cases
-        if final_decision is None and self.ai_reasoning:
-            final_decision = self._evaluate_with_ai(
-                context, permission, evaluation_results
-            )
-
         # Default deny if still no decision
         if final_decision is None:
             final_decision = {
@@ -999,146 +981,6 @@ class ABACPermissionEvaluatorNode(SecurityMixin, PerformanceMixin, LoggingMixin,
             return [self._resolve_template_variables(item, context) for item in value]
         else:
             return value
-
-    def _evaluate_with_ai(
-        self,
-        context: ABACContext,
-        permission: str,
-        policy_evaluations: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
-        """Use AI to evaluate complex permission scenarios.
-
-        Args:
-            context: ABAC evaluation context
-            permission: Permission being requested
-            policy_evaluations: Results from rule-based evaluation
-
-        Returns:
-            AI-based permission decision
-        """
-        if not self.ai_agent:
-            return None
-
-        try:
-            # Create AI analysis prompt
-            prompt = self._create_ai_evaluation_prompt(
-                context, permission, policy_evaluations
-            )
-
-            # Run AI analysis
-            ai_response = self.ai_agent.execute(
-                provider="ollama",
-                model=self.ai_model.replace("ollama:", ""),
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            # Parse AI response
-            ai_decision = self._parse_ai_evaluation_response(ai_response)
-
-            if ai_decision:
-                ai_decision["evaluation_method"] = "ai_reasoning"
-                ai_decision["policy_evaluations"] = policy_evaluations
-                ai_decision["timestamp"] = datetime.now(UTC).isoformat()
-
-                self.evaluation_stats["ai_evaluations"] += 1
-                return ai_decision
-
-        except Exception as e:
-            self.log_with_context("WARNING", f"AI evaluation failed: {e}")
-
-        return None
-
-    def _create_ai_evaluation_prompt(
-        self,
-        context: ABACContext,
-        permission: str,
-        policy_evaluations: List[Dict[str, Any]],
-    ) -> str:
-        """Create prompt for AI permission evaluation.
-
-        Args:
-            context: ABAC evaluation context
-            permission: Permission being requested
-            policy_evaluations: Rule-based evaluation results
-
-        Returns:
-            AI evaluation prompt
-        """
-        prompt = f"""
-You are an enterprise security expert evaluating an access control decision.
-
-PERMISSION REQUEST:
-- User wants permission: {permission}
-
-USER CONTEXT:
-{json.dumps(context.user_attributes, indent=2)}
-
-RESOURCE CONTEXT:
-{json.dumps(context.resource_attributes, indent=2)}
-
-ENVIRONMENT CONTEXT:
-{json.dumps(context.environment_attributes, indent=2)}
-
-ACTION CONTEXT:
-{json.dumps(context.action_attributes, indent=2)}
-
-RULE-BASED EVALUATION RESULTS:
-{json.dumps(policy_evaluations, indent=2)}
-
-TASK:
-Based on the context and rule evaluations, make an access control decision.
-Consider:
-1. Security best practices
-2. Principle of least privilege
-3. Business context and requirements
-4. Risk assessment
-5. Regulatory compliance needs
-
-RESPONSE FORMAT:
-Return a JSON object with this structure:
-{{
-  "allowed": true|false,
-  "reason": "detailed explanation of the decision",
-  "confidence": 0.0-1.0,
-  "risk_factors": ["factor1", "factor2"],
-  "recommendations": ["recommendation1", "recommendation2"]
-}}
-"""
-        return prompt
-
-    def _parse_ai_evaluation_response(
-        self, ai_response: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
-        """Parse AI evaluation response.
-
-        Args:
-            ai_response: Response from AI agent
-
-        Returns:
-            Parsed decision or None if parsing failed
-        """
-        try:
-            content = ai_response.get("result", {}).get("content", "")
-            if not content:
-                return None
-
-            # Try to parse JSON response
-            import re
-
-            json_match = re.search(r"\{.*\}", content, re.DOTALL)
-            if json_match:
-                decision_data = json.loads(json_match.group())
-
-                # Validate required fields
-                if "allowed" in decision_data and "reason" in decision_data:
-                    return decision_data
-
-        except Exception as e:
-            self.log_with_context(
-                "WARNING", f"Failed to parse AI evaluation response: {e}"
-            )
-
-        return None
 
     def _generate_cache_key(
         self,
@@ -1307,69 +1149,6 @@ Return a JSON object with this structure:
             self.log_with_context("INFO", f"Removed ABAC policy: {policy_id}")
 
         return removed
-
-    def evaluate_complex_policy(
-        self, policy: Dict[str, Any], context: Dict[str, Any]
-    ) -> bool:
-        """Evaluate complex policies using AI reasoning.
-
-        Args:
-            policy: Complex policy definition
-            context: Evaluation context
-
-        Returns:
-            True if policy allows access
-        """
-        if not self.ai_reasoning or not self.ai_agent:
-            self.log_with_context(
-                "WARNING", "AI reasoning not available for complex policy evaluation"
-            )
-            return False
-
-        try:
-            # Convert to ABAC context
-            abac_context = ABACContext(
-                user_attributes=context.get("user", {}),
-                resource_attributes=context.get("resource", {}),
-                environment_attributes=context.get("environment", {}),
-                action_attributes=context.get("action", {}),
-            )
-
-            # Use AI to evaluate the complex policy
-            prompt = f"""
-Evaluate this complex access control policy:
-
-POLICY:
-{json.dumps(policy, indent=2)}
-
-CONTEXT:
-{json.dumps(context, indent=2)}
-
-Return true if access should be allowed, false otherwise.
-Provide reasoning for your decision.
-
-RESPONSE FORMAT:
-{{
-  "allowed": true|false,
-  "reasoning": "explanation"
-}}
-"""
-
-            ai_response = self.ai_agent.execute(
-                provider="ollama",
-                model=self.ai_model.replace("ollama:", ""),
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            # Parse response
-            parsed_response = self._parse_ai_evaluation_response(ai_response)
-            if parsed_response:
-                return parsed_response.get("allowed", False)
-
-        except Exception as e:
-            self.log_with_context("ERROR", f"Complex policy evaluation failed: {e}")
-
-        return False
 
     def get_applicable_permissions(self, context: Dict[str, Any]) -> List[str]:
         """Get all applicable permissions for given context.
