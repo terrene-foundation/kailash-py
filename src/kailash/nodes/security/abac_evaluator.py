@@ -15,13 +15,13 @@ from datetime import UTC, datetime, timedelta
 from functools import lru_cache
 from typing import Any, Callable, Dict, List, Optional, Union
 
+from kaizen.nodes.ai.llm_agent import LLMAgentNode
+
 from kailash.access_control import AccessDecision, UserContext
 from kailash.access_control.managers import AccessControlManager
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
-
-from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 logger = logging.getLogger(__name__)
 

@@ -11,12 +11,12 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
+from kaizen.nodes.ai.llm_agent import LLMAgentNode
+
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
 from kailash.nodes.security.security_event import SecurityEvent, SecurityEventNode
-
-from kaizen.nodes.ai.llm_agent import LLMAgentNode
 
 logger = logging.getLogger(__name__)
 
