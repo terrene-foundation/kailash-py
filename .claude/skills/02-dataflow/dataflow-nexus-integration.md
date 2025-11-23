@@ -29,10 +29,14 @@ from nexus import Nexus
 # CRITICAL CONFIGURATION to prevent blocking
 db = DataFlow(
     database_url="postgresql://user:pass@localhost/db",
-    auto_migrate=False,              # Don't create tables during init
+    auto_migrate=False,              # Don't create tables during init (prevents 5-10s startup delay)
     skip_registry=True,              # Skip automatic model discovery
     existing_schema_mode=True        # Work with existing schema only
 )
+
+# Note: auto_migrate=False prevents blocking during Nexus startup, not for async safety.
+# As of v0.9.5+, auto_migrate=True is safe in async contexts. This config is specifically
+# for preventing the 5-10s startup delay when integrating with Nexus.
 
 # Define models AFTER init
 @db.model
@@ -81,10 +85,13 @@ nexus = Nexus(
 db = DataFlow(
     database_url="postgresql://...",
 
-    # CRITICAL: Prevent blocking startup
+    # CRITICAL: Prevent blocking startup (5-10s delay prevention, NOT async safety)
     auto_migrate=False,           # No automatic schema changes
     skip_registry=True,           # Don't auto-discover models
     existing_schema_mode=True,    # Maximum safety
+
+    # Note: As of v0.9.5+, auto_migrate=True is safe in async contexts.
+    # This setting is specifically for preventing Nexus startup delays.
 
     # Performance
     pool_size=20,
