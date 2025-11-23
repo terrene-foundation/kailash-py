@@ -269,23 +269,23 @@ async def create_user():
     return results["create"]["id"]
 ```
 
-### FastAPI Integration (v0.9.1 Workaround)
+### FastAPI Integration
 
-**CRITICAL**: DataFlow v0.9.1 has a known async deadlock issue in migration system. Workaround required until v0.9.2 release.
+**✅ FIXED in v0.9.5+**: All async context deadlocks resolved. No workarounds needed!
 
 ```python
 from fastapi import FastAPI
 from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+import uuid
 
 app = FastAPI()
 
-# ⚠️ v0.9.1 WORKAROUND: Disable auto-migration in async contexts
+# ✅ Works in v0.9.5+ - No workaround needed!
 db = DataFlow(
     "postgresql://localhost:5432/mydb",
-    auto_migrate=False,        # CRITICAL: Prevents deadlock
-    migration_enabled=False     # CRITICAL: Prevents deadlock
+    auto_migrate=True  # Safe in FastAPI/async contexts
 )
 
 @db.model
@@ -293,10 +293,6 @@ class User:
     id: str
     name: str
     email: str
-
-# IMPORTANT: Manually create tables ONCE before running FastAPI
-# Run this separately (NOT in async context):
-# python -c "from dataflow import DataFlow; db = DataFlow('postgresql://...'); ..."
 
 @app.post("/users")
 async def create_user(name: str, email: str):
@@ -312,19 +308,11 @@ async def create_user(name: str, email: str):
     return results["create"]
 ```
 
-**Why This Workaround is Needed**:
-- v0.9.1 migration system uses sync runtime in async contexts
-- Causes deadlock when `auto_migrate=True` in FastAPI/async apps
-- **Fix coming in v0.9.2** with async context detection
-
-**What the Fix Will Look Like** (v0.9.2+):
-```python
-# After v0.9.2 release - NO workaround needed!
-db = DataFlow(
-    "postgresql://localhost:5432/mydb",
-    auto_migrate=True  # ✅ Will work in async contexts
-)
-```
+**What Changed in v0.9.5**:
+- All DDL operations now use context-safe runtime execution
+- `auto_migrate=True` works safely in FastAPI/async applications
+- No manual table creation needed
+- Fixed 18 locations across ModelRegistry, migration system, schema inspectors, and testing utilities
 
 ## DataFlow + Nexus Integration
 
