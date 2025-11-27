@@ -24,6 +24,7 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - "Bulk operations?" → [`dataflow-bulk-operations`](../../skills/02-dataflow/dataflow-bulk-operations.md)
 - "Transactions?" → [`dataflow-transactions`](../../skills/02-dataflow/dataflow-transactions.md)
 - "Connection isolation?" → [`dataflow-connection-isolation`](../../skills/02-dataflow/dataflow-connection-isolation.md) ⚠️ CRITICAL
+- "Fast CRUD? db.express?" → [`dataflow-express`](../../skills/02-dataflow/dataflow-express.md) 🚀 ~23x FASTER
 
 **Integration**:
 - "With Nexus?" → [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-integration.md)
@@ -42,6 +43,7 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - ❌ "Simple queries" → Use `dataflow-queries` Skill
 - ❌ "Model setup" → Use `dataflow-models` Skill
 - ❌ "Nexus integration" → Use `dataflow-nexus-integration` Skill
+- ❌ "Fast db.express operations" → Use `dataflow-express` Skill
 
 ## DataFlow Reference (`sdk-users/apps/dataflow/`)
 
@@ -200,6 +202,7 @@ When encountering apparent "limitations":
 - **ErrorEnhancer System (v0.8.0+)**: Rich, actionable error messages with DF-XXX codes, context, causes, and solutions
 - **Debug Agent (v0.8.0+)**: Intelligent error analysis with 50+ patterns, 60+ solutions, 92%+ confidence
 - **Inspector System (v0.8.0+)**: Workflow introspection and debugging tools
+- **ExpressDataFlow (v0.9.8+)**: High-performance direct node invocation (~23x faster than workflows)
 - **Schema Cache (v0.7.3+)**: 91-99% performance improvement for multi-operation workflows
 - **PostgreSQL Native Arrays (v0.8.0+)**: 2-10x faster with TEXT[], INTEGER[], REAL[] support
 - **6-Level Write Protection**: Comprehensive protection system (Global, Connection, Model, Operation, Field, Runtime)
@@ -299,6 +302,53 @@ db = DataFlow(url, error_enhancement_mode="DISABLED")
 - **DF-801**: Workflow Build Failed → Validate all connections before .build()
 
 **File Reference**: `src/dataflow/core/error_enhancer.py:1-756` (60+ methods)
+
+## 🚀 ExpressDataFlow - High-Performance CRUD (NEW in v0.9.8+)
+
+Direct node invocation bypassing workflow overhead for simple CRUD operations.
+
+**Performance**: ~23x faster than workflow-based operations
+
+**Access**: `db.express.<operation>()` after `await db.initialize()`
+
+**Operations**:
+- **CRUD**: create, read, update, delete, list, count
+- **Bulk**: bulk_create, bulk_update, bulk_delete, bulk_upsert
+
+**Basic Usage**:
+```python
+from dataflow import DataFlow
+
+db = DataFlow("postgresql://user:password@localhost/mydb")
+
+@db.model
+class User:
+    id: str
+    name: str
+    email: str
+
+await db.initialize()
+
+# Direct node invocation - ~23x faster than workflows
+user = await db.express.create("User", {"id": "user-001", "name": "Alice", "email": "alice@example.com"})
+user = await db.express.read("User", "user-001")
+updated = await db.express.update("User", {"id": "user-001"}, {"name": "Alice Updated"})
+success = await db.express.delete("User", "user-001")
+users = await db.express.list("User", filter={"active": True})
+total = await db.express.count("User")
+```
+
+**When to Use**:
+- Simple CRUD operations without workflow complexity
+- High-throughput applications needing maximum performance
+- Single-node operations
+
+**When NOT to Use** (Use Traditional Workflows):
+- Multi-node operations with data flow between nodes
+- Conditional execution or branching logic
+- Transaction management across operations
+
+**Skill Reference**: See `dataflow-express` skill for complete API
 
 ## 🔍 Inspector - Workflow Introspection (NEW in v0.4.7+)
 
