@@ -9,6 +9,8 @@ import pytest
 # Add parent directory to path for test_config import
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from test_config import TEST_DB_CONFIG, VECTOR_DB_CONFIG
+
 from kailash.access_control import (
     AccessControlManager,
     NodePermission,
@@ -32,7 +34,6 @@ from kailash.nodes.data import (
 from kailash.runtime.local import LocalRuntime
 from kailash.utils.migrations import Migration, MigrationGenerator, MigrationRunner
 from kailash.workflow import Workflow
-from test_config import TEST_DB_CONFIG, VECTOR_DB_CONFIG
 
 
 class TestAsyncDatabaseIntegrationReal:

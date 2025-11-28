@@ -37,6 +37,10 @@ from typing import Any, Dict, List, Optional, Union
 from fastapi import Depends, FastAPI, HTTPException, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, EmailStr, Field
+
+# Utils
+from examples.utils.paths import get_output_data_path
 
 # Kailash Middleware - Proper Gateway Usage
 from kailash.middleware import (
@@ -86,10 +90,6 @@ from kailash.runtime.local import LocalRuntime
 
 # Core SDK
 from kailash.workflow import WorkflowBuilder
-from pydantic import BaseModel, EmailStr, Field
-
-# Utils
-from examples.utils.paths import get_output_data_path
 
 
 class EnterpriseUserManagementGateway:
