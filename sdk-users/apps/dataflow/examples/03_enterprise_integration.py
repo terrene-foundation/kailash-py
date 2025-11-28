@@ -12,11 +12,11 @@ This example demonstrates:
 
 from datetime import datetime
 
+from dataflow import DataFlow
+
 from kailash.middleware.gateway import create_gateway
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
-from dataflow import DataFlow
 
 # Production-ready configuration
 db = DataFlow(
