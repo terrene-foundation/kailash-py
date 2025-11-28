@@ -9,7 +9,7 @@ DataFlow is a **zero-config database framework** built on Core SDK that automati
 pip install kailash-dataflow
 ```
 
-## Current Status: v0.6.0 Release Ready
+## Current Status: v0.9.7 Stable
 
 **Database Support:**
 - ✅ **PostgreSQL**: Full support with all enterprise features (asyncpg driver)
@@ -24,7 +24,13 @@ pip install kailash-dataflow
 - 🚀 **Neo4j**: Graph database for relationship-heavy data models
 - 🚀 **TimescaleDB**: Time-series data optimization
 
-**🎉 Major Bug Fixes in v0.4.0:**
+**🎉 Recent Bug Fixes:**
+
+**v0.9.7 (Latest):**
+- **Pytest Compatibility**: Fixed model registration race condition in pytest test collection
+- **Database Infrastructure**: Fixed DDL operations for all runtime contexts (sync/async/pytest)
+
+**v0.4.0:**
 - **DateTime Serialization**: Fixed datetime objects being converted to strings
 - **PostgreSQL Parameter Types**: Added explicit type casting for parameter determination
 - **Content Size Limits**: Changed VARCHAR(255) to TEXT for unlimited content

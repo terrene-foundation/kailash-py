@@ -4,8 +4,9 @@
 Shows different ways to use the new Nexus API similar to FastAPI patterns.
 """
 
-from kailash.workflow.builder import WorkflowBuilder
 from nexus import Nexus
+
+from kailash.workflow.builder import WorkflowBuilder
 
 # Pattern 1: Simple - like FastAPI
 app = Nexus()
