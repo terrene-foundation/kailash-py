@@ -1,6 +1,7 @@
-# Kailash DataFlow - Complete Function Access Guide (v0.6.0 Release Ready)
+# Kailash DataFlow - Complete Function Access Guide (v0.9.7 Stable)
 
-**🎉 Major Release: v0.6.0 with Complete Database Support + New CRUD API**
+**Current Version: v0.9.7 - Production Ready**
+- **PYTEST COMPATIBILITY**: Fixed model registration race condition (v0.9.7)
 - **MYSQL SUPPORT**: Full MySQL support with 100% feature parity (aiomysql driver)
 - **THREE DATABASES**: PostgreSQL, MySQL, and SQLite with identical 9 nodes per model
 - DateTime serialization issues resolved
