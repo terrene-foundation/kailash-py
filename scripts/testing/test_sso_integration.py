@@ -22,6 +22,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 
 import jwt
 import pytest
+
 from kailash.nodes.auth.directory_integration import DirectoryIntegrationNode
 from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
 from kailash.nodes.auth.session_management import SessionManagementNode
