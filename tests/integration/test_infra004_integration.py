@@ -581,9 +581,8 @@ result = {{
     def test_infrastructure_memory_and_resource_usage(self):
         """Infrastructure must maintain reasonable resource usage."""
         with PerformanceTracker("resource_usage", threshold=10.0):
-            import psutil
-
             import kaizen
+            import psutil
 
             # Get baseline memory usage
             process = psutil.Process()

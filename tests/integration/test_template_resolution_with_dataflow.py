@@ -13,9 +13,10 @@ Requirements:
 """
 
 import pytest
-from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 
 
 @pytest.fixture

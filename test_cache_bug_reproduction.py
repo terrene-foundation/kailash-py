@@ -7,9 +7,10 @@ when used with InMemoryCache.
 
 import asyncio
 
-from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 
 
 async def test_list_node_cache_bug():
