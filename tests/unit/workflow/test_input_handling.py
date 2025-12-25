@@ -4,7 +4,6 @@ import logging
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from kailash.nodes.base import Node, NodeParameter
 from kailash.workflow.graph import Workflow
 from kailash.workflow.input_handling import (

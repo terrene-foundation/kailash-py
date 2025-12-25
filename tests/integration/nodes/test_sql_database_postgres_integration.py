@@ -8,7 +8,6 @@ from datetime import datetime
 from decimal import Decimal
 
 import pytest
-
 from kailash.nodes.data import SQLDatabaseNode
 from kailash.sdk_exceptions import NodeExecutionError
 

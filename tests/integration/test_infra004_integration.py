@@ -27,7 +27,6 @@ import time
 from typing import Any, Dict, List
 
 import pytest
-
 from kailash.runtime.local import LocalRuntime
 
 # Import Core SDK components for real integration testing
@@ -582,8 +581,9 @@ result = {{
     def test_infrastructure_memory_and_resource_usage(self):
         """Infrastructure must maintain reasonable resource usage."""
         with PerformanceTracker("resource_usage", threshold=10.0):
-            import kaizen
             import psutil
+
+            import kaizen
 
             # Get baseline memory usage
             process = psutil.Process()

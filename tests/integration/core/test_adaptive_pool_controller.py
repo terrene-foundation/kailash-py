@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from kailash.core.actors.adaptive_pool_controller import (
     AdaptivePoolController,
     PoolMetrics,

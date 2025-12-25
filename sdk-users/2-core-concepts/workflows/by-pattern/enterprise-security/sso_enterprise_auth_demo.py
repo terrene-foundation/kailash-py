@@ -28,13 +28,14 @@ import time
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List
 
-from examples.utils.paths import get_output_data_path
 from kailash.nodes.auth.directory_integration import DirectoryIntegrationNode
 from kailash.nodes.auth.enterprise_auth_provider import EnterpriseAuthProviderNode
 from kailash.nodes.auth.mfa import MultiFactorAuthNode
 from kailash.nodes.auth.session_management import SessionManagementNode
 from kailash.nodes.auth.sso import SSOAuthenticationNode
 from kailash.nodes.code import PythonCodeNode
+
+from examples.utils.paths import get_output_data_path
 
 
 async def setup_enterprise_auth() -> Dict[str, Any]:

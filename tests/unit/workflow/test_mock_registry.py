@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash.nodes.base import NodeRegistry
 from kailash.sdk_exceptions import NodeConfigurationError
 from kailash.workflow.mock_registry import NODE_TYPES, MockNode, MockRegistry

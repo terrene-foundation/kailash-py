@@ -5,7 +5,6 @@ import time
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from kailash.core.actors import ConnectionState
 from kailash.nodes.data.workflow_connection_pool import (
     ConnectionPoolMetrics,

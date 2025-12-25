@@ -27,7 +27,6 @@ from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
-
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskRun, TaskStatus
 

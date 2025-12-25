@@ -7,7 +7,6 @@ failing due to the parameter handling bugs documented in TODO-092.
 import asyncio
 
 import pytest
-
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.parameter_injector import (

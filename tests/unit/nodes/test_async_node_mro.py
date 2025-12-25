@@ -11,7 +11,6 @@ Created: 2025-10-26
 import asyncio
 
 import pytest
-
 from kailash.nodes.base import Node
 from kailash.nodes.base_async import AsyncNode
 

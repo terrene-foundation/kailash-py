@@ -17,7 +17,6 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.base_async import AsyncNode
 from kailash.runtime.parallel import ParallelRuntime
