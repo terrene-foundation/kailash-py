@@ -5,7 +5,6 @@ requirements for compliance, performance, and geo-distribution.
 """
 
 from dataflow import DataFlow
-
 from kailash.integrations.dataflow_edge import (
     DataFlowEdgeIntegration,
     enhance_dataflow_node_generator,

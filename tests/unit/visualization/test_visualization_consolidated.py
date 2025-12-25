@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.storage.filesystem import FileSystemStorage
 from kailash.visualization.api import SimpleDashboardAPI

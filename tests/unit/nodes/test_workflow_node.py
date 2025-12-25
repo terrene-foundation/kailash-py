@@ -5,7 +5,6 @@ from typing import Any
 
 import pytest
 import yaml
-
 from kailash.nodes.base import Node, NodeParameter, NodeRegistry
 from kailash.nodes.logic.workflow import WorkflowNode
 from kailash.sdk_exceptions import NodeConfigurationError

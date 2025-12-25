@@ -14,7 +14,6 @@ import asyncio
 from datetime import datetime, timedelta
 
 from dataflow import DataFlow, DataFlowConfig, Environment
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

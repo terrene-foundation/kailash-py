@@ -1,7 +1,6 @@
 """Integration tests for access control with real components."""
 
 import pytest
-
 from kailash.access_control import (
     AccessControlManager,
     NodePermission,

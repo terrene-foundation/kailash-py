@@ -25,16 +25,17 @@ import pandas as pd
 project_root = Path(__file__).parent.parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from examples.utils.data_paths import (
-    ensure_output_dir_exists,
-    get_input_data_path,
-    get_output_data_path,
-)
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, JSONReaderNode, JSONWriterNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow
+
+from examples.utils.data_paths import (
+    ensure_output_dir_exists,
+    get_input_data_path,
+    get_output_data_path,
+)
 
 
 def enrich_fraud_indicators(transaction_data: Any, customer_data: list) -> dict:

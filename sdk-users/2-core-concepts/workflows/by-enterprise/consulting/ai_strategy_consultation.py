@@ -37,12 +37,13 @@ And access resources like registry://stats for statistics.
 
 import os
 
-from examples.utils.data_paths import get_output_data_path
 from kailash import Workflow
 from kailash.nodes.ai.iterative_llm_agent import IterativeLLMAgentNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import JSONWriterNode
 from kailash.runtime.local import LocalRuntime
+
+from examples.utils.data_paths import get_output_data_path
 
 
 def create_ai_strategy_workflow() -> Workflow:

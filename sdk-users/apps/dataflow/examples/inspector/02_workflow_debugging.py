@@ -10,7 +10,6 @@ Run this example:
 
 from dataflow import DataFlow
 from dataflow.platform.inspector import Inspector
-
 from kailash.workflow.builder import WorkflowBuilder
 
 

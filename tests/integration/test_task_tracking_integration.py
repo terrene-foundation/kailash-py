@@ -4,7 +4,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-
 from kailash.runtime.local import LocalRuntime
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus

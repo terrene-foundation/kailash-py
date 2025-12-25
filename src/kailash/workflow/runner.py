@@ -7,11 +7,10 @@ allowing for complex multi-stage processing pipelines.
 import logging
 from typing import Any
 
-from pydantic import BaseModel
-
 from kailash.sdk_exceptions import WorkflowExecutionError
 from kailash.tracking import TaskManager
 from kailash.workflow.graph import Workflow
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 

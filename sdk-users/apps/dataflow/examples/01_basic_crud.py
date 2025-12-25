@@ -12,7 +12,6 @@ from datetime import datetime
 from typing import Optional
 
 from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

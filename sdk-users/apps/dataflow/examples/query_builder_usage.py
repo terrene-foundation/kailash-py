@@ -5,7 +5,6 @@ Demonstrates MongoDB-style query building with DataFlow models.
 """
 
 from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

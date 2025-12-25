@@ -22,7 +22,6 @@ import weakref
 
 import pytest
 import pytest_asyncio
-
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

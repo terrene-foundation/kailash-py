@@ -6,7 +6,6 @@ from pathlib import Path
 from textwrap import dedent
 
 import pytest
-
 from kailash.runtime.validation import ImportIssue, ImportIssueType, ImportPathValidator
 
 

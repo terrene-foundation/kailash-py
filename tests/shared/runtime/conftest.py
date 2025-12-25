@@ -12,7 +12,6 @@ import inspect
 from typing import Any, Dict
 
 import pytest
-
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 

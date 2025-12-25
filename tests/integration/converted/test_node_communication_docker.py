@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from kailash.nodes.base import Node, NodeRegistry
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.runner import WorkflowRunner

@@ -21,7 +21,6 @@ from typing import Any, Dict, List
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-
 from kailash.mcp_server.discovery import (
     DiscoveryBackend,
     FileBasedDiscovery,
