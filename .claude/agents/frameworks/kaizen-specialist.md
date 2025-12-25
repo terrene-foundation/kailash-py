@@ -125,6 +125,76 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **A2A Protocol**: Google Agent-to-Agent protocol for semantic capability matching
 - **Multi-Modal**: Vision (Ollama/OpenAI), audio (Whisper), unified orchestration
 - **UX Improvements**: Config auto-extraction, concise API, defensive parsing
+- **LLM Providers** (v0.7.1): 8 providers with auto-detection priority
+
+### Supported LLM Providers (v0.7.1)
+
+Kaizen supports 8 LLM providers with automatic detection and fallback:
+
+| Provider | Type | Requirements | Features |
+|----------|------|--------------|----------|
+| `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
+| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings |
+| `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
+| `ollama` | Local | Ollama running on port 11434 | Free, local models (llama, mistral, etc.) |
+| `docker` | Local | Docker Desktop Model Runner on port 12434 | Free local inference, GPU acceleration |
+| `cohere` | Cloud | `COHERE_API_KEY` | Command models, embeddings |
+| `huggingface` | Local | None | Sentence transformers, embeddings |
+| `mock` | Testing | None | Unit test provider, no API calls |
+
+**Auto-Detection Priority**: OpenAI → Azure → Anthropic → Ollama → Docker
+
+**Provider Configuration Examples**:
+
+```python
+from dataclasses import dataclass
+
+# OpenAI (default)
+@dataclass
+class OpenAIConfig:
+    llm_provider: str = "openai"
+    model: str = "gpt-4o"
+    temperature: float = 0.7
+
+# Azure AI Foundry
+@dataclass
+class AzureConfig:
+    llm_provider: str = "azure"
+    model: str = "gpt-4o"  # Or any deployed model
+    temperature: float = 0.7
+    # Requires: AZURE_AI_INFERENCE_ENDPOINT, AZURE_AI_INFERENCE_API_KEY
+
+# Docker Model Runner (FREE, local)
+@dataclass
+class DockerConfig:
+    llm_provider: str = "docker"
+    model: str = "ai/llama3.2"  # Or ai/qwen3, ai/gemma3
+    temperature: float = 0.7
+    # Requires: Docker Desktop 4.40+ with Model Runner enabled
+    # Enable: docker desktop enable model-runner --tcp 12434
+    # Pull:   docker model pull ai/llama3.2
+
+# Ollama (FREE, local)
+@dataclass
+class OllamaConfig:
+    llm_provider: str = "ollama"
+    model: str = "llama3.2:1b"
+    temperature: float = 0.7
+    # Requires: ollama serve, ollama pull llama3.2:1b
+```
+
+**Docker Model Runner Tool Calling**:
+Tool calling is model-dependent. Supported models: `ai/qwen3`, `ai/llama3.3`, `ai/gemma3`.
+
+```python
+from kaizen.nodes.ai import DockerModelRunnerProvider
+
+provider = DockerModelRunnerProvider()
+if provider.supports_tools("ai/qwen3"):  # Check before using tools
+    response = provider.chat(messages, model="ai/qwen3", tools=tools)
+```
+
+**Reference**: `kaizen.config.providers`, `kaizen.nodes.ai.ai_providers`
 
 ## Essential Patterns
 

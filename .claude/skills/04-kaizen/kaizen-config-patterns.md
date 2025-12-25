@@ -270,6 +270,61 @@ class OllamaConfig:
         }
 ```
 
+### Azure AI Foundry Configuration (v0.7.1)
+
+```python
+@dataclass
+class AzureConfig:
+    """Azure AI Foundry configuration.
+
+    Prerequisites:
+        export AZURE_AI_INFERENCE_ENDPOINT="https://your-endpoint.azure.com"
+        export AZURE_AI_INFERENCE_API_KEY="your-key"
+    """
+    llm_provider: str = "azure"
+    model: str = "gpt-4o"  # Or any deployed model
+    temperature: float = 0.7
+    max_tokens: int = 1000
+
+    provider_config: dict = None
+
+    def __post_init__(self):
+        self.provider_config = {
+            "api_version": "2024-02-01"
+        }
+```
+
+**Features**: Chat completions, vision/multi-modal support, embeddings, tool calling, async support.
+
+### Docker Model Runner Configuration (v0.7.1)
+
+```python
+@dataclass
+class DockerConfig:
+    """Docker Model Runner configuration (FREE local inference).
+
+    Prerequisites:
+        1. Docker Desktop 4.40+ with Model Runner enabled
+        2. Enable TCP access: docker desktop enable model-runner --tcp 12434
+        3. Pull model: docker model pull ai/llama3.2
+    """
+    llm_provider: str = "docker"
+    model: str = "ai/llama3.2"  # Or ai/qwen3, ai/gemma3, ai/mxbai-embed-large
+    temperature: float = 0.7
+    max_tokens: int = 1000
+
+    provider_config: dict = None
+
+    def __post_init__(self):
+        self.provider_config = {
+            "base_url": "http://localhost:12434/engines/llama.cpp/v1"
+        }
+```
+
+**Features**: OpenAI-compatible API, GPU acceleration (Metal/CUDA/Vulkan), embeddings, model-dependent tool calling.
+
+**Tool-Capable Models**: `ai/qwen3`, `ai/llama3.3`, `ai/gemma3` (check with `provider.supports_tools(model)`).
+
 ## Configuration Validation
 
 ### With Validation Rules
@@ -299,7 +354,7 @@ class ValidatedConfig:
             raise ValueError("timeout must be positive")
 
         # Validate provider
-        valid_providers = ["openai", "anthropic", "ollama", "mock"]
+        valid_providers = ["openai", "azure", "anthropic", "ollama", "docker", "cohere", "huggingface", "mock"]
         if self.llm_provider not in valid_providers:
             raise ValueError(f"Invalid provider: {self.llm_provider}")
 ```
