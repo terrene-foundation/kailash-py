@@ -57,6 +57,41 @@ class CustomConfig:
 agent = SimpleQAAgent(CustomConfig())
 ```
 
+### LLM Provider Configuration (v0.7.1)
+
+Kaizen supports 8 LLM providers with automatic detection:
+
+| Provider | Type | Requirements | Features |
+|----------|------|--------------|----------|
+| `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
+| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings |
+| `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
+| `ollama` | Local | Ollama running on port 11434 | Free, local models |
+| `docker` | Local | Docker Desktop Model Runner on port 12434 | Free local inference, GPU acceleration |
+| `cohere` | Cloud | `COHERE_API_KEY` | Command models, embeddings |
+| `huggingface` | Local | None | Sentence transformers, embeddings |
+| `mock` | Testing | None | Unit test provider |
+
+```python
+# Azure AI Foundry (v0.7.1)
+@dataclass
+class AzureConfig:
+    llm_provider: str = "azure"
+    model: str = "gpt-4o"
+    # Set: AZURE_AI_INFERENCE_ENDPOINT, AZURE_AI_INFERENCE_API_KEY
+
+# Docker Model Runner (FREE local, v0.7.1)
+@dataclass
+class DockerConfig:
+    llm_provider: str = "docker"
+    model: str = "ai/llama3.2"  # Or ai/qwen3, ai/gemma3
+    # Prerequisites: docker desktop enable model-runner --tcp 12434
+```
+
+**Auto-Detection Order**: OpenAI → Azure → Anthropic → Ollama → Docker
+
+**Docker Tool Calling**: Model-dependent. Supported: `ai/qwen3`, `ai/llama3.3`, `ai/gemma3`
+
 ### Multi-Modal Processing
 
 ```python
