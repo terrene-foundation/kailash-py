@@ -7,7 +7,6 @@ import asyncio
 from unittest.mock import Mock, patch
 
 import pytest
-
 from kailash.runtime.compatibility_reporter import (
     CompatibilityLevel,
     CompatibilityReporter,

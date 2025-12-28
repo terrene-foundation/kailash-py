@@ -534,11 +534,16 @@ workflow.connect("sort_results", "write_json", {"sorted_data": "data"})
         self._basic_template(project_root, project_name)
 
         # Add ML workflow
-        workflow_content = '''"""Machine learning pipeline workflow."""
+        workflow_content = '''"""Machine learning pipeline workflow.
+
+Note:
+    This template uses AI nodes from the Kaizen framework.
+    Install with: pip install kailash-kaizen
+"""
 from kailash.workflow import Workflow
 from kailash.nodes.data import CSVReaderNode, JSONWriterNode
 from kailash.nodes.transform import Filter, Map
-from kailash.nodes.ai import (
+from kaizen.nodes.ai import (
     TextClassifier,
     SentimentAnalyzer,
     NamedEntityRecognizer,
@@ -601,12 +606,17 @@ workflow.connect("merge_results", "save_results", {"merged_data": "data"})
         self._basic_template(project_root, project_name)
 
         # Add API workflow
-        workflow_content = '''"""API integration workflow."""
+        workflow_content = '''"""API integration workflow.
+
+Note:
+    This template uses AI nodes from the Kaizen framework.
+    Install with: pip install kailash-kaizen
+"""
 from kailash.workflow import Workflow
 from kailash.nodes.data import JSONReaderNode, JSONWriterNode
 from kailash.nodes.transform import Map, Filter
 from kailash.nodes.logic import Conditional
-from kailash.nodes.ai import ChatAgent, FunctionCallingAgent
+from kaizen.nodes.ai import ChatAgent, FunctionCallingAgent
 
 # Create workflow
 workflow = Workflow(

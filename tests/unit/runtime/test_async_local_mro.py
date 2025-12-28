@@ -13,7 +13,6 @@ AsyncLocalRuntime → LocalRuntime → BaseRuntime → ABC → CycleExecutionMix
 from abc import ABC
 
 import pytest
-
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 from kailash.runtime.base import BaseRuntime
 from kailash.runtime.mixins import (

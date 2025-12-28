@@ -10,7 +10,6 @@ Zero-config database framework built on Core SDK with automatic node generation 
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `CRITICAL`
-> SDK Version: `0.9.25+` (DataFlow v0.6.0+)
 > Related Skills: [`workflow-quickstart`](../../01-core-sdk/workflow-quickstart.md), [`dataflow-models`](dataflow-models.md), [`dataflow-queries`](dataflow-queries.md)
 > Related Subagents: `dataflow-specialist` (enterprise features, migrations), `nexus-specialist` (DataFlow+Nexus integration)
 
@@ -116,7 +115,7 @@ db = DataFlow("postgresql://user:password@localhost:5432/database")
 # MySQL (web hosting, existing infrastructure)
 db = DataFlow("mysql://user:password@localhost:3306/database")
 
-# Special characters in passwords supported (v0.9.4+)
+# Special characters in passwords supported
 db = DataFlow("postgresql://admin:MySecret#123$@localhost/db")
 ```
 
@@ -237,6 +236,84 @@ workflow.add_node("OrderCreateNode", "create", {
 })
 ```
 
+## Async Usage (FastAPI, Async Workflows)
+
+### Basic Pattern
+
+```python
+from dataflow import DataFlow
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
+# Initialize DataFlow
+db = DataFlow("postgresql://localhost:5432/mydb")
+
+@db.model
+class User:
+    id: str
+    name: str
+    email: str
+
+# IMPORTANT: Use AsyncLocalRuntime in async contexts
+async def create_user():
+    workflow = WorkflowBuilder()
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "name": "Alice",
+        "email": "alice@example.com"
+    })
+
+    # ✅ Use AsyncLocalRuntime for async contexts
+    runtime = AsyncLocalRuntime()
+    results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs={})
+    return results["create"]["id"]
+```
+
+### FastAPI Integration
+
+**✅ FIXED in v0.9.5+**: All async context deadlocks resolved. No workarounds needed!
+
+```python
+from fastapi import FastAPI
+from dataflow import DataFlow
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+import uuid
+
+app = FastAPI()
+
+# ✅ Works in v0.9.5+ - No workaround needed!
+db = DataFlow(
+    "postgresql://localhost:5432/mydb",
+    auto_migrate=True  # Safe in FastAPI/async contexts
+)
+
+@db.model
+class User:
+    id: str
+    name: str
+    email: str
+
+@app.post("/users")
+async def create_user(name: str, email: str):
+    workflow = WorkflowBuilder()
+    workflow.add_node("UserCreateNode", "create", {
+        "id": f"user-{uuid.uuid4()}",
+        "name": name,
+        "email": email
+    })
+
+    runtime = AsyncLocalRuntime()
+    results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+    return results["create"]
+```
+
+**What Changed in v0.9.5**:
+- All DDL operations now use context-safe runtime execution
+- `auto_migrate=True` works safely in FastAPI/async applications
+- No manual table creation needed
+- Fixed 18 locations across ModelRegistry, migration system, schema inspectors, and testing utilities
+
 ## DataFlow + Nexus Integration
 
 **CRITICAL**: Use these settings to avoid blocking/slow startup:
@@ -253,7 +330,9 @@ app = Nexus(auto_discovery=False)  # CRITICAL: Prevents blocking
 db = DataFlow(
     "postgresql://user:pass@localhost/db",
     skip_registry=True,           # CRITICAL: Prevents 5-10s delay
-    enable_model_persistence=False  # Fast startup
+    enable_model_persistence=False,  # Fast startup
+    auto_migrate=False,           # v0.9.1: Prevents async deadlock
+    migration_enabled=False        # v0.9.1: Prevents async deadlock
 )
 
 # Step 3: Define models
@@ -316,17 +395,8 @@ Use `nexus-specialist` when:
 - 💡 **Zero-config first**: Start with `DataFlow()` - no configuration needed
 - 💡 **9 nodes per model**: Remember - Create, Read, Update, Delete, List, Bulk(Create/Update/Delete/Upsert)
 - 💡 **MongoDB queries**: Use familiar syntax that works across all SQL databases (PostgreSQL/MySQL/SQLite)
-- 💡 **String IDs**: Fully supported - no forced integer conversion (v0.5.0+)
+- 💡 **String IDs**: Fully supported - no forced integer conversion
 - 💡 **Existing databases**: Use `existing_schema_mode=True` for safety
 - 💡 **Nexus integration**: Set `skip_registry=True` + `auto_discovery=False` to avoid blocking
-
-## Version Notes
-
-- **v0.6.0**: MongoDB document database + PostgreSQL pgvector support
-- **v0.5.6**: MySQL support with 100% feature parity, BaseAdapter hierarchy
-- **v0.5.4**: Multi-node workflow threading bug fixed
-- **v0.5.0**: String ID support, multi-instance isolation
-- **v0.4.6**: TEXT fields (unlimited content), improved parameter types
-- **v0.4.5**: Enterprise migration system with 8 safety components
 
 <!-- Trigger Keywords: DataFlow tutorial, DataFlow quick start, @db.model, DataFlow setup, database framework, how to use DataFlow, DataFlow installation, DataFlow guide, zero-config database, automatic node generation, DataFlow example, start with DataFlow -->

@@ -4,9 +4,8 @@
 Shows the new FastAPI-style API with explicit instances and enterprise options.
 """
 
-from nexus import Nexus
-
 from kailash.workflow.builder import WorkflowBuilder
+from nexus import Nexus
 
 
 def main():

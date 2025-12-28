@@ -231,7 +231,7 @@ print(f"Status: {report.overall_status}")
    # Analyze codebase
    checker = CompatibilityChecker()
    analysis = checker.analyze_codebase("/path/to/project")
-   
+
    # Validate configurations
    validator = ConfigurationValidator()
    for config_name, config in configs.items():
@@ -243,7 +243,7 @@ print(f"Status: {report.overall_status}")
    # Create migration plan
    assistant = MigrationAssistant(dry_run=True)
    plan = assistant.create_migration_plan("/path/to/project")
-   
+
    # Review plan and estimate effort
    print(f"Migration complexity: {plan.risk_level}")
    print(f"Estimated duration: {plan.estimated_duration_minutes} minutes")
@@ -255,7 +255,7 @@ print(f"Status: {report.overall_status}")
    detector = RegressionDetector()
    baseline_config = get_current_config()
    baselines = detector.create_baseline(baseline_config)
-   
+
    # Compare configurations
    comparator = PerformanceComparator()
    new_config = get_migrated_config()
@@ -266,7 +266,7 @@ print(f"Status: {report.overall_status}")
    ```python
    # Execute migration (dry-run first)
    result = assistant.execute_migration(plan)
-   
+
    if result.success:
        # Execute actual migration
        assistant.dry_run = False
@@ -277,7 +277,7 @@ print(f"Status: {report.overall_status}")
    ```python
    # Check for regressions
    regression_report = detector.detect_regressions(new_config)
-   
+
    if regression_report.overall_status != "all_passed":
        print("Regressions detected - review before deployment")
    ```
@@ -310,7 +310,7 @@ runtime = LocalRuntime(
 )
 ```
 
-### Modern Configuration  
+### Modern Configuration
 ```python
 # After migration
 runtime = LocalRuntime(
@@ -408,7 +408,7 @@ runtime = LocalRuntime(
    ```python
    import logging
    logging.basicConfig(level=logging.DEBUG)
-   
+
    runtime = LocalRuntime(debug=True)
    ```
 

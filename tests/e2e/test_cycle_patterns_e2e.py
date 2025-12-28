@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
 from kailash import Workflow
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.base_cycle_aware import CycleAwareNode

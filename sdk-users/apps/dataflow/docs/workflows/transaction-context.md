@@ -1,8 +1,38 @@
 # Transaction Context Propagation in DataFlow
 
+## ⚠️ Critical: Transaction Context is Opt-In
+
+**IMPORTANT**: By default, DataFlow nodes do NOT share a transaction context. Each node gets its own connection from the pool.
+
+### Default Behavior (No Shared Transaction)
+
+```python
+# ❌ NO shared transaction - each node gets separate connection
+workflow.add_node("UserCreateNode", "create_user", {...})
+workflow.add_node("OrderCreateNode", "create_order", {...})
+# If create_order fails, create_user is NOT automatically rolled back!
+```
+
+### Explicit Transaction Context (Shared Connection)
+
+```python
+# ✅ Shared transaction - all nodes use same connection
+workflow.add_node("TransactionScopeNode", "tx", {})
+workflow.add_node("UserCreateNode", "create_user", {...})
+workflow.add_node("OrderCreateNode", "create_order", {...})
+workflow.add_node("TransactionCommitNode", "commit", {})
+# If create_order fails, create_user IS rolled back automatically!
+```
+
+**See**: [Connection Isolation Guide](../../../../.claude/skills/02-dataflow/dataflow-connection-isolation.md) for complete explanation.
+
+---
+
 ## Overview
 
-DataFlow now supports transaction context propagation, enabling ACID guarantees across multiple nodes within a single workflow execution. This feature allows you to maintain database transaction state throughout a workflow, ensuring data consistency and atomicity.
+DataFlow supports transaction context propagation, enabling ACID guarantees across multiple nodes within a single workflow execution. This feature allows you to maintain database transaction state throughout a workflow, ensuring data consistency and atomicity.
+
+**To use this feature, you MUST explicitly use TransactionScopeNode** - it is not automatic.
 
 ## Key Features
 

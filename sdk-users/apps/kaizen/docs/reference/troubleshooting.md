@@ -59,24 +59,31 @@ AuthenticationError: Invalid API key
 ValueError: Agent does not have tool calling support enabled
 ```
 
-**Cause:** Forgot to pass `tool_registry` during initialization.
+**Cause:** Forgot to enable tools during initialization.
 
 **Solution:**
 ```python
-# ❌ WRONG - No tool registry
+# ❌ WRONG - Tools not enabled
 agent = BaseAgent(config=config, signature=signature)
 
-# ✅ CORRECT - Add tool registry
-# Tools auto-configured via MCP
-
-
-
-# 12 builtin tools enabled via MCP
-
+# ✅ CORRECT - Enable tools via MCP
 agent = BaseAgent(
     config=config,
     signature=signature,
     tools="all"  # Enable 12 builtin tools via MCP
+)
+
+# OR with custom MCP servers:
+mcp_servers = [{
+    "name": "kaizen_builtin",
+    "command": "python",
+    "args": ["-m", "kaizen.mcp.builtin_server"],
+    "transport": "stdio"
+}]
+agent = BaseAgent(
+    config=config,
+    signature=signature,
+    custom_mcp_servers=mcp_servers
 )
 ```
 
@@ -103,7 +110,7 @@ protocol = ControlProtocol(transport)
 agent = BaseAgent(
     config=config,
     signature=signature,
-    tools="all"  # Enable 12 builtin tools via MCP
+    tools="all",  # Enable tools via MCP
     control_protocol=protocol  # Add protocol
 )
 
@@ -622,6 +629,618 @@ def test_simple_qa():
 
     assert "answer" in result
     assert isinstance(result["answer"], str)
+```
+
+## 🔄 Autonomy System Issues
+
+### Hooks System
+
+#### Error: Hook Registration Failed
+
+**Error Message:**
+```
+ValueError: Hook must implement handle() method
+```
+
+**Cause:** Hook handler does not implement required interface.
+
+**Solution:**
+
+```python
+from kaizen.core.autonomy.hooks import BaseHook, HookContext, HookResult
+
+# ❌ WRONG - Missing handle() method
+class MyHook(BaseHook):
+    def __init__(self):
+        super().__init__(name="my_hook")
+        self.events = [HookEvent.POST_AGENT_LOOP]
+
+# ✅ CORRECT - Implement handle() method
+class MyHook(BaseHook):
+    def __init__(self):
+        super().__init__(name="my_hook")
+        self.events = [HookEvent.POST_AGENT_LOOP]
+
+    async def handle(self, context: HookContext) -> HookResult:
+        """Required handle method."""
+        print(f"Agent {context.agent_id} executed")
+        return HookResult(success=True)
+
+# Register hook
+hook_manager = HookManager()
+hook_manager.register_hook(MyHook(), priority=HookPriority.NORMAL)
+```
+
+#### Error: Hook Execution Timeout
+
+**Error Message:**
+```
+TimeoutError: Hook execution timed out after 5 seconds
+```
+
+**Cause:** Hook is taking too long to execute.
+
+**Solution:**
+
+```python
+# Option 1: Increase hook timeout
+hook_manager = HookManager(default_timeout=10.0)  # 10 seconds
+
+# Option 2: Optimize hook logic
+class OptimizedHook(BaseHook):
+    async def handle(self, context: HookContext) -> HookResult:
+        # ❌ WRONG - Slow synchronous operation
+        # result = slow_api_call()
+
+        # ✅ CORRECT - Fast async operation
+        result = await asyncio.wait_for(
+            async_api_call(),
+            timeout=2.0
+        )
+        return HookResult(success=True)
+
+# Option 3: Use LOWEST priority for expensive hooks
+hook_manager.register_hook(
+    expensive_hook,
+    priority=HookPriority.LOWEST  # Execute last
+)
+```
+
+#### Error: Hook Order Incorrect
+
+**Issue:** Hooks executing in wrong order.
+
+**Cause:** Hook priorities not set correctly.
+
+**Solution:**
+
+```python
+from kaizen.core.autonomy.hooks import HookPriority
+
+# Set explicit priorities
+hook_manager.register(
+    HookEvent.PRE_AGENT_LOOP,
+    auth_hook,
+    priority=HookPriority.CRITICAL  # Execute first
+)
+
+hook_manager.register(
+    HookEvent.PRE_AGENT_LOOP,
+    rate_limit_hook,
+    priority=HookPriority.HIGH  # Execute second
+)
+
+hook_manager.register(
+    HookEvent.PRE_AGENT_LOOP,
+    logging_hook,
+    priority=HookPriority.NORMAL  # Execute third (default)
+)
+```
+
+### Checkpoint System
+
+#### Error: Checkpoint Save Failed
+
+**Error Message:**
+```
+IOError: Permission denied: ./checkpoints/
+```
+
+**Cause:** Insufficient filesystem permissions.
+
+**Solution:**
+
+```python
+import os
+
+# Ensure checkpoint directory exists with correct permissions
+checkpoint_dir = "./checkpoints"
+os.makedirs(checkpoint_dir, exist_ok=True)
+
+# Verify writable
+if not os.access(checkpoint_dir, os.W_OK):
+    print(f"Directory not writable: {checkpoint_dir}")
+    checkpoint_dir = "/tmp/checkpoints"  # Use temp directory
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+# Create state manager with writable directory
+storage = FilesystemStorage(base_dir=checkpoint_dir)
+state_manager = StateManager(storage=storage)
+```
+
+#### Error: Checkpoint Load Failed
+
+**Error Message:**
+```
+ValueError: Checkpoint not found: agent_123_step_10_20231025_120000
+```
+
+**Cause:** Checkpoint ID is incorrect or checkpoint was deleted.
+
+**Solution:**
+
+```python
+# List available checkpoints
+available = await state_manager.list_checkpoints("agent_123")
+print(f"Available checkpoints: {[c.checkpoint_id for c in available]}")
+
+# Load latest checkpoint instead
+latest_state = await state_manager.resume_from_latest("agent_123")
+
+# Or handle missing checkpoint gracefully
+try:
+    state = await state_manager.load_checkpoint(checkpoint_id)
+except ValueError as e:
+    print(f"Checkpoint not found: {e}")
+    # Start fresh
+    state = AgentState(agent_id="agent_123", step_number=0)
+```
+
+#### Error: Database Storage Backend Unavailable
+
+**Error Message:**
+```
+ConnectionError: Could not connect to database
+```
+
+**Cause:** Database not running or connection string incorrect.
+
+**Solution:**
+
+```python
+from kaizen.core.autonomy.state import DatabaseStorage, FilesystemStorage
+from dataflow import DataFlow
+
+# Try database storage first
+try:
+    db = DataFlow(database_url="postgresql://localhost/kaizen")
+    storage = DatabaseStorage(dataflow=db)
+    print("Using database storage")
+except Exception as e:
+    print(f"Database unavailable: {e}")
+    # Fallback to filesystem storage
+    storage = FilesystemStorage(base_dir="./checkpoints")
+    print("Using filesystem storage")
+
+state_manager = StateManager(storage=storage)
+```
+
+#### Issue: Checkpoints Too Large
+
+**Symptoms:** Checkpoint files are hundreds of MB.
+
+**Solution:**
+
+```python
+# Enable compression
+storage = FilesystemStorage(
+    base_dir="./checkpoints",
+    compress=True  # gzip compression (5-10x size reduction)
+)
+
+# Reduce checkpoint frequency
+state_manager = StateManager(
+    storage=storage,
+    checkpoint_frequency=20,  # Every 20 steps instead of 10
+    retention_count=50  # Keep only 50 checkpoints
+)
+
+# Clean up old checkpoints
+await state_manager.cleanup_old_checkpoints(
+    agent_id="agent_123",
+    keep_count=10  # Keep only last 10
+)
+```
+
+### Interrupt Mechanism
+
+#### Error: Graceful Shutdown Timeout
+
+**Error Message:**
+```
+TimeoutError: Graceful shutdown exceeded timeout of 5.0 seconds
+```
+
+**Cause:** Agent cycle taking too long to finish.
+
+**Solution:**
+
+```python
+# Option 1: Increase graceful shutdown timeout
+config = AutonomousConfig(
+    llm_provider="openai",
+    model="gpt-4",
+    enable_interrupts=True,
+    graceful_shutdown_timeout=10.0  # Increase to 10 seconds
+)
+
+# Option 2: Use IMMEDIATE mode for faster shutdown
+try:
+    result = await agent.run_autonomous(task="Long task")
+except InterruptedError as e:
+    if e.reason.mode == InterruptMode.GRACEFUL:
+        print("Graceful shutdown timed out, using immediate mode")
+        # Cleanup manually
+        await cleanup()
+```
+
+#### Error: Checkpoint Not Saved on Interrupt
+
+**Issue:** State lost when interrupted.
+
+**Cause:** `checkpoint_on_interrupt` not enabled.
+
+**Solution:**
+
+```python
+# Enable checkpoint on interrupt
+config = AutonomousConfig(
+    llm_provider="openai",
+    model="gpt-4",
+    enable_interrupts=True,
+    enable_checkpoints=True,  # MUST enable checkpoints
+    checkpoint_on_interrupt=True  # MUST enable this
+)
+
+agent = BaseAutonomousAgent(config=config, signature=signature)
+
+# Verify checkpoint saved on interrupt
+try:
+    result = await agent.run_autonomous(task="Task")
+except InterruptedError as e:
+    checkpoint_id = e.reason.metadata.get("checkpoint_id")
+    if checkpoint_id:
+        print(f"State saved to: {checkpoint_id}")
+    else:
+        print("WARNING: No checkpoint saved!")
+```
+
+#### Error: Interrupt Handler Error
+
+**Error Message:**
+```
+RuntimeError: Interrupt handler check_interrupt() failed
+```
+
+**Cause:** Custom interrupt handler has a bug.
+
+**Solution:**
+
+```python
+from kaizen.core.autonomy.interrupts import BaseInterruptHandler
+
+class SafeInterruptHandler(BaseInterruptHandler):
+    async def check_interrupt(self, context: dict) -> InterruptReason | None:
+        try:
+            # Your interrupt logic
+            if should_interrupt(context):
+                return InterruptReason(
+                    source=InterruptSource.PROGRAMMATIC,
+                    mode=InterruptMode.GRACEFUL,
+                    message="Interrupt condition met"
+                )
+        except Exception as e:
+            # ✅ CORRECT - Handle errors gracefully
+            print(f"Interrupt handler error: {e}")
+            # Don't interrupt on error
+            return None
+
+        return None
+
+# Use safe handler
+agent.interrupt_manager.add_handler(SafeInterruptHandler())
+```
+
+#### Issue: Ctrl+C Not Working
+
+**Symptoms:** Agent ignores Ctrl+C.
+
+**Cause:** Signal handlers not installed.
+
+**Solution:**
+
+```python
+# Verify signal handlers installed
+agent.interrupt_manager.install_signal_handlers()
+
+# Run agent
+try:
+    result = await agent.run_autonomous(task="Task")
+except InterruptedError as e:
+    print(f"Interrupted by: {e.reason.source}")
+except KeyboardInterrupt:
+    print("KeyboardInterrupt received (signal handlers not installed)")
+    # Install handlers for next run
+    agent.interrupt_manager.install_signal_handlers()
+```
+
+### Memory System
+
+#### Error: Memory Backend Connection Failed
+
+**Error Message:**
+```
+ConnectionError: Could not connect to memory database
+```
+
+**Cause:** DataFlow database not running or connection incorrect.
+
+**Solution:**
+
+```python
+from dataflow import DataFlow
+from kaizen.memory.backends import DataFlowBackend
+
+# Test database connection first
+try:
+    db = DataFlow(database_url="postgresql://localhost/kaizen")
+
+    # Test connection
+    @db.model
+    class TestModel:
+        id: str
+        content: str
+
+    print("Database connection successful")
+
+    backend = DataFlowBackend(db, model_name="ConversationMessage")
+
+except Exception as e:
+    print(f"Database connection failed: {e}")
+    # Use alternative storage
+    from kaizen.memory import BufferMemory
+    backend = BufferMemory(max_turns=100)
+```
+
+#### Error: Memory Tier Promotion Failed
+
+**Issue:** Hot tier not promoting to warm tier.
+
+**Cause:** Access count threshold not reached.
+
+**Solution:**
+
+```python
+from kaizen.memory.tiers import TierManager
+
+# Lower promotion thresholds
+tier_manager = TierManager({
+    "hot_promotion_threshold": 2,      # Promote after 2 accesses (default: 5)
+    "warm_promotion_threshold": 1,     # Promote to warm after 1 access (default: 3)
+    "access_window_seconds": 1800      # 30 min window (default: 3600)
+})
+
+# Or disable automatic promotion
+tier_manager = TierManager({
+    "enable_auto_promotion": False  # Manual promotion only
+})
+
+# Manual promotion
+await tier_manager.promote_to_warm("key")
+```
+
+#### Issue: Memory Retrieval Too Slow
+
+**Symptoms:** Memory access taking > 100ms.
+
+**Cause:** Cold tier queries too slow or tier not optimal.
+
+**Solution:**
+
+```python
+# Option 1: Increase cache sizes
+config = DataFlowConfig(
+    cache_enabled=True,
+    cache_ttl=600,  # Increase from 300 to 600 seconds
+    batch_size=200  # Increase batch size for bulk operations
+)
+
+# Option 2: Use indexes on database
+# In DataFlow model:
+@db.model
+class ConversationMessage:
+    id: str
+    conversation_id: str  # Add index on this field
+    content: str
+
+# Create index via SQL
+# CREATE INDEX idx_conversation_id ON conversation_messages(conversation_id);
+
+# Option 3: Reduce query complexity
+backend.load_turns(
+    conversation_id="session_123",
+    limit=10  # Fetch fewer turns
+)
+```
+
+### Planning Agents
+
+#### Error: Plan Validation Failed
+
+**Error Message:**
+```
+ValidationError: Plan validation failed: Invalid step 3
+```
+
+**Cause:** Generated plan has errors.
+
+**Solution:**
+
+```python
+# Option 1: Enable replanning
+config = PlanningConfig(
+    llm_provider="openai",
+    model="gpt-4",
+    max_plan_steps=10,
+    validation_mode="strict",
+    enable_replanning=True,  # ✅ Enable replanning
+    max_replanning_attempts=3
+)
+
+# Option 2: Use warn mode instead of strict
+config = PlanningConfig(
+    validation_mode="warn"  # Log warnings but continue
+)
+
+# Option 3: Increase max plan steps
+config = PlanningConfig(
+    max_plan_steps=20  # Allow more complex plans
+)
+```
+
+#### Error: PEVAgent Not Converging
+
+**Issue:** PEVAgent reaches max iterations without passing verification.
+
+**Cause:** Verification too strict or task too complex.
+
+**Solution:**
+
+```python
+# Option 1: Increase max iterations
+config = PEVConfig(
+    llm_provider="openai",
+    model="gpt-4",
+    max_iterations=20,  # Increase from 10 to 20
+    verification_strictness="medium"  # Reduce strictness
+)
+
+# Option 2: Lower confidence threshold
+config = PEVConfig(
+    min_confidence_threshold=0.7  # Reduce from 0.8 to 0.7
+)
+
+# Option 3: Use lenient verification for complex tasks
+config = PEVConfig(
+    verification_strictness="lenient"  # Most lenient
+)
+
+# Check refinement history
+result = agent.run(task="Complex task")
+print(f"Iterations: {len(result['refinements'])}")
+for refinement in result['refinements']:
+    print(f"  Issue: {refinement['issue']}")
+    print(f"  Fix: {refinement['fix']}")
+```
+
+### Meta-Controller Routing
+
+#### Error: No Agent Selected
+
+**Error Message:**
+```
+ValueError: No suitable agent found for task
+```
+
+**Cause:** No agent capabilities match task.
+
+**Solution:**
+
+```python
+# Option 1: Add fallback agent
+pipeline = Pipeline.router(
+    agents=[agent1, agent2, agent3],
+    routing_strategy="semantic",
+    fallback_agent=general_agent  # ✅ Add fallback
+)
+
+# Option 2: Lower match threshold
+pipeline = Pipeline.router(
+    agents=[agent1, agent2, agent3],
+    routing_strategy="semantic",
+    min_confidence_score=0.3  # Lower from default 0.5
+)
+
+# Option 3: Use round-robin instead
+pipeline = Pipeline.router(
+    agents=[agent1, agent2, agent3],
+    routing_strategy="round-robin"  # Always selects an agent
+)
+```
+
+#### Issue: Wrong Agent Selected
+
+**Symptoms:** Router selecting suboptimal agent.
+
+**Cause:** Agent capability cards not descriptive enough.
+
+**Solution:**
+
+```python
+# ❌ WRONG - Vague capability
+qa_agent.capability = "Answering questions"
+
+# ✅ CORRECT - Specific capability
+qa_agent.capability = "Question answering for general knowledge, science, and history topics"
+
+# Update A2A capability card
+qa_agent_card = qa_agent.to_a2a_card()
+qa_agent_card["capabilities"] = [
+    "General knowledge Q&A",
+    "Scientific explanations",
+    "Historical facts",
+    "Conceptual understanding"
+]
+
+# Test routing
+result = pipeline.run(
+    task="Explain quantum entanglement",
+    debug=True  # Show agent selection scores
+)
+
+print(f"Selected: {result['selected_agent']}")
+print(f"Score: {result['confidence_score']}")
+print(f"All scores: {result['agent_scores']}")  # See all agent scores
+```
+
+#### Error: Agent Pipeline Execution Failed
+
+**Error Message:**
+```
+RuntimeError: Agent execution failed: Agent 'code_agent' raised exception
+```
+
+**Cause:** Selected agent failed during execution.
+
+**Solution:**
+
+```python
+# Use graceful error handling
+pipeline = Pipeline.router(
+    agents=[agent1, agent2, agent3],
+    routing_strategy="semantic",
+    error_handling="graceful",  # ✅ Try fallback on error
+    fallback_agent=safe_agent,
+    max_retries=2  # Retry up to 2 times
+)
+
+# Or catch errors manually
+try:
+    result = pipeline.run(task="Complex task")
+except RuntimeError as e:
+    print(f"Primary agent failed: {e}")
+    # Try secondary agent manually
+    result = secondary_agent.run(task="Complex task")
 ```
 
 ## 🆘 Getting Help

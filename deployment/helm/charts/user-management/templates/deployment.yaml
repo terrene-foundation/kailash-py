@@ -64,7 +64,7 @@ spec:
           value: {{ .Values.config.logLevel | quote }}
         - name: DEBUG
           value: {{ .Values.config.debug | quote }}
-        
+
         # Database configuration
         - name: DATABASE_HOST
           value: "{{ include "kailash-user-management.postgresql.fullname" . }}"
@@ -82,7 +82,7 @@ spec:
             secretKeyRef:
               name: {{ include "kailash-user-management.fullname" . }}-secrets
               key: database-password
-        
+
         # Redis configuration
         - name: REDIS_HOST
           value: "{{ include "kailash-user-management.redis.fullname" . }}-master"
@@ -93,7 +93,7 @@ spec:
             secretKeyRef:
               name: {{ include "kailash-user-management.fullname" . }}-secrets
               key: redis-password
-        
+
         # API configuration
         - name: API_HOST
           value: "0.0.0.0"
@@ -101,7 +101,7 @@ spec:
           value: "8000"
         - name: WEBSOCKET_PORT
           value: "8001"
-        
+
         # Security configuration
         - name: SESSION_TIMEOUT
           value: {{ .Values.config.sessionTimeout | quote }}
@@ -120,7 +120,7 @@ spec:
             secretKeyRef:
               name: {{ include "kailash-user-management.fullname" . }}-secrets
               key: mfa-secret-key
-        
+
         # Feature flags
         - name: MFA_ENABLED
           value: {{ .Values.app.features.mfaEnabled | quote }}
@@ -136,7 +136,7 @@ spec:
           value: {{ .Values.app.features.aiChatEnabled | quote }}
         - name: ANALYTICS_ENABLED
           value: {{ .Values.app.features.analyticsEnabled | quote }}
-        
+
         # Performance configuration
         - name: MAX_CONCURRENT_USERS
           value: {{ .Values.config.maxConcurrentUsers | quote }}
@@ -144,7 +144,7 @@ spec:
           value: {{ .Values.config.apiRateLimit | quote }}
         - name: RESPONSE_TIMEOUT
           value: {{ .Values.config.responseTimeout | quote }}
-        
+
         # Backup configuration
         {{- if .Values.app.features.backupEnabled }}
         - name: BACKUP_ENABLED
@@ -154,11 +154,11 @@ spec:
         - name: BACKUP_RETENTION_DAYS
           value: {{ .Values.config.backupRetentionDays | quote }}
         {{- end }}
-        
+
         # Compliance configuration
         - name: DATA_RETENTION_DAYS
           value: {{ .Values.config.dataRetentionDays | quote }}
-        
+
         # Monitoring configuration
         {{- if .Values.monitoring.enabled }}
         - name: METRICS_ENABLED
@@ -168,7 +168,7 @@ spec:
         - name: HEALTH_CHECK_PATH
           value: {{ .Values.monitoring.healthCheck.path | quote }}
         {{- end }}
-        
+
         volumeMounts:
         {{- if .Values.persistence.enabled }}
         - name: app-data
@@ -180,10 +180,10 @@ spec:
         {{- end }}
         - name: tmp
           mountPath: /tmp
-        
+
         resources:
           {{- toYaml .Values.resources.app | nindent 12 }}
-        
+
         {{- if .Values.monitoring.healthCheck.enabled }}
         livenessProbe:
           httpGet:
@@ -202,14 +202,14 @@ spec:
           timeoutSeconds: 3
           failureThreshold: 3
         {{- end }}
-        
+
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: {{ .Values.security.readOnlyRootFilesystem }}
           capabilities:
             drop:
             - ALL
-      
+
       - name: nginx-proxy
         image: nginx:1.21-alpine
         ports:
@@ -247,7 +247,7 @@ spec:
           capabilities:
             drop:
             - ALL
-      
+
       volumes:
       {{- if .Values.persistence.enabled }}
       - name: app-data
@@ -271,10 +271,10 @@ spec:
       - name: nginx-config
         configMap:
           name: {{ include "kailash-user-management.fullname" . }}-nginx-config
-      
+
       restartPolicy: Always
       terminationGracePeriodSeconds: 60
-      
+
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

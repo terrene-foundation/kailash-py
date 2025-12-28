@@ -11,7 +11,6 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 import pytest
-
 from kailash.mcp_server.auth import (
     APIKeyAuth,
     AuthenticationError,

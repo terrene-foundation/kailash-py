@@ -10,11 +10,10 @@ High-performance bulk nodes for processing thousands of records efficiently with
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.28+ / DataFlow 0.7.0`
 > Related Skills: [`dataflow-crud-operations`](#), [`dataflow-models`](#), [`dataflow-queries`](#)
 > Related Subagents: `dataflow-specialist` (performance optimization, troubleshooting)
 >
-> **⚡ New in v0.7.0**: MongoDB-style operators ($in, $nin, $gt, $gte, $lt, $lte, $ne) for bulk UPDATE and DELETE
+> **⚡ New Feature**: MongoDB-style operators ($in, $nin, $gt, $gte, $lt, $lte, $ne) for bulk UPDATE and DELETE
 
 ## Quick Reference
 
@@ -22,7 +21,7 @@ High-performance bulk nodes for processing thousands of records efficiently with
 - **Performance**: 1,000-100,000 records/sec depending on operation
 - **Auto-Optimization**: Database-specific optimizations (PostgreSQL COPY, etc.)
 - **Pattern**: Use for >100 records
-- **Datetime Auto-Conversion**: ISO 8601 strings → datetime objects (v0.6.4+)
+- **Datetime Auto-Conversion**: ISO 8601 strings → datetime objects
 
 ```python
 # Bulk create
@@ -43,7 +42,7 @@ workflow.add_node("ProductBulkDeleteNode", "cleanup", {
     "soft_delete": True
 })
 
-# Bulk upsert (v0.7.1+)
+# Bulk upsert
 workflow.add_node("ProductBulkUpsertNode", "sync", {
     "data": products_list,
     "conflict_resolution": "update"  # "update" or "skip"/"ignore"
@@ -161,7 +160,7 @@ workflow.add_node("ProductBulkUpdateNode", "update", {
 
 ```python
 workflow.add_node("ProductBulkDeleteNode", "cleanup", {
-    # Filter (which records to delete) - MongoDB-style operators supported (v0.7.0+)
+    # Filter (which records to delete) - MongoDB-style operators supported
     "filter": {
         "active": False,
         "created_at": {"$lt": "2022-01-01"}
@@ -180,7 +179,7 @@ workflow.add_node("ProductBulkDeleteNode", "cleanup", {
 })
 ```
 
-### ⚡ MongoDB-Style Operators (v0.7.0+)
+### ⚡ MongoDB-Style Operators
 
 **NEW**: Bulk UPDATE and DELETE operations support MongoDB-style query operators for intuitive filtering.
 
@@ -236,9 +235,7 @@ workflow.add_node("ProductBulkDeleteNode", "delete_specific", {
 - ✅ Duplicates: `{"id": {"$in": ["prod_1", "prod_1"]}}` → Deduped automatically
 - ✅ Mixed operators: Multiple operators in same filter work correctly
 
-### BulkUpsertNode (v0.7.1+)
-
-**IMPORTANT**: BulkUpsertNode was fully implemented in v0.7.1. Previous versions had only a stub implementation.
+### BulkUpsertNode
 
 ```python
 workflow.add_node("ProductBulkUpsertNode", "sync", {
@@ -348,7 +345,7 @@ workflow.add_node("ProductBulkCreateNode", "import", {
 })
 ```
 
-## Automatic Datetime Conversion in Bulk Operations (v0.6.4+)
+## Automatic Datetime Conversion in Bulk Operations
 
 DataFlow automatically converts ISO 8601 datetime strings to Python datetime objects in ALL bulk operations. This is especially powerful for data imports from external sources.
 

@@ -96,7 +96,7 @@ def create_production_app():
         mcp_port=3001,
         auto_discovery=False
     )
-    
+
     db = DataFlow(
         database_url=os.environ["DATABASE_URL"],
         skip_registry=True,
@@ -107,15 +107,15 @@ def create_production_app():
         enable_caching=True,  # Keep caching
         connection_pool_size=20  # Keep pooling
     )
-    
+
     # Models register instantly
     @db.model
     class User:
         # ... fields ...
-    
+
     # Manual workflow registration
     register_workflows(app, db)
-    
+
     return app
 ```
 

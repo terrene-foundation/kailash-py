@@ -14,7 +14,6 @@ from typing import Any, Dict, List, Optional, Union
 from unittest.mock import AsyncMock, Mock
 
 import pytest
-
 from kailash.nodes.base import AsyncTypedNode, NodeParameter
 from kailash.nodes.ports import InputPort, IntPort, OutputPort, StringPort
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError

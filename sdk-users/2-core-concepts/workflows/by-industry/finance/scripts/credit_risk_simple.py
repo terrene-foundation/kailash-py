@@ -13,15 +13,16 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
+from kailash.nodes.code import PythonCodeNode
+from kailash.nodes.data import CSVReaderNode, JSONWriterNode
+from kailash.runtime.local import LocalRuntime
+from kailash.workflow import Workflow
+
 from examples.utils.data_paths import (
     ensure_output_dir_exists,
     get_input_data_path,
     get_output_data_path,
 )
-from kailash.nodes.code import PythonCodeNode
-from kailash.nodes.data import CSVReaderNode, JSONWriterNode
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow import Workflow
 
 
 def calculate_simple_risk_metrics(data: list) -> dict:

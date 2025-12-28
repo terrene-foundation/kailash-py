@@ -5,7 +5,6 @@ Follows 3-tier testing policy: no Docker dependencies, memory backend only.
 """
 
 import pytest
-
 from kailash.nodes.cache.cache_invalidation import (
     CacheInvalidationNode,
     EventType,

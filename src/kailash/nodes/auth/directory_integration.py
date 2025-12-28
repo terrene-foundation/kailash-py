@@ -22,7 +22,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
@@ -90,10 +89,6 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
 
     def _setup_supporting_nodes(self):
         """Initialize supporting Kailash nodes."""
-        self.llm_agent = LLMAgentNode(
-            name=f"{self.name}_llm", provider="ollama", model="llama3.2:3b"
-        )
-
         self.http_client = HTTPRequestNode(name=f"{self.name}_http")
 
         self.json_reader = JSONReaderNode(name=f"{self.name}_json")
@@ -464,11 +459,17 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         attributes: List[str] = None,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Search directory for users/groups."""
+        """Search directory for users/groups.
+
+        Note:
+            This is the rule-based Core SDK version. For AI-powered intelligent
+            search query analysis, use the Kaizen version:
+            `from kaizen.nodes.auth import DirectoryIntegrationNode`
+        """
         search_results = {"users": [], "groups": [], "total": 0}
 
-        # Parse search query using LLM for intelligent search
-        search_intent = await self._analyze_search_query(query)
+        # Parse search query using rule-based logic
+        search_intent = self._analyze_search_query_rules(query)
 
         # Build search filters
         search_filters = self._build_search_filters(query, search_intent, filters)
@@ -499,6 +500,36 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         search_results["entries"] = search_results["users"] + search_results["groups"]
 
         return search_results
+
+    def _analyze_search_query_rules(self, query: str) -> Dict[str, Any]:
+        """Analyze search intent using rule-based logic."""
+        query_lower = query.lower()
+
+        # Determine search targets based on keywords
+        search_users = True
+        search_groups = False
+        search_attributes = ["cn", "mail", "uid"]
+
+        # Group-specific keywords
+        if any(keyword in query_lower for keyword in ["group", "team", "department"]):
+            search_groups = True
+            search_attributes.extend(["ou", "description"])
+
+        # User-specific keywords
+        if any(keyword in query_lower for keyword in ["user", "person", "employee"]):
+            search_users = True
+            search_attributes.extend(["givenName", "sn", "title"])
+
+        # If query contains @ symbol, prioritize email search
+        if "@" in query:
+            search_attributes = ["mail"] + search_attributes
+
+        return {
+            "search_users": search_users,
+            "search_groups": search_groups,
+            "search_attributes": search_attributes,
+            "filters": {},
+        }
 
     async def _authenticate_user(
         self, credentials: Dict[str, str], **kwargs
@@ -705,7 +736,13 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
     async def _provision_user(
         self, user_id: str, attributes: List[str] = None, **kwargs
     ) -> Dict[str, Any]:
-        """Provision user from directory to local system."""
+        """Provision user from directory to local system.
+
+        Note:
+            This is the rule-based Core SDK version. For AI-powered intelligent
+            provisioning with advanced role assignment, use the Kaizen version:
+            `from kaizen.nodes.auth import DirectoryIntegrationNode`
+        """
         if not self.auto_provisioning:
             raise ValueError("Auto-provisioning is disabled")
 
@@ -717,42 +754,14 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
 
         user_data = user_result["user"]
 
-        # Use LLM to generate intelligent user provisioning
-        provisioning_prompt = f"""
-        Provision user account from directory data for {self.directory_type}.
-
-        Directory user data:
-        {json.dumps(user_data, indent=2)}
-
-        Generate a complete user profile including:
-        - Role assignment based on groups and department
-        - Permissions mapping from directory groups
-        - Default settings and preferences
-        - Security settings (MFA requirements, password policies)
-
-        Return JSON format with provisioning details.
-        """
-
-        llm_result = await self.llm_agent.execute_async(
-            provider="ollama",
-            model="llama3.2:3b",
-            messages=[{"role": "user", "content": provisioning_prompt}],
-        )
-
-        # Parse provisioning recommendations
-        try:
-            provisioning_data = json.loads(llm_result.get("response", "{}"))
-        except:
-            # Fallback provisioning
-            provisioning_data = {
-                "user_id": user_id,
-                "roles": ["user"],
-                "permissions": self._map_groups_to_permissions(
-                    user_data.get("groups", [])
-                ),
-                "settings": {"mfa_required": False},
-                "status": "active",
-            }
+        # Rule-based provisioning logic
+        provisioning_data = {
+            "user_id": user_id,
+            "roles": self._assign_roles_from_directory(user_data),
+            "permissions": self._map_groups_to_permissions(user_data.get("groups", [])),
+            "settings": self._determine_security_settings(user_data),
+            "status": "active",
+        }
 
         # Log user provisioning
         await self.audit_logger.execute_async(
@@ -770,6 +779,37 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
             "provisioned": True,
             "user_data": user_data,
             "provisioning_data": provisioning_data,
+        }
+
+    def _assign_roles_from_directory(self, user_data: Dict[str, Any]) -> List[str]:
+        """Assign roles based on directory groups and attributes."""
+        roles = ["user"]  # Default role
+
+        groups = user_data.get("groups", [])
+        for group in groups:
+            group_lower = group.lower()
+            if "admin" in group_lower or "administrator" in group_lower:
+                roles.append("admin")
+            elif "manager" in group_lower:
+                roles.append("manager")
+            elif "developer" in group_lower or "engineer" in group_lower:
+                roles.append("developer")
+
+        return list(set(roles))  # Remove duplicates
+
+    def _determine_security_settings(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Determine security settings based on user attributes."""
+        groups = user_data.get("groups", [])
+
+        # Admin and manager roles require MFA
+        require_mfa = any(
+            group.lower() in ["admin", "administrator", "manager"] for group in groups
+        )
+
+        return {
+            "mfa_required": require_mfa,
+            "password_expiry_days": 90,
+            "session_timeout_minutes": 480,  # 8 hours
         }
 
     async def _test_connection(self, **kwargs) -> Dict[str, Any]:
@@ -1039,38 +1079,6 @@ class DirectoryIntegrationNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
                 "username": username,
                 "reason": "invalid_credentials",
                 "message": "Invalid credentials",
-            }
-
-    async def _analyze_search_query(self, query: str) -> Dict[str, Any]:
-        """Use LLM to analyze search intent."""
-        analysis_prompt = f"""
-        Analyze this directory search query to determine search intent:
-        Query: "{query}"
-
-        Determine:
-        1. Should search users? (true/false)
-        2. Should search groups? (true/false)
-        3. What attributes to search in?
-        4. What filters to apply?
-
-        Return JSON format with search_users, search_groups, search_attributes, filters.
-        """
-
-        llm_result = await self.llm_agent.execute_async(
-            provider="ollama",
-            model="llama3.2:3b",
-            messages=[{"role": "user", "content": analysis_prompt}],
-        )
-
-        try:
-            return json.loads(llm_result.get("response", "{}"))
-        except:
-            # Fallback analysis
-            return {
-                "search_users": True,
-                "search_groups": True,
-                "search_attributes": ["cn", "mail", "uid"],
-                "filters": {},
             }
 
     def _map_directory_attributes(

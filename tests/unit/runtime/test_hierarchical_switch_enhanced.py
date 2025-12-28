@@ -7,7 +7,6 @@ import time
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import SwitchNode
 from kailash.runtime.hierarchical_switch_executor import HierarchicalSwitchExecutor

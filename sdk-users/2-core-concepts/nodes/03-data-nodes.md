@@ -344,7 +344,35 @@ runtime = LocalRuntime()
   - `validate_queries`: Enable security query validation (default: `True`)
   - `allow_admin`: Allow admin operations (CREATE, DROP, etc.) (default: `False`)
   - `retry_config`: Retry configuration object (optional)
-  - `timeout`: Query timeout in seconds (default: 30.0)
+  - `command_timeout`: Pool-level timeout applied to all queries (default: 60.0 seconds)
+
+- **Timeout Configuration**:
+
+  Timeouts are applied at the connection pool level via `command_timeout`, protecting all queries automatically:
+
+  ```python
+  # Configure pool-level timeout (recommended)
+  node = AsyncSQLDatabaseNode(
+      database_type="postgresql",
+      host="localhost",
+      database="myapp",
+      user="dbuser",
+      password="dbpass",
+      command_timeout=30.0  # All queries timeout after 30 seconds
+  )
+  ```
+
+  **How it works**:
+  - Applied automatically to all queries through the connection pool
+  - Protects against slow queries without per-query timeout parameters
+  - Used by health checks and all database operations
+  - Default 60 seconds is suitable for most applications
+
+  **Best practices**:
+  - Use default 60 seconds for typical OLTP queries
+  - Increase to 300+ seconds for analytical/batch queries
+  - Set to 5-10 seconds for health checks in load balancers
+  - Monitor slow query logs to optimize timeout values
 
 - **Transaction Management Modes**:
   ```python

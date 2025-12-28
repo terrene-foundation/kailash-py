@@ -4,7 +4,6 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash.nodes.transaction import SagaStepNode
 from kailash.sdk_exceptions import NodeExecutionError
 

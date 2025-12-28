@@ -6,7 +6,6 @@ which is critical for enterprise security.
 """
 
 import pytest
-
 from kailash import LocalRuntime, WorkflowBuilder
 from kailash.nodes.admin import (
     PermissionCheckNode,

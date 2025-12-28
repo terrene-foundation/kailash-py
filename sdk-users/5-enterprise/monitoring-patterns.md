@@ -10,8 +10,8 @@ Kailash SDK v0.8.4+ provides enterprise-grade monitoring and alerting capabiliti
 
 ```python
 from kailash.monitoring.metrics import (
-    get_validation_metrics, 
-    get_security_metrics, 
+    get_validation_metrics,
+    get_security_metrics,
     get_performance_metrics,
     get_metrics_registry
 )
@@ -83,7 +83,7 @@ alert_manager.stop()
 
 ```python
 from kailash.monitoring.alerts import (
-    LogNotificationChannel, SlackNotificationChannel, 
+    LogNotificationChannel, SlackNotificationChannel,
     EmailNotificationChannel, WebhookNotificationChannel
 )
 
@@ -166,15 +166,15 @@ for rule in security_rules:
 
 # Record security events
 security_metrics.record_security_violation(
-    "sql_injection", 
-    MetricSeverity.CRITICAL, 
+    "sql_injection",
+    MetricSeverity.CRITICAL,
     "DatabaseNode",
     {"query": "'; DROP TABLE users; --"}
 )
 
 security_metrics.record_blocked_connection(
-    "untrusted_source", 
-    "database", 
+    "untrusted_source",
+    "database",
     "SQL injection detected"
 )
 
@@ -349,17 +349,17 @@ def health_check():
     """Health check endpoint for load balancers."""
     validation_metrics = get_validation_metrics()
     security_metrics = get_security_metrics()
-    
+
     # Check validation health
     success_rate = validation_metrics.get_success_rate(timedelta(minutes=5))
     if success_rate < 0.9:  # Less than 90% success
         return {"status": "unhealthy", "reason": "High validation failure rate"}
-    
+
     # Check security health
     critical_violations = security_metrics.get_critical_violations(timedelta(minutes=5))
     if critical_violations > 0:
         return {"status": "unhealthy", "reason": "Critical security violations"}
-    
+
     return {"status": "healthy"}
 
 # Example Flask integration
@@ -380,14 +380,14 @@ import time
 def metrics_collector_daemon():
     """Background daemon to collect metrics for dashboard."""
     registry = get_metrics_registry()
-    
+
     while True:
         # Export metrics for dashboard
         metrics_json = registry.export_metrics("json")
-        
+
         # Send to dashboard system (e.g., Grafana, custom dashboard)
         # send_to_dashboard(metrics_json)
-        
+
         # Wait before next collection
         time.sleep(30)  # Collect every 30 seconds
 
@@ -469,7 +469,7 @@ monitoring_config = {
 # Apply configuration to alert rules
 def create_production_alert_rules(config):
     rules = []
-    
+
     # Validation rules
     val_config = config["validation"]
     rules.append(AlertRule(
@@ -480,7 +480,7 @@ def create_production_alert_rules(config):
         condition=f"rate < {val_config['success_rate_threshold']}",
         threshold=val_config['success_rate_threshold']
     ))
-    
+
     # Security rules
     sec_config = config["security"]
     rules.append(AlertRule(
@@ -492,7 +492,7 @@ def create_production_alert_rules(config):
         threshold=sec_config['max_violations_per_hour'],
         notification_interval=timedelta(minutes=sec_config['critical_alert_interval_minutes'])
     ))
-    
+
     return rules
 
 production_rules = create_production_alert_rules(monitoring_config)
@@ -513,7 +513,7 @@ def safe_monitoring_setup():
         # Initialize monitoring
         registry = get_metrics_registry()
         alert_manager = AlertManager(registry)
-        
+
         # Add rules with error handling
         try:
             rules = create_default_alert_rules()
@@ -521,17 +521,17 @@ def safe_monitoring_setup():
                 alert_manager.add_rule(rule)
         except Exception as e:
             logger.error(f"Failed to add alert rule: {e}")
-        
+
         # Add notification channels with fallback
         try:
             alert_manager.add_notification_channel(LogNotificationChannel())
         except Exception as e:
             logger.error(f"Failed to add notification channel: {e}")
-        
+
         # Start monitoring
         alert_manager.start()
         return alert_manager
-        
+
     except Exception as e:
         logger.error(f"Failed to initialize monitoring: {e}")
         return None
@@ -552,13 +552,13 @@ import atexit
 def setup_monitoring_lifecycle():
     """Proper lifecycle management for monitoring."""
     alert_manager = AlertManager(registry)
-    
+
     # Configure monitoring
     # ... (configuration code)
-    
+
     # Start monitoring
     alert_manager.start()
-    
+
     # Ensure cleanup on exit
     def cleanup():
         try:
@@ -566,9 +566,9 @@ def setup_monitoring_lifecycle():
             logger.info("Monitoring stopped gracefully")
         except Exception as e:
             logger.error(f"Error stopping monitoring: {e}")
-    
+
     atexit.register(cleanup)
-    
+
     return alert_manager
 
 # Use for long-running applications
@@ -604,10 +604,10 @@ def health_check():
     """Health check with metrics."""
     validation_metrics = get_validation_metrics()
     success_rate = validation_metrics.get_success_rate()
-    
+
     if success_rate < 0.9:
         return {"status": "unhealthy", "success_rate": success_rate}
-    
+
     return {"status": "healthy", "success_rate": success_rate}
 ```
 
@@ -643,9 +643,9 @@ from kailash.monitoring.alerts import AlertManager, AlertRule, AlertSeverity
 def setup_django_monitoring():
     if not settings.KAILASH_MONITORING.get('ENABLED'):
         return None
-    
+
     alert_manager = AlertManager(get_metrics_registry())
-    
+
     # Configure from Django settings
     for rule_config in settings.KAILASH_MONITORING['ALERT_RULES']:
         rule = AlertRule(
@@ -657,7 +657,7 @@ def setup_django_monitoring():
             threshold=rule_config['threshold']
         )
         alert_manager.add_rule(rule)
-    
+
     alert_manager.start()
     return alert_manager
 

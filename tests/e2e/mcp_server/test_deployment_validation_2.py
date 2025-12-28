@@ -26,9 +26,8 @@ import pytest
 import yaml
 
 try:
-    from docker.errors import APIError, BuildError
-
     import docker
+    from docker.errors import APIError, BuildError
 
     DOCKER_AVAILABLE = True
 except ImportError:

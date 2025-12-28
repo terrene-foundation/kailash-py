@@ -209,7 +209,7 @@ spec:
           name: user-management-nginx-config
       restartPolicy: Always
       terminationGracePeriodSeconds: 60
-      
+
 ---
 # PostgreSQL Database Deployment
 apiVersion: apps/v1

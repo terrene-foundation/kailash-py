@@ -130,49 +130,49 @@ log_info "Starting deployment setup for $PROJECT_NAME in $ENVIRONMENT environmen
 # Check for required tools
 check_requirements() {
     log_info "Checking requirements..."
-    
+
     local missing_tools=()
-    
+
     if ! command -v docker &> /dev/null; then
         missing_tools+=("docker")
     fi
-    
+
     if ! command -v docker-compose &> /dev/null; then
         missing_tools+=("docker-compose")
     fi
-    
+
     if ! command -v curl &> /dev/null; then
         missing_tools+=("curl")
     fi
-    
+
     if [[ ${#missing_tools[@]} -gt 0 ]]; then
         log_error "Missing required tools: ${missing_tools[*]}"
         log_error "Please install them and try again."
         exit 1
     fi
-    
+
     log_success "All requirements satisfied"
 }
 
 # Setup port configuration
 setup_ports() {
     log_info "Setting up port configuration..."
-    
+
     # Use tests/utils setup if available
     if [[ -f "$ROOT_DIR/tests/utils/setup_local_docker.py" ]]; then
         cd "$ROOT_DIR"
-        
+
         local setup_args=()
         if [[ -n "$CUSTOM_BASE_PORT" ]]; then
             setup_args+=("--custom-base-port" "$CUSTOM_BASE_PORT")
         fi
-        
+
         if [[ "$CLEANUP" == "true" ]]; then
             setup_args+=("--cleanup")
         fi
-        
+
         python tests/utils/setup_local_docker.py "${setup_args[@]}"
-        
+
         cd "$DEPLOY_DIR"
         log_success "Port configuration completed"
     else
@@ -183,19 +183,19 @@ setup_ports() {
 # Setup environment file
 setup_env_file() {
     log_info "Setting up environment file..."
-    
+
     local env_file="$DEPLOY_DIR/docker/.env.$ENVIRONMENT"
     local example_file="$DEPLOY_DIR/docker/.env.example"
-    
+
     if [[ ! -f "$env_file" ]]; then
         if [[ -f "$example_file" ]]; then
             log_info "Creating environment file from example: $env_file"
             cp "$example_file" "$env_file"
-            
+
             # Update project name
             sed -i.bak "s/PROJECT_NAME=template/PROJECT_NAME=$PROJECT_NAME/g" "$env_file"
             rm "$env_file.bak"
-            
+
             log_warning "Please edit $env_file with your configuration values"
         else
             log_error "Environment file not found: $env_file"
@@ -203,7 +203,7 @@ setup_env_file() {
             exit 1
         fi
     fi
-    
+
     log_success "Environment file ready: $env_file"
 }
 
@@ -211,18 +211,18 @@ setup_env_file() {
 cleanup_containers() {
     if [[ "$CLEANUP" == "true" ]]; then
         log_info "Cleaning up existing containers..."
-        
+
         cd "$DEPLOY_DIR/docker"
-        
+
         # Try to stop and remove containers
         docker-compose -f "docker-compose.$ENVIRONMENT.yml" down --remove-orphans --volumes || true
-        
+
         # Remove any dangling containers with our project name
         docker ps -a --filter "name=$PROJECT_NAME" --format "{{.Names}}" | xargs -r docker rm -f || true
-        
+
         # Prune unused networks
         docker network prune -f || true
-        
+
         log_success "Cleanup completed"
     fi
 }
@@ -230,9 +230,9 @@ cleanup_containers() {
 # Deploy services
 deploy_services() {
     log_info "Deploying services..."
-    
+
     cd "$DEPLOY_DIR/docker"
-    
+
     # Check if containers are already running
     if docker-compose -f "docker-compose.$ENVIRONMENT.yml" ps --services --filter "status=running" | grep -q .; then
         if [[ "$FORCE" == "true" ]]; then
@@ -242,20 +242,20 @@ deploy_services() {
             exit 1
         fi
     fi
-    
+
     # Deploy with the appropriate compose file
     local compose_file="docker-compose.$ENVIRONMENT.yml"
-    
+
     if [[ ! -f "$compose_file" ]]; then
         log_error "Compose file not found: $compose_file"
         exit 1
     fi
-    
+
     # Load environment variables
     if [[ -f ".env.$ENVIRONMENT" ]]; then
         export $(cat ".env.$ENVIRONMENT" | grep -v '^#' | xargs)
     fi
-    
+
     # Load port configuration from lock file (only valid key=value pairs)
     if [[ -f "$ROOT_DIR/tests/.docker-ports.lock" ]]; then
         while IFS= read -r line; do
@@ -264,20 +264,20 @@ deploy_services() {
             fi
         done < "$ROOT_DIR/tests/.docker-ports.lock"
     fi
-    
+
     # Start services
     log_info "Starting services with $compose_file"
     docker-compose -f "$compose_file" up -d
-    
+
     # Wait for services to be healthy
     log_info "Waiting for services to be healthy..."
     local max_wait=300  # 5 minutes
     local wait_time=0
-    
+
     while [[ $wait_time -lt $max_wait ]]; do
         local running_services=$(docker-compose -f "$compose_file" ps --services --filter "status=running" | wc -l)
         local total_services=$(docker-compose -f "$compose_file" config --services | wc -l)
-        
+
         if [[ $running_services -eq $total_services ]]; then
             break
         fi
@@ -285,13 +285,13 @@ deploy_services() {
         wait_time=$((wait_time + 10))
         log_info "Waiting for services... (${wait_time}s/${max_wait}s)"
     done
-    
+
     if [[ $wait_time -ge $max_wait ]]; then
         log_error "Services failed to start within $max_wait seconds"
         docker-compose -f "$compose_file" logs --tail=50
         exit 1
     fi
-    
+
     log_success "Services deployed successfully"
 }
 
@@ -301,21 +301,21 @@ download_models() {
         log_info "Skipping Ollama model downloads"
         return
     fi
-    
+
     log_info "Downloading Ollama models..."
-    
+
     # Get Ollama port from environment or use default
     local ollama_port="11434"
     if [[ -f "$ROOT_DIR/tests/.docker-ports.lock" ]]; then
         ollama_port=$(grep "OLLAMA_PORT" "$ROOT_DIR/tests/.docker-ports.lock" | cut -d'=' -f2)
     fi
-    
+
     local ollama_url="http://localhost:$ollama_port"
-    
+
     # Wait for Ollama to be available
     local max_wait=180  # 3 minutes
     local wait_time=0
-    
+
     while [[ $wait_time -lt $max_wait ]]; do
         if curl -s "$ollama_url/api/tags" > /dev/null 2>&1; then
             break
@@ -324,15 +324,15 @@ download_models() {
         wait_time=$((wait_time + 5))
         log_info "Waiting for Ollama... (${wait_time}s/${max_wait}s)"
     done
-    
+
     if [[ $wait_time -ge $max_wait ]]; then
         log_error "Ollama not available after $max_wait seconds"
         return 1
     fi
-    
+
     # Download models
     local models=("llama3.2:1b" "nomic-embed-text")
-    
+
     for model in "${models[@]}"; do
         log_info "Downloading model: $model"
         curl -X POST "$ollama_url/api/pull" \
@@ -340,30 +340,30 @@ download_models() {
             -d "{\"name\": \"$model\"}" \
             --max-time 600 || log_warning "Failed to download model: $model"
     done
-    
+
     log_success "Model downloads completed"
 }
 
 # Show status
 show_status() {
     log_info "Deployment Status:"
-    
+
     cd "$DEPLOY_DIR/docker"
-    
+
     # Show running containers
     echo
     log_info "Running containers:"
     docker-compose -f "docker-compose.$ENVIRONMENT.yml" ps
-    
+
     # Show access URLs
     echo
     log_info "Access URLs:"
-    
+
     # Get ports from lock file if available
     local app_port="8000"
     local grafana_port="3000"
     local prometheus_port="9090"
-    
+
     if [[ -f "$ROOT_DIR/tests/.docker-ports.lock" ]]; then
         # For development, show actual ports
         if [[ "$ENVIRONMENT" == "development" ]]; then
@@ -390,7 +390,7 @@ show_status() {
             echo "  Prometheus:      http://localhost:$prometheus_port"
         fi
     fi
-    
+
     echo
     log_success "Deployment completed successfully!"
 }

@@ -26,7 +26,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 import pytest
-
 from kailash.nodes.base import Node
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime

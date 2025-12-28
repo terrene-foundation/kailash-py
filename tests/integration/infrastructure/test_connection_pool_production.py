@@ -13,7 +13,6 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
 import pytest
-
 from kailash.nodes.data.workflow_connection_pool import WorkflowConnectionPool
 from kailash.sdk_exceptions import NodeExecutionError
 

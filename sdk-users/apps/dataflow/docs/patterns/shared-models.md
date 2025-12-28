@@ -27,21 +27,21 @@ All applications using the shared database should import this module.
 def register_shared_models(dataflow_instance):
     """
     Register all shared models with a DataFlow instance.
-    
+
     Args:
         dataflow_instance: DataFlow instance to register models with
-        
+
     Returns:
         dataflow_instance: The same instance with models registered
     """
-    
+
     @dataflow_instance.model
     class User:
         name: str
         email: str
         active: bool = True
         created_at: datetime = None
-    
+
     @dataflow_instance.model
     class Project:
         project_name: str
@@ -49,7 +49,7 @@ def register_shared_models(dataflow_instance):
         owner_id: int
         status: str = "active"
         budget: float = 0.0
-    
+
     @dataflow_instance.model
     class Task:
         task_name: str
@@ -58,9 +58,9 @@ def register_shared_models(dataflow_instance):
         due_date: datetime
         completed: bool = False
         priority: str = "medium"
-    
+
     # Add more models as needed
-    
+
     return dataflow_instance
 ```
 
@@ -137,7 +137,7 @@ Since each application could trigger migrations, coordinate schema changes:
 # migration_controller.py
 class MigrationController:
     """Centralized migration control for multi-app environments."""
-    
+
     @staticmethod
     def apply_migrations(db, dry_run=True):
         """Apply migrations with safety checks."""
@@ -145,13 +145,13 @@ class MigrationController:
             # Only one designated app should apply migrations
             if not os.environ.get("ALLOW_MIGRATIONS") == "true":
                 raise PermissionError("This application is not authorized to run migrations")
-        
+
         success, migrations = db.auto_migrate(
             dry_run=dry_run,
             max_risk_level="MEDIUM",
             data_loss_protection=True
         )
-        
+
         return success, migrations
 ```
 
@@ -164,15 +164,15 @@ def validate_model_consistency(db, expected_models):
     """Validate that all expected models are registered."""
     registered = set(db.get_models().keys())
     expected = set(expected_models)
-    
+
     missing = expected - registered
     extra = registered - expected
-    
+
     if missing:
         raise ValueError(f"Missing models: {missing}")
     if extra:
         logger.warning(f"Extra models registered: {extra}")
-    
+
     return True
 
 # Usage
@@ -238,16 +238,16 @@ logger = logging.getLogger(__name__)
 def create_dataflow_instance(app_name, allow_migrations=False):
     """
     Create a configured DataFlow instance for multi-app use.
-    
+
     Args:
         app_name: Name of the application (for logging)
         allow_migrations: Whether this app can run migrations
-        
+
     Returns:
         Configured DataFlow instance with shared models
     """
     logger.info(f"Initializing DataFlow for {app_name}")
-    
+
     # Create instance with safety settings
     db = DataFlow(
         database_url=os.environ.get("DATABASE_URL"),
@@ -256,14 +256,14 @@ def create_dataflow_instance(app_name, allow_migrations=False):
         pool_size=20,
         echo=False
     )
-    
+
     # Register shared models
     db = register_shared_models(db)
-    
+
     # Validate models
     expected_models = ["User", "Project", "Task"]
     validate_model_consistency(db, expected_models)
-    
+
     # Handle migrations if authorized
     if allow_migrations and os.environ.get("RUN_MIGRATIONS") == "true":
         logger.info(f"{app_name} is applying migrations...")
@@ -274,7 +274,7 @@ def create_dataflow_instance(app_name, allow_migrations=False):
         )
         if not success:
             raise RuntimeError("Migration failed")
-    
+
     logger.info(f"DataFlow ready for {app_name}")
     return db
 
@@ -282,7 +282,7 @@ def create_dataflow_instance(app_name, allow_migrations=False):
 # app_a.py
 db = create_dataflow_instance("Application A", allow_migrations=True)
 
-# app_b.py  
+# app_b.py
 db = create_dataflow_instance("Application B", allow_migrations=False)
 ```
 

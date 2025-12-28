@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from kailash.edge.migration.edge_migrator import (
     EdgeMigrator,
     MigrationCheckpoint,

@@ -12,7 +12,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import aiohttp
 import asyncpg
-
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError

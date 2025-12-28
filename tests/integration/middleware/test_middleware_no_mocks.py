@@ -8,7 +8,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from kailash.middleware.communication.api_gateway import APIGateway
 from kailash.middleware.gateway.checkpoint_manager import (
     CheckpointManager,

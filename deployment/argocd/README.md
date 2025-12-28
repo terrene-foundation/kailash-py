@@ -176,7 +176,7 @@ g, kailash:developers, role:developer
    ```bash
    # Install sealed-secrets controller
    kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.24.5/controller.yaml
-   
+
    # Create sealed secret
    echo -n mypassword | kubectl create secret generic mysecret \
      --dry-run=client \
@@ -306,10 +306,10 @@ spec:
    ```bash
    # Check application status
    argocd app get <app-name>
-   
+
    # View sync details
    argocd app sync <app-name> --dry-run
-   
+
    # Force sync
    argocd app sync <app-name> --force
    ```
@@ -318,7 +318,7 @@ spec:
    ```bash
    # Check differences
    argocd app diff <app-name>
-   
+
    # Refresh application
    argocd app refresh <app-name>
    ```
@@ -327,7 +327,7 @@ spec:
    ```bash
    # Remove conflicting resources
    kubectl delete <resource> <name> -n <namespace>
-   
+
    # Sync with replace
    argocd app sync <app-name> --replace
    ```

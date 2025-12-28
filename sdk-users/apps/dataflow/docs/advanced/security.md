@@ -17,7 +17,7 @@ from dataflow.core.protection import ProtectionLevel
 
 # Available protection levels:
 ProtectionLevel.OFF     # No protection
-ProtectionLevel.WARN    # Log warnings but allow operations  
+ProtectionLevel.WARN    # Log warnings but allow operations
 ProtectionLevel.BLOCK   # Block operations with detailed errors
 ProtectionLevel.AUDIT   # Block and create audit entries
 ```
@@ -78,7 +78,7 @@ user_protection = ModelProtection(
 class User:
     name: str
     email: str
-    
+
     __dataflow__ = {
         'protection': user_protection
     }
@@ -93,7 +93,7 @@ from dataflow.core.protection import OperationType
 @db.model
 class CriticalData:
     value: str
-    
+
     __dataflow__ = {
         'protection': {
             'bulk_operations': ProtectionLevel.BLOCK,  # No bulk operations
@@ -113,7 +113,7 @@ class Employee:
     email: str
     salary: float
     ssn: str
-    
+
     __dataflow__ = {
         'protection': {
             'fields': [
@@ -123,7 +123,7 @@ class Employee:
                     allowed_operations={OperationType.READ}
                 ),
                 FieldProtection(
-                    field_name="ssn", 
+                    field_name="ssn",
                     protection_level=ProtectionLevel.BLOCK,
                     reason="SSN is permanently read-only"
                 )
@@ -146,7 +146,7 @@ def protect_critical_records(context):
 class Order:
     amount: float
     status: str
-    
+
     __dataflow__ = {
         'protection': {
             'conditions': [protect_critical_records],

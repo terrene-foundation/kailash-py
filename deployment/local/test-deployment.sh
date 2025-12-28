@@ -38,10 +38,10 @@ log_error() {
 # Initialize test environment
 init_test_env() {
     log_info "Initializing test environment..."
-    
+
     # Create results directory
     mkdir -p "$RESULTS_DIR"
-    
+
     # Create test report file
     cat > "$RESULTS_DIR/test-report-$TIMESTAMP.txt" << EOF
 Enterprise Deployment Test Report
@@ -51,14 +51,14 @@ Test Type: Local Docker Validation
 
 Test Summary:
 EOF
-    
+
     log_success "Test environment initialized"
 }
 
 # Test Docker Compose configuration
 test_docker_compose() {
     log_info "Testing Docker Compose configuration..."
-    
+
     if docker-compose -f "$COMPOSE_FILE" config &> /dev/null; then
         log_success "Docker Compose configuration is valid"
         echo "- Docker Compose: PASS" >> "$RESULTS_DIR/test-report-$TIMESTAMP.txt"
@@ -72,16 +72,16 @@ test_docker_compose() {
 # Start test services
 start_services() {
     log_info "Starting test services..."
-    
+
     # Start services
     if docker-compose -f "$COMPOSE_FILE" up -d; then
         log_success "Test services started"
-        
+
         # Wait for services to be healthy
         log_info "Waiting for services to be healthy..."
         local max_wait=60
         local wait_time=0
-        
+
         while [[ $wait_time -lt $max_wait ]]; do
             if docker-compose -f "$COMPOSE_FILE" ps | grep -q "unhealthy"; then
                 sleep 5
@@ -91,10 +91,10 @@ start_services() {
                 break
             fi
         done
-        
+
         # Show service status
         docker-compose -f "$COMPOSE_FILE" ps
-        
+
         echo "- Services startup: PASS" >> "$RESULTS_DIR/test-report-$TIMESTAMP.txt"
     else
         log_error "Failed to start test services"
@@ -106,7 +106,7 @@ start_services() {
 # Test PostgreSQL security
 test_postgres_security() {
     log_info "Testing PostgreSQL security configuration..."
-    
+
     # Test SSL connection
     if docker exec kailash-test-postgres psql -U kailash_user -d kailash_test -c "SHOW ssl;" | grep -q "on"; then
         log_success "PostgreSQL SSL is enabled"
@@ -115,7 +115,7 @@ test_postgres_security() {
         log_error "PostgreSQL SSL is not enabled"
         echo "- PostgreSQL SSL: FAIL" >> "$RESULTS_DIR/test-report-$TIMESTAMP.txt"
     fi
-    
+
     # Test connection limits
     if docker exec kailash-test-postgres psql -U kailash_user -d kailash_test -c "SHOW max_connections;" | grep -q "100"; then
         log_success "PostgreSQL connection limit is set"
@@ -129,7 +129,7 @@ test_postgres_security() {
 # Test Redis security
 test_redis_security() {
     log_info "Testing Redis security configuration..."
-    
+
     # Test authentication requirement
     if docker exec kailash-test-redis redis-cli ping 2>&1 | grep -q "NOAUTH"; then
         log_success "Redis requires authentication"
@@ -138,7 +138,7 @@ test_redis_security() {
         log_error "Redis does not require authentication"
         echo "- Redis authentication: FAIL" >> "$RESULTS_DIR/test-report-$TIMESTAMP.txt"
     fi
-    
+
     # Test authenticated connection
     if docker exec kailash-test-redis redis-cli -a secure_redis_password ping | grep -q "PONG"; then
         log_success "Redis authenticated connection works"
@@ -152,7 +152,7 @@ test_redis_security() {
 # Test Vault
 test_vault() {
     log_info "Testing Vault configuration..."
-    
+
     # Test Vault status
     if docker exec kailash-test-vault vault status | grep -q "Initialized.*true"; then
         log_success "Vault is initialized"
@@ -161,7 +161,7 @@ test_vault() {
         log_error "Vault is not initialized"
         echo "- Vault initialized: FAIL" >> "$RESULTS_DIR/test-report-$TIMESTAMP.txt"
     fi
-    
+
     # Test Vault unsealed
     if docker exec kailash-test-vault vault status | grep -q "Sealed.*false"; then
         log_success "Vault is unsealed"
@@ -170,7 +170,7 @@ test_vault() {
         log_error "Vault is sealed"
         echo "- Vault unsealed: FAIL" >> "$RESULTS_DIR/test-report-$TIMESTAMP.txt"
     fi
-    
+
     # Create test secret in Vault
     if docker exec kailash-test-vault vault kv put secret/test-secret value=test-value; then
         log_success "Can write secrets to Vault"
@@ -184,10 +184,10 @@ test_vault() {
 # Test security configurations
 test_security_configs() {
     log_info "Testing security configurations..."
-    
+
     # Run validation scripts
     "$PROJECT_ROOT/deployment/security/scripts/validate-configs.sh" > "$RESULTS_DIR/cis-validation-$TIMESTAMP.txt" 2>&1
-    
+
     if grep -q "All validations passed" "$RESULTS_DIR/cis-validation-$TIMESTAMP.txt"; then
         log_success "CIS benchmark configurations are valid"
         echo "- CIS configurations: PASS" >> "$RESULTS_DIR/test-report-$TIMESTAMP.txt"
@@ -200,14 +200,14 @@ test_security_configs() {
 # Test container security scanning
 test_container_scanning() {
     log_info "Testing container security scanning..."
-    
+
     # Wait for Trivy scan to complete
     sleep 10
-    
+
     if [[ -f "$SCRIPT_DIR/scan-results/scan-report.json" ]]; then
         log_success "Container scan completed"
         echo "- Container scanning: PASS" >> "$RESULTS_DIR/test-report-$TIMESTAMP.txt"
-        
+
         # Check for vulnerabilities
         local vuln_count=$(jq '.Results[0].Vulnerabilities | length' "$SCRIPT_DIR/scan-results/scan-report.json" 2>/dev/null || echo "0")
         log_info "Found $vuln_count vulnerabilities in test image"
@@ -220,7 +220,7 @@ test_container_scanning() {
 # Test network connectivity
 test_network_connectivity() {
     log_info "Testing network connectivity between services..."
-    
+
     # Test app to postgres connectivity
     if docker exec kailash-test-app nc -zv postgres 5432 2>&1 | grep -q "succeeded"; then
         log_success "App can connect to PostgreSQL"
@@ -229,7 +229,7 @@ test_network_connectivity() {
         log_error "App cannot connect to PostgreSQL"
         echo "- App->PostgreSQL connectivity: FAIL" >> "$RESULTS_DIR/test-report-$TIMESTAMP.txt"
     fi
-    
+
     # Test app to redis connectivity
     if docker exec kailash-test-app nc -zv redis 6379 2>&1 | grep -q "succeeded"; then
         log_success "App can connect to Redis"
@@ -238,7 +238,7 @@ test_network_connectivity() {
         log_error "App cannot connect to Redis"
         echo "- App->Redis connectivity: FAIL" >> "$RESULTS_DIR/test-report-$TIMESTAMP.txt"
     fi
-    
+
     # Test app to vault connectivity
     if docker exec kailash-test-app nc -zv vault 8200 2>&1 | grep -q "succeeded"; then
         log_success "App can connect to Vault"
@@ -252,7 +252,7 @@ test_network_connectivity() {
 # Generate final report
 generate_report() {
     log_info "Generating final test report..."
-    
+
     # Add summary to report
     cat >> "$RESULTS_DIR/test-report-$TIMESTAMP.txt" << EOF
 
@@ -273,7 +273,7 @@ Recommendations:
 
 Test artifacts saved in: $RESULTS_DIR
 EOF
-    
+
     # Display report
     log_success "Test report generated:"
     cat "$RESULTS_DIR/test-report-$TIMESTAMP.txt"
@@ -282,13 +282,13 @@ EOF
 # Cleanup test environment
 cleanup() {
     log_info "Cleaning up test environment..."
-    
+
     # Stop and remove containers
     docker-compose -f "$COMPOSE_FILE" down -v
-    
+
     # Remove test artifacts
     rm -rf "$SCRIPT_DIR/scan-results"
-    
+
     log_success "Cleanup completed"
 }
 
@@ -296,11 +296,11 @@ cleanup() {
 main() {
     log_info "Starting enterprise deployment testing"
     echo "========================================"
-    
+
     init_test_env
     test_docker_compose
     start_services
-    
+
     # Run tests
     test_postgres_security
     test_redis_security
@@ -308,9 +308,9 @@ main() {
     test_security_configs
     test_container_scanning
     test_network_connectivity
-    
+
     generate_report
-    
+
     echo "========================================"
     log_success "Testing completed!"
 }

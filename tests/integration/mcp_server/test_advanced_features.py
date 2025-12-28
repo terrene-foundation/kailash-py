@@ -7,7 +7,6 @@ import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from kailash.mcp_server.advanced_features import (
     BinaryResourceHandler,
     CancellationContext,

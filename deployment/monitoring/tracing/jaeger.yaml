@@ -9,7 +9,7 @@ metadata:
     app.kubernetes.io/component: tracing
 spec:
   strategy: production
-  
+
   # Storage configuration using Elasticsearch
   storage:
     type: elasticsearch
@@ -23,29 +23,29 @@ spec:
       tls:
         skipHostVerify: true
       indexPrefix: jaeger
-      
+
       # Performance tuning
       numShards: 3
       numReplicas: 1
       maxSpanAge: 72h
-      
+
       # Index settings
       indexDateSeparator: "-"
       indexRolloverFrequencySpans: "1000000"
       indexRolloverFrequencyDuration: "24h"
-      
+
       # Bulk settings
       bulkSize: 5000000
       bulkActions: 1000
       bulkWorkers: 10
       bulkFlushInterval: 200ms
-    
+
     # Index cleanup
     esIndexCleaner:
       enabled: true
       numberOfDays: 7
       schedule: "55 23 * * *"
-  
+
   # Ingester configuration
   ingester:
     options:
@@ -60,7 +60,7 @@ spec:
           brokers: kafka.kafka.svc.cluster.local:9092
           group-id: jaeger-ingester
           fetch-min-bytes: 100000
-    
+
     # Resource configuration
     resources:
       requests:
@@ -69,14 +69,14 @@ spec:
       limits:
         memory: 1Gi
         cpu: 500m
-    
+
     # High availability
     replicas: 2
-    
+
     podAnnotations:
       prometheus.io/scrape: "true"
       prometheus.io/port: "14269"
-    
+
     affinity:
       podAntiAffinity:
         preferredDuringSchedulingIgnoredDuringExecution:
@@ -87,7 +87,7 @@ spec:
                   app.kubernetes.io/name: jaeger
                   app.kubernetes.io/component: ingester
               topologyKey: kubernetes.io/hostname
-  
+
   # Collector configuration
   collector:
     resources:
@@ -97,27 +97,27 @@ spec:
       limits:
         memory: 512Mi
         cpu: 200m
-    
+
     replicas: 3
-    
+
     # Service configuration
     service:
       type: ClusterIP
-    
+
     # Sampling configuration
     options:
       collector:
         # Zipkin compatibility
         zipkin:
           host-port: ":9411"
-        
+
         # OTLP receiver
         otlp:
           grpc:
             host-port: ":14250"
           http:
             host-port: ":14268"
-        
+
         # Kafka producer
         kafka:
           producer:
@@ -126,11 +126,11 @@ spec:
             encoding: protobuf
             batch-size: 1000000
             batch-timeout: 1s
-    
+
     podAnnotations:
       prometheus.io/scrape: "true"
       prometheus.io/port: "14269"
-    
+
     affinity:
       podAntiAffinity:
         preferredDuringSchedulingIgnoredDuringExecution:
@@ -141,7 +141,7 @@ spec:
                   app.kubernetes.io/name: jaeger
                   app.kubernetes.io/component: collector
               topologyKey: kubernetes.io/hostname
-  
+
   # Query service configuration
   query:
     resources:
@@ -151,13 +151,13 @@ spec:
       limits:
         memory: 512Mi
         cpu: 200m
-    
+
     replicas: 2
-    
+
     # Service configuration
     service:
       type: ClusterIP
-    
+
     # Query options
     options:
       query:
@@ -165,14 +165,14 @@ spec:
         static-files: /go/jaeger-ui/
         ui-config: /etc/jaeger/ui/ui-config.json
         log-level: info
-        
+
         # Max lookback for traces
         max-clock-skew-adjustment: 0s
-    
+
     podAnnotations:
       prometheus.io/scrape: "true"
       prometheus.io/port: "16687"
-    
+
     affinity:
       podAntiAffinity:
         preferredDuringSchedulingIgnoredDuringExecution:
@@ -183,11 +183,11 @@ spec:
                   app.kubernetes.io/name: jaeger
                   app.kubernetes.io/component: query
               topologyKey: kubernetes.io/hostname
-  
+
   # Agent configuration (optional - use OTEL collector instead)
   agent:
     strategy: DaemonSet
-    
+
     resources:
       requests:
         memory: 64Mi
@@ -195,15 +195,15 @@ spec:
       limits:
         memory: 128Mi
         cpu: 100m
-    
+
     options:
       agent:
         collector.host-port: kailash-jaeger-collector:14267
-        
+
         # Sampling configuration
         sampling:
           strategies-file: /etc/jaeger/sampling/sampling.json
-    
+
     podAnnotations:
       prometheus.io/scrape: "true"
       prometheus.io/port: "14271"
@@ -422,13 +422,13 @@ spec:
       ports:
         - protocol: TCP
           port: 16686
-    
+
     # Allow inter-component communication
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/name: jaeger
-      
+
     # Allow application traces
     - from:
         - namespaceSelector:
@@ -443,7 +443,7 @@ spec:
           port: 14250  # Collector gRPC
         - protocol: TCP
           port: 9411   # Zipkin
-    
+
     # Allow monitoring
     - from:
         - namespaceSelector:
@@ -456,7 +456,7 @@ spec:
           port: 16687  # Query metrics
         - protocol: TCP
           port: 14271  # Agent metrics
-  
+
   egress:
     # Allow connection to Elasticsearch
     - to:
@@ -466,7 +466,7 @@ spec:
       ports:
         - protocol: TCP
           port: 9200
-    
+
     # Allow connection to Kafka (if using)
     - to:
         - namespaceSelector:
@@ -475,7 +475,7 @@ spec:
       ports:
         - protocol: TCP
           port: 9092
-    
+
     # Allow DNS
     - to: []
       ports:

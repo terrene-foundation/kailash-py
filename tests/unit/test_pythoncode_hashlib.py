@@ -1,7 +1,6 @@
 """Test hashlib import in PythonCodeNode for TODO-116."""
 
 import pytest
-
 from kailash.nodes.code.python import PythonCodeNode
 
 

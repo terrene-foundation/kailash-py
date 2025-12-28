@@ -14,7 +14,6 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import psutil
-
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError

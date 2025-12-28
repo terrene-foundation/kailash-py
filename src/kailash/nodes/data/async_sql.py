@@ -668,7 +668,9 @@ class EnterpriseConnectionPool:
                 )
 
             # Perform simple query
-            await self.execute_query("SELECT 1", timeout=5)
+            # Note: Pool-level command_timeout already provides timeout protection
+            # No need for explicit timeout parameter here
+            await self.execute_query("SELECT 1")
 
             latency = (time.time() - start_time) * 1000
 
@@ -1323,6 +1325,15 @@ class MySQLAdapter(DatabaseAdapter):
             async with conn.cursor() as cursor:
                 await cursor.execute(query, params)
 
+                # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
+                query_type = query.strip().upper().split()[0] if query.strip() else ""
+
+                if query_type in ("DELETE", "UPDATE", "INSERT"):
+                    # Capture rowcount for DML operations
+                    rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+                    # Use list format to match PostgreSQL adapter
+                    return [{"rows_affected": rowcount}]
+
                 if fetch_mode == FetchMode.ONE:
                     row = await cursor.fetchone()
                     if row and cursor.description:
@@ -1351,6 +1362,18 @@ class MySQLAdapter(DatabaseAdapter):
             async with self._pool.acquire() as conn:
                 async with conn.cursor() as cursor:
                     await cursor.execute(query, params)
+
+                    # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
+                    query_type = (
+                        query.strip().upper().split()[0] if query.strip() else ""
+                    )
+
+                    if query_type in ("DELETE", "UPDATE", "INSERT"):
+                        # Capture rowcount for DML operations
+                        rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+                        await conn.commit()  # Commit DML operations
+                        # Use list format to match PostgreSQL adapter
+                        return [{"rows_affected": rowcount}]
 
                     if fetch_mode == FetchMode.ONE:
                         row = await cursor.fetchone()
@@ -1429,6 +1452,9 @@ class SQLiteAdapter(DatabaseAdapter):
         self._db_path = config.connection_string or config.database or ":memory:"
         self._is_memory_db = self._db_path == ":memory:"
         self._connection = None
+        # Transaction nesting support (for SQLite nested transaction bug fix)
+        self._transaction_depth = 0
+        self._savepoint_counter = 0
         # Import aiosqlite on init
         try:
             import aiosqlite
@@ -1529,6 +1555,15 @@ class SQLiteAdapter(DatabaseAdapter):
             db = transaction
             cursor = await db.execute(query, params or [])
 
+            # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
+            query_type = query.strip().upper().split()[0] if query.strip() else ""
+
+            if query_type in ("DELETE", "UPDATE", "INSERT"):
+                # Capture rowcount for DML operations
+                rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+                # Use list format to match PostgreSQL/MySQL adapters
+                return [{"rows_affected": rowcount}]
+
             if fetch_mode == FetchMode.ONE:
                 row = await cursor.fetchone()
                 result = self._convert_row(dict(row)) if row else None
@@ -1544,7 +1579,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 result = []
 
             # Check if this was an INSERT and capture lastrowid for SQLite
-            if query.strip().upper().startswith("INSERT") and (
+            if query_type == "INSERT" and (
                 not result or result == [] or result is None
             ):
                 # For INSERT without RETURNING, capture lastrowid
@@ -1559,6 +1594,16 @@ class SQLiteAdapter(DatabaseAdapter):
                 # Use shared connection for memory databases
                 db = await self._get_connection()
                 cursor = await db.execute(query, params or [])
+
+                # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
+                query_type = query.strip().upper().split()[0] if query.strip() else ""
+
+                if query_type in ("DELETE", "UPDATE", "INSERT"):
+                    # Capture rowcount for DML operations
+                    rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+                    await db.commit()
+                    # Use list format to match PostgreSQL/MySQL adapters
+                    return [{"rows_affected": rowcount}]
 
                 if fetch_mode == FetchMode.ONE:
                     row = await cursor.fetchone()
@@ -1575,9 +1620,7 @@ class SQLiteAdapter(DatabaseAdapter):
                     result = []
 
                 # Check if this was an INSERT and capture lastrowid for SQLite
-                if query.strip().upper().startswith("INSERT") and (
-                    not result or result == []
-                ):
+                if query_type == "INSERT" and (not result or result == []):
                     # For INSERT without RETURNING, capture lastrowid
                     lastrowid = (
                         cursor.lastrowid if hasattr(cursor, "lastrowid") else None
@@ -1594,11 +1637,25 @@ class SQLiteAdapter(DatabaseAdapter):
                     db.row_factory = self._aiosqlite.Row
                     cursor = await db.execute(query, params or [])
 
+                    # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
+                    query_type = (
+                        query.strip().upper().split()[0] if query.strip() else ""
+                    )
+
+                    if query_type in ("DELETE", "UPDATE", "INSERT"):
+                        # Capture rowcount for DML operations
+                        rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+                        await db.commit()
+                        # Use list format to match PostgreSQL/MySQL adapters
+                        return [{"rows_affected": rowcount}]
+
                     if fetch_mode == FetchMode.ONE:
                         row = await cursor.fetchone()
+                        await db.commit()
                         return self._convert_row(dict(row)) if row else None
                     elif fetch_mode == FetchMode.ALL:
                         rows = await cursor.fetchall()
+                        await db.commit()
                         return [self._convert_row(dict(row)) for row in rows]
                     elif fetch_mode == FetchMode.MANY:
                         if not fetch_size:
@@ -1609,9 +1666,7 @@ class SQLiteAdapter(DatabaseAdapter):
                         result = []
 
                     # Check if this was an INSERT and capture lastrowid for SQLite
-                    if query.strip().upper().startswith("INSERT") and (
-                        not result or result == []
-                    ):
+                    if query_type == "INSERT" and (not result or result == []):
                         # For INSERT without RETURNING, capture lastrowid
                         lastrowid = (
                             cursor.lastrowid if hasattr(cursor, "lastrowid") else None
@@ -1648,32 +1703,111 @@ class SQLiteAdapter(DatabaseAdapter):
                     await db.commit()
 
     async def begin_transaction(self) -> Any:
-        """Begin a transaction."""
+        """
+        Begin a transaction with nested transaction support.
+
+        SQLite Nested Transaction Fix:
+        - First call: BEGIN (outer transaction)
+        - Nested calls: SAVEPOINT sp_N (nested transactions)
+
+        This prevents "cannot start a transaction within a transaction" error
+        that occurs when BEGIN is called while already in a transaction.
+
+        Returns:
+            tuple: (connection, savepoint_name or None, transaction_depth)
+        """
         if self._is_memory_db:
             # Use shared connection for memory databases
             db = await self._get_connection()
-            await db.execute("BEGIN")
-            return db
         else:
             # Create new connection for file databases
             db = await self._aiosqlite.connect(self._db_path)
             db.row_factory = self._aiosqlite.Row
+
+        # Check current transaction depth
+        if self._transaction_depth == 0:
+            # First transaction - use BEGIN
             await db.execute("BEGIN")
-            return db
+            self._transaction_depth += 1
+            return (db, None, self._transaction_depth)
+        else:
+            # Nested transaction - use SAVEPOINT
+            self._savepoint_counter += 1
+            savepoint_name = f"sp_{self._savepoint_counter}"
+            await db.execute(f"SAVEPOINT {savepoint_name}")
+            self._transaction_depth += 1
+            return (db, savepoint_name, self._transaction_depth)
 
     async def commit_transaction(self, transaction: Any) -> None:
-        """Commit a transaction."""
-        await transaction.commit()
-        # Don't close shared memory connections
-        if not self._is_memory_db:
-            await transaction.close()
+        """
+        Commit a transaction or release a savepoint.
+
+        SQLite Nested Transaction Fix:
+        - If savepoint: RELEASE SAVEPOINT sp_N
+        - If outer transaction: COMMIT
+
+        Args:
+            transaction: tuple of (connection, savepoint_name or None, depth)
+        """
+        # Handle both old API (just connection) and new API (tuple)
+        if isinstance(transaction, tuple):
+            db, savepoint_name, depth = transaction
+
+            if savepoint_name:
+                # Nested transaction - release savepoint
+                await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+            else:
+                # Outer transaction - commit
+                await db.commit()
+
+            # Decrement transaction depth
+            self._transaction_depth -= 1
+
+            # Close connection if not memory database and depth is 0
+            if not self._is_memory_db and self._transaction_depth == 0:
+                await db.close()
+        else:
+            # Old API - just commit (backward compatibility)
+            await transaction.commit()
+            # Don't close shared memory connections
+            if not self._is_memory_db:
+                await transaction.close()
 
     async def rollback_transaction(self, transaction: Any) -> None:
-        """Rollback a transaction."""
-        await transaction.rollback()
-        # Don't close shared memory connections
-        if not self._is_memory_db:
-            await transaction.close()
+        """
+        Rollback a transaction or rollback to a savepoint.
+
+        SQLite Nested Transaction Fix:
+        - If savepoint: ROLLBACK TO SAVEPOINT sp_N
+        - If outer transaction: ROLLBACK
+
+        Args:
+            transaction: tuple of (connection, savepoint_name or None, depth)
+        """
+        # Handle both old API (just connection) and new API (tuple)
+        if isinstance(transaction, tuple):
+            db, savepoint_name, depth = transaction
+
+            if savepoint_name:
+                # Nested transaction - rollback to savepoint
+                await db.execute(f"ROLLBACK TO SAVEPOINT {savepoint_name}")
+                await db.execute(f"RELEASE SAVEPOINT {savepoint_name}")
+            else:
+                # Outer transaction - rollback
+                await db.rollback()
+
+            # Decrement transaction depth
+            self._transaction_depth -= 1
+
+            # Close connection if not memory database and depth is 0
+            if not self._is_memory_db and self._transaction_depth == 0:
+                await db.close()
+        else:
+            # Old API - just rollback (backward compatibility)
+            await transaction.rollback()
+            # Don't close shared memory connections
+            if not self._is_memory_db:
+                await transaction.close()
 
 
 class DatabaseConfigManager:

@@ -10,7 +10,6 @@ Performance tuning for DataFlow applications with connection pooling, caching, a
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `MEDIUM`
-> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-bulk-operations`](#), [`dataflow-queries`](#), [`dataflow-connection-config`](#)
 > Related Subagents: `dataflow-specialist` (advanced optimization)
 
@@ -129,6 +128,53 @@ workflow.add_node("UserListNode", "names_only", {
     "filter": {"active": True}
 })
 ```
+
+### 6. Schema Cache
+
+Thread-safe table existence cache eliminating redundant migration checks, providing 91-99% performance improvement for multi-operation workflows.
+
+```python
+from dataflow import DataFlow
+
+# Default (cache enabled, no TTL)
+db = DataFlow("postgresql://...")
+
+# Custom configuration
+db = DataFlow(
+    "postgresql://...",
+    schema_cache_enabled=True,      # Enable/disable cache
+    schema_cache_ttl=300,            # TTL in seconds (None = no expiration)
+    schema_cache_max_size=10000,    # Max cached tables
+    schema_cache_validation=False,  # Schema checksum validation
+)
+
+# Performance Impact
+# First operation: ~1500ms (cache miss with migration check)
+# Subsequent operations: ~1ms (cache hit) - 99% faster!
+
+# Cache Management
+metrics = db._schema_cache.get_metrics()
+print(f"Hit rate: {metrics['hit_rate']:.2%}")  # Should be >90%
+
+# Clear cache
+db._schema_cache.clear()
+
+# Clear specific table
+db._schema_cache.clear_table("User", database_url)
+```
+
+**When to Clear Cache:**
+- After manual schema modifications
+- After external migrations
+- For debugging schema issues
+- Cache auto-clears on DataFlow schema operations
+
+**Performance Characteristics:**
+- **First operation**: ~1500ms (cache miss)
+- **Subsequent operations**: ~1ms (cache hit) - **99% faster**
+- **Multi-operation workflows**: 91-99% overall improvement
+- **Memory overhead**: <1KB per cached table
+- **Thread safety**: RLock-protected concurrent access
 
 ## Performance Benchmarks
 

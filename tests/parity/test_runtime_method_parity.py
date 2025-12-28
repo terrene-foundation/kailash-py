@@ -8,6 +8,7 @@ method in AsyncLocalRuntime (unless explicitly documented as runtime-specific).
 import inspect
 
 import pytest
+
 from kailash.runtime.async_local import AsyncLocalRuntime
 from kailash.runtime.local import LocalRuntime
 
@@ -21,6 +22,7 @@ ALLOWED_ASYNC_ONLY_METHODS = {
     "_execute_sync_node_in_thread",  # Thread pool execution
     "_execute_sync_workflow",  # Sync workflow in async runtime
     "_execute_sync_workflow_internal",
+    "_execute_workflow_internal",  # Internal workflow execution orchestration
     "_prepare_async_node_inputs",  # Async input preparation
     "_prepare_sync_node_inputs",  # Sync input preparation
 }

@@ -4,10 +4,10 @@ DataFlow QueryBuilder Usage Examples
 Demonstrates MongoDB-style query building with DataFlow models.
 """
 
-from dataflow import DataFlow
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+
+from dataflow import DataFlow
 
 
 def basic_query_example():

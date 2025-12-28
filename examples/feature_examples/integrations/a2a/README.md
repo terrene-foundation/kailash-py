@@ -6,7 +6,7 @@ This directory contains examples demonstrating the enhanced A2A communication sy
 
 ### 1. Rich Agent Cards
 - **Detailed capability descriptions** with proficiency levels
-- **Collaboration and communication styles** 
+- **Collaboration and communication styles**
 - **Performance metrics** and success tracking
 - **Hierarchical capability organization** by domain
 
@@ -68,7 +68,7 @@ agent = A2AAgentNode(
     capabilities=[
         {
             "name": "web_development",
-            "domain": "programming", 
+            "domain": "programming",
             "level": "expert",
             "description": "Django, FastAPI, Flask development"
         }
@@ -151,7 +151,7 @@ task_result = await coordinator.run(
     enable_insight_extraction=True,
     insight_extraction_stages=[
         "analysis",
-        "design", 
+        "design",
         "implementation",
         "review",
         "final_insights"

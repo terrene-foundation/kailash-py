@@ -4,7 +4,6 @@ import time
 from unittest.mock import Mock, patch
 
 import pytest
-
 from kailash.core.monitoring.connection_metrics import (
     ConnectionMetricsCollector,
     ErrorCategory,

@@ -263,7 +263,7 @@ output "deployment_info" {
     cluster_name = module.eks.cluster_name
     region      = var.aws_region
     environment = var.environment
-    
+
     next_steps = [
       "1. Configure kubectl: ${local.kubectl_config_command}",
       "2. Verify cluster: kubectl get nodes",
@@ -271,7 +271,7 @@ output "deployment_info" {
       "4. Access application: ${local.application_url}",
       "5. Monitor cluster: ${local.grafana_url}"
     ]
-    
+
     important_notes = [
       "Database password is stored in AWS Secrets Manager",
       "All data is encrypted at rest and in transit",

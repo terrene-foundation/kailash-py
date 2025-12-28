@@ -3,7 +3,6 @@ Integration tests for hierarchical switch execution with cyclic workflows.
 """
 
 import pytest
-
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import SwitchNode
 from kailash.runtime.local import LocalRuntime

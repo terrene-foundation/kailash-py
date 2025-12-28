@@ -11,9 +11,10 @@ import json
 from datetime import UTC, datetime
 from typing import Any, Dict, List
 
-from examples.utils.paths import get_output_data_path
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.security.threat_detection import ThreatDetectionNode
+
+from examples.utils.paths import get_output_data_path
 
 
 async def create_realistic_security_events() -> List[Dict[str, Any]]:

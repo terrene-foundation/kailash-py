@@ -46,12 +46,6 @@ The middleware consists of these interconnected layers:
 - Security event tracking with SecurityEventNode
 - Workflow and execution persistence
 
-**AI Chat Integration Layer**:
-- Semantic search using AsyncPostgreSQLVectorNode
-- LLM integration for natural language workflow generation
-- Context-aware conversation management
-- Intent recognition and response generation
-
 Key Components
 -------------
 
@@ -65,11 +59,6 @@ Key Components
 - `KailashJWTAuthManager`: JWT token management using SDK security nodes
 - `MiddlewareAccessControlManager`: RBAC/ABAC access control
 - `MiddlewareAuthenticationMiddleware`: Request authentication middleware
-
-**AI & Chat Integration**:
-- `AIChatMiddleware`: AI-powered conversation management
-- `WorkflowGenerator`: Natural language to workflow conversion
-- `ChatMessage`: Structured chat message handling
 
 **MCP Integration**:
 - `MiddlewareMCPServer`: Enhanced MCP server with caching and metrics
@@ -128,23 +117,6 @@ Usage Examples
     >>> await realtime.event_stream.subscribe(
     ...     "workflow_monitor",
     ...     handle_workflow_events
-    ... )
-
-**AI Chat Integration**:
-    >>> from kailash.middleware import AIChatMiddleware
-    >>>
-    >>> # Create AI chat with semantic search
-    >>> ai_chat = AIChatMiddleware(
-    ...     agent_ui,
-    ...     enable_vector_search=True,
-    ...     vector_database_url="postgresql://..."
-    ... )
-    >>>
-    >>> # Start chat session and get workflow suggestions
-    >>> session_id = await ai_chat.start_chat_session("user123")
-    >>> response = await ai_chat.send_message(
-    ...     session_id,
-    ...     "Create a workflow to process CSV data and generate charts"
     ... )
 
 **Dynamic Workflow Creation**:
@@ -220,7 +192,11 @@ from .auth.auth_manager import AuthLevel, MiddlewareAuthManager
 
 # Authentication & Access Control
 from .auth.jwt_auth import JWTAuthManager
-from .communication.ai_chat import AIChatMiddleware, ChatMessage, WorkflowGenerator
+
+# Communication Layer
+# Note: AI chat functionality has been moved to the Kaizen framework.
+# For AI-powered chat interfaces with semantic search and workflow generation, use:
+#     from kaizen.middleware.communication import AIChatMiddleware, ChatMessage, WorkflowGenerator
 from .communication.api_gateway import APIGateway, create_gateway
 
 # Communication Layer
@@ -265,9 +241,6 @@ from .mcp.enhanced_server import (
 __all__ = [
     # Core Components
     "AgentUIMiddleware",
-    "AIChatMiddleware",
-    "ChatMessage",
-    "WorkflowGenerator",
     "APIGateway",
     "create_gateway",
     "EventStream",

@@ -4,7 +4,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode, RetryConfig
 from kailash.sdk_exceptions import NodeExecutionError
 

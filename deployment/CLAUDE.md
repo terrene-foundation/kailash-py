@@ -18,7 +18,7 @@ cd deployment/terraform/aws
 terraform apply -var-file=environments/prod.tfvars
 aws eks update-kubeconfig --name $(terraform output -raw cluster_name)
 
-# GCP GKE  
+# GCP GKE
 cd deployment/terraform/gcp
 terraform apply -var-file=environments/prod.tfvars
 gcloud container clusters get-credentials $(terraform output -raw cluster_name) --location $(terraform output -raw cluster_location)
@@ -116,7 +116,7 @@ kubectl port-forward -n logging svc/kailash-kibana-kb-http 5601:5601 &
 kubectl port-forward -n tracing svc/kailash-jaeger-query 16686:16686 &
 
 echo "Prometheus: http://localhost:9090"
-echo "Grafana: http://localhost:3000" 
+echo "Grafana: http://localhost:3000"
 echo "Kibana: http://localhost:5601"
 echo "Jaeger: http://localhost:16686"
 ```

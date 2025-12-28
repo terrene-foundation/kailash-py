@@ -15,7 +15,9 @@ import asyncio
 import logging
 from typing import Any, Dict, List
 
-from kailash.nodes.rag import (
+from kailash.runtime.local import LocalRuntime
+
+from kaizen.nodes.rag import (
     HyDENode,
     RAGConfig,
     RAGFusionNode,
@@ -23,7 +25,6 @@ from kailash.nodes.rag import (
     SelfCorrectingRAGNode,
     StepBackRAGNode,
 )
-from kailash.runtime.local import LocalRuntime
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

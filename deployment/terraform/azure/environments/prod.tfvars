@@ -42,7 +42,7 @@ node_pools = {
     os_disk_size_gb = 200
     os_disk_type    = "Managed"
   }
-  
+
   memory = {
     vm_size             = "Standard_E8s_v3"
     node_count         = 3
@@ -59,7 +59,7 @@ node_pools = {
     os_disk_size_gb = 200
     os_disk_type    = "Managed"
   }
-  
+
   spot = {
     vm_size             = "Standard_D4s_v3"
     node_count         = 0
@@ -184,7 +184,7 @@ action_groups = {
       }
     ]
   }
-  
+
   warning_alerts = {
     short_name = "warning"
     email_receivers = [
@@ -211,7 +211,7 @@ metric_alerts = {
       threshold        = 90
     }
   }
-  
+
   node_memory_critical = {
     description = "Node memory usage critical"
     severity    = 1
@@ -226,7 +226,7 @@ metric_alerts = {
       threshold        = 85
     }
   }
-  
+
   pod_failed = {
     description = "Pods in failed state"
     severity    = 2
@@ -243,7 +243,7 @@ metric_alerts = {
       threshold        = 0
     }
   }
-  
+
   disk_usage_high = {
     description = "Disk usage high"
     severity    = 2

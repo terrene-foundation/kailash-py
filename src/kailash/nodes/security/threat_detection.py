@@ -11,7 +11,6 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
-from kailash.nodes.ai.llm_agent import LLMAgentNode
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
@@ -53,7 +52,6 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         self,
         name: str = "threat_detection",
         detection_rules: Optional[List[str]] = None,
-        ai_model: str = "ollama:llama3.2:3b",
         response_actions: Optional[List[str]] = None,
         real_time: bool = True,
         severity_threshold: str = "medium",
@@ -65,7 +63,6 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         Args:
             name: Node name
             detection_rules: List of detection rules to apply
-            ai_model: AI model for threat analysis
             response_actions: Automated response actions
             real_time: Enable real-time threat detection
             severity_threshold: Minimum severity to trigger response
@@ -80,7 +77,6 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             "insider_threat",
             "anomalous_behavior",
         ]
-        self.ai_model = ai_model
         self.response_actions = response_actions or ["alert", "log"]
         self.real_time = real_time
         self.severity_threshold = severity_threshold
@@ -88,14 +84,6 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
         # Initialize parent classes
         super().__init__(name=name, **kwargs)
-
-        # Initialize AI agent for threat analysis
-        self.ai_agent = LLMAgentNode(
-            name=f"{name}_ai_agent",
-            provider="ollama",
-            model=ai_model.replace("ollama:", ""),
-            temperature=0.1,  # Low temperature for consistent analysis
-        )
 
         # Initialize security event and audit logging
         self.security_event_node = SecurityEventNode(name=f"{name}_security_events")
@@ -258,13 +246,7 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         detected_threats.extend(rule_threats)
         analysis_results["rule_based_detections"] = len(rule_threats)
 
-        # Phase 2: AI-powered detection for complex patterns
-        if len(events) > 0:
-            ai_threats = self._detect_ai_threats(events, context)
-            detected_threats.extend(ai_threats)
-            analysis_results["ai_detections"] = len(ai_threats)
-
-        # Phase 3: Cross-correlation analysis
+        # Phase 2: Cross-correlation analysis
         correlated_threats = self._correlate_threats(detected_threats, events)
         analysis_results["correlation_matches"] = len(correlated_threats)
 
@@ -639,169 +621,6 @@ class ThreatDetectionNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
 
         return threats
 
-    def _detect_ai_threats(
-        self, events: List[Dict[str, Any]], context: Dict[str, Any]
-    ) -> List[Dict[str, Any]]:
-        """Use AI to detect complex threat patterns.
-
-        Args:
-            events: Events to analyze
-            context: Additional context for analysis
-
-        Returns:
-            List of AI-detected threats
-        """
-        threats = []
-
-        try:
-            # Prepare events for AI analysis
-            event_summary = self._prepare_events_for_ai(events)
-
-            # Create AI analysis prompt
-            prompt = self._create_ai_analysis_prompt(event_summary, context)
-
-            # Run AI analysis
-            ai_response = self.ai_agent.execute(
-                provider="ollama",
-                model=self.ai_model.replace("ollama:", ""),
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            # Parse AI response for threats
-            ai_threats = self._parse_ai_response(ai_response)
-            threats.extend(ai_threats)
-
-        except Exception as e:
-            self.log_with_context("WARNING", f"AI threat detection failed: {e}")
-
-        return threats
-
-    def _prepare_events_for_ai(self, events: List[Dict[str, Any]]) -> str:
-        """Prepare events for AI analysis.
-
-        Args:
-            events: Raw events
-
-        Returns:
-            Formatted event summary for AI analysis
-        """
-        # Limit events for AI analysis (performance)
-        sample_events = events[:50] if len(events) > 50 else events
-
-        # Create summary
-        summary = {
-            "total_events": len(events),
-            "event_types": list(set(event.get("type", "unknown") for event in events)),
-            "unique_users": list(set(event.get("user", "unknown") for event in events)),
-            "unique_ips": list(set(event.get("ip", "unknown") for event in events)),
-            "time_range": {
-                "start": min(
-                    event.get("timestamp", "")
-                    for event in events
-                    if event.get("timestamp")
-                ),
-                "end": max(
-                    event.get("timestamp", "")
-                    for event in events
-                    if event.get("timestamp")
-                ),
-            },
-            "sample_events": sample_events,
-        }
-
-        return json.dumps(summary, indent=2)
-
-    def _create_ai_analysis_prompt(
-        self, event_summary: str, context: Dict[str, Any]
-    ) -> str:
-        """Create prompt for AI threat analysis.
-
-        Args:
-            event_summary: Formatted event summary
-            context: Additional context
-
-        Returns:
-            AI analysis prompt
-        """
-        prompt = f"""
-You are a cybersecurity expert analyzing security events for potential threats.
-
-CONTEXT:
-{json.dumps(context, indent=2) if context else "No additional context provided"}
-
-EVENTS TO ANALYZE:
-{event_summary}
-
-TASK:
-Analyze these events for security threats that may not be caught by simple rules.
-Look for:
-1. Complex attack patterns
-2. Coordinated activities
-3. Subtle indicators of compromise
-4. Advanced persistent threats
-5. Social engineering attempts
-
-RESPONSE FORMAT:
-Return a JSON array of threat objects with this structure:
-[
-  {{
-    "id": "unique_threat_id",
-    "type": "threat_type",
-    "severity": "low|medium|high|critical",
-    "description": "detailed threat description",
-    "confidence": 0.0-1.0,
-    "indicators": ["indicator1", "indicator2"],
-    "evidence": {{"key": "value"}},
-    "recommended_actions": ["action1", "action2"]
-  }}
-]
-
-If no threats are detected, return an empty array: []
-"""
-        return prompt
-
-    def _parse_ai_response(self, ai_response: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Parse AI response for detected threats.
-
-        Args:
-            ai_response: Response from AI agent
-
-        Returns:
-            List of parsed threats
-        """
-        threats = []
-
-        try:
-            # Extract content from AI response
-            content = ai_response.get("result", {}).get("content", "")
-            if not content:
-                return threats
-
-            # Try to parse JSON response
-            import re
-
-            json_match = re.search(r"\[.*\]", content, re.DOTALL)
-            if json_match:
-                threats_data = json.loads(json_match.group())
-
-                for threat_data in threats_data:
-                    # Add AI detection metadata
-                    threat_data["detection_method"] = "ai_analysis"
-                    threat_data["detection_time"] = datetime.now(UTC).isoformat()
-
-                    # Ensure required fields
-                    if not threat_data.get("id"):
-                        threat_data["id"] = (
-                            f"ai_threat_{int(datetime.now(UTC).timestamp())}"
-                        )
-
-                    threats.append(threat_data)
-
-        except Exception as e:
-            self.log_with_context("WARNING", f"Failed to parse AI response: {e}")
-
-        return threats
-
     def _correlate_threats(
         self, threats: List[Dict[str, Any]], events: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
@@ -1093,7 +912,6 @@ If no threats are detected, return an empty array: []
             **self.detection_stats,
             "rules_enabled": self.detection_rules,
             "response_actions": self.response_actions,
-            "ai_model": self.ai_model,
             "real_time_enabled": self.real_time,
             "performance_target_ms": self.response_time_target_ms,
         }

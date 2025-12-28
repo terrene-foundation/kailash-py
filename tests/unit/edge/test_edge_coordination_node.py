@@ -5,7 +5,6 @@ from datetime import datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from kailash.edge.coordination.global_ordering import GlobalOrderingService
 from kailash.edge.coordination.leader_election import EdgeLeaderElection
 from kailash.edge.coordination.raft import RaftNode, RaftState

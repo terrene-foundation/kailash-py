@@ -10,9 +10,8 @@ from typing import Any
 
 import networkx as nx
 import yaml
-from pydantic import BaseModel, Field, ValidationError
-
 from kailash.nodes.base import Node
+from pydantic import BaseModel, Field, ValidationError
 
 try:
     # For normal runtime, use the actual registry

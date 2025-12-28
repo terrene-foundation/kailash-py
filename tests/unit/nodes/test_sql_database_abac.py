@@ -5,7 +5,6 @@ import sqlite3
 import tempfile
 
 import pytest
-
 from kailash.access_control import (
     AccessControlManager,
     NodePermission,

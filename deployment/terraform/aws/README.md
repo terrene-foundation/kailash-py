@@ -279,7 +279,7 @@ name: Terraform
 on:
   push:
     paths: ['deployment/terraform/**']
-  
+
 jobs:
   terraform:
     runs-on: ubuntu-latest

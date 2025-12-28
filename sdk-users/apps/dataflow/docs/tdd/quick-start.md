@@ -49,7 +49,7 @@ async def tdd_dataflow():
         auto_migrate=False,
         existing_schema_mode=True
     )
-    
+
     # Automatic savepoint creation for isolation
     yield db
     # Automatic rollback - no cleanup needed!
@@ -82,40 +82,40 @@ Add DataFlow models with automatic node generation:
 @pytest.mark.asyncio
 async def test_user_crud_operations(tdd_dataflow):
     """Complete CRUD test in <100ms."""
-    
+
     # Define model
     @tdd_dataflow.model
     class User:
         name: str
         email: str
         active: bool = True
-    
+
     # Use auto-generated nodes
     from kailash.workflow.builder import WorkflowBuilder
     from kailash.runtime.local import LocalRuntime
-    
+
     workflow = WorkflowBuilder()
-    
+
     # Create user (uses savepoint isolation)
     workflow.add_node("UserCreateNode", "create", {
         "name": "Test User",
         "email": "test@example.com"
     })
-    
+
     # List users
     workflow.add_node("UserListNode", "list", {
         "filter": {"active": True}
     })
-    
+
     workflow.add_connection("create", "id", "list", "user_id")
-    
+
     # Execute workflow
     runtime = LocalRuntime()
     results, run_id = runtime.execute(workflow.build())
-    
+
     assert "create" in results
     assert results["create"]["success"] is True
-    
+
     # All changes automatically rolled back after test!
     # Next test gets clean database state
 ```
@@ -131,25 +131,25 @@ import time
 async def test_performance_validation(tdd_dataflow):
     """Validate <100ms execution target."""
     start = time.time()
-    
+
     @tdd_dataflow.model
     class Product:
         name: str
         price: float
         stock: int = 0
-    
+
     # Perform operations...
     workflow = WorkflowBuilder()
     workflow.add_node("ProductCreateNode", "create", {
         "name": "Test Product",
         "price": 99.99
     })
-    
+
     runtime = LocalRuntime()
     results, _ = runtime.execute(workflow.build())
-    
+
     execution_time = (time.time() - start) * 1000  # Convert to ms
-    
+
     # Validate performance
     assert execution_time < 100, f"Test exceeded 100ms: {execution_time:.2f}ms"
     print(f"✅ Test executed in {execution_time:.2f}ms")
@@ -219,7 +219,7 @@ from kailash.runtime.local import LocalRuntime
 async def verify_tdd_setup():
     """Verify TDD setup in <100ms."""
     print("🚀 Starting DataFlow TDD Quick Start Verification...")
-    
+
     # Step 1: Initialize TDD
     start = time.time()
     context = TDDTestContext(test_id="quickstart")
@@ -228,36 +228,36 @@ async def verify_tdd_setup():
         tdd_mode=True,
         test_context=context
     )
-    
+
     # Step 2: Define model
     @db.model
     class QuickStartUser:
         name: str
         email: str
-    
+
     # Step 3: Execute operations
     workflow = WorkflowBuilder()
     workflow.add_node("QuickStartUserCreateNode", "create", {
         "name": "Quick Start User",
         "email": "quickstart@example.com"
     })
-    
+
     runtime = LocalRuntime()
     results, _ = runtime.execute(workflow.build())
-    
+
     # Step 4: Validate results
     execution_time = (time.time() - start) * 1000
-    
+
     print(f"\n✅ Setup complete in {execution_time:.2f}ms")
     print(f"✅ TDD mode active: {db._tdd_mode}")
     print(f"✅ Test isolation: Automatic rollback enabled")
     print(f"✅ Performance target: {'MET' if execution_time < 100 else 'FAILED'}")
-    
+
     if execution_time < 100:
         print("\n🎉 SUCCESS! You're ready for TDD with <100ms tests!")
     else:
         print(f"\n⚠️  Performance target missed. Check PostgreSQL connection.")
-    
+
     return execution_time < 100
 
 

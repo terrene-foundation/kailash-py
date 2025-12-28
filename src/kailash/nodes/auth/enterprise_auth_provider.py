@@ -24,7 +24,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
-from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
 from kailash.nodes.auth.directory_integration import DirectoryIntegrationNode
 from kailash.nodes.auth.mfa import MultiFactorAuthNode
@@ -126,10 +125,6 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         )
 
         # Supporting nodes
-        self.llm_agent = LLMAgentNode(
-            name=f"{self.name}_llm", provider="ollama", model="llama3.2:3b"
-        )
-
         self.http_client = HTTPRequestNode(name=f"{self.name}_http")
 
         self.security_logger = SecurityEventNode(name=f"{self.name}_security")
@@ -984,8 +979,14 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
     async def _ai_risk_assessment(
         self, user_id: str, risk_context: Dict[str, Any], existing_factors: List[str]
     ) -> Dict[str, Any]:
-        """AI-powered risk assessment using LLM."""
-        # For low-risk scenarios with minimal factors, skip AI assessment
+        """Rule-based risk assessment.
+
+        Note:
+            This is the rule-based Core SDK version. For AI-powered fraud detection
+            with intelligent pattern recognition, use the Kaizen version:
+            `from kaizen.nodes.auth import EnterpriseAuthProviderNode`
+        """
+        # For low-risk scenarios with minimal factors, return low risk
         if not existing_factors or (
             len(existing_factors) == 1 and existing_factors[0] in ["unusual_hour"]
         ):
@@ -1003,48 +1004,50 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
                     "reasoning": "Trusted internal access from recognized device",
                 }
 
-        risk_prompt = f"""
-        Analyze this authentication attempt for fraud risk:
+        # Rule-based risk scoring
+        risk_score = 0.0
+        additional_factors = []
 
-        User: {user_id}
-        Context: {json.dumps(risk_context, indent=2)}
-        Existing Risk Factors: {existing_factors}
+        # High number of existing factors = higher base risk
+        if len(existing_factors) >= 3:
+            risk_score += 0.3
+            additional_factors.append("multiple_risk_factors")
+        elif len(existing_factors) >= 2:
+            risk_score += 0.2
+            additional_factors.append("elevated_risk_factors")
 
-        Consider:
-        1. Geographic consistency
-        2. Device patterns
-        3. Time patterns
-        4. Behavioral anomalies
-        5. Known fraud indicators
+        # Pattern matching for specific risk combinations
+        if "suspicious_ip" in existing_factors and "unknown_device" in existing_factors:
+            risk_score += 0.3
+            additional_factors.append("suspicious_ip_and_device")
 
-        Return JSON with:
-        - risk_score (0.0 to 1.0)
-        - additional_factors (array of risk factors)
-        - reasoning (brief explanation)
-        """
+        if "geographic_anomaly" in existing_factors:
+            risk_score += 0.2
+            additional_factors.append("geographic_risk")
 
-        try:
-            llm_result = await self.llm_agent.execute_async(
-                provider="ollama",
-                model="llama3.2:3b",
-                messages=[{"role": "user", "content": risk_prompt}],
-            )
+        if (
+            "off_hours_login" in existing_factors
+            and "unknown_device" in existing_factors
+        ):
+            risk_score += 0.15
+            additional_factors.append("unusual_access_pattern")
 
-            ai_assessment = json.loads(llm_result.get("response", "{}"))
+        # Cap at 1.0
+        risk_score = min(risk_score, 1.0)
 
-            return {
-                "score": ai_assessment.get("risk_score", 0.1),
-                "factors": ai_assessment.get("additional_factors", ["ai_analysis"]),
-                "reasoning": ai_assessment.get("reasoning", "AI risk assessment"),
-            }
+        # Generate reasoning
+        if risk_score < 0.3:
+            reasoning = "Low risk based on standard authentication patterns"
+        elif risk_score < 0.6:
+            reasoning = "Medium risk due to unusual access patterns"
+        else:
+            reasoning = "High risk due to multiple suspicious indicators"
 
-        except Exception as e:
-            # Fallback if AI assessment fails
-            return {
-                "score": 0.1,
-                "factors": ["ai_assessment_unavailable"],
-                "reasoning": f"AI assessment failed: {e}",
-            }
+        return {
+            "score": risk_score,
+            "factors": additional_factors,
+            "reasoning": reasoning,
+        }
 
     def _generate_device_fingerprint(self, device_info: Dict[str, Any]) -> str:
         """Generate device fingerprint from device information."""

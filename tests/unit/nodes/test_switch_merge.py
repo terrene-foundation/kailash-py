@@ -1,7 +1,6 @@
 """Tests for Switch and enhanced Merge nodes."""
 
 import pytest
-
 from kailash.nodes.logic.operations import MergeNode, SwitchNode
 
 

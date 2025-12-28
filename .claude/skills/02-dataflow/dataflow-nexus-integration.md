@@ -10,7 +10,6 @@ Critical configuration patterns to prevent startup blocking when integrating Dat
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `CRITICAL`
-> SDK Version: `0.9.25+ / DataFlow 0.6.0 / Nexus 0.1.5+`
 > Related Skills: [`nexus-quickstart`](#), [`dataflow-models`](#), [`dataflow-existing-database`](#)
 > Related Subagents: `dataflow-specialist`, `nexus-specialist`
 
@@ -30,10 +29,14 @@ from nexus import Nexus
 # CRITICAL CONFIGURATION to prevent blocking
 db = DataFlow(
     database_url="postgresql://user:pass@localhost/db",
-    auto_migrate=False,              # Don't create tables during init
+    auto_migrate=False,              # Don't create tables during init (prevents 5-10s startup delay)
     skip_registry=True,              # Skip automatic model discovery
     existing_schema_mode=True        # Work with existing schema only
 )
+
+# Note: auto_migrate=False prevents blocking during Nexus startup, not for async safety.
+# As of v0.9.5+, auto_migrate=True is safe in async contexts. This config is specifically
+# for preventing the 5-10s startup delay when integrating with Nexus.
 
 # Define models AFTER init
 @db.model
@@ -82,10 +85,13 @@ nexus = Nexus(
 db = DataFlow(
     database_url="postgresql://...",
 
-    # CRITICAL: Prevent blocking startup
+    # CRITICAL: Prevent blocking startup (5-10s delay prevention, NOT async safety)
     auto_migrate=False,           # No automatic schema changes
     skip_registry=True,           # Don't auto-discover models
     existing_schema_mode=True,    # Maximum safety
+
+    # Note: As of v0.9.5+, auto_migrate=True is safe in async contexts.
+    # This setting is specifically for preventing Nexus startup delays.
 
     # Performance
     pool_size=20,
@@ -385,13 +391,6 @@ nexus.run(port=8000)
 - Test startup time - should be <2 seconds
 - Monitor slow query threshold
 - Use read-only mode for analytics APIs
-
-## Version Notes
-
-- **v0.9.25+**: Multi-instance isolation fixed
-- **v0.4.0+**: Deferred schema operations
-- **v0.1.5+** (Nexus): DataFlow integration support
-- **CRITICAL FIX**: Blocking issue documented and resolved
 
 ## Keywords for Auto-Trigger
 

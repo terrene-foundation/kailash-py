@@ -22,11 +22,11 @@ spec:
       terminationGracePeriodSeconds: 30
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
-      
+
       securityContext:
         runAsUser: 0
         fsGroup: 0
-      
+
       containers:
         - name: filebeat
           image: docker.elastic.co/beats/filebeat:8.11.3
@@ -34,7 +34,7 @@ spec:
             "-c", "/etc/filebeat.yml",
             "-e",
           ]
-          
+
           env:
             - name: ELASTICSEARCH_HOST
               value: "kailash-logs-es-http.logging.svc.cluster.local"
@@ -55,7 +55,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-          
+
           resources:
             limits:
               memory: 200Mi
@@ -63,7 +63,7 @@ spec:
             requests:
               cpu: 100m
               memory: 100Mi
-          
+
           volumeMounts:
             - name: config
               mountPath: /etc/filebeat.yml
@@ -80,13 +80,13 @@ spec:
             - name: dockersock
               mountPath: /var/run/docker.sock
               readOnly: true
-          
+
           securityContext:
             runAsUser: 0
             capabilities:
               add:
                 - DAC_READ_SEARCH
-          
+
           livenessProbe:
             exec:
               command:
@@ -99,7 +99,7 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
-          
+
           readinessProbe:
             exec:
               command:
@@ -113,7 +113,7 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
-      
+
       volumes:
         - name: config
           configMap:
@@ -146,7 +146,7 @@ data:
     - type: container
       paths:
         - /var/log/containers/*.log
-      
+
       # Kubernetes metadata enrichment
       processors:
         - add_kubernetes_metadata:
@@ -154,7 +154,7 @@ data:
             matchers:
             - logs_path:
                 logs_path: "/var/log/containers/"
-        
+
         # Drop system containers logs
         - drop_event:
             when:
@@ -167,20 +167,20 @@ data:
                     kubernetes.namespace: "kube-system"
                 - contains:
                     kubernetes.namespace: "kube-public"
-        
+
         # Add custom fields
         - add_fields:
             target: ""
             fields:
               cluster: "kailash-prod"
               environment: "production"
-        
+
         # Parse JSON logs
         - decode_json_fields:
             fields: ["message"]
             target: ""
             overwrite_keys: true
-        
+
         # Add log source identification
         - script:
             lang: javascript
@@ -190,7 +190,7 @@ data:
                 var message = event.Get("message");
                 var namespace = event.Get("kubernetes.namespace");
                 var container = event.Get("kubernetes.container.name");
-                
+
                 // Classify log types
                 if (namespace === "kailash-app") {
                   event.Put("log_category", "application");
@@ -203,7 +203,7 @@ data:
                 } else {
                   event.Put("log_category", "system");
                 }
-                
+
                 // Detect log levels
                 if (message && typeof message === 'string') {
                   if (message.match(/\b(ERROR|FATAL|CRITICAL)\b/i)) {
@@ -218,7 +218,7 @@ data:
                   }
                 }
               }
-    
+
     # System logs
     - type: log
       paths:
@@ -229,7 +229,7 @@ data:
       multiline.pattern: '^type='
       multiline.negate: true
       multiline.match: after
-    
+
     - type: log
       paths:
         - /var/log/syslog
@@ -237,7 +237,7 @@ data:
       fields:
         log_source: "system"
         log_category: "system"
-    
+
     # Kubernetes API server audit logs
     - type: log
       paths:
@@ -247,19 +247,19 @@ data:
         log_category: "security"
       json.keys_under_root: true
       json.overwrite_keys: true
-    
+
     # Output configuration
     output.logstash:
       hosts: ["${LOGSTASH_HOST}:${LOGSTASH_PORT}"]
       loadbalance: true
       worker: 2
       compression_level: 3
-      
+
       # Bulk settings
       bulk_max_size: 2048
       template.name: "filebeat"
       template.pattern: "filebeat-*"
-    
+
     # Alternative direct output to Elasticsearch (disabled by default)
     # output.elasticsearch:
     #   hosts: ["https://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}"]
@@ -267,16 +267,16 @@ data:
     #   password: "${ELASTICSEARCH_PASSWORD}"
     #   ssl.verification_mode: "none"
     #   index: "filebeat-%{+yyyy.MM.dd}"
-    
+
     # Processor configuration
     processors:
       - add_host_metadata:
           when.not.contains.tags: forwarded
-      
+
       - add_cloud_metadata: ~
-      
+
       - add_docker_metadata: ~
-      
+
       # Drop noisy logs
       - drop_event:
           when:
@@ -291,7 +291,7 @@ data:
                       message: '.*GET /health.*'
                   - equals:
                       kubernetes.container.name: "kailash-app"
-    
+
     # Logging configuration
     logging.level: info
     logging.to_files: true
@@ -300,13 +300,13 @@ data:
       name: filebeat
       keepfiles: 7
       permissions: 0644
-    
+
     # Monitoring
     monitoring.enabled: true
     http.enabled: true
     http.host: "0.0.0.0"
     http.port: 5066
-    
+
     # ILM settings
     setup.ilm.enabled: true
     setup.ilm.rollover_alias: "filebeat"

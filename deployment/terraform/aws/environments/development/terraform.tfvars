@@ -95,7 +95,7 @@ enable_cross_region_backup = false
 # Application Configuration - Minimal resources for dev
 application_config = {
   replicas = 1
-  
+
   resources = {
     requests = {
       cpu    = "250m"
@@ -106,7 +106,7 @@ application_config = {
       memory = "2Gi"
     }
   }
-  
+
   autoscaling = {
     enabled                          = false  # Disabled for dev
     min_replicas                    = 1

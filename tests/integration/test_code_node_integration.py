@@ -3,7 +3,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-
 from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode, JSONReaderNode

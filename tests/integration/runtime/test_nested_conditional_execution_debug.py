@@ -8,7 +8,6 @@ where the bug occurs in the execution pipeline.
 import asyncio
 
 import pytest
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

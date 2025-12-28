@@ -61,7 +61,7 @@ grep -r "CircuitBreaker" src/kailash/
 
 ### **"I need database connections"**
 ✅ **Don't Build**: Custom connection managers
-✅ **Use Instead**: 
+✅ **Use Instead**:
 - `AsyncSQLDatabaseNode` (advanced features)
 - `SQLDatabaseNode` (simple operations)
 - Built-in connection pooling with shared pools
@@ -163,7 +163,7 @@ find src/kailash/nodes -name "*.py" | xargs grep -l "YourFeature"
 # Database operations?
 # Check: apps/kailash-dataflow/
 
-# Multi-channel platform?  
+# Multi-channel platform?
 # Check: apps/kailash-nexus/
 
 # Enterprise MCP?
@@ -232,7 +232,7 @@ grep -r "health.*monitor" src/kailash/core/
 
 **Poor Discovery:**
 - Built custom database connection management
-- Rebuilt parameter validation systems  
+- Rebuilt parameter validation systems
 - Created custom AI integration wrappers
 - Ignored existing security and enterprise patterns
 

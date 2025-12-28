@@ -23,7 +23,7 @@ spec:
         fsGroup: 1000
         runAsUser: 1000
         runAsNonRoot: true
-      
+
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -33,7 +33,7 @@ spec:
                   matchLabels:
                     app.kubernetes.io/name: logstash
                 topologyKey: kubernetes.io/hostname
-      
+
       containers:
         - name: logstash
           image: docker.elastic.co/logstash/logstash:8.11.3
@@ -47,7 +47,7 @@ spec:
             - containerPort: 5000
               name: tcp-input
               protocol: TCP
-          
+
           resources:
             requests:
               memory: 1Gi
@@ -55,7 +55,7 @@ spec:
             limits:
               memory: 2Gi
               cpu: 1
-          
+
           env:
             - name: LS_JAVA_OPTS
               value: "-Xms1g -Xmx1g"
@@ -70,7 +70,7 @@ spec:
                 secretKeyRef:
                   name: kailash-logs-es-elastic-user
                   key: elastic
-          
+
           volumeMounts:
             - name: logstash-config
               mountPath: /usr/share/logstash/config/logstash.yml
@@ -79,7 +79,7 @@ spec:
               mountPath: /usr/share/logstash/pipeline/
             - name: logstash-patterns
               mountPath: /usr/share/logstash/patterns/
-          
+
           livenessProbe:
             httpGet:
               path: /
@@ -87,7 +87,7 @@ spec:
             initialDelaySeconds: 60
             periodSeconds: 30
             failureThreshold: 3
-          
+
           readinessProbe:
             httpGet:
               path: /
@@ -95,7 +95,7 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 10
             failureThreshold: 3
-      
+
       volumes:
         - name: logstash-config
           configMap:
@@ -118,28 +118,28 @@ data:
   logstash.yml: |
     http.host: "0.0.0.0"
     http.port: 9600
-    
+
     # Monitoring
     monitoring.enabled: true
     monitoring.elasticsearch.hosts: ["https://${ELASTICSEARCH_HOST}:${ELASTICSEARCH_PORT}"]
     monitoring.elasticsearch.username: "${ELASTICSEARCH_USERNAME}"
     monitoring.elasticsearch.password: "${ELASTICSEARCH_PASSWORD}"
     monitoring.elasticsearch.ssl.verification_mode: none
-    
+
     # Pipeline settings
     pipeline.workers: 2
     pipeline.batch.size: 1000
     pipeline.batch.delay: 50
-    
+
     # Queue settings
     queue.type: persisted
     queue.max_bytes: 1gb
     queue.checkpoint.writes: 1024
-    
+
     # Dead letter queue
     dead_letter_queue.enable: true
     dead_letter_queue.max_bytes: 1gb
-    
+
     # Security
     xpack.monitoring.enabled: true
 
@@ -156,19 +156,19 @@ data:
       beats {
         port => 5044
       }
-      
+
       tcp {
         port => 5000
         codec => json_lines
       }
-      
+
       # Kubernetes logs via Filebeat
       beats {
         port => 5045
         add_field => { "log_source" => "kubernetes" }
       }
     }
-    
+
     filter {
       # Parse Kubernetes logs
       if [kubernetes] {
@@ -178,46 +178,46 @@ data:
           add_field => { "k8s_pod" => "%{[kubernetes][pod][name]}" }
           add_field => { "k8s_container" => "%{[kubernetes][container][name]}" }
         }
-        
+
         # Parse application logs based on container
         if [k8s_container] == "kailash-app" {
           grok {
-            match => { 
-              "message" => "%{TIMESTAMP_ISO8601:timestamp} %{LOGLEVEL:level} %{DATA:logger} - %{GREEDYDATA:log_message}" 
+            match => {
+              "message" => "%{TIMESTAMP_ISO8601:timestamp} %{LOGLEVEL:level} %{DATA:logger} - %{GREEDYDATA:log_message}"
             }
             tag_on_failure => ["_grokparsefailure_kailash"]
           }
-          
+
           if ![timestamp] {
             grok {
-              match => { 
-                "message" => "\[%{TIMESTAMP_ISO8601:timestamp}\] %{WORD:level}: %{GREEDYDATA:log_message}" 
+              match => {
+                "message" => "\[%{TIMESTAMP_ISO8601:timestamp}\] %{WORD:level}: %{GREEDYDATA:log_message}"
               }
               tag_on_failure => ["_grokparsefailure_kailash_alt"]
             }
           }
         }
-        
+
         # Parse nginx logs
         if [k8s_container] == "nginx" {
           grok {
-            match => { 
-              "message" => "%{NGINXACCESS}" 
+            match => {
+              "message" => "%{NGINXACCESS}"
             }
             tag_on_failure => ["_grokparsefailure_nginx"]
           }
         }
-        
+
         # Parse ingress controller logs
         if [k8s_container] == "controller" and [k8s_namespace] == "ingress-nginx" {
           grok {
-            match => { 
-              "message" => "%{IPORHOST:clientip} - %{DATA:ident} \[%{HTTPDATE:timestamp}\] \"%{WORD:verb} %{DATA:request} HTTP/%{NUMBER:httpversion}\" %{NUMBER:response:int} (?:-|%{NUMBER:bytes:int}) %{QS:referrer} %{QS:agent} %{NUMBER:request_length:int} %{NUMBER:request_time:float} \[%{DATA:proxy_upstream_name}\] \[%{DATA:proxy_alternative_upstream_name}\] %{IPORHOST:upstream_addr}:%{NUMBER:upstream_port} %{NUMBER:upstream_response_length:int} %{NUMBER:upstream_response_time:float} %{NUMBER:upstream_status:int} %{DATA:req_id}" 
+            match => {
+              "message" => "%{IPORHOST:clientip} - %{DATA:ident} \[%{HTTPDATE:timestamp}\] \"%{WORD:verb} %{DATA:request} HTTP/%{NUMBER:httpversion}\" %{NUMBER:response:int} (?:-|%{NUMBER:bytes:int}) %{QS:referrer} %{QS:agent} %{NUMBER:request_length:int} %{NUMBER:request_time:float} \[%{DATA:proxy_upstream_name}\] \[%{DATA:proxy_alternative_upstream_name}\] %{IPORHOST:upstream_addr}:%{NUMBER:upstream_port} %{NUMBER:upstream_response_length:int} %{NUMBER:upstream_response_time:float} %{NUMBER:upstream_status:int} %{DATA:req_id}"
             }
             tag_on_failure => ["_grokparsefailure_ingress"]
           }
         }
-        
+
         # Security event detection
         if [log_message] =~ /(?i)(failed|error|exception|unauthorized|forbidden|denied)/ {
           mutate {
@@ -225,7 +225,7 @@ data:
             add_field => { "alert_priority" => "medium" }
           }
         }
-        
+
         if [log_message] =~ /(?i)(attack|malicious|intrusion|breach|compromise)/ {
           mutate {
             add_tag => ["security_alert"]
@@ -233,13 +233,13 @@ data:
           }
         }
       }
-      
+
       # Parse audit logs
       if [log_source] == "audit" {
         json {
           source => "message"
         }
-        
+
         if [verb] and [objectRef] {
           mutate {
             add_field => { "audit_action" => "%{verb}" }
@@ -247,7 +247,7 @@ data:
             add_field => { "audit_namespace" => "%{[objectRef][namespace]}" }
           }
         }
-        
+
         # Detect privileged operations
         if [verb] in ["create", "delete", "update"] and [objectRef][resource] in ["secrets", "configmaps", "serviceaccounts"] {
           mutate {
@@ -256,7 +256,7 @@ data:
           }
         }
       }
-      
+
       # Enrich with GeoIP for external IPs
       if [clientip] and [clientip] !~ /^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.127\.)/ {
         geoip {
@@ -264,14 +264,14 @@ data:
           target => "geoip"
         }
       }
-      
+
       # Add environment metadata
       mutate {
         add_field => { "environment" => "production" }
         add_field => { "cluster" => "kailash-prod" }
         add_field => { "ingestion_timestamp" => "%{[@timestamp]}" }
       }
-      
+
       # Convert timestamps
       if [timestamp] {
         date {
@@ -280,7 +280,7 @@ data:
         }
       }
     }
-    
+
     output {
       # Main logs to Elasticsearch
       elasticsearch {
@@ -288,13 +288,13 @@ data:
         user => "${ELASTICSEARCH_USERNAME}"
         password => "${ELASTICSEARCH_PASSWORD}"
         ssl_certificate_verification => false
-        
+
         # Index strategy
         index => "kailash-logs-%{+YYYY.MM.dd}"
-        
+
         # Document ID for deduplication
         document_id => "%{[@metadata][beat]}-%{[@metadata][type]}-%{[@timestamp]}-%{[host][name]}-%{[log][offset]}"
-        
+
         # Template management
         manage_template => true
         template_name => "kailash-logs"
@@ -324,7 +324,7 @@ data:
           }
         }
       }
-      
+
       # Security events to dedicated index
       if "security_event" in [tags] or "security_alert" in [tags] {
         elasticsearch {
@@ -335,7 +335,7 @@ data:
           index => "security-events-%{+YYYY.MM.dd}"
         }
       }
-      
+
       # Audit logs to dedicated index
       if [log_source] == "audit" {
         elasticsearch {
@@ -346,7 +346,7 @@ data:
           index => "audit-logs-%{+YYYY.MM.dd}"
         }
       }
-      
+
       # Debug output (remove in production)
       # stdout { codec => rubydebug { metadata => true } }
     }

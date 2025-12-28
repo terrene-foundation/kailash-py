@@ -40,7 +40,7 @@ class MyConfig:
 
 # 2. Define signature (type-safe I/O)
 class MySignature(Signature):
-    question: str = InputField(desc="User question")
+    question: str = InputField(desc="User question")  # 'description=' also works
     answer: str = OutputField(desc="Agent answer")
 
 # 3. Extend BaseAgent (87% less code, production-ready)
@@ -91,6 +91,53 @@ Conversation persistence with dual-buffer architecture:
 - **Production**: 100+ concurrent hooks supported
 
 **Version**: 0.6.0 | **Dependencies**: Kailash >=0.10.2
+
+---
+
+## 🎯 OpenAI Structured Outputs
+
+**Guaranteed schema compliance** with OpenAI's Structured Outputs API - ensure LLM responses always match your signature's structure.
+
+### Usage
+
+```python
+from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
+from kaizen.core.structured_output import create_structured_output_config
+from kaizen.signatures import Signature, InputField, OutputField
+
+# Define signature
+class ProductAnalysisSignature(Signature):
+    product_description: str = InputField(desc="Product to analyze")
+    category: str = OutputField(desc="Product category")
+    price_range: str = OutputField(desc="Price estimate")
+    confidence: float = OutputField(desc="Confidence 0-1")
+
+# Enable structured outputs
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model="gpt-4o-2024-08-06",  # Required for strict mode
+    provider_config=create_structured_output_config(
+        signature=ProductAnalysisSignature(),
+        strict=True,  # 100% schema compliance
+        name="product_analysis"
+    )
+)
+
+agent = BaseAgent(config=config, signature=ProductAnalysisSignature())
+result = agent.run(product_description="Wireless headphones")
+
+# Response guaranteed to have all fields
+print(result['category'])      # Always present
+print(result['price_range'])   # Always present
+print(result['confidence'])    # Always present, correct type
+```
+
+### Modes
+
+- **Strict Mode** (`strict=True`): 100% schema compliance, requires `gpt-4o-2024-08-06+`
+- **Legacy Mode** (`strict=False`): Best-effort compliance (~70-85%), works with all models
+
+**Learn More**: [Structured Outputs Guide](docs/guides/signature-programming.md)
 
 ---
 
@@ -151,6 +198,87 @@ result1 = agent.ask("My name is Alice", session_id="user123")
 result2 = agent.ask("What's my name?", session_id="user123")
 print(result2["answer"])  # "Your name is Alice"
 ```
+
+## 🔧 LLM Provider Configuration (v0.7.1)
+
+Kaizen supports 8 LLM providers with automatic detection:
+
+| Provider | Type | Requirements | Features |
+|----------|------|--------------|----------|
+| `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
+| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings |
+| `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
+| `ollama` | Local | Ollama running on port 11434 | Free, local models (llama, mistral, etc.) |
+| `docker` | Local | Docker Desktop Model Runner on port 12434 | Free local inference, GPU acceleration |
+| `cohere` | Cloud | `COHERE_API_KEY` | Command models, embeddings |
+| `huggingface` | Local | None (optional API key) | Sentence transformers, embeddings |
+| `mock` | Testing | None | Unit test provider, no API calls |
+
+### Provider Configuration Examples
+
+```python
+from dataclasses import dataclass
+
+# OpenAI (default, recommended for production)
+@dataclass
+class OpenAIConfig:
+    llm_provider: str = "openai"
+    model: str = "gpt-4o-mini"
+    temperature: float = 0.7
+
+# Azure AI Foundry
+# Prerequisites: export AZURE_AI_INFERENCE_ENDPOINT="https://your-endpoint.azure.com"
+#               export AZURE_AI_INFERENCE_API_KEY="your-key"
+@dataclass
+class AzureConfig:
+    llm_provider: str = "azure"
+    model: str = "gpt-4o"
+    temperature: float = 0.7
+
+# Docker Model Runner (FREE local inference)
+# Prerequisites: Docker Desktop 4.40+ with Model Runner enabled
+#               docker desktop enable model-runner --tcp 12434
+#               docker model pull ai/llama3.2
+@dataclass
+class DockerConfig:
+    llm_provider: str = "docker"
+    model: str = "ai/llama3.2"  # Or ai/qwen3, ai/gemma3
+    temperature: float = 0.7
+
+# Ollama (FREE local models)
+# Prerequisites: Ollama running on port 11434
+@dataclass
+class OllamaConfig:
+    llm_provider: str = "ollama"
+    model: str = "llama3.2"
+    temperature: float = 0.7
+```
+
+### Auto-Detection
+
+Kaizen automatically detects available providers in this priority order:
+1. OpenAI (if `OPENAI_API_KEY` set)
+2. Azure (if `AZURE_AI_INFERENCE_ENDPOINT` set)
+3. Anthropic (if `ANTHROPIC_API_KEY` set)
+4. Ollama (if running locally)
+5. Docker Model Runner (if running locally)
+
+Override with `KAIZEN_DEFAULT_PROVIDER` environment variable.
+
+### Docker Model Runner Tool Calling
+
+Tool calling support is model-dependent. Check capability:
+
+```python
+from kaizen.providers import DockerModelRunnerProvider
+
+provider = DockerModelRunnerProvider()
+if provider.supports_tools("ai/qwen3"):
+    # Tool calling supported
+    pass
+```
+
+**Tool-Capable Models**: `ai/qwen3`, `ai/llama3.3`, `ai/gemma3`
 
 ## 🏗️ BaseAgent Architecture
 

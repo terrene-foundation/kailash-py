@@ -30,7 +30,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 472
         fsGroup: 472
-      
+
       # Init container to set up plugins
       initContainers:
         - name: grafana-plugins-installer
@@ -46,17 +46,17 @@ spec:
           volumeMounts:
             - name: grafana-storage
               mountPath: /var/lib/grafana
-      
+
       containers:
         - name: grafana
           image: grafana/grafana:10.2.2
           imagePullPolicy: IfNotPresent
-          
+
           ports:
             - name: http
               containerPort: 3000
               protocol: TCP
-          
+
           env:
             - name: GF_SECURITY_ADMIN_USER
               valueFrom:
@@ -82,7 +82,7 @@ spec:
               value: "false"
             - name: GF_INSTALL_PLUGINS
               value: "grafana-clock-panel,grafana-simple-json-datasource"
-          
+
           resources:
             requests:
               cpu: 100m
@@ -90,7 +90,7 @@ spec:
             limits:
               cpu: 500m
               memory: 1Gi
-          
+
           livenessProbe:
             httpGet:
               path: /api/health
@@ -100,7 +100,7 @@ spec:
             timeoutSeconds: 5
             successThreshold: 1
             failureThreshold: 3
-          
+
           readinessProbe:
             httpGet:
               path: /api/health
@@ -110,7 +110,7 @@ spec:
             timeoutSeconds: 3
             successThreshold: 1
             failureThreshold: 3
-          
+
           volumeMounts:
             - name: grafana-storage
               mountPath: /var/lib/grafana
@@ -123,7 +123,7 @@ spec:
             - name: grafana-config
               mountPath: /etc/grafana/grafana.ini
               subPath: grafana.ini
-      
+
       volumes:
         - name: grafana-storage
           persistentVolumeClaim:
@@ -140,7 +140,7 @@ spec:
         - name: grafana-config
           configMap:
             name: grafana-config
-      
+
       # Pod anti-affinity for HA
       affinity:
         podAntiAffinity:
@@ -186,27 +186,27 @@ data:
   grafana.ini: |
     [server]
     root_url = https://grafana.yourdomain.com
-    
+
     [analytics]
     reporting_enabled = false
     check_for_updates = false
-    
+
     [log]
     mode = console
     level = info
-    
+
     [alerting]
     enabled = true
-    
+
     [unified_alerting]
     enabled = true
-    
+
     [database]
     type = sqlite3
-    
+
     [session]
     provider = file
-    
+
     [security]
     cookie_secure = true
     cookie_samesite = strict
@@ -215,20 +215,20 @@ data:
     strict_transport_security_preload = true
     strict_transport_security_subdomains = true
     content_security_policy = true
-    
+
     [users]
     allow_sign_up = false
     allow_org_create = false
-    
+
     [auth]
     disable_login_form = false
     disable_signout_menu = false
-    
+
     [auth.anonymous]
     enabled = false
-    
+
     [auth.basic]
     enabled = true
-    
+
     [dashboards]
     default_home_dashboard_path = /var/lib/grafana/dashboards/kubernetes-cluster.json

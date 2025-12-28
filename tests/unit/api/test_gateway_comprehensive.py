@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from kailash.api.gateway import (
     WorkflowAPIGateway,
     WorkflowOrchestrator,

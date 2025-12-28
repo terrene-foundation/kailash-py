@@ -4,13 +4,24 @@ Comprehensive guide to managing database transactions in DataFlow workflows.
 
 ## Overview
 
-DataFlow provides automatic transaction management for workflows, ensuring data consistency and integrity. Transactions can be implicit (automatic) or explicit (manual control).
+DataFlow provides two transaction patterns: **separate connections (default)** and **shared transaction context (explicit)**. Understanding which pattern you're using is critical for data consistency.
 
-## Automatic Transaction Management
+## ⚠️ Critical Understanding: Connection Isolation
 
-### Default Behavior
+**By default, DataFlow nodes do NOT share a transaction context.** Each node gets its own connection from the connection pool, which means:
 
-By default, DataFlow wraps each workflow execution in a transaction:
+- ❌ No automatic ACID guarantees across multiple nodes
+- ❌ No automatic rollback if a later node fails
+- ✅ Better concurrency (connections returned to pool quickly)
+- ✅ No connection blocking on long workflows
+
+**See**: [Connection Isolation Guide](../../../../.claude/skills/02-dataflow/dataflow-connection-isolation.md) for complete details.
+
+## Transaction Patterns
+
+### Pattern 1: Separate Connections (Default)
+
+**Each DataFlow node gets its own connection from the pool:**
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
@@ -18,7 +29,7 @@ from kailash.runtime.local import LocalRuntime
 
 workflow = WorkflowBuilder()
 
-# These operations are automatically in a transaction
+# Each node uses SEPARATE connection
 workflow.add_node("UserCreateNode", "create_user", {
     "name": "John Doe",
     "email": "john@example.com"
@@ -35,24 +46,60 @@ workflow.add_connection("create_user", "create_account", "id", "user_id")
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 
-# If any operation fails, all are rolled back
+# ❌ NO ACID GUARANTEES:
+# - If create_account fails, create_user is NOT rolled back
+# - Each operation commits independently
+# - Partial data may persist if workflow fails midway
 ```
 
-### Transaction Boundaries
+**When to use:** Independent operations, bulk imports where partial success is acceptable, high-concurrency scenarios.
 
-Each workflow execution creates a transaction boundary:
+### Pattern 2: Shared Transaction (Explicit)
+
+**Use TransactionScopeNode for ACID guarantees across multiple nodes:**
 
 ```python
-# Transaction 1
-workflow1 = WorkflowBuilder()
-workflow1.add_node("UserCreateNode", "create_user", {...})
-runtime.execute(workflow1.build())  # Commits on success
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime.local import LocalRuntime
 
-# Transaction 2 (separate)
-workflow2 = WorkflowBuilder()
-workflow2.add_node("OrderCreateNode", "create_order", {...})
-runtime.execute(workflow2.build())  # Independent transaction
+workflow = WorkflowBuilder()
+
+# Start explicit transaction
+workflow.add_node("TransactionScopeNode", "tx", {
+    "isolation_level": "READ_COMMITTED",
+    "timeout": 30,
+    "rollback_on_error": True
+})
+
+# All nodes share SAME connection
+workflow.add_node("UserCreateNode", "create_user", {
+    "name": "John Doe",
+    "email": "john@example.com"
+})
+
+workflow.add_node("AccountCreateNode", "create_account", {
+    "user_id": ":user_id",
+    "balance": 100.00
+})
+
+# Commit transaction
+workflow.add_node("TransactionCommitNode", "commit", {})
+
+# Connect nodes
+workflow.add_connection("tx", "result", "create_user", "input")
+workflow.add_connection("create_user", "create_account", "id", "user_id")
+workflow.add_connection("create_account", "result", "commit", "input")
+
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+
+# ✅ ACID GUARANTEES:
+# - If create_account fails, create_user IS rolled back
+# - All operations in single transaction
+# - No partial data commits
 ```
+
+**When to use:** Financial operations, multi-step operations requiring atomicity, data consistency requirements, audit trail needs.
 
 ## Explicit Transaction Control
 

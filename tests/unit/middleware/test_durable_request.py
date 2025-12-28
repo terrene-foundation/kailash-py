@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from kailash.middleware.gateway.durable_request import (
     Checkpoint,
     DurableRequest,

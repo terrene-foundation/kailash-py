@@ -7,7 +7,6 @@ Following testing policy: Unit tests must be fast (<1s), use mocks, no external 
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash.nodes.validation.test_executor import (
     ValidationLevel,
     ValidationResult,

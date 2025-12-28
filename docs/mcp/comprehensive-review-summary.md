@@ -172,6 +172,6 @@ The Kailash MCP server sets a high bar for MCP implementations and serves as an 
 
 ---
 
-**Review Completed**: January 2025  
-**Reviewer**: Claude (AI Assistant)  
+**Review Completed**: January 2025
+**Reviewer**: Claude (AI Assistant)
 **Version**: Kailash SDK v0.8.5+ with resource subscriptions

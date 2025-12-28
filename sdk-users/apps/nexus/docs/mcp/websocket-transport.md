@@ -58,11 +58,11 @@ from nexus.mcp.transport import WebSocketServerTransport
 async def custom_handler(message):
     """Handle incoming messages with custom logic."""
     msg_type = message.get("type")
-    
+
     if msg_type == "custom_command":
         # Process custom command
         return {"type": "custom_response", "data": "processed"}
-    
+
     # Default handling
     return {"type": "echo", "original": message}
 

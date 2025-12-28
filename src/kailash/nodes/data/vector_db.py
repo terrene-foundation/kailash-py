@@ -47,7 +47,6 @@ Example:
 from typing import Any
 
 import numpy as np
-
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeConfigurationError, NodeExecutionError
 

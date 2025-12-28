@@ -36,7 +36,7 @@ def create_demo_project():
             """
         from src.myapp.models.base import BaseModel
         from src.myapp.utils.validators import validate_email
-        
+
         class User(BaseModel):
             def __init__(self, email):
                 self.email = validate_email(email)
@@ -51,7 +51,7 @@ def create_demo_project():
         from ..utils.validators import validate_price  # Relative import
         from .base import BaseModel  # Relative import
         from utils.helpers import format_currency  # Implicit relative
-        
+
         class Product(BaseModel):
             def __init__(self, price):
                 self.price = validate_price(price)

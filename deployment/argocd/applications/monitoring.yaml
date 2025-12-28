@@ -10,7 +10,7 @@ metadata:
     app.kubernetes.io/part-of: monitoring
 spec:
   project: kailash
-  
+
   source:
     repoURL: https://prometheus-community.github.io/helm-charts
     targetRevision: 55.5.0
@@ -18,7 +18,7 @@ spec:
     helm:
       values: |
         fullnameOverride: prometheus
-        
+
         # Prometheus configuration
         prometheus:
           prometheusSpec:
@@ -40,47 +40,47 @@ spec:
               limits:
                 memory: 8Gi
                 cpu: 4
-            
+
             # Service monitors
             serviceMonitorSelectorNilUsesHelmValues: false
             serviceMonitorSelector:
               matchLabels:
                 prometheus: kailash
-            
+
             # Pod monitors
             podMonitorSelectorNilUsesHelmValues: false
             podMonitorSelector:
               matchLabels:
                 prometheus: kailash
-            
+
             # Probe selector
             probeSelectorNilUsesHelmValues: false
             probeSelector:
               matchLabels:
                 prometheus: kailash
-            
+
             # Rule selector
             ruleSelectorNilUsesHelmValues: false
             ruleSelector:
               matchLabels:
                 prometheus: kailash
-            
+
             # External labels
             externalLabels:
               cluster: kailash-prod
               environment: production
-        
+
         # Grafana configuration
         grafana:
           enabled: true
           replicas: 2
           adminPassword: changeme  # Change in production
-          
+
           persistence:
             enabled: true
             size: 10Gi
             storageClassName: standard
-          
+
           ingress:
             enabled: true
             ingressClassName: nginx
@@ -92,7 +92,7 @@ spec:
               - secretName: grafana-tls
                 hosts:
                   - grafana.yourdomain.com
-          
+
           sidecar:
             dashboards:
               enabled: true
@@ -100,7 +100,7 @@ spec:
             datasources:
               enabled: true
               defaultDatasourceEnabled: true
-          
+
           additionalDataSources:
             - name: Loki
               type: loki
@@ -110,7 +110,7 @@ spec:
               type: tempo
               access: proxy
               url: http://tempo-query:16686
-        
+
         # AlertManager configuration
         alertmanager:
           alertmanagerSpec:
@@ -123,12 +123,12 @@ spec:
                     requests:
                       storage: 10Gi
                   storageClassName: standard
-          
+
           config:
             global:
               resolve_timeout: 5m
               slack_api_url: 'YOUR_SLACK_WEBHOOK_URL'
-            
+
             route:
               group_by: ['alertname', 'cluster', 'service']
               group_wait: 10s
@@ -143,52 +143,52 @@ spec:
                 - match:
                     severity: warning
                   receiver: slack
-            
+
             receivers:
               - name: 'default'
                 slack_configs:
                   - channel: '#alerts'
                     title: 'Alert'
                     text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}'
-              
+
               - name: 'pagerduty'
                 pagerduty_configs:
                   - service_key: 'YOUR_PAGERDUTY_KEY'
-              
+
               - name: 'slack'
                 slack_configs:
                   - channel: '#alerts-warning'
                     title: 'Warning'
-        
+
         # Additional components
         kubeApiServer:
           enabled: true
-        
+
         kubeControllerManager:
           enabled: true
-        
+
         kubeScheduler:
           enabled: true
-        
+
         kubeEtcd:
           enabled: true
-        
+
         kubeProxy:
           enabled: true
-        
+
         kubeStateMetrics:
           enabled: true
-        
+
         nodeExporter:
           enabled: true
-        
+
         prometheusOperator:
           enabled: true
-  
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
-  
+
   syncPolicy:
     automated:
       prune: true
@@ -207,7 +207,7 @@ metadata:
     app.kubernetes.io/part-of: monitoring
 spec:
   project: kailash
-  
+
   source:
     repoURL: https://grafana.github.io/helm-charts
     targetRevision: 5.41.4
@@ -231,27 +231,27 @@ spec:
                 index:
                   prefix: index_
                   period: 24h
-        
+
         write:
           replicas: 3
           persistence:
             enabled: true
             size: 10Gi
-        
+
         read:
           replicas: 3
           persistence:
             enabled: true
             size: 10Gi
-        
+
         gateway:
           enabled: true
           replicas: 2
-  
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
-  
+
   syncPolicy:
     automated:
       prune: true
@@ -269,7 +269,7 @@ metadata:
     app.kubernetes.io/part-of: monitoring
 spec:
   project: kailash
-  
+
   source:
     repoURL: https://grafana.github.io/helm-charts
     targetRevision: 6.15.3
@@ -279,20 +279,20 @@ spec:
         config:
           clients:
             - url: http://loki-gateway.monitoring.svc.cluster.local/loki/api/v1/push
-        
+
         serviceMonitor:
           enabled: true
           labels:
             prometheus: kailash
-        
+
         tolerations:
           - effect: NoSchedule
             operator: Exists
-  
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
-  
+
   syncPolicy:
     automated:
       prune: true
@@ -308,7 +308,7 @@ metadata:
     app.kubernetes.io/part-of: monitoring
 spec:
   project: kailash
-  
+
   source:
     repoURL: https://grafana.github.io/helm-charts
     targetRevision: 1.7.2
@@ -323,26 +323,26 @@ spec:
                 bucket: kailash-tempo-traces
                 endpoint: s3.amazonaws.com
                 region: us-east-1
-        
+
         distributor:
           replicas: 3
-        
+
         ingester:
           replicas: 3
           persistence:
             enabled: true
             size: 10Gi
-        
+
         querier:
           replicas: 2
-        
+
         compactor:
           enabled: true
-  
+
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
-  
+
   syncPolicy:
     automated:
       prune: true

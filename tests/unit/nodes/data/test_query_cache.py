@@ -6,8 +6,6 @@ from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 import pytest
-from redis.exceptions import RedisError
-
 from kailash.nodes.data.query_cache import (
     CacheInvalidationStrategy,
     CachePattern,
@@ -15,6 +13,7 @@ from kailash.nodes.data.query_cache import (
     QueryCacheKey,
     create_query_cache,
 )
+from redis.exceptions import RedisError
 
 
 class TestQueryCacheKey:

@@ -36,11 +36,11 @@ from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash.runtime.base import BaseRuntime
 from kailash.runtime.mixins.cycle_execution import CycleExecutionMixin
 from kailash.sdk_exceptions import RuntimeExecutionError
 from kailash.workflow import Workflow
+
 from tests.unit.runtime.helpers_runtime import (
     create_empty_workflow,
     create_large_workflow,

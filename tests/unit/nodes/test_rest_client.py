@@ -5,7 +5,6 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from kailash.nodes.api.rest import RESTClientNode
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import NodeValidationError

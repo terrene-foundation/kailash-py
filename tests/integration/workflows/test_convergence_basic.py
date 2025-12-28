@@ -12,7 +12,6 @@ but the convergence expression evaluation has limitations in the current SDK.
 """
 
 import pytest
-
 from kailash import Workflow
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.code.python import PythonCodeNode

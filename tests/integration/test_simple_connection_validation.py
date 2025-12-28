@@ -3,7 +3,6 @@ Simple integration test for connection validation to verify basic functionality.
 """
 
 import pytest
-
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime

@@ -8,6 +8,7 @@ at the runtime level.
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+
 from kailash.nodes.base import Node, NodeParameter
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow

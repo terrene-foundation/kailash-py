@@ -1,6 +1,6 @@
 # Kailash Strategic Repivot: Executive Overview
 
-**Date:** January 2025
+**Date:** August 2025
 **Version:** 1.0
 **Status:** Strategic Decision Approved
 

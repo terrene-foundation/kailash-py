@@ -15,6 +15,7 @@ NO MOCKING - Tests verify actual runtime behavior with real components.
 from unittest.mock import patch
 
 import pytest
+
 from kailash.access_control import (
     AccessControlManager,
     NodePermission,

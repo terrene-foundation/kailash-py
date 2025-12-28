@@ -98,11 +98,14 @@ class MultiInputExample(Signature):
 
 **Key Features:**
 - Inherit from `Signature` base class
-- Use `InputField(desc="...")` for inputs
-- Use `OutputField(desc="...")` for outputs
+- Use `InputField(desc="...")` or `InputField(description="...")` for inputs (both work)
+- Use `OutputField(desc="...")` or `OutputField(description="...")` for outputs (both work)
 - Add type annotations for clarity (`str`, `float`, `list`, etc.)
 - Provide field descriptions for better AI understanding
 - Support default values for optional inputs
+
+> **📝 Note on Parameter Names**
+> Both `desc=` and `description=` parameters work identically - they are aliases. Use whichever you prefer for consistency with your codebase. Examples in this guide use `desc=` for brevity, but `description=` is equally valid.
 
 ### Basic Patterns (String-based - Legacy)
 
@@ -254,6 +257,44 @@ config = BaseAgentConfig(
     model="gpt-4",  # Works with older models
     provider_config=provider_config
 )
+```
+
+### Response Handling
+
+OpenAI structured outputs return pre-parsed dict responses. The framework handles this automatically:
+
+```python
+# OpenAI returns dict directly for structured outputs
+response = {
+    "category": "Electronics",
+    "price_range": "$200-$400",
+    "confidence": 0.95
+}
+
+# BaseAgent automatically detects dict responses and returns them directly
+result = agent.run(product_description="Wireless headphones")
+
+# Access fields directly - no JSON parsing needed
+print(result['category'])        # "Electronics"
+print(result['price_range'])     # "$200-$400"
+print(result['confidence'])      # 0.95
+```
+
+**How It Works:**
+- OpenAI structured outputs return JSON as a dict object (not a string)
+- Both `AsyncSingleShotStrategy` and `SingleShotStrategy` detect dict responses
+- Dict responses are returned directly without string parsing
+- This is transparent to users - no code changes needed
+
+**Traditional vs Structured Outputs:**
+```python
+# Traditional (string response, needs parsing)
+response = '{"category": "Electronics", ...}'  # String
+result = json.loads(response)  # Manual parsing
+
+# Structured Outputs (dict response, pre-parsed)
+response = {"category": "Electronics", ...}  # Dict
+result = response  # Already parsed, use directly
 ```
 
 ### Signature Inheritance (v0.6.3+)

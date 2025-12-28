@@ -32,7 +32,7 @@ def temp_project_dir():
             textwrap.dedent(
                 """
             from kailash.runtime.local import LocalRuntime
-            
+
             # Legacy configuration that needs migration
             runtime = LocalRuntime(
                 enable_parallel=True,
@@ -40,7 +40,7 @@ def temp_project_dir():
                 debug_mode=True,
                 memory_limit=2048
             )
-            
+
             # Legacy method usage
             workflow = build_workflow()
             runtime.execute_sync(workflow)
@@ -58,7 +58,7 @@ def temp_project_dir():
                 'retry_count': 3,
                 'log_level': 'INFO'
             }
-            
+
             from kailash.runtime.local import LocalRuntime
             runtime = LocalRuntime(**RUNTIME_CONFIG)
         """
@@ -69,14 +69,14 @@ def temp_project_dir():
             textwrap.dedent(
                 """
             from kailash.runtime.local import LocalRuntime
-            
+
             # Already modern - should not need changes
             runtime = LocalRuntime(
                 debug=True,
                 max_concurrency=10,
                 enable_monitoring=True
             )
-            
+
             results, run_id = runtime.execute(workflow)
         """
             ).strip()

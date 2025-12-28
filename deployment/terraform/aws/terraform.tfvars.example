@@ -35,7 +35,7 @@ node_groups = {
       tier = "application"
     }
   }
-  
+
   # Spot instances for cost optimization (non-production workloads)
   spot = {
     instance_types = ["m6i.large", "m5.large", "m5a.large"]
@@ -121,7 +121,7 @@ backup_region             = "us-east-1"
 # Application Configuration
 application_config = {
   replicas = 5
-  
+
   resources = {
     requests = {
       cpu    = "1000m"
@@ -132,7 +132,7 @@ application_config = {
       memory = "8Gi"
     }
   }
-  
+
   autoscaling = {
     enabled                          = true
     min_replicas                    = 3

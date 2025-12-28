@@ -37,11 +37,11 @@ log_error() {
 # Check prerequisites
 check_prerequisites() {
     log_info "Checking prerequisites..."
-    
+
     # Check required tools
     local required_tools=("terraform" "aws")
     local optional_tools=("kubectl" "helm")
-    
+
     for tool in "${required_tools[@]}"; do
         if command -v "$tool" &> /dev/null; then
             local version=$($tool version | head -1)
@@ -50,7 +50,7 @@ check_prerequisites() {
             log_error "Required tool missing: $tool"
         fi
     done
-    
+
     for tool in "${optional_tools[@]}"; do
         if command -v "$tool" &> /dev/null; then
             local version=$($tool version --short 2>/dev/null || $tool version | head -1)
@@ -59,7 +59,7 @@ check_prerequisites() {
             log_warning "Optional tool missing: $tool"
         fi
     done
-    
+
     # Check AWS credentials
     if aws sts get-caller-identity &> /dev/null; then
         local account_id=$(aws sts get-caller-identity --query Account --output text)
@@ -74,16 +74,16 @@ check_prerequisites() {
 # Validate Terraform configuration syntax
 validate_terraform_syntax() {
     log_info "Validating Terraform configuration syntax..."
-    
+
     cd "$TERRAFORM_DIR"
-    
+
     # Format check
     if terraform fmt -check -recursive; then
         log_success "Terraform formatting is correct"
     else
         log_warning "Terraform formatting issues found (can be fixed with 'terraform fmt')"
     fi
-    
+
     # Initialize Terraform (without backend)
     if terraform init -backend=false &> /dev/null; then
         log_success "Terraform initialization successful"
@@ -91,7 +91,7 @@ validate_terraform_syntax() {
         log_error "Terraform initialization failed"
         return 1
     fi
-    
+
     # Validate configuration
     if terraform validate; then
         log_success "Terraform configuration is valid"
@@ -104,25 +104,25 @@ validate_terraform_syntax() {
 # Test Terraform plan with example configuration
 test_terraform_plan() {
     log_info "Testing Terraform plan with development configuration..."
-    
+
     cd "$TERRAFORM_DIR"
-    
+
     # Use development configuration for testing
     local dev_config="environments/development/terraform.tfvars"
-    
+
     if [[ ! -f "$dev_config" ]]; then
         log_error "Development configuration not found: $dev_config"
         return 1
     fi
-    
+
     # Run terraform plan (dry run)
     if terraform plan -var-file="$dev_config" -out=tfplan &> plan.out; then
         log_success "Terraform plan completed successfully"
-        
+
         # Check plan output for resources
         local resources_to_create=$(grep "Plan:" plan.out | grep -o '[0-9]\+ to add' | grep -o '[0-9]\+' || echo "0")
         log_info "Resources to create: $resources_to_create"
-        
+
         if [[ "$resources_to_create" -gt 0 ]]; then
             log_success "Plan includes resource creation ($resources_to_create resources)"
         else
@@ -133,7 +133,7 @@ test_terraform_plan() {
         cat plan.out
         return 1
     fi
-    
+
     # Cleanup
     rm -f tfplan plan.out
 }
@@ -141,15 +141,15 @@ test_terraform_plan() {
 # Validate variable files
 validate_variable_files() {
     log_info "Validating variable files..."
-    
+
     local var_files=(
         "terraform.tfvars.example"
         "environments/development/terraform.tfvars"
     )
-    
+
     for var_file in "${var_files[@]}"; do
         local full_path="$TERRAFORM_DIR/$var_file"
-        
+
         if [[ -f "$full_path" ]]; then
             # Check syntax by attempting to parse with terraform
             if terraform console -var-file="$full_path" <<< "var.environment" &> /dev/null; then
@@ -166,11 +166,11 @@ validate_variable_files() {
 # Check security best practices
 check_security_practices() {
     log_info "Checking security best practices..."
-    
+
     local config_files=("main.tf" "variables.tf" "outputs.tf")
     local security_checks_passed=0
     local total_security_checks=5
-    
+
     # Check 1: Encryption at rest
     if grep -r "encrypted.*=.*true" "$TERRAFORM_DIR"/*.tf &> /dev/null; then
         log_success "Encryption at rest is enabled"
@@ -178,7 +178,7 @@ check_security_practices() {
     else
         log_warning "Encryption at rest may not be properly configured"
     fi
-    
+
     # Check 2: KMS key usage
     if grep -r "kms_key" "$TERRAFORM_DIR"/*.tf &> /dev/null; then
         log_success "KMS keys are configured"
@@ -186,7 +186,7 @@ check_security_practices() {
     else
         log_warning "KMS key configuration not found"
     fi
-    
+
     # Check 3: Private subnets for worker nodes
     if grep -r "private_subnets" "$TERRAFORM_DIR"/*.tf &> /dev/null; then
         log_success "Private subnets are configured"
@@ -194,7 +194,7 @@ check_security_practices() {
     else
         log_warning "Private subnets configuration not found"
     fi
-    
+
     # Check 4: IRSA configuration
     if grep -r "enable_irsa" "$TERRAFORM_DIR"/*.tf &> /dev/null; then
         log_success "IAM Roles for Service Accounts (IRSA) is configured"
@@ -202,7 +202,7 @@ check_security_practices() {
     else
         log_warning "IRSA configuration not found"
     fi
-    
+
     # Check 5: Security groups
     if grep -r "security_group" "$TERRAFORM_DIR"/*.tf &> /dev/null; then
         log_success "Security groups are configured"
@@ -210,9 +210,9 @@ check_security_practices() {
     else
         log_warning "Security group configuration not found"
     fi
-    
+
     log_info "Security checks passed: $security_checks_passed/$total_security_checks"
-    
+
     if [[ "$security_checks_passed" -ge 4 ]]; then
         log_success "Security configuration looks good"
     else
@@ -223,23 +223,23 @@ check_security_practices() {
 # Check for hardcoded values
 check_hardcoded_values() {
     log_info "Checking for hardcoded sensitive values..."
-    
+
     local sensitive_patterns=(
         "password.*=.*\"[^\"]*\""
         "secret.*=.*\"[^\"]*\""
         "key.*=.*\"[A-Za-z0-9+/=]{20,}\""
         "token.*=.*\"[^\"]*\""
     )
-    
+
     local hardcoded_found=false
-    
+
     for pattern in "${sensitive_patterns[@]}"; do
         if grep -r -i "$pattern" "$TERRAFORM_DIR"/*.tf &> /dev/null; then
             log_error "Potential hardcoded sensitive value found (pattern: $pattern)"
             hardcoded_found=true
         fi
     done
-    
+
     if [[ "$hardcoded_found" == "false" ]]; then
         log_success "No hardcoded sensitive values detected"
     fi
@@ -248,10 +248,10 @@ check_hardcoded_values() {
 # Validate module structure
 validate_module_structure() {
     log_info "Validating module structure..."
-    
+
     local required_files=("main.tf" "variables.tf" "outputs.tf")
     local recommended_files=("terraform.tfvars.example" "README.md")
-    
+
     # Check required files
     for file in "${required_files[@]}"; do
         if [[ -f "$TERRAFORM_DIR/$file" ]]; then
@@ -260,7 +260,7 @@ validate_module_structure() {
             log_error "Required file missing: $file"
         fi
     done
-    
+
     # Check recommended files
     for file in "${recommended_files[@]}"; do
         if [[ -f "$TERRAFORM_DIR/$file" ]]; then
@@ -269,11 +269,11 @@ validate_module_structure() {
             log_warning "Recommended file missing: $file"
         fi
     done
-    
+
     # Check modules directory
     if [[ -d "$TERRAFORM_DIR/modules" ]]; then
         log_success "Modules directory exists"
-        
+
         # List modules
         local modules=($(find "$TERRAFORM_DIR/modules" -mindepth 1 -maxdepth 1 -type d -exec basename {} \;))
         log_info "Modules found: ${modules[*]}"
@@ -285,9 +285,9 @@ validate_module_structure() {
 # Generate validation report
 generate_report() {
     log_info "Generating validation report..."
-    
+
     local report_file="$TERRAFORM_DIR/validation-report-$(date +%Y%m%d_%H%M%S).txt"
-    
+
     cat > "$report_file" << EOF
 Terraform AWS EKS Configuration Validation Report
 ================================================
@@ -330,7 +330,7 @@ Next Steps:
 4. Run 'terraform plan' to review planned changes
 5. Run 'terraform apply' to deploy the infrastructure
 EOF
-    
+
     log_success "Validation report generated: $report_file"
     cat "$report_file"
 }
@@ -339,7 +339,7 @@ EOF
 main() {
     log_info "Starting Terraform AWS EKS Configuration Validation"
     echo "============================================================"
-    
+
     check_prerequisites
     validate_terraform_syntax
     test_terraform_plan
@@ -347,9 +347,9 @@ main() {
     check_security_practices
     check_hardcoded_values
     validate_module_structure
-    
+
     generate_report
-    
+
     echo "============================================================"
     if [[ $ERRORS -eq 0 ]]; then
         log_success "All validations passed! Configuration is ready for deployment."

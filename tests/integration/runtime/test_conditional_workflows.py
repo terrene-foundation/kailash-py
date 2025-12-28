@@ -14,7 +14,6 @@ import time
 from unittest.mock import patch
 
 import pytest
-
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import CSVReaderNode

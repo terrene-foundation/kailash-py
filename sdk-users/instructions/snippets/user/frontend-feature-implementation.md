@@ -11,7 +11,7 @@ You are implementing a frontend feature. Follow these steps exactly and show me 
 ### Essential Context Loading
 Load these files before starting (DO NOT proceed until loaded):
 - Root `CLAUDE.md` - Core validation rules and critical patterns
-- `frontend/CLAUDE.md` - Frontend-specific patterns and architectural guidance  
+- `frontend/CLAUDE.md` - Frontend-specific patterns and architectural guidance
 - `frontend/package.json` - Dependencies, scripts, and project configuration
 - `todos/000-master.md` - Current project state and priorities
 

@@ -10,7 +10,6 @@ Tests ResourceReference and helper functions for:
 import json
 
 import pytest
-
 from kailash.resources.reference import (
     ResourceReference,
     create_cache_reference,

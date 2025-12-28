@@ -14,7 +14,6 @@ from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 import pytest
-
 from kailash.nodes.admin.role_management import RoleManagementNode
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 

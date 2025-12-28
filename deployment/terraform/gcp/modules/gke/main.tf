@@ -54,7 +54,7 @@ resource "google_container_cluster" "primary" {
 
   # Security features
   enable_shielded_nodes = var.enable_shielded_nodes
-  
+
   dynamic "binary_authorization" {
     for_each = var.enable_binary_authorization ? [1] : []
     content {
@@ -95,7 +95,7 @@ resource "google_container_cluster" "primary" {
           "https://www.googleapis.com/auth/trace.append",
         ]
         service_account = google_service_account.nodes.email
-        
+
         shielded_instance_config {
           enable_secure_boot          = true
           enable_integrity_monitoring = true
@@ -109,27 +109,27 @@ resource "google_container_cluster" "primary" {
     horizontal_pod_autoscaling {
       disabled = !var.enable_horizontal_pod_autoscaling
     }
-    
+
     vertical_pod_autoscaling {
       enabled = var.enable_vertical_pod_autoscaling
     }
-    
+
     http_load_balancing {
       disabled = false
     }
-    
+
     network_policy_config {
       disabled = false
     }
-    
+
     dns_cache_config {
       enabled = true
     }
-    
+
     gce_persistent_disk_csi_driver_config {
       enabled = true
     }
-    
+
     gcp_filestore_csi_driver_config {
       enabled = true
     }
@@ -138,12 +138,12 @@ resource "google_container_cluster" "primary" {
   # Monitoring and logging
   monitoring_config {
     enable_components = var.monitoring_config
-    
+
     managed_prometheus {
       enabled = true
     }
   }
-  
+
   logging_config {
     enable_components = var.logging_config
   }
@@ -220,7 +220,7 @@ resource "google_container_node_pool" "node_pools" {
 
   # Node count and autoscaling
   initial_node_count = each.value.initial_count
-  
+
   autoscaling {
     min_node_count = each.value.min_count
     max_node_count = each.value.max_count
@@ -231,14 +231,14 @@ resource "google_container_node_pool" "node_pools" {
     machine_type = each.value.machine_type
     disk_size_gb = each.value.disk_size_gb
     disk_type    = each.value.disk_type
-    
+
     # Use spot instances if specified
     dynamic "spot" {
       for_each = each.value.spot ? [1] : []
       content {
       }
     }
-    
+
     preemptible = each.value.preemptible
 
     # Service account

@@ -208,14 +208,14 @@ migration_plan = db.create_migration_plan(
 ```python
 class DataTypeMigrationEngine:
     """Handles safe column type transformations"""
-    
+
     SAFE_CONVERSIONS = {
         'int -> float': 'SAFE',
         'varchar(n) -> varchar(m)': 'SAFE' if 'm > n' else 'MEDIUM',
         'text -> jsonb': 'MEDIUM',
         'varchar -> text': 'SAFE'
     }
-    
+
     UNSAFE_CONVERSIONS = {
         'float -> int': 'HIGH',     # Precision loss
         'varchar(m) -> varchar(n)': 'HIGH' if 'n < m' else 'SAFE',
@@ -240,7 +240,7 @@ class Product:
     specs: dict         # Migrates to JSONB with GIN index
     tags: list          # Migrates to JSONB array
     price: Decimal      # Migrates to NUMERIC(10,2)
-    
+
     __dataflow__ = {
         'postgresql': {
             'type_migrations': {
@@ -269,7 +269,7 @@ class Product:
 class Order:
     customer_id: int
     total: float
-    
+
     # Gold Standards Compliance automatically applied
     __dataflow__ = {
         'multi_tenant': True,      # Adds tenant_id field
@@ -307,7 +307,7 @@ db = DataFlow(
 ```python
 async def production_migration_workflow():
     """Production-safe migration orchestration"""
-    
+
     # Initialize with production safety settings
     db = DataFlow(
         database_url="postgresql://user:pass@prod:5432/app",
@@ -319,33 +319,33 @@ async def production_migration_workflow():
             'migration_timeout': 300
         }
     )
-    
+
     # Step 1: Analyze pending migrations
     pending = await db.get_pending_migrations()
     print(f"Pending migrations: {len(pending)}")
-    
+
     # Step 2: Create migration plan
     plan = db.create_migration_plan(
         migrations=pending,
         optimize_for='SAFETY',  # vs 'SPEED'
         batch_operations=True
     )
-    
+
     # Step 3: Dry run validation
     dry_run_result = await db.execute_migration_plan(
         plan, dry_run=True
     )
-    
+
     if not dry_run_result.success:
         raise Exception(f"Dry run failed: {dry_run_result.errors}")
-    
+
     # Step 4: Execute with monitoring
     result = await db.execute_migration_plan(
         plan,
         progress_callback=lambda status: log_migration_progress(status),
         rollback_on_failure=True
     )
-    
+
     return result
 ```
 
@@ -354,35 +354,35 @@ async def production_migration_workflow():
 ```python
 async def sync_migrations_across_environments():
     """Synchronize migrations across dev/staging/prod"""
-    
+
     environments = {
         'dev': DataFlow(database_url=DEV_DB_URL),
         'staging': DataFlow(database_url=STAGING_DB_URL),
         'prod': DataFlow(database_url=PROD_DB_URL)
     }
-    
+
     # Generate migration plan from development
     dev_db = environments['dev']
     migration_plan = dev_db.create_migration_plan()
-    
+
     # Apply to staging first
     staging_result = await environments['staging'].execute_migration_plan(
         migration_plan, auto_confirm=True
     )
-    
+
     if staging_result.success:
         # Run validation tests on staging
         await run_integration_tests(environments['staging'])
-        
+
         # Apply to production
         prod_result = await environments['prod'].execute_migration_plan(
             migration_plan,
             max_risk_level='MEDIUM',
             backup_before_migration=True
         )
-        
+
         return prod_result
-    
+
     return staging_result
 ```
 
@@ -393,11 +393,11 @@ from dataflow.migrations import MigrationStrategy
 
 class ZeroDowntimeMigrationStrategy(MigrationStrategy):
     """Custom strategy for zero-downtime migrations"""
-    
+
     def plan_migration(self, changes):
         """Plan migration with zero-downtime approach"""
         plan = []
-        
+
         for change in changes:
             if change.operation == 'RENAME_COLUMN':
                 # Zero-downtime column rename
@@ -409,13 +409,13 @@ class ZeroDowntimeMigrationStrategy(MigrationStrategy):
                 ])
             else:
                 plan.append(change)
-        
+
         return plan
-    
+
     def should_batch_operations(self, operations):
         """Determine if operations can be batched"""
         # Don't batch operations that might lock tables
-        return not any(op.operation in ['ADD_INDEX', 'DROP_COLUMN'] 
+        return not any(op.operation in ['ADD_INDEX', 'DROP_COLUMN']
                       for op in operations)
 
 # Use custom strategy

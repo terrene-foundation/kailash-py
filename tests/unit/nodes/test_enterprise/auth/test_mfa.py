@@ -6,7 +6,6 @@ not app-specific MFA implementations.
 """
 
 import pytest
-
 from kailash.nodes.auth.mfa import MultiFactorAuthNode
 
 

@@ -1,7 +1,6 @@
 """Tests for data retrieval nodes."""
 
 import pytest
-
 from kailash.nodes.data.retrieval import HybridRetrieverNode, RelevanceScorerNode
 
 

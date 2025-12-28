@@ -10,7 +10,6 @@ Common misunderstandings and mistakes when using DataFlow, with solutions.
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-models`](#), [`dataflow-crud-operations`](#), [`dataflow-nexus-integration`](#)
 > Related Subagents: `dataflow-specialist` (complex troubleshooting)
 
@@ -25,25 +24,25 @@ Common misunderstandings and mistakes when using DataFlow, with solutions.
 
 ## Critical Gotchas
 
-### 0. Empty Dict Truthiness Bug (Fixed in v0.6.2-v0.6.3) ⚠️ CRITICAL
+### 0. Empty Dict Truthiness Bug ⚠️ CRITICAL
 
 #### The Bug
 Python treats empty dict `{}` as falsy, causing incorrect behavior in filter operations.
 
 #### Symptoms (Before Fix)
 ```python
-# This would return ALL records instead of filtered records (v0.6.1 and earlier)
+# This would return ALL records instead of filtered records in older versions
 workflow.add_node("UserListNode", "query", {
     "filter": {"status": {"$ne": "inactive"}}
 })
 # Expected: 2 users (active only)
-# Actual (v0.6.1 and earlier): 3 users (ALL records)
+# Actual (older versions): 3 users (ALL records)
 ```
 
-#### The Fix (v0.6.2+)
-✅ **Upgrade to DataFlow v0.6.2 or later**
+#### The Fix
+✅ **Upgrade to Latest DataFlow**
 ```bash
-pip install --upgrade kailash-dataflow>=0.6.3
+pip install --upgrade kailash-dataflow
 ```
 
 ✅ All filter operators now work correctly:
@@ -67,16 +66,11 @@ if "filter" in kwargs:
 
 #### Root Cause
 Two locations had truthiness bugs:
-1. **v0.6.2 fix**: ListNode at nodes.py:1810 - `if filter_dict:` → `if "filter" in kwargs:`
-2. **v0.6.3 fix**: BulkDeleteNode at bulk_delete.py:177 - `not filter_conditions` → `"filter" not in validated_inputs`
-
-#### Affected Versions
-- ❌ v0.5.4 - v0.6.1: Broken
-- ✅ v0.6.2+: Filter operators fixed
-- ✅ v0.6.3+: BulkDelete safe mode fixed
+1. ListNode at nodes.py:1810 - `if filter_dict:` → `if "filter" in kwargs:`
+2. BulkDeleteNode at bulk_delete.py:177 - `not filter_conditions` → `"filter" not in validated_inputs`
 
 #### Impact
-**High**: All query filtering was broken in v0.6.1 and earlier. Upgrade immediately if using filters.
+**High**: All query filtering was affected in older versions. Ensure you're using the latest DataFlow version.
 
 ---
 
@@ -258,62 +252,62 @@ user_data = results["create_user"]["result"]  # Correct
 user_id = user_data["id"]  # Works
 ```
 
-### 5. String IDs Forced to Integer (Pre-v0.4.0)
+### 5. String IDs (Fixed - Historical Issue)
 
 ```python
-# OLD ISSUE (pre-v0.4.0)
+# HISTORICAL ISSUE (now fixed)
 @db.model
 class Session:
-    id: str  # String IDs were converted to int
+    id: str  # String IDs were converted to int in older versions
 
 workflow.add_node("SessionReadNode", "read", {
-    "id": "session-uuid-string"  # Failed - converted to int
+    "id": "session-uuid-string"  # Failed in older versions
 })
 ```
 
-**Fix: Upgrade to v0.4.0+**
+**Fix: Upgrade to Latest DataFlow**
 ```python
-# Fixed in v0.4.0+ - string IDs preserved
+# Fixed - string IDs now fully supported
 @db.model
 class Session:
-    id: str  # Fully supported now
+    id: str  # Fully supported
 
 workflow.add_node("SessionReadNode", "read", {
     "id": "session-uuid-string"  # Works perfectly
 })
 ```
 
-### 6. VARCHAR(255) Content Limits (Pre-v0.4.0)
+### 6. VARCHAR(255) Content Limits (Fixed - Historical Issue)
 
 ```python
-# OLD ISSUE (pre-v0.4.0)
+# HISTORICAL ISSUE (now fixed)
 @db.model
 class Article:
-    content: str  # Was VARCHAR(255) - truncated!
+    content: str  # Was VARCHAR(255) in older versions - truncated!
 
 # Long content failed or got truncated
 ```
 
-**Fix: Automatic in v0.4.0+**
+**Fix: Automatic in Current Version**
 ```python
-# Fixed in v0.4.0+ - now TEXT type
+# Fixed - now TEXT type
 @db.model
 class Article:
     content: str  # Unlimited content - TEXT type
 ```
 
-### 7. DateTime Serialization Issues (Pre-v0.4.0)
+### 7. DateTime Serialization (Fixed - Historical Issue)
 
 ```python
-# OLD ISSUE (pre-v0.4.0)
+# HISTORICAL ISSUE (now fixed)
 from datetime import datetime
 
 workflow.add_node("OrderCreateNode", "create", {
-    "due_date": datetime.now().isoformat()  # String failed validation
+    "due_date": datetime.now().isoformat()  # String failed validation in older versions
 })
 ```
 
-**Fix: Use Native datetime (v0.4.0+)**
+**Fix: Use Native datetime Objects**
 ```python
 from datetime import datetime
 
@@ -322,10 +316,10 @@ workflow.add_node("OrderCreateNode", "create", {
 })
 ```
 
-### 8. Multi-Instance Context Leaks (Pre-v0.4.0)
+### 8. Multi-Instance Context Isolation (Fixed - Historical Issue)
 
 ```python
-# OLD ISSUE (pre-v0.4.0)
+# HISTORICAL ISSUE (now fixed)
 db_dev = DataFlow("sqlite:///dev.db")
 db_prod = DataFlow("postgresql://...")
 
@@ -333,12 +327,12 @@ db_prod = DataFlow("postgresql://...")
 class DevModel:
     name: str
 
-# Model leaked to db_prod instance!
+# Model leaked to db_prod instance in older versions!
 ```
 
-**Fix: Fixed in v0.4.0+ (Context Isolation)**
+**Fix: Fixed (Proper Context Isolation)**
 ```python
-# Fixed in v0.4.0+ - proper isolation
+# Fixed - proper isolation now enforced
 db_dev = DataFlow("sqlite:///dev.db")
 db_prod = DataFlow("postgresql://...")
 
@@ -380,15 +374,7 @@ Use `dataflow-specialist` when:
 - Use connections, NOT `${}` template syntax
 - Enable critical config for Nexus integration
 - Access results via `results["node"]["result"]`
-- v0.4.0+ fixes: string IDs, TEXT type, datetime, multi-instance
-
-## Version Notes
-
-- **v0.6.3**: BulkDeleteNode safe mode validation fix (truthiness bug)
-- **v0.6.2**: ListNode filter operators fix ($ne, $nin, $in, $not - truthiness bug)
-- **v0.4.0+**: String ID support, TEXT type, datetime fix, multi-instance isolation
-- **v0.9.4+**: Password special character support
-- **v0.9.25+**: Threading fixes for Docker
+- Historical fixes: string IDs, TEXT type, datetime, multi-instance isolation
 
 ## Keywords for Auto-Trigger
 

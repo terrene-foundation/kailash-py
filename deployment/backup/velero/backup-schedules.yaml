@@ -27,24 +27,24 @@ spec:
         - vault-system
         - cert-manager
         - ingress-nginx
-      
+
       # Include cluster-scoped resources
       includeClusterResources: true
-      
+
       # Snapshot persistent volumes
       snapshotVolumes: true
-      
+
       # Default snapshot locations
       defaultVolumesToRestic: false
-      
+
       # Storage location
       storageLocation: aws-s3
       volumeSnapshotLocations:
         - aws-ebs
-      
+
       # Retention policy - keep for 30 days
       ttl: 720h0m0s  # 30 days
-      
+
       # Include additional resources
       includedResources:
         - persistentvolumes
@@ -54,7 +54,7 @@ spec:
         - services
         - ingresses
         - networkpolicies
-      
+
       # Exclude problematic resources
       excludedResources:
         - events
@@ -62,7 +62,7 @@ spec:
         - backups.velero.io
         - restores.velero.io
         - resticrepositories.velero.io
-      
+
       # Hooks for application consistency
       hooks:
         resources:
@@ -85,7 +85,7 @@ spec:
                       curl -X POST "localhost:9200/_refresh?pretty"
                   timeout: 30s
                   onError: Continue
-          
+
           - name: postgres-backup-hook
             includedNamespaces:
               - kailash-app
@@ -131,22 +131,22 @@ spec:
         - kube-node-lease
         - local-path-storage
         - velero
-      
+
       # Include cluster-scoped resources
       includeClusterResources: true
-      
+
       # Snapshot all volumes
       snapshotVolumes: true
       defaultVolumesToRestic: false
-      
+
       # Storage location
       storageLocation: aws-s3
       volumeSnapshotLocations:
         - aws-ebs
-      
+
       # Retention policy - keep for 90 days
       ttl: 2160h0m0s  # 90 days
-      
+
       # Exclude backup-related resources
       excludedResources:
         - events
@@ -179,23 +179,23 @@ spec:
       # Only backup application data
       includedNamespaces:
         - kailash-app
-      
+
       # Don't include cluster resources for hourly backups
       includeClusterResources: false
-      
+
       # Only backup specific resources
       includedResources:
         - persistentvolumeclaims
         - secrets
         - configmaps
-      
+
       # No volume snapshots for hourly (too expensive)
       snapshotVolumes: false
       defaultVolumesToRestic: true
-      
+
       # Storage location
       storageLocation: aws-s3
-      
+
       # Short retention - keep for 7 days
       ttl: 168h0m0s  # 7 days
 
@@ -224,10 +224,10 @@ spec:
         - kube-public
         - kube-node-lease
         - local-path-storage
-      
+
       # Include cluster-scoped configuration
       includeClusterResources: true
-      
+
       # Only configuration resources
       includedResources:
         - configmaps
@@ -239,17 +239,17 @@ spec:
         - customresourcedefinitions
         - storageclasses
         - priorityclasses
-      
+
       # No volume snapshots for config backups
       snapshotVolumes: false
       defaultVolumesToRestic: false
-      
+
       # Storage location
       storageLocation: aws-s3
-      
+
       # Short retention - keep for 3 days
       ttl: 72h0m0s  # 3 days
-      
+
       # Exclude data volumes
       excludedResources:
         - persistentvolumes
@@ -325,22 +325,22 @@ spec:
         - kube-public
         - kube-node-lease
         - local-path-storage
-      
+
       # Include all cluster resources
       includeClusterResources: true
-      
+
       # Snapshot all volumes
       snapshotVolumes: true
       defaultVolumesToRestic: false
-      
+
       # Use cross-region storage
       storageLocation: cross-region-backup
       volumeSnapshotLocations:
         - aws-ebs
-      
+
       # Long retention - keep for 1 year
       ttl: 8760h0m0s  # 365 days
-      
+
       # Include everything except transient resources
       excludedResources:
         - events

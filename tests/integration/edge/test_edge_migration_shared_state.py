@@ -9,7 +9,6 @@ import asyncio
 
 import pytest
 import pytest_asyncio
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

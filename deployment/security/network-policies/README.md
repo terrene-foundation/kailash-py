@@ -58,7 +58,7 @@ kubectl logs -n kube-system -l k8s-app=cilium -f | grep -i "denied"
 ### Default Deny (00-default-deny.yaml)
 Blocks all ingress and egress traffic to pods unless explicitly allowed by other policies.
 
-### Namespace Isolation (01-namespace-isolation.yaml)  
+### Namespace Isolation (01-namespace-isolation.yaml)
 Prevents cross-namespace communication except for system namespaces.
 
 ### Kube-System Policies (02-kube-system-policies.yaml)
@@ -81,7 +81,7 @@ Manages outbound traffic for internet access, DNS, etc.
 ### CNI Compatibility
 Network policies require a CNI plugin that supports them:
 - ✅ Calico
-- ✅ Cilium  
+- ✅ Cilium
 - ✅ Weave Net
 - ❌ Flannel (basic)
 
@@ -115,7 +115,7 @@ kubectl logs -n kube-system -l k8s-app=calico-node -f
 # Development - more permissive
 kubectl apply -f network-policies/environments/development/
 
-# Staging - moderate restrictions  
+# Staging - moderate restrictions
 kubectl apply -f network-policies/environments/staging/
 
 # Production - strict enforcement
@@ -142,7 +142,7 @@ Network policy decisions are logged in the CNI plugin logs:
 # Calico logs
 kubectl logs -n kube-system -l k8s-app=calico-node
 
-# Cilium logs  
+# Cilium logs
 kubectl logs -n kube-system -l k8s-app=cilium
 ```
 

@@ -88,7 +88,7 @@ monitoring/
    ```bash
    # Kustomize
    kubectl kustomize version
-   
+
    # Helm (for dependencies)
    helm version
    ```
@@ -99,7 +99,7 @@ monitoring/
    ```bash
    # Using Kustomize (included in kustomization.yaml)
    kubectl apply -k deployment/monitoring/
-   
+
    # Or using Helm
    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
    helm install prometheus-operator prometheus-community/kube-prometheus-stack \
@@ -114,7 +114,7 @@ monitoring/
      --namespace monitoring \
      --from-literal=admin-user=admin \
      --from-literal=admin-password=$(openssl rand -base64 32)
-   
+
    # Create AlertManager configuration
    kubectl create secret generic alertmanager-config \
      --namespace monitoring \
@@ -125,7 +125,7 @@ monitoring/
    ```bash
    # Deploy using Kustomize
    kubectl apply -k deployment/monitoring/
-   
+
    # Verify deployment
    kubectl get pods -n monitoring
    kubectl get prometheus,alertmanager,servicemonitor -n monitoring
@@ -239,7 +239,7 @@ Add JSON files to `dashboards/` directory and they'll be automatically loaded.
 # Increase Prometheus replicas
 spec:
   replicas: 3
-  
+
 # Enable sharding
 spec:
   shards: 2
@@ -300,7 +300,7 @@ spec:
    ```bash
    # Check ServiceMonitor labels
    kubectl get servicemonitor -n monitoring --show-labels
-   
+
    # Verify in Prometheus UI
    kubectl port-forward -n monitoring svc/prometheus 9090:9090
    # Visit http://localhost:9090/targets
@@ -310,7 +310,7 @@ spec:
    ```bash
    # Check datasource configuration
    kubectl describe configmap grafana-datasources -n monitoring
-   
+
    # Test connection in Grafana UI
    kubectl port-forward -n monitoring svc/grafana 3000:3000
    ```
@@ -319,7 +319,7 @@ spec:
    ```bash
    # Check configuration
    kubectl logs -n monitoring alertmanager-0
-   
+
    # Verify webhook URLs
    curl -X POST https://your-webhook-url/test
    ```

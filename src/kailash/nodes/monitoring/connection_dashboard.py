@@ -35,7 +35,6 @@ from typing import Any, Dict, List, Optional, Set
 
 import aiohttp_cors
 from aiohttp import web
-
 from kailash.nodes.base import Node, NodeParameter, register_node
 
 logger = logging.getLogger(__name__)

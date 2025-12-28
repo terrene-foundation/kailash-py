@@ -6,7 +6,6 @@ import sqlite3
 import tempfile
 
 import pytest
-
 from kailash.core.resilience.bulkhead import (
     BulkheadManager,
     BulkheadRejectionError,

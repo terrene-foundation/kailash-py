@@ -6,10 +6,9 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field
-
 from kailash.sdk_exceptions import ManifestError
 from kailash.workflow import Workflow
+from pydantic import BaseModel, Field
 
 
 class KailashManifest(BaseModel):

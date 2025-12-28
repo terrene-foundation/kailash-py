@@ -74,7 +74,7 @@ azure/
    ```bash
    # Install Azure CLI
    curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-   
+
    # Install Terraform
    brew install terraform  # macOS
    # or
@@ -140,7 +140,7 @@ az storage container create \
 1. **Initialize Terraform**:
    ```bash
    cd deployment/terraform/azure
-   
+
    # Initialize with backend config
    terraform init \
      -backend-config="resource_group_name=terraform-state-rg" \
@@ -159,7 +159,7 @@ az storage container create \
    ```bash
    # Plan deployment
    terraform plan -var-file=environments/dev.tfvars
-   
+
    # Apply configuration
    terraform apply -var-file=environments/dev.tfvars
    ```
@@ -306,7 +306,7 @@ metric_alerts = {
    ```bash
    # Check quotas
    az vm list-usage --location eastus2 -o table
-   
+
    # Request increase
    az support tickets create
    ```
@@ -315,7 +315,7 @@ metric_alerts = {
    ```bash
    # Check cluster autoscaler
    kubectl logs -n kube-system -l component=cluster-autoscaler
-   
+
    # Manual scale
    az aks nodepool scale \
      --resource-group RESOURCE_GROUP \
@@ -328,7 +328,7 @@ metric_alerts = {
    ```bash
    # Test DNS
    kubectl run -it --rm debug --image=busybox --restart=Never -- nslookup kubernetes
-   
+
    # Check network policies
    kubectl get networkpolicies --all-namespaces
    ```

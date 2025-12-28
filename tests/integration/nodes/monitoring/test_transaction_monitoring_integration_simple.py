@@ -9,7 +9,6 @@ import time
 from datetime import UTC, datetime
 
 import pytest
-
 from kailash.nodes.monitoring import (
     DeadlockDetectorNode,
     PerformanceAnomalyNode,

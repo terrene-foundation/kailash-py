@@ -10,7 +10,6 @@ from unittest.mock import MagicMock, Mock, patch
 
 import networkx as nx
 import pytest
-
 from kailash.analysis.conditional_branch_analyzer import ConditionalBranchAnalyzer
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import MergeNode, SwitchNode

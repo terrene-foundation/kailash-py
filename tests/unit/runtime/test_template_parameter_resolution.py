@@ -12,7 +12,6 @@ Created: 2025-10-24
 """
 
 import pytest
-
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

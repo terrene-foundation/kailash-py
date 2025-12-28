@@ -1,7 +1,6 @@
 """Tests for Query Builder Integration."""
 
 import pytest
-
 from kailash.nodes.data.query_builder import (
     DatabaseDialect,
     QueryBuilder,

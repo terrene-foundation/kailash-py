@@ -53,6 +53,8 @@ import threading
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+# Import after database module to avoid circular imports
+import kailash.api.database as db
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
@@ -60,9 +62,6 @@ from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Session, relationship
-
-# Import after database module to avoid circular imports
-import kailash.api.database as db
 
 Base = db.Base
 get_db_session = db.get_db_session

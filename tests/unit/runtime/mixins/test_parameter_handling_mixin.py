@@ -4,7 +4,6 @@ Tests parameter resolution, template handling, merging, and nested value access.
 """
 
 import pytest
-
 from kailash.runtime.base import BaseRuntime
 from kailash.runtime.mixins.parameters import TEMPLATE_PATTERN, ParameterHandlingMixin
 from kailash.workflow import Workflow

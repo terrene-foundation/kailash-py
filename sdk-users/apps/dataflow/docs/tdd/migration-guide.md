@@ -33,7 +33,7 @@ from pathlib import Path
 
 def assess_test_suite(test_directory="tests/"):
     """Analyze test suite characteristics."""
-    
+
     metrics = {
         "total_tests": 0,
         "database_tests": 0,
@@ -41,32 +41,32 @@ def assess_test_suite(test_directory="tests/"):
         "avg_execution_time": 0,
         "cleanup_patterns": []
     }
-    
+
     # Count test files
     test_files = list(Path(test_directory).rglob("test_*.py"))
     metrics["total_tests"] = len(test_files)
-    
+
     # Analyze for database patterns
     for test_file in test_files:
         content = test_file.read_text()
-        
+
         # Check for database usage
         if "DataFlow" in content or "postgresql://" in content:
             metrics["database_tests"] += 1
-        
+
         # Check for DROP SCHEMA patterns
         if "DROP SCHEMA" in content or "CASCADE" in content:
             metrics["uses_drop_schema"] += 1
-            
+
         # Check for cleanup patterns
         if "teardown" in content or "cleanup" in content:
             metrics["cleanup_patterns"].append(str(test_file))
-    
+
     # Measure current execution time
     start = time.time()
     subprocess.run(["pytest", test_directory, "-q"], capture_output=True)
     metrics["avg_execution_time"] = (time.time() - start) / max(metrics["total_tests"], 1)
-    
+
     return metrics
 
 
@@ -143,10 +143,10 @@ async def tdd_database_manager():
 async def tdd_dataflow(tdd_database_manager):
     """Test-scoped DataFlow with automatic isolation."""
     context = TDDTestContext(test_id=f"test_{id(asyncio.current_task())}")
-    
+
     # Get pooled connection
     connection = await tdd_database_manager.get_test_connection(context)
-    
+
     # Create DataFlow with TDD optimizations
     db = DataFlow(
         database_url=TEST_DATABASE_URL,
@@ -156,12 +156,12 @@ async def tdd_dataflow(tdd_database_manager):
         auto_migrate=False,
         existing_schema_mode=True
     )
-    
+
     # Begin savepoint for isolation
     await context.begin_test_transaction(connection)
-    
+
     yield db
-    
+
     # Automatic rollback - no cleanup needed!
     await context.rollback_test_transaction(connection)
     await tdd_database_manager.release_connection(context)
@@ -179,11 +179,11 @@ def test_user_creation_traditional(database):
     database.execute("DROP SCHEMA public CASCADE")  # 2000ms
     database.execute("CREATE SCHEMA public")        # 500ms
     create_tables()                                 # 1000ms
-    
+
     # Test
     user = create_user("test@example.com")
     assert user.id is not None
-    
+
     # Teardown (manual)
     database.execute("DELETE FROM users")           # 100ms
     # Total: >3600ms
@@ -195,22 +195,22 @@ def test_user_creation_traditional(database):
 async def test_user_creation_tdd(tdd_dataflow):
     """TDD test with automatic isolation."""
     # No setup needed - reuses connection
-    
+
     @tdd_dataflow.model
     class User:
         email: str
-    
+
     # Use generated nodes
     workflow = WorkflowBuilder()
     workflow.add_node("UserCreateNode", "create", {
         "email": "test@example.com"
     })
-    
+
     runtime = LocalRuntime()
     results, _ = runtime.execute(workflow.build())
-    
+
     assert results["create"]["id"] is not None
-    
+
     # No teardown - automatic rollback!
     # Total: <100ms (20-50x faster!)
 ```
@@ -224,16 +224,16 @@ def test_order_workflow_traditional():
     # Setup
     cleanup_all_tables()  # 3000ms
     seed_test_data()      # 2000ms
-    
+
     # Test workflow
     customer = create_customer()
     order = create_order(customer)
     items = add_order_items(order)
     invoice = generate_invoice(order)
-    
+
     # Complex assertions
     assert invoice.total == sum(item.price for item in items)
-    
+
     # Cleanup
     delete_invoices()     # 500ms
     delete_orders()       # 500ms
@@ -250,26 +250,26 @@ async def test_order_workflow_tdd(tdd_dataflow):
     @tdd_dataflow.model
     class Customer:
         name: str
-        
+
     @tdd_dataflow.model
     class Order:
         customer_id: int
         total: float = 0.0
-    
+
     # Build workflow
     workflow = WorkflowBuilder()
-    
+
     # All operations in single transaction
     workflow.add_node("CustomerCreateNode", "customer", {"name": "Test"})
     workflow.add_node("OrderCreateNode", "order", {"total": 100.00})
     workflow.add_connection("customer", "id", "order", "customer_id")
-    
+
     runtime = LocalRuntime()
     results, _ = runtime.execute(workflow.build())
-    
+
     # Assertions
     assert results["order"]["total"] == 100.00
-    
+
     # Automatic rollback - all changes reverted!
     # Total: <100ms (70x faster!)
 ```
@@ -312,29 +312,29 @@ import statistics
 
 async def benchmark_test_suite():
     """Benchmark before and after migration."""
-    
+
     traditional_times = []
     tdd_times = []
-    
+
     # Benchmark traditional tests
     for _ in range(10):
         start = time.time()
         # Run traditional test
         await run_traditional_test()
         traditional_times.append(time.time() - start)
-    
+
     # Benchmark TDD tests
     for _ in range(10):
         start = time.time()
         # Run TDD test
         await run_tdd_test()
         tdd_times.append(time.time() - start)
-    
+
     # Calculate improvements
     traditional_avg = statistics.mean(traditional_times) * 1000  # ms
     tdd_avg = statistics.mean(tdd_times) * 1000  # ms
     improvement = traditional_avg / tdd_avg
-    
+
     print(f"""
 Performance Comparison:
 ======================
@@ -366,7 +366,7 @@ on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+
     services:
       postgres:
         image: postgres:15
@@ -381,20 +381,20 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    
+
     steps:
       - uses: actions/checkout@v3
-      
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      
+
       - name: Install dependencies
         run: |
           pip install -e .[tdd]
           pip install pytest pytest-asyncio pytest-xdist
-      
+
       - name: Run TDD tests (parallel)
         env:
           DATAFLOW_TDD_MODE: true
@@ -402,7 +402,7 @@ jobs:
         run: |
           # Run tests in parallel with xdist
           pytest tests/ -n auto --dist loadscope
-      
+
       - name: Performance validation
         run: |
           python scripts/validate_performance.py

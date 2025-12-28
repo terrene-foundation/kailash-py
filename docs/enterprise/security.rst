@@ -24,15 +24,15 @@ Quick Example
 .. code-block:: python
 
    from kailash.workflow.builder import WorkflowBuilder
-   
+
    workflow = WorkflowBuilder()
-   
+
    # Multi-factor authentication
    workflow.add_node("MultiFactorAuthNode", "auth", {
        "methods": ["password", "totp"],
        "require_all": False
    })
-   
+
    # Threat detection
    workflow.add_node("ThreatDetectionNode", "security", {
        "enable_ml": True,

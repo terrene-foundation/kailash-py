@@ -19,7 +19,7 @@ Add these methods to the `MCPServer` class in `src/kailash/mcp_server/server.py`
 async def _handle_logging_set_level(self, params: Dict[str, Any], request_id: Any) -> Dict[str, Any]:
     """Handle logging/setLevel request to dynamically adjust log levels."""
     level = params.get("level", "INFO").upper()
-    
+
     # Validate log level
     valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
     if level not in valid_levels:
@@ -31,11 +31,11 @@ async def _handle_logging_set_level(self, params: Dict[str, Any], request_id: An
             },
             "id": request_id
         }
-    
+
     # Set the log level
     logging.getLogger().setLevel(getattr(logging, level))
     logger.info(f"Log level changed to {level}")
-    
+
     # Track in event store if available
     if self.event_store:
         await self.event_store.record_event({
@@ -44,7 +44,7 @@ async def _handle_logging_set_level(self, params: Dict[str, Any], request_id: An
             "timestamp": time.time(),
             "changed_by": params.get("client_id", "unknown")
         })
-    
+
     return {
         "jsonrpc": "2.0",
         "result": {
@@ -57,7 +57,7 @@ async def _handle_logging_set_level(self, params: Dict[str, Any], request_id: An
 async def _handle_roots_list(self, params: Dict[str, Any], request_id: Any) -> Dict[str, Any]:
     """Handle roots/list request to get file system access roots."""
     protocol_mgr = get_protocol_manager()
-    
+
     # Check if client supports roots
     client_info = self.client_info.get(params.get("client_id", ""))
     if not client_info.get("capabilities", {}).get("roots", {}).get("listChanged", False):
@@ -69,21 +69,21 @@ async def _handle_roots_list(self, params: Dict[str, Any], request_id: Any) -> D
             },
             "id": request_id
         }
-    
+
     roots = protocol_mgr.roots.list_roots()
-    
+
     # Apply access control if auth manager is available
     if self.auth_manager and params.get("client_id"):
         filtered_roots = []
         for root in roots:
             if await protocol_mgr.roots.validate_access(
-                root["uri"], 
+                root["uri"],
                 operation="list",
                 user_context=self.client_info.get(params["client_id"], {})
             ):
                 filtered_roots.append(root)
         roots = filtered_roots
-    
+
     return {
         "jsonrpc": "2.0",
         "result": {
@@ -95,22 +95,22 @@ async def _handle_roots_list(self, params: Dict[str, Any], request_id: Any) -> D
 async def _handle_completion_complete(self, params: Dict[str, Any], request_id: Any) -> Dict[str, Any]:
     """Handle completion/complete request for auto-completion."""
     protocol_mgr = get_protocol_manager()
-    
+
     ref = params.get("ref", {})
     argument = params.get("argument", {})
-    
+
     # Extract completion parameters
     ref_type = ref.get("type")  # "resource", "prompt", "tool"
     ref_name = ref.get("name")  # Optional specific name
     partial_value = argument.get("value", "")
-    
+
     try:
         completions = await protocol_mgr.completion.get_completions(
             completion_type=ref_type,
             ref_name=ref_name,
             partial=partial_value
         )
-        
+
         # Format completions based on type
         if ref_type == "resource":
             values = [{"uri": c.get("uri"), "name": c.get("name")} for c in completions]
@@ -118,28 +118,28 @@ async def _handle_completion_complete(self, params: Dict[str, Any], request_id: 
             values = [{"name": c.get("name"), "description": c.get("description")} for c in completions]
         else:
             values = completions
-        
+
         # Add hasMore flag if there are many completions
         has_more = len(completions) > 100
         if has_more:
             values = values[:100]
-        
+
         result = {
             "completion": {
                 "values": values,
                 "total": len(completions)
             }
         }
-        
+
         if has_more:
             result["completion"]["hasMore"] = True
-            
+
         return {
             "jsonrpc": "2.0",
             "result": result,
             "id": request_id
         }
-        
+
     except Exception as e:
         logger.error(f"Completion error: {e}")
         return {
@@ -155,15 +155,15 @@ async def _handle_sampling_create_message(self, params: Dict[str, Any], request_
     """Handle sampling/createMessage - this is typically server-to-client."""
     # This is usually initiated by the server to request LLM sampling from the client
     # For server-side handling, we can validate and forward to connected clients
-    
+
     protocol_mgr = get_protocol_manager()
-    
+
     # Check if any client supports sampling
     sampling_clients = [
         client_id for client_id, info in self.client_info.items()
         if info.get("capabilities", {}).get("experimental", {}).get("sampling", False)
     ]
-    
+
     if not sampling_clients:
         return {
             "jsonrpc": "2.0",
@@ -173,7 +173,7 @@ async def _handle_sampling_create_message(self, params: Dict[str, Any], request_
             },
             "id": request_id
         }
-    
+
     # Create sampling request
     messages = params.get("messages", [])
     sampling_params = {
@@ -184,10 +184,10 @@ async def _handle_sampling_create_message(self, params: Dict[str, Any], request_
         "max_tokens": params.get("maxTokens"),
         "metadata": params.get("metadata")
     }
-    
+
     # Send to first available sampling client (or implement selection logic)
     target_client = sampling_clients[0]
-    
+
     # Create server-to-client request
     sampling_request = {
         "jsonrpc": "2.0",
@@ -195,18 +195,18 @@ async def _handle_sampling_create_message(self, params: Dict[str, Any], request_
         "params": sampling_params,
         "id": f"sampling_{uuid.uuid4().hex[:8]}"
     }
-    
+
     # Send via WebSocket to client
     if self._transport and hasattr(self._transport, "send_message"):
         await self._transport.send_message(sampling_request, client_id=target_client)
-        
+
         # Store pending sampling request
         self._pending_sampling_requests[sampling_request["id"]] = {
             "original_request_id": request_id,
             "client_id": params.get("client_id"),
             "timestamp": time.time()
         }
-        
+
         return {
             "jsonrpc": "2.0",
             "result": {
@@ -274,10 +274,10 @@ Ensure the server initializes required protocol managers:
 ```python
 def __init__(self, ...):
     # ... existing init code ...
-    
+
     # Initialize protocol manager components
     protocol_mgr = get_protocol_manager()
-    
+
     # Set up default roots if needed
     if not protocol_mgr.roots.list_roots():
         protocol_mgr.roots.add_root(
@@ -285,17 +285,17 @@ def __init__(self, ...):
             name="Root",
             description="File system root"
         )
-    
+
     # Register completion providers
     protocol_mgr.completion.register_completion_provider(
         "resource",
         self._get_resource_completions
     )
     protocol_mgr.completion.register_completion_provider(
-        "prompt", 
+        "prompt",
         self._get_prompt_completions
     )
-    
+
     # Initialize pending sampling requests tracker
     self._pending_sampling_requests = {}
 ```

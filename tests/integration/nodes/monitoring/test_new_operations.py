@@ -12,7 +12,6 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from kailash.nodes.monitoring.deadlock_detector import DeadlockDetectorNode
 from kailash.nodes.monitoring.race_condition_detector import RaceConditionDetectorNode
 from kailash.nodes.monitoring.transaction_metrics import TransactionMetricsNode

@@ -8,8 +8,8 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
-
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+
 from tests.utils.docker_config import get_postgres_connection_string
 
 # Mark all tests as requiring postgres and as integration tests

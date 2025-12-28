@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from kailash.sdk_exceptions import WorkflowExecutionError
 from kailash.tracking import TaskManager, TaskStatus
 from kailash.workflow.cyclic_runner import (

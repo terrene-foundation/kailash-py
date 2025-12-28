@@ -17,7 +17,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import qrcode
-
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode

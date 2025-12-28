@@ -10,14 +10,13 @@ Configure database connections with full support for special characters in passw
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+ / DataFlow 0.6.0+`
 > Related Skills: [`dataflow-quickstart`](#), [`dataflow-models`](#), [`dataflow-existing-database`](#)
 > Related Subagents: `dataflow-specialist` (connection troubleshooting, pooling optimization)
 
 ## Quick Reference
 
 - **Format**: `scheme://[user[:pass]@]host[:port]/database`
-- **Special Chars**: Fully supported in passwords (v0.9.4+)
+- **Special Chars**: Fully supported in passwords
 - **SQL Databases**: PostgreSQL, MySQL, SQLite (9 nodes per @db.model)
 - **Document Database**: MongoDB (8 specialized nodes, flexible schema)
 - **Vector Search**: PostgreSQL pgvector (3 vector nodes for RAG/semantic search)
@@ -28,7 +27,7 @@ Configure database connections with full support for special characters in passw
 ```python
 from dataflow import DataFlow
 
-# PostgreSQL with special characters (v0.9.4+ fixed)
+# PostgreSQL with special characters
 db = DataFlow(
     database_url="postgresql://admin:MySecret#123$@localhost:5432/mydb",
     pool_size=20,
@@ -107,7 +106,7 @@ db = DataFlow(
 
 ## Common Mistakes
 
-### Mistake 1: URL Encoding Passwords (Pre-v0.9.4)
+### Mistake 1: URL Encoding Passwords
 
 ```python
 # Wrong (old workaround, no longer needed)
@@ -115,7 +114,7 @@ password = "MySecret%23123%24"  # Manual encoding
 db = DataFlow(f"postgresql://user:{password}@host/db")
 ```
 
-**Fix: Use Password Directly (v0.9.4+)**
+**Fix: Use Password Directly**
 
 ```python
 # Correct - automatic handling
@@ -201,7 +200,7 @@ else:
 ### Example 2: Connection with Complex Password
 
 ```python
-# Password with special characters (v0.9.4+ fixed)
+# Password with special characters
 db = DataFlow(
     database_url="postgresql://admin:P@ssw0rd!#$@db.example.com:5432/prod",
     pool_size=20,
@@ -215,24 +214,18 @@ db = DataFlow(
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | Connection refused | Wrong host/port | Verify connection string |
-| Password authentication failed | Special chars in password | Upgrade to v0.9.4+ |
+| Password authentication failed | Special chars in password | Use latest DataFlow |
 | Pool exhausted | pool_size too small | Increase pool_size |
 | Connection timeout | Network/firewall | Check connect_timeout |
 
 ## Quick Tips
 
 - Use environment variables for credentials
-- Special characters work in v0.9.4+ (no encoding)
+- Special characters work with no encoding required
 - SQLite for development, PostgreSQL for production
 - pool_size = 2x CPU cores (typical)
 - Enable pool_pre_ping for reliability
 - Test connection before deployment
-
-## Version Notes
-
-- **v0.9.4+**: Special character support in passwords
-- **v0.4.0+**: Enhanced parameter type casting
-- **v0.4.0+**: Multi-instance isolation
 
 ## Keywords for Auto-Trigger
 

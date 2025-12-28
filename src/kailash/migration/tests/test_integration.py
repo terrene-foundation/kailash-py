@@ -33,7 +33,7 @@ def complete_project():
                 """
             from kailash.runtime.local import LocalRuntime
             from kailash.workflow.builder import WorkflowBuilder
-            
+
             def create_runtime():
                 # Legacy configuration
                 return LocalRuntime(
@@ -43,20 +43,20 @@ def complete_project():
                     memory_limit=4096,
                     timeout=600
                 )
-            
+
             def run_workflow(data):
                 runtime = create_runtime()
-                
+
                 workflow = WorkflowBuilder()
                 workflow.add_node("PythonCodeNode", "process", {
                     "code": f"result = len('{data}') * 2",
                     "output_key": "length_doubled"
                 })
-                
+
                 # Legacy execution pattern
                 runtime.execute_sync(workflow.build())
                 return runtime.get_results()
-            
+
             if __name__ == "__main__":
                 result = run_workflow("test data")
                 print(f"Result: {result}")
@@ -77,7 +77,7 @@ def complete_project():
                 'log_level': 'INFO',
                 'retry_count': 5
             }
-            
+
             DEVELOPMENT_CONFIG = {
                 'debug_mode': True,
                 'enable_parallel': False,
@@ -93,7 +93,7 @@ def complete_project():
                 """
             from kailash.runtime.local import LocalRuntime
             from kailash.access_control import UserContext
-            
+
             def create_modern_runtime():
                 user_context = UserContext(user_id="modern_user")
                 return LocalRuntime(
@@ -107,7 +107,7 @@ def complete_project():
                         'timeout_seconds': 300
                     }
                 )
-            
+
             def execute_modern_workflow(workflow):
                 runtime = create_modern_runtime()
                 results, run_id = runtime.execute(workflow)
@@ -122,11 +122,11 @@ def complete_project():
                 """
             import pytest
             from app import run_workflow
-            
+
             def test_workflow_execution():
                 result = run_workflow("hello")
                 assert result is not None
-            
+
             def test_workflow_with_empty_data():
                 result = run_workflow("")
                 assert result is not None

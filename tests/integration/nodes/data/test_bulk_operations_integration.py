@@ -5,7 +5,6 @@ from datetime import datetime
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from kailash.nodes.data.bulk_operations import (
     BulkCreateNode,
     BulkDeleteNode,

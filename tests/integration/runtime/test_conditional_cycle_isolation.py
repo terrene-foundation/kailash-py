@@ -6,7 +6,6 @@ does not interfere with cycle execution, causing double workflow execution.
 """
 
 import pytest
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

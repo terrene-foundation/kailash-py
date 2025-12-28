@@ -24,26 +24,23 @@
 
 ### Automatic Health Checks
 ```python
-from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode, HealthCheckConfig
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
 
-# Configure health monitoring
-health_config = HealthCheckConfig(
-    enabled=True,
-    interval=30.0,  # Check every 30 seconds
-    timeout=5.0,    # Health check timeout
-    query="SELECT 1",  # Simple health check query
-    failure_threshold=3,  # Mark unhealthy after 3 failures
-    recovery_threshold=2  # Mark healthy after 2 successes
-)
-
+# Configure node with health monitoring
+# Health checks use pool-level command_timeout for timeout protection
 node = AsyncSQLDatabaseNode(
     name="monitored_db",
     database_type="postgresql",
     host="db.production.internal",
     database="prod_app",
-    health_check_config=health_config,
+    command_timeout=60.0,  # Pool-level timeout for all queries (including health checks)
+    enable_health_checks=True,  # Enable automatic health monitoring
     share_pool=True
 )
+
+# Health checks run automatically using "SELECT 1" query
+# Pool-level command_timeout provides timeout protection
+# No need for per-query timeout parameters
 
 # Monitor pool health
 health_status = await node.get_pool_health()
@@ -99,8 +96,8 @@ await node.async_run(
         INSERT INTO analytics (
             id, metrics, binary_data, computation_result
         ) VALUES (
-            :id::uuid, 
-            :metrics::jsonb, 
+            :id::uuid,
+            :metrics::jsonb,
             :binary_data::bytea,
             :result::numeric[]
         )
@@ -205,7 +202,7 @@ node = AsyncSQLDatabaseNode(
 # Async iterator for large datasets
 async def process_large_dataset():
     total_processed = 0
-    
+
     async for batch in node.stream_query(
         query="SELECT * FROM events WHERE created_at > :start_date",
         params={"start_date": "2024-01-01"},
@@ -215,9 +212,9 @@ async def process_large_dataset():
         for row in batch:
             await process_event(row)
             total_processed += 1
-            
+
         print(f"Processed {total_processed} events...")
-        
+
         # Optional: Add backpressure control
         if total_processed % 10000 == 0:
             await asyncio.sleep(0.1)  # Brief pause
@@ -280,24 +277,24 @@ result = await node.async_run(
 
 ## Query Timeout & Cancellation [Built-in]
 
-### Granular Timeout Control
+### Pool-Level Timeout Control
 ```python
-# Different timeout levels
+# Configure pool-level timeout for all queries
 node = AsyncSQLDatabaseNode(
     database_type="postgresql",
     host="localhost",
     database="myapp",
-    connection_timeout=5.0,    # Connection establishment
-    command_timeout=30.0,      # Default query timeout
-    pool_timeout=10.0,         # Acquiring connection from pool
-    network_timeout=60.0       # Network-level timeout
+    connection_timeout=5.0,    # Connection establishment timeout
+    command_timeout=30.0,      # Pool-level timeout applied to ALL queries
+    pool_timeout=10.0,         # Timeout for acquiring connection from pool
 )
 
-# Override timeout for specific queries
+# All queries inherit the pool-level command_timeout
+# For longer-running queries, configure appropriate command_timeout at node creation
 result = await node.async_run(
     query="SELECT * FROM generate_large_report(:params)",
-    params={"year": 2024},
-    timeout=300.0  # 5 minutes for this specific query
+    params={"year": 2024}
+    # No per-query timeout parameter - use pool-level command_timeout
 )
 
 # Cancellable operations
@@ -308,11 +305,11 @@ async def cancellable_query():
             cancellable=True
         )
     )
-    
+
     # Cancel after 5 seconds
     await asyncio.sleep(5)
     task.cancel()
-    
+
     try:
         await task
     except asyncio.CancelledError:
@@ -358,10 +355,10 @@ try:
         query="UPDATE accounts SET balance = balance - :amount WHERE id = :id",
         params={"amount": 100, "id": 1}
     )
-    
+
     # Create savepoint
     await node.create_savepoint("before_risky_operation")
-    
+
     try:
         # Risky operation
         await node.async_run(
@@ -376,9 +373,9 @@ try:
             query="INSERT INTO error_log (error) VALUES (:error)",
             params={"error": "Audit log failed"}
         )
-    
+
     await node.commit()
-    
+
 except Exception:
     await node.rollback()
     raise
@@ -394,36 +391,36 @@ async def transfer_across_databases(amount: float, from_account: int, to_account
         connection_string=SOURCE_DB_URL,
         transaction_mode="manual"
     )
-    
+
     target_db = AsyncSQLDatabaseNode(
         name="target_db",
         database_type="postgresql",
         connection_string=TARGET_DB_URL,
         transaction_mode="manual"
     )
-    
+
     # Two-phase commit preparation
     await source_db.begin_transaction()
     await target_db.begin_transaction()
-    
+
     try:
         # Phase 1: Prepare
         await source_db.async_run(
             query="UPDATE accounts SET balance = balance - :amount WHERE id = :id RETURNING balance",
             params={"amount": amount, "id": from_account}
         )
-        
+
         await target_db.async_run(
             query="UPDATE accounts SET balance = balance + :amount WHERE id = :id",
             params={"amount": amount, "id": to_account}
         )
-        
+
         # Phase 2: Commit both
         await asyncio.gather(
             source_db.commit(),
             target_db.commit()
         )
-        
+
     except Exception as e:
         # Rollback both on any failure
         await asyncio.gather(
@@ -462,7 +459,7 @@ node = AsyncSQLDatabaseNode(
 # Method 3: Rotate credentials
 async def rotate_db_credentials():
     new_password = await secret_manager.rotate_password("prod/database/password")
-    
+
     # Update node configuration
     await node.update_connection(
         password=new_password,
@@ -507,7 +504,7 @@ async def db_with_circuit_breaker(node: AsyncSQLDatabaseNode, query: str, params
             breaker.state = "half_open"
         else:
             raise NodeExecutionError("Circuit breaker is OPEN - database unavailable")
-    
+
     try:
         result = await node.async_run(query=query, params=params)
         # Success - reset on half_open or reduce failure count
@@ -517,15 +514,15 @@ async def db_with_circuit_breaker(node: AsyncSQLDatabaseNode, query: str, params
         elif breaker.failure_count > 0:
             breaker.failure_count -= 1
         return result
-        
+
     except NodeExecutionError as e:
         breaker.failure_count += 1
         breaker.last_failure_time = datetime.now()
-        
+
         if breaker.failure_count >= breaker.failure_threshold:
             breaker.state = "open"
             logger.error(f"Circuit breaker OPENED after {breaker.failure_count} failures")
-        
+
         raise
 
 # Usage in workflow
@@ -576,7 +573,7 @@ retry_config = RetryConfig(
     jitter_factor=0.1,      # ±10% random variation
     retryable_errors=[
         "connection_refused",
-        "connection_reset", 
+        "connection_reset",
         "pool_timeout",
         "deadlock_detected",
         "serialization_failure"  # For SERIALIZABLE isolation
@@ -696,13 +693,13 @@ workflow.add_node("ConditionalNode", "check_data", {
     "condition": "input.result.data.count > 0"
 })
 
-# Step 3: Heavy transformation with custom timeout
+# Step 3: Heavy transformation with pool-level timeout
 workflow.add_node("AsyncSQLDatabaseNode", "transform", {
     "database_type": "postgresql",
     "connection_name": "analytics_db",
     "query": "CALL process_daily_aggregates(:date)",
     "params": {"date": "2024-01-01"},
-    "timeout": 1800.0,  # 30 minutes
+    "command_timeout": 1800.0,  # 30 minutes - pool-level timeout for long-running operations
     "transaction_mode": "none"  # Stored proc handles its own transactions
 })
 
@@ -720,13 +717,13 @@ results, run_id = runtime.execute(workflow.build())
 # Query across multiple databases
 class FederatedQueryNode(AsyncNode):
     """Execute queries across multiple databases and join results."""
-    
+
     async def async_run(self, **kwargs):
         # Database configurations
         databases = kwargs.get("databases", {})
         queries = kwargs.get("queries", {})
         join_key = kwargs.get("join_key", "id")
-        
+
         # Execute queries in parallel
         tasks = []
         for db_name, db_config in databases.items():
@@ -740,13 +737,13 @@ class FederatedQueryNode(AsyncNode):
                     params=queries[db_name].get("params", {})
                 )
             )
-        
+
         # Gather results
         results = await asyncio.gather(*tasks)
-        
+
         # Join results in memory
         joined_data = self._join_results(results, join_key)
-        
+
         return {"result": {"data": joined_data}}
 
 # Use in workflow

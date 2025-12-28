@@ -36,6 +36,40 @@ The changelog has been reorganized into individual files for better management. 
 
 ### Core SDK Releases
 
+### [0.10.6] - 2025-11-02
+
+**Database Adapter Rowcount Fix**
+
+Critical bug fix for SQLite and MySQL database adapters not capturing rowcount from DML operations, causing bulk operations to report incorrect counts.
+
+#### 🐛 Fixed
+
+**Database Adapter Rowcount Capture**
+- **Fixed**: SQLite and MySQL adapters not capturing `cursor.rowcount` for DML operations (DELETE, UPDATE, INSERT)
+- **Location**: `src/kailash/nodes/data/async_sql.py`
+  - **SQLiteAdapter**: Lines 1554-1558 (transaction path), 1594-1599 (memory DB), 1638-1643 (file DB)
+  - **MySQLAdapter**: Lines 1329-1333 (transaction path), 1367-1372 (pool connection)
+- **Root Cause**: Adapters were not capturing rowcount from cursor after DML operations, causing downstream bulk operations to report incorrect counts
+- **Solution**:
+  - Added `cursor.rowcount` capture for all DML operations (DELETE, UPDATE, INSERT)
+  - Standardized return format to `[{"rows_affected": N}]` across all adapters (PostgreSQL, MySQL, SQLite)
+- **Impact**: Bulk operations (BulkCreate, BulkUpdate, BulkDelete) now correctly report actual database rowcounts
+- **Breaking**: NO - fully backward compatible, fixes internal behavior only
+
+#### 📊 Test Results
+
+All comprehensive tests passing:
+- ✅ Bulk CREATE: Correctly reports inserted count
+- ✅ Bulk UPDATE: Correctly reports updated count
+- ✅ Bulk DELETE: Correctly reports deleted count and persists to database
+
+#### 🔗 Related
+
+- DataFlow v0.7.12 includes complementary fix for bulk operation extraction logic
+- Requires DataFlow v0.7.12+ for full bulk operations accuracy
+
+---
+
 ### [0.10.0] - 2025-10-26
 
 **Runtime Parity & Parameter Scoping Release - BREAKING CHANGES**

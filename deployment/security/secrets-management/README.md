@@ -327,7 +327,7 @@ vault operator raft snapshot restore backup.snap
 # Vault Enterprise feature
 storage "raft" {
   path = "/vault/data"
-  
+
   retry_join {
     leader_api_addr = "https://vault-primary.region1.com:8200"
   }

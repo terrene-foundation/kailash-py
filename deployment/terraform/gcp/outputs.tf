@@ -136,20 +136,20 @@ output "connection_info" {
   description = "Connection information for various services"
   value = {
     gke_connect = "gcloud container clusters get-credentials ${module.gke.cluster_name} --location ${module.gke.location} --project ${local.project_id}"
-    
+
     postgresql = {
       host     = module.cloud_sql.private_ip_address
       port     = 5432
       database = var.databases[0]
       connection_string = "postgresql://USER:PASSWORD@${module.cloud_sql.private_ip_address}:5432/${var.databases[0]}?sslmode=require"
     }
-    
+
     redis = {
       host = module.memorystore.host
       port = module.memorystore.port
       connection_string = "redis://:AUTH_STRING@${module.memorystore.host}:${module.memorystore.port}"
     }
-    
+
     monitoring = {
       workspace = module.monitoring.workspace_name
       dashboards_url = "https://console.cloud.google.com/monitoring/dashboards?project=${local.project_id}"

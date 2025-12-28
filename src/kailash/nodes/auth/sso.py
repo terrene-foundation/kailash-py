@@ -24,7 +24,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Union
 from urllib.parse import parse_qs, urlencode, urlparse
 
-from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.api import HTTPRequestNode
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.nodes.data import JSONReaderNode
@@ -117,10 +116,6 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
 
     def _setup_supporting_nodes(self):
         """Initialize supporting Kailash nodes."""
-        self.llm_agent = LLMAgentNode(
-            name=f"{self.name}_llm", provider="ollama", model="llama3.2:3b"
-        )
-
         self.http_client = HTTPRequestNode(name=f"{self.name}_http")
 
         self.json_reader = JSONReaderNode(name=f"{self.name}_json")
@@ -943,60 +938,26 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
     async def _provision_user(
         self, attributes: Dict[str, Any], provider: str
     ) -> Dict[str, Any]:
-        """Provision user using Just-In-Time (JIT) provisioning."""
+        """Provision user using Just-In-Time (JIT) provisioning.
+
+        Note:
+            This is the rule-based Core SDK version. For AI-powered intelligent
+            field mapping and role assignment, use the Kaizen version:
+            `from kaizen.nodes.auth import SSOAuthenticationNode`
+        """
         email = attributes.get("email")
         if not email:
             raise ValueError("Email is required for user provisioning")
 
-        # Simulate user provisioning using LLM for intelligent field mapping
-        provisioning_prompt = f"""
-        Provision a new user account based on SSO attributes from {provider}.
-
-        Attributes received:
-        {json.dumps(attributes, indent=2)}
-
-        Please generate a user profile with:
-        - Standardized name formatting
-        - Department mapping from groups/attributes
-        - Role assignment based on attributes
-        - Default settings for new user
-
-        Return JSON format with user_id, email, first_name, last_name, department, roles.
-        """
-
-        llm_result = await self.llm_agent.async_run(
-            provider="ollama",
-            model="llama3.2:3b",
-            messages=[{"role": "user", "content": provisioning_prompt}],
-        )
-
-        # Parse LLM response (in production, implement actual user creation)
-        try:
-            llm_response = llm_result.get("response", {})
-            if isinstance(llm_response, dict) and "content" in llm_response:
-                # Extract content from LLM response
-                response_content = llm_response["content"]
-            elif isinstance(llm_response, str):
-                response_content = llm_response
-            else:
-                response_content = "{}"
-
-            user_profile = json.loads(response_content)
-
-            # Ensure user_id is set
-            if "user_id" not in user_profile:
-                user_profile["user_id"] = email
-
-        except:
-            # Fallback to basic mapping
-            user_profile = {
-                "user_id": email,
-                "email": email,
-                "first_name": attributes.get("firstName", ""),
-                "last_name": attributes.get("lastName", ""),
-                "department": attributes.get("department", ""),
-                "roles": ["user"],
-            }
+        # Rule-based user provisioning with attribute mapping
+        user_profile = {
+            "user_id": email,
+            "email": email,
+            "first_name": attributes.get("firstName", ""),
+            "last_name": attributes.get("lastName", ""),
+            "department": attributes.get("department", ""),
+            "roles": self._assign_roles_from_attributes(attributes, provider),
+        }
 
         # Log user provisioning
         await self.audit_logger.async_run(
@@ -1010,6 +971,31 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
         )
 
         return user_profile
+
+    def _assign_roles_from_attributes(
+        self, attributes: Dict[str, Any], provider: str
+    ) -> List[str]:
+        """Assign roles based on user attributes using rule-based logic."""
+        roles = ["user"]  # Default role
+
+        # Check groups for role assignment
+        groups = attributes.get("groups", [])
+        for group in groups:
+            group_lower = group.lower()
+            if "admin" in group_lower or "administrator" in group_lower:
+                roles.append("admin")
+            elif "manager" in group_lower:
+                roles.append("manager")
+            elif "developer" in group_lower or "engineer" in group_lower:
+                roles.append("developer")
+
+        # Check department for additional roles
+        department = attributes.get("department", "").lower()
+        if "it" in department or "technology" in department:
+            if "developer" not in roles:
+                roles.append("developer")
+
+        return list(set(roles))  # Remove duplicates
 
     async def _create_sso_session(
         self,

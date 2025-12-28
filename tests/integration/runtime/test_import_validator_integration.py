@@ -8,7 +8,6 @@ from pathlib import Path
 from textwrap import dedent
 
 import pytest
-
 from kailash.runtime.validation import ImportPathValidator
 from kailash.runtime.validation.import_validator import ImportIssueType
 

@@ -12,7 +12,6 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-
 from kailash.nodes.base_async import AsyncNode
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import MergeNode, SwitchNode

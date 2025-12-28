@@ -129,12 +129,12 @@ async def get_status(service: str) -> dict:
 
 if __name__ == "__main__":
     server.run()
-    
+
 # WebSocket production server
 from kailash.mcp_server.transports import WebSocketServerTransport
 
 ws_transport = WebSocketServerTransport(
-    host="0.0.0.0", 
+    host="0.0.0.0",
     port=3001,
     ping_interval=30.0,
     max_message_size=5*1024*1024  # 5MB
@@ -225,7 +225,7 @@ mcp_servers = [
         }
     },
     {
-        "name": "secure-server", 
+        "name": "secure-server",
         "transport": "websocket",
         "url": "wss://api.company.com/mcp",
         "ping_interval": 30.0,
@@ -248,8 +248,8 @@ async with client:
     # Connection pooling automatically used
     result1 = await client.call_tool("ws://api.example.com/mcp", "search", {"query": "AI"})
     result2 = await client.call_tool("ws://api.example.com/mcp", "analyze", {"data": result1})
-    
-    # Check pool efficiency  
+
+    # Check pool efficiency
     metrics = client.get_metrics()
     print(f"Pool efficiency: {metrics.get('websocket_pool_hits', 0)} hits")
 ```

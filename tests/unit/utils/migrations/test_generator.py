@@ -8,7 +8,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from kailash.utils.migrations.generator import MigrationGenerator
 
 

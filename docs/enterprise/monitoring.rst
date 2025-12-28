@@ -24,16 +24,16 @@ Quick Example
 .. code-block:: python
 
    from kailash.workflow.builder import WorkflowBuilder
-   
+
    workflow = WorkflowBuilder()
-   
+
    # Transaction monitoring
    workflow.add_node("TransactionMetricsNode", "metrics", {
        "track_latency": True,
        "detect_deadlocks": True,
        "alert_threshold": 0.95
    })
-   
+
    # Performance monitoring
    workflow.add_node("PerformanceAnomalyNode", "anomaly", {
        "ml_detection": True,

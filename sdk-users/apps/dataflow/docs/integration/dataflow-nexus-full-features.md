@@ -25,23 +25,23 @@ from kailash.workflow.builder import WorkflowBuilder
 # Step 1: Initialize DataFlow FIRST with ALL features
 db = DataFlow(
     database_url="postgresql://user:pass@localhost/db",
-    
+
     # FULL FEATURES - These cause the slower startup
     skip_registry=False,              # ✅ Model registry enabled (adds ~5s)
     enable_model_persistence=True,    # ✅ Model persistence (adds ~5s per model)
     auto_migrate=True,                # ✅ Auto-migration (adds ~2-5s)
     skip_migration=False,             # ✅ Migration tracking
     enable_schema_discovery=True,     # ✅ Schema introspection
-    
+
     # Performance features (still fast)
     enable_caching=True,              # ✅ Query caching
     enable_metrics=True,              # ✅ Performance metrics
     connection_pool_size=50,          # ✅ Connection pooling
-    
+
     # Enterprise features (optional, add more time)
     enable_audit_log=True,            # ✅ Audit trail (adds ~2s)
     multi_tenant=True,                # ✅ Multi-tenancy (adds ~2s)
-    
+
     # Monitoring
     monitoring=True,                  # ✅ Performance monitoring
     slow_query_threshold=1.0          # ✅ Slow query detection
@@ -77,7 +77,7 @@ app = Nexus(
     api_port=8000,
     mcp_port=3001,
     auto_discovery=False,    # Still keep False even with full features
-    
+
     # Enable all Nexus features
     enable_auth=True,        # ✅ Authentication
     enable_monitoring=True,  # ✅ Monitoring
@@ -158,13 +158,13 @@ app = Nexus(
 # Step 2: Create DataFlow with minimal features
 db = DataFlow(
     database_url="postgresql://user:pass@localhost/db",
-    
+
     # FAST SETTINGS - Skip slow features
     skip_registry=True,              # ❌ No model registry
     enable_model_persistence=False,  # ❌ No persistence
     auto_migrate=False,              # ❌ No auto-migration
     skip_migration=True,             # ❌ No migration tracking
-    
+
     # Keep performance features
     enable_caching=True,             # ✅ Still have caching
     enable_metrics=True,             # ✅ Still have metrics
@@ -216,12 +216,12 @@ def init_dataflow_async():
         enable_model_persistence=True,
         auto_migrate=True
     )
-    
+
     @db.model
     class User:
         # ... model definition
         pass
-    
+
     print("✅ DataFlow ready!")  # After 10-30s
 
 # Start background initialization

@@ -10,7 +10,7 @@ Summary:
 Configuration Files Validated:
 - API Server Configuration
 - Audit Policy
-- Encryption Configuration  
+- Encryption Configuration
 - Admission Configuration
 
 Tools Check:

@@ -13,7 +13,6 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock, patch
 
 import pytest
-
 from kailash.monitoring.metrics import (
     MetricPoint,
     MetricsCollector,

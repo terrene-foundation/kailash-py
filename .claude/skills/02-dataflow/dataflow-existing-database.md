@@ -10,7 +10,6 @@ Connect DataFlow to existing databases without @db.model decorators using dynami
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-models`](#), [`dataflow-connection-config`](#), [`dataflow-nexus-integration`](#)
 > Related Subagents: `dataflow-specialist` (complex schemas, migration planning)
 
@@ -312,12 +311,6 @@ workflow.add_node(user_nodes['list'], "users", {"limit": 20})
 - Models persist across sessions via registry
 - Perfect for legacy database integration
 - No @db.model needed - fully dynamic
-
-## Version Notes
-
-- **v0.4.0+**: Dynamic model registration added
-- **v0.4.0+**: Cross-session model persistence
-- **v0.4.0+**: existing_schema_mode safety mode
 
 ## Keywords for Auto-Trigger
 

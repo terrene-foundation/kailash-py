@@ -8,7 +8,6 @@ to ensure resources can be accessed within async code execution.
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from kailash.nodes.code.async_python import AsyncPythonCodeNode
 from kailash.resources.factory import ResourceFactory
 from kailash.resources.registry import ResourceRegistry

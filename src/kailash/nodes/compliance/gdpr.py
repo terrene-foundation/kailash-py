@@ -16,7 +16,6 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from kailash.nodes.ai.llm_agent import LLMAgentNode
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.mixins import LoggingMixin, PerformanceMixin, SecurityMixin
 from kailash.nodes.security.audit_log import AuditLogNode
@@ -174,8 +173,6 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         frameworks: Optional[List[str]] = None,
         auto_anonymize: bool = True,
         retention_policies: Optional[Dict[str, str]] = None,
-        ai_analysis: bool = True,
-        ai_model: str = "ollama:llama3.2:3b",
         **kwargs,
     ):
         """Initialize GDPR compliance node.
@@ -185,30 +182,20 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             frameworks: Supported compliance frameworks
             auto_anonymize: Enable automatic data anonymization
             retention_policies: Data retention policies by data type
-            ai_analysis: Enable AI-powered compliance analysis
-            ai_model: AI model for compliance analysis
             **kwargs: Additional node parameters
+
+        Note:
+            This is the pure Core SDK version with rule-based compliance checking.
+            For AI-powered compliance analysis, use the Kaizen version:
+            `from kaizen.nodes.compliance import GDPRComplianceNode`
         """
         # Set attributes before calling super().__init__()
         self.frameworks = frameworks or ["gdpr", "ccpa"]
         self.auto_anonymize = auto_anonymize
         self.retention_policies = retention_policies or {}
-        self.ai_analysis = ai_analysis
-        self.ai_model = ai_model
 
         # Initialize parent classes
         super().__init__(name=name, **kwargs)
-
-        # Initialize AI agent for compliance analysis
-        if self.ai_analysis:
-            self.ai_agent = LLMAgentNode(
-                name=f"{name}_ai_agent",
-                provider="ollama",
-                model=ai_model.replace("ollama:", ""),
-                temperature=0.1,  # Low temperature for consistent analysis
-            )
-        else:
-            self.ai_agent = None
 
         # Initialize audit logging
         self.audit_log_node = AuditLogNode(name=f"{name}_audit_log")
@@ -557,12 +544,9 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
             compliance_issues.extend(retention_check["violations"])
             recommendations.extend(retention_check["recommendations"])
 
-        # AI-powered compliance analysis
+        # Note: AI-powered compliance analysis has been moved to the Kaizen version
+        # This Core SDK version uses rule-based analysis only
         ai_insights = None
-        if self.ai_analysis and (pii_detections or compliance_issues):
-            ai_insights = self._ai_analyze_compliance(
-                data_type, data, compliance_issues
-            )
 
         # Calculate compliance score
         total_checks = 3  # PII, consent, retention
@@ -1473,99 +1457,9 @@ class GDPRComplianceNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         else:
             return f"anonymized_{hash_hex[:8]}"
 
-    def _ai_analyze_compliance(
-        self, data_type: str, data: Dict[str, Any], compliance_issues: List[str]
-    ) -> Optional[Dict[str, Any]]:
-        """Use AI to analyze compliance issues.
-
-        Args:
-            data_type: Type of data
-            data: Data being analyzed
-            compliance_issues: Detected compliance issues
-
-        Returns:
-            AI analysis insights or None if failed
-        """
-        if not self.ai_agent:
-            return None
-
-        try:
-            # Create compliance analysis prompt
-            prompt = f"""
-You are a GDPR compliance expert analyzing data processing compliance.
-
-DATA TYPE: {data_type}
-
-DATA STRUCTURE:
-{json.dumps({k: "***" if isinstance(v, str) and len(v) > 10 else v for k, v in data.items()}, indent=2)}
-
-DETECTED COMPLIANCE ISSUES:
-{json.dumps(compliance_issues, indent=2)}
-
-TASK:
-Analyze the compliance issues and provide recommendations for GDPR compliance.
-Consider:
-1. Data minimization principles
-2. Purpose limitation
-3. Storage limitation
-4. Lawful basis for processing
-5. Data subject rights
-6. Privacy by design
-
-RESPONSE FORMAT:
-{{
-  "severity": "low|medium|high|critical",
-  "risk_assessment": "detailed risk analysis",
-  "recommendations": ["recommendation1", "recommendation2"],
-  "legal_basis_suggestions": ["basis1", "basis2"],
-  "data_protection_measures": ["measure1", "measure2"]
-}}
-"""
-
-            # Run AI analysis
-            ai_response = self.ai_agent.execute(
-                provider="ollama",
-                model=self.ai_model.replace("ollama:", ""),
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            # Parse AI response
-            return self._parse_ai_compliance_response(ai_response)
-
-        except Exception as e:
-            self.log_with_context("WARNING", f"AI compliance analysis failed: {e}")
-            return None
-
-    def _parse_ai_compliance_response(
-        self, ai_response: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
-        """Parse AI compliance analysis response.
-
-        Args:
-            ai_response: Response from AI agent
-
-        Returns:
-            Parsed insights or None if parsing failed
-        """
-        try:
-            content = ai_response.get("result", {}).get("content", "")
-            if not content:
-                return None
-
-            # Try to parse JSON response
-            import re
-
-            json_match = re.search(r"\{.*\}", content, re.DOTALL)
-            if json_match:
-                insights = json.loads(json_match.group())
-                return insights
-
-        except Exception as e:
-            self.log_with_context(
-                "WARNING", f"Failed to parse AI compliance response: {e}"
-            )
-
-        return None
+    # AI-powered compliance analysis methods have been removed from Core SDK
+    # For AI-enhanced compliance analysis, use the Kaizen version:
+    # from kaizen.nodes.compliance import GDPRComplianceNode
 
     def _calculate_compliance_score(self) -> float:
         """Calculate overall compliance score.

@@ -24,9 +24,9 @@ Quick Example
 .. code-block:: python
 
    from kailash.workflow.builder import WorkflowBuilder
-   
+
    workflow = WorkflowBuilder()
-   
+
    # GDPR compliance
    workflow.add_node("GDPRComplianceNode", "gdpr", {
        "auto_anonymize": True,

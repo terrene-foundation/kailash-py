@@ -23,7 +23,7 @@ class User:
 
 # Generated automatically:
 # - UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode
-# - UserListNode, UserBulkCreateNode, UserBulkUpdateNode, 
+# - UserListNode, UserBulkCreateNode, UserBulkUpdateNode,
 # - UserBulkDeleteNode, UserBulkUpsertNode
 
 # Use in Core SDK workflows immediately

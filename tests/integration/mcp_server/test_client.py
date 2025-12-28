@@ -12,7 +12,6 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from kailash.mcp_server.auth import (
     APIKeyAuth,
     AuthManager,

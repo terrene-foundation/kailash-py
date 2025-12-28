@@ -1,7 +1,6 @@
 """Consolidated tests for enterprise security nodes (MFA and Threat Detection)."""
 
 import pytest
-
 from kailash.nodes.auth.mfa import MultiFactorAuthNode
 from kailash.nodes.security.threat_detection import ThreatDetectionNode
 

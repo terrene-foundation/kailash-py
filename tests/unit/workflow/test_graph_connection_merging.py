@@ -16,7 +16,6 @@ Key functionality tested:
 from unittest.mock import MagicMock
 
 import pytest
-
 from kailash.workflow.graph import Workflow
 
 

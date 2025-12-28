@@ -24,29 +24,29 @@ services:
       - DATABASE_URL=postgresql://app_user:${POSTGRES_PASSWORD}@postgres:5432/${PROJECT_NAME:-template}_db
       - REDIS_URL=redis://redis:6379
       - OLLAMA_BASE_URL=http://ollama:11434
-      
+
       # Application configuration
       - ENVIRONMENT=production
       - DEBUG=false
       - LOG_LEVEL=info
       - WORKERS=4
       - TIMEOUT=300
-      
+
       # Security
       - SECRET_KEY=${SECRET_KEY}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
-      
+
       # Monitoring
       - ENABLE_METRICS=true
       - METRICS_PORT=9090
       - HEALTH_CHECK_INTERVAL=30
-      
+
       # DataFlow configuration
       - DATAFLOW_DATABASE_URL=postgresql://app_user:${POSTGRES_PASSWORD}@postgres:5432/${PROJECT_NAME:-template}_db
       - DATAFLOW_REDIS_URL=redis://redis:6379
       - DATAFLOW_CACHE_TTL=3600
-      
+
       # Nexus configuration
       - NEXUS_ENABLE_API=true
       - NEXUS_ENABLE_CLI=true

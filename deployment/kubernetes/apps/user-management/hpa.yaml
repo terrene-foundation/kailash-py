@@ -21,7 +21,7 @@ spec:
       target:
         type: Utilization
         averageUtilization: 70
-  
+
   # Memory-based scaling
   - type: Resource
     resource:
@@ -29,7 +29,7 @@ spec:
       target:
         type: Utilization
         averageUtilization: 80
-  
+
   # Custom metrics (requests per second)
   - type: Pods
     pods:
@@ -38,7 +38,7 @@ spec:
       target:
         type: AverageValue
         averageValue: "100"
-  
+
   # External metrics (queue depth)
   - type: External
     external:
@@ -50,7 +50,7 @@ spec:
       target:
         type: Value
         value: "50"
-  
+
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300

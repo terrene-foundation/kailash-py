@@ -15,7 +15,6 @@ from datetime import datetime
 
 import pytest
 import pytest_asyncio
-
 from kailash.client import KailashClient
 from kailash.gateway import (
     EnhancedDurableAPIGateway,

@@ -4,7 +4,6 @@ import asyncio
 from unittest.mock import patch
 
 import pytest
-
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError

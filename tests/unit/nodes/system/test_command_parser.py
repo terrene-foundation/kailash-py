@@ -3,7 +3,6 @@
 from unittest.mock import Mock, patch
 
 import pytest
-
 from src.kailash.nodes.system.command_parser import (
     CommandParserNode,
     CommandRouterNode,

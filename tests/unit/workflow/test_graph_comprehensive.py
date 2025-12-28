@@ -17,8 +17,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 import yaml
-from pydantic import BaseModel
-
 from kailash.nodes.base import Node, NodeParameter
 from kailash.sdk_exceptions import (
     ConnectionError,
@@ -29,6 +27,7 @@ from kailash.sdk_exceptions import (
 )
 from kailash.workflow.graph import Connection, CyclicConnection, NodeInstance, Workflow
 from kailash.workflow.state import WorkflowStateWrapper
+from pydantic import BaseModel
 
 
 class MockNode(Node):

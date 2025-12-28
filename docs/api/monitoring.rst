@@ -1,7 +1,7 @@
 Monitoring & Alerting API
 =========================
 
-The monitoring and alerting system provides comprehensive metrics collection, 
+The monitoring and alerting system provides comprehensive metrics collection,
 security violation tracking, and multi-channel alerting for Kailash workflows.
 
 .. automodule:: kailash.monitoring
@@ -65,15 +65,15 @@ Custom Metrics Collection
 
    # Create custom metrics collector
    collector = MetricsCollector()
-   
+
    # Create and record metrics
    response_time = collector.create_metric(
-       "api_response_time", 
-       MetricType.TIMER, 
+       "api_response_time",
+       MetricType.TIMER,
        "API response time",
        "milliseconds"
    )
-   
+
    collector.record_timer("api_response_time", 150.5)
    collector.increment("api_requests")
    collector.set_gauge("active_connections", 42)
@@ -86,7 +86,7 @@ Security Monitoring
    from kailash.monitoring.metrics import get_security_metrics, MetricSeverity
 
    security_metrics = get_security_metrics()
-   
+
    # Record security violations
    security_metrics.record_security_violation(
        violation_type="sql_injection_attempt",
@@ -94,7 +94,7 @@ Security Monitoring
        source="workflow_connection",
        details={"query": "malicious_query"}
    )
-   
+
    # Check critical violations
    critical_count = security_metrics.get_critical_violations()
    violation_rate = security_metrics.get_violation_rate()
@@ -107,21 +107,21 @@ Performance Monitoring
    from kailash.monitoring.metrics import get_performance_metrics
 
    performance_metrics = get_performance_metrics()
-   
+
    # Record operation performance
    performance_metrics.record_operation(
        operation="workflow_execution",
        duration_ms=1250.0,
        success=True
    )
-   
+
    # Update system metrics
    performance_metrics.update_system_metrics(
        memory_mb=512.0,
        cpu_percent=25.5,
        rps=100.0
    )
-   
+
    # Get performance statistics
    p95_time = performance_metrics.get_p95_response_time()
 
@@ -136,14 +136,14 @@ Connection Validation Monitoring
    # Enable connection validation with monitoring
    runtime = LocalRuntime(connection_validation="strict")
    validation_metrics = get_validation_metrics()
-   
+
    # Execute workflow with monitoring
    results, run_id = runtime.execute(workflow.build())
-   
+
    # View validation metrics
    success_rate = validation_metrics.get_success_rate()
    cache_hit_rate = validation_metrics.get_cache_hit_rate()
-   
+
    print(f"Validation success rate: {success_rate:.2%}")
    print(f"Cache hit rate: {cache_hit_rate:.2%}")
 
@@ -155,11 +155,11 @@ Metrics Export
    from kailash.monitoring.metrics import get_metrics_registry
 
    registry = get_metrics_registry()
-   
+
    # Export metrics in JSON format
    json_metrics = registry.export_metrics("json")
-   
+
    # Export metrics in Prometheus format
    prometheus_metrics = registry.export_metrics("prometheus")
-   
+
    print(json_metrics)

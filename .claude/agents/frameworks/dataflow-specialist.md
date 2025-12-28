@@ -1,6 +1,6 @@
 ---
 name: dataflow-specialist
-description: Zero-config database framework specialist for Kailash DataFlow implementation (v0.4.6+). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
+description: Zero-config database framework specialist for Kailash DataFlow implementation (v0.8.0+). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
 ---
 
 # DataFlow Specialist Agent
@@ -23,6 +23,8 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - "Query patterns?" → [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md)
 - "Bulk operations?" → [`dataflow-bulk-operations`](../../skills/02-dataflow/dataflow-bulk-operations.md)
 - "Transactions?" → [`dataflow-transactions`](../../skills/02-dataflow/dataflow-transactions.md)
+- "Connection isolation?" → [`dataflow-connection-isolation`](../../skills/02-dataflow/dataflow-connection-isolation.md) ⚠️ CRITICAL
+- "Fast CRUD? db.express?" → [`dataflow-express`](../../skills/02-dataflow/dataflow-express.md) 🚀 ~23x FASTER
 
 **Integration**:
 - "With Nexus?" → [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-integration.md)
@@ -41,6 +43,7 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 - ❌ "Simple queries" → Use `dataflow-queries` Skill
 - ❌ "Model setup" → Use `dataflow-models` Skill
 - ❌ "Nexus integration" → Use `dataflow-nexus-integration` Skill
+- ❌ "Fast db.express operations" → Use `dataflow-express` Skill
 
 ## DataFlow Reference (`sdk-users/apps/dataflow/`)
 
@@ -142,6 +145,28 @@ workflow.add_node("UserUpdateNode", "update", {
 - **Pattern**: Create new `LocalRuntime()` for each `workflow.build()` execution
 - **Impact**: This prevents event loop conflicts, especially with async operations
 
+**4a. Async Context Usage (v0.9.5+ Fixed)**
+- ✅ FIXED: v0.9.5+ automatically detects async contexts and uses appropriate runtime
+- **No workarounds needed** - All DataFlow components now auto-detect async event loops
+- **Pattern**: Use `auto_migrate=True` safely in FastAPI/async contexts (works in v0.9.5+):
+  ```python
+  # FastAPI/Async contexts - Works in v0.9.5+
+  db = DataFlow(
+      "postgresql://localhost/db",
+      auto_migrate=True  # ✅ Now safe! Auto-detects async context
+  )
+
+  # All components automatically use AsyncLocalRuntime when needed
+  ```
+- **What Changed**: All 18 hardcoded `LocalRuntime()` instances now use async context detection
+- **Fixed Locations**: ModelRegistry, migration system, schema inspectors, gateway integration, testing utilities
+- **Impact**: No more production deadlocks in FastAPI/async deployments (Fixed in v0.9.5)
+
+**Historical Context (v0.9.1-v0.9.4)**:
+- **Old Issue**: Using `auto_migrate=True` caused deadlocks in FastAPI/async contexts
+- **Old Workaround**: Disable auto-migration and manually use `AsyncLocalRuntime()`
+- **Resolution**: v0.9.5 fixed all async deadlock bugs - workaround no longer needed
+
 **5. Performance Expectations**
 - ❌ MISUNDERSTANDING: "DataFlow is slow - queries take 400-500ms"
 - ✅ REALITY: Performance is network-dependent, not DataFlow limitation
@@ -167,9 +192,19 @@ When encountering apparent "limitations":
 
 ### DataFlow Architecture & Philosophy
 - **Not an ORM**: Workflow-native database framework, not traditional ORM
-- **PostgreSQL + SQLite Full Parity**: Both databases fully supported with identical functionality
-- **Automatic Node Generation**: Each `@db.model` creates 9 node types automatically
+- **PostgreSQL + MySQL + SQLite Full Parity**: All databases fully supported with identical functionality
+- **Automatic Node Generation**: Each `@db.model` creates 11 node types automatically (v0.8.0+)
+  - CRUD: CreateNode, ReadNode, UpdateNode, DeleteNode
+  - Query: ListNode, CountNode (v0.8.0+)
+  - Advanced: UpsertNode (v0.8.0+)
+  - Bulk: BulkCreateNode, BulkUpdateNode, BulkDeleteNode, BulkUpsertNode
 - **Datetime Auto-Conversion (v0.6.4+)**: ISO 8601 strings automatically converted to datetime objects
+- **ErrorEnhancer System (v0.8.0+)**: Rich, actionable error messages with DF-XXX codes, context, causes, and solutions
+- **Debug Agent (v0.8.0+)**: Intelligent error analysis with 50+ patterns, 60+ solutions, 92%+ confidence
+- **Inspector System (v0.8.0+)**: Workflow introspection and debugging tools
+- **ExpressDataFlow (v0.9.8+)**: High-performance direct node invocation (~23x faster than workflows)
+- **Schema Cache (v0.7.3+)**: 91-99% performance improvement for multi-operation workflows
+- **PostgreSQL Native Arrays (v0.8.0+)**: 2-10x faster with TEXT[], INTEGER[], REAL[] support
 - **6-Level Write Protection**: Comprehensive protection system (Global, Connection, Model, Operation, Field, Runtime)
 - **Migration System**: Auto-migration with schema state management and performance tracking
 - **Enterprise-Grade**: Built-in caching, multi-tenancy, distributed transactions
@@ -197,6 +232,2438 @@ When encountering apparent "limitations":
 > **Note**: For basic patterns (setup, CRUD, queries), see the [DataFlow Skills](../../skills/02-dataflow/) - 24 Skills covering common operations.
 
 This section focuses on **enterprise-level patterns** and **production complexity**.
+
+## 🚨 Error Handling with ErrorEnhancer (NEW in v0.4.7+)
+
+DataFlow includes **ErrorEnhancer** to transform Python exceptions into rich, actionable error messages with solutions.
+
+**Key Features**:
+- **DF-XXX Error Codes**: Standardized error codes for quick lookup
+- **Context-Aware Messages**: What, why, and how to fix
+- **Multiple Solutions**: 3-5 possible fixes with code examples
+- **Performance Modes**: FULL (development), MINIMAL (staging), DISABLED (production)
+- **Pattern Caching**: 90%+ cache hit rate for repeated errors
+
+**Example Enhanced Error**:
+```python
+# Code that triggers error
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Alice"  # Missing 'id' field
+})
+
+# Enhanced error output
+DF-101: Missing Required Parameter
+
+Error: Field 'id' is required for CREATE operations
+
+Context:
+- Node: UserCreateNode
+- Operation: CREATE
+- Model: User
+- Missing Parameter: id
+
+Causes:
+1. Missing 'id' field in data dictionary
+2. Typo in field name (e.g., 'user_id' instead of 'id')
+3. Data structure doesn't match model schema
+
+Solutions:
+1. Add 'id' field to your data:
+   data = {"id": "user-123", "name": "Alice"}
+
+2. Check model definition for required fields
+3. Use Inspector to validate workflow structure
+
+Documentation: https://docs.kailash.dev/dataflow/errors/DF-101
+```
+
+**Performance Modes**:
+```python
+from dataflow import DataFlow
+
+# Development: Full error enhancement (default)
+db = DataFlow(url, error_enhancement_mode="FULL")
+
+# Staging: Minimal overhead
+db = DataFlow(url, error_enhancement_mode="MINIMAL")
+
+# Production: Disabled for performance
+db = DataFlow(url, error_enhancement_mode="DISABLED")
+```
+
+**Common Error Codes**:
+- **DF-101**: Missing Required Parameter → Add missing field to data dictionary
+- **DF-201**: Connection Type Mismatch → Check parameter types in connections
+- **DF-301**: Migration Failed → Review schema changes and constraints
+- **DF-401**: Database URL Invalid → Verify connection string format
+- **DF-501**: Event Loop Closed → Use AsyncLocalRuntime in async contexts
+- **DF-601**: Primary Key Missing → Ensure model has 'id' field
+- **DF-701**: Node Not Found → Check node name spelling and case
+- **DF-801**: Workflow Build Failed → Validate all connections before .build()
+
+**File Reference**: `src/dataflow/core/error_enhancer.py:1-756` (60+ methods)
+
+## 🚀 ExpressDataFlow - High-Performance CRUD (NEW in v0.9.8+)
+
+Direct node invocation bypassing workflow overhead for simple CRUD operations.
+
+**Performance**: ~23x faster than workflow-based operations
+
+**Access**: `db.express.<operation>()` after `await db.initialize()`
+
+**Operations**:
+- **CRUD**: create, read, update, delete, list, count
+- **Bulk**: bulk_create, bulk_update, bulk_delete, bulk_upsert
+
+**Basic Usage**:
+```python
+from dataflow import DataFlow
+
+db = DataFlow("postgresql://user:password@localhost/mydb")
+
+@db.model
+class User:
+    id: str
+    name: str
+    email: str
+
+await db.initialize()
+
+# Direct node invocation - ~23x faster than workflows
+user = await db.express.create("User", {"id": "user-001", "name": "Alice", "email": "alice@example.com"})
+user = await db.express.read("User", "user-001")
+updated = await db.express.update("User", {"id": "user-001"}, {"name": "Alice Updated"})
+success = await db.express.delete("User", "user-001")
+users = await db.express.list("User", filter={"active": True})
+total = await db.express.count("User")
+```
+
+**When to Use**:
+- Simple CRUD operations without workflow complexity
+- High-throughput applications needing maximum performance
+- Single-node operations
+
+**When NOT to Use** (Use Traditional Workflows):
+- Multi-node operations with data flow between nodes
+- Conditional execution or branching logic
+- Transaction management across operations
+
+**Skill Reference**: See `dataflow-express` skill for complete API
+
+## 🔍 Inspector - Workflow Introspection (NEW in v0.4.7+)
+
+DataFlow includes **Inspector** for debugging and analyzing workflow structure before execution.
+
+**Key Features**:
+- **Connection Analysis**: List connections, find broken connections, trace chains
+- **Parameter Tracing**: Trace parameters back to source, track transformations
+- **Workflow Validation**: Validate connections and detect circular dependencies
+- **Visual Inspection**: Rich formatted output for debugging
+- **30+ Methods**: Comprehensive introspection API
+
+**Basic Usage**:
+```python
+from dataflow.platform.inspector import Inspector
+from kailash.workflow.builder import WorkflowBuilder
+
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create", {"id": "user-123", "name": "Alice"})
+workflow.add_node("UserReadNode", "read", {"id": "user-123"})
+workflow.add_connection("create", "id", "read", "id")
+
+# Inspect workflow structure
+inspector = Inspector(workflow)
+
+# List all connections
+connections = inspector.connections()
+print(f"Found {len(connections)} connections")
+
+# Trace parameter back to source
+trace = inspector.trace_parameter("read", "id")
+print(trace.show())  # Shows: create.id → read.id
+
+# Validate connections
+validation = inspector.validate_connections()
+if not validation["is_valid"]:
+    print(f"Found {len(validation['errors'])} connection errors")
+```
+
+**Common Debugging Scenarios**:
+
+**Scenario 1: Missing Data Parameter**
+```python
+# Problem: Parameter 'id' is None in node 'read'
+inspector = Inspector(workflow)
+trace = inspector.trace_parameter("read", "id")
+
+# Inspector shows:
+# create.id (source) → read.id (destination)
+# Value: "user-123" (confirmed data flow)
+# If value is None, Inspector shows where connection breaks
+```
+
+**Scenario 2: Broken Connection**
+```python
+# Problem: Connection not working as expected
+inspector = Inspector(workflow)
+broken = inspector.find_broken_connections()
+
+# Shows all connections with type mismatches or missing sources
+for conn in broken:
+    print(f"Broken: {conn['source']} → {conn['target']}")
+    print(f"Reason: {conn['error']}")
+```
+
+**Scenario 3: Circular Dependency**
+```python
+# Problem: Workflow hangs due to circular dependency
+inspector = Inspector(workflow)
+cycles = inspector.detect_cycles()
+
+if cycles:
+    print(f"Found {len(cycles)} circular dependencies:")
+    for cycle in cycles:
+        print(f"  Cycle: {' → '.join(cycle)}")
+```
+
+**File Reference**: `src/dataflow/platform/inspector.py:1-3540` (30+ methods)
+
+**Quick Reference Guide**: `sdk-users/apps/dataflow/guides/inspector-debugging-guide.md` (12+ scenarios)
+
+## 🔍 Debug Agent - Intelligent Error Analysis (NEW in v0.8.0+)
+
+The **Debug Agent** is an intelligent error analysis system that automatically diagnoses DataFlow errors and provides ranked, actionable solutions with code examples.
+
+**What It Does** (5-stage pipeline):
+1. **Captures** error details with full stack traces
+2. **Categorizes** errors into 5 categories using 50+ patterns
+3. **Analyzes** workflow context using Inspector
+4. **Suggests** ranked solutions with code examples (60+ solutions)
+5. **Formats** results for terminal or JSON output
+
+**Key Features**:
+- **50+ Error Patterns**: Covers PARAMETER, CONNECTION, MIGRATION, RUNTIME, CONFIGURATION errors
+- **60+ Solution Templates**: Ranked by relevance with code examples
+- **Inspector Integration**: Context-aware analysis using workflow introspection
+- **Multiple Output Formats**: CLI (ANSI colors), JSON (machine-readable), Dictionary (programmatic)
+- **Performance**: 5-50ms execution time, 92%+ confidence for known patterns
+- **Production-Ready**: Logging, batch analysis, custom patterns
+
+**Quick Start**:
+```python
+from dataflow import DataFlow
+from dataflow.debug.debug_agent import DebugAgent
+from dataflow.debug.knowledge_base import KnowledgeBase
+from dataflow.platform.inspector import Inspector
+
+# Initialize DataFlow
+db = DataFlow("postgresql://localhost/mydb")
+
+@db.model
+class User:
+    id: str
+    name: str
+
+# Initialize Debug Agent (once - singleton pattern)
+kb = KnowledgeBase(
+    "src/dataflow/debug/patterns.yaml",
+    "src/dataflow/debug/solutions.yaml"
+)
+inspector = Inspector(db)
+debug_agent = DebugAgent(kb, inspector)
+
+# Execute and debug
+runtime = LocalRuntime()
+try:
+    results, _ = runtime.execute(workflow.build())
+except Exception as e:
+    # Debug error automatically
+    report = debug_agent.debug(e, max_solutions=5, min_relevance=0.3)
+
+    # Display rich CLI output
+    print(report.to_cli_format())
+
+    # Or access programmatically
+    print(f"Category: {report.error_category.category}")
+    print(f"Root Cause: {report.analysis_result.root_cause}")
+    print(f"Solutions: {len(report.suggested_solutions)}")
+```
+
+**Error Categories**:
+- **PARAMETER** (15 patterns): Missing `id`, type mismatch, invalid values, reserved fields
+- **CONNECTION** (10 patterns): Missing source node, circular dependency, type incompatibility
+- **MIGRATION** (8 patterns): Schema conflicts, missing table, constraint violations
+- **RUNTIME** (10 patterns): Transaction timeout, event loop collision, node execution failed
+- **CONFIGURATION** (7 patterns): Invalid database URL, missing environment variables, auth failed
+
+**Common Scenario Example** (Missing Required 'id' Parameter):
+```python
+# Error
+ValueError: Missing required parameter 'id' in CreateNode
+
+# Debug Output
+Category: PARAMETER (Confidence: 95%)
+Root Cause: Node 'create' is missing required parameter 'id' (primary key)
+
+[1] Add Missing 'id' Parameter (QUICK_FIX) - 95%
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",  # Add missing parameter
+        "name": "Alice"
+    })
+
+[2] Use UUID for Automatic ID Generation (BEST_PRACTICE) - 85%
+    import uuid
+    workflow.add_node("UserCreateNode", "create", {
+        "id": str(uuid.uuid4()),  # Auto-generate UUID
+        "name": "Alice"
+    })
+```
+
+**Production Integration Patterns**:
+```python
+# Pattern 1: Global Error Handler
+class DataFlowWithDebugAgent:
+    def __init__(self, database_url: str):
+        self.db = DataFlow(database_url)
+        kb = KnowledgeBase("patterns.yaml", "solutions.yaml")
+        inspector = Inspector(self.db)
+        self.debug_agent = DebugAgent(kb, inspector)
+
+    def execute(self, workflow: WorkflowBuilder):
+        runtime = LocalRuntime()
+        try:
+            results, _ = runtime.execute(workflow.build())
+            return results
+        except Exception as e:
+            report = self.debug_agent.debug(e)
+            print(report.to_cli_format())
+            raise
+
+# Pattern 2: Production Logging
+import logging
+logger = logging.getLogger(__name__)
+
+try:
+    runtime.execute(workflow.build())
+except Exception as e:
+    report = debug_agent.debug(e)
+    logger.error("Workflow failed", extra={
+        "category": report.error_category.category,
+        "confidence": report.error_category.confidence,
+        "root_cause": report.analysis_result.root_cause,
+        "solutions_count": len(report.suggested_solutions),
+        "report_json": report.to_json()
+    })
+
+# Pattern 3: Batch Error Analysis
+from pathlib import Path
+import json
+
+def analyze_error_logs(log_file: Path, output_dir: Path):
+    with open(log_file, "r") as f:
+        error_lines = [line.strip() for line in f if "ERROR" in line]
+
+    reports = []
+    for i, error_message in enumerate(error_lines):
+        report = agent.debug_from_string(error_message)
+        reports.append(report.to_dict())
+
+        output_file = output_dir / f"report_{i:03d}.json"
+        with open(output_file, "w") as f:
+            f.write(report.to_json())
+
+    summary = {
+        "total_errors": len(reports),
+        "category_breakdown": {...},
+        "average_execution_time_ms": ...
+    }
+
+    with open(output_dir / "summary.json", "w") as f:
+        json.dump(summary, f, indent=2)
+```
+
+**Configuration Options**:
+```python
+# Tuning solution count
+report = debug_agent.debug(exception, max_solutions=5)  # Default: 5
+report = debug_agent.debug(exception, max_solutions=3)  # Faster: 20-30% speedup
+
+# Tuning relevance threshold
+report = debug_agent.debug(exception, min_relevance=0.3)  # Default: 30%
+report = debug_agent.debug(exception, min_relevance=0.7)  # Faster: 40-50% speedup
+
+# Disabling Inspector (faster but less context)
+agent = DebugAgent(kb, inspector=None)  # 30-40% faster
+```
+
+**Extending Debug Agent** (Custom Patterns):
+```yaml
+# patterns.yaml
+CUSTOM_001:
+  name: "Your Custom Error Pattern"
+  category: PARAMETER
+  regex: ".*your custom regex.*"
+  semantic_features:
+    - error_type: [CustomError]
+  severity: high
+  related_solutions: [CUSTOM_SOL_001]
+
+# solutions.yaml
+CUSTOM_SOL_001:
+  id: CUSTOM_SOL_001
+  title: "Your Custom Solution"
+  category: QUICK_FIX
+  description: "Description of solution"
+  code_example: |
+    # Your code example
+    workflow.add_node("Node", "id", {...})
+  difficulty: easy
+  estimated_time: 5
+```
+
+**Critical Patterns**:
+1. **Initialize Once** (singleton): Create DebugAgent once and reuse (20-50ms overhead if initialized every time)
+2. **Store Reports**: Save JSON reports for later analysis and metrics tracking
+3. **Custom Formatters**: Format reports for Slack, email, or other notification systems
+
+**File References**:
+- Core: `src/dataflow/debug/debug_agent.py:1-487` (5-stage pipeline)
+- Knowledge Base: `src/dataflow/debug/knowledge_base.py:1-312` (pattern/solution management)
+- Patterns: `src/dataflow/debug/patterns.yaml` (50+ patterns)
+- Solutions: `src/dataflow/debug/solutions.yaml` (60+ solutions)
+
+**Comprehensive Documentation**:
+- **User Guide**: `docs/guides/debug-agent-user-guide.md` (2513 lines, 15 scenarios)
+- **Developer Guide**: `docs/guides/debug-agent-developer-guide.md` (2003 lines, extension guide)
+- **Examples**: `examples/debug_agent/` (5 working examples)
+- **E2E Tests**: `tests/integration/test_debug_agent_e2e.py` (18 tests, 100% passing)
+
+**Version Requirements**: DataFlow v0.8.0+, Python 3.10+
+
+---
+
+## 🔒 Strict Mode Validation System (NEW in v0.8.0+, Week 9)
+
+**Location**: `apps/kailash-dataflow/src/dataflow/validation/`
+
+DataFlow v0.8.0+ introduces **Strict Mode** - an opt-in validation system that provides comprehensive parameter, connection, and model validation with fail-fast and verbose modes.
+
+### What is Strict Mode?
+
+Strict Mode is a 4-layer validation system that catches errors **before** workflow execution:
+
+**Layer 1**: Model schema validation (field types, constraints, relationships)
+**Layer 2**: Parameter validation (types, values, required fields)
+**Layer 3**: Connection validation (type compatibility, parameter contracts)
+**Layer 4**: Workflow validation (structure, cycles, dependencies)
+
+**Key Features**:
+- **3-tier priority system**: Per-model > Global > Environment variable
+- **Fail-fast mode**: Stop at first validation error (default)
+- **Verbose mode**: Collect all validation errors before failing
+- **Zero runtime overhead**: Validation only at workflow build time
+- **Backward compatible**: Opt-in via configuration or decorator
+
+### Configuration Priority (Highest to Lowest)
+
+```python
+from dataflow import DataFlow
+
+# Priority 1: Environment variable (lowest)
+# export DATAFLOW_STRICT_MODE=true
+db = DataFlow("postgresql://...")
+
+# Priority 2: Global DataFlow configuration (medium)
+db = DataFlow("postgresql://...", strict_mode=True)
+
+# Priority 3: Per-model configuration (highest)
+@db.model
+class User:
+    id: str
+    email: str
+    name: str
+
+    __dataflow__ = {
+        'strict_mode': True  # Overrides global and env var
+    }
+```
+
+### Strict Mode Options
+
+```python
+from dataflow.validation.strict_mode import StrictModeConfig
+
+# Enable strict mode with default settings
+db = DataFlow("postgresql://...", strict_mode=True)
+
+# Custom strict mode configuration
+db = DataFlow(
+    "postgresql://...",
+    strict_mode=StrictModeConfig(
+        enabled=True,
+        fail_fast=False,  # Collect all errors before failing
+        verbose=True,     # Detailed error messages
+        validate_models=True,
+        validate_parameters=True,
+        validate_connections=True,
+        validate_workflows=True
+    )
+)
+
+# Disable specific validation layers
+db = DataFlow(
+    "postgresql://...",
+    strict_mode=StrictModeConfig(
+        enabled=True,
+        validate_parameters=True,  # Keep parameter validation
+        validate_connections=False,  # Skip connection validation
+        validate_workflows=False    # Skip workflow validation
+    )
+)
+```
+
+**File Reference**: `src/dataflow/validation/strict_mode.py:1-156` (StrictModeConfig class)
+
+### Layer 1: Model Validation
+
+**Location**: `src/dataflow/validation/model_validator.py:1-248`
+
+Validates DataFlow model schemas before node generation.
+
+**Validation Checks**:
+- Primary key 'id' field presence and type
+- Field type annotations (str, int, float, bool, List, Dict)
+- Reserved field names (created_at, updated_at)
+- List field type constraints (List[str], List[int], List[float] only)
+- PostgreSQL native array validation
+- Field naming conventions
+
+**Usage**:
+```python
+from dataflow.validation.model_validator import ModelValidator
+from dataflow import DataFlow
+
+db = DataFlow("postgresql://...", strict_mode=True)
+
+# Invalid model - will raise validation error
+@db.model
+class BadUser:
+    user_id: str  # ❌ Missing 'id' field
+    created_at: str  # ❌ Reserved field
+    tags: List[dict]  # ❌ Unsupported List element type
+
+# Validation error raised BEFORE node generation:
+# ModelValidationError: Model 'BadUser' validation failed:
+#   - Missing required primary key field 'id'
+#   - Reserved field 'created_at' cannot be manually defined
+#   - Unsupported List element type: dict (use List[str], List[int], or List[float])
+
+# Valid model
+@db.model
+class GoodUser:
+    id: str  # ✅ Required primary key
+    name: str
+    email: str
+    tags: List[str]  # ✅ Supported List type
+```
+
+**ModelValidator API**:
+```python
+from dataflow.validation.model_validator import ModelValidator
+
+validator = ModelValidator()
+
+# Validate model class
+errors = validator.validate_model(User, model_name="User")
+# Returns: List[str] - validation error messages
+
+# Validate primary key
+errors = validator.validate_primary_key(User, model_name="User")
+# Checks: 'id' field exists and is str type
+
+# Validate field types
+errors = validator.validate_field_types(User, model_name="User")
+# Checks: All fields have valid type annotations
+
+# Validate reserved fields
+errors = validator.validate_reserved_fields(User, model_name="User")
+# Checks: created_at, updated_at not manually defined
+```
+
+**Error Messages**:
+```
+ModelValidationError: Model 'User' validation failed:
+  - Missing required primary key field 'id'
+  - Primary key field 'id' must be of type str, got int
+  - Field 'created_at' is reserved and auto-managed by DataFlow
+  - Field 'tags' has unsupported List element type: dict
+  - Field 'metadata' requires type annotation
+```
+
+### Layer 2: Parameter Validation
+
+**Location**: `src/dataflow/validation/parameter_validator.py:1-312`
+
+Validates node parameters before workflow execution.
+
+**Validation Checks**:
+- Required parameter presence
+- Parameter type matching (str, int, float, bool, list, dict)
+- Value constraints (range, format, length)
+- Special node parameter structures:
+  - CreateNode: flat field structure
+  - UpdateNode: filter + fields structure
+  - ListNode: filters, limit, offset
+  - BulkCreateNode: data list with records
+
+**Usage**:
+```python
+from dataflow.validation.parameter_validator import ParameterValidator
+from dataflow import DataFlow
+
+db = DataFlow("postgresql://...", strict_mode=True)
+
+@db.model
+class User:
+    id: str
+    email: str
+    name: str
+
+# Invalid CreateNode - missing 'id'
+workflow.add_node("UserCreateNode", "create", {
+    "name": "Alice"  # ❌ Missing required 'id' field
+})
+
+# Validation error raised at workflow.build():
+# ParameterValidationError: Node 'create' parameter validation failed:
+#   - Missing required parameter 'id' for CREATE operation
+#   - Required parameter type: str
+
+# Valid CreateNode
+workflow.add_node("UserCreateNode", "create", {
+    "id": "user-123",  # ✅ Required parameter
+    "name": "Alice",
+    "email": "alice@example.com"
+})
+
+# Invalid UpdateNode - wrong structure
+workflow.add_node("UserUpdateNode", "update", {
+    "name": "Alice Updated"  # ❌ Missing 'filter' and 'fields' structure
+})
+
+# Validation error:
+# ParameterValidationError: Node 'update' parameter validation failed:
+#   - UPDATE operation requires 'filter' field
+#   - UPDATE operation requires 'fields' field
+
+# Valid UpdateNode
+workflow.add_node("UserUpdateNode", "update", {
+    "filter": {"id": "user-123"},  # ✅ Which records to update
+    "fields": {"name": "Alice Updated"}  # ✅ What to change
+})
+```
+
+**ParameterValidator API**:
+```python
+from dataflow.validation.parameter_validator import ParameterValidator
+
+validator = ParameterValidator()
+
+# Validate node parameters
+errors = validator.validate_parameters(
+    node_id="create",
+    node_type="UserCreateNode",
+    parameters={"name": "Alice"},
+    model_schema=user_schema
+)
+# Returns: List[str] - validation error messages
+
+# Validate parameter types
+errors = validator.validate_parameter_types(
+    parameters={"id": "user-123", "age": "25"},
+    expected_types={"id": str, "age": int}
+)
+# Checks: Parameter types match expected types
+
+# Validate required parameters
+errors = validator.validate_required_parameters(
+    parameters={"name": "Alice"},
+    required_params=["id", "name", "email"]
+)
+# Checks: All required parameters are present
+```
+
+**Error Messages**:
+```
+ParameterValidationError: Node 'create' parameter validation failed:
+  - Missing required parameter 'id' for CREATE operation
+  - Parameter 'age' type mismatch: expected int, got str
+  - Parameter 'email' invalid format: 'notanemail'
+  - UPDATE operation requires 'filter' field
+  - UPDATE operation requires 'fields' field
+```
+
+### Layer 3: Connection Validation
+
+**Location**: `src/dataflow/validation/connection_validator.py:1-285`
+
+Validates workflow connections for type compatibility and parameter contracts.
+
+**Validation Checks**:
+- Source node existence
+- Target node existence
+- Parameter type compatibility (str → str, int → int, dict → dict)
+- Connection contract validation (source output matches target input)
+- Circular dependency detection
+- Self-connection prevention
+
+**Usage**:
+```python
+from dataflow.validation.connection_validator import ConnectionValidator
+from dataflow import DataFlow
+
+db = DataFlow("postgresql://...", strict_mode=True)
+
+@db.model
+class User:
+    id: str
+    name: str
+
+# Invalid connection - source node doesn't exist
+workflow.add_node("UserReadNode", "read", {"id": "user-123"})
+workflow.add_connection("nonexistent_node", "id", "read", "id")
+
+# Validation error at workflow.build():
+# ConnectionValidationError: Connection validation failed:
+#   - Source node 'nonexistent_node' not found in workflow
+#   - Add source node before creating connection
+
+# Valid connection
+workflow.add_node("UserCreateNode", "create", {"id": "user-123", "name": "Alice"})
+workflow.add_node("UserReadNode", "read", {})
+workflow.add_connection("create", "id", "read", "id")  # ✅ Valid connection
+
+# Invalid connection - type mismatch
+workflow.add_node("UserCountNode", "count", {})  # Returns int count
+workflow.add_connection("count", "count", "read", "id")  # ❌ int → str mismatch
+
+# Validation error:
+# ConnectionValidationError: Connection validation failed:
+#   - Type mismatch: source outputs int, target expects str
+#   - Connection: count.count → read.id
+```
+
+**ConnectionValidator API**:
+```python
+from dataflow.validation.connection_validator import ConnectionValidator
+
+validator = ConnectionValidator()
+
+# Validate connection
+errors = validator.validate_connection(
+    source_node="create",
+    source_param="id",
+    target_node="read",
+    target_param="id",
+    workflow=workflow
+)
+# Returns: List[str] - validation error messages
+
+# Validate connection type compatibility
+errors = validator.validate_connection_types(
+    source_type=str,
+    target_type=int,
+    connection_id="create.id → read.id"
+)
+# Checks: Source and target types are compatible
+
+# Detect circular dependencies
+errors = validator.detect_circular_dependencies(
+    workflow=workflow
+)
+# Checks: No circular dependencies in workflow graph
+```
+
+**Error Messages**:
+```
+ConnectionValidationError: Connection validation failed:
+  - Source node 'create' not found in workflow
+  - Target node 'read' not found in workflow
+  - Type mismatch: source outputs int, target expects str
+  - Circular dependency detected: create → read → create
+  - Self-connection not allowed: node 'create' connects to itself
+```
+
+### Layer 4: Workflow Validation
+
+**Location**: `src/dataflow/validation/validators.py:1-198`
+
+Orchestrates all validation layers and provides workflow-level validation.
+
+**Validation Checks**:
+- Workflow structure integrity
+- Node registration completeness
+- Connection graph validity
+- Dependency resolution
+- Cyclic workflow validation
+
+**Usage**:
+```python
+from dataflow.validation.validators import WorkflowValidator
+from dataflow import DataFlow
+
+db = DataFlow("postgresql://...", strict_mode=True)
+
+@db.model
+class User:
+    id: str
+    name: str
+
+# Build workflow
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create", {"id": "user-123", "name": "Alice"})
+workflow.add_node("UserReadNode", "read", {"id": "user-123"})
+workflow.add_connection("create", "id", "read", "id")
+
+# Validate workflow before execution
+validator = WorkflowValidator(db)
+errors = validator.validate_workflow(workflow)
+
+if errors:
+    print(f"Workflow validation failed:")
+    for error in errors:
+        print(f"  - {error}")
+else:
+    # Safe to execute
+    results, _ = runtime.execute(workflow.build())
+```
+
+**WorkflowValidator API**:
+```python
+from dataflow.validation.validators import WorkflowValidator
+
+validator = WorkflowValidator(db)
+
+# Validate complete workflow
+errors = validator.validate_workflow(workflow)
+# Returns: List[str] - all validation errors
+
+# Validate workflow structure
+errors = validator.validate_structure(workflow)
+# Checks: Workflow has valid structure (nodes, connections)
+
+# Validate workflow dependencies
+errors = validator.validate_dependencies(workflow)
+# Checks: All dependencies can be resolved
+
+# Validate cyclic workflows
+errors = validator.validate_cycles(workflow)
+# Checks: Cyclic workflows have valid convergence conditions
+```
+
+**Error Messages**:
+```
+WorkflowValidationError: Workflow validation failed:
+  - Workflow structure invalid: no nodes defined
+  - Unresolved dependency: node 'read' depends on non-existent node 'create'
+  - Cyclic workflow missing convergence condition
+  - Multiple validation errors found (see details above)
+```
+
+### Fail-Fast vs Verbose Mode
+
+```python
+# Fail-Fast Mode (default) - stops at first error
+db = DataFlow(
+    "postgresql://...",
+    strict_mode=StrictModeConfig(
+        enabled=True,
+        fail_fast=True  # Stop at first validation error
+    )
+)
+
+# Error output (single error):
+# ModelValidationError: Model 'User' validation failed:
+#   - Missing required primary key field 'id'
+
+# Verbose Mode - collects all errors
+db = DataFlow(
+    "postgresql://...",
+    strict_mode=StrictModeConfig(
+        enabled=True,
+        fail_fast=False,  # Collect all errors
+        verbose=True      # Detailed error messages
+    )
+)
+
+# Error output (all errors):
+# ModelValidationError: Model 'User' validation failed:
+#   - Missing required primary key field 'id'
+#   - Field 'created_at' is reserved and auto-managed
+#   - Field 'tags' has unsupported List element type: dict
+#   - Field 'metadata' requires type annotation
+```
+
+### Integration Tests
+
+**Location**: `apps/kailash-dataflow/tests/integration/`
+
+Comprehensive integration tests verify strict mode behavior across all validation layers.
+
+**Test Coverage**:
+- Model validation integration: `test_model_validation_integration.py:1-187`
+- Parameter validation integration: `test_parameter_validation_integration.py:1-215`
+- Connection validation integration: `test_connection_validation_integration.py:1-198`
+- End-to-end validation workflows: All tests passing (100% coverage)
+
+**Running Integration Tests**:
+```bash
+# Run all strict mode integration tests
+pytest apps/kailash-dataflow/tests/integration/test_*_validation_integration.py -v
+
+# Run specific validation layer tests
+pytest apps/kailash-dataflow/tests/integration/test_model_validation_integration.py -v
+pytest apps/kailash-dataflow/tests/integration/test_parameter_validation_integration.py -v
+pytest apps/kailash-dataflow/tests/integration/test_connection_validation_integration.py -v
+```
+
+### Architecture Decision Record
+
+**Location**: `apps/kailash-dataflow/docs/architecture/ADR-003-STRICT-MODE.md`
+
+Comprehensive architectural documentation for Strict Mode system design.
+
+**Sections**:
+- Design rationale and alternatives considered
+- 3-tier priority system justification
+- Validation layer architecture
+- Performance considerations
+- Integration with existing ErrorEnhancer
+- Backward compatibility guarantees
+
+### User Guide
+
+**Location**: `apps/kailash-dataflow/docs/guides/strict-mode-validation.md`
+
+Complete user guide with configuration, usage patterns, and examples.
+
+**Sections**:
+- Quick start guide
+- Configuration priority system
+- Validation layer details
+- Common validation scenarios
+- Troubleshooting validation errors
+- Best practices for production use
+
+### Production Best Practices
+
+**1. Enable Strict Mode in Development** (catch errors early):
+```python
+# Development
+db = DataFlow("postgresql://...", strict_mode=True)
+```
+
+**2. Disable Strict Mode in Production** (zero overhead):
+```python
+# Production
+db = DataFlow("postgresql://...", strict_mode=False)
+```
+
+**3. Use Verbose Mode for Debugging** (collect all errors):
+```python
+# Debugging
+db = DataFlow(
+    "postgresql://...",
+    strict_mode=StrictModeConfig(
+        enabled=True,
+        fail_fast=False,  # Collect all errors
+        verbose=True      # Detailed messages
+    )
+)
+```
+
+**4. Per-Model Strict Mode** (selective validation):
+```python
+# Enable strict mode only for critical models
+@db.model
+class CriticalUser:
+    id: str
+    email: str
+
+    __dataflow__ = {'strict_mode': True}
+
+# Disable for less critical models
+@db.model
+class LogEntry:
+    id: str
+    message: str
+
+    __dataflow__ = {'strict_mode': False}
+```
+
+### Performance Impact
+
+**Validation Overhead**:
+- Model validation: <1ms per model (one-time at registration)
+- Parameter validation: <1ms per node (at workflow build)
+- Connection validation: <1ms per connection (at workflow build)
+- Workflow validation: <5ms for 100-node workflows
+
+**Production Recommendation**: Disable in production to eliminate overhead.
+
+**Development Recommendation**: Enable in development to catch errors before execution.
+
+### File References (Complete)
+
+**Core Implementation**:
+- `src/dataflow/validation/strict_mode.py:1-156` - StrictModeConfig class
+- `src/dataflow/validation/model_validator.py:1-248` - Layer 1 validation
+- `src/dataflow/validation/parameter_validator.py:1-312` - Layer 2 validation
+- `src/dataflow/validation/connection_validator.py:1-285` - Layer 3 validation
+- `src/dataflow/validation/validators.py:1-198` - Layer 4 orchestration
+
+**Testing**:
+- `tests/unit/test_model_validator.py:1-156` - Model validation unit tests
+- `tests/unit/test_parameter_validation.py:1-187` - Parameter validation unit tests
+- `tests/unit/test_connection_validation.py:1-165` - Connection validation unit tests
+- `tests/integration/test_model_validation_integration.py:1-187` - Model integration tests
+- `tests/integration/test_parameter_validation_integration.py:1-215` - Parameter integration tests
+- `tests/integration/test_connection_validation_integration.py:1-198` - Connection integration tests
+
+**Documentation**:
+- `docs/architecture/ADR-003-STRICT-MODE.md` - Architecture decision record
+- `docs/guides/strict-mode-validation.md` - User guide
+
+---
+
+## 🐛 Debug Agent - 5-Stage Pipeline Deep Dive (NEW in v0.8.0+, Week 10)
+
+**Location**: `apps/kailash-dataflow/src/dataflow/debug/`
+
+The Debug Agent implements a **5-stage error analysis pipeline** for intelligent error diagnosis with 50+ patterns, 60+ solutions, and 92%+ confidence.
+
+### Architecture Overview
+
+The Debug Agent processes errors through 5 sequential stages:
+
+**Stage 1**: Error Capture → Extract stacktrace, message, context
+**Stage 2**: Error Categorization → Match against 50+ patterns
+**Stage 3**: Context Analysis → Use Inspector for workflow context
+**Stage 4**: Solution Generation → Rank 60+ solutions by relevance
+**Stage 5**: Result Formatting → Output CLI, JSON, or dictionary
+
+Each stage builds upon the previous stage's output, creating a pipeline that progressively enriches error information.
+
+### Stage 1: Error Capture
+
+**Location**: `src/dataflow/debug/error_capture.py:1-312`
+
+Captures comprehensive error information including stacktrace, context, and metadata.
+
+**CapturedError Class**:
+```python
+from dataflow.debug.error_capture import ErrorCapture, CapturedError
+
+# Capture exception
+capture = ErrorCapture()
+captured_error = capture.capture(exception)
+
+# CapturedError attributes:
+captured_error.exception_type  # e.g., "ValueError"
+captured_error.message         # Error message string
+captured_error.stacktrace      # List of StackFrame objects
+captured_error.context         # Dict with node_id, parameters, etc.
+captured_error.timestamp       # When error was captured
+```
+
+**Stacktrace Analysis**:
+```python
+# Access stacktrace frames
+for frame in captured_error.stacktrace:
+    print(f"File: {frame.filename}")
+    print(f"Line: {frame.line_number}")
+    print(f"Function: {frame.function_name}")
+    print(f"Code: {frame.code_context}")
+```
+
+**Context Extraction**:
+```python
+# Error context includes:
+context = captured_error.context
+context["node_id"]          # Which node failed
+context["parameters"]       # Node parameters
+context["error_location"]   # File:line where error occurred
+context["workflow_info"]    # Workflow metadata
+```
+
+**ErrorCapture API**:
+```python
+from dataflow.debug.error_capture import ErrorCapture
+
+capture = ErrorCapture()
+
+# Capture exception
+captured = capture.capture(exception)
+# Returns: CapturedError with full context
+
+# Capture from string (for log parsing)
+captured = capture.capture_from_string(
+    error_message="ValueError: Missing required parameter 'id'"
+)
+# Returns: CapturedError with limited context
+
+# Extract stacktrace
+frames = capture.extract_stacktrace(exception)
+# Returns: List[StackFrame]
+
+# Extract context
+context = capture.extract_context(exception)
+# Returns: Dict with error context
+```
+
+**File Reference**: `src/dataflow/debug/error_capture.py:1-312` (ErrorCapture, CapturedError, StackFrame)
+
+### Stage 2: Error Categorization
+
+**Location**: `src/dataflow/debug/error_categorizer.py:1-426`
+
+Matches captured errors against 50+ patterns across 5 categories using regex and semantic features.
+
+**ErrorCategory Class**:
+```python
+from dataflow.debug.error_categorizer import ErrorCategorizer, ErrorCategory
+
+categorizer = ErrorCategorizer(knowledge_base)
+category = categorizer.categorize(captured_error)
+
+# ErrorCategory attributes:
+category.category       # "PARAMETER", "CONNECTION", "MIGRATION", etc.
+category.pattern_id     # "PARAM_001", "CONN_002", etc.
+category.confidence     # 0.0-1.0 confidence score
+category.pattern_name   # Human-readable pattern name
+category.features       # Matched semantic features
+```
+
+**Pattern Matching Algorithm**:
+```python
+# Two-phase matching:
+# Phase 1: Regex matching on error message
+# Phase 2: Semantic feature matching (error type, stacktrace location, context)
+
+# Example: Missing 'id' parameter
+# Regex: ".*[Mm]issing.*'id'.*"
+# Semantic features:
+#   - error_type: [KeyError, ValueError]
+#   - stacktrace_location: [CreateNode, UpdateNode]
+#   - missing_field: "id"
+# Result: PARAM_001 with 95% confidence
+```
+
+**Category Distribution** (50 patterns):
+- **PARAMETER** (15 patterns): Field validation, type mismatches, missing parameters
+- **CONNECTION** (10 patterns): Node connections, circular dependencies, type compatibility
+- **MIGRATION** (8 patterns): Schema changes, table/column issues, constraints
+- **RUNTIME** (10 patterns): Execution errors, timeouts, resource exhaustion
+- **CONFIGURATION** (7 patterns): Database URLs, environment variables, authentication
+
+**ErrorCategorizer API**:
+```python
+from dataflow.debug.error_categorizer import ErrorCategorizer
+
+categorizer = ErrorCategorizer(knowledge_base)
+
+# Categorize error
+category = categorizer.categorize(captured_error)
+# Returns: ErrorCategory with matched pattern
+
+# Calculate confidence score
+confidence = categorizer.calculate_confidence(
+    regex_match=True,
+    semantic_match_score=0.85
+)
+# Returns: float (0.0-1.0)
+
+# Match semantic features
+match_score = categorizer.match_semantic_features(
+    error_features={"error_type": "ValueError", "missing_field": "id"},
+    pattern_features={"error_type": ["ValueError", "KeyError"], "missing_field": "id"}
+)
+# Returns: float (0.0-1.0)
+```
+
+**Pattern Structure** (from `patterns.yaml`):
+```yaml
+PARAM_001:
+  name: "Missing Required Parameter 'id'"
+  category: PARAMETER
+  regex: ".*[Mm]issing.*'id'.*"
+  semantic_features:
+    - error_type: [KeyError, ValueError]
+    - stacktrace_location: [CreateNode, UpdateNode]
+    - missing_field: "id"
+  severity: high
+  related_solutions: [SOL_001, SOL_002]
+```
+
+**File Reference**: `src/dataflow/debug/error_categorizer.py:1-426` (ErrorCategorizer, ErrorCategory)
+
+### Stage 3: Context Analysis
+
+**Location**: `src/dataflow/debug/context_analyzer.py:1-768`
+
+Extracts workflow context using Inspector API to provide detailed root cause analysis.
+
+**AnalysisResult Class**:
+```python
+from dataflow.debug.context_analyzer import ContextAnalyzer, AnalysisResult
+
+analyzer = ContextAnalyzer(inspector)
+analysis = analyzer.analyze(captured_error, category)
+
+# AnalysisResult attributes:
+analysis.root_cause          # Human-readable root cause
+analysis.affected_nodes      # List of affected node IDs
+analysis.affected_connections  # List of affected connections
+analysis.affected_models     # List of affected models
+analysis.context_data        # Dict with detailed context
+analysis.suggestions         # List of suggested fixes
+```
+
+**Category-Specific Analysis Methods**:
+```python
+# Each error category has specialized analysis:
+
+# PARAMETER errors → _analyze_parameter_error()
+# Extracts:
+#   - Model schema from Inspector
+#   - Missing parameter name
+#   - Field type and constraints
+#   - is_primary_key, is_nullable flags
+
+# CONNECTION errors → _analyze_connection_error()
+# Extracts:
+#   - Missing source/target nodes
+#   - Available nodes in workflow
+#   - Similar node names (typo suggestions)
+#   - Connection parameter details
+
+# MIGRATION errors → _analyze_migration_error()
+# Extracts:
+#   - Table name from error message
+#   - Existing tables list
+#   - Similar table names (typo suggestions)
+
+# CONFIGURATION errors → _analyze_configuration_error()
+# Extracts:
+#   - Configuration parameter that failed
+#   - Expected format
+#   - Environment variable references
+
+# RUNTIME errors → _analyze_runtime_error()
+# Extracts:
+#   - Runtime issue type (timeout, deadlock, resource)
+#   - Query information
+#   - Resource usage indicators
+```
+
+**Inspector Integration**:
+```python
+# Context analyzer uses Inspector API for workflow introspection:
+
+# Get model schema
+model_info = inspector.model("User")
+model_info.schema           # Field definitions
+model_info.table_name       # Database table name
+
+# Get workflow nodes
+workflow = inspector._get_workflow()
+available_nodes = list(workflow.nodes.keys())
+
+# Find similar node names (typo suggestions)
+similar_nodes = analyzer._find_similar_strings(
+    target="user_create",
+    candidates=available_nodes
+)
+# Returns: [("UserCreateNode", 0.85), ...]
+```
+
+**Context Data Structure**:
+```python
+# For PARAMETER errors:
+context_data = {
+    "node_id": "create",
+    "node_type": "UserCreateNode",
+    "model_name": "User",
+    "model_schema": {...},        # Full schema from Inspector
+    "missing_parameter": "id",
+    "field_type": "str",
+    "is_primary_key": True,
+    "is_nullable": False,
+    "provided_parameters": {"name": "Alice"},
+    "table_name": "users"
+}
+
+# For CONNECTION errors:
+context_data = {
+    "source_node": "create",
+    "target_node": "nonexistent_node",
+    "missing_node": "nonexistent_node",
+    "available_nodes": ["create", "read", "update"],
+    "similar_nodes": [("read", 0.65)],  # Typo suggestions
+    "connection_details": {"source_param": "id", "target_param": "id"}
+}
+```
+
+**ContextAnalyzer API**:
+```python
+from dataflow.debug.context_analyzer import ContextAnalyzer
+
+analyzer = ContextAnalyzer(inspector)
+
+# Analyze error with workflow context
+analysis = analyzer.analyze(captured_error, category)
+# Returns: AnalysisResult with root cause and suggestions
+
+# Find similar strings (typo suggestions)
+similar = analyzer._find_similar_strings(
+    target="usr_create",
+    candidates=["user_create", "user_update"],
+    threshold=0.5
+)
+# Returns: [('user_create', 0.85), ('user_update', 0.65)]
+
+# Extract model name from node ID
+model_name = analyzer._extract_model_name("UserCreateNode")
+# Returns: "User"
+
+# Extract parameter name from error message
+param_name = analyzer._extract_parameter_name("Missing parameter 'id'")
+# Returns: "id"
+```
+
+**File Reference**: `src/dataflow/debug/context_analyzer.py:1-768` (ContextAnalyzer, AnalysisResult)
+
+### Stage 4: Solution Generation
+
+**Location**: `src/dataflow/debug/solution_generator.py:1-797`
+
+Ranks 60+ solution templates by relevance, customizes with error context, and returns top N solutions.
+
+**SuggestedSolution Class**:
+```python
+from dataflow.debug.solution_generator import SolutionGenerator, SuggestedSolution
+
+generator = SolutionGenerator(knowledge_base)
+solutions = generator.generate_solutions(
+    analysis=analysis_result,
+    category=error_category,
+    max_solutions=5,
+    min_relevance=0.3
+)
+
+# SuggestedSolution attributes:
+solution.solution_id      # "SOL_001"
+solution.title            # "Add Missing 'id' Parameter"
+solution.category         # "QUICK_FIX"
+solution.description      # Short description
+solution.code_example     # Customized code example
+solution.explanation      # Detailed explanation
+solution.relevance_score  # 0.0-1.0 relevance score
+solution.confidence       # 0.0-1.0 confidence from categorizer
+solution.difficulty       # "easy", "medium", "hard"
+solution.estimated_time   # Minutes to implement
+```
+
+**Relevance Scoring Algorithm**:
+```python
+# Scoring formula (0.0-1.0):
+# relevance_score = (pattern_confidence * 0.5) + (context_match * 0.5) + category_bonus
+#
+# Components:
+# 1. Pattern confidence (0.0-1.0): From ErrorCategorizer
+# 2. Context match (0.0-1.0):
+#    - Solution addresses affected_nodes? +0.3
+#    - Solution addresses affected_models? +0.3
+#    - Solution references context_data fields? +0.4
+# 3. Category bonus:
+#    - QUICK_FIX for PARAMETER/CONNECTION? +0.2
+#    - CODE_REFACTORING for MIGRATION/RUNTIME? +0.1
+
+# Example:
+# pattern_confidence = 0.95
+# context_match = 0.85 (addresses node, model, missing parameter)
+# category_bonus = 0.2 (QUICK_FIX for PARAMETER)
+# relevance_score = min(0.95*0.5 + 0.85*0.5 + 0.2, 1.0) = 1.0
+```
+
+**Solution Customization**:
+```python
+# Generic solution template:
+code_example = '''
+workflow.add_node("${node_type}", "create", {
+    "${parameter_name}": "value"
+})
+'''
+
+# Customized with error context:
+code_example = '''
+workflow.add_node("UserCreateNode", "create", {
+    "id": "value"  # Replaced ${parameter_name} → "id"
+})
+'''
+
+# Customization placeholders:
+# ${parameter_name} → context_data["missing_parameter"]
+# ${model_name} → context_data["model_name"]
+# ${node_type} → context_data["node_type"]
+# ${missing_node} → context_data["missing_node"]
+# ${suggested_node} → context_data["similar_nodes"][0][0]
+# ${table_name} → context_data["table_name"]
+```
+
+**Category-Specific Filters**:
+```python
+# Each error category has specialized solution filtering:
+
+# PARAMETER errors → _filter_parameter_solutions()
+# Boosts:
+#   - Solutions mentioning specific missing parameter: +0.15
+#   - Solutions for primary key parameters: +0.1
+
+# CONNECTION errors → _filter_connection_solutions()
+# Boosts:
+#   - Solutions mentioning typos/similar nodes: +0.2
+#   - Solutions for specific missing node: +0.15
+
+# MIGRATION errors → _filter_migration_solutions()
+# Boosts:
+#   - Solutions for table name issues: +0.1
+#   - Solutions mentioning schema/migration: +0.1
+```
+
+**Fallback Solutions** (for UNKNOWN category):
+```python
+# When no pattern matches (category == UNKNOWN):
+# Generate 5 generic but actionable fallback solutions:
+
+# 1. Examine Error Message and Stack Trace (relevance: 0.5)
+# 2. Verify Configuration of Affected Components (relevance: 0.45)
+# 3. Follow Context-Specific Recommendations (relevance: 0.55)
+# 4. Enable Debug Logging for More Information (relevance: 0.4)
+# 5. Consult DataFlow Documentation and Patterns (relevance: 0.35)
+```
+
+**SolutionGenerator API**:
+```python
+from dataflow.debug.solution_generator import SolutionGenerator
+
+generator = SolutionGenerator(knowledge_base)
+
+# Generate ranked solutions
+solutions = generator.generate_solutions(
+    analysis=analysis_result,
+    category=error_category,
+    max_solutions=5,
+    min_relevance=0.3
+)
+# Returns: List[SuggestedSolution] sorted by relevance
+
+# Calculate relevance score
+score = generator._calculate_relevance_score(
+    solution=solution_dict,
+    analysis=analysis_result,
+    category=error_category
+)
+# Returns: float (0.0-1.0)
+
+# Customize solution template
+customized = generator._customize_solution(
+    solution=solution_dict,
+    analysis=analysis_result,
+    solution_id="SOL_001"
+)
+# Returns: Dict with customized code examples
+```
+
+**Solution Structure** (from `solutions.yaml`):
+```yaml
+SOL_001:
+  id: SOL_001
+  title: "Add Missing 'id' Parameter to CreateNode"
+  category: QUICK_FIX
+  description: "Add required 'id' field to CREATE operation"
+  code_example: |
+    workflow.add_node("${node_type}", "create", {
+        "${parameter_name}": "user-123",  # Required parameter
+        "name": "Alice"
+    })
+  explanation: |
+    DataFlow requires all models to have an 'id' field as primary key.
+    This field must be explicitly provided in CREATE operations.
+  difficulty: easy
+  estimated_time: 1
+  references:
+    - https://docs.dataflow.dev/models
+```
+
+**File Reference**: `src/dataflow/debug/solution_generator.py:1-797` (SolutionGenerator, SuggestedSolution)
+
+### Stage 5: Result Formatting
+
+**Location**: `src/dataflow/debug/debug_agent.py:1-487`
+
+Formats debug results into CLI (ANSI colors), JSON (machine-readable), or dictionary (programmatic access).
+
+**DebugReport Class**:
+```python
+from dataflow.debug.debug_agent import DebugAgent, DebugReport
+
+# Execute debug agent
+report = debug_agent.debug(exception, max_solutions=5, min_relevance=0.3)
+
+# DebugReport attributes:
+report.captured_error     # CapturedError from Stage 1
+report.error_category     # ErrorCategory from Stage 2
+report.analysis_result    # AnalysisResult from Stage 3
+report.suggested_solutions  # List[SuggestedSolution] from Stage 4
+report.execution_time_ms  # Debug pipeline execution time
+```
+
+**Output Format 1: CLI (ANSI Colors)**:
+```python
+# Rich terminal output with box drawing and colors
+print(report.to_cli_format())
+
+# Example output:
+# ╔═══════════════════════════════════════════════════════════════╗
+# ║                    DataFlow Debug Report                      ║
+# ╚═══════════════════════════════════════════════════════════════╝
+#
+# Error Category: PARAMETER (Confidence: 95%)
+# Root Cause: Node 'create' is missing required parameter 'id' (primary key)
+#
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Suggested Solutions (5)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# [1] Add Missing 'id' Parameter to CreateNode (QUICK_FIX) - 95%
+#
+#     workflow.add_node("UserCreateNode", "create", {
+#         "id": "user-123",  # Add missing parameter
+#         "name": "Alice"
+#     })
+#
+#     Difficulty: easy | Estimated time: 1 minute
+#
+# [2] Use UUID for Automatic ID Generation (BEST_PRACTICE) - 85%
+#     ...
+```
+
+**Output Format 2: JSON (Machine-Readable)**:
+```python
+# Structured JSON for logging/monitoring
+json_output = report.to_json()
+
+# Example output:
+{
+  "error_category": {
+    "category": "PARAMETER",
+    "pattern_id": "PARAM_001",
+    "confidence": 0.95,
+    "pattern_name": "Missing Required Parameter 'id'"
+  },
+  "analysis_result": {
+    "root_cause": "Node 'create' is missing required parameter 'id' (primary key)",
+    "affected_nodes": ["create"],
+    "affected_models": ["User"],
+    "context_data": {
+      "missing_parameter": "id",
+      "model_name": "User",
+      "is_primary_key": true
+    }
+  },
+  "suggested_solutions": [
+    {
+      "solution_id": "SOL_001",
+      "title": "Add Missing 'id' Parameter to CreateNode",
+      "category": "QUICK_FIX",
+      "code_example": "...",
+      "relevance_score": 0.95,
+      "difficulty": "easy",
+      "estimated_time": 1
+    }
+  ],
+  "execution_time_ms": 47.3
+}
+```
+
+**Output Format 3: Dictionary (Programmatic)**:
+```python
+# Direct field access for custom processing
+data = report.to_dict()
+
+# Access fields:
+category = data["error_category"]["category"]
+root_cause = data["analysis_result"]["root_cause"]
+solutions = data["suggested_solutions"]
+
+# Example usage:
+if category == "PARAMETER":
+    missing_param = data["analysis_result"]["context_data"]["missing_parameter"]
+    print(f"Add parameter: {missing_param}")
+```
+
+**DebugAgent API**:
+```python
+from dataflow.debug.debug_agent import DebugAgent
+
+agent = DebugAgent(knowledge_base, inspector)
+
+# Debug exception
+report = agent.debug(
+    exception=e,
+    max_solutions=5,      # Top N solutions
+    min_relevance=0.3     # Minimum relevance threshold
+)
+# Returns: DebugReport with 5-stage pipeline results
+
+# Debug from string (log parsing)
+report = agent.debug_from_string(
+    error_message="ValueError: Missing parameter 'id'"
+)
+# Returns: DebugReport with limited context
+```
+
+**File Reference**: `src/dataflow/debug/debug_agent.py:1-487` (DebugAgent, DebugReport)
+
+### Knowledge Base Management
+
+**Location**: `src/dataflow/debug/knowledge_base.py:1-221`
+
+Centralized storage and retrieval of error patterns and solution templates.
+
+**KnowledgeBase Class**:
+```python
+from dataflow.debug.knowledge_base import KnowledgeBase
+
+kb = KnowledgeBase(
+    patterns_path="src/dataflow/debug/patterns.yaml",
+    solutions_path="src/dataflow/debug/solutions.yaml"
+)
+
+# Get pattern by ID
+pattern = kb.get_pattern("PARAM_001")
+# Returns: Dict with pattern details
+
+# Get all patterns for category
+param_patterns = kb.get_patterns_by_category("PARAMETER")
+# Returns: List[Dict] with 15 PARAMETER patterns
+
+# Get solution by ID
+solution = kb.get_solution("SOL_001")
+# Returns: Dict with solution template
+
+# Get solutions for pattern
+solutions = kb.get_solutions_for_pattern("PARAM_001")
+# Returns: List[Dict] with related solutions
+
+# Reload from disk (hot reload)
+kb.reload_patterns()
+kb.reload_solutions()
+```
+
+**Pattern Database** (`patterns.yaml`):
+- 50+ error patterns across 5 categories
+- Regex patterns for message matching
+- Semantic features for context matching
+- Severity levels (low, medium, high, critical)
+- Related solutions mapping
+
+**Solution Database** (`solutions.yaml`):
+- 60+ solution templates across 4 categories
+- Code examples with placeholders
+- Detailed explanations
+- Difficulty ratings (easy, medium, hard)
+- Estimated implementation time
+
+**File Reference**: `src/dataflow/debug/knowledge_base.py:1-221` (KnowledgeBase)
+
+### Performance Optimization
+
+**Execution Time Breakdown**:
+```
+Stage 1 (Capture):        5-10ms
+Stage 2 (Categorize):     10-20ms (pattern matching + semantic features)
+Stage 3 (Analyze):        10-15ms (Inspector API calls)
+Stage 4 (Generate):       15-25ms (solution ranking + customization)
+Stage 5 (Format):         5-10ms (string formatting)
+Total:                    45-80ms (average: 50ms)
+```
+
+**Optimization Strategies**:
+
+**1. Reduce max_solutions** (20-30% speedup):
+```python
+# Default: 5 solutions
+report = agent.debug(e, max_solutions=5)  # 50ms
+
+# Optimized: 3 solutions
+report = agent.debug(e, max_solutions=3)  # 35ms (30% faster)
+```
+
+**2. Increase min_relevance** (40-50% speedup):
+```python
+# Default: 30% minimum relevance
+report = agent.debug(e, min_relevance=0.3)  # 50ms
+
+# Optimized: 70% minimum relevance
+report = agent.debug(e, min_relevance=0.7)  # 25ms (50% faster)
+```
+
+**3. Disable Inspector** (30-40% speedup):
+```python
+# With Inspector (full context)
+agent = DebugAgent(kb, inspector)
+report = agent.debug(e)  # 50ms
+
+# Without Inspector (limited context)
+agent = DebugAgent(kb, inspector=None)
+report = agent.debug(e)  # 30ms (40% faster)
+```
+
+**4. Singleton Pattern** (avoid repeated initialization):
+```python
+# ✅ CORRECT - Initialize once, reuse
+kb = KnowledgeBase("patterns.yaml", "solutions.yaml")
+inspector = Inspector(db)
+agent = DebugAgent(kb, inspector)
+
+for workflow in workflows:
+    try:
+        runtime.execute(workflow.build())
+    except Exception as e:
+        report = agent.debug(e)  # 50ms per error
+
+# ❌ WRONG - Initialize every time
+for workflow in workflows:
+    try:
+        runtime.execute(workflow.build())
+    except Exception as e:
+        kb = KnowledgeBase(...)  # 20ms overhead
+        agent = DebugAgent(...)  # 10ms overhead
+        report = agent.debug(e)  # 50ms + 30ms overhead = 80ms
+```
+
+### Testing Coverage
+
+**Unit Tests**:
+- `tests/unit/test_error_capture.py` - ErrorCapture, CapturedError, StackFrame
+- `tests/unit/test_error_categorizer.py` - ErrorCategorizer, pattern matching
+- `tests/unit/test_context_analyzer.py` - ContextAnalyzer, Inspector integration
+- `tests/unit/test_solution_generator.py` - SolutionGenerator, relevance scoring
+- `tests/unit/test_debug_agent.py` - DebugAgent, pipeline orchestration
+- `tests/unit/test_knowledge_base.py` - KnowledgeBase, pattern/solution loading
+
+**Integration Tests**:
+- `tests/integration/test_debug_agent_e2e.py:1-687` - 18 end-to-end scenarios
+  - Missing 'id' parameter (PARAM_001)
+  - CreateNode vs UpdateNode confusion (PARAM_005/PARAM_006)
+  - Source node not found (CONN_001)
+  - Type mismatch in connections (CONN_007)
+  - Table not found (MIG_002)
+  - Invalid database URL (CONFIG_001)
+  - Event loop closed (RUNTIME_005)
+  - And 11 more scenarios...
+- **100% passing** (all 18 tests pass)
+
+### Documentation
+
+**User Guide**: `docs/guides/debug-agent-user-guide.md:1-2513`
+- Quick start (20 lines of code)
+- 15 common error scenarios with solutions
+- Production integration patterns
+- Configuration tuning guide
+- Troubleshooting common issues
+
+**Developer Guide**: `docs/guides/debug-agent-developer-guide.md:1-2003`
+- 5-stage pipeline architecture
+- Custom pattern creation
+- Custom solution templates
+- Extending categorizer
+- Performance profiling
+
+**Examples**: `examples/debug_agent/`
+- `01_basic_error_handling.py` - Basic usage
+- `02_production_logging.py` - Logging integration
+- `03_batch_error_analysis.py` - Batch processing
+- `04_custom_pattern_example.py` - Custom patterns
+- `05_performance_monitoring.py` - Performance tracking
+
+### File References (Complete)
+
+**Core Implementation**:
+- `src/dataflow/debug/debug_agent.py:1-487` - DebugAgent orchestrator
+- `src/dataflow/debug/error_capture.py:1-312` - Stage 1: Capture
+- `src/dataflow/debug/error_categorizer.py:1-426` - Stage 2: Categorize
+- `src/dataflow/debug/context_analyzer.py:1-768` - Stage 3: Analyze
+- `src/dataflow/debug/solution_generator.py:1-797` - Stage 4: Suggest
+- `src/dataflow/debug/knowledge_base.py:1-221` - Pattern/solution database
+- `src/dataflow/debug/patterns.yaml:1-723` - 50+ error patterns
+- `src/dataflow/debug/solutions.yaml:1-895` - 60+ solution templates
+
+**Supporting Classes**:
+- `src/dataflow/debug/analysis_result.py` - AnalysisResult data class
+- `src/dataflow/debug/suggested_solution.py` - SuggestedSolution data class
+- `src/dataflow/debug/cli.py` - CLI interface (python -m dataflow.debug.cli)
+
+**Testing**:
+- `tests/unit/test_debug_agent.py` - Unit tests for all stages
+- `tests/integration/test_debug_agent_e2e.py:1-687` - 18 E2E scenarios (100% passing)
+
+**Documentation**:
+- `docs/guides/debug-agent-user-guide.md:1-2513` - Complete user guide
+- `docs/guides/debug-agent-developer-guide.md:1-2003` - Developer guide
+
+---
+
+## 🔧 CLI Commands (NEW in v0.4.7+)
+
+DataFlow includes 5 CLI commands for workflow analysis, debugging, and generation.
+
+**Available Commands**:
+1. **analyze**: Analyze workflow structure and dependencies
+2. **debug**: Debug workflow issues with detailed diagnostics
+3. **generate**: Generate node code from models
+4. **perf**: Performance analysis and profiling
+5. **validate**: Validate workflow structure before execution
+
+**Command 1: Analyze**
+```bash
+# Analyze workflow structure
+dataflow analyze my_workflow.py
+
+# Output:
+# Workflow Analysis Report
+# - Nodes: 15
+# - Connections: 23
+# - Cycles: 0
+# - Validation: PASSED
+# - Estimated Runtime: ~2.5s
+```
+
+**Command 2: Debug**
+```bash
+# Debug workflow with detailed diagnostics
+dataflow debug my_workflow.py --node "user_create"
+
+# Output:
+# Node Debug Report: user_create
+# - Type: UserCreateNode
+# - Parameters: id, name, email
+# - Connections: 3 outgoing, 0 incoming
+# - Validation: PASSED
+# - Potential Issues: None
+```
+
+**Command 3: Generate**
+```bash
+# Generate node code from model
+dataflow generate User --output nodes/
+
+# Generates:
+# - nodes/user_create_node.py
+# - nodes/user_read_node.py
+# - nodes/user_update_node.py
+# - nodes/user_delete_node.py
+# - nodes/user_list_node.py
+```
+
+**Command 4: Perf**
+```bash
+# Analyze workflow performance
+dataflow perf my_workflow.py --profile
+
+# Output:
+# Performance Analysis Report
+# - Total Runtime: 1.8s
+# - Node Timings:
+#   - user_create: 0.5s (28%)
+#   - user_read: 0.3s (17%)
+#   - email_send: 1.0s (55%)
+# - Bottlenecks: email_send (optimize email API calls)
+```
+
+**Command 5: Validate**
+```bash
+# Validate workflow before execution
+dataflow validate my_workflow.py --strict
+
+# Output:
+# Workflow Validation Report
+# - Structure: PASSED
+# - Connections: PASSED (23 connections)
+# - Parameters: PASSED (all required parameters present)
+# - Types: PASSED (all type constraints satisfied)
+# - Cycles: PASSED (no circular dependencies)
+# - Overall: PASSED ✓
+```
+
+**File Reference**: `src/dataflow/cli/*.py` (5 command files)
+
+## 🔄 UpsertNode with Custom Conflict Fields (v0.8.0+)
+
+### What is UpsertNode?
+
+**UpsertNode** performs "upsert" operations (INSERT if record doesn't exist, UPDATE if it does) in a single atomic operation. **v0.8.0+** adds `conflict_on` parameter for custom conflict detection.
+
+### Key Features
+- **Atomic operation**: Single database query for INSERT or UPDATE
+- **Custom conflict fields**: Specify any unique field(s) for conflict detection (v0.8.0+)
+- **Cross-database**: Works identically on PostgreSQL, MySQL, and SQLite
+- **Natural keys**: Use email, SKU, or composite keys instead of just `id`
+- **Return metadata**: Tells you whether INSERT or UPDATE occurred
+
+### Basic Usage
+
+```python
+from dataflow import DataFlow
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
+db = DataFlow("postgresql://...")
+
+@db.model
+class User:
+    id: str
+    email: str
+    name: str
+
+workflow = WorkflowBuilder()
+workflow.add_node("UserUpsertNode", "upsert", {
+    "where": {"id": "user-123"},
+    "update": {"name": "Alice Updated"},
+    "create": {"id": "user-123", "email": "alice@example.com", "name": "Alice"}
+})
+
+runtime = AsyncLocalRuntime()
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+
+# Check what happened
+print(results["upsert"]["created"])  # True = inserted, False = updated
+print(results["upsert"]["action"])   # "created" or "updated"
+```
+
+### Custom Conflict Fields (v0.8.0+)
+
+**Use any unique field(s) for conflict detection**, not just `id`. Perfect for natural keys like email, SKU, or composite keys.
+
+**Single Field Conflict**
+```python
+# Upsert based on email (natural key)
+@db.model
+class User:
+    id: str
+    email: str  # Unique field
+    name: str
+
+workflow.add_node("UserUpsertNode", "upsert", {
+    "where": {"email": "alice@example.com"},
+    "conflict_on": ["email"],  # NEW: Conflict on email
+    "update": {"name": "Alice Updated"},
+    "create": {
+        "id": "user-123",
+        "email": "alice@example.com",
+        "name": "Alice"
+    }
+})
+
+# First run: INSERT (email doesn't exist)
+# Second run: UPDATE (email exists)
+```
+
+**Composite Key Conflict**
+```python
+# Upsert based on multiple fields (composite key)
+@db.model
+class OrderItem:
+    id: str
+    order_id: str
+    product_id: str
+    quantity: int
+
+workflow.add_node("OrderItemUpsertNode", "upsert", {
+    "where": {"order_id": "order-123", "product_id": "prod-456"},
+    "conflict_on": ["order_id", "product_id"],  # Composite key
+    "update": {"quantity": 10},
+    "create": {
+        "id": "item-789",
+        "order_id": "order-123",
+        "product_id": "prod-456",
+        "quantity": 5
+    }
+})
+```
+
+### Parameter Reference
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `where` | dict | Yes | Fields to identify the record |
+| `update` | dict | No | Fields to update if record exists |
+| `create` | dict | No | Fields to create if record doesn't exist |
+| `conflict_on` | list | No | Fields for conflict detection (defaults to `where` keys) |
+
+### Common Patterns
+
+**Pattern 1: Email-based User Upsert**
+```python
+# Ensure user exists with updated data
+workflow.add_node("UserUpsertNode", "upsert", {
+    "where": {"email": user_email},
+    "conflict_on": ["email"],
+    "update": {"last_login": datetime.now(), "name": user_name},
+    "create": {"id": user_id, "email": user_email, "name": user_name}
+})
+```
+
+**Pattern 2: Idempotent API Requests**
+```python
+# Ensure request is only processed once
+workflow.add_node("RequestUpsertNode", "upsert", {
+    "where": {"request_id": req_id},
+    "conflict_on": ["request_id"],
+    "update": {},  # Don't update if exists
+    "create": {"id": id, "request_id": req_id, "data": req_data}
+})
+
+if results["upsert"]["created"]:
+    # Process the request
+    pass
+else:
+    # Request already processed
+    pass
+```
+
+## 🔢 CountNode - Efficient Count Queries (v0.8.0+)
+
+### What is CountNode?
+
+**CountNode** performs efficient `SELECT COUNT(*) FROM table WHERE filters` queries without fetching actual records. Automatically generated for all SQL models.
+
+### Key Features
+- **High performance**: 10-50x faster than ListNode workaround (1-5ms vs 20-50ms)
+- **No data transfer**: Only count value returned, no records
+- **Filter support**: Supports MongoDB-style filters (same as ListNode)
+- **Cross-database**: Works identically on PostgreSQL, MySQL, and SQLite
+- **Zero overhead**: Minimal memory usage (<1KB)
+
+### Basic Usage
+
+```python
+from dataflow import DataFlow
+from kailash.runtime import AsyncLocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
+
+db = DataFlow("postgresql://...")
+
+@db.model
+class User:
+    id: str
+    email: str
+    name: str
+    active: bool
+
+# Count all records
+workflow = WorkflowBuilder()
+workflow.add_node("UserCountNode", "count_all", {})
+
+runtime = AsyncLocalRuntime()
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+print(results["count_all"]["count"])  # 1523
+```
+
+### Count with Filters
+
+```python
+# Count active users
+workflow.add_node("UserCountNode", "count_active", {
+    "filter": {"active": True}
+})
+
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+print(results["count_active"]["count"])  # 842
+
+# Count with complex filters
+workflow.add_node("UserCountNode", "count_complex", {
+    "filter": {
+        "active": True,
+        "email": {"$like": "%@example.com"}
+    }
+})
+```
+
+### Performance Comparison
+
+**ListNode Workaround** (Deprecated):
+```python
+# ❌ SLOW: Fetches all records to count (20-50ms)
+workflow.add_node("UserListNode", "count_users", {"limit": 10000})
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+count = len(results["count_users"])  # Fetched 10,000 records!
+```
+
+**CountNode** (Recommended):
+```python
+# ✅ FAST: Uses COUNT(*) query (1-5ms)
+workflow.add_node("UserCountNode", "count_users", {})
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+count = results["count_users"]["count"]  # Only count value
+```
+
+**Performance Metrics**:
+- Query time: 1-5ms (vs. 20-50ms with ListNode)
+- Memory usage: <1KB (vs. 1-10MB with ListNode)
+- Network transfer: 8 bytes (vs. 100KB-10MB with ListNode)
+
+### Common Patterns
+
+**Pattern 1: Session Statistics**
+```python
+# Count active sessions for each user
+workflow.add_node("SessionCountNode", "count_sessions", {
+    "filter": {"user_id": user_id, "active": True}
+})
+
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+if results["count_sessions"]["count"] > 5:
+    print(f"Warning: {results['count_sessions']['count']} active sessions")
+```
+
+**Pattern 2: Metrics Dashboard**
+```python
+# Build real-time dashboard metrics
+workflow.add_node("OrderCountNode", "total_orders", {})
+workflow.add_node("OrderCountNode", "pending_orders", {
+    "filter": {"status": "pending"}
+})
+workflow.add_node("OrderCountNode", "completed_orders", {
+    "filter": {"status": "completed"}
+})
+
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+metrics = {
+    "total": results["total_orders"]["count"],
+    "pending": results["pending_orders"]["count"],
+    "completed": results["completed_orders"]["count"]
+}
+```
+
+## 🔢 PostgreSQL Native Arrays (v0.8.0+)
+
+### What Are Native Arrays?
+
+PostgreSQL native arrays (TEXT[], INTEGER[], REAL[]) provide **2-10x faster performance** compared to JSON string storage, with built-in indexing support (GIN/GiST) and PostgreSQL-specific operators.
+
+### Key Features
+- **Native PostgreSQL arrays**: TEXT[], INTEGER[], REAL[] instead of JSONB
+- **Opt-in feature flag**: Backward compatible, enable per-model with `__dataflow__`
+- **Cross-database validated**: Error if used on MySQL/SQLite
+- **Performance gains**: 2-10x faster queries with native array operators
+- **Index support**: GIN/GiST indexes for array columns
+
+### Basic Usage
+
+```python
+from dataflow import DataFlow
+from typing import List
+
+db = DataFlow("postgresql://...")
+
+@db.model
+class AgentMemory:
+    id: str
+    tags: List[str]
+    scores: List[int]
+    ratings: List[float]
+
+    __dataflow__ = {
+        'use_native_arrays': True  # Opt-in to PostgreSQL native arrays
+    }
+
+# Generates PostgreSQL schema:
+# CREATE TABLE agent_memorys (
+#     id TEXT PRIMARY KEY,
+#     tags TEXT[],      -- Native array instead of JSONB
+#     scores INTEGER[],  -- Native array
+#     ratings REAL[]     -- Native array
+# )
+```
+
+### Supported Array Types
+
+| Python Type | PostgreSQL Type | Element Type |
+|-------------|-----------------|--------------|
+| `List[str]` | `TEXT[]` | Text strings |
+| `List[int]` | `INTEGER[]` | Integers |
+| `List[float]` | `REAL[]` | Floating point |
+| `Optional[List[str]]` | `TEXT[] NULL` | Nullable arrays |
+
+**Unsupported** (defaults to JSONB):
+- `List[dict]`, `List[List[...]]` (nested), custom types
+
+### CRUD Operations
+
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime import AsyncLocalRuntime
+
+workflow = WorkflowBuilder()
+
+# Create with array values
+workflow.add_node("AgentMemoryCreateNode", "create", {
+    "id": "mem-001",
+    "tags": ["medical", "urgent", "ai"],
+    "scores": [85, 92, 78],
+    "ratings": [4.5, 4.8, 4.2]
+})
+
+# Update array values
+workflow.add_node("AgentMemoryUpdateNode", "update", {
+    "filter": {"id": "mem-001"},
+    "fields": {
+        "tags": ["medical", "urgent", "ai", "reviewed"]
+    }
+})
+
+# Query with array operators
+workflow.add_node("AgentMemoryListNode", "find", {
+    "filter": {"tags": {"$contains": "medical"}}
+})
+
+runtime = AsyncLocalRuntime()
+results, _ = await runtime.execute_workflow_async(workflow.build(), inputs={})
+```
+
+### PostgreSQL Array Operators
+
+DataFlow provides MongoDB-style syntax for PostgreSQL array operators:
+
+**Contains Operator (@>)**
+```python
+# Find records where tags contain "medical"
+workflow.add_node("AgentMemoryListNode", "find_medical", {
+    "filter": {"tags": {"$contains": "medical"}}
+})
+# SQL: WHERE tags @> ARRAY['medical']
+```
+
+**Overlap Operator (&&)**
+```python
+# Find records where tags overlap with ["medical", "urgent"]
+workflow.add_node("AgentMemoryListNode", "find_urgent", {
+    "filter": {"tags": {"$overlap": ["medical", "urgent"]}}
+})
+# SQL: WHERE tags && ARRAY['medical', 'urgent']
+```
+
+**Any Operator (= ANY)**
+```python
+# Find records where any score is >= 90
+workflow.add_node("AgentMemoryListNode", "high_scores", {
+    "filter": {"scores": {"$any": {"$gte": 90}}}
+})
+# SQL: WHERE 90 <= ANY(scores)
+```
+
+### Performance Optimization
+
+**Query Performance**
+
+**Before (JSON string storage)**:
+```python
+tags: str  # Manual encoding: ",".join(tags)
+# Query: WHERE tags LIKE '%medical%'  # Slow, no index
+# Time: ~50ms for 10k rows
+```
+
+**After (Native arrays)**:
+```python
+tags: List[str]  # Native PostgreSQL array
+# Query: WHERE tags @> ARRAY['medical']  # Fast, GIN index
+# Time: ~5ms for 10k rows (10x faster!)
+```
+
+### Best Practices
+
+**When to Use Native Arrays**:
+- ✅ PostgreSQL production databases
+- ✅ Large tables (>10k rows) with frequent array queries
+- ✅ Need for array-specific operators (@>, &&, ANY)
+- ✅ Performance-critical applications
+
+**When NOT to Use Native Arrays**:
+- ❌ Cross-database compatibility required (MySQL, SQLite)
+- ❌ Small tables (<1k rows) with infrequent queries
+- ❌ Nested arrays or complex element types
+- ❌ Development phase (use default JSONB for flexibility)
+
+## 🚀 Schema Cache (v0.7.3+)
+
+### What It Is
+
+The schema cache is a thread-safe table existence cache that eliminates redundant migration checks, providing **91-99% performance improvement** for multi-operation workflows.
+
+### Key Features
+- **Thread-safe**: RLock protection for multi-threaded apps (FastAPI, Flask, Gunicorn)
+- **Configurable**: TTL, size limits, and validation
+- **Automatic invalidation**: Cache cleared on schema changes
+- **Low overhead**: <1KB per cached table
+
+### Performance Characteristics
+- **Cache miss** (first check): ~1500ms
+- **Cache hit** (subsequent): ~1ms
+- **Improvement**: 91-99% faster for multi-operation workflows
+
+### Configuration
+
+```python
+from dataflow import DataFlow
+
+# Default (cache enabled, no TTL)
+db = DataFlow("postgresql://...")
+
+# Custom configuration
+db = DataFlow(
+    "postgresql://...",
+    schema_cache_enabled=True,      # Enable/disable cache
+    schema_cache_ttl=300,            # TTL in seconds (None = no expiration)
+    schema_cache_max_size=10000,    # Max cached tables
+    schema_cache_validation=False,  # Schema checksum validation
+)
+
+# Disable cache (for debugging)
+db = DataFlow("postgresql://...", schema_cache_enabled=False)
+```
+
+### Usage (Automatic)
+
+```python
+# Cache works automatically - no code changes needed
+db = DataFlow("postgresql://...")
+
+@db.model
+class User:
+    id: str
+    name: str
+
+# First operation: Cache miss (~1500ms)
+workflow = WorkflowBuilder()
+workflow.add_node("UserCreateNode", "create", {
+    "id": "user-1",
+    "name": "Alice"
+})
+runtime = LocalRuntime()
+results, _ = runtime.execute(workflow.build())
+
+# Subsequent operations: Cache hit (~1ms)
+workflow2 = WorkflowBuilder()
+workflow2.add_node("UserCreateNode", "create2", {
+    "id": "user-2",
+    "name": "Bob"
+})
+results2, _ = runtime.execute(workflow2.build())  # 99% faster!
+```
+
+### Cache Methods (Advanced)
+
+```python
+# Clear all cache entries
+db._schema_cache.clear()
+
+# Get cache performance statistics
+metrics = db._schema_cache.get_metrics()
+print(f"Hits: {metrics['hits']}")
+print(f"Misses: {metrics['misses']}")
+print(f"Hit rate: {metrics['hit_rate']:.2%}")
+print(f"Cached tables: {metrics['cached_tables']}")
+```
+
+### Thread Safety
+
+The schema cache is fully thread-safe for multi-threaded applications:
+
+```python
+from dataflow import DataFlow
+from concurrent.futures import ThreadPoolExecutor
+
+db = DataFlow("postgresql://...")
+
+@db.model
+class User:
+    id: str
+    name: str
+
+def create_user(user_id: str):
+    workflow = WorkflowBuilder()
+    workflow.add_node("UserCreateNode", "create", {
+        "id": user_id,
+        "name": f"User {user_id}"
+    })
+    runtime = LocalRuntime()
+    return runtime.execute(workflow.build())
+
+# Safe for concurrent execution
+with ThreadPoolExecutor(max_workers=10) as executor:
+    futures = [executor.submit(create_user, f"user-{i}") for i in range(100)]
+    results = [f.result() for f in futures]
+```
+
+All cache operations are protected by RLock, ensuring safe concurrent access from FastAPI endpoints, Flask workers, or Gunicorn processes.
+
+## 🔧 String ID Preservation & Multi-Instance Isolation (v0.4.7+)
+
+### String ID Preservation
+
+**No forced integer conversion** - String/UUID IDs preserved exactly.
+
+```python
+# ✅ CORRECT - String IDs preserved
+@db.model
+class Session:
+    id: str  # Explicitly string
+    user_id: str
+
+# Creates with string ID preserved
+workflow.add_node("SessionCreateNode", "create", {
+    "id": "sess-uuid-123",  # Stays as string
+    "user_id": "user-456"
+})
+```
+
+### Multi-Instance Isolation
+
+Each DataFlow instance maintains separate context - nodes are bound to the correct instance.
+
+```python
+# Each instance is independent
+dev_db = DataFlow("sqlite:///dev.db")
+prod_db = DataFlow("postgresql://prod...")
+
+@dev_db.model
+class User:
+    name: str
+
+@prod_db.model
+class User:  # Same name, different instance - works!
+    name: str
+    email: str
+
+# Nodes bound to correct instance
+dev_node = dev_db._nodes["UserCreateNode"]()
+prod_node = prod_db._nodes["UserCreateNode"]()
+# dev_node.dataflow_instance is dev_db ✓
+# prod_node.dataflow_instance is prod_db ✓
+```
 
 ### Automatic Datetime Conversion (v0.6.4+)
 
@@ -387,7 +2854,11 @@ workflow.add_node(result['generated_nodes']['User']['create'], 'create_user', {.
 
 > **See Skills**: [`dataflow-crud-operations`](../../skills/02-dataflow/dataflow-crud-operations.md) and [`dataflow-queries`](../../skills/02-dataflow/dataflow-queries.md) for complete CRUD and query examples.
 
-Quick reference: 9 nodes auto-generated per model (Create, Read, Update, Delete, List, BulkCreate, BulkUpdate, BulkDelete, BulkUpsert).
+Quick reference: **11 nodes auto-generated per model** (v0.8.0+):
+- **CRUD**: CreateNode, ReadNode, UpdateNode, DeleteNode
+- **Query**: ListNode, CountNode (v0.8.0+)
+- **Advanced**: UpsertNode (v0.8.0+)
+- **Bulk**: BulkCreateNode, BulkUpdateNode, BulkDeleteNode, BulkUpsertNode
 
 **v0.7.1 Update - BulkUpsertNode:**
 - Fully implemented in v0.7.1 (previous versions had stub implementation)
@@ -1110,22 +3581,160 @@ def event_loop():
 - **Fixture Patterns**: `/apps/kailash-dataflow/docs/testing/fixture-patterns.md`
 - **ADR-017 Quick Reference**: `/apps/kailash-dataflow/adr/ADR-017-API-QUICK-REFERENCE.md`
 
+## 📊 Performance Characteristics (Updated v0.4.7+)
+
+DataFlow Phase 1A/1B improvements significantly reduce overhead while maintaining functionality.
+
+**Instance Creation**:
+- **Before v0.4.7**: ~700ms per DataFlow instance
+- **After v0.4.7**: <50ms per instance (14x faster)
+- **Improvement**: 93% reduction via schema cache and deferred operations
+
+**CRUD Operations**:
+- **First operation** (cache miss): ~1500ms with migration checks
+- **Subsequent operations** (cache hit): ~1ms (99% faster)
+- **Improvement**: 91-99% via schema cache (v0.7.3+)
+
+**Memory Overhead**:
+- **Per instance**: ~20MB with models + <1KB per cached table
+- **Schema cache**: <1KB per cached table
+- **Connection pools**: Shared across instances (event loop isolated)
+
+**Schema Operations**:
+- **Model registration**: Synchronous, instant
+- **Table creation**: Deferred to first use (not registration)
+- **Migration checks**: Cached, 91-99% improvement after first check
+
+**Error Enhancement Overhead**:
+- **FULL mode**: <5ms per error (development)
+- **MINIMAL mode**: <1ms per error (staging)
+- **DISABLED mode**: 0ms (production)
+
+**Inspector Overhead**:
+- **Workflow analysis**: <10ms for 100-node workflows
+- **Parameter tracing**: <1ms per trace
+- **Connection validation**: <5ms for 500 connections
+
+**CLI Commands Overhead**:
+- **analyze**: <50ms for complex workflows
+- **debug**: <100ms with full diagnostics
+- **validate**: <25ms for structure checks
+
+## 🐛 Debugging Tips (Updated v0.4.7+)
+
+DataFlow Phase 1A/1B introduces enhanced debugging tools beyond basic inspection.
+
+**Step 1: Use Inspector First**
+```python
+from dataflow.platform.inspector import Inspector
+
+# ALWAYS start with Inspector
+inspector = Inspector(workflow)
+
+# Quick health check
+validation = inspector.validate_connections()
+if not validation["is_valid"]:
+    print(f"Found {len(validation['errors'])} errors")
+    for error in validation["errors"]:
+        print(f"  - {error}")
+```
+
+**Step 2: Check Error Codes**
+```python
+# Enhanced errors show DF-XXX codes
+try:
+    results = runtime.execute(workflow.build())
+except Exception as e:
+    if "DF-" in str(e):
+        # Extract error code and lookup solution
+        error_code = str(e).split(":")[0]
+        print(f"Error code: {error_code}")
+        print(f"Documentation: https://docs.kailash.dev/dataflow/errors/{error_code}")
+```
+
+**Step 3: Use CLI Commands**
+```bash
+# Validate workflow structure
+dataflow validate my_workflow.py --strict
+
+# Debug specific node
+dataflow debug my_workflow.py --node "problematic_node"
+
+# Analyze performance bottlenecks
+dataflow perf my_workflow.py --profile
+```
+
+**Step 4: Verify Node-Instance Coupling**
+```python
+# Check node-instance coupling (rare issue)
+node = db._nodes["UserCreateNode"]()
+print(f"Bound to: {node.dataflow_instance}")
+print(f"Correct: {node.dataflow_instance is db}")
+```
+
+**Step 5: Verify String ID Preservation**
+```python
+# Verify string ID preservation (rare issue)
+results = runtime.execute(workflow.build())
+print(f"ID type: {type(results['create_user']['id'])}")
+print(f"ID value: {results['create_user']['id']}")
+```
+
+**Common Debugging Patterns**:
+
+**Pattern 1: Connection Issues**
+```python
+# Use Inspector to trace parameter flow
+inspector = Inspector(workflow)
+trace = inspector.trace_parameter("target_node", "missing_param")
+
+if trace.source is None:
+    print("Parameter not connected! Add connection:")
+    print(f"  workflow.add_connection(source_node, 'param', 'target_node', 'missing_param')")
+```
+
+**Pattern 2: Type Mismatches**
+```python
+# Inspector shows type mismatches in connections
+validation = inspector.validate_connections()
+for error in validation["errors"]:
+    if "type mismatch" in error["reason"].lower():
+        print(f"Type mismatch: {error['from_node']}.{error['from_param']} → {error['to_node']}.{error['to_param']}")
+        print(f"Expected: {error['expected_type']}, Got: {error['actual_type']}")
+```
+
+**Pattern 3: Performance Issues**
+```bash
+# Use CLI perf command to identify bottlenecks
+dataflow perf my_workflow.py --profile --output report.json
+
+# Analyze report:
+# - Long-running nodes
+# - Network-bound operations
+# - Database query optimization opportunities
+```
+
 ## Critical Limitations & Workarounds
 
-### PostgreSQL Array Types (Still Limited)
+### PostgreSQL Array Types (v0.8.0+ - FULLY SUPPORTED!)
 ```python
-# ❌ AVOID - PostgreSQL List[str] fields cause parameter type issues
+# ✅ SUPPORTED (v0.8.0+) - Native PostgreSQL arrays with opt-in flag
 @db.model
 class BlogPost:
     title: str
-    tags: List[str] = []  # CAUSES ERRORS - avoid array types
+    content: str
+    tags: List[str]  # Fully supported with __dataflow__ flag!
 
-# ✅ WORKAROUND - Use JSON field or separate table
+    __dataflow__ = {
+        'use_native_arrays': True  # Opt-in for PostgreSQL native arrays
+    }
+
+# ⚠️ For cross-database compatibility (MySQL, SQLite)
 @db.model
 class BlogPost:
     title: str
-    content: str  # v0.4.0: Now unlimited with TEXT fix!
-    tags_json: Dict[str, Any] = {}  # Store as JSON object
+    content: str
+    tags_json: Dict[str, Any] = {}  # Use JSON for cross-DB support
 ```
 
 ### JSON Field Behavior
@@ -1167,6 +3776,127 @@ db = DataFlow(
     existing_schema_mode=True  # Use existing schema
 )
 ```
+
+## 🔧 Troubleshooting Common Issues (NEW in v0.4.7+)
+
+DataFlow Phase 1A/1B provides diagnostic tools to resolve issues quickly.
+
+**Issue 1: Workflow Builds But Produces No Results**
+
+**Symptoms**: `runtime.execute(workflow.build())` succeeds but results are empty or None.
+
+**Solution**:
+```python
+# Step 1: Use Inspector to validate connections
+inspector = Inspector(workflow)
+validation = inspector.validate_connections()
+
+if not validation["is_valid"]:
+    print("Connection errors found:")
+    for error in validation["errors"]:
+        print(f"  - {error}")
+
+# Step 2: Use CLI validate command
+# dataflow validate my_workflow.py --strict
+```
+
+**Issue 2: Missing Parameter Error (DF-101)**
+
+**Symptoms**: Error shows "DF-101: Missing Required Parameter"
+
+**Solution**:
+```python
+# ErrorEnhancer shows exactly which parameter is missing
+# Follow the 3 solutions provided in error message:
+
+# Solution 1: Add missing parameter
+data = {
+    "id": "user-123",  # <- ADD THIS
+    "name": "Alice",
+    "email": "alice@example.com"
+}
+
+# Solution 2: Check model definition
+# Verify all required fields are present
+
+# Solution 3: Use Inspector to validate
+inspector = Inspector(workflow)
+trace = inspector.trace_parameter("create", "id")
+```
+
+**Issue 3: Slow First Operation**
+
+**Symptoms**: First database operation takes ~1500ms, subsequent operations are fast.
+
+**Solution**:
+```python
+# This is expected behavior! Schema cache causes this pattern:
+# - First operation: Cache miss (~1500ms) - includes migration checks
+# - Subsequent operations: Cache hit (~1ms) - 99% faster
+
+# To verify schema cache is working:
+metrics = db._schema_cache.get_metrics()
+print(f"Hit rate: {metrics['hit_rate']:.2%}")  # Should be >90% after warm-up
+```
+
+**Issue 4: Event Loop Closed Errors**
+
+**Symptoms**: "Event loop is closed" or "Pool attached to different loop"
+
+**Solution**:
+```python
+# Use test mode with automatic cleanup
+db = DataFlow("postgresql://...", test_mode=True)
+
+# In pytest fixture:
+@pytest.fixture(scope="function")
+async def db():
+    db = DataFlow("postgresql://...", test_mode=True)
+    yield db
+    await db.cleanup_all_pools()  # Clean up after each test
+```
+
+**Issue 5: Connection Type Mismatch (DF-201)**
+
+**Symptoms**: Error shows "DF-201: Connection Type Mismatch"
+
+**Solution**:
+```python
+# ErrorEnhancer shows expected vs actual types
+# Use Inspector to trace the issue:
+
+inspector = Inspector(workflow)
+validation = inspector.validate_connections()
+
+for error in validation["errors"]:
+    if "type mismatch" in error["reason"].lower():
+        print(f"Mismatch: {error['from_node']}.{error['from_param']}")
+        print(f"Expected: {error['expected_type']}")
+        print(f"Got: {error['actual_type']}")
+        # Fix the type in the source node
+```
+
+**Quick Diagnostic Commands**:
+```bash
+# Full workflow validation
+dataflow validate my_workflow.py --strict
+
+# Debug specific node
+dataflow debug my_workflow.py --node "problematic_node"
+
+# Analyze performance
+dataflow perf my_workflow.py --profile
+
+# Check workflow structure
+dataflow analyze my_workflow.py
+```
+
+**Troubleshooting Flowchart**:
+1. **Start**: Is workflow executing at all? → NO → Check error message for DF-XXX code
+2. **Results empty?** → YES → Use Inspector to validate connections
+3. **Slow performance?** → YES → Use `dataflow perf` to identify bottlenecks
+4. **Type errors?** → YES → Use Inspector to check connection types
+5. **Event loop errors?** → YES → Enable test_mode with cleanup
 
 ## Key Rules
 

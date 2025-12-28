@@ -15,7 +15,6 @@ from unittest.mock import Mock
 import pytest
 import requests
 import yaml
-
 from kailash.access_control import (
     AccessControlManager,
     NodePermission,

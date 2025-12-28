@@ -10,7 +10,6 @@ Use the 9 automatically generated workflow nodes for Create, Read, Update, Delet
 > **Skill Metadata**
 > Category: `dataflow`
 > Priority: `HIGH`
-> SDK Version: `0.9.25+ / DataFlow 0.6.0`
 > Related Skills: [`dataflow-models`](#), [`dataflow-queries`](#), [`dataflow-bulk-operations`](#), [`workflow-quickstart`](#)
 > Related Subagents: `dataflow-specialist` (complex operations, troubleshooting)
 
@@ -19,8 +18,8 @@ Use the 9 automatically generated workflow nodes for Create, Read, Update, Delet
 - **9 Generated Nodes**: Create, Read, Update, Delete, List, BulkCreate, BulkUpdate, BulkDelete, BulkUpsert
 - **Naming Pattern**: `{Model}{Operation}Node` (e.g., `UserCreateNode`)
 - **Performance**: <1ms for single operations
-- **String IDs**: Fully supported (v0.4.0+)
-- **Datetime Auto-Conversion**: ISO 8601 strings → datetime objects (v0.6.4+)
+- **String IDs**: Fully supported
+- **Datetime Auto-Conversion**: ISO 8601 strings → datetime objects
 
 ## ⚠️ CRITICAL WARNING: CreateNode vs UpdateNode Patterns
 
@@ -166,7 +165,7 @@ results, run_id = runtime.execute(workflow.build())
 - **Account Updates**: Update user profile fields
 - **Account Deletion**: Soft or hard delete users
 - **User Search**: List users with filters and pagination
-- **Timestamp Handling**: Seamless datetime integration with PythonCodeNode (v0.6.4+)
+- **Timestamp Handling**: Seamless datetime integration with PythonCodeNode
 
 ## Generated Nodes Reference
 
@@ -219,7 +218,7 @@ workflow.add_node("UserReadNode", "read", {
     "raise_on_not_found": True  # Error if not found
 })
 
-# Option 3: String IDs (v0.4.0+)
+# Option 3: String IDs
 workflow.add_node("SessionReadNode", "read_session", {
     "filter": {"id": "session-uuid-string"}  # String IDs preserved
 })
@@ -394,7 +393,7 @@ workflow.add_node("OrderCreateNode", "create", {
 workflow.add_connection("create_customer", "id", "create", "customer_id")
 ```
 
-## Automatic Datetime Conversion (v0.6.4+)
+## Automatic Datetime Conversion
 
 DataFlow automatically converts ISO 8601 datetime strings to Python datetime objects for all datetime fields. This enables seamless integration with PythonCodeNode and external data sources.
 
@@ -646,7 +645,7 @@ inactive_users = results["list_inactive"]["result"]
 print(f"Found {len(inactive_users)} inactive users")
 ```
 
-### Example 2: String ID Operations (v0.4.0+)
+### Example 2: String ID Operations
 
 ```python
 @db.model
@@ -725,7 +724,7 @@ workflow.add_node("CustomerListNode", "all_customers", {
 
 ## Quick Tips
 
-- String IDs fully supported (v0.4.0+) - no conversion needed
+- String IDs fully supported - no conversion needed
 - Use connections for dynamic parameters, NOT template syntax
 - Access results via `results["node"]["result"]` pattern
 - Soft deletes preserve data with `deleted_at` timestamp
@@ -734,12 +733,6 @@ workflow.add_node("CustomerListNode", "all_customers", {
 - ReadNode can use ID or conditions
 - UpdateNode returns updated record if `return_updated=True`
 
-## Version Notes
-
-- **v0.4.0+**: String ID support - preserved throughout operations
-- **v0.4.0+**: DateTime serialization fixed - use native datetime objects
-- **v0.4.0+**: Workflow connection parameter order fixed
-- **v0.9.25+**: Multi-instance isolation - separate contexts
 
 ## Keywords for Auto-Trigger
 

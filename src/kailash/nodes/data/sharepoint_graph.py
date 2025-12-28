@@ -28,7 +28,6 @@ from pathlib import Path
 from typing import Any, Optional
 
 import requests
-
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter, register_node
 from kailash.sdk_exceptions import (
     NodeConfigurationError,

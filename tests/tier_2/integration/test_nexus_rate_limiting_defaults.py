@@ -21,10 +21,9 @@ from io import StringIO
 
 import pytest
 import pytest_asyncio
-from nexus import Nexus
-
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
+from nexus import Nexus
 
 
 class TestRateLimitingDefaults:

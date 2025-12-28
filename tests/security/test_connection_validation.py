@@ -8,7 +8,6 @@ are properly validated and cannot bypass security checks.
 from typing import Any, Dict
 
 import pytest
-
 from kailash.nodes.base import Node, NodeParameter, NodeRegistry
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder

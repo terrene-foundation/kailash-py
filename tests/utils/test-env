@@ -109,10 +109,10 @@ setup_environment() {
 # Setup Kubernetes test environment
 setup_kubernetes() {
     check_kubernetes_prerequisites
-    
+
     print_info "Setting up Kubernetes test environment..."
     "$SCRIPT_DIR/setup_kubernetes.sh" setup
-    
+
     print_success "Kubernetes test environment setup complete"
     print_info "Environment variables exported to /tmp/kailash-k8s-env"
     print_info "Run: source /tmp/kailash-k8s-env"
@@ -121,11 +121,11 @@ setup_kubernetes() {
 # Start Kubernetes cluster
 start_kubernetes() {
     print_info "Starting Kubernetes test cluster..."
-    
+
     # Check if cluster already exists
     if kind get clusters | grep -q "kailash-test"; then
         print_info "Cluster 'kailash-test' already exists"
-        
+
         # Verify cluster is healthy
         if kubectl cluster-info --context kind-kailash-test &> /dev/null; then
             print_success "Kubernetes cluster is running and healthy"
@@ -137,7 +137,7 @@ start_kubernetes() {
             stop_kubernetes
         fi
     fi
-    
+
     # Create new cluster
     setup_kubernetes
 }
@@ -145,14 +145,14 @@ start_kubernetes() {
 # Stop Kubernetes cluster
 stop_kubernetes() {
     print_info "Stopping Kubernetes test cluster..."
-    
+
     if kind get clusters | grep -q "kailash-test"; then
         kind delete cluster --name kailash-test
         print_success "Kubernetes cluster stopped"
     else
         print_info "No Kubernetes cluster to stop"
     fi
-    
+
     # Clean up environment files
     rm -f /tmp/kailash-k8s-env
 }
@@ -160,10 +160,10 @@ stop_kubernetes() {
 # Show Kubernetes status
 show_kubernetes_status() {
     print_info "Kubernetes cluster status:"
-    
+
     if kind get clusters | grep -q "kailash-test"; then
         echo "✓ Cluster 'kailash-test' exists"
-        
+
         if kubectl cluster-info --context kind-kailash-test &> /dev/null; then
             echo "✓ Cluster is healthy"
             kubectl get nodes --context kind-kailash-test

@@ -829,7 +829,7 @@ validation_result = {
 
         # Add AI text processor if not exists
         if text_processor not in workflow.nodes:
-            from kailash.nodes.ai import LLMAgentNode
+            from kaizen.nodes.ai import LLMAgentNode
 
             workflow.add_node(
                 text_processor,

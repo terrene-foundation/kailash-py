@@ -11,7 +11,6 @@ import warnings
 from pathlib import Path
 
 import pytest
-
 from kailash.nodes.base import Node, NodeParameter, NodeRegistry
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder

@@ -29,13 +29,14 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
+from pydantic import BaseModel, Field, ValidationError
+
 from kailash.nodes.ports import InputPort, OutputPort, get_port_registry
 from kailash.sdk_exceptions import (
     NodeConfigurationError,
     NodeExecutionError,
     NodeValidationError,
 )
-from pydantic import BaseModel, Field, ValidationError
 
 
 class NodeMetadata(BaseModel):
@@ -1206,8 +1207,9 @@ class Node(ABC):
 
         # Then validate JSON-serializability
         # Skip JSON validation for state management objects
-        from kailash.workflow.state import WorkflowStateWrapper
         from pydantic import BaseModel
+
+        from kailash.workflow.state import WorkflowStateWrapper
 
         non_serializable = []
         for k, v in outputs.items():
