@@ -11,7 +11,6 @@ Root Cause: security.py:755 - sanitize_input() strips $ characters
 """
 
 import pytest
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

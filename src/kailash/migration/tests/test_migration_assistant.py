@@ -5,7 +5,6 @@ import textwrap
 from pathlib import Path
 
 import pytest
-
 from kailash.migration.compatibility_checker import CompatibilityChecker
 from kailash.migration.migration_assistant import (
     MigrationAssistant,

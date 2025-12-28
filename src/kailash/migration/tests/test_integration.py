@@ -9,7 +9,6 @@ import textwrap
 from pathlib import Path
 
 import pytest
-
 from kailash.migration import (
     CompatibilityChecker,
     ConfigurationValidator,
