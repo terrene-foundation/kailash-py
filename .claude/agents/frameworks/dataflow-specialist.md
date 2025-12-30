@@ -70,15 +70,66 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 
 ## ⚠️ CRITICAL LEARNINGS - Read First
 
+### 🚨 #1 MOST COMMON MISTAKE: Auto-Managed Timestamp Fields (DF-104)
+
+**This error occurs in almost EVERY new DataFlow project. It causes the PostgreSQL error:**
+
+```
+DatabaseError: multiple assignments to same column "updated_at"
+```
+
+**DataFlow automatically manages `created_at` and `updated_at`. NEVER set them manually!**
+
+```python
+# ❌ WRONG - This is the #1 mistake in every project
+async def update_record(self, id: str, data: dict) -> dict:
+    now = datetime.now(UTC).isoformat()
+    data["updated_at"] = now  # ❌ CAUSES DF-104 ERROR!
+
+    workflow.add_node("ModelUpdateNode", "update", {
+        "filter": {"id": id},
+        "fields": data  # Error: multiple assignments to updated_at
+    })
+
+# ✅ CORRECT - Remove timestamp fields before passing to DataFlow
+async def update_record(self, id: str, data: dict) -> dict:
+    # ALWAYS strip auto-managed fields
+    data.pop("updated_at", None)
+    data.pop("created_at", None)
+
+    workflow.add_node("ModelUpdateNode", "update", {
+        "filter": {"id": id},
+        "fields": data  # DataFlow handles updated_at automatically
+    })
+
+# ❌ WRONG in CreateNode too
+workflow.add_node("UserCreateNode", "create", {
+    "id": "user-001",
+    "name": "Alice",
+    "created_at": datetime.now()  # ❌ NEVER DO THIS!
+})
+
+# ✅ CORRECT
+workflow.add_node("UserCreateNode", "create", {
+    "id": "user-001",
+    "name": "Alice"
+    # created_at is set automatically by DataFlow
+})
+```
+
+**Auto-managed fields to NEVER include:**
+- `created_at` - Set once on CREATE
+- `updated_at` - Updated on every UPDATE
+
 ### ⚠️ Common Mistakes (HIGH IMPACT - Prevents 1-4 Hour Debugging)
 
 **CRITICAL**: These mistakes cause the most debugging time for new developers. **READ THIS FIRST** before implementing DataFlow.
 
 | Mistake | Impact | Correct Approach |
 |---------|--------|------------------|
+| **Manually setting `created_at`/`updated_at`** | **DF-104 error** | **NEVER set - DataFlow manages automatically** |
 | **Using `user_id` or `model_id` instead of `id`** | 10-20 min debugging | **PRIMARY KEY MUST BE `id`** (not `user_id`, `agent_id`, etc.) |
 | **Applying CreateNode pattern to UpdateNode** | 1-2 hours debugging | CreateNode = flat fields, UpdateNode = `{"filter": {...}, "fields": {...}}` |
-| **Including `created_at`/`updated_at` in updates** | Validation errors | Auto-managed by DataFlow - **NEVER** set manually |
 | **Wrong node naming** (e.g., `User_Create`) | Node not found | Use `ModelOperationNode` pattern (e.g., `UserCreateNode`) |
 | **Missing `db_instance` parameter** | Generic validation errors | ALL DataFlow nodes require `db_instance` and `model_name` |
 
