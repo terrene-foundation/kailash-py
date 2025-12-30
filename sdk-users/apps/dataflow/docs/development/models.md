@@ -23,7 +23,10 @@ class User:
     active: bool = True
     role: str = "user"
 
-    # Auto-populated fields
+    # 🚨 AUTO-MANAGED FIELDS - NEVER set these manually!
+    # DataFlow sets created_at on creation and updated_at on every update
+    # Including them in CreateNode or UpdateNode causes DF-104 error:
+    # "multiple assignments to same column"
     created_at: datetime = None
     updated_at: datetime = None
 ```
