@@ -4,6 +4,30 @@ Quick-reference troubleshooting guide for the most common DataFlow errors. For c
 
 ---
 
+## 🚨 #1 MOST COMMON ERROR: DF-104 Auto-Managed Fields
+
+**This error occurs in almost EVERY new DataFlow project!**
+
+```
+DatabaseError: multiple assignments to same column "updated_at"
+```
+
+**Problem**: You're manually setting `created_at` or `updated_at`, but DataFlow manages these automatically.
+
+**Quick Fix**: Remove all manual timestamp assignments:
+```python
+# ❌ WRONG
+data["updated_at"] = datetime.now()  # Remove this line!
+
+# ✅ CORRECT
+data.pop("updated_at", None)  # Strip auto-managed fields
+data.pop("created_at", None)
+```
+
+**See**: [Gotchas Guide - Auto-Managed Fields](../docs/development/gotchas.md#-1-most-common-mistake-auto-managed-timestamp-fields-df-104)
+
+---
+
 ## 📋 Error Code Format
 
 DataFlow error codes follow the pattern `DF-XYY`:

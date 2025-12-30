@@ -232,6 +232,77 @@ This inheritance ensures 100% feature parity between sync and async runtimes, in
 - **Docker/FastAPI**: Use `AsyncLocalRuntime()` or `WorkflowAPI()` (defaults to async)
 - **CLI/Scripts**: Use `LocalRuntime()` for synchronous execution
 
+## 🚨 DataFlow Critical Rules (MUST READ)
+
+**These 3 mistakes cause 90% of DataFlow debugging time. READ THIS BEFORE WRITING ANY DataFlow CODE:**
+
+### 1. NEVER Manually Set `created_at` or `updated_at` (DF-104 Error)
+
+DataFlow **automatically manages** timestamp fields. Manually setting them causes PostgreSQL errors:
+
+```
+DatabaseError: multiple assignments to same column "updated_at"
+```
+
+```python
+# ❌ WRONG - Causes DF-104 error
+async def update_user(self, id: str, data: dict) -> dict:
+    now = datetime.now(UTC).isoformat()
+    data["updated_at"] = now  # ❌ NEVER DO THIS!
+
+    workflow.add_node("UserUpdateNode", "update", {
+        "filter": {"id": id},
+        "fields": data  # Error: multiple assignments to updated_at
+    })
+
+# ✅ CORRECT - Let DataFlow handle timestamps
+async def update_user(self, id: str, data: dict) -> dict:
+    # Remove any timestamp fields if present
+    data.pop("updated_at", None)
+    data.pop("created_at", None)
+
+    workflow.add_node("UserUpdateNode", "update", {
+        "filter": {"id": id},
+        "fields": data  # DataFlow sets updated_at automatically
+    })
+```
+
+**Auto-managed fields (NEVER include in CreateNode or UpdateNode):**
+- `created_at` - Set automatically on record creation
+- `updated_at` - Set automatically on every modification
+
+### 2. CreateNode vs UpdateNode Have DIFFERENT Parameter Patterns
+
+```python
+# CreateNode: FLAT fields at top level
+workflow.add_node("UserCreateNode", "create", {
+    "id": "user-001",
+    "name": "Alice",
+    "email": "alice@example.com"
+})
+
+# UpdateNode: NESTED filter + fields structure
+workflow.add_node("UserUpdateNode", "update", {
+    "filter": {"id": "user-001"},      # Which records
+    "fields": {"name": "Alice Updated"}  # What to change
+})
+```
+
+### 3. Primary Key MUST Be Named `id`
+
+```python
+# ❌ WRONG - Will fail
+@db.model
+class User:
+    user_id: str  # DataFlow requires 'id', not 'user_id'
+
+# ✅ CORRECT
+@db.model
+class User:
+    id: str  # Must be exactly 'id'
+    name: str
+```
+
 ## 🐳 Docker Deployment
 - WorkflowAPI now defaults to AsyncLocalRuntime (async-first, no threads).
 
