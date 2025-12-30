@@ -15,6 +15,7 @@ Common misunderstandings and mistakes when using DataFlow, with solutions.
 
 ## Quick Reference
 
+- **🚨 NEVER set `created_at`/`updated_at`**: DataFlow manages automatically - causes DF-104 error!
 - **NOT an ORM**: DataFlow is workflow-native, not like SQLAlchemy
 - **Primary Key MUST be `id`**: NOT `user_id`, `model_id`, or anything else
 - **CreateNode ≠ UpdateNode**: Different parameter patterns (flat vs nested)
@@ -23,6 +24,54 @@ Common misunderstandings and mistakes when using DataFlow, with solutions.
 - **Result Access**: `results["node"]["result"]`, not `results["node"]`
 
 ## Critical Gotchas
+
+### 🚨 #1 MOST COMMON: Auto-Managed Timestamp Fields (DF-104) ⚠️ CRITICAL
+
+**This is the #1 mistake in almost EVERY DataFlow project!**
+
+#### Error Message
+```
+DatabaseError: multiple assignments to same column "updated_at"
+```
+
+#### The Mistake
+Developers instinctively add timestamp management to their update methods:
+
+```python
+# ❌ WRONG - Every new project makes this mistake
+async def update(self, id: str, data: dict) -> dict:
+    now = datetime.now(UTC).isoformat()
+    data["updated_at"] = now  # ❌ CAUSES DF-104!
+
+    workflow.add_node("ModelUpdateNode", "update", {
+        "filter": {"id": id},
+        "fields": data  # PostgreSQL throws "multiple assignments"
+    })
+```
+
+#### The Fix
+**DataFlow automatically manages timestamps. NEVER set them manually:**
+
+```python
+# ✅ CORRECT - Let DataFlow handle timestamps
+async def update(self, id: str, data: dict) -> dict:
+    # Strip auto-managed fields
+    data.pop("updated_at", None)
+    data.pop("created_at", None)
+
+    workflow.add_node("ModelUpdateNode", "update", {
+        "filter": {"id": id},
+        "fields": data  # DataFlow sets updated_at automatically
+    })
+```
+
+#### Auto-Managed Fields (NEVER include)
+- `created_at` - Set automatically on record creation (CreateNode)
+- `updated_at` - Set automatically on every modification (UpdateNode)
+
+**Impact**: 5-30 minutes debugging. This error is so common that if you see "multiple assignments to same column", check for manual timestamp setting first!
+
+---
 
 ### 0. Empty Dict Truthiness Bug ⚠️ CRITICAL
 

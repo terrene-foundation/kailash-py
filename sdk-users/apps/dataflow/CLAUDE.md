@@ -19,19 +19,42 @@
 - **Qdrant**: Dedicated vector database for billion-scale semantic search
 - **Neo4j**: Graph database for relationship-heavy data models
 
+## 🚨 #1 MOST COMMON MISTAKE: Auto-Managed Timestamp Fields (DF-104)
+
+**This error occurs in almost EVERY new DataFlow project!**
+
+```
+DatabaseError: multiple assignments to same column "updated_at"
+```
+
+**DataFlow automatically manages `created_at` and `updated_at`. NEVER set them manually!**
+
+```python
+# ❌ WRONG - This is the #1 mistake in every project
+async def update_record(self, id: str, data: dict):
+    now = datetime.now(UTC).isoformat()
+    data["updated_at"] = now  # ❌ CAUSES DF-104 ERROR!
+
+# ✅ CORRECT - Remove auto-managed fields before passing to DataFlow
+async def update_record(self, id: str, data: dict):
+    data.pop("updated_at", None)
+    data.pop("created_at", None)
+    # DataFlow handles timestamps automatically
+```
+
 ## ⚠️ Common Mistakes (Critical)
 
 | Mistake | Impact | Solution |
 |---------|--------|----------|
+| **Manually setting `created_at`/`updated_at`** | **DF-104 error** | **NEVER set - DataFlow manages automatically** |
 | **Using `user_id` or `model_id` instead of `id`** | 10-20 min debugging | **MUST use `id`** (not `user_id`, `agent_id`, etc.) |
 | **Applying CreateNode pattern to UpdateNode** | 1-2 hours debugging | CreateNode = flat fields, UpdateNode = `{"filter": {...}, "fields": {...}}` |
-| **Including `created_at`/`updated_at`** | Validation errors | Auto-managed - NEVER include manually |
 | **Wrong node naming** | Node not found | Use `ModelOperationNode` (e.g., `UserCreateNode`) |
 
 **Critical Rules**:
-1. **Primary key MUST be `id`** - DataFlow requires this exact name
-2. **CreateNode ≠ UpdateNode** - Different parameter patterns
-3. **Auto-managed fields** - created_at, updated_at handled by DataFlow
+1. **Auto-managed fields** - `created_at`, `updated_at` NEVER set manually (DF-104 error)
+2. **Primary key MUST be `id`** - DataFlow requires this exact name
+3. **CreateNode ≠ UpdateNode** - Different parameter patterns
 4. **Node naming** - Always `ModelOperationNode` pattern (v0.6.0+)
 
 ## 🛠️ DEVELOPER EXPERIENCE TOOLS (v0.8.0 - NEW)
@@ -57,8 +80,8 @@ db = DataFlow("postgresql://...")
 **Common Error Codes**:
 - **DF-101**: Missing required parameter → Shows which connection to add
 - **DF-102**: Type mismatch → Shows expected vs received types
-- **DF-103**: Auto-managed field conflict → Lists fields to remove
-- **DF-104**: Wrong node pattern (CreateNode vs UpdateNode) → Shows correct structure
+- **DF-103**: Auto-managed field conflict → **Remove `created_at`/`updated_at` from your data!**
+- **DF-104**: UpdateNode parameter error → **Most often caused by manually setting `updated_at`!**
 - **DF-105**: Primary key 'id' missing → Explains 'id' requirement
 - **DF-201**: Invalid connection → Shows correct output names
 - **DF-301**: Migration failed → Provides safe recovery steps
