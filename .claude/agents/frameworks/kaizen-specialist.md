@@ -125,24 +125,25 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **A2A Protocol**: Google Agent-to-Agent protocol for semantic capability matching
 - **Multi-Modal**: Vision (Ollama/OpenAI), audio (Whisper), unified orchestration
 - **UX Improvements**: Config auto-extraction, concise API, defensive parsing
-- **LLM Providers** (v0.7.1): 8 providers with auto-detection priority
+- **LLM Providers** (v0.7.2): 9 providers with auto-detection priority
 
-### Supported LLM Providers (v0.7.1)
+### Supported LLM Providers (v0.7.2)
 
-Kaizen supports 8 LLM providers with automatic detection and fallback:
+Kaizen supports 9 LLM providers with automatic detection and fallback:
 
 | Provider | Type | Requirements | Features |
 |----------|------|--------------|----------|
 | `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
 | `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings |
 | `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
+| `google` | Cloud | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Gemini 2.0, vision, embeddings, tool calling |
 | `ollama` | Local | Ollama running on port 11434 | Free, local models (llama, mistral, etc.) |
 | `docker` | Local | Docker Desktop Model Runner on port 12434 | Free local inference, GPU acceleration |
 | `cohere` | Cloud | `COHERE_API_KEY` | Command models, embeddings |
 | `huggingface` | Local | None | Sentence transformers, embeddings |
 | `mock` | Testing | None | Unit test provider, no API calls |
 
-**Auto-Detection Priority**: OpenAI → Azure → Anthropic → Ollama → Docker
+**Auto-Detection Priority**: OpenAI → Azure → Anthropic → Google → Ollama → Docker
 
 **Provider Configuration Examples**:
 
@@ -181,6 +182,15 @@ class OllamaConfig:
     model: str = "llama3.2:1b"
     temperature: float = 0.7
     # Requires: ollama serve, ollama pull llama3.2:1b
+
+# Google Gemini (Cloud, multimodal)
+@dataclass
+class GoogleConfig:
+    llm_provider: str = "google"
+    model: str = "gemini-2.0-flash"  # Or gemini-1.5-pro, gemini-1.5-flash
+    temperature: float = 0.7
+    # Requires: GOOGLE_API_KEY or GEMINI_API_KEY
+    # Features: Vision, embeddings (text-embedding-004), tool calling
 ```
 
 **Docker Model Runner Tool Calling**:
@@ -192,6 +202,47 @@ from kaizen.nodes.ai import DockerModelRunnerProvider
 provider = DockerModelRunnerProvider()
 if provider.supports_tools("ai/qwen3"):  # Check before using tools
     response = provider.chat(messages, model="ai/qwen3", tools=tools)
+```
+
+**Google Gemini Provider**:
+Supports chat, vision (multimodal), embeddings, and tool calling via the `google-genai` SDK.
+
+```python
+from kaizen.nodes.ai import GoogleGeminiProvider
+
+provider = GoogleGeminiProvider()
+
+# Chat completion
+messages = [{"role": "user", "content": "What is 2+2?"}]
+response = provider.chat(
+    messages=messages,
+    model="gemini-2.0-flash",
+    generation_config={"temperature": 0.7, "max_tokens": 100}
+)
+print(response["content"])  # "4"
+
+# Vision (multimodal) - pass base64-encoded images
+import base64
+with open("image.png", "rb") as f:
+    image_b64 = base64.b64encode(f.read()).decode()
+
+messages = [{
+    "role": "user",
+    "content": [
+        {"type": "text", "text": "What's in this image?"},
+        {"type": "image", "base64": image_b64, "media_type": "image/png"}
+    ]
+}]
+response = provider.chat(messages=messages, model="gemini-2.0-flash")
+
+# Embeddings
+texts = ["Hello world", "Machine learning"]
+embeddings = provider.embed(texts=texts, model="text-embedding-004")
+# Returns: List of 768-dimensional vectors
+
+# Async support
+response = await provider.chat_async(messages=messages, model="gemini-2.0-flash")
+embeddings = await provider.embed_async(texts=texts, model="text-embedding-004")
 ```
 
 **Reference**: `kaizen.config.providers`, `kaizen.nodes.ai.ai_providers`
