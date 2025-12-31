@@ -57,15 +57,16 @@ class CustomConfig:
 agent = SimpleQAAgent(CustomConfig())
 ```
 
-### LLM Provider Configuration (v0.7.1)
+### LLM Provider Configuration (v0.7.2)
 
-Kaizen supports 8 LLM providers with automatic detection:
+Kaizen supports 9 LLM providers with automatic detection:
 
 | Provider | Type | Requirements | Features |
 |----------|------|--------------|----------|
 | `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
 | `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings |
 | `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
+| `google` | Cloud | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Gemini 2.0, vision, embeddings, tool calling |
 | `ollama` | Local | Ollama running on port 11434 | Free, local models |
 | `docker` | Local | Docker Desktop Model Runner on port 12434 | Free local inference, GPU acceleration |
 | `cohere` | Cloud | `COHERE_API_KEY` | Command models, embeddings |
@@ -86,11 +87,21 @@ class DockerConfig:
     llm_provider: str = "docker"
     model: str = "ai/llama3.2"  # Or ai/qwen3, ai/gemma3
     # Prerequisites: docker desktop enable model-runner --tcp 12434
+
+# Google Gemini (Cloud, multimodal, v0.7.2)
+@dataclass
+class GoogleConfig:
+    llm_provider: str = "google"  # Or "gemini" (alias)
+    model: str = "gemini-2.0-flash"  # Or gemini-1.5-pro
+    # Set: GOOGLE_API_KEY or GEMINI_API_KEY
+    # Install: pip install kailash-kaizen[google]
 ```
 
-**Auto-Detection Order**: OpenAI → Azure → Anthropic → Ollama → Docker
+**Auto-Detection Order**: OpenAI → Azure → Anthropic → Google → Ollama → Docker
 
 **Docker Tool Calling**: Model-dependent. Supported: `ai/qwen3`, `ai/llama3.3`, `ai/gemma3`
+
+**Google Gemini**: Chat, vision (multimodal), embeddings (text-embedding-004), tool calling, async support
 
 ### Multi-Modal Processing
 

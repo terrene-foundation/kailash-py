@@ -325,6 +325,80 @@ class DockerConfig:
 
 **Tool-Capable Models**: `ai/qwen3`, `ai/llama3.3`, `ai/gemma3` (check with `provider.supports_tools(model)`).
 
+### Google Gemini Configuration (v0.7.2)
+
+```python
+@dataclass
+class GoogleGeminiConfig:
+    """Google Gemini configuration (Cloud, multimodal).
+
+    Prerequisites:
+        export GOOGLE_API_KEY="your-api-key"
+        # Or: export GEMINI_API_KEY="your-api-key"
+
+    Install dependency:
+        pip install kailash-kaizen[google]
+    """
+    llm_provider: str = "google"  # Or "gemini" (alias)
+    model: str = "gemini-2.0-flash"  # Fast, efficient model
+    temperature: float = 0.7
+    max_tokens: int = 1000
+
+    provider_config: dict = None
+
+    def __post_init__(self):
+        self.provider_config = {
+            "top_p": 0.9,
+            "top_k": 40
+        }
+```
+
+**Available Models**:
+- Chat: `gemini-2.0-flash`, `gemini-1.5-pro`, `gemini-1.5-flash`
+- Embeddings: `text-embedding-004` (768 dimensions)
+
+**Features**: Chat completions, vision/multimodal support, embeddings, tool calling, async support.
+
+**Direct Provider Usage**:
+```python
+from kaizen.nodes.ai import GoogleGeminiProvider
+
+provider = GoogleGeminiProvider()
+
+# Chat
+response = provider.chat(
+    messages=[{"role": "user", "content": "Hello!"}],
+    model="gemini-2.0-flash"
+)
+
+# Vision (multimodal)
+import base64
+with open("image.png", "rb") as f:
+    image_b64 = base64.b64encode(f.read()).decode()
+
+response = provider.chat(
+    messages=[{
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "Describe this image"},
+            {"type": "image", "base64": image_b64, "media_type": "image/png"}
+        ]
+    }],
+    model="gemini-2.0-flash"
+)
+
+# Embeddings
+embeddings = provider.embed(
+    texts=["Hello world"],
+    model="text-embedding-004"
+)
+# Returns: [[0.01, -0.02, ...]] (768-dim vectors)
+
+# Async
+response = await provider.chat_async(messages=[...], model="gemini-2.0-flash")
+embeddings = await provider.embed_async(texts=[...], model="text-embedding-004")
+```
+
 ## Configuration Validation
 
 ### With Validation Rules
@@ -354,7 +428,7 @@ class ValidatedConfig:
             raise ValueError("timeout must be positive")
 
         # Validate provider
-        valid_providers = ["openai", "azure", "anthropic", "ollama", "docker", "cohere", "huggingface", "mock"]
+        valid_providers = ["openai", "azure", "anthropic", "google", "gemini", "ollama", "docker", "cohere", "huggingface", "mock"]
         if self.llm_provider not in valid_providers:
             raise ValueError(f"Invalid provider: {self.llm_provider}")
 ```
