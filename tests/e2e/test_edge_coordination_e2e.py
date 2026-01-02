@@ -4,7 +4,6 @@ import asyncio
 from datetime import datetime
 
 import pytest
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

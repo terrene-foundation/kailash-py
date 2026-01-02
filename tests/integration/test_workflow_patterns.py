@@ -5,7 +5,6 @@ import tempfile
 from pathlib import Path
 
 import pytest
-
 from kailash import Workflow
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode

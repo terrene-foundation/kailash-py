@@ -5,7 +5,6 @@ Tests the basic functionality of the threat detection node that's part of the co
 """
 
 import pytest
-
 from kailash.nodes.security.threat_detection import ThreatDetectionNode
 
 

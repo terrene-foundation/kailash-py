@@ -5,9 +5,8 @@ Validates the stub fixes in channels.py and core.py.
 """
 
 import pytest
-from nexus import Nexus
-
 from kailash.workflow.builder import WorkflowBuilder
+from nexus import Nexus
 
 
 @pytest.mark.integration

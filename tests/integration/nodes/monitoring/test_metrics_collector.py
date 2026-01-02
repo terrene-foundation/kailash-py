@@ -7,7 +7,6 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
-
 from kailash.nodes.monitoring import MetricsCollectorNode
 from kailash.nodes.monitoring.metrics_collector import MetricFormat, MetricType
 from kailash.sdk_exceptions import NodeExecutionError

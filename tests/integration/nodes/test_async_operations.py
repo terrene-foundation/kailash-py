@@ -10,7 +10,6 @@ import asyncio
 from typing import Any
 
 import pytest
-
 from kailash.nodes.base_async import AsyncNode
 from kailash.nodes.logic.async_operations import AsyncMergeNode, AsyncSwitchNode
 from kailash.runtime.parallel import ParallelRuntime

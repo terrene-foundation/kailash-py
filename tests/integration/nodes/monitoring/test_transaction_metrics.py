@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
 import pytest
-
 from kailash.nodes.monitoring import TransactionMetricsNode
 from kailash.nodes.monitoring.transaction_metrics import (
     AggregationType,

@@ -11,7 +11,6 @@ BUG-010: UPDATE defaulted to record_id=1 (FIXED)
 import pytest
 import pytest_asyncio
 from dotenv import load_dotenv
-
 from kailash.runtime import AsyncLocalRuntime, LocalRuntime
 from kailash.sdk_exceptions import NodeValidationError
 from kailash.workflow.builder import WorkflowBuilder

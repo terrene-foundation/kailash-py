@@ -8,7 +8,6 @@ from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.monitoring import PerformanceBenchmarkNode
 from kailash.nodes.monitoring.performance_benchmark import (
