@@ -3594,6 +3594,174 @@ if result.valid:
     pass
 ```
 
+### Human Traceability (v0.8.0)
+
+**What**: Complete human-to-agent traceability for all AI actions
+**When**: Enterprise deployments requiring every agent action to be traceable to an authorizing human
+**Core Principle**: Every action in the system MUST be traceable to a human. PseudoAgents bridge human authentication to the agentic world.
+
+**Key Components**:
+- **HumanOrigin**: Immutable record of the human who authorized an execution chain
+- **ExecutionContext**: Ambient context carrying human origin through all operations
+- **PseudoAgent**: Human facade - the ONLY entity that can initiate trust chains
+- **ConstraintValidator**: Validates constraint tightening (delegations can only REDUCE permissions)
+
+#### HumanOrigin (Immutable Human Record)
+
+```python
+from kaizen.trust.execution_context import HumanOrigin
+from datetime import datetime
+
+# Created from authentication system
+human_origin = HumanOrigin(
+    human_id="alice@corp.com",          # Canonical ID (usually email)
+    display_name="Alice Chen",           # Human-readable name
+    auth_provider="okta",                # How they authenticated
+    session_id="sess-abc123",            # Current session
+    authenticated_at=datetime.utcnow(),  # When they authenticated
+)
+
+# Immutable (frozen=True) - cannot be modified after creation
+# This ensures audit integrity
+```
+
+#### ExecutionContext (Context Propagation)
+
+```python
+from kaizen.trust.execution_context import (
+    ExecutionContext,
+    execution_context,
+    get_current_context,
+    require_current_context,
+)
+
+# Create context rooted in a human
+ctx = ExecutionContext(
+    human_origin=human_origin,
+    delegation_chain=["pseudo:alice@corp.com", "agent-001"],
+    delegation_depth=1,
+    constraints={"cost_limit": 1000},
+)
+
+# Context flows through async operations using ContextVar
+async def process_data():
+    # Get context (returns None if not set)
+    ctx = get_current_context()
+
+    # Require context (raises RuntimeError if not set)
+    ctx = require_current_context()
+
+    # Access human origin
+    print(f"Authorized by: {ctx.human_origin.display_name}")
+    print(f"Delegation depth: {ctx.delegation_depth}")
+
+# Context manager sets context for a scope
+with execution_context(ctx):
+    await process_data()  # Context available here
+# Context automatically cleared after scope
+```
+
+#### PseudoAgent (Human Facade)
+
+```python
+from kaizen.trust import TrustOperations
+from kaizen.trust.pseudo_agent import (
+    PseudoAgent,
+    PseudoAgentFactory,
+    PseudoAgentConfig,
+    AuthProvider,
+)
+
+# Initialize factory with trust operations
+factory = PseudoAgentFactory(
+    trust_operations=trust_ops,
+    default_config=PseudoAgentConfig(
+        session_timeout_minutes=60,
+        require_mfa=True,
+        allowed_capabilities=["read_data", "process_data"],
+    ),
+)
+
+# Create PseudoAgent from session data
+pseudo = factory.from_session(
+    user_id="user-123",
+    email="alice@corp.com",
+    display_name="Alice Chen",
+    session_id="sess-456",
+    auth_provider="okta",
+)
+
+# Or from JWT claims
+pseudo = factory.from_claims(
+    claims={"sub": "user-123", "email": "alice@corp.com", "name": "Alice"},
+    auth_provider="azure_ad",
+)
+
+# Or from HTTP request headers (API gateway pattern)
+pseudo = factory.from_http_request(
+    headers=request.headers,
+    auth_provider="oidc",
+)
+
+# Delegate trust to an agent (ONLY way trust enters the system)
+delegation, agent_ctx = await pseudo.delegate_to(
+    agent_id="invoice-processor",
+    task_id="november-invoices",
+    capabilities=["read_invoices", "process_invoices"],
+    constraints={"cost_limit": 1000},
+)
+
+# Agent executes with the delegated context
+result = await agent.execute_async(inputs, context=agent_ctx)
+
+# Revoke when human logs out
+await pseudo.revoke_all_delegations()
+```
+
+#### Constraint Tightening Validation
+
+```python
+from kaizen.trust.constraint_validator import ConstraintValidator
+
+validator = ConstraintValidator()
+
+# Constraints can only become MORE restrictive
+parent_constraints = {"cost_limit": 1000, "regions": ["US", "EU"]}
+child_constraints = {"cost_limit": 500, "regions": ["US"]}  # More restrictive
+
+# Valid: child is subset of parent
+result = validator.validate(parent_constraints, child_constraints)
+assert result.valid
+
+# Invalid: child tries to EXPAND permissions
+invalid_child = {"cost_limit": 2000}  # Tries to increase limit
+result = validator.validate(parent_constraints, invalid_child)
+assert not result.valid
+assert "cost_limit" in result.violations
+```
+
+#### Database Migration (v0.8.0)
+
+EATP v0.8.0 adds human origin tracking columns to trust tables:
+
+```bash
+# Check migration status
+python -m kaizen.trust.migrations.eatp_human_origin --check
+
+# Run migration
+python -m kaizen.trust.migrations.eatp_human_origin
+```
+
+**Migration adds**:
+- `human_origin_id` - VARCHAR(255) for human ID lookup
+- `human_origin_data` - JSONB for full HumanOrigin record
+- `delegation_chain` - TEXT[] array of agent IDs from human to current agent
+- `delegation_depth` - INTEGER distance from human (0 = direct delegation)
+
+**Tables affected**:
+- `delegation_records` - All 4 columns
+- `audit_anchors` - human_origin_id and human_origin_data only
+
 ### TrustedAgent (BaseAgent with Trust)
 
 **What**: BaseAgent extended with trust capabilities for enterprise deployments
@@ -3894,6 +4062,12 @@ logger = SecurityAuditLogger(output_path="/var/log/trust-audit.jsonl")
 | `CredentialRotationManager` | Automatic credential rotation |
 | `TrustRateLimiter` | Rate limiting for trust operations |
 | `SecurityAuditLogger` | Security event audit logging |
+| `HumanOrigin` | Immutable record of authorizing human (v0.8.0) |
+| `ExecutionContext` | Context propagation with human traceability (v0.8.0) |
+| `PseudoAgent` | Human facade for initiating trust chains (v0.8.0) |
+| `PseudoAgentFactory` | Factory for creating PseudoAgents from auth sources (v0.8.0) |
+| `ConstraintValidator` | Validates constraint tightening in delegations (v0.8.0) |
+| `EATPMigration` | Database migration for EATP v0.8.0 columns |
 
 ### When to Use EATP
 

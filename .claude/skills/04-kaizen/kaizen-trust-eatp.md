@@ -60,6 +60,59 @@ if result.valid:
     print(f"Verification level: {result.level}")
 ```
 
+### Human Traceability (v0.8.0)
+
+Every action MUST be traceable to a human. PseudoAgents bridge human authentication to the agentic world.
+
+```python
+from kaizen.trust.execution_context import HumanOrigin, ExecutionContext
+from kaizen.trust.pseudo_agent import PseudoAgent, PseudoAgentFactory, PseudoAgentConfig
+from datetime import datetime
+
+# Factory creates PseudoAgents from auth sources
+factory = PseudoAgentFactory(
+    trust_operations=trust_ops,
+    default_config=PseudoAgentConfig(
+        session_timeout_minutes=60,
+        require_mfa=True,
+        allowed_capabilities=["read_data", "process_data"],
+    ),
+)
+
+# Create from session/JWT/HTTP headers
+pseudo = factory.from_session(
+    user_id="user-123",
+    email="alice@corp.com",
+    display_name="Alice Chen",
+    session_id="sess-456",
+    auth_provider="okta",
+)
+
+# Delegate to agent (ONLY way trust enters the system)
+delegation, agent_ctx = await pseudo.delegate_to(
+    agent_id="invoice-processor",
+    task_id="november-invoices",
+    capabilities=["read_invoices", "process_invoices"],
+    constraints={"cost_limit": 1000},
+)
+
+# Agent executes with delegated context
+result = await agent.execute_async(inputs, context=agent_ctx)
+
+# Access human origin in context
+print(f"Authorized by: {agent_ctx.human_origin.display_name}")
+print(f"Delegation depth: {agent_ctx.delegation_depth}")
+
+# Revoke when human logs out
+await pseudo.revoke_all_delegations()
+```
+
+**Key Components**:
+- **HumanOrigin**: Immutable (frozen=True) record of the authorizing human
+- **ExecutionContext**: Context propagation via ContextVar for async operations
+- **PseudoAgent**: Human facade - ONLY entity that can initiate trust chains
+- **ConstraintValidator**: Validates constraint tightening (can only REDUCE permissions)
+
 ### TrustedAgent Usage
 
 ```python
@@ -503,6 +556,12 @@ await audit_logger.log(SecurityEvent(
 | `SecurityAuditLogger` | Audit logging | `kaizen.trust.security` |
 | `PostgresTrustStore` | Persistent storage | `kaizen.trust.store` |
 | `TrustChainCache` | Performance caching | `kaizen.trust.cache` |
+| `HumanOrigin` | Immutable human record (v0.8.0) | `kaizen.trust.execution_context` |
+| `ExecutionContext` | Human traceability context (v0.8.0) | `kaizen.trust.execution_context` |
+| `PseudoAgent` | Human facade (v0.8.0) | `kaizen.trust.pseudo_agent` |
+| `PseudoAgentFactory` | Create PseudoAgents (v0.8.0) | `kaizen.trust.pseudo_agent` |
+| `ConstraintValidator` | Constraint tightening (v0.8.0) | `kaizen.trust.constraint_validator` |
+| `EATPMigration` | DB migration for v0.8.0 | `kaizen.trust.migrations` |
 
 ## When to Use EATP
 
