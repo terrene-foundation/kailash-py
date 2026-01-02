@@ -14,7 +14,6 @@ from io import StringIO
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from kailash.cli.validation_audit import (
     ReportFormatter,
     ValidationAuditReport,

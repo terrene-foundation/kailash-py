@@ -5,7 +5,6 @@ import random
 from datetime import datetime, timedelta
 
 import pytest
-
 from kailash.edge.coordination.global_ordering import GlobalOrderingService
 from kailash.edge.coordination.leader_election import EdgeLeaderElection
 from kailash.edge.coordination.partition_detector import PartitionDetector

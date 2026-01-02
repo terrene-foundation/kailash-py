@@ -7,7 +7,6 @@ import tempfile
 from unittest.mock import Mock, patch
 
 import pytest
-
 from kailash.testing.fixtures import (
     HAS_DOCKER,
     AsyncWorkflowFixtures,

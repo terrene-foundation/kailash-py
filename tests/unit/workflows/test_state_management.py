@@ -6,9 +6,8 @@ classes to ensure they correctly handle immutable state updates.
 """
 
 import pytest
-from pydantic import BaseModel, Field
-
 from kailash.workflow.state import StateManager, WorkflowStateWrapper
+from pydantic import BaseModel, Field
 
 
 # Test model classes

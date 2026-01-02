@@ -16,7 +16,6 @@ from datetime import UTC, datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from kailash.nodes.alerts import AlertSeverity, DiscordAlertNode
 from kailash.sdk_exceptions import NodeExecutionError
 

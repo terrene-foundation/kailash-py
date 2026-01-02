@@ -45,13 +45,14 @@ sys.path.insert(0, str(project_root))
 examples_dir = project_root / "examples"
 sys.path.insert(0, str(examples_dir))
 
-from examples.utils.paths import get_data_dir
 from kailash.nodes.api.http import HTTPRequestNode
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.writers import JSONWriterNode
 from kailash.nodes.logic.operations import SwitchNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.graph import Workflow
+
+from examples.utils.paths import get_data_dir
 
 # Configure business-focused logging
 logging.basicConfig(

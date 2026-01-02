@@ -8,7 +8,6 @@ import warnings
 from pathlib import Path
 
 import pytest
-
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode
 from kailash.nodes.data.writers import CSVWriterNode

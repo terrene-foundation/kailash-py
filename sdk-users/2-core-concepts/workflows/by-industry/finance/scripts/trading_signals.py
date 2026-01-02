@@ -25,16 +25,17 @@ import pandas as pd
 project_root = Path(__file__).parent.parent.parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
-from examples.utils.data_paths import (
-    ensure_output_dir_exists,
-    get_input_data_path,
-    get_output_data_path,
-)
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, JSONWriterNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow import Workflow
+
+from examples.utils.data_paths import (
+    ensure_output_dir_exists,
+    get_input_data_path,
+    get_output_data_path,
+)
 
 
 def calculate_technical_indicators(price_data: list, volume_data: list) -> dict:
