@@ -5,7 +5,6 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from kailash.middleware.gateway.deduplicator import (
     CachedResponse,
     RequestDeduplicator,

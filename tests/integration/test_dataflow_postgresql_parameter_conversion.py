@@ -7,7 +7,6 @@ conversion failures in the AsyncSQLDatabaseNode → PostgreSQL adapter chain.
 """
 
 import pytest
-
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

@@ -6,7 +6,6 @@ import re
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-
 from kailash.utils.secure_logging import (
     SecureLogger,
     SecureLoggingMixin,

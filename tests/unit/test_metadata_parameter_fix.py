@@ -12,7 +12,6 @@ Tests verify that:
 from typing import Any, Dict
 
 import pytest
-
 from kailash.nodes.base import (
     Node,
     NodeMetadata,

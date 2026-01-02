@@ -14,7 +14,6 @@ from typing import Any, Dict
 from unittest.mock import MagicMock, Mock, mock_open, patch
 
 import pytest
-
 from kailash.nodes.base import Node, NodeParameter
 from kailash.runtime.docker import DockerNodeWrapper, DockerRuntime
 from kailash.sdk_exceptions import NodeConfigurationError, NodeExecutionError

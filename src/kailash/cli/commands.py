@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 import click
-
 from kailash.nodes import NodeRegistry
 from kailash.runtime.local import LocalRuntime
 from kailash.sdk_exceptions import (

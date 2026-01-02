@@ -9,8 +9,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError
-
 from kailash.nodes import Node
 from kailash.sdk_exceptions import (
     ConfigurationException,
@@ -18,6 +16,7 @@ from kailash.sdk_exceptions import (
     ImportException,
 )
 from kailash.workflow import Workflow
+from pydantic import BaseModel, Field, ValidationError
 
 logger = logging.getLogger(__name__)
 

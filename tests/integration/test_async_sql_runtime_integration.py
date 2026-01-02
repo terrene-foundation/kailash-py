@@ -20,7 +20,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.resource_manager import CircuitBreaker, RetryPolicy
 from kailash.sdk_exceptions import CircuitBreakerOpenError

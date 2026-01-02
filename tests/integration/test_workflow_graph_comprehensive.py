@@ -1,7 +1,6 @@
 """Comprehensive tests for workflow graph functionality."""
 
 import pytest
-
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 

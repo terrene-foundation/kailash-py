@@ -53,7 +53,6 @@ sys.path.insert(0, str(project_root))
 examples_dir = project_root / "examples"
 sys.path.insert(0, str(examples_dir))
 
-from examples.utils.paths import get_data_dir
 from kailash.nodes.base_cycle_aware import CycleAwareNode
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import CSVReaderNode, JSONReaderNode
@@ -67,6 +66,8 @@ from kailash.runtime.local import LocalRuntime
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskRun, TaskStatus
 from kailash.workflow.graph import Workflow
+
+from examples.utils.paths import get_data_dir
 
 # Configure enterprise-focused logging
 logging.basicConfig(

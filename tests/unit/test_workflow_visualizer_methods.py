@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, Mock, patch
 import matplotlib.pyplot as plt
 import networkx as nx
 import pytest
-
 from kailash.nodes.base import Node
 from kailash.nodes.code import PythonCodeNode
 from kailash.workflow.graph import Workflow
