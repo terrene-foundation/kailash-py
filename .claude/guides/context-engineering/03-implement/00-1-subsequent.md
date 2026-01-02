@@ -56,3 +56,7 @@
    - Write your docs in the respective apps accordingly, using as many files as required
      - capture the essence and intent, the what it is, and how to use it
      - and not status/progress/reports and other irrelevant information.
+   - Also update the following docs accordingly if required
+     - .claude/agents/frameworks/kaizen-specialist.md
+     - .claude/skills/04-kaizen
+     - sdk-users/apps/kaizen
