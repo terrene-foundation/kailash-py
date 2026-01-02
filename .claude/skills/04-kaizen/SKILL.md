@@ -1,6 +1,6 @@
 ---
 name: kaizen
-description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'Planning agent', 'PEV agent', 'Tree-of-Thoughts', 'pipeline patterns', 'supervisor-worker', 'router pattern', 'ensemble pattern', 'blackboard pattern', 'parallel execution', 'agent-to-agent communication', 'A2A protocol', 'streaming agents', 'agent testing', 'agent memory', 'agentic workflows', 'AgentRegistry', 'OrchestrationRuntime', 'distributed agents', 'agent registry', '100+ agents', 'capability discovery', 'fault tolerance', or 'health monitoring'."
+description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'Planning agent', 'PEV agent', 'Tree-of-Thoughts', 'pipeline patterns', 'supervisor-worker', 'router pattern', 'ensemble pattern', 'blackboard pattern', 'parallel execution', 'agent-to-agent communication', 'A2A protocol', 'streaming agents', 'agent testing', 'agent memory', 'agentic workflows', 'AgentRegistry', 'OrchestrationRuntime', 'distributed agents', 'agent registry', '100+ agents', 'capability discovery', 'fault tolerance', 'health monitoring', 'trust protocol', 'EATP', 'TrustedAgent', 'trust chains', 'secure messaging', 'enterprise trust', 'credential rotation', 'trust verification', or 'cross-organization agents'."
 ---
 
 # Kailash Kaizen - AI Agent Framework
@@ -21,6 +21,7 @@ Kaizen enables building sophisticated AI agents with:
 - **Enterprise Features**: Cost tracking, streaming responses, automatic optimization
 - **Memory System**: 3-tier hierarchical storage (Hot/Warm/Cold) with DataFlow backend
 - **Security**: RBAC, process isolation, compliance controls (SOC2, GDPR, HIPAA, PCI-DSS)
+- **Enterprise Agent Trust Protocol (v0.8.0)**: Cryptographic trust chains, TrustedAgent, secure messaging, credential rotation
 
 ## Quick Start
 
@@ -170,6 +171,16 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 - **[kaizen-observability-logging](kaizen-observability-logging.md)** - Structured JSON logging
 - **[kaizen-observability-audit](kaizen-observability-audit.md)** - Compliance audit trails
 
+### Enterprise Agent Trust Protocol (v0.8.0)
+- **[kaizen-trust-eatp](kaizen-trust-eatp.md)** - Complete trust infrastructure for AI agents
+  - Trust lineage chains with cryptographic verification
+  - TrustedAgent and TrustedSupervisorAgent with built-in trust
+  - Secure messaging with HMAC authentication and replay protection
+  - Trust-aware orchestration with policy enforcement
+  - Enterprise System Agent (ESA) for legacy system integration
+  - A2A HTTP service for cross-organization trust operations
+  - Credential rotation, rate limiting, and security audit logging
+
 ### Testing & Quality
 - **[kaizen-testing-patterns](kaizen-testing-patterns.md)** - Testing AI agents
 - **[Performance Benchmarks](../../../apps/kailash-kaizen/docs/benchmarks/BENCHMARK_GUIDE.md)** - Measure Kaizen performance
@@ -251,6 +262,11 @@ Use Kaizen when you need to:
 - Monitor, trace, and audit agent behavior in production
 - Secure agent observability with RBAC and compliance controls
 - Create production-ready agentic applications
+- **Enterprise trust and accountability (v0.8.0)**:
+  - Cryptographic trust chains for AI agents
+  - Cross-organization agent coordination
+  - Regulatory compliance with audit trails
+  - Secure inter-agent communication
 
 **Use Pipeline Patterns When:**
 - **Ensemble**: Need diverse perspectives synthesized (code review, research)
