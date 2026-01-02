@@ -4,7 +4,57 @@
 
 **Kaizen** is a signature-based AI agent framework built on Kailash Core SDK, providing production-ready agents with multi-modal processing, multi-agent coordination, and enterprise features.
 
-## 🆕 What's New in v0.6.0 (2025-10-29)
+## 🆕 What's New in v0.8.0 (2026-01)
+
+**Enterprise Agent Trust Protocol (EATP)**:
+
+- **🔐 Trust Lineage Chains**
+  - Cryptographically linked chain of genesis, capabilities, delegations, and audit anchors
+  - TrustLineageChain with GenesisRecord, CapabilityAttestation, DelegationRecord, AuditAnchor
+  - 4 core operations: ESTABLISH, DELEGATE, VERIFY, AUDIT
+  - PostgresTrustStore for persistent storage with caching
+
+- **🤖 TrustedAgent & TrustedSupervisorAgent**
+  - BaseAgent extensions with built-in trust verification
+  - Automatic trust establishment and capability verification
+  - Trust delegation with constraints and time limits
+  - Trust context propagation through workflows
+
+- **📡 Secure Agent Communication**
+  - SecureChannel with HMAC-based message authentication
+  - Nonce-based replay protection (InMemoryReplayProtection)
+  - Timestamp validation and sender/receiver verification
+  - MessageSigner and MessageVerifier for end-to-end security
+
+- **🏗️ Trust-Aware Orchestration**
+  - TrustAwareOrchestrationRuntime with trust context propagation
+  - TrustPolicyEngine for policy-based trust evaluation
+  - TrustExecutionContext for capability and delegation tracking
+  - Integration with existing orchestration patterns
+
+- **🏢 Enterprise System Agent (ESA)**
+  - Proxy agents for legacy systems with trust verification
+  - SystemMetadata and SystemConnectionInfo for system configuration
+  - Bridge non-AI systems into trust ecosystem
+  - Accountability for external system calls
+
+- **🌐 A2A HTTP Service**
+  - REST/JSON-RPC API for trust operations
+  - AgentCardGenerator for agent capability cards
+  - Cross-organization agent coordination
+  - Integration with existing A2A protocol
+
+- **🛡️ Security Hardening**
+  - CredentialRotationManager for automatic key rotation
+  - TrustRateLimiter for rate limiting trust operations
+  - SecurityAuditLogger for security event logging
+  - SecureKeyStorage for encrypted key storage
+
+**Version**: 0.8.0 | **Dependencies**: Kailash >=0.10.13
+
+---
+
+## What Was New in v0.6.0
 
 **Enhanced Autonomy & Memory Systems**:
 
@@ -28,8 +78,6 @@
   - New hook events: PRE/POST_INTERRUPT, PRE/POST_CHECKPOINT_SAVE
   - Improved performance: <0.01ms overhead (625x better than target)
   - Production-validated: 100+ concurrent hooks supported
-
-**Version**: 0.6.0 | **Dependencies**: Kailash >=0.10.2
 
 ---
 
