@@ -81,6 +81,24 @@ Master multi-agent coordination patterns including collaborative workflows, hier
 **Time investment:** 35-45 minutes
 **Prerequisites:** Understanding of individual agent creation
 
+### [Enterprise Agent Trust Protocol](enterprise-trust-protocol.md) (v0.8.0)
+**Cryptographically verifiable trust chains for AI agents**
+
+Complete guide to EATP (Enterprise Agent Trust Protocol) for enterprise-grade accountability, authorization, and secure multi-agent communication.
+
+**What you'll learn:**
+- Trust lineage chains with cryptographic verification
+- TrustedAgent and TrustedSupervisorAgent usage
+- Trust operations: ESTABLISH, DELEGATE, VERIFY, AUDIT
+- Secure messaging with HMAC and replay protection
+- Trust-aware orchestration with policy enforcement
+- Enterprise System Agent (ESA) for legacy integration
+- A2A HTTP service for cross-organization trust
+- Credential rotation and security hardening
+
+**Time investment:** 40-50 minutes
+**Prerequisites:** Multi-agent coordination, enterprise requirements
+
 ### [Optimization](optimization.md)
 **Performance tuning and reliability**
 
