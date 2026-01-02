@@ -34,6 +34,11 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 **Observability**:
 - "Distributed tracing?" → [`kaizen-observability`](../../skills/04-kaizen/kaizen-observability.md)
 
+**Enterprise Trust (v0.8.0)**:
+- "Trust protocol?" → See EATP section below
+- "Trusted agents?" → See TrustedAgent section below
+- "Secure messaging?" → See SecureChannel section below
+
 ## Primary Responsibilities (This Subagent)
 
 ### Use This Subagent When:
@@ -3529,6 +3534,384 @@ pytestmark = [
 ]
 ```
 
+## Enterprise Agent Trust Protocol (EATP) - v0.8.0
+
+**Cryptographically verifiable trust chains for AI agents**, enabling enterprise-grade accountability, authorization, and secure multi-agent communication.
+
+**What**: Complete trust infrastructure for AI agents with lineage tracking, capability attestation, secure messaging, and policy enforcement
+**When**: Enterprise deployments requiring accountability, regulatory compliance, cross-organization agent coordination
+**Where**: `kaizen.trust` module
+
+### Core Concepts
+
+**Trust Lineage Chain**: Cryptographically linked chain of records establishing agent identity, capabilities, and delegation history. Every action is traceable to an organizational authority.
+
+**Key Components**:
+- **GenesisRecord**: Initial trust establishment with authority signature
+- **CapabilityAttestation**: Cryptographic proof of agent capabilities
+- **DelegationRecord**: Capability delegation between agents
+- **AuditAnchor**: Immutable audit trail entries
+
+### Quick Start
+
+```python
+from kaizen.trust import (
+    TrustOperations,
+    PostgresTrustStore,
+    OrganizationalAuthorityRegistry,
+    TrustKeyManager,
+    CapabilityRequest,
+    CapabilityType,
+)
+
+# Initialize trust infrastructure
+store = PostgresTrustStore(connection_string="postgresql://...")
+registry = OrganizationalAuthorityRegistry()
+key_manager = TrustKeyManager()
+trust_ops = TrustOperations(registry, key_manager, store)
+await trust_ops.initialize()
+
+# Establish trust for an agent
+chain = await trust_ops.establish(
+    agent_id="agent-001",
+    authority_id="org-acme",
+    capabilities=[
+        CapabilityRequest(
+            capability="analyze_data",
+            capability_type=CapabilityType.ACCESS,
+        )
+    ],
+)
+
+# Verify trust before action
+result = await trust_ops.verify(
+    agent_id="agent-001",
+    action="analyze_data",
+)
+
+if result.valid:
+    # Proceed with trusted action
+    pass
+```
+
+### TrustedAgent (BaseAgent with Trust)
+
+**What**: BaseAgent extended with trust capabilities for enterprise deployments
+**When**: Agents requiring cryptographic accountability and capability verification
+
+```python
+from kaizen.trust import TrustedAgent, TrustedAgentConfig
+
+config = TrustedAgentConfig(
+    llm_provider="openai",
+    model="gpt-4o",
+    trust_store_url="postgresql://...",
+    authority_id="org-acme",
+)
+
+# Create trusted agent
+agent = TrustedAgent(
+    config=config,
+    signature=MySignature(),
+    capabilities=["analyze_data", "generate_reports"],
+)
+
+# Trust is automatically verified before each action
+result = await agent.run(question="Analyze sales data")
+
+# Access trust context
+print(f"Trust chain valid: {agent.trust_context.is_valid}")
+print(f"Capabilities: {agent.trust_context.capabilities}")
+```
+
+**TrustedSupervisorAgent**: Supervisor pattern with trust propagation to worker agents.
+
+```python
+from kaizen.trust import TrustedSupervisorAgent
+
+supervisor = TrustedSupervisorAgent(
+    config=config,
+    workers=[worker1, worker2],
+    delegation_policy="least_privilege",  # Only delegate required capabilities
+)
+
+# Delegated capabilities are cryptographically attested
+result = await supervisor.delegate_task(
+    task="Process customer data",
+    required_capabilities=["read_customer_data"],
+)
+```
+
+### Agent Registry & Discovery
+
+**What**: Central registry for agent discovery with health monitoring
+**When**: Multi-agent systems requiring capability-based discovery
+
+```python
+from kaizen.trust import (
+    AgentRegistry,
+    PostgresAgentRegistryStore,
+    AgentHealthMonitor,
+    DiscoveryQuery,
+    RegistrationRequest,
+)
+
+# Initialize registry
+store = PostgresAgentRegistryStore(connection_string="...")
+registry = AgentRegistry(store=store)
+
+# Register agent
+await registry.register(RegistrationRequest(
+    agent_id="agent-001",
+    name="Data Analyzer",
+    capabilities=["analyze_data", "generate_charts"],
+    metadata={"version": "1.0", "owner": "team-data"},
+))
+
+# Discover agents by capability
+agents = await registry.discover(DiscoveryQuery(
+    capabilities=["analyze_data"],
+    status="active",
+))
+
+# Health monitoring (background)
+monitor = AgentHealthMonitor(registry=registry, interval_seconds=30)
+await monitor.start()
+```
+
+### Secure Messaging
+
+**What**: End-to-end encrypted, replay-protected messaging between agents
+**When**: Cross-agent communication requiring confidentiality and integrity
+
+```python
+from kaizen.trust import (
+    SecureChannel,
+    MessageSigner,
+    MessageVerifier,
+    InMemoryReplayProtection,
+)
+
+# Create secure channel
+channel = SecureChannel(
+    agent_id="agent-001",
+    signer=MessageSigner(private_key=my_key),
+    verifier=MessageVerifier(),
+    replay_protection=InMemoryReplayProtection(window_seconds=300),
+)
+
+# Send secure message
+await channel.send(
+    recipient="agent-002",
+    payload={"action": "process_data", "data": {...}},
+)
+
+# Receive and verify message
+message = await channel.receive()
+if message.verification.valid:
+    # Message is authentic and not replayed
+    process(message.payload)
+```
+
+### Trust-Aware Orchestration
+
+**What**: Workflow runtime with trust context propagation and policy enforcement
+**When**: Complex workflows requiring trust verification at each step
+
+```python
+from kaizen.trust import (
+    TrustAwareOrchestrationRuntime,
+    TrustAwareRuntimeConfig,
+    TrustExecutionContext,
+    TrustPolicyEngine,
+    TrustPolicy,
+    PolicyType,
+)
+
+# Configure trust-aware runtime
+config = TrustAwareRuntimeConfig(
+    verify_on_execute=True,
+    propagate_context=True,
+    fail_on_policy_violation=True,
+)
+
+runtime = TrustAwareOrchestrationRuntime(
+    trust_ops=trust_ops,
+    config=config,
+)
+
+# Create execution context with trust
+context = TrustExecutionContext(
+    agent_id="agent-001",
+    trust_chain=chain,
+    delegations=[],
+)
+
+# Execute workflow with trust verification
+results, run_id = await runtime.execute_workflow_async(
+    workflow.build(),
+    trust_context=context,
+)
+
+# Policy engine for complex rules
+policy_engine = TrustPolicyEngine()
+policy_engine.add_policy(TrustPolicy(
+    name="require_mfa",
+    policy_type=PolicyType.CAPABILITY,
+    condition=lambda ctx: ctx.has_mfa_attestation,
+))
+```
+
+### Enterprise System Agents (ESA)
+
+**What**: Proxy agents for legacy systems (databases, APIs) with trust attestation
+**When**: Integrating non-agent systems into trusted workflows
+
+```python
+from kaizen.trust import (
+    EnterpriseSystemAgent,
+    ESAConfig,
+    SystemMetadata,
+    SystemConnectionInfo,
+)
+
+# Create ESA for legacy database
+db_esa = EnterpriseSystemAgent(
+    config=ESAConfig(
+        system_id="legacy-crm",
+        system_type="database",
+        connection=SystemConnectionInfo(
+            host="db.internal",
+            port=5432,
+            credentials_ref="vault://crm-db",
+        ),
+    ),
+    trust_ops=trust_ops,
+    capabilities=["read_customers", "write_orders"],
+)
+
+# ESA operations are trust-verified
+result = await db_esa.execute(
+    operation="read_customers",
+    params={"filter": {"region": "APAC"}},
+)
+```
+
+### A2A HTTP Service
+
+**What**: HTTP service for trust operations following Google A2A protocol
+**When**: Cross-network agent communication via HTTP
+
+```python
+from kaizen.trust import A2AService, create_a2a_app, AgentCardGenerator
+
+# Generate A2A-compatible agent card
+card = AgentCardGenerator.generate(
+    agent_id="agent-001",
+    name="Data Processor",
+    capabilities=["analyze", "transform"],
+    trust_extensions={"authority": "org-acme"},
+)
+
+# Create A2A HTTP service
+app = create_a2a_app(
+    trust_ops=trust_ops,
+    registry=registry,
+    enable_delegation=True,
+    enable_verification=True,
+)
+
+# Run service (FastAPI-based)
+# uvicorn app:app --port 8080
+```
+
+### Security Features
+
+**Credential Rotation**:
+```python
+from kaizen.trust import CredentialRotationManager, ScheduledRotation
+
+rotation_manager = CredentialRotationManager(
+    trust_ops=trust_ops,
+    key_manager=key_manager,
+)
+
+# Schedule automatic rotation
+await rotation_manager.schedule(ScheduledRotation(
+    agent_id="agent-001",
+    interval_days=30,
+    notify_hours_before=24,
+))
+
+# Manual rotation
+result = await rotation_manager.rotate(agent_id="agent-001")
+```
+
+**Rate Limiting**:
+```python
+from kaizen.trust import TrustRateLimiter
+
+limiter = TrustRateLimiter(
+    max_operations_per_minute=100,
+    max_delegations_per_hour=10,
+)
+
+# Rate limit applied automatically in TrustOperations
+```
+
+**Security Audit Logging**:
+```python
+from kaizen.trust import SecurityAuditLogger, SecurityEventType
+
+logger = SecurityAuditLogger(output_path="/var/log/trust-audit.jsonl")
+
+# Automatic logging of security events:
+# - TRUST_ESTABLISHED, TRUST_REVOKED
+# - DELEGATION_CREATED, DELEGATION_EXPIRED
+# - VERIFICATION_PASSED, VERIFICATION_FAILED
+# - REPLAY_DETECTED, SIGNATURE_INVALID
+```
+
+### Trust Module Components
+
+| Component | Purpose |
+|-----------|---------|
+| `TrustLineageChain` | Complete trust chain for an agent |
+| `TrustOperations` | ESTABLISH, DELEGATE, VERIFY, AUDIT operations |
+| `PostgresTrustStore` | Persistent storage for trust chains |
+| `TrustedAgent` | BaseAgent with trust capabilities |
+| `TrustedSupervisorAgent` | Supervisor with trust delegation |
+| `AgentRegistry` | Central registry for agent discovery |
+| `AgentHealthMonitor` | Background health monitoring |
+| `SecureChannel` | End-to-end encrypted messaging |
+| `MessageVerifier` | Multi-step message verification |
+| `InMemoryReplayProtection` | Replay attack prevention |
+| `TrustExecutionContext` | Trust state propagation |
+| `TrustPolicyEngine` | Policy-based trust evaluation |
+| `TrustAwareOrchestrationRuntime` | Trust-aware workflow execution |
+| `EnterpriseSystemAgent` | Proxy agents for legacy systems |
+| `A2AService` | HTTP service for trust operations |
+| `CredentialRotationManager` | Automatic credential rotation |
+| `TrustRateLimiter` | Rate limiting for trust operations |
+| `SecurityAuditLogger` | Security event audit logging |
+
+### When to Use EATP
+
+**Use EATP When**:
+- ✅ Enterprise deployments with regulatory requirements (SOC2, GDPR, HIPAA)
+- ✅ Multi-organization agent coordination
+- ✅ Audit trail requirements for agent actions
+- ✅ Capability-based access control
+- ✅ Secure cross-agent messaging
+- ✅ Integration with legacy systems
+
+**Skip EATP When**:
+- ❌ Development/testing environments (use standard BaseAgent)
+- ❌ Single-tenant, single-agent applications
+- ❌ Performance-critical paths without compliance needs
+
+**Reference**: `kaizen.trust`, `apps/kailash-kaizen/docs/plans/01-eatp/`, `tests/integration/trust/`, `tests/unit/trust/`
+
 ## Examples Directory
 
 **Location**: `apps/kailash-kaizen/examples/`
@@ -3553,6 +3936,9 @@ pytestmark = [
 - ✅ **Production monitoring with observability stack (v0.5.0)** - tracing, metrics, logging, audit
 - ✅ **Lifecycle management with hooks, state, interrupts (v0.5.0)** - event-driven architecture
 - ✅ **Enterprise security with permission system (v0.5.0+)** - policy-based access control, budgets
+- ✅ **Enterprise Agent Trust Protocol (v0.8.0)** - trust chains, TrustedAgent, secure messaging
+- ✅ **Agent registry and discovery (v0.8.0)** - capability-based discovery, health monitoring
+- ✅ **Cross-organization agent coordination (v0.8.0)** - A2A HTTP service, ESA integration
 - ✅ Building multi-modal workflows (vision/audio/text)
 - ✅ Optimizing agent prompts and signatures
 - ✅ Writing agent tests with fixtures (use `llm_provider="mock"` for unit tests)
