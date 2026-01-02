@@ -5,11 +5,11 @@ and switch node results.
 """
 
 import pytest
-
 from kailash.runtime.base import BaseRuntime
 from kailash.runtime.mixins.validation import ValidationMixin
 from kailash.sdk_exceptions import WorkflowValidationError
 from kailash.workflow import Workflow
+
 from tests.unit.runtime.helpers_runtime import (
     create_empty_workflow,
     create_large_workflow,

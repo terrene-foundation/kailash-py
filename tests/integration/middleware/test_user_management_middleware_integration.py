@@ -12,7 +12,6 @@ from typing import Any, Dict
 
 import pytest
 import pytest_asyncio
-
 from kailash.middleware import AgentUIMiddleware, create_gateway
 from kailash.middleware.auth.access_control import MiddlewareAccessControlManager
 

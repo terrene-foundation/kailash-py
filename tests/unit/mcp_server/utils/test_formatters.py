@@ -5,7 +5,6 @@ NO MOCKING - This is a unit test file for isolated component testing.
 """
 
 import pytest
-
 from kailash.mcp_server.utils.formatters import (
     JSONFormatter,
     MarkdownFormatter,

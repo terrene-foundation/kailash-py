@@ -14,7 +14,6 @@ from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import HTTPException, Request, Response
 from fastapi.responses import JSONResponse
-
 from kailash.api.gateway import WorkflowAPIGateway
 
 from .checkpoint_manager import CheckpointManager

@@ -5,7 +5,6 @@ from unittest.mock import MagicMock, Mock, patch
 
 import networkx as nx
 import pytest
-
 from kailash.sdk_exceptions import WorkflowExecutionError, WorkflowValidationError
 
 

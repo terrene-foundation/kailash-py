@@ -11,7 +11,6 @@ from unittest.mock import Mock, patch
 
 import networkx as nx
 import pytest
-
 from kailash.nodes.base import Node, NodeParameter
 from kailash.runtime.parallel_cyclic import ParallelCyclicRuntime
 from kailash.sdk_exceptions import RuntimeExecutionError, WorkflowExecutionError

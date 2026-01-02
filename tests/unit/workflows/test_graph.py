@@ -3,7 +3,6 @@
 from typing import Any
 
 import pytest
-
 from kailash.nodes import NodeRegistry
 from kailash.nodes.base import Node
 from kailash.workflow import Workflow

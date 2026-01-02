@@ -15,7 +15,6 @@ import time
 from typing import Any
 
 import requests
-
 from kailash.nodes.api.http import HTTPRequestNode
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError

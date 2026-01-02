@@ -8,7 +8,6 @@ Tests the following SDK components:
 """
 
 import pytest
-
 from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
 from kailash.workflow.migration import DAGToCycleConverter
