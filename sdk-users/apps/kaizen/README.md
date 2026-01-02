@@ -199,15 +199,16 @@ result2 = agent.ask("What's my name?", session_id="user123")
 print(result2["answer"])  # "Your name is Alice"
 ```
 
-## 🔧 LLM Provider Configuration (v0.7.1)
+## 🔧 LLM Provider Configuration (v0.7.2)
 
-Kaizen supports 8 LLM providers with automatic detection:
+Kaizen supports 9 LLM providers with automatic detection:
 
 | Provider | Type | Requirements | Features |
 |----------|------|--------------|----------|
 | `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
 | `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings |
 | `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
+| `google` | Cloud | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Gemini 2.0, vision, embeddings, tool calling |
 | `ollama` | Local | Ollama running on port 11434 | Free, local models (llama, mistral, etc.) |
 | `docker` | Local | Docker Desktop Model Runner on port 12434 | Free local inference, GPU acceleration |
 | `cohere` | Cloud | `COHERE_API_KEY` | Command models, embeddings |
@@ -252,6 +253,15 @@ class OllamaConfig:
     llm_provider: str = "ollama"
     model: str = "llama3.2"
     temperature: float = 0.7
+
+# Google Gemini (Cloud, multimodal)
+# Prerequisites: export GOOGLE_API_KEY="your-api-key"
+#               pip install kailash-kaizen[google]
+@dataclass
+class GoogleConfig:
+    llm_provider: str = "google"  # Or "gemini" (alias)
+    model: str = "gemini-2.0-flash"  # Or gemini-1.5-pro, gemini-1.5-flash
+    temperature: float = 0.7
 ```
 
 ### Auto-Detection
@@ -260,8 +270,9 @@ Kaizen automatically detects available providers in this priority order:
 1. OpenAI (if `OPENAI_API_KEY` set)
 2. Azure (if `AZURE_AI_INFERENCE_ENDPOINT` set)
 3. Anthropic (if `ANTHROPIC_API_KEY` set)
-4. Ollama (if running locally)
-5. Docker Model Runner (if running locally)
+4. Google (if `GOOGLE_API_KEY` or `GEMINI_API_KEY` set)
+5. Ollama (if running locally)
+6. Docker Model Runner (if running locally)
 
 Override with `KAIZEN_DEFAULT_PROVIDER` environment variable.
 
@@ -270,12 +281,53 @@ Override with `KAIZEN_DEFAULT_PROVIDER` environment variable.
 Tool calling support is model-dependent. Check capability:
 
 ```python
-from kaizen.providers import DockerModelRunnerProvider
+from kaizen.nodes.ai import DockerModelRunnerProvider
 
 provider = DockerModelRunnerProvider()
 if provider.supports_tools("ai/qwen3"):
     # Tool calling supported
     pass
+```
+
+### Google Gemini Provider
+
+Supports chat, vision (multimodal), embeddings, and tool calling via the `google-genai` SDK:
+
+```python
+from kaizen.nodes.ai import GoogleGeminiProvider
+
+provider = GoogleGeminiProvider()
+
+# Chat completion
+messages = [{"role": "user", "content": "What is 2+2?"}]
+response = provider.chat(
+    messages=messages,
+    model="gemini-2.0-flash",
+    generation_config={"temperature": 0.7, "max_tokens": 100}
+)
+print(response["content"])  # "4"
+
+# Vision (multimodal) - pass base64-encoded images
+import base64
+with open("image.png", "rb") as f:
+    image_b64 = base64.b64encode(f.read()).decode()
+
+messages = [{
+    "role": "user",
+    "content": [
+        {"type": "text", "text": "What's in this image?"},
+        {"type": "image", "base64": image_b64, "media_type": "image/png"}
+    ]
+}]
+response = provider.chat(messages=messages, model="gemini-2.0-flash")
+
+# Embeddings (768-dimensional vectors)
+texts = ["Hello world", "Machine learning"]
+embeddings = provider.embed(texts=texts, model="text-embedding-004")
+
+# Async support
+response = await provider.chat_async(messages=messages, model="gemini-2.0-flash")
+embeddings = await provider.embed_async(texts=texts, model="text-embedding-004")
 ```
 
 **Tool-Capable Models**: `ai/qwen3`, `ai/llama3.3`, `ai/gemma3`
