@@ -231,27 +231,71 @@ workflow.add_node("UserUpdateNode", "update", {
 - **Pattern**: Create new `LocalRuntime()` for each `workflow.build()` execution
 - **Impact**: This prevents event loop conflicts, especially with async operations
 
-**4a. Async Context Usage (v0.9.5+ Fixed)**
-- ✅ FIXED: v0.9.5+ automatically detects async contexts and uses appropriate runtime
-- **No workarounds needed** - All DataFlow components now auto-detect async event loops
-- **Pattern**: Use `auto_migrate=True` safely in FastAPI/async contexts (works in v0.9.5+):
-  ```python
-  # FastAPI/Async contexts - Works in v0.9.5+
-  db = DataFlow(
-      "postgresql://localhost/db",
-      auto_migrate=True  # ✅ Now safe! Auto-detects async context
-  )
+**4a. Docker/FastAPI Deployment (v0.10.6+ Phase 6)**
 
-  # All components automatically use AsyncLocalRuntime when needed
-  ```
-- **What Changed**: All 18 hardcoded `LocalRuntime()` instances now use async context detection
-- **Fixed Locations**: ModelRegistry, migration system, schema inspectors, gateway integration, testing utilities
-- **Impact**: No more production deadlocks in FastAPI/async deployments (Fixed in v0.9.5)
+✅ **SOLVED IN v0.10.6+**: Phase 6 introduced `async_safe_run()` which transparently bridges sync/async contexts. `auto_migrate=True` now works in Docker/FastAPI!
 
-**Historical Context (v0.9.1-v0.9.4)**:
-- **Old Issue**: Using `auto_migrate=True` caused deadlocks in FastAPI/async contexts
-- **Old Workaround**: Disable auto-migration and manually use `AsyncLocalRuntime()`
-- **Resolution**: v0.9.5 fixed all async deadlock bugs - workaround no longer needed
+**NEW RECOMMENDED PATTERN (v0.10.6+):**
+```python
+from dataflow import DataFlow
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+
+# v0.10.6+: auto_migrate=True works in async contexts!
+db = DataFlow("postgresql://...", auto_migrate=True)
+
+@db.model  # Tables created safely via async_safe_run
+class User:
+    id: str
+    name: str
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await db.initialize()  # Optional: explicit init for control
+    yield
+    await db.close_async()
+
+app = FastAPI(lifespan=lifespan)
+```
+
+**LEGACY PATTERN (still works if you prefer explicit control):**
+```python
+db = DataFlow("postgresql://...", auto_migrate=False)
+# Then use: await db.create_tables_async() in lifespan
+```
+
+**When to Use Each Pattern:**
+| Context | Pattern | Reason |
+|---------|---------|--------|
+| **Docker/FastAPI (v0.10.6+)** | `auto_migrate=True` | async_safe_run handles bridging |
+| **Docker/FastAPI (legacy)** | `auto_migrate=False` + `create_tables_async()` | Explicit control |
+| **CLI Scripts** | `auto_migrate=True` (default) | No event loop, sync is safe |
+| **pytest (sync)** | `auto_migrate=True` (default) | No async fixtures |
+| **pytest (async)** | Either pattern works | async_safe_run handles both |
+
+**Internal: async_safe_run utility** (for custom sync→async bridging):
+```python
+from dataflow.core.async_utils import async_safe_run
+
+async def my_async_op():
+    return await some_async_call()
+
+# Works in both sync contexts (CLI) and async contexts (FastAPI)
+result = async_safe_run(my_async_op())
+```
+
+**Use DataFlow Express for API endpoints (23x faster):**
+```python
+@app.post("/users")
+async def create_user(data: dict):
+    return await db.express.create("User", data)  # ~0.27ms vs ~6.3ms
+
+@app.get("/users/{id}")
+async def get_user(id: str):
+    return await db.express.read("User", id)
+```
+
+**v0.9.5 Fixes (Internal)**: All 18 hardcoded `LocalRuntime()` instances now auto-detect async contexts, but this only helps AFTER tables exist - it doesn't solve the import-time table creation issue.
 
 **5. Performance Expectations**
 - ❌ MISUNDERSTANDING: "DataFlow is slow - queries take 400-500ms"
@@ -382,12 +426,215 @@ db = DataFlow(url, error_enhancement_mode="DISABLED")
 - **DF-201**: Connection Type Mismatch → Check parameter types in connections
 - **DF-301**: Migration Failed → Review schema changes and constraints
 - **DF-401**: Database URL Invalid → Verify connection string format
-- **DF-501**: Event Loop Closed → Use AsyncLocalRuntime in async contexts
+- **DF-501**: Sync Method in Async Context → Use `create_tables_async()` instead of `create_tables()`
 - **DF-601**: Primary Key Missing → Ensure model has 'id' field
 - **DF-701**: Node Not Found → Check node name spelling and case
 - **DF-801**: Workflow Build Failed → Validate all connections before .build()
 
 **File Reference**: `src/dataflow/core/error_enhancer.py:1-756` (60+ methods)
+
+## 🔄 DF-501: Async Context Lifecycle Methods (v0.10.7+)
+
+### The Problem
+
+When using DataFlow in async contexts (FastAPI lifespan, pytest async fixtures, async main functions), sync methods like `create_tables()` and `_ensure_migration_tables()` would fail with event loop conflicts:
+
+```
+RuntimeError: Cannot run sync method in running event loop
+RuntimeError: Event loop is closed
+```
+
+### New Async Methods (v0.10.7+)
+
+DataFlow v0.10.7 introduces proper async lifecycle methods that work correctly in async contexts:
+
+| Sync Method | Async Alternative | Usage |
+|-------------|-------------------|-------|
+| `create_tables()` | `create_tables_async()` | Table creation in async contexts |
+| `close()` | `close_async()` | Cleanup in async contexts |
+| `_ensure_migration_tables()` | `_ensure_migration_tables_async()` | Internal migration tables |
+
+### When to Use Each
+
+**Use Async Methods When:**
+- ✅ Inside FastAPI lifespan events (`@asynccontextmanager async def lifespan()`)
+- ✅ Inside pytest async fixtures (`@pytest.fixture async def db()`)
+- ✅ Inside async main functions (`async def main()`)
+- ✅ Any code running in an async context with `asyncio.get_running_loop()`
+
+**Use Sync Methods When:**
+- ✅ CLI scripts and management commands
+- ✅ Sync pytest tests (non-async)
+- ✅ Any code NOT running in an async context
+
+### FastAPI Integration Pattern (Recommended)
+
+```python
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from dataflow import DataFlow
+
+db = DataFlow("postgresql://localhost/mydb")
+
+@db.model
+class User:
+    id: str
+    name: str
+    email: str
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Use async version
+    await db.create_tables_async()
+    yield
+    # Shutdown: Use async version
+    await db.close_async()
+
+app = FastAPI(lifespan=lifespan)
+
+@app.get("/users/{user_id}")
+async def get_user(user_id: str):
+    # Normal async operations work
+    pass
+```
+
+### Pytest Async Fixture Pattern (Recommended)
+
+```python
+import pytest
+from dataflow import DataFlow
+
+@pytest.fixture
+async def db():
+    """Async fixture with proper cleanup."""
+    db = DataFlow("postgresql://...", test_mode=True)
+
+    @db.model
+    class User:
+        id: str
+        name: str
+
+    # Use async version in async context
+    await db.create_tables_async()
+
+    yield db
+
+    # Use async cleanup
+    await db.close_async()
+
+@pytest.mark.asyncio
+async def test_user_creation(db):
+    # Test with async db fixture
+    pass
+```
+
+### Sync Context Detection
+
+DataFlow sync methods now detect when they're called from an async context and raise a clear error:
+
+```python
+# In async context (e.g., async def main())
+try:
+    db.create_tables()  # Raises RuntimeError
+except RuntimeError as e:
+    print(e)
+    # Output: Cannot use create_tables() in async context - use create_tables_async() instead.
+    # See DF-501 for details.
+```
+
+### Error Message Examples
+
+**DF-501 for create_tables():**
+```
+RuntimeError: Cannot use create_tables() in async context - use create_tables_async() instead.
+See DF-501 for details.
+```
+
+**DF-501 for _ensure_migration_tables():**
+```
+RuntimeError: Cannot use _ensure_migration_tables() in async context - use _ensure_migration_tables_async() instead.
+See DF-501 for details.
+```
+
+### Migration from Sync to Async
+
+**Before (DF-501 Error):**
+```python
+# ❌ WRONG - Causes DF-501 in async context
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db = DataFlow("postgresql://...")
+
+    @db.model
+    class User:
+        id: str
+        name: str
+
+    db.create_tables()  # ❌ DF-501 ERROR!
+    yield
+    db.close()  # ❌ May fail silently
+```
+
+**After (v0.10.7+ Fix):**
+```python
+# ✅ CORRECT - Use async methods in async context
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    db = DataFlow("postgresql://...")
+
+    @db.model
+    class User:
+        id: str
+        name: str
+
+    await db.create_tables_async()  # ✅ Works correctly
+    yield
+    await db.close_async()  # ✅ Proper cleanup
+```
+
+### close_async() Method Details
+
+The `close_async()` method properly cleans up all DataFlow resources in async contexts:
+
+```python
+async def close_async(self):
+    """Close database connections and clean up resources (async version)."""
+    # Closes connection pool manager
+    # Closes memory connections (SQLite)
+    # Clears internal state
+```
+
+**Safe to Call Multiple Times:**
+```python
+await db.close_async()  # First call - cleans up
+await db.close_async()  # Second call - no-op, safe
+await db.close_async()  # Third call - no-op, safe
+```
+
+### Context Manager Support
+
+DataFlow also supports sync context managers, which call `close()` automatically:
+
+```python
+# Sync context manager (for CLI/scripts)
+with DataFlow("sqlite:///dev.db") as db:
+    @db.model
+    class User:
+        id: str
+        name: str
+
+    db.create_tables()  # OK in sync context
+    # Automatic cleanup when exiting context
+
+# For async contexts, use the lifespan pattern above
+```
+
+### File References
+
+- **Implementation**: `src/dataflow/core/engine.py:7180-7230` (close_async, close methods)
+- **Async Table Creation**: `src/dataflow/core/engine.py:4100-4200` (create_tables_async)
+- **Error Messages**: `src/dataflow/platform/errors.py:2757-2783` (DF-501 error codes)
+- **Tests**: `tests/integration/test_dataflow_async_lifecycle.py` (16 comprehensive tests)
 
 ## 🚀 ExpressDataFlow - High-Performance CRUD (NEW in v0.10.6+)
 
