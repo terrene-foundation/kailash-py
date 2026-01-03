@@ -105,16 +105,16 @@ class CustomConfig:
 agent = SimpleQAAgent(CustomConfig())
 ```
 
-### LLM Provider Configuration (v0.7.2)
+### LLM Provider Configuration (v0.8.2)
 
 Kaizen supports 9 LLM providers with automatic detection:
 
 | Provider | Type | Requirements | Features |
 |----------|------|--------------|----------|
 | `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
-| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings |
+| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings, structured outputs |
 | `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
-| `google` | Cloud | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Gemini 2.0, vision, embeddings, tool calling |
+| `google` | Cloud | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Gemini 2.0, vision, embeddings, tool calling, structured outputs |
 | `ollama` | Local | Ollama running on port 11434 | Free, local models |
 | `docker` | Local | Docker Desktop Model Runner on port 12434 | Free local inference, GPU acceleration |
 | `cohere` | Cloud | `COHERE_API_KEY` | Command models, embeddings |
@@ -136,7 +136,7 @@ class DockerConfig:
     model: str = "ai/llama3.2"  # Or ai/qwen3, ai/gemma3
     # Prerequisites: docker desktop enable model-runner --tcp 12434
 
-# Google Gemini (Cloud, multimodal, v0.7.2)
+# Google Gemini (Cloud, multimodal, v0.8.2)
 @dataclass
 class GoogleConfig:
     llm_provider: str = "google"  # Or "gemini" (alias)
@@ -187,9 +187,9 @@ best_worker = pattern.supervisor.select_worker_for_task(
 # Returns: {"worker": <DataAnalystAgent>, "score": 0.9}
 ```
 
-### OpenAI Structured Outputs
+### Multi-Provider Structured Outputs (v0.8.2)
 
-**Guarantee LLM responses match your signature** with 100% schema compliance:
+**Guarantee LLM responses match your signature** with 100% schema compliance across OpenAI, Google/Gemini, and Azure:
 
 ```python
 from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
@@ -202,10 +202,10 @@ class AnalysisSignature(Signature):
     category: str = OutputField(desc="Classification category")
     confidence: float = OutputField(desc="Confidence 0-1")
 
-# Enable structured outputs (strict mode)
+# Enable structured outputs - works with OpenAI, Google, or Azure
 config = BaseAgentConfig(
-    llm_provider="openai",
-    model="gpt-4o-2024-08-06",  # Required for strict mode
+    llm_provider="openai",  # or "google", "gemini", "azure"
+    model="gpt-4o-2024-08-06",  # or "gemini-2.0-flash", etc.
     provider_config=create_structured_output_config(
         signature=AnalysisSignature(),
         strict=True,  # 100% schema compliance
@@ -222,13 +222,22 @@ print(result['confidence'])    # Always present, always float
 ```
 
 **How It Works:**
-- OpenAI returns JSON as a dict object (pre-parsed, not a string)
-- Both `AsyncSingleShotStrategy` and `SingleShotStrategy` detect dict responses automatically
+- All providers receive OpenAI-style `response_format` from `create_structured_output_config()`
+- Each provider auto-translates to native parameters:
+  - **OpenAI**: Uses `response_format` directly
+  - **Google/Gemini**: Translates to `response_mime_type` + `response_schema`
+  - **Azure**: Translates to `JsonSchemaFormat`
 - Dict responses are returned directly without string parsing - transparent to users
 
+**Provider Support Matrix:**
+- ✅ **OpenAI**: Full support (`json_schema` strict, `json_object` legacy)
+- ✅ **Google/Gemini**: Full support (auto-translated)
+- ✅ **Azure AI Foundry**: Full support (auto-translated)
+- ❌ **Ollama/Anthropic**: Not supported
+
 **Modes:**
-- **Strict Mode** (`strict=True`): 100% compliance, requires `gpt-4o-2024-08-06+`
-- **Legacy Mode** (`strict=False`): ~70-85% compliance, works with all models
+- **Strict Mode** (`strict=True`): 100% compliance
+- **Legacy Mode** (`strict=False`): ~70-85% compliance
 
 **Learn More:** [Structured Outputs Guide](docs/guides/signature-programming.md)
 
