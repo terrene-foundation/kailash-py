@@ -262,7 +262,7 @@ await db.express.create("User", {...})
 
 ### Empty list returned
 
-If using custom `__tablename__`, ensure you're on v0.9.8+:
+If using custom `__tablename__`, ensure you're on v0.10.6+:
 
 ```python
 @db.model
@@ -270,7 +270,7 @@ class User:
     id: str
     __tablename__ = "custom_users"
 
-# Fixed in v0.9.8 - uses correct table name
+# Fixed in v0.10.6 - uses correct table name
 users = await db.express.list("User")
 ```
 
@@ -283,4 +283,4 @@ users = await db.express.list("User")
 
 ## Version History
 
-- **v0.9.8**: Initial ExpressDataFlow release with full CRUD and bulk operations
+- **v0.10.6**: Initial ExpressDataFlow release with full CRUD and bulk operations

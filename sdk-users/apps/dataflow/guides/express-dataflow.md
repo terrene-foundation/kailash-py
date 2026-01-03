@@ -634,10 +634,10 @@ await db.initialize()
 
 **Cause**: Table name mismatch with custom `__tablename__`.
 
-**Solution**: This was fixed in v0.9.8. Ensure you're using the latest version:
+**Solution**: This was fixed in v0.10.6. Ensure you're using the latest version:
 
 ```python
-# Works correctly in v0.9.8+
+# Works correctly in v0.10.6+
 @db.model
 class User:
     id: str
@@ -653,12 +653,12 @@ users = await db.express.list("User")  # Returns records correctly
 
 ### Error: bulk_delete returns count instead of boolean
 
-**Cause**: Version prior to v0.9.8.
+**Cause**: Version prior to v0.10.6.
 
-**Solution**: Upgrade to v0.9.8+ where return type is consistent:
+**Solution**: Upgrade to v0.10.6+ where return type is consistent:
 
 ```python
-# v0.9.8+ returns boolean
+# v0.10.6+ returns boolean
 result = await db.express.bulk_delete("User", ["id-1", "id-2"])
 # result is True or False
 ```
@@ -747,6 +747,6 @@ workflow.add_connection("create_user", "id", "send_welcome", "user_id")
 
 ## Version History
 
-- **v0.9.8**: Added ExpressDataFlow with all CRUD and bulk operations
-- **v0.9.8**: Fixed custom `__tablename__` support for list operations
-- **v0.9.8**: Fixed bulk_delete return type consistency
+- **v0.10.6**: Added ExpressDataFlow with all CRUD and bulk operations
+- **v0.10.6**: Fixed custom `__tablename__` support for list operations
+- **v0.10.6**: Fixed bulk_delete return type consistency
