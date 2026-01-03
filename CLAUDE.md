@@ -303,6 +303,54 @@ class User:
     name: str
 ```
 
+### 4. `soft_delete` Only Affects DELETE, NOT Queries
+
+```python
+# soft_delete config ONLY converts DELETE to UPDATE deleted_at
+@db.model
+class Patient:
+    id: str
+    deleted_at: Optional[str] = None
+    __dataflow__ = {"soft_delete": True}  # Only affects DeleteNode!
+
+# ❌ WRONG ASSUMPTION - Queries do NOT auto-filter
+workflow.add_node("PatientListNode", "list", {"filter": {}})
+# Returns ALL patients INCLUDING soft-deleted ones!
+
+# ✅ CORRECT - Manually filter for non-deleted records
+workflow.add_node("PatientListNode", "list", {
+    "filter": {"deleted_at": {"$null": True}}  # WHERE deleted_at IS NULL
+})
+```
+
+### 5. Query Operators for NULL Checking (v0.10.6+)
+
+```python
+# $null operator for IS NULL
+workflow.add_node("PatientListNode", "active", {
+    "filter": {"deleted_at": {"$null": True}}
+})
+
+# $exists operator for IS NOT NULL
+workflow.add_node("PatientListNode", "deleted", {
+    "filter": {"deleted_at": {"$exists": True}}
+})
+
+# $eq with None also works (v0.10.6+)
+workflow.add_node("PatientListNode", "active", {
+    "filter": {"deleted_at": {"$eq": None}}
+})
+```
+
+### 6. Result Keys by Node Type
+
+| Node Type | Result Key | Access Pattern |
+|-----------|------------|----------------|
+| ListNode | `records` | `results["list"]["records"]` |
+| CountNode | `count` | `results["count"]["count"]` |
+| ReadNode | (direct) | `results["read"]` → dict |
+| UpsertNode | `record`, `created` | `results["upsert"]["record"]` |
+
 ## 🐳 Docker Deployment
 - WorkflowAPI now defaults to AsyncLocalRuntime (async-first, no threads).
 

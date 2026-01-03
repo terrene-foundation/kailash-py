@@ -187,8 +187,43 @@ workflow.add_node("UserUpdateNode", "update", {
 **3. ListNode Result Structure**
 - ❌ MISUNDERSTANDING: "ListNode returns weird nested structure - might be a bug"
 - ✅ REALITY: Nested structure is intentional design for pagination metadata
-- **Pattern**: `result["records"]` contains data, `result["total"]` contains count
+- **Pattern**: `result["records"]` contains data, `result["count"]` contains count
 - **Impact**: This is correct behavior, not a workaround
+- **Result Keys by Node Type**:
+  - ListNode: `{"records": [...], "count": N, "limit": N}`
+  - CountNode: `{"count": N}`
+  - ReadNode: returns record dict directly (or None)
+  - UpsertNode: `{"created": bool, "record": {...}, "action": "created"|"updated"}`
+
+**3a. soft_delete Auto-Filters Queries (v0.10.6+) ✅ FIXED**
+- ✅ NEW: `soft_delete: True` now AUTO-FILTERS queries by default
+- ✅ Matches industry standards (Django, Rails, Laravel)
+- **Default Behavior**: ListNode, CountNode, ReadNode auto-exclude soft-deleted records
+- **Override**: Use `include_deleted=True` to see all records:
+  ```python
+  # v0.10.6+: Auto-filters by default - no manual filter needed!
+  workflow.add_node("PatientListNode", "list", {"filter": {}})
+  # Returns ONLY non-deleted records
+
+  # To include soft-deleted records:
+  workflow.add_node("PatientListNode", "list_all", {
+      "filter": {},
+      "include_deleted": True  # Returns ALL records
+  })
+  ```
+- **Affected Nodes**: ListNode, CountNode, ReadNode
+
+**3b. $null and $eq with None for NULL Queries (v0.10.6+)**
+- ✅ `$null` operator: `{"deleted_at": {"$null": True}}` → IS NULL
+- ✅ `$eq` with `None`: `{"deleted_at": {"$eq": None}}` → IS NULL
+- ✅ `$exists` for NOT NULL: `{"email": {"$exists": True}}` → IS NOT NULL
+
+**3c. Timestamp Fields Auto-Stripped (v0.10.6+) ✅ FIXED**
+- ✅ NEW: `created_at` and `updated_at` fields are auto-stripped from updates with WARNING
+- ✅ No more DF-104 "multiple assignments" errors
+- **Previous behavior**: Error was thrown
+- **New behavior**: Fields auto-removed with warning message
+- **Best practice**: Don't set timestamp fields - DataFlow manages them automatically
 
 **4. Runtime Reuse**
 - ❌ MISUNDERSTANDING: "Can't reuse LocalRuntime() - it's a limitation"
@@ -253,7 +288,7 @@ When encountering apparent "limitations":
 - **ErrorEnhancer System (v0.8.0+)**: Rich, actionable error messages with DF-XXX codes, context, causes, and solutions
 - **Debug Agent (v0.8.0+)**: Intelligent error analysis with 50+ patterns, 60+ solutions, 92%+ confidence
 - **Inspector System (v0.8.0+)**: Workflow introspection and debugging tools
-- **ExpressDataFlow (v0.9.8+)**: High-performance direct node invocation (~23x faster than workflows)
+- **ExpressDataFlow (v0.10.6+)**: High-performance direct node invocation (~23x faster than workflows)
 - **Schema Cache (v0.7.3+)**: 91-99% performance improvement for multi-operation workflows
 - **PostgreSQL Native Arrays (v0.8.0+)**: 2-10x faster with TEXT[], INTEGER[], REAL[] support
 - **6-Level Write Protection**: Comprehensive protection system (Global, Connection, Model, Operation, Field, Runtime)
@@ -354,7 +389,7 @@ db = DataFlow(url, error_enhancement_mode="DISABLED")
 
 **File Reference**: `src/dataflow/core/error_enhancer.py:1-756` (60+ methods)
 
-## 🚀 ExpressDataFlow - High-Performance CRUD (NEW in v0.9.8+)
+## 🚀 ExpressDataFlow - High-Performance CRUD (NEW in v0.10.6+)
 
 Direct node invocation bypassing workflow overhead for simple CRUD operations.
 

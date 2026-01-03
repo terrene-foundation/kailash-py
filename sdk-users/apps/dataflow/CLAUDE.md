@@ -1,9 +1,11 @@
-# Kailash DataFlow - Complete Function Access Guide (v0.9.7 Stable)
+# Kailash DataFlow - Complete Function Access Guide (v0.10.6 Stable)
 
-**Current Version: v0.9.7 - Production Ready**
+**Current Version: v0.10.6 - Production Ready**
+- **🚀 SOFT DELETE AUTO-FILTER (v0.10.6)**: soft_delete models now auto-filter queries - use `include_deleted=True` to override
+- **🚀 TIMESTAMP AUTO-STRIP (v0.10.6)**: `created_at`/`updated_at` now auto-stripped with warning (no more DF-104 errors!)
 - **PYTEST COMPATIBILITY**: Fixed model registration race condition (v0.9.7)
 - **MYSQL SUPPORT**: Full MySQL support with 100% feature parity (aiomysql driver)
-- **THREE DATABASES**: PostgreSQL, MySQL, and SQLite with identical 9 nodes per model
+- **THREE DATABASES**: PostgreSQL, MySQL, and SQLite with identical 11 nodes per model
 - DateTime serialization issues resolved
 - PostgreSQL parameter type casting improved
 - VARCHAR(255) limits removed (now TEXT with unlimited content)
@@ -19,43 +21,77 @@
 - **Qdrant**: Dedicated vector database for billion-scale semantic search
 - **Neo4j**: Graph database for relationship-heavy data models
 
-## 🚨 #1 MOST COMMON MISTAKE: Auto-Managed Timestamp Fields (DF-104)
+## 🚨 #1 MOST COMMON MISTAKE: Auto-Managed Timestamp Fields ✅ FIXED in v0.10.6
 
-**This error occurs in almost EVERY new DataFlow project!**
-
-```
-DatabaseError: multiple assignments to same column "updated_at"
-```
-
-**DataFlow automatically manages `created_at` and `updated_at`. NEVER set them manually!**
+**v0.10.6+ automatically handles this! Fields are auto-stripped with warning.**
 
 ```python
-# ❌ WRONG - This is the #1 mistake in every project
+# v0.10.6+: This now WORKS (with warning) instead of failing
 async def update_record(self, id: str, data: dict):
     now = datetime.now(UTC).isoformat()
-    data["updated_at"] = now  # ❌ CAUSES DF-104 ERROR!
+    data["updated_at"] = now  # ⚠️ Auto-stripped with warning
 
-# ✅ CORRECT - Remove auto-managed fields before passing to DataFlow
+    workflow.add_node("ModelUpdateNode", "update", {
+        "filter": {"id": id},
+        "fields": data  # ✅ Works! updated_at is auto-removed
+    })
+```
+
+**Warning message logged:**
+```
+⚠️ AUTO-STRIPPED: Fields ['updated_at'] removed from update. DataFlow automatically
+manages created_at/updated_at timestamps. Remove these fields from your code.
+```
+
+**Best Practice (avoid warning):**
+```python
+# ✅ BEST - Don't set timestamps at all
 async def update_record(self, id: str, data: dict):
-    data.pop("updated_at", None)
-    data.pop("created_at", None)
-    # DataFlow handles timestamps automatically
+    # DataFlow handles timestamps automatically - no need to set them
+    workflow.add_node("ModelUpdateNode", "update", {
+        "filter": {"id": id},
+        "fields": data
+    })
 ```
 
 ## ⚠️ Common Mistakes (Critical)
 
 | Mistake | Impact | Solution |
 |---------|--------|----------|
-| **Manually setting `created_at`/`updated_at`** | **DF-104 error** | **NEVER set - DataFlow manages automatically** |
+| **Manually setting `created_at`/`updated_at`** | ⚠️ Warning | **v0.10.6+ auto-strips with warning** - remove from code to avoid warning |
 | **Using `user_id` or `model_id` instead of `id`** | 10-20 min debugging | **MUST use `id`** (not `user_id`, `agent_id`, etc.) |
 | **Applying CreateNode pattern to UpdateNode** | 1-2 hours debugging | CreateNode = flat fields, UpdateNode = `{"filter": {...}, "fields": {...}}` |
 | **Wrong node naming** | Node not found | Use `ModelOperationNode` (e.g., `UserCreateNode`) |
+| **Wrong result key for ListNode** | Empty results | ListNode → `records`, CountNode → `count`, ReadNode → direct dict |
 
 **Critical Rules**:
-1. **Auto-managed fields** - `created_at`, `updated_at` NEVER set manually (DF-104 error)
+1. **Timestamp fields (v0.10.6+)** - Auto-stripped with warning; don't set them for clean logs
 2. **Primary key MUST be `id`** - DataFlow requires this exact name
 3. **CreateNode ≠ UpdateNode** - Different parameter patterns
 4. **Node naming** - Always `ModelOperationNode` pattern (v0.6.0+)
+5. **soft_delete (v0.10.6+)** - Auto-filters queries! Use `include_deleted=True` to see deleted records
+6. **Result keys** - ListNode: `records`, CountNode: `count`, ReadNode: direct record
+
+## 🔍 Query Operators for NULL Checking (v0.10.6+)
+
+```python
+# Filter for NULL values (e.g., non-deleted records in soft-delete pattern)
+workflow.add_node("PatientListNode", "active", {
+    "filter": {"deleted_at": {"$null": True}}  # WHERE deleted_at IS NULL
+})
+
+# Filter for NOT NULL values
+workflow.add_node("PatientListNode", "deleted", {
+    "filter": {"deleted_at": {"$exists": True}}  # WHERE deleted_at IS NOT NULL
+})
+
+# Alternative: $eq with None (v0.10.6+)
+workflow.add_node("PatientListNode", "active", {
+    "filter": {"deleted_at": {"$eq": None}}  # Also generates IS NULL
+})
+```
+
+**⚠️ Important**: `soft_delete: True` in model config ONLY affects DeleteNode operations. It does NOT auto-filter queries. You MUST manually add `deleted_at` filters to ListNode/ReadNode queries.
 
 ## 🛠️ DEVELOPER EXPERIENCE TOOLS (v0.8.0 - NEW)
 
