@@ -1550,8 +1550,12 @@ class SQLiteAdapter(DatabaseAdapter):
     ) -> Any:
         """Execute query and return results."""
         if transaction:
-            # Use existing transaction connection
-            db = transaction
+            # Handle both old API (just connection) and new API (tuple)
+            # begin_transaction() returns (db, savepoint_name, depth) tuple
+            if isinstance(transaction, tuple):
+                db, _savepoint_name, _depth = transaction
+            else:
+                db = transaction
             cursor = await db.execute(query, params or [])
 
             # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
@@ -1685,8 +1689,13 @@ class SQLiteAdapter(DatabaseAdapter):
     ) -> None:
         """Execute query multiple times with different parameters."""
         if transaction:
-            # Use existing transaction connection
-            await transaction.executemany(query, params_list)
+            # Handle both old API (just connection) and new API (tuple)
+            # begin_transaction() returns (db, savepoint_name, depth) tuple
+            if isinstance(transaction, tuple):
+                db, _savepoint_name, _depth = transaction
+            else:
+                db = transaction
+            await db.executemany(query, params_list)
             # Don't commit here - let transaction handling do it
         else:
             # Create new connection for non-transactional queries
