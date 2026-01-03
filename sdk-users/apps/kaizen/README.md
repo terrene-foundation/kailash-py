@@ -199,16 +199,16 @@ result2 = agent.ask("What's my name?", session_id="user123")
 print(result2["answer"])  # "Your name is Alice"
 ```
 
-## 🔧 LLM Provider Configuration (v0.7.2)
+## 🔧 LLM Provider Configuration (v0.8.2)
 
 Kaizen supports 9 LLM providers with automatic detection:
 
 | Provider | Type | Requirements | Features |
 |----------|------|--------------|----------|
 | `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
-| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings |
+| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings, structured outputs |
 | `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
-| `google` | Cloud | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Gemini 2.0, vision, embeddings, tool calling |
+| `google` | Cloud | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Gemini 2.0, vision, embeddings, tool calling, structured outputs |
 | `ollama` | Local | Ollama running on port 11434 | Free, local models (llama, mistral, etc.) |
 | `docker` | Local | Docker Desktop Model Runner on port 12434 | Free local inference, GPU acceleration |
 | `cohere` | Cloud | `COHERE_API_KEY` | Command models, embeddings |
