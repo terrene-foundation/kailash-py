@@ -77,9 +77,10 @@ Errors during workflow execution.
 
 | Code | Error | Common Cause |
 |------|-------|--------------|
-| DF-501 | Query execution failed | Invalid SQL |
+| DF-501 | Sync method in async context | Called `create_tables()` from async function - use `create_tables_async()` |
 | DF-502 | Transaction failed | Deadlock or timeout |
 | DF-503 | Connection pool exhausted | Too many concurrent queries |
+| DF-504 | Query execution failed | Invalid SQL or database error |
 
 ### DF-6XX: Model Errors
 Issues with @db.model definitions.
@@ -259,6 +260,75 @@ workflow.add_node("UserCreateNode", "create", {
 ```
 
 **See:** `sdk-users/apps/dataflow/guides/create-vs-update.md` (comprehensive guide)
+
+---
+
+### DF-501: Sync Method in Async Context (v0.10.7+)
+
+**Error Message:**
+```
+🔴 DF-501: Sync Method in Async Context
+
+You called create_tables() from an async context (running event loop detected).
+
+In async contexts (FastAPI, pytest-asyncio, etc.), you MUST use the async methods:
+  - create_tables() → create_tables_async()
+  - close() → close_async()
+  - _ensure_migration_tables() → _ensure_migration_tables_async()
+
+See: sdk-users/apps/dataflow/troubleshooting/common-errors.md#DF-501
+```
+
+**Cause:** Called a sync method (`create_tables()`, `close()`) from within an async function or event loop.
+
+**Solution:**
+```python
+# ❌ WRONG - Sync method in async context (FastAPI/pytest)
+@app.on_event("startup")
+async def startup():
+    db.create_tables()  # ← RuntimeError: DF-501
+
+# ✅ CORRECT - Use async methods in async context
+@app.on_event("startup")
+async def startup():
+    await db.create_tables_async()  # ← Works!
+
+# ✅ CORRECT - FastAPI lifespan pattern (recommended)
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    await db.create_tables_async()
+    yield
+    # Shutdown
+    await db.close_async()
+
+app = FastAPI(lifespan=lifespan)
+
+# ✅ CORRECT - pytest async fixtures
+@pytest.fixture
+async def db():
+    db = DataFlow(":memory:")
+    @db.model
+    class User:
+        id: str
+        name: str
+    await db.create_tables_async()
+    yield db
+    await db.close_async()
+```
+
+**Async Methods Available (v0.10.7+):**
+| Sync Method | Async Method | When to Use |
+|-------------|--------------|-------------|
+| `create_tables()` | `create_tables_async()` | Table creation |
+| `close()` | `close_async()` | Connection cleanup |
+| `_ensure_migration_tables()` | `_ensure_migration_tables_async()` | Migration system |
+
+**Detection:** DataFlow detects async context via `asyncio.get_running_loop()`. If a running loop exists, sync methods raise `RuntimeError` with DF-501.
+
+**See:** `sdk-users/apps/dataflow/troubleshooting/common-errors.md#DF-501`
 
 ---
 
