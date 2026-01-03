@@ -325,7 +325,7 @@ class DockerConfig:
 
 **Tool-Capable Models**: `ai/qwen3`, `ai/llama3.3`, `ai/gemma3` (check with `provider.supports_tools(model)`).
 
-### Google Gemini Configuration (v0.7.2)
+### Google Gemini Configuration (v0.8.2)
 
 ```python
 @dataclass

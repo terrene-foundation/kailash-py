@@ -114,7 +114,7 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 
 ### Key Concepts
 - **Signature-Based Programming**: Type-safe I/O with InputField/OutputField. Both `description=` and `desc=` parameters are supported (aliases) - use either based on preference.
-- **Structured Outputs**: OpenAI Structured Outputs API with 100% schema compliance. Use `create_structured_output_config()` with `provider_config`. Strict mode (100% compliance, gpt-4o-2024-08-06+) returns dict responses - strategies auto-detect and handle transparently. Legacy mode (70-85% best-effort, all models). **Provider Compatibility**: OpenAI supports `json_schema` (strict) and `json_object` (legacy); Ollama/Anthropic do NOT support structured outputs API. **Implementation**: `provider_config` IS the `response_format` - pass entire dict from `create_structured_output_config()` directly; `llm_agent.py` assigns it to `generation_config["response_format"]` without nested key extraction.
+- **Structured Outputs** (v0.8.2): Multi-provider structured outputs with 100% schema compliance. Use `create_structured_output_config()` with `provider_config`. Strict mode (100% compliance) returns dict responses - strategies auto-detect and handle transparently. Legacy mode (70-85% best-effort). **Provider Compatibility**: OpenAI supports `json_schema` (strict) and `json_object` (legacy); Google/Gemini supports `json_schema` and `json_object` (auto-translated to `response_mime_type` + `response_schema`); Azure AI Foundry supports `json_schema` (via JsonSchemaFormat); Ollama/Anthropic do NOT support structured outputs API. **Implementation**: `provider_config` IS the `response_format` - pass entire dict from `create_structured_output_config()` directly; providers auto-translate OpenAI-style format to native parameters.
 - **Signature Inheritance** (v0.6.5): Child signatures merge parent fields with proper type validation
 - **Extension Points** (v0.6.5): Custom system prompts via callback pattern enabling subclass method overrides without circular dependencies
 - **BaseAgent**: Unified agent system with lazy initialization, auto-generates A2A capability cards
@@ -130,18 +130,18 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **A2A Protocol**: Google Agent-to-Agent protocol for semantic capability matching
 - **Multi-Modal**: Vision (Ollama/OpenAI), audio (Whisper), unified orchestration
 - **UX Improvements**: Config auto-extraction, concise API, defensive parsing
-- **LLM Providers** (v0.7.2): 9 providers with auto-detection priority
+- **LLM Providers** (v0.8.2): 9 providers with auto-detection priority
 
-### Supported LLM Providers (v0.7.2)
+### Supported LLM Providers (v0.8.2)
 
 Kaizen supports 9 LLM providers with automatic detection and fallback:
 
 | Provider | Type | Requirements | Features |
 |----------|------|--------------|----------|
 | `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
-| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings |
+| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings, structured outputs |
 | `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
-| `google` | Cloud | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Gemini 2.0, vision, embeddings, tool calling |
+| `google` | Cloud | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Gemini 2.0, vision, embeddings, tool calling, structured outputs |
 | `ollama` | Local | Ollama running on port 11434 | Free, local models (llama, mistral, etc.) |
 | `docker` | Local | Docker Desktop Model Runner on port 12434 | Free local inference, GPU acceleration |
 | `cohere` | Cloud | `COHERE_API_KEY` | Command models, embeddings |
@@ -3440,24 +3440,31 @@ data = self.extract_list(result, "actual_key_name", default=[])
 ### Multi-Modal API Errors
 **See**: `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` - Common Pitfalls section
 
-### Provider Compatibility for Structured Outputs
+### Provider Compatibility for Structured Outputs (v0.8.2)
 
-**CRITICAL**: Ollama does NOT support OpenAI Structured Outputs API. Use OpenAI for agents requiring structured outputs.
+**Multi-Provider Support**: OpenAI, Google/Gemini, and Azure AI Foundry all support structured outputs with automatic format translation. Ollama/Anthropic do NOT support structured outputs API.
 
-**Affected Agents**:
+**Provider Support Matrix**:
+- ✅ **OpenAI**: Full support for `json_schema` (strict mode) and `json_object` (legacy)
+- ✅ **Google/Gemini**: Full support - auto-translates to `response_mime_type` + `response_schema`
+- ✅ **Azure AI Foundry**: Full support - auto-translates to `JsonSchemaFormat`
+- ❌ **Ollama**: NO support for structured outputs API
+- ❌ **Anthropic**: NO support for structured outputs API
+
+**Affected Agents** (require structured output provider):
 - `PlanningAgent` - Uses `List[PlanStep]` schema
 - `PEVAgent` - Uses `List[Refinement]` schema
 - `ToTAgent` - Uses `List[ToTNode]` schema
 - `MetaController` - Uses complex routing schemas
 
-**Symptoms with Ollama**:
+**Symptoms with Unsupported Providers**:
 ```python
 # Test times out after 60-120s
 # JSON_PARSE_FAILED errors
-# Ollama tries to generate matching JSON but can't comply with strict schema
+# Provider tries to generate matching JSON but can't comply with strict schema
 ```
 
-**Solution**:
+**Solution** (choose any supported provider):
 ```python
 # WRONG (will timeout with complex schemas)
 agent = PlanningAgent(
@@ -3465,35 +3472,53 @@ agent = PlanningAgent(
     model="llama3.1:8b-instruct-q8_0"
 )
 
-# RIGHT (100% schema compliance)
+# RIGHT - OpenAI (100% schema compliance)
 agent = PlanningAgent(
     llm_provider="openai",
-    model="gpt-4o-mini"  # Supports structured outputs
+    model="gpt-4o-mini"
+)
+
+# RIGHT - Google Gemini (100% schema compliance, v0.8.2)
+agent = PlanningAgent(
+    llm_provider="google",
+    model="gemini-2.0-flash"
+)
+
+# RIGHT - Azure AI Foundry (100% schema compliance, v0.8.2)
+agent = PlanningAgent(
+    llm_provider="azure",
+    model="gpt-4o"
 )
 ```
 
-**Provider Support Matrix**:
-- ✅ **OpenAI**: Full support for `json_schema` (strict mode) and `json_object` (legacy)
-- ❌ **Ollama**: NO support for structured outputs API
-- ❌ **Anthropic**: NO support for structured outputs API
+**How It Works** (v0.8.2):
+- All providers receive OpenAI-style `response_format` from `create_structured_output_config()`
+- Each provider auto-translates to native parameters:
+  - **OpenAI**: Uses `response_format` directly
+  - **Google**: Translates to `response_mime_type="application/json"` + `response_schema`
+  - **Azure**: Translates to `JsonSchemaFormat(name, schema, strict)`
 
-**When to Use OpenAI vs Ollama**:
-- **OpenAI** (REQUIRED): Agents with complex schemas (`List[T]`, nested Pydantic models)
-- **Ollama** (OK): Simple agents with string/dict outputs, basic RAG, simple QA
+**When to Use Each Provider**:
+- **OpenAI** (RECOMMENDED): Widest model selection, proven reliability
+- **Google/Gemini** (GOOD): Free tier available, multimodal support
+- **Azure** (ENTERPRISE): Azure ecosystem integration, compliance
+- **Ollama** (SIMPLE ONLY): Free local inference, string/dict outputs only
 
 **Cost Impact**:
 - OpenAI gpt-4o-mini: ~$0.001-0.01 per test
+- Google gemini-2.0-flash: Similar pricing, free tier available
+- Azure: Enterprise pricing
 - Ollama: Free (local inference)
 
 **Test Configuration**:
 ```python
-# For E2E tests with structured outputs
+# For E2E tests with structured outputs (any supported provider)
 pytestmark = [
     pytest.mark.e2e,
     pytest.mark.asyncio,
     pytest.mark.skipif(
-        not os.getenv("OPENAI_API_KEY"),
-        reason="OPENAI_API_KEY required for structured outputs"
+        not (os.getenv("OPENAI_API_KEY") or os.getenv("GOOGLE_API_KEY") or os.getenv("AZURE_AI_INFERENCE_API_KEY")),
+        reason="API key required for structured outputs (OpenAI, Google, or Azure)"
     ),
 ]
 ```
