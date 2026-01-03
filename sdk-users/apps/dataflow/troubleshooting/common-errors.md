@@ -77,8 +77,9 @@ DataFlow error codes follow the pattern `DF-XYY`:
 
 | Error Code | What It Means | Quick Fix |
 |------------|---------------|-----------|
-| **DF-501** | Runtime execution error | Enable `debug=True` to see detailed error messages |
+| **DF-501** | Sync method in async context | Use `create_tables_async()` not `create_tables()` in FastAPI/pytest |
 | **DF-502** | Database operation failed | Check constraints, foreign keys, and data validity |
+| **DF-504** | Query execution failed | Enable `debug=True` to see detailed error messages |
 
 ---
 
@@ -268,7 +269,71 @@ workflow.add_node("UserBulkCreateNode", "bulk", {
 
 ---
 
-### Pattern 6: Missing Connection (DF-101)
+### Pattern 6: Sync Methods in Async Context (DF-501)
+
+**Issue**: Calling sync methods (`create_tables()`, `close()`) from async functions.
+
+**Error Indicators**:
+- "Sync Method in Async Context"
+- "Use create_tables_async() instead"
+- "DF-501"
+
+**Before** ❌:
+```python
+# In FastAPI or pytest-asyncio
+@app.on_event("startup")
+async def startup():
+    db.create_tables()  # ❌ RuntimeError: DF-501
+
+@pytest.fixture
+async def db_fixture():
+    db = DataFlow(":memory:")
+    db.create_tables()  # ❌ RuntimeError: DF-501
+    yield db
+    db.close()  # ❌ Also fails!
+```
+
+**After** ✅:
+```python
+# Use async methods in async contexts
+@app.on_event("startup")
+async def startup():
+    await db.create_tables_async()  # ✅ Works
+
+# FastAPI lifespan pattern (recommended)
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await db.create_tables_async()
+    yield
+    await db.close_async()
+
+app = FastAPI(lifespan=lifespan)
+
+# pytest async fixtures
+@pytest.fixture
+async def db_fixture():
+    db = DataFlow(":memory:")
+    @db.model
+    class User:
+        id: str
+        name: str
+    await db.create_tables_async()
+    yield db
+    await db.close_async()
+```
+
+**Async Methods (v0.10.7+):**
+| Sync Method | Async Method |
+|-------------|--------------|
+| `create_tables()` | `create_tables_async()` |
+| `close()` | `close_async()` |
+| `_ensure_migration_tables()` | `_ensure_migration_tables_async()` |
+
+---
+
+### Pattern 7: Missing Connection (DF-101)
 
 **Issue**: Required parameter not provided and no connection established.
 
@@ -305,7 +370,7 @@ workflow.add_node("UserCreateNode", "create", {
 
 ---
 
-### Pattern 7: Type Mismatch (DF-102)
+### Pattern 8: Type Mismatch (DF-102)
 
 **Issue**: Passing wrong type to parameter.
 
@@ -361,6 +426,7 @@ Use this table to quickly identify error categories:
 | "Connection invalid" | DF-201 | Node doesn't exist or wrong parameter name |
 | "Migration failed" | DF-301 | Database permissions or `auto_migrate=False` |
 | "Schema mismatch" | DF-302 | Model changed but schema not updated |
+| "Sync Method in Async Context" | DF-501 | Use `create_tables_async()` in FastAPI/pytest |
 | "Missing .build()" | DF-803 | Forgot to call `.build()` on workflow |
 
 ---
