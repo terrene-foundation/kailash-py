@@ -133,6 +133,38 @@ results, run_id = runtime.execute(workflow.build())
 | `$lte` | `<=` | `{"price": {"$lte": 100}}` |
 | `$ne` | `!=` | `{"status": {"$ne": "inactive"}}` |
 | `$eq` | `=` | `{"active": {"$eq": true}}` (or just `{"active": true}`) |
+| `$null` | `IS NULL` | `{"deleted_at": {"$null": True}}` |
+| `$exists` | `IS NOT NULL` | `{"email": {"$exists": True}}` |
+
+### Null Checking Operators (v0.10.6+)
+
+**For soft-delete filtering and nullable field queries:**
+
+```python
+# Query for NULL values (e.g., non-deleted records)
+workflow.add_node("PatientListNode", "active_patients", {
+    "filter": {"deleted_at": {"$null": True}}  # WHERE deleted_at IS NULL
+})
+
+# Query for NOT NULL values
+workflow.add_node("PatientListNode", "deleted_patients", {
+    "filter": {"deleted_at": {"$exists": True}}  # WHERE deleted_at IS NOT NULL
+})
+
+# Alternative: $eq with None also works (v0.10.6+)
+workflow.add_node("PatientListNode", "active", {
+    "filter": {"deleted_at": {"$eq": None}}  # Also generates IS NULL
+})
+```
+
+**Common Pattern - Soft Delete Filtering:**
+```python
+# soft_delete: True only affects DELETE operations, NOT queries!
+# You MUST manually filter in queries:
+workflow.add_node("ModelListNode", "active_records", {
+    "filter": {"deleted_at": {"$null": True}}  # Exclude soft-deleted records
+})
+```
 
 ### Logical Operators
 
