@@ -15,7 +15,7 @@ When DataFlow models are registered, they create workflows that can interfere wi
 
 Use these two key settings:
 - **Nexus**: Set `auto_discovery=False` to prevent blocking
-- **DataFlow**: Set `skip_registry=True` and `enable_model_persistence=False` for fast startup
+- **DataFlow**: Set `enable_model_persistence=False` and `auto_migrate=False` for fast startup
 
 ## Tested Configuration Patterns
 
@@ -36,13 +36,12 @@ app = Nexus(
 
 db = DataFlow(
     database_url=os.environ["DATABASE_URL"],
-    skip_registry=True,  # Fast startup
-    enable_model_persistence=False,  # No workflow execution
-    auto_migrate=False,
+    enable_model_persistence=False,  # Skip model persistence for fast startup
+    auto_migrate=False,              # Skip auto table creation
     skip_migration=True,
-    enable_caching=True,  # Keep for performance
-    enable_metrics=True,  # Keep for monitoring
-    connection_pool_size=50  # High for concurrent requests
+    enable_caching=True,             # Keep for performance
+    enable_metrics=True,             # Keep for monitoring
+    connection_pool_size=50          # High for concurrent requests
 )
 
 @db.model
@@ -73,12 +72,11 @@ app = Nexus(
 
 db = DataFlow(
     database_url=os.environ["DATABASE_URL"],
-    skip_registry=True,
-    enable_model_persistence=False,
-    enable_caching=True,  # Critical for context
-    cache_ttl=3600,  # Long TTL for conversations
-    auto_migrate=False,
-    skip_migration=True
+    enable_model_persistence=False,  # Skip model persistence for fast startup
+    auto_migrate=False,              # Skip auto table creation
+    skip_migration=True,
+    enable_caching=True,             # Critical for context
+    cache_ttl=3600                   # Long TTL for conversations
 )
 
 @db.model
@@ -117,15 +115,14 @@ app = Nexus(
     auto_discovery=False
 )
 
-# Production would use: skip_registry=False, enable_model_persistence=True
+# Production would use: enable_model_persistence=True
 # But that adds 10-30s startup time
 db = DataFlow(
     database_url=os.environ["DATABASE_URL"],
-    skip_registry=True,  # Fast for testing
     enable_model_persistence=False,  # Fast for testing
-    auto_migrate=False,
+    auto_migrate=False,              # Skip auto table creation
     skip_migration=True,
-    enable_audit_log=True  # Keep audit features
+    enable_audit_log=True            # Keep audit features
 )
 
 @db.model
@@ -154,13 +151,12 @@ app = Nexus(
 
 db = DataFlow(
     database_url=os.environ["DATABASE_URL"],
-    skip_registry=True,
-    enable_model_persistence=False,
-    connection_pool_size=5,  # Small per instance
-    enable_metrics=False,  # Use K8s metrics
-    enable_caching=False,  # Use Redis separately
-    auto_migrate=False,
-    skip_migration=True
+    enable_model_persistence=False,  # Skip model persistence for fast startup
+    auto_migrate=False,              # Skip auto table creation
+    skip_migration=True,
+    connection_pool_size=5,          # Small per instance
+    enable_metrics=False,            # Use K8s metrics
+    enable_caching=False             # Use Redis separately
 )
 
 @db.model
@@ -188,10 +184,9 @@ from dataflow.core.engine import DataFlow
 # For production ETL, enable full features:
 db = DataFlow(
     database_url=os.environ["DATABASE_URL"],
-    skip_registry=False,  # Need migration tracking
-    enable_model_persistence=True,  # Need model history
-    enable_schema_discovery=True,  # Need introspection
-    auto_migrate=True,  # Core ETL feature
+    enable_model_persistence=True,   # Need model history
+    enable_schema_discovery=True,    # Need introspection
+    auto_migrate=True,               # Core ETL feature
     migration_lock_timeout=60
 )
 
@@ -223,12 +218,11 @@ app = Nexus(
 )
 
 db = DataFlow(
-    database_url="sqlite:///dev.db",  # Local SQLite
-    skip_registry=True,
-    enable_model_persistence=False,
-    auto_migrate=False,
+    database_url="sqlite:///dev.db",     # Local SQLite
+    enable_model_persistence=False,      # Skip model persistence for fast startup
+    auto_migrate=False,                  # Skip auto table creation
     skip_migration=True,
-    echo=True  # See SQL for debugging
+    echo=True                            # See SQL for debugging
 )
 
 @db.model
@@ -252,11 +246,10 @@ class TestModel:
 # Initialize DataFlow once at startup
 db = DataFlow(
     database_url=os.environ["DATABASE_URL"],
-    enable_model_persistence=False,  # Fast startup
-    multi_tenant=True,  # Enable multi-tenancy
-    skip_registry=True,  # Fast startup
-    auto_migrate=False,
-    skip_migration=True
+    enable_model_persistence=False,  # Skip model persistence for fast startup
+    auto_migrate=False,              # Skip auto table creation
+    skip_migration=True,
+    multi_tenant=True                # Enable multi-tenancy
 )
 
 @db.model
@@ -291,12 +284,11 @@ def create_tenant_app(tenant_id: str):
 from dataflow.core.engine import DataFlow
 
 db = DataFlow(
-    database_url="sqlite:///:memory:",  # In-memory
-    skip_registry=True,
-    enable_model_persistence=False,
-    auto_migrate=False,
+    database_url="sqlite:///:memory:",   # In-memory
+    enable_model_persistence=False,      # Skip model persistence for fast startup
+    auto_migrate=False,                  # Skip auto table creation
     skip_migration=True,
-    tdd_mode=True  # Test optimizations
+    tdd_mode=True                        # Test optimizations
 )
 
 @db.model
@@ -315,16 +307,16 @@ class TestEntity:
 
 ## Decision Matrix
 
-| Use Case | Skip Registry | Model Persistence | Auto-Migrate | Startup Time |
-|----------|--------------|-------------------|--------------|--------------|
-| **API Server** | ✅ Yes | ❌ No | ❌ No | <2s ✅ |
-| **Chatbot** | ✅ Yes | ❌ No | ❌ No | <2s ✅ |
-| **Admin Dashboard** | ❌ No* | ✅ Yes* | ✅ Yes* | 10-30s |
-| **Microservices** | ✅ Yes | ❌ No | ❌ No | <1.5s ✅ |
-| **ETL Tool** | ❌ No | ✅ Yes | ✅ Yes | 10-30s |
-| **Development** | ✅ Yes | ❌ No | ❌ No | <2s ✅ |
-| **Multi-Tenant** | ✅ Yes | ❌ No | ❌ No | <2s ✅ |
-| **CI/CD Tests** | ✅ Yes | ❌ No | ❌ No | <1s ✅ |
+| Use Case | Model Persistence | Auto-Migrate | Startup Time |
+|----------|-------------------|--------------|--------------|
+| **API Server** | ❌ No | ❌ No | <2s |
+| **Chatbot** | ❌ No | ❌ No | <2s |
+| **Admin Dashboard** | ✅ Yes* | ✅ Yes* | 10-30s |
+| **Microservices** | ❌ No | ❌ No | <1.5s |
+| **ETL Tool** | ✅ Yes | ✅ Yes | 10-30s |
+| **Development** | ❌ No | ❌ No | <2s |
+| **Multi-Tenant** | ❌ No | ❌ No | <2s |
+| **CI/CD Tests** | ❌ No | ❌ No | <1s |
 
 *For production admin dashboards and ETL tools, accept slower startup for full features
 
@@ -338,8 +330,8 @@ app = Nexus(auto_discovery=False)  # Prevents blocking
 
 # For DataFlow (fast startup)
 db = DataFlow(
-    skip_registry=True,
-    enable_model_persistence=False
+    enable_model_persistence=False,  # Skip model persistence for fast startup
+    auto_migrate=False               # Skip auto table creation
 )
 ```
 
@@ -383,8 +375,8 @@ db = DataFlow()  # persistence enabled by default
 # NEW (fast, non-blocking)
 app = Nexus(auto_discovery=False)
 db = DataFlow(
-    skip_registry=True,
-    enable_model_persistence=False
+    enable_model_persistence=False,  # Skip model persistence for fast startup
+    auto_migrate=False               # Skip auto table creation
 )
 ```
 
@@ -394,13 +386,13 @@ db = DataFlow(
 **Solution**: Ensure `auto_discovery=False` in Nexus
 
 ### Issue: 5-10 second delay per model
-**Solution**: Set `skip_registry=True` and `enable_model_persistence=False` in DataFlow
+**Solution**: Set `enable_model_persistence=False` and `auto_migrate=False` in DataFlow
 
 ### Issue: Models not found after restart
 **Expected**: Without persistence, models must be re-registered on each startup
 
 ### Issue: Migrations not tracked
-**Expected**: With `skip_registry=True`, use external migration tools (Alembic, Flyway)
+**Expected**: With `auto_migrate=False`, use external migration tools (Alembic, Flyway)
 
 ## Full Featured Configuration
 
@@ -421,7 +413,6 @@ db = DataFlow(
     database_url="postgresql://user:pass@localhost/db",
 
     # FULL FEATURES (causes slower startup)
-    skip_registry=False,              # ✅ Model registry (+5s)
     enable_model_persistence=True,    # ✅ Model persistence (+2s/model)
     auto_migrate=True,                # ✅ Auto-migration (+5s)
     skip_migration=False,             # ✅ Migration tracking
@@ -512,7 +503,7 @@ The DataFlow + Nexus integration has three main options:
 
 1. **Fast Configuration (<2s)**: For production APIs needing quick restarts
    - `Nexus(auto_discovery=False)`
-   - `DataFlow(skip_registry=True, enable_model_persistence=False)`
+   - `DataFlow(enable_model_persistence=False, auto_migrate=False)`
 
 2. **Full Featured (10-30s)**: For admin tools needing all features
    - Initialize DataFlow first with all features enabled

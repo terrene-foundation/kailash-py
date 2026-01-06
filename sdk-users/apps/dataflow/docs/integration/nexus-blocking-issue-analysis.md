@@ -85,10 +85,9 @@ from dataflow.core.engine import DataFlow
 
 db = DataFlow(
     database_url="postgresql://user:pass@host:port/db",
-    auto_migrate=False,       # Control migrations manually
-    skip_migration=True,      # Skip auto-migration for faster startup
-    skip_registry=False,      # Keep registry for production features
-    enable_model_persistence=True,  # Enable multi-app support
+    auto_migrate=False,              # Control migrations manually
+    skip_migration=True,             # Skip auto-migration for faster startup
+    enable_model_persistence=True,   # Enable model persistence for multi-app support
     connection_pool_size=20,
     enable_metrics=True,
     enable_caching=True
