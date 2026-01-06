@@ -188,11 +188,10 @@ from kailash.workflow.builder import WorkflowBuilder
 # Step 1: Create Nexus with auto_discovery=False
 app = Nexus(auto_discovery=False)
 
-# Step 2: Create DataFlow with skip_registry=True
+# Step 2: Create DataFlow with enable_model_persistence=False
 db = DataFlow(
     "postgresql://localhost/db",
-    skip_registry=True,  # Prevents 5-10s delay
-    enable_model_persistence=False
+    enable_model_persistence=False  # Prevents 5-10s delay, fast startup
 )
 
 @db.model

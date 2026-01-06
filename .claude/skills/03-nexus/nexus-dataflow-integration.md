@@ -1,6 +1,6 @@
 ---
 skill: nexus-dataflow-integration
-description: CRITICAL DataFlow + Nexus integration patterns with blocking fix configuration (auto_discovery=False, skip_registry=True)
+description: CRITICAL DataFlow + Nexus integration patterns with blocking fix configuration (auto_discovery=False, enable_model_persistence=False)
 priority: CRITICAL
 tags: [nexus, dataflow, integration, blocking-fix, performance]
 ---
@@ -31,8 +31,7 @@ app = Nexus(
 # Step 2: Create DataFlow with optimized settings
 db = DataFlow(
     database_url="postgresql://user:pass@host:port/db",
-    skip_registry=True,              # CRITICAL: Skip model registry
-    enable_model_persistence=False,  # CRITICAL: Disable persistence
+    enable_model_persistence=False,  # CRITICAL: Skip model registry for fast startup
     auto_migrate=False,
     skip_migration=True
 )
@@ -61,31 +60,27 @@ app.start()
 - Eliminates infinite blocking issue
 - **When to use**: Always when integrating with DataFlow
 
-### `skip_registry=True` (DataFlow)
+### `enable_model_persistence=False` (DataFlow)
 - Skips creating registry tables in database
 - Avoids synchronous workflow execution during init
-- Models still work normally for CRUD operations
-- **Impact**: <0.1s per model vs 5-10s with registry
-
-### `enable_model_persistence=False` (DataFlow)
 - Disables persisting model metadata to database
 - Prevents workflow execution for each model registration
-- Models stored in memory only
-- **Impact**: Instant model registration
+- Models stored in memory only, still work normally for CRUD operations
+- **Impact**: <0.1s per model vs 5-10s with registry, instant model registration
 
 ## Performance Comparison
 
 ### With Default Settings
 ```
 Nexus init: 1-2s
-DataFlow init with persistence: 5-10s per model
+DataFlow init with enable_model_persistence=True: 5-10s per model
 Total for 3 models: 15-30s
 ```
 
-### With Optimized Settings
+### With Optimized Settings (enable_model_persistence=False)
 ```
 Nexus init: <1s
-DataFlow init without persistence: <0.1s per model
+DataFlow init with enable_model_persistence=False: <0.1s per model
 Total for 3 models: <2s
 ```
 
@@ -105,8 +100,7 @@ app = Nexus(
 
 db = DataFlow(
     database_url="postgresql://localhost:5432/mydb",
-    skip_registry=True,              # CRITICAL
-    enable_model_persistence=False,  # CRITICAL
+    enable_model_persistence=False,  # CRITICAL: Skip model registry for fast startup
     auto_migrate=False,
     skip_migration=True,
     enable_metrics=True,  # Keep monitoring
@@ -191,8 +185,7 @@ app = Nexus(
 
 db = DataFlow(
     database_url="postgresql://localhost:5432/mydb",
-    skip_registry=False,             # Enable registry
-    enable_model_persistence=True,   # Enable persistence
+    enable_model_persistence=True,   # Enable persistence (slower startup)
     auto_migrate=True,
     skip_migration=False
 )
@@ -260,8 +253,7 @@ def create_production_app():
 
     db = DataFlow(
         database_url=os.getenv("DATABASE_URL"),
-        skip_registry=True,
-        enable_model_persistence=False,
+        enable_model_persistence=False,  # Skip model registry for fast startup
         auto_migrate=False,
         skip_migration=True,
         enable_metrics=True,
@@ -286,7 +278,7 @@ app = create_production_app()
 ```python
 # Ensure both settings are configured
 app = Nexus(auto_discovery=False)
-db = DataFlow(skip_registry=True, enable_model_persistence=False)
+db = DataFlow(enable_model_persistence=False)
 ```
 
 ### Blocking on Start
@@ -319,7 +311,7 @@ def test_nexus_dataflow_integration():
     start_time = time.time()
 
     app = Nexus(auto_discovery=False)
-    db = DataFlow(skip_registry=True, enable_model_persistence=False)
+    db = DataFlow(enable_model_persistence=False)
 
     @db.model
     class TestModel:
@@ -345,8 +337,7 @@ def test_nexus_dataflow_integration():
 ## Key Takeaways
 
 - **CRITICAL**: Use `auto_discovery=False` with DataFlow
-- **CRITICAL**: Use `skip_registry=True` for fast startup
-- **CRITICAL**: Use `enable_model_persistence=False` for instant models
+- **CRITICAL**: Use `enable_model_persistence=False` for fast startup and instant models
 - Optimized config: <2s startup
 - Full features config: 10-30s startup
 - All CRUD operations work with both configs
