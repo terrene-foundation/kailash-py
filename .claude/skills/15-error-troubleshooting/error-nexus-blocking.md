@@ -53,11 +53,10 @@ app = Nexus(
     auto_discovery=False  # CRITICAL: Prevents blocking
 )
 
-# Step 2: Create DataFlow with skip_registry=True
+# Step 2: Create DataFlow with enable_model_persistence=False
 db = DataFlow(
     "postgresql://user:pass@localhost/db",
-    skip_registry=True,             # CRITICAL: Prevents 5-10s delay per model
-    enable_model_persistence=False  # Fast startup
+    enable_model_persistence=False  # CRITICAL: Prevents 5-10s delay per model, fast startup
 )
 
 # Step 3: Define models (now instant!)
@@ -111,8 +110,7 @@ app = Nexus(
 
 db = DataFlow(
     "postgresql://...",
-    skip_registry=False,            # Enable full features
-    enable_model_persistence=True,  # Model persistence
+    enable_model_persistence=True,  # Enable full features (slower startup)
     auto_migrate=True               # Auto migrations
 )
 
@@ -146,9 +144,9 @@ Use `nexus-specialist` subagent when:
 
 ## Quick Tips
 
-- 💡 **Two critical settings**: `auto_discovery=False` + `skip_registry=True`
+- 💡 **Two critical settings**: `auto_discovery=False` + `enable_model_persistence=False`
 - 💡 **Order matters**: Create Nexus FIRST, then DataFlow
 - 💡 **Manual registration**: Register workflows explicitly with `app.register()`
-- 💡 **Fast is fine**: <2s startup with skip_registry is production-ready
+- 💡 **Fast is fine**: <2s startup with enable_model_persistence=False is production-ready
 
 <!-- Trigger Keywords: Nexus blocking, Nexus slow startup, Nexus hangs, DataFlow Nexus integration slow, startup delay, Nexus initialization slow, blocking on startup, slow Nexus, integration blocking -->
