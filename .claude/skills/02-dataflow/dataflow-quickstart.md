@@ -326,13 +326,12 @@ from kailash.workflow.builder import WorkflowBuilder
 # Step 1: Create Nexus FIRST with auto_discovery=False
 app = Nexus(auto_discovery=False)  # CRITICAL: Prevents blocking
 
-# Step 2: Create DataFlow with skip_registry=True
+# Step 2: Create DataFlow with enable_model_persistence=False
 db = DataFlow(
     "postgresql://user:pass@localhost/db",
-    skip_registry=True,           # CRITICAL: Prevents 5-10s delay
-    enable_model_persistence=False,  # Fast startup
-    auto_migrate=False,           # v0.9.1: Prevents async deadlock
-    migration_enabled=False        # v0.9.1: Prevents async deadlock
+    enable_model_persistence=False,  # CRITICAL: Prevents 5-10s delay, fast startup
+    auto_migrate=False,              # v0.9.1: Prevents async deadlock
+    migration_enabled=False          # v0.9.1: Prevents async deadlock
 )
 
 # Step 3: Define models
@@ -397,6 +396,6 @@ Use `nexus-specialist` when:
 - 💡 **MongoDB queries**: Use familiar syntax that works across all SQL databases (PostgreSQL/MySQL/SQLite)
 - 💡 **String IDs**: Fully supported - no forced integer conversion
 - 💡 **Existing databases**: Use `existing_schema_mode=True` for safety
-- 💡 **Nexus integration**: Set `skip_registry=True` + `auto_discovery=False` to avoid blocking
+- 💡 **Nexus integration**: Set `enable_model_persistence=False` + `auto_discovery=False` to avoid blocking
 
 <!-- Trigger Keywords: DataFlow tutorial, DataFlow quick start, @db.model, DataFlow setup, database framework, how to use DataFlow, DataFlow installation, DataFlow guide, zero-config database, automatic node generation, DataFlow example, start with DataFlow -->
