@@ -344,8 +344,7 @@ app = Nexus(
 # Step 2: Create DataFlow with optimized settings
 db = DataFlow(
     database_url="postgresql://...",
-    skip_registry=True,  # CRITICAL: Prevents 5-10s delay per model
-    enable_model_persistence=False,  # No workflow execution during init
+    enable_model_persistence=False,  # CRITICAL: Prevents 5-10s delay per model
     auto_migrate=False,
     skip_migration=True
 )
