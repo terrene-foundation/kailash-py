@@ -15,8 +15,8 @@ Common misunderstandings and mistakes when using DataFlow, with solutions.
 
 ## Quick Reference
 
-- **✅ Docker/FastAPI (v0.10.6+)**: `auto_migrate=True` now works transparently via `async_safe_run`
-- **🚨 Sync methods in async context (DF-501)**: Use `create_tables_async()` if you prefer explicit control
+- **⚠️ Docker/FastAPI**: `auto_migrate=False` + `create_tables_async()` **REQUIRED** (event loop boundary issue)
+- **🚨 Sync methods in async context (DF-501)**: Use `create_tables_async()` in FastAPI lifespan
 - **🚨 Timestamp fields auto-stripped (v0.10.6+)**: `created_at`/`updated_at` auto-removed with warning
 - **soft_delete auto-filters (v0.10.6+)**: Use `include_deleted=True` to see deleted records
 - **NOT an ORM**: DataFlow is workflow-native, not like SQLAlchemy
@@ -154,64 +154,52 @@ if __name__ == "__main__":
 
 ---
 
-### ✅ #2.5: Docker Deployment - Now Works Transparently (v0.10.6+)
+### ⚠️ #2.5: Docker/FastAPI Deployment (CRITICAL)
 
-**FIXED IN v0.10.6**: `auto_migrate=True` (default) now works in Docker/FastAPI thanks to `async_safe_run()` utility that transparently bridges sync/async contexts.
+**`auto_migrate=False` + `create_tables_async()` is REQUIRED for Docker/FastAPI.**
 
-#### The Simple Docker Pattern (v0.10.6+)
+Despite `async_safe_run()` being implemented in v0.10.7+, `auto_migrate=True` **STILL FAILS** due to fundamental asyncio limitations:
+- Database connections are event-loop-bound in asyncio
+- `async_safe_run` creates a NEW event loop in thread pool when uvicorn's loop is running
+- Connections created there are bound to the wrong loop
+- Later, FastAPI routes fail: "Task got Future attached to a different loop"
+
+#### The REQUIRED Docker Pattern
 ```python
 from dataflow import DataFlow
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-# v0.10.6+: auto_migrate=True works transparently!
-db = DataFlow("postgresql://...", auto_migrate=True)
+# CRITICAL: Use auto_migrate=False to prevent sync table creation at import time
+db = DataFlow("postgresql://...", auto_migrate=False)
 
-@db.model  # Tables created automatically via async_safe_run
+@db.model  # Models registered but NO tables created (safe!)
 class User:
     id: str
     name: str
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await db.initialize()  # Optional: ensures ready
+    await db.create_tables_async()  # Tables created in FastAPI's event loop
     yield
     await db.close_async()
 
 app = FastAPI(lifespan=lifespan)
 ```
 
-#### Legacy Pattern (Still Works)
-If you prefer explicit control:
-```python
-db = DataFlow("postgresql://...", auto_migrate=False)
-
-@db.model  # Models registered, but NO tables created
-class User:
-    id: str
-    name: str
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await db.create_tables_async()  # Tables created explicitly
-    yield
-    await db.close_async()
-```
-
 #### When to Use Each Pattern
 | Context | Pattern | Notes |
 |---------|---------|-------|
-| **Docker/FastAPI** | `auto_migrate=True` (default) | Works transparently in v0.10.6+ |
-| **CLI Scripts** | `auto_migrate=True` (default) | No change needed |
-| **pytest (sync)** | `auto_migrate=True` (default) | No change needed |
-| **pytest (async)** | `auto_migrate=True` (default) | Works transparently in v0.10.6+ |
+| **Docker/FastAPI** | `auto_migrate=False` + `create_tables_async()` | **REQUIRED** - event loop boundary issue |
+| **CLI Scripts** | `auto_migrate=True` (default) | No event loop running |
+| **pytest (sync)** | `auto_migrate=True` (default) | No event loop running |
+| **pytest (async)** | `auto_migrate=False` + `create_tables_async()` | Same as Docker/FastAPI |
 
-#### Technical Details (Phase 6)
-The `async_safe_run()` utility detects running event loops and:
-- **Sync context**: Uses `asyncio.run()` directly
-- **Async context**: Runs in thread pool with separate event loop
-- Recursion protection prevents infinite loops
-- Thread-safe with proper cleanup
+#### Why async_safe_run Doesn't Fix This
+The `async_safe_run()` utility detects running event loops and runs coroutines in a thread pool with a separate event loop. However:
+- **Database connections are bound to the event loop they're created in**
+- Connections created in the thread pool's loop **cannot** be used in uvicorn's main loop
+- This is a fundamental asyncio limitation, not a bug in the code
 
 ---
 

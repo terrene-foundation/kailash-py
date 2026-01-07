@@ -378,21 +378,29 @@ from kailash.runtime import get_runtime
 runtime = get_runtime("async")  # or "sync"
 ```
 
-## 🐳 DataFlow Docker Deployment (v0.10.6+)
+## 🐳 DataFlow Docker Deployment (CRITICAL)
 
-### ✅ auto_migrate=True Now Works in Docker/FastAPI!
+### ⚠️ auto_migrate=False is REQUIRED for Docker/FastAPI
 
-As of **v0.10.6+**, DataFlow uses `async_safe_run()` internally to handle async/sync context bridging transparently. You can now use `auto_migrate=True` (the default) in Docker/FastAPI deployments without issues.
+**IMPORTANT**: Despite `async_safe_run()` being implemented in v0.10.7+, `auto_migrate=True` **STILL FAILS** in Docker/FastAPI due to fundamental asyncio limitations:
+
+- **Problem**: Database connections are event-loop-bound in asyncio
+- **At import time**: uvicorn's event loop is already running
+- **async_safe_run creates a NEW event loop** in a thread pool for table creation
+- **Connections created there are bound to the wrong loop**
+- **Later, FastAPI routes fail**: "Task got Future attached to a different loop"
+
+### ✅ The ONLY Reliable Pattern for Docker/FastAPI
 
 ```python
 from dataflow import DataFlow
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
-# v0.10.6+: auto_migrate=True works in async contexts!
-db = DataFlow("postgresql://...", auto_migrate=True)
+# CRITICAL: Use auto_migrate=False to prevent sync table creation at import time
+db = DataFlow("postgresql://...", auto_migrate=False)
 
-@db.model
+@db.model  # Models registered but NO tables created here (safe!)
 class User:
     id: str
     name: str
@@ -400,30 +408,22 @@ class User:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Optional: explicit async initialization for control
-    await db.initialize()  # Tables already created by auto_migrate
+    # Create tables in FastAPI's event loop - this is the ONLY safe place
+    await db.create_tables_async()
     yield
     await db.close_async()
 
 app = FastAPI(lifespan=lifespan)
 ```
 
-### Legacy Pattern (if you prefer explicit control)
-
-```python
-db = DataFlow("postgresql://...", auto_migrate=False)
-# Then call await db.create_tables_async() in lifespan
-```
-
 ### When to Use Each Pattern
 
 | Context | Pattern | Reason |
 |---------|---------|--------|
-| **Docker/FastAPI (v0.10.6+)** | `auto_migrate=True` | async_safe_run handles bridging |
-| **Docker/FastAPI (legacy)** | `auto_migrate=False` + `create_tables_async()` | Explicit control |
+| **Docker/FastAPI** | `auto_migrate=False` + `create_tables_async()` | **REQUIRED** - event loop boundary issue |
 | **CLI Scripts** | `auto_migrate=True` (default) | No event loop, sync is safe |
 | **pytest (sync)** | `auto_migrate=True` (default) | No async fixtures |
-| **pytest (async)** | Either pattern works | async_safe_run handles both |
+| **pytest (async)** | `auto_migrate=False` + `create_tables_async()` | Same as FastAPI |
 
 ### DataFlow Express (23x Faster CRUD)
 
@@ -441,30 +441,30 @@ deleted = await db.express.delete("User", "user-123")
 # Performance: ~0.27ms vs ~6.3ms per operation
 ```
 
-### Complete FastAPI + DataFlow Example (v0.10.6+)
+### Complete FastAPI + DataFlow Example
 
 ```python
 from dataflow import DataFlow
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-# Step 1: Initialize with auto_migrate=True (works in v0.10.6+!)
+# Step 1: Initialize with auto_migrate=False (REQUIRED for Docker/FastAPI!)
 db = DataFlow(
     "postgresql://user:pass@localhost:5432/mydb",
-    auto_migrate=True  # Works transparently in Docker/FastAPI
+    auto_migrate=False  # CRITICAL: Prevents sync table creation at import time
 )
 
-# Step 2: Register models (tables created automatically)
+# Step 2: Register models (NO tables created - safe!)
 @db.model
 class User:
     id: str
     name: str
     email: str
 
-# Step 3: Optional lifespan for explicit control
+# Step 3: Create tables in lifespan (REQUIRED - this is the ONLY safe place)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await db.initialize()  # Optional: tables already created by auto_migrate
+    await db.create_tables_async()  # Tables created in FastAPI's event loop
     yield
     await db.close_async()
 

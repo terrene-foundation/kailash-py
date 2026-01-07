@@ -1,7 +1,7 @@
 # Kailash DataFlow - Complete Function Access Guide (v0.10.10 Stable)
 
 **Current Version: v0.10.10 - Production Ready**
-- **🚀 ASYNC-SAFE AUTO-MIGRATE (v0.10.7+)**: `auto_migrate=True` now works transparently in Docker/FastAPI via `async_safe_run()`
+- **⚠️ DOCKER/FASTAPI**: `auto_migrate=False` + `create_tables_async()` is **REQUIRED** (async_safe_run cannot fix event loop boundary issue)
 - **🚀 SOFT DELETE AUTO-FILTER (v0.10.6)**: soft_delete models now auto-filter queries - use `include_deleted=True` to override
 - **🚀 TIMESTAMP AUTO-STRIP (v0.10.6)**: `created_at`/`updated_at` now auto-stripped with warning (no more DF-104 errors!)
 - **PYTEST COMPATIBILITY**: Fixed model registration race condition (v0.9.7)
