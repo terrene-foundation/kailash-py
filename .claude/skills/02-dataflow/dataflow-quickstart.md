@@ -401,5 +401,6 @@ Use `nexus-specialist` when:
 - 💡 **String IDs**: Fully supported - no forced integer conversion
 - 💡 **Existing databases**: Use `existing_schema_mode=True` for safety
 - 💡 **Nexus integration**: Set `enable_model_persistence=False` + `auto_discovery=False` to avoid blocking
+- 💡 **Clean logs (v0.10.12+)**: Use `LoggingConfig.production()` for production, `LoggingConfig.development()` for debugging
 
 <!-- Trigger Keywords: DataFlow tutorial, DataFlow quick start, @db.model, DataFlow setup, database framework, how to use DataFlow, DataFlow installation, DataFlow guide, zero-config database, automatic node generation, DataFlow example, start with DataFlow -->

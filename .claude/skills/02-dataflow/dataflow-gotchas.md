@@ -18,6 +18,7 @@ Common misunderstandings and mistakes when using DataFlow, with solutions.
 - **⚠️ Docker/FastAPI**: `auto_migrate=False` + `create_tables_async()` **REQUIRED** (event loop boundary issue)
 - **🚨 Sync methods in async context (DF-501)**: Use `create_tables_async()` in FastAPI lifespan
 - **🚨 Timestamp fields auto-stripped (v0.10.6+)**: `created_at`/`updated_at` auto-removed with warning
+- **🔇 Logging configuration (v0.10.12+)**: Use `LoggingConfig` for clean logs - `db = DataFlow(..., log_config=LoggingConfig.production())`
 - **soft_delete auto-filters (v0.10.6+)**: Use `include_deleted=True` to see deleted records
 - **NOT an ORM**: DataFlow is workflow-native, not like SQLAlchemy
 - **Primary Key MUST be `id`**: NOT `user_id`, `model_id`, or anything else
