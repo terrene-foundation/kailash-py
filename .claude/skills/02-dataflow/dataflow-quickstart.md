@@ -271,21 +271,20 @@ async def create_user():
 
 ### FastAPI Integration
 
-**✅ FIXED in v0.9.5+**: All async context deadlocks resolved. No workarounds needed!
+**⚠️ Docker/FastAPI Requires `auto_migrate=False`**: Due to event loop boundary issues, you must use the lifespan pattern.
 
 ```python
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 import uuid
 
-app = FastAPI()
-
-# ✅ Works in v0.9.5+ - No workaround needed!
+# ⚠️ CRITICAL: auto_migrate=False is REQUIRED for Docker/FastAPI
 db = DataFlow(
     "postgresql://localhost:5432/mydb",
-    auto_migrate=True  # Safe in FastAPI/async contexts
+    auto_migrate=False  # REQUIRED - auto_migrate=True fails in Docker/FastAPI
 )
 
 @db.model
@@ -293,6 +292,14 @@ class User:
     id: str
     name: str
     email: str
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await db.create_tables_async()  # Create tables in FastAPI's event loop
+    yield
+    await db.close_async()
+
+app = FastAPI(lifespan=lifespan)
 
 @app.post("/users")
 async def create_user(name: str, email: str):
@@ -308,12 +315,8 @@ async def create_user(name: str, email: str):
     return results["create"]
 ```
 
-**What Changed in v0.9.5**:
-- All DDL operations now use context-safe runtime execution
-- Fixed 18 locations across ModelRegistry, migration system, schema inspectors, and testing utilities
-
-**⚠️ Docker/FastAPI Still Requires Manual Pattern**:
-Despite async_safe_run() improvements, `auto_migrate=False` + `create_tables_async()` in lifespan is **REQUIRED** for Docker/FastAPI due to event loop boundary limitations (connections created in thread pool's loop cannot be used in uvicorn's loop).
+**⚠️ Docker/FastAPI REQUIRES Manual Pattern**:
+`auto_migrate=False` + `create_tables_async()` in lifespan is **REQUIRED** for Docker/FastAPI due to event loop boundary limitations. Database connections are bound to the event loop they're created in - connections from async_safe_run's thread pool cannot be used in uvicorn's main loop.
 
 ## DataFlow + Nexus Integration
 
