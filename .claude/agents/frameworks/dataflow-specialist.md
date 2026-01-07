@@ -231,58 +231,49 @@ workflow.add_node("UserUpdateNode", "update", {
 - **Pattern**: Create new `LocalRuntime()` for each `workflow.build()` execution
 - **Impact**: This prevents event loop conflicts, especially with async operations
 
-**4a. Docker/FastAPI Deployment (v0.10.6+ Phase 6)**
+**4a. Docker/FastAPI Deployment (CRITICAL)**
 
-✅ **SOLVED IN v0.10.6+**: Phase 6 introduced `async_safe_run()` which transparently bridges sync/async contexts. `auto_migrate=True` now works in Docker/FastAPI!
+⚠️ **`auto_migrate=False` + `create_tables_async()` is REQUIRED for Docker/FastAPI.**
 
-**NEW RECOMMENDED PATTERN (v0.10.6+):**
+Despite `async_safe_run()` being implemented in v0.10.7+, `auto_migrate=True` **STILL FAILS** due to fundamental asyncio limitations:
+- Database connections are event-loop-bound in asyncio
+- `async_safe_run` creates a NEW event loop in thread pool when uvicorn's loop is running
+- Connections created there are bound to the wrong loop
+- Later, FastAPI routes fail: "Task got Future attached to a different loop"
+
+**THE ONLY RELIABLE PATTERN FOR DOCKER/FASTAPI:**
 ```python
 from dataflow import DataFlow
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-# v0.10.6+: auto_migrate=True works in async contexts!
-db = DataFlow("postgresql://...", auto_migrate=True)
+# CRITICAL: Use auto_migrate=False to prevent sync table creation at import time
+db = DataFlow("postgresql://...", auto_migrate=False)
 
-@db.model  # Tables created safely via async_safe_run
+@db.model  # Models registered but NO tables created (safe!)
 class User:
     id: str
     name: str
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await db.initialize()  # Optional: explicit init for control
+    await db.create_tables_async()  # Tables created in FastAPI's event loop
     yield
     await db.close_async()
 
 app = FastAPI(lifespan=lifespan)
 ```
 
-**LEGACY PATTERN (still works if you prefer explicit control):**
-```python
-db = DataFlow("postgresql://...", auto_migrate=False)
-# Then use: await db.create_tables_async() in lifespan
-```
-
 **When to Use Each Pattern:**
 | Context | Pattern | Reason |
 |---------|---------|--------|
-| **Docker/FastAPI (v0.10.6+)** | `auto_migrate=True` | async_safe_run handles bridging |
-| **Docker/FastAPI (legacy)** | `auto_migrate=False` + `create_tables_async()` | Explicit control |
+| **Docker/FastAPI** | `auto_migrate=False` + `create_tables_async()` | **REQUIRED** - event loop boundary issue |
 | **CLI Scripts** | `auto_migrate=True` (default) | No event loop, sync is safe |
 | **pytest (sync)** | `auto_migrate=True` (default) | No async fixtures |
-| **pytest (async)** | Either pattern works | async_safe_run handles both |
+| **pytest (async)** | `auto_migrate=False` + `create_tables_async()` | Same as Docker/FastAPI |
 
-**Internal: async_safe_run utility** (for custom sync→async bridging):
-```python
-from dataflow.core.async_utils import async_safe_run
-
-async def my_async_op():
-    return await some_async_call()
-
-# Works in both sync contexts (CLI) and async contexts (FastAPI)
-result = async_safe_run(my_async_op())
-```
+**Why async_safe_run Doesn't Fix Docker/FastAPI:**
+The `async_safe_run()` utility runs coroutines in a thread pool with a separate event loop when uvicorn's loop is detected. However, database connections are bound to the event loop they're created in - connections from the thread pool's loop **cannot** be used in uvicorn's main loop. This is a fundamental asyncio limitation.
 
 **Use DataFlow Express for API endpoints (23x faster):**
 ```python

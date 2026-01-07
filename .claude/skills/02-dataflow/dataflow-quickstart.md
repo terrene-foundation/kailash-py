@@ -310,9 +310,10 @@ async def create_user(name: str, email: str):
 
 **What Changed in v0.9.5**:
 - All DDL operations now use context-safe runtime execution
-- `auto_migrate=True` works safely in FastAPI/async applications
-- No manual table creation needed
 - Fixed 18 locations across ModelRegistry, migration system, schema inspectors, and testing utilities
+
+**⚠️ Docker/FastAPI Still Requires Manual Pattern**:
+Despite async_safe_run() improvements, `auto_migrate=False` + `create_tables_async()` in lifespan is **REQUIRED** for Docker/FastAPI due to event loop boundary limitations (connections created in thread pool's loop cannot be used in uvicorn's loop).
 
 ## DataFlow + Nexus Integration
 
