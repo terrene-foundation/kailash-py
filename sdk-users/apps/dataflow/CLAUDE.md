@@ -1,6 +1,7 @@
-# Kailash DataFlow - Complete Function Access Guide (v0.10.11 Stable)
+# Kailash DataFlow - Complete Function Access Guide (v0.10.12 Stable)
 
-**Current Version: v0.10.11 - Production Ready**
+**Current Version: v0.10.12 - Production Ready**
+- **🔇 LOGGING CONFIGURATION (v0.10.12)**: `LoggingConfig` for centralized log level control - 524 noisy warnings eliminated
 - **⚠️ DOCKER/FASTAPI**: `auto_migrate=False` + `create_tables_async()` is **REQUIRED** (sync DDL architecture in v0.10.11 uses psycopg2 for migrations but event loop boundary still applies)
 - **🚀 SOFT DELETE AUTO-FILTER (v0.10.6)**: soft_delete models now auto-filter queries - use `include_deleted=True` to override
 - **🚀 TIMESTAMP AUTO-STRIP (v0.10.6)**: `created_at`/`updated_at` now auto-stripped with warning (no more DF-104 errors!)
@@ -93,6 +94,102 @@ workflow.add_node("PatientListNode", "active", {
 ```
 
 **⚠️ Important**: `soft_delete: True` in model config ONLY affects DeleteNode operations. It does NOT auto-filter queries. You MUST manually add `deleted_at` filters to ListNode/ReadNode queries.
+
+## 🔇 CENTRALIZED LOGGING CONFIGURATION (v0.10.12 - NEW)
+
+Control log verbosity with `LoggingConfig` for cleaner output. Eliminates 524+ noisy diagnostic messages that were incorrectly logged at WARNING level.
+
+### Quick Usage
+```python
+import logging
+from dataflow import DataFlow, LoggingConfig
+
+# Option 1: Simple log level (quick control)
+db = DataFlow("postgresql://...", log_level=logging.WARNING)
+
+# Option 2: Full configuration object
+config = LoggingConfig.production()  # Only WARNING and above
+db = DataFlow("postgresql://...", log_config=config)
+
+# Option 3: Environment variables (12-factor app pattern)
+# Set in .env or shell:
+# DATAFLOW_LOG_LEVEL=WARNING
+# DATAFLOW_NODE_EXECUTION_LOG_LEVEL=ERROR
+# DATAFLOW_SQL_GENERATION_LOG_LEVEL=WARNING
+config = LoggingConfig.from_env()
+db = DataFlow("postgresql://...", log_config=config)
+```
+
+### Configuration Presets
+
+| Preset | Behavior | Use Case |
+|--------|----------|----------|
+| `LoggingConfig.production()` | Only WARNING+ | Production deployments |
+| `LoggingConfig.development()` | DEBUG for all | Local development |
+| `LoggingConfig.quiet()` | Only ERROR+ | Testing with minimal output |
+| `LoggingConfig.from_env()` | Environment-based | Docker/Kubernetes |
+
+### Category-Specific Logging
+
+Fine-grained control over different subsystems:
+
+```python
+import logging
+from dataflow import LoggingConfig
+
+config = LoggingConfig(
+    level=logging.WARNING,           # Default for all categories
+    node_execution=logging.ERROR,    # Node execution traces (only errors)
+    sql_generation=logging.WARNING,  # SQL generation diagnostics
+    list_operations=logging.WARNING, # ListNode field ordering info
+    migration=logging.INFO,          # Migration operations
+    core=logging.WARNING             # Core DataFlow operations
+)
+```
+
+### Sensitive Value Masking
+
+Automatic security for logged data:
+
+```python
+from dataflow import LoggingConfig, mask_sensitive
+
+config = LoggingConfig(
+    mask_sensitive_values=True,
+    sensitive_patterns=["password", "api_key", "secret", "token", "authorization"]
+)
+
+# Usage
+data = {"username": "alice", "password": "secret123", "api_key": "sk-xxx"}
+masked = mask_sensitive(data, config)
+# Result: {'username': 'alice', 'password': '***MASKED***', 'api_key': '***MASKED***'}
+```
+
+### Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `DATAFLOW_LOG_LEVEL` | Default level | `WARNING`, `INFO`, `DEBUG` |
+| `DATAFLOW_NODE_EXECUTION_LOG_LEVEL` | Node execution | `ERROR` |
+| `DATAFLOW_SQL_GENERATION_LOG_LEVEL` | SQL generation | `WARNING` |
+| `DATAFLOW_LIST_OPERATIONS_LOG_LEVEL` | List operations | `WARNING` |
+| `DATAFLOW_MIGRATION_LOG_LEVEL` | Migrations | `INFO` |
+| `DATAFLOW_CORE_LOG_LEVEL` | Core operations | `WARNING` |
+| `DATAFLOW_MASK_SENSITIVE` | Enable masking | `true`, `1` |
+
+### Programmatic Control
+
+```python
+from dataflow import configure_dataflow_logging, restore_dataflow_logging
+
+# Apply configuration manually (useful for testing)
+configure_dataflow_logging(LoggingConfig.quiet())
+
+# Restore original logging levels
+restore_dataflow_logging()
+```
+
+---
 
 ## 🛠️ DEVELOPER EXPERIENCE TOOLS (v0.8.0 - NEW)
 

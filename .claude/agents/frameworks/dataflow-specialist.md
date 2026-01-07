@@ -68,6 +68,26 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 | **Global enable** | `DataFlow.enable_test_mode()` | Session-wide |
 | **With aggressive cleanup** | `db = DataFlow("postgresql://...", test_mode=True, test_mode_aggressive_cleanup=True)` | Maximum isolation |
 
+### 🔇 Logging Configuration (v0.10.12+)
+| Preset | Config | Use Case |
+|--------|--------|----------|
+| **Production** | `log_config=LoggingConfig.production()` | Clean logs, WARNING+ |
+| **Development** | `log_config=LoggingConfig.development()` | Verbose, DEBUG |
+| **Quiet** | `log_config=LoggingConfig.quiet()` | ERROR only |
+| **Environment** | `log_config=LoggingConfig.from_env()` | 12-factor apps |
+| **Simple** | `log_level=logging.WARNING` | Quick override |
+
+**Category-specific logging:**
+```python
+config = LoggingConfig(
+    level=logging.WARNING,           # Default
+    node_execution=logging.ERROR,    # Node traces
+    sql_generation=logging.WARNING,  # SQL generation
+    migration=logging.INFO           # Migrations
+)
+db = DataFlow("postgresql://...", log_config=config)
+```
+
 ## ⚠️ CRITICAL LEARNINGS - Read First
 
 ### 🚨 #1 MOST COMMON MISTAKE: Auto-Managed Timestamp Fields (DF-104)
