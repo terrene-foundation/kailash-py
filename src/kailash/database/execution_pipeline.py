@@ -161,7 +161,8 @@ class QueryValidationStage(PipelineStage):
         for keyword in dangerous_keywords:
             pattern = r"\b" + re.escape(keyword) + r"\b"
             if re.search(pattern, query_upper):
-                self.logger.warning(
+                # ADR-002: Changed from WARNING to DEBUG - DDL during schema creation is expected
+                self.logger.debug(
                     f"Query contains potentially dangerous keyword: {keyword}"
                 )
                 # In production, you might want to block these entirely
