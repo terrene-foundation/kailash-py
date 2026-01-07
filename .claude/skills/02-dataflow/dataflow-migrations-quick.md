@@ -15,10 +15,11 @@ Automatic schema migrations with safety controls for development and production.
 
 ## Quick Reference
 
-- **Development**: `auto_migrate=True` (default) - safe, preserves data
+- **Development (CLI/scripts)**: `auto_migrate=True` (default) - safe, preserves data
+- **Docker/FastAPI**: `auto_migrate=False` + `create_tables_async()` in lifespan - **REQUIRED**
 - **Production**: `auto_migrate=False` + manual migrations
 - **Enterprise**: Full migration system with risk assessment
-- **Safety**: auto_migrate ALWAYS preserves existing data
+- **Safety**: auto_migrate ALWAYS preserves existing data (but fails in Docker/FastAPI async contexts)
 
 ## Core Pattern
 
@@ -191,7 +192,8 @@ db_prod = DataFlow(
 
 ## Quick Tips
 
-- auto_migrate=True safe for development (preserves data)
+- auto_migrate=True safe for development CLI/scripts (preserves data)
+- **⚠️ Docker/FastAPI**: Use `auto_migrate=False` + `create_tables_async()` in lifespan
 - Always provide defaults for NOT NULL columns
 - Use existing_schema_mode=True for production
 - Enterprise system available for complex migrations

@@ -34,9 +34,9 @@ db = DataFlow(
     existing_schema_mode=True        # Work with existing schema only
 )
 
-# Note: auto_migrate=False prevents blocking during Nexus startup, not for async safety.
-# As of v0.9.5+, auto_migrate=True is safe in async contexts. This config is specifically
-# for preventing the 5-10s startup delay when integrating with Nexus.
+# CRITICAL: auto_migrate=False is REQUIRED for Docker/FastAPI deployments.
+# Despite async_safe_run() improvements, auto_migrate=True still fails due to
+# event loop boundary issues (connections created in wrong loop).
 
 # Define models AFTER init
 @db.model
@@ -85,13 +85,13 @@ nexus = Nexus(
 db = DataFlow(
     database_url="postgresql://...",
 
-    # CRITICAL: Prevent blocking startup (5-10s delay prevention, NOT async safety)
-    auto_migrate=False,              # No automatic schema changes
+    # CRITICAL: auto_migrate=False is REQUIRED for Docker/FastAPI deployments
+    auto_migrate=False,              # Prevents event loop conflicts (connections bound to wrong loop)
     enable_model_persistence=False,  # Skip model registry for fast startup
     existing_schema_mode=True,       # Maximum safety
 
-    # Note: As of v0.9.5+, auto_migrate=True is safe in async contexts.
-    # This setting is specifically for preventing Nexus startup delays.
+    # Note: Despite async_safe_run() improvements in v0.10.7+, auto_migrate=True
+    # STILL FAILS in Docker/FastAPI due to asyncio event loop boundary issues.
 
     # Performance
     pool_size=20,

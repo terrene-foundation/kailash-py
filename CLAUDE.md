@@ -380,16 +380,22 @@ runtime = get_runtime("async")  # or "sync"
 
 ## 🐳 DataFlow Docker Deployment (CRITICAL)
 
-### The Problem: async/sync Event Loop Conflicts
+### ⚠️ auto_migrate=False is REQUIRED for Docker/FastAPI
 
-**Why raw SQL workarounds exist**: `auto_migrate=True` (default) creates tables during `@db.model` registration, which is a sync operation. In Docker/FastAPI, this happens when uvicorn loads modules - but by then the async event loop may already be running, causing DF-501 errors.
+**IMPORTANT**: Despite `async_safe_run()` being implemented in v0.10.7+, `auto_migrate=True` **STILL FAILS** in Docker/FastAPI due to fundamental asyncio limitations:
 
-### The Solution: `auto_migrate=False` + `create_tables_async()`
+- **Problem**: Database connections are event-loop-bound in asyncio
+- **At import time**: uvicorn's event loop is already running
+- **async_safe_run creates a NEW event loop** in a thread pool for table creation
+- **Connections created there are bound to the wrong loop**
+- **Later, FastAPI routes fail**: "Task got Future attached to a different loop"
+
+### ✅ The ONLY Reliable Pattern for Docker/FastAPI
 
 ```python
 from dataflow import DataFlow
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 
 # CRITICAL: Use auto_migrate=False to prevent sync table creation at import time
 db = DataFlow("postgresql://...", auto_migrate=False)
@@ -402,7 +408,7 @@ class User:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables explicitly in async context - this is the only time tables are created
+    # Create tables in FastAPI's event loop - this is the ONLY safe place
     await db.create_tables_async()
     yield
     await db.close_async()
@@ -414,7 +420,7 @@ app = FastAPI(lifespan=lifespan)
 
 | Context | Pattern | Reason |
 |---------|---------|--------|
-| **Docker/FastAPI** | `auto_migrate=False` + `create_tables_async()` | Async event loop running at import time |
+| **Docker/FastAPI** | `auto_migrate=False` + `create_tables_async()` | **REQUIRED** - event loop boundary issue |
 | **CLI Scripts** | `auto_migrate=True` (default) | No event loop, sync is safe |
 | **pytest (sync)** | `auto_migrate=True` (default) | No async fixtures |
 | **pytest (async)** | `auto_migrate=False` + `create_tables_async()` | Same as FastAPI |
@@ -442,23 +448,23 @@ from dataflow import DataFlow
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-# Step 1: Initialize with auto_migrate=False
+# Step 1: Initialize with auto_migrate=False (REQUIRED for Docker/FastAPI!)
 db = DataFlow(
     "postgresql://user:pass@localhost:5432/mydb",
-    auto_migrate=False  # CRITICAL for Docker
+    auto_migrate=False  # CRITICAL: Prevents sync table creation at import time
 )
 
-# Step 2: Register models (no tables created)
+# Step 2: Register models (NO tables created - safe!)
 @db.model
 class User:
     id: str
     name: str
     email: str
 
-# Step 3: Create tables in lifespan
+# Step 3: Create tables in lifespan (REQUIRED - this is the ONLY safe place)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await db.create_tables_async()
+    await db.create_tables_async()  # Tables created in FastAPI's event loop
     yield
     await db.close_async()
 
