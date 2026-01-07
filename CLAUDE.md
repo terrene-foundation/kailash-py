@@ -378,23 +378,21 @@ from kailash.runtime import get_runtime
 runtime = get_runtime("async")  # or "sync"
 ```
 
-## 🐳 DataFlow Docker Deployment (CRITICAL)
+## 🐳 DataFlow Docker Deployment (v0.10.6+)
 
-### The Problem: async/sync Event Loop Conflicts
+### ✅ auto_migrate=True Now Works in Docker/FastAPI!
 
-**Why raw SQL workarounds exist**: `auto_migrate=True` (default) creates tables during `@db.model` registration, which is a sync operation. In Docker/FastAPI, this happens when uvicorn loads modules - but by then the async event loop may already be running, causing DF-501 errors.
-
-### The Solution: `auto_migrate=False` + `create_tables_async()`
+As of **v0.10.6+**, DataFlow uses `async_safe_run()` internally to handle async/sync context bridging transparently. You can now use `auto_migrate=True` (the default) in Docker/FastAPI deployments without issues.
 
 ```python
 from dataflow import DataFlow
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 
-# CRITICAL: Use auto_migrate=False to prevent sync table creation at import time
-db = DataFlow("postgresql://...", auto_migrate=False)
+# v0.10.6+: auto_migrate=True works in async contexts!
+db = DataFlow("postgresql://...", auto_migrate=True)
 
-@db.model  # Models registered but NO tables created here (safe!)
+@db.model
 class User:
     id: str
     name: str
@@ -402,22 +400,30 @@ class User:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables explicitly in async context - this is the only time tables are created
-    await db.create_tables_async()
+    # Optional: explicit async initialization for control
+    await db.initialize()  # Tables already created by auto_migrate
     yield
     await db.close_async()
 
 app = FastAPI(lifespan=lifespan)
 ```
 
+### Legacy Pattern (if you prefer explicit control)
+
+```python
+db = DataFlow("postgresql://...", auto_migrate=False)
+# Then call await db.create_tables_async() in lifespan
+```
+
 ### When to Use Each Pattern
 
 | Context | Pattern | Reason |
 |---------|---------|--------|
-| **Docker/FastAPI** | `auto_migrate=False` + `create_tables_async()` | Async event loop running at import time |
+| **Docker/FastAPI (v0.10.6+)** | `auto_migrate=True` | async_safe_run handles bridging |
+| **Docker/FastAPI (legacy)** | `auto_migrate=False` + `create_tables_async()` | Explicit control |
 | **CLI Scripts** | `auto_migrate=True` (default) | No event loop, sync is safe |
 | **pytest (sync)** | `auto_migrate=True` (default) | No async fixtures |
-| **pytest (async)** | `auto_migrate=False` + `create_tables_async()` | Same as FastAPI |
+| **pytest (async)** | Either pattern works | async_safe_run handles both |
 
 ### DataFlow Express (23x Faster CRUD)
 
@@ -435,30 +441,30 @@ deleted = await db.express.delete("User", "user-123")
 # Performance: ~0.27ms vs ~6.3ms per operation
 ```
 
-### Complete FastAPI + DataFlow Example
+### Complete FastAPI + DataFlow Example (v0.10.6+)
 
 ```python
 from dataflow import DataFlow
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-# Step 1: Initialize with auto_migrate=False
+# Step 1: Initialize with auto_migrate=True (works in v0.10.6+!)
 db = DataFlow(
     "postgresql://user:pass@localhost:5432/mydb",
-    auto_migrate=False  # CRITICAL for Docker
+    auto_migrate=True  # Works transparently in Docker/FastAPI
 )
 
-# Step 2: Register models (no tables created)
+# Step 2: Register models (tables created automatically)
 @db.model
 class User:
     id: str
     name: str
     email: str
 
-# Step 3: Create tables in lifespan
+# Step 3: Optional lifespan for explicit control
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await db.create_tables_async()
+    await db.initialize()  # Optional: tables already created by auto_migrate
     yield
     await db.close_async()
 
