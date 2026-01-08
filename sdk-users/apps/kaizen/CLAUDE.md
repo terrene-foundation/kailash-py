@@ -189,28 +189,26 @@ best_worker = pattern.supervisor.select_worker_for_task(
 
 ### Multi-Provider Structured Outputs (v0.8.2)
 
-**Guarantee LLM responses match your signature** with 100% schema compliance across OpenAI, Google/Gemini, and Azure:
+**Guarantee LLM responses match your signature** with 100% schema compliance across OpenAI, Google/Gemini, and Azure.
+
+#### Automatic Configuration (Recommended)
+
+**Most users don't need any configuration!** Structured outputs are **automatically enabled** when you use BaseAgent with a signature:
 
 ```python
-from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
-from kaizen.core.structured_output import create_structured_output_config
+from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import Signature, InputField, OutputField
+from kaizen.core.config import BaseAgentConfig
 
-# Define signature
 class AnalysisSignature(Signature):
     input_text: str = InputField(desc="Text to analyze")
     category: str = OutputField(desc="Classification category")
     confidence: float = OutputField(desc="Confidence 0-1")
 
-# Enable structured outputs - works with OpenAI, Google, or Azure
+# Structured outputs auto-configured - NO provider_config needed!
 config = BaseAgentConfig(
     llm_provider="openai",  # or "google", "gemini", "azure"
-    model="gpt-4o-2024-08-06",  # or "gemini-2.0-flash", etc.
-    provider_config=create_structured_output_config(
-        signature=AnalysisSignature(),
-        strict=True,  # 100% schema compliance
-        name="analysis"
-    )
+    model="gpt-4o-2024-08-06"
 )
 
 agent = BaseAgent(config=config, signature=AnalysisSignature())
@@ -219,6 +217,27 @@ result = agent.run(input_text="Sample text")
 # Response guaranteed to have all fields with correct types
 print(result['category'])      # Always present, always string
 print(result['confidence'])    # Always present, always float
+```
+
+**How Auto-Configuration Works**: When a signature is provided and no `provider_config` is set, WorkflowGenerator automatically calls `create_structured_output_config()` with strict mode enabled.
+
+#### Manual Configuration (Advanced)
+
+For explicit control over structured output behavior:
+
+```python
+from kaizen.core.structured_output import create_structured_output_config
+
+# Only needed when you want to override defaults
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model="gpt-4o-2024-08-06",
+    provider_config=create_structured_output_config(
+        signature=AnalysisSignature(),
+        strict=True,  # 100% schema compliance (default)
+        name="analysis"  # Custom schema name
+    )
+)
 ```
 
 **How It Works:**
