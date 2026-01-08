@@ -21,7 +21,51 @@ This guide covers configuration, type system, signature inheritance, and integra
 
 ## Quick Start
 
-### Basic Usage with Strict Mode
+### Automatic Configuration (Recommended)
+
+**Most users don't need to configure anything!** When you use BaseAgent with a signature, structured outputs are **automatically configured** for supported providers (OpenAI, Google, Azure).
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.signatures import Signature, InputField, OutputField
+from kaizen.core.config import BaseAgentConfig
+
+class QASignature(Signature):
+    """Simple Q&A signature."""
+    question: str = InputField(desc="User question")
+    answer: str = OutputField(desc="Answer to the question")
+    confidence: float = OutputField(desc="Confidence score 0-1")
+
+# Structured outputs auto-configured - NO provider_config needed!
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model="gpt-4o-2024-08-06"
+)
+
+agent = BaseAgent(config=config, signature=QASignature())
+result = agent.run(question="What is AI?")
+
+# Response guaranteed to have all fields with correct types
+print(result['answer'])       # Always present, always string
+print(result['confidence'])   # Always present, always float
+```
+
+**How Auto-Configuration Works** (from `workflow_generator.py`):
+- When a signature is provided and no `provider_config` is set
+- WorkflowGenerator automatically calls `create_structured_output_config()`
+- Uses strict mode for OpenAI (100% schema compliance)
+- Providers that don't support structured outputs (Ollama, Anthropic) use prompt-based schema enforcement
+
+**When to Use Manual Configuration**:
+- Force legacy JSON mode (`strict=False`) instead of strict schema mode
+- Override auto-generated schema with a custom one
+- Disable structured outputs entirely (rare)
+
+---
+
+### Manual Configuration with Strict Mode
+
+For advanced use cases requiring explicit control:
 
 ```python
 from kaizen.core.base_agent import BaseAgent
