@@ -34,6 +34,11 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 **Observability**:
 - "Distributed tracing?" → [`kaizen-observability`](../../skills/04-kaizen/kaizen-observability.md)
 
+**Journey Orchestration (v0.9.0)**:
+- "User journeys?" → [`kaizen-journey-orchestration`](../../skills/04-kaizen/kaizen-journey-orchestration.md)
+- "Multi-pathway flows?" → [`kaizen-journey-orchestration`](../../skills/04-kaizen/kaizen-journey-orchestration.md)
+- "Intent-driven transitions?" → [`kaizen-journey-orchestration`](../../skills/04-kaizen/kaizen-journey-orchestration.md)
+
 **Enterprise Trust (v0.8.0)**:
 - "Trust protocol?" → See EATP section below
 - "Trusted agents?" → See TrustedAgent section below
@@ -93,6 +98,8 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 | **Autonomy infrastructure (NEW)** | `sdk-users/apps/kaizen/docs/guides/autonomy-system-overview.md` |
 | **Planning agents (NEW)** | `sdk-users/apps/kaizen/docs/guides/planning-agents-guide.md` |
 | **Intelligent routing (NEW)** | `sdk-users/apps/kaizen/docs/guides/meta-controller-routing-guide.md` |
+| **Journey orchestration (NEW)** | `apps/kailash-kaizen/docs/plans/03-journey/` |
+| **User journey examples** | `apps/kailash-kaizen/examples/journey/healthcare_referral/` |
 | Multi-modal (vision/audio) | `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` |
 | Memory patterns | `sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md` |
 | Strategy selection | `sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md` |
@@ -2627,7 +2634,7 @@ pattern = SupervisorWorkerPattern(
 result = pattern.execute_task("Process this PDF report")
 ```
 
-#### Composable Pipeline Patterns (Phase 3 - TODO-174)
+#### Composable Pipeline Patterns
 
 Kaizen provides **9 factory methods** on `Pipeline` class for creating production-ready coordination patterns:
 
@@ -2940,7 +2947,7 @@ class CustomPipeline(Pipeline):
 
 **Key enterprise-level multi-modal insights preserved below** - these are CRITICAL for production implementations.
 
-### Single-Agent Patterns (Phase 4 - TODO-175)
+### Single-Agent Patterns
 
 **NEW in v0.5.0**: Three advanced single-agent patterns for structured workflows, iterative refinement, and multi-path exploration.
 
