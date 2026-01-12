@@ -1,6 +1,6 @@
 # Kaizen Framework Skills
 
-26 skills for Kaizen AI agent framework covering core patterns, multi-agent coordination, multi-modal processing, autonomous tool calling, observability, memory systems, and checkpoint/resume.
+27 skills for Kaizen AI agent framework covering core patterns, multi-agent coordination, multi-modal processing, autonomous tool calling, observability, memory systems, checkpoint/resume, and journey orchestration.
 
 ## Skill Categories
 
@@ -44,21 +44,31 @@ Vision, audio, and multi-modal processing:
 
 ---
 
+### Journey Orchestration (1 Skill - HIGH) - NEW in v0.9.0
+
+User journey management with declarative pathways and intent-driven transitions:
+
+16. **[kaizen-journey-orchestration.md](kaizen-journey-orchestration.md)** - Journey, Pathway, Transitions, Context Accumulation, Nexus deployment
+
+**Key Features**: Multi-pathway flows, intent detection (LLM-powered), ReturnToPrevious behavior, context accumulation with merge strategies, Nexus deployment
+
+---
+
 ### Advanced Patterns (11 Skills - MEDIUM/HIGH)
 
 Production patterns, enterprise features, tool calling, observability, memory systems, and specialized techniques:
 
-16. **[kaizen-control-protocol.md](kaizen-control-protocol.md)** - Bidirectional agent ↔ client communication
-17. **[kaizen-tool-calling.md](kaizen-tool-calling.md)** - Autonomous tool execution with approval workflows
-18. **[kaizen-observability.md](kaizen-observability.md)** - Complete observability stack (tracing, metrics, logging, audit)
-19. **[kaizen-memory-system.md](kaizen-memory-system.md)** - Persistent memory, learning, and preference adaptation
-20. **[kaizen-checkpoint-resume.md](kaizen-checkpoint-resume.md)** - Automatic checkpointing and resume for long-running agents
-21. **[kaizen-chain-of-thought.md](kaizen-chain-of-thought.md)** - CoT pattern, step-by-step reasoning
-22. **[kaizen-rag-agent.md](kaizen-rag-agent.md)** - RAG implementation with Kaizen
-23. **[kaizen-react-pattern.md](kaizen-react-pattern.md)** - ReAct (reasoning + acting)
-24. **[kaizen-cost-tracking.md](kaizen-cost-tracking.md)** - Token usage, budget management
-25. **[kaizen-streaming.md](kaizen-streaming.md)** - Streaming responses, real-time output
-26. **[kaizen-testing-patterns.md](kaizen-testing-patterns.md)** - 3-tier testing, fixtures, standardized tests
+17. **[kaizen-control-protocol.md](kaizen-control-protocol.md)** - Bidirectional agent ↔ client communication
+18. **[kaizen-tool-calling.md](kaizen-tool-calling.md)** - Autonomous tool execution with approval workflows
+19. **[kaizen-observability.md](kaizen-observability.md)** - Complete observability stack (tracing, metrics, logging, audit)
+20. **[kaizen-memory-system.md](kaizen-memory-system.md)** - Persistent memory, learning, and preference adaptation
+21. **[kaizen-checkpoint-resume.md](kaizen-checkpoint-resume.md)** - Automatic checkpointing and resume for long-running agents
+22. **[kaizen-chain-of-thought.md](kaizen-chain-of-thought.md)** - CoT pattern, step-by-step reasoning
+23. **[kaizen-rag-agent.md](kaizen-rag-agent.md)** - RAG implementation with Kaizen
+24. **[kaizen-react-pattern.md](kaizen-react-pattern.md)** - ReAct (reasoning + acting)
+25. **[kaizen-cost-tracking.md](kaizen-cost-tracking.md)** - Token usage, budget management
+26. **[kaizen-streaming.md](kaizen-streaming.md)** - Streaming responses, real-time output
+27. **[kaizen-testing-patterns.md](kaizen-testing-patterns.md)** - 3-tier testing, fixtures, standardized tests
 
 **Testing**: All patterns use 3-tier strategy (Unit → Ollama → OpenAI), NO MOCKING in Tiers 2-3
 
@@ -105,6 +115,16 @@ Production patterns, enterprise features, tool calling, observability, memory sy
 5. `kaizen-multimodal-orchestration.md` - Unified processing
 
 **Output**: Vision + audio agent
+
+---
+
+### Path 5: User Journey Orchestration (45 minutes) - NEW
+1. `kaizen-baseagent-quick.md` - Core pattern
+2. `kaizen-signatures.md` - Signatures with `__intent__`, `__guidelines__`
+3. **`kaizen-journey-orchestration.md`** - Journey, Pathway, Transitions
+4. `examples/journey/healthcare_referral/` - Reference implementation
+
+**Output**: Multi-pathway user journey with intent-driven transitions
 
 ---
 
@@ -200,7 +220,7 @@ print(result['answer'])          # Key is 'answer', NOT 'response'
 
 ---
 
-## Framework Status (v0.5.0)
+## Framework Status (v0.9.0)
 
 **Implementation**: Production-ready
 **Performance**: -0.06% overhead (essentially zero), validated with real LLM workloads
@@ -208,6 +228,7 @@ print(result['answer'])          # Key is 'answer', NOT 'response'
 **Multi-Modal**: Vision (Ollama + OpenAI) + Audio (Whisper) fully operational
 **Multi-Agent**: SupervisorWorkerPattern production-ready
 **A2A Protocol**: 100% Google A2A compliant with automatic capability cards
+**Journey Orchestration**: Layer 5 with declarative pathways, intent detection, context accumulation (351 tests)
 
 ---
 
@@ -239,6 +260,7 @@ print(result['answer'])          # Key is 'answer', NOT 'response'
 | Interactive agents | **control-protocol** (v0.2.0), baseagent-quick |
 | Tool calling | **tool-calling** (v0.2.0), control-protocol |
 | Multi-agent system | multi-agent-setup, shared-memory, a2a-protocol, supervisor-worker |
+| **User journeys** | **journey-orchestration** (v0.9.0) - pathways, intent detection, context |
 | Vision processing | **multimodal-pitfalls** (READ FIRST), vision-processing |
 | Audio processing | audio-processing, multimodal-orchestration |
 | Chain of thought | chain-of-thought |
