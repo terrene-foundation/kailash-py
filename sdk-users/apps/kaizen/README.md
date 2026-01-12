@@ -64,9 +64,40 @@ class MyAgent(BaseAgent):
 - **Production Observability**: Complete monitoring stack (Jaeger, Prometheus, Grafana, ELK) with zero overhead
 - **Core SDK Compatible**: Seamless integration with Kailash workflows
 
-## 🆕 What's New in v0.6.0
+## 🆕 What's New in v0.9.0
 
-**Enhanced Autonomy & Memory Systems** (Released 2025-10-29):
+**Journey Orchestration (Layer 5)** - Declarative user journey management:
+
+- **Declarative Pathways**: Define multi-step user flows as nested Pathway classes
+- **Intent Detection**: LLM-powered intent classification (not keyword/regex)
+- **Context Accumulation**: Persist data across pathways (REPLACE, APPEND, UNION, SUM strategies)
+- **Return Behaviors**: ReturnToPrevious for detours, ReturnToSpecific for error handling
+- **Nexus Deployment**: Deploy journeys via API/CLI/MCP with `deploy_journey_to_nexus()`
+- **Hooks System**: 9 lifecycle events for observability
+
+```python
+from kaizen.journey import Journey, Pathway, Transition, IntentTrigger
+
+class PatientJourney(Journey):
+    __entry_pathway__ = "intake"
+    __transitions__ = [
+        Transition(trigger=IntentTrigger(intents=["help"]), to_pathway="faq")
+    ]
+
+    class IntakePath(Pathway):
+        __signature__ = IntakeSignature
+        __agents__ = ["intake_agent"]
+        __accumulate__ = ["symptoms"]
+        __next__ = "booking"
+```
+
+**Reference**: `examples/journey/healthcare_referral/` | **Tests**: 301 unit + 50 integration
+
+---
+
+## What Was New in v0.6.0
+
+**Enhanced Autonomy & Memory Systems**:
 
 ### Interrupt Mechanism (Production-Ready)
 Complete graceful shutdown with checkpoint preservation:
@@ -929,8 +960,7 @@ result = agent.run(question="What's my communication style?")
 **Performance (Production validated):**
 - <50ms retrieval (p95), <100ms storage (p95)
 - 10,000+ entries per agent (SQLite), millions (PostgreSQL)
-- 281 tests passing (Phase 3 complete)
-
+- 281 tests passing
 **Use Cases:** Conversational agents, customer support, research agents, code generation, multi-agent systems
 
 ## 📄 Document Extraction & RAG
@@ -996,8 +1026,7 @@ for chunk in relevant_chunks:
 | Landing AI    | 2-3s  | 95%+     | ~$0.05          | Mission-critical, max accuracy |
 
 **Production Validated:**
-- 281 tests passing (Phase 3 complete)
-- Real infrastructure testing (NO MOCKING)
+- 281 tests passing - Real infrastructure testing (NO MOCKING)
 - Ollama: $0.00 cost for unlimited processing
 - RAG chunking with page citations for source attribution
 
