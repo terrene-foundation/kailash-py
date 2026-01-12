@@ -4,7 +4,62 @@
 
 **Kaizen** is a signature-based AI agent framework built on Kailash Core SDK, providing production-ready agents with multi-modal processing, multi-agent coordination, and enterprise features.
 
-## 🆕 What's New in v0.8.0 (2026-01)
+## 🆕 What's New in v0.9.0 (2026-01)
+
+**Journey Orchestration (Layer 5)** - Declarative user journey management with intent-driven transitions:
+
+```python
+from kaizen.journey import Journey, Pathway, Transition, IntentTrigger, JourneyConfig
+
+# Define signatures with Layer 2 enhancements
+class IntakeSignature(Signature):
+    __intent__ = "Gather patient symptoms and preferences"
+    __guidelines__ = ["Ask symptoms before demographics", "Use empathetic language"]
+
+    message: str = InputField(desc="Patient message")
+    symptoms: list = OutputField(desc="Extracted symptoms")
+
+# Define Journey with nested Pathways
+class PatientJourney(Journey):
+    __entry_pathway__ = "intake"
+    __transitions__ = [
+        Transition(
+            trigger=IntentTrigger(intents=["help", "faq"]),
+            to_pathway="faq"
+        )
+    ]
+
+    class IntakePath(Pathway):
+        __signature__ = IntakeSignature
+        __agents__ = ["intake_agent"]
+        __accumulate__ = ["symptoms", "preferences"]
+        __next__ = "booking"
+
+    class FAQPath(Pathway):
+        __return_behavior__ = ReturnToPrevious()  # Returns to previous pathway
+
+# Run the Journey
+journey = PatientJourney(session_id="patient-123", config=JourneyConfig())
+journey.manager.register_agent("intake_agent", intake_agent)
+await journey.start()
+response = await journey.process_message("I have back pain")
+```
+
+**Key Features:**
+- **Declarative Pathways**: Define multi-step user flows as nested classes
+- **Intent Detection**: LLM-powered intent classification (not keyword/regex)
+- **Context Accumulation**: Persist data across pathways with merge strategies (REPLACE, APPEND, UNION, SUM)
+- **Return Behaviors**: ReturnToPrevious for detours (FAQ, help), ReturnToSpecific for error handling
+- **Nexus Deployment**: Deploy journeys via API/CLI/MCP with `deploy_journey_to_nexus()`
+- **Hooks System**: 9 lifecycle events (PRE/POST_PATHWAY_EXECUTE, PRE/POST_TRANSITION, etc.)
+
+**Reference Implementation**: `examples/journey/healthcare_referral/` (5 pathways, 3 transitions)
+
+**Production Validated**: 301 unit + 50 integration tests (351 total)
+
+---
+
+## What Was New in v0.8.0 (2026-01)
 
 **Enterprise Agent Trust Protocol (EATP)**:
 
@@ -479,8 +534,7 @@ result = agent.run(question="test")
 **Production Validated:**
 - -0.06% overhead (essentially zero, tested with 100 real OpenAI API calls)
 - 0.57ms p95 audit latency (<10ms target, 17.5x margin)
-- 281 tests passing (Phase 3 complete)
-- Validated with real infrastructure (NO MOCKING in Tiers 2-3 tests)
+- 281 tests passing - Validated with real infrastructure (NO MOCKING in Tiers 2-3 tests)
 
 **Start Observability Stack:**
 ```bash
@@ -796,8 +850,7 @@ result = agent.run(question="What's my communication style?")
 - <100ms storage (p95)
 - 10,000+ entries per agent (SQLite)
 - Millions of entries (PostgreSQL)
-- 281 tests passing (Phase 3 complete)
-
+- 281 tests passing
 **Use Cases:**
 - Conversational agents with context continuity
 - Customer support bots with preference learning
@@ -883,8 +936,7 @@ batch_results = agent.extract_batch(
 - **Cost Control**: Prefer-free mode tries Ollama first, falls back to paid
 
 **Production Validated:**
-- 281 tests passing (Phase 3 complete)
-- Real infrastructure testing (NO MOCKING)
+- 281 tests passing - Real infrastructure testing (NO MOCKING)
 - Ollama: $0.00 cost for unlimited processing
 - OpenAI: Budget-controlled, accurate
 - Landing AI: Mission-critical accuracy (95%+)
@@ -1124,8 +1176,7 @@ result = agent.run(question="What is AI?")
 - <0.01ms overhead per event (625x better than 10ms target)
 - 100+ concurrent hooks supported
 - Thread-safe and composable
-- 281 tests passing (Phase 3 complete)
-
+- 281 tests passing
 **See:** `docs/guides/hooks-system-guide.md` for complete documentation.
 
 ### 2. Checkpoint System - Persistent State Management
@@ -1578,8 +1629,7 @@ result = ensemble.run(
    - State: Persistent checkpoints with pluggable storage
    - Interrupts: Graceful execution control (6 signal types)
    - Thread-safe, composable, extensible
-   - 281 tests passing (Phase 3 complete)
-
+   - 281 tests passing
 7. **Permission System** (`src/kaizen/core/autonomy/permissions/`)
    - ExecutionContext: Thread-safe runtime state
    - PermissionRule: Pattern-based access control

@@ -95,7 +95,7 @@ results = manager.setup_vision_models(auto_download=True)
 print(f"Vision models ready: {results}")
 ```
 
-### Example 6: Vision Analysis (Coming in Phase 1)
+### Example 6: Vision Analysis
 ```python
 from kaizen.providers import OllamaProvider, OllamaConfig
 from kaizen.providers import OllamaModelManager
@@ -138,7 +138,7 @@ config = OllamaConfig(
 - **qwen2.5** - Excellent for code (5GB)
 - **phi3** - Small but powerful (2GB)
 
-### Vision Models (Phase 1)
+### Vision Models
 - **llava:13b** - Best quality vision model (7.4GB)
 - **bakllava** - Faster vision model (4.7GB)
 
@@ -171,7 +171,7 @@ python test_ollama_integration.py
 **Expected Output**:
 ```
 ======================================================================
-🚀 KAIZEN OLLAMA INTEGRATION TEST SUITE (Phase 0)
+🚀 KAIZEN OLLAMA INTEGRATION TEST SUITE
 ======================================================================
 ✅ OLLAMA_AVAILABLE = True
 ✅ Ollama CLI is installed
@@ -270,24 +270,22 @@ if info:
 
 ## Next Steps
 
-- **Phase 1**: OllamaBaseAgent integration with BaseAgent
-- **Phase 2**: Vision processing workflows
-- **Phase 3**: Multi-modal signatures
-- **Phase 4**: Advanced vision examples
+- **Vision Processing**: See [multi-modal-api-reference.md](../reference/multi-modal-api-reference.md) for VisionAgent usage
+- **Multi-Modal**: Combine vision + audio with MultiModalAgent
+- **BaseAgent Integration**: Use `llm_provider="ollama"` in any Kaizen agent config
 
 ## Resources
 
 - **Ollama Website**: https://ollama.ai
 - **Model Library**: https://ollama.ai/library
-- **Kaizen Docs**: `apps/kailash-kaizen/docs/`
-- **Phase 0 Report**: `PHASE_0_OLLAMA_COMPLETION_REPORT.md`
+- **Kaizen Docs**: See [Documentation Hub](../README.md)
 
 ## Support
 
 For issues or questions:
-1. Check `test_ollama_integration.py` for working examples
-2. Review `PHASE_0_OLLAMA_COMPLETION_REPORT.md` for details
-3. Run unit tests: `pytest tests/unit/providers/ -v`
+1. Check examples in `examples/` directory
+2. Run unit tests: `pytest tests/unit/providers/ -v`
+3. See [Troubleshooting Guide](../reference/troubleshooting.md)
 
 ---
 
