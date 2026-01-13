@@ -13,7 +13,7 @@ with open(os.path.join(this_directory, "README.md"), encoding="utf-8") as f:
 # Package configuration
 setup(
     name="kailash",
-    version="0.10.13",
+    version="0.10.14",
     author="Terrene Foundation",
     author_email="info@terrene.foundation",
     description="Python SDK for the Kailash container-node architecture",
@@ -29,7 +29,7 @@ setup(
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     # Python version requirement
-    python_requires=">=3.12",
+    python_requires=">=3.11",
     # Dependencies
     install_requires=[
         "networkx>=2.7",
