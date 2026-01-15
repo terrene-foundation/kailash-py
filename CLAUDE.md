@@ -24,7 +24,10 @@
 ### DataFlow (`sdk-users/apps/dataflow/`)
 **Zero-config database framework** built on Core SDK:
 - **Purpose**: Database operations with automatic model-to-node generation
-- **Features**: @db.model decorator generates 9 nodes per model automatically. DataFlow IS NOT AN ORM!
+- **Features**: @db.model decorator generates 11 nodes per model automatically:
+  - CRUD: CREATE, READ, UPDATE, DELETE, LIST, UPSERT, COUNT
+  - Bulk: BULK_CREATE, BULK_UPDATE, BULK_DELETE, BULK_UPSERT
+  - DataFlow IS NOT AN ORM!
 - **Usage**: Database-first applications with enterprise features
 - **Install**: `pip install kailash-dataflow`
 - **Import**: `from dataflow import DataFlow`
@@ -432,7 +435,8 @@ For high-performance API endpoints, use `db.express` instead of workflows:
 ```python
 # Express API: Direct node invocation, 23x faster than workflows
 user = await db.express.create("User", {"id": "user-123", "name": "Alice"})
-user = await db.express.read("User", "user-123")
+user = await db.express.read("User", "user-123")  # Primary key lookup
+user = await db.express.find_one("User", {"email": "alice@example.com"})  # Non-PK lookup (v0.10.13+)
 users = await db.express.list("User", filter={"status": "active"}, limit=100)
 count = await db.express.count("User", filter={"status": "active"})
 user = await db.express.update("User", "user-123", {"name": "Alice Updated"})
@@ -440,6 +444,10 @@ deleted = await db.express.delete("User", "user-123")
 
 # Performance: ~0.27ms vs ~6.3ms per operation
 ```
+
+**read() vs find_one():**
+- `read(model, id)` - Lookup by primary key (fast, direct)
+- `find_one(model, filter)` - Lookup by any field(s) using MongoDB-style filter
 
 ### Complete FastAPI + DataFlow Example
 
@@ -482,4 +490,69 @@ async def get_user(id: str):
 @app.get("/users")
 async def list_users(limit: int = 100):
     return await db.express.list("User", limit=limit)
+```
+
+## 🔧 DataFlow Centralized Logging (v0.10.12+)
+
+Control log verbosity with LoggingConfig for cleaner output:
+
+```python
+from dataflow import DataFlow, LoggingConfig
+import logging
+
+# Option 1: Simple log level
+db = DataFlow("postgresql://...", log_level=logging.WARNING)
+
+# Option 2: Full configuration with presets
+db = DataFlow("postgresql://...", log_config=LoggingConfig.production())
+
+# Option 3: Environment variables (12-factor app)
+# DATAFLOW_LOG_LEVEL=WARNING
+# DATAFLOW_NODE_EXECUTION_LOG_LEVEL=ERROR
+config = LoggingConfig.from_env()
+```
+
+### Logging Presets
+
+| Preset | Use Case |
+|--------|----------|
+| `LoggingConfig.production()` | Clean production logs (WARNING+) |
+| `LoggingConfig.development()` | Verbose debugging (DEBUG) |
+| `LoggingConfig.quiet()` | Minimal output (ERROR only) |
+| `LoggingConfig.from_env()` | Environment variable configuration |
+
+### Category-Specific Logging
+
+```python
+config = LoggingConfig(
+    level=logging.WARNING,           # Default for all categories
+    node_execution=logging.ERROR,    # Node execution only errors
+    sql_generation=logging.WARNING,  # SQL generation
+    migration=logging.INFO           # Migration operations
+)
+```
+
+### Sensitive Value Masking
+
+```python
+from dataflow import LoggingConfig, mask_sensitive
+
+config = LoggingConfig(mask_sensitive_values=True)
+data = {"password": "secret123", "api_key": "sk-xxx"}
+masked = mask_sensitive(data, config)
+# {'password': '***MASKED***', 'api_key': '***MASKED***'}
+```
+
+## 🔧 Async-Safe Utilities (v0.10.6+)
+
+For custom sync→async bridging, use `async_safe_run`:
+
+```python
+from dataflow.core.async_utils import async_safe_run
+
+# Works in both sync contexts (CLI) and async contexts (FastAPI)
+async def my_async_op():
+    return await some_async_call()
+
+result = async_safe_run(my_async_op())  # Works everywhere!
 ```
