@@ -251,33 +251,53 @@ workflow.add_node("UserUpdateNode", "update", {
 - **Pattern**: Create new `LocalRuntime()` for each `workflow.build()` execution
 - **Impact**: This prevents event loop conflicts, especially with async operations
 
-**4a. Docker/FastAPI Deployment (CRITICAL)**
+**4a. Docker/FastAPI Deployment (v0.10.15+ FIX)**
 
-⚠️ **`auto_migrate=False` + `create_tables_async()` is REQUIRED for Docker/FastAPI.**
+✅ **`auto_migrate=True` NOW WORKS in Docker/FastAPI (v0.10.15+)!**
 
-Despite `async_safe_run()` being implemented in v0.10.7+, `auto_migrate=True` **STILL FAILS** due to fundamental asyncio limitations:
-- Database connections are event-loop-bound in asyncio
-- `async_safe_run` creates a NEW event loop in thread pool when uvicorn's loop is running
-- Connections created there are bound to the wrong loop
-- Later, FastAPI routes fail: "Task got Future attached to a different loop"
+DataFlow now uses `SyncDDLExecutor` with synchronous database drivers (psycopg2, sqlite3) for table creation. This bypasses all event loop boundary issues.
 
-**THE ONLY RELIABLE PATTERN FOR DOCKER/FASTAPI:**
+**Zero-Config Docker/FastAPI Pattern:**
 ```python
 from dataflow import DataFlow
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-# CRITICAL: Use auto_migrate=False to prevent sync table creation at import time
-db = DataFlow("postgresql://...", auto_migrate=False)
+# Zero-config: auto_migrate=True (default) now works!
+db = DataFlow("postgresql://...")
 
-@db.model  # Models registered but NO tables created (safe!)
+@db.model  # Tables created immediately via sync DDL
 class User:
     id: str
     name: str
 
+app = FastAPI()
+
+@app.post("/users")
+async def create_user(data: dict):
+    return await db.express.create("User", data)
+```
+
+**How It Works:**
+- `SyncDDLExecutor` uses psycopg2 (PostgreSQL) or sqlite3 (SQLite) - no asyncio
+- Tables are created synchronously at model registration time
+- CRUD operations use async drivers (asyncpg, aiosqlite) as before
+- No event loop conflicts because DDL and CRUD use separate connection types
+
+**⚠️ IN-MEMORY SQLite LIMITATION:**
+In-memory databases (`:memory:`) **cannot** use sync DDL because each connection gets a separate database. They automatically fall back to lazy table creation:
+```python
+# In-memory SQLite: Uses lazy creation (still works, just deferred)
+db = DataFlow(":memory:", auto_migrate=True)  # Tables created on first access
+```
+
+**Alternative Pattern (Manual Control):**
+```python
+# For explicit control over table creation timing
+db = DataFlow("postgresql://...", auto_migrate=False)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await db.create_tables_async()  # Tables created in FastAPI's event loop
+    await db.create_tables_async()  # Or db.create_tables_sync()
     yield
     await db.close_async()
 
@@ -285,15 +305,20 @@ app = FastAPI(lifespan=lifespan)
 ```
 
 **When to Use Each Pattern:**
-| Context | Pattern | Reason |
-|---------|---------|--------|
-| **Docker/FastAPI** | `auto_migrate=False` + `create_tables_async()` | **REQUIRED** - event loop boundary issue |
-| **CLI Scripts** | `auto_migrate=True` (default) | No event loop, sync is safe |
-| **pytest (sync)** | `auto_migrate=True` (default) | No async fixtures |
-| **pytest (async)** | `auto_migrate=False` + `create_tables_async()` | Same as Docker/FastAPI |
+| Context | Pattern | Notes |
+|---------|---------|-------|
+| **Docker/FastAPI** | `auto_migrate=True` (default) | ✅ Works in v0.10.15+ |
+| **In-Memory SQLite** | `auto_migrate=True` | Uses lazy creation (works) |
+| **CLI Scripts** | `auto_migrate=True` (default) | Works |
+| **pytest (sync)** | `auto_migrate=True` (default) | Works |
+| **pytest (async)** | `auto_migrate=True` (default) | Works via sync DDL |
 
-**Why async_safe_run Doesn't Fix Docker/FastAPI:**
-The `async_safe_run()` utility runs coroutines in a thread pool with a separate event loop when uvicorn's loop is detected. However, database connections are bound to the event loop they're created in - connections from the thread pool's loop **cannot** be used in uvicorn's main loop. This is a fundamental asyncio limitation.
+**Methods Available:**
+| Method | When to Use |
+|--------|-------------|
+| `auto_migrate=True` | Default, works everywhere (v0.10.15+) |
+| `db.create_tables_sync()` | Explicit sync table creation |
+| `await db.create_tables_async()` | Explicit async table creation |
 
 **Use DataFlow Express for API endpoints (23x faster):**
 ```python
