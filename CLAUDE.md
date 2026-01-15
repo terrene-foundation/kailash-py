@@ -381,52 +381,58 @@ from kailash.runtime import get_runtime
 runtime = get_runtime("async")  # or "sync"
 ```
 
-## 🐳 DataFlow Docker Deployment (CRITICAL)
+## 🐳 DataFlow Docker Deployment
 
-### ⚠️ auto_migrate=False is REQUIRED for Docker/FastAPI
+### ✅ auto_migrate=True Now Works in Docker/FastAPI (v0.10.15+)
 
-**IMPORTANT**: Despite `async_safe_run()` being implemented in v0.10.7+, `auto_migrate=True` **STILL FAILS** in Docker/FastAPI due to fundamental asyncio limitations:
+**FIXED**: As of v0.10.15, `auto_migrate=True` works in Docker/FastAPI for file-based databases (PostgreSQL, SQLite file).
 
-- **Problem**: Database connections are event-loop-bound in asyncio
-- **At import time**: uvicorn's event loop is already running
-- **async_safe_run creates a NEW event loop** in a thread pool for table creation
-- **Connections created there are bound to the wrong loop**
-- **Later, FastAPI routes fail**: "Task got Future attached to a different loop"
+**How it works**: DataFlow uses `SyncDDLExecutor` with synchronous drivers (psycopg2, sqlite3) for DDL. No event loop involvement - works in any context.
 
-### ✅ The ONLY Reliable Pattern for Docker/FastAPI
+### ✅ Zero-Config Pattern (RECOMMENDED for file-based databases)
 
 ```python
 from dataflow import DataFlow
 from fastapi import FastAPI
-from contextlib import asynccontextmanager
 
-# CRITICAL: Use auto_migrate=False to prevent sync table creation at import time
-db = DataFlow("postgresql://...", auto_migrate=False)
+# auto_migrate=True (default) works for PostgreSQL and SQLite file databases!
+db = DataFlow("postgresql://...")
 
-@db.model  # Models registered but NO tables created here (safe!)
+@db.model  # Tables created immediately via sync DDL
 class User:
     id: str
     name: str
     email: str
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Create tables in FastAPI's event loop - this is the ONLY safe place
-    await db.create_tables_async()
-    yield
-    await db.close_async()
+app = FastAPI()
 
-app = FastAPI(lifespan=lifespan)
+@app.post("/users")
+async def create_user(data: dict):
+    return await db.express.create("User", data)
 ```
 
-### When to Use Each Pattern
+### ⚠️ Limitation: In-Memory SQLite
 
-| Context | Pattern | Reason |
-|---------|---------|--------|
-| **Docker/FastAPI** | `auto_migrate=False` + `create_tables_async()` | **REQUIRED** - event loop boundary issue |
-| **CLI Scripts** | `auto_migrate=True` (default) | No event loop, sync is safe |
-| **pytest (sync)** | `auto_migrate=True` (default) | No async fixtures |
-| **pytest (async)** | `auto_migrate=False` + `create_tables_async()` | Same as FastAPI |
+In-memory databases (`:memory:`) do NOT use sync DDL because each connection gets a separate database. For in-memory SQLite, use the lifespan pattern:
+
+```python
+db = DataFlow(":memory:", auto_migrate=False)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await db.create_tables_async()  # Uses shared connection
+    yield
+```
+
+### Pattern Summary
+
+| Context | Pattern | Notes |
+|---------|---------|-------|
+| **PostgreSQL** | `auto_migrate=True` (default) | ✅ Uses sync DDL (psycopg2) |
+| **SQLite file** | `auto_migrate=True` (default) | ✅ Uses sync DDL (sqlite3) |
+| **SQLite :memory:** | `auto_migrate=False` + `create_tables_async()` | ⚠️ Sync DDL not supported |
+| **CLI Scripts** | `auto_migrate=True` (default) | Always worked |
+| **pytest (async)** | `auto_migrate=True` (default) | ✅ Uses sync DDL |
 
 ### DataFlow Express (23x Faster CRUD)
 
@@ -453,30 +459,18 @@ deleted = await db.express.delete("User", "user-123")
 
 ```python
 from dataflow import DataFlow
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
-# Step 1: Initialize with auto_migrate=False (REQUIRED for Docker/FastAPI!)
-db = DataFlow(
-    "postgresql://user:pass@localhost:5432/mydb",
-    auto_migrate=False  # CRITICAL: Prevents sync table creation at import time
-)
+# Zero-config: auto_migrate=True works for file-based databases!
+db = DataFlow("postgresql://user:pass@localhost:5432/mydb")
 
-# Step 2: Register models (NO tables created - safe!)
-@db.model
+@db.model  # Tables created immediately
 class User:
     id: str
     name: str
     email: str
 
-# Step 3: Create tables in lifespan (REQUIRED - this is the ONLY safe place)
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await db.create_tables_async()  # Tables created in FastAPI's event loop
-    yield
-    await db.close_async()
-
-app = FastAPI(lifespan=lifespan)
+app = FastAPI()
 
 # Step 4: Use Express for CRUD endpoints
 @app.post("/users")

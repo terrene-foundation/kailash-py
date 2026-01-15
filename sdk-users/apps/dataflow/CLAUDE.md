@@ -1,8 +1,9 @@
-# Kailash DataFlow - Complete Function Access Guide (v0.10.12 Stable)
+# Kailash DataFlow - Complete Function Access Guide (v0.10.15 Stable)
 
-**Current Version: v0.10.12 - Production Ready**
+**Current Version: v0.10.15 - Production Ready**
 - **🔇 LOGGING CONFIGURATION (v0.10.12)**: `LoggingConfig` for centralized log level control - 524 noisy warnings eliminated
-- **⚠️ DOCKER/FASTAPI**: `auto_migrate=False` + `create_tables_async()` is **REQUIRED** (sync DDL architecture in v0.10.11 uses psycopg2 for migrations but event loop boundary still applies)
+- **✅ DOCKER/FASTAPI (v0.10.15+)**: `auto_migrate=True` NOW WORKS! Uses `SyncDDLExecutor` with psycopg2/sqlite3 for DDL, bypassing event loop issues
+- **⚠️ IN-MEMORY SQLITE**: `:memory:` databases skip sync DDL and use lazy table creation (sync DDL requires separate connection = different database)
 - **🚀 SOFT DELETE AUTO-FILTER (v0.10.6)**: soft_delete models now auto-filter queries - use `include_deleted=True` to override
 - **🚀 TIMESTAMP AUTO-STRIP (v0.10.6)**: `created_at`/`updated_at` now auto-stripped with warning (no more DF-104 errors!)
 - **PYTEST COMPATIBILITY**: Fixed model registration race condition (v0.9.7)
