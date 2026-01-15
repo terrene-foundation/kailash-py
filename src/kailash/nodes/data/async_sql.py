@@ -1290,12 +1290,32 @@ class MySQLAdapter(DatabaseAdapter):
                 "aiomysql not installed. Install with: pip install aiomysql"
             )
 
+        # Parse connection string if provided (aiomysql requires discrete params, not DSN)
+        if self.config.connection_string:
+            from urllib.parse import unquote, urlparse
+
+            # Handle special characters in password before parsing
+            conn_str = self.config.connection_string
+            parsed = urlparse(conn_str)
+
+            host = parsed.hostname or "localhost"
+            port = parsed.port or 3306
+            user = parsed.username or "root"
+            password = unquote(parsed.password) if parsed.password else ""
+            database = parsed.path.lstrip("/") if parsed.path else ""
+        else:
+            host = self.config.host
+            port = self.config.port or 3306
+            user = self.config.user
+            password = self.config.password
+            database = self.config.database
+
         self._pool = await aiomysql.create_pool(
-            host=self.config.host,
-            port=self.config.port or 3306,
-            user=self.config.user,
-            password=self.config.password,
-            db=self.config.database,
+            host=host,
+            port=port,
+            user=user,
+            password=password,
+            db=database,
             minsize=1,
             maxsize=self.config.max_pool_size,
             pool_recycle=3600,
@@ -3534,32 +3554,29 @@ class AsyncSQLDatabaseNode(AsyncNode):
     def _generate_pool_key(self) -> str:
         """Generate a unique key for connection pool sharing.
 
-        In test environments (pytest/unittest), the loop ID is replaced with
-        a constant 'test' string to enable pool reuse across tests that create
-        new event loops. This fixes pytest-asyncio incompatibility where each
-        test creates a fresh event loop, causing stale pool key lookups.
+        The pool key ALWAYS includes the actual event loop ID to prevent
+        "Task got Future attached to a different loop" errors when pools
+        are reused across different event loops.
 
-        In production environments, the loop ID is included for proper isolation.
+        In test environments, this means each pytest-asyncio test that creates
+        a new event loop will get its own pool. This is the correct behavior
+        to prevent asyncio errors, even though it means less pool reuse.
 
         Returns:
             str: Pool key in format "loop_id|db_type|connection|pool_size|max_pool_size"
 
         Examples:
-            Test mode:    "test|postgresql|localhost:5432|10|20"
-            Production:   "140736120345216|postgresql|localhost:5432|10|20"
+            With running loop:  "140736120345216|postgresql|localhost:5432|10|20"
+            Without loop:       "no_loop|postgresql|localhost:5432|10|20"
         """
-        # Adaptive loop ID based on environment
-        if self._is_test_environment():
-            # Test mode: use constant string for pool reuse across tests
-            loop_id = "test"
-        else:
-            # Production mode: use loop ID for proper isolation
-            try:
-                loop = asyncio.get_running_loop()
-                loop_id = str(id(loop))
-            except RuntimeError:
-                # No running loop (initialization phase)
-                loop_id = "no_loop"
+        # Always use actual loop ID for proper event loop isolation
+        # This prevents "attached to different loop" errors
+        try:
+            loop = asyncio.get_running_loop()
+            loop_id = str(id(loop))
+        except RuntimeError:
+            # No running loop (sync context like auto_migrate)
+            loop_id = "no_loop"
 
         # Create a unique key based on event loop and connection parameters
         key_parts = [
@@ -3742,13 +3759,33 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 raise NodeExecutionError("No query provided")
 
             # Handle parameter style conversion
+            # MySQL uses %s positional parameters and expects tuple/list, not named params
+            # PostgreSQL/SQLite support :name style named parameters
+            db_type = self.config.get("database_type", "").lower()
+
             if params is not None:
-                if isinstance(params, (list, tuple)):
-                    # Convert positional parameters to named parameters
-                    query, params = self._convert_to_named_parameters(query, params)
-                elif not isinstance(params, dict):
-                    # Single parameter - wrap in list and convert
-                    query, params = self._convert_to_named_parameters(query, [params])
+                if db_type == "mysql":
+                    # MySQL: Keep %s placeholders and convert params to tuple
+                    if isinstance(params, dict):
+                        # If dict provided, convert to MySQL %(name)s style
+                        # But for now, just keep as dict - aiomysql handles it
+                        pass
+                    elif isinstance(params, (list, tuple)):
+                        # Keep as tuple for %s placeholders
+                        params = tuple(params) if isinstance(params, list) else params
+                    else:
+                        # Single param - wrap in tuple
+                        params = (params,)
+                else:
+                    # PostgreSQL/SQLite: Convert to named parameters (:p0, :p1)
+                    if isinstance(params, (list, tuple)):
+                        # Convert positional parameters to named parameters
+                        query, params = self._convert_to_named_parameters(query, params)
+                    elif not isinstance(params, dict):
+                        # Single parameter - wrap in list and convert
+                        query, params = self._convert_to_named_parameters(
+                            query, [params]
+                        )
 
             # Validate query for security
             if self._validate_queries:
