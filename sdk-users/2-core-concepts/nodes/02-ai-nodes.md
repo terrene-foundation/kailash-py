@@ -1180,18 +1180,78 @@ The SDK features a unified provider architecture supporting multiple AI provider
 
 **Supported Providers**:
 - **OpenAI**: GPT models and text-embedding series
+- **Azure**: Unified Azure provider (auto-detects Azure OpenAI vs AI Foundry)
 - **Anthropic**: Claude models (chat only)
+- **Google**: Gemini models with vision, embeddings, and tool calling
 - **Ollama**: Local LLMs with both chat and embeddings
+- **Docker**: Docker Model Runner for local inference
 - **Cohere**: Embedding models
 - **HuggingFace**: Sentence transformers and local models
 - **Mock**: Testing provider with consistent outputs
 
+**Auto-Detection Priority**: OpenAI → Azure → Anthropic → Google → Ollama → Docker
+
 **Example**:
 ```python
-from kailash.nodes.ai.ai_providers import get_available_providers
+from kailash.nodes.ai.ai_providers import get_available_providers, get_provider
 providers = get_available_providers()
 # Returns: {"ollama": {"available": True, "chat": True, "embeddings": True}, ...}
 
+# Get specific provider
+azure_provider = get_provider("azure")
+print(azure_provider.get_detected_backend())  # "azure_openai" or "azure_ai_foundry"
+```
+
+### Unified Azure Provider (v0.9.0)
+
+The `azure` provider intelligently auto-detects between Azure OpenAI Service and Azure AI Foundry based on endpoint patterns.
+
+**Configuration**:
+```bash
+export AZURE_ENDPOINT="https://myresource.openai.azure.com"
+export AZURE_API_KEY="your-api-key"
+export AZURE_DEPLOYMENT="gpt-4o"  # Optional: default deployment
+# Optional override: AZURE_BACKEND=openai|foundry
+```
+
+**Backend Detection**:
+| Endpoint Pattern | Detected Backend |
+|------------------|------------------|
+| `*.openai.azure.com` | Azure OpenAI Service |
+| `*.inference.ai.azure.com` | Azure AI Foundry |
+| `*.services.ai.azure.com` | Azure AI Foundry |
+| Unknown patterns | Azure OpenAI (default) |
+
+**Backend-Specific Features**:
+| Feature | Azure OpenAI | AI Foundry |
+|---------|--------------|------------|
+| Audio input | ✅ | ❌ |
+| Reasoning models (o1/o3/GPT-5) | ✅ | ❌ |
+| Llama/Mistral models | ❌ | ✅ |
+| Structured output (json_schema) | ✅ | ✅ |
+
+**Usage**:
+```python
+from kailash.nodes.ai import get_provider
+
+provider = get_provider("azure")
+
+# Auto-detect backend
+print(provider.get_detected_backend())  # "azure_openai" or "azure_ai_foundry"
+print(provider.get_capabilities())  # Feature dictionary
+
+# Chat with automatic parameter handling
+response = provider.chat(
+    messages=[{"role": "user", "content": "Hello"}],
+    model="gpt-4o"
+)
+
+# Reasoning models - temperature auto-filtered
+response = provider.chat(
+    messages=[{"role": "user", "content": "Think step by step"}],
+    model="o1-preview",  # Temperature/top_p automatically removed
+    generation_config={"temperature": 0.7}  # Ignored
+)
 ```
 
 ## See Also
