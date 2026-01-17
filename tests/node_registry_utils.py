@@ -34,9 +34,9 @@ def ensure_nodes_registered():
             logging.debug("All required nodes already present")
             return  # All required nodes present
 
-    # Don't clear module cache in non-forked mode to preserve class identities
-    # Only clear in forked processes where we have no choice
-    if os.environ.get("_PYTEST_FORKED"):
+    # Don't clear module cache in single-process mode to preserve class identities
+    # Only clear in xdist worker processes where we have separate interpreters
+    if os.environ.get("PYTEST_XDIST_WORKER"):
         modules_to_reload = []
         for module_name in list(sys.modules.keys()):
             if module_name.startswith("kailash.nodes."):
