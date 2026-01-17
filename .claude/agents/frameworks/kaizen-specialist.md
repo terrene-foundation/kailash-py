@@ -146,7 +146,7 @@ Kaizen supports 9 LLM providers with automatic detection and fallback:
 | Provider | Type | Requirements | Features |
 |----------|------|--------------|----------|
 | `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
-| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings, structured outputs |
+| `azure` | Cloud | `AZURE_ENDPOINT`, `AZURE_API_KEY` | Unified Azure (auto-detects OpenAI vs AI Foundry), vision, embeddings, structured outputs, reasoning models |
 | `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
 | `google` | Cloud | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Gemini 2.0, vision, embeddings, tool calling, structured outputs |
 | `ollama` | Local | Ollama running on port 11434 | Free, local models (llama, mistral, etc.) |
@@ -169,13 +169,17 @@ class OpenAIConfig:
     model: str = "gpt-4o"
     temperature: float = 0.7
 
-# Azure AI Foundry
+# Azure (Unified - auto-detects Azure OpenAI vs AI Foundry)
 @dataclass
 class AzureConfig:
     llm_provider: str = "azure"
     model: str = "gpt-4o"  # Or any deployed model
     temperature: float = 0.7
-    # Requires: AZURE_AI_INFERENCE_ENDPOINT, AZURE_AI_INFERENCE_API_KEY
+    # Requires: AZURE_ENDPOINT, AZURE_API_KEY
+    # Auto-detects backend from endpoint pattern:
+    #   *.openai.azure.com → Azure OpenAI Service
+    #   *.inference.ai.azure.com → Azure AI Foundry
+    # Override with: AZURE_BACKEND=openai|foundry
 
 # Docker Model Runner (FREE, local)
 @dataclass
@@ -257,7 +261,76 @@ response = await provider.chat_async(messages=messages, model="gemini-2.0-flash"
 embeddings = await provider.embed_async(texts=texts, model="text-embedding-004")
 ```
 
-**Reference**: `kaizen.config.providers`, `kaizen.nodes.ai.ai_providers`
+**Unified Azure Provider (v0.9.0)**:
+Intelligent provider that auto-detects between Azure OpenAI Service and Azure AI Foundry based on endpoint patterns. Handles feature gaps automatically.
+
+```python
+from kaizen.nodes.ai import get_provider, UnifiedAzureProvider
+
+# Auto-detect backend from environment
+# export AZURE_ENDPOINT="https://myresource.openai.azure.com"
+# export AZURE_API_KEY="..."
+provider = get_provider("azure")  # Returns UnifiedAzureProvider
+
+# Check detected backend
+print(provider.get_detected_backend())  # "azure_openai" or "azure_ai_foundry"
+print(provider.get_detection_source())  # "pattern", "explicit", or "error_fallback"
+
+# Check capabilities
+caps = provider.get_capabilities()
+print(caps["audio_input"])        # True for Azure OpenAI, False for AI Foundry
+print(caps["reasoning_models"])   # True for Azure OpenAI (o1, o3, GPT-5)
+print(caps["llama_models"])       # True for AI Foundry only
+
+# Chat with automatic parameter handling
+response = provider.chat(
+    messages=[{"role": "user", "content": "Hello"}],
+    model="gpt-4o",
+    generation_config={"temperature": 0.7}
+)
+
+# Reasoning models - temperature auto-filtered
+response = provider.chat(
+    messages=[{"role": "user", "content": "Think step by step"}],
+    model="o1-preview",  # Temperature automatically removed
+    generation_config={"temperature": 0.7}  # Ignored for o1/o3/GPT-5
+)
+
+# Structured output with json_schema
+response = provider.chat(
+    messages=[{"role": "user", "content": "Extract user info"}],
+    model="gpt-4o",
+    generation_config={
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "user",
+                "strict": True,
+                "schema": {"type": "object", "properties": {"name": {"type": "string"}}}
+            }
+        }
+    }
+)
+
+# Feature checking before use
+try:
+    provider.check_feature("audio_input")  # Raises if not supported
+except FeatureNotSupportedError as e:
+    print(f"Feature {e.feature} requires {e.suggested_backend}")
+```
+
+**Backend-Specific Capabilities**:
+| Feature | Azure OpenAI | AI Foundry |
+|---------|--------------|------------|
+| Audio input | ✅ | ❌ |
+| Reasoning models (o1/o3/GPT-5) | ✅ | ❌ |
+| Llama/Mistral models | ❌ | ✅ |
+| Vision | ✅ | ⚠️ (degraded) |
+| Structured output (json_schema) | ✅ | ✅ |
+| Tool calling | ✅ | ✅ |
+| Streaming | ✅ | ✅ |
+
+**Reference**: `kaizen.config.providers`, `kaizen.nodes.ai.ai_providers`, `kaizen.nodes.ai.unified_azure_provider`
 
 ## Essential Patterns
 
