@@ -428,11 +428,11 @@ jobs:
           # Tests are now properly organized - unit tests have no sleep calls
           # Use marker-based exclusion as per test organization policy
 
-          # Fast test execution without forking overhead
+          # Fast test execution without parallel overhead
           # Problematic threading test moved to integration tests
-          # Disable pytest-xdist and pytest-forked to avoid test isolation issues
+          # Disable pytest-xdist to avoid test isolation issues in CI
           # Include parity and shared tests (fast, no external dependencies)
-          PYTEST_CMD="pytest tests/unit/ tests/parity/ tests/shared/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v --log-cli-level=WARNING -p no:xdist -p no:forked"
+          PYTEST_CMD="pytest tests/unit/ tests/parity/ tests/shared/ -m 'not (slow or integration or e2e or requires_docker or requires_postgres or requires_mysql or requires_redis or requires_ollama)' --maxfail=5 -v --log-cli-level=WARNING -p no:xdist"
           echo "Running Tier 1 unit tests + parity + shared tests (fast mode) with marker-based exclusion"
 
           # Run all checks in parallel with proper failure detection
