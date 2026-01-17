@@ -19,7 +19,7 @@ def pytest_collection_modifyitems(config, items):
         # Apply timeouts based on directory
         if "/tests/unit/" in test_path:
             # Unit tests: 1 second max (5 seconds for tests with heavy imports)
-            # Tests that import heavy modules need more time in forked processes
+            # Tests that import heavy modules need more time in worker processes
             needs_extended_timeout = any(
                 [
                     "pythoncode" in test_path.lower(),
