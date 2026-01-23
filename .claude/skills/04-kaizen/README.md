@@ -1,8 +1,31 @@
 # Kaizen Framework Skills
 
-27 skills for Kaizen AI agent framework covering core patterns, multi-agent coordination, multi-modal processing, autonomous tool calling, observability, memory systems, checkpoint/resume, and journey orchestration.
+27+ skills for Kaizen AI agent framework covering core patterns, Unified Agent API, multi-agent coordination, multi-modal processing, autonomous tool calling, observability, memory systems, checkpoint/resume, and journey orchestration.
 
 ## Skill Categories
+
+### Unified Agent API (v0.10.0 - RECOMMENDED)
+
+The simplest way to build Kaizen agents with progressive configuration:
+
+**Quick Start (2 lines):**
+```python
+from kaizen.api import Agent
+agent = Agent(model="gpt-4")
+result = await agent.run("What is IRP?")
+```
+
+**Key Features:**
+- `Agent` class with progressive configuration (beginner → expert)
+- 3-axis capability system: ExecutionMode, MemoryDepth, ToolAccess
+- 9 presets: qa_assistant, tutor, researcher, developer, admin, chat_assistant, data_analyst, code_reviewer
+- `LocalKaizenAdapter` with TAOD (Think-Act-Observe-Decide) loop for autonomous execution
+- `HierarchicalMemory` with Hot/Warm/Cold tiers
+- `LLMRouter` and `FallbackRouter` for multi-LLM routing
+
+See also: `UNIFIED_AGENT_API_DESIGN.md`, `UNIFIED_AGENT_EXECUTIVE_SUMMARY.md`
+
+---
 
 ### Core Patterns (6 Skills - CRITICAL/HIGH)
 

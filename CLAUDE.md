@@ -44,9 +44,27 @@
 **AI agent framework** built on Core SDK:
 - **Purpose**: Production-ready AI agents with multi-modal processing, multi-agent coordination, and enterprise features built on Kailash SDK
 - **Features**: Signature-based programming, BaseAgent architecture, automatic optimization, error handling, audit trails
+- **Unified Agent API (v0.10.0)**: Progressive configuration from 2-line quickstart to expert mode
 - **Usage**: Agentic applications requiring robust AI capabilities
 - **Install**: `pip install kailash-kaizen`
-- **Import**: `from kaizen.* import ...`
+- **Import**: `from kaizen.api import Agent` (v0.10.0) or `from kaizen.core.base_agent import BaseAgent`
+
+**Kaizen v0.10.0 Quick Start (Unified Agent API)**:
+```python
+from kaizen.api import Agent
+
+# 2-line quickstart
+agent = Agent(model="gpt-4")
+result = await agent.run("What is IRP?")
+
+# Autonomous mode with memory
+agent = Agent(
+    model="gpt-4",
+    execution_mode="autonomous",  # TAOD loop
+    memory="session",
+    tool_access="constrained",
+)
+```
 
 ### Critical Relationships
 - **DataFlow, Nexus, and Kaizen are built ON Core SDK** - they don't replace it
