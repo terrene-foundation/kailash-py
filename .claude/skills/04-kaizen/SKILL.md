@@ -1,6 +1,6 @@
 ---
 name: kaizen
-description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'Planning agent', 'PEV agent', 'Tree-of-Thoughts', 'pipeline patterns', 'supervisor-worker', 'router pattern', 'ensemble pattern', 'blackboard pattern', 'parallel execution', 'agent-to-agent communication', 'A2A protocol', 'streaming agents', 'agent testing', 'agent memory', 'agentic workflows', 'AgentRegistry', 'OrchestrationRuntime', 'distributed agents', 'agent registry', '100+ agents', 'capability discovery', 'fault tolerance', 'health monitoring', 'trust protocol', 'EATP', 'TrustedAgent', 'trust chains', 'secure messaging', 'enterprise trust', 'credential rotation', 'trust verification', or 'cross-organization agents'."
+description: "Kailash Kaizen - production-ready AI agent framework with signature-based programming, multi-agent coordination, and enterprise features. Use when asking about 'AI agents', 'agent framework', 'BaseAgent', 'multi-agent systems', 'agent coordination', 'signatures', 'agent signatures', 'RAG agents', 'vision agents', 'audio agents', 'multimodal agents', 'agent prompts', 'prompt optimization', 'chain of thought', 'ReAct pattern', 'Planning agent', 'PEV agent', 'Tree-of-Thoughts', 'pipeline patterns', 'supervisor-worker', 'router pattern', 'ensemble pattern', 'blackboard pattern', 'parallel execution', 'agent-to-agent communication', 'A2A protocol', 'streaming agents', 'agent testing', 'agent memory', 'agentic workflows', 'AgentRegistry', 'OrchestrationRuntime', 'distributed agents', 'agent registry', '100+ agents', 'capability discovery', 'fault tolerance', 'health monitoring', 'trust protocol', 'EATP', 'TrustedAgent', 'trust chains', 'secure messaging', 'enterprise trust', 'credential rotation', 'trust verification', 'cross-organization agents', 'Unified Agent API', 'Agent class', 'execution_mode', 'autonomous mode', 'TAOD loop', 'LocalKaizenAdapter', 'RuntimeAdapter', 'RuntimeSelector', 'memory providers', 'HierarchicalMemory', 'MemoryProvider', 'Hot/Warm/Cold memory', 'multi-LLM routing', 'LLMRouter', 'TaskAnalyzer', 'FallbackRouter', 'RoutingRule', 'capability presets', 'progressive configuration', or 'AgentResult'."
 ---
 
 # Kailash Kaizen - AI Agent Framework
@@ -11,6 +11,10 @@ Kaizen is a production-ready AI agent framework built on Kailash Core SDK that p
 
 Kaizen enables building sophisticated AI agents with:
 
+- **Unified Agent API (v0.10.0)**: Progressive configuration from 2-line quickstart to expert mode
+- **Autonomous Execution**: TAOD (Think-Act-Observe-Decide) agentic loop with LocalKaizenAdapter
+- **Multi-LLM Routing (v0.10.0)**: Task-based model selection with LLMRouter and FallbackRouter
+- **Memory Provider Interface (v0.10.0)**: HierarchicalMemory with Hot/Warm/Cold tiers
 - **Signature-Based Programming**: Type-safe agent interfaces with automatic validation and optimization
 - **BaseAgent Architecture**: Production-ready agent foundation with error handling, audit trails, and cost tracking
 - **Multi-Agent Coordination**: Supervisor-worker, agent-to-agent protocols, hierarchical structures
@@ -25,7 +29,39 @@ Kaizen enables building sophisticated AI agents with:
 
 ## Quick Start
 
-### Basic Agent
+### Unified Agent API (v0.10.0 - Recommended)
+```python
+from kaizen.api import Agent
+
+# 2-line quickstart
+agent = Agent(model="gpt-4")
+result = await agent.run("What is IRP?")
+
+# With memory and autonomous mode
+agent = Agent(
+    model="gpt-4",
+    execution_mode="autonomous",  # TAOD loop
+    memory="session",             # Session memory
+    tool_access="constrained",    # Safe tool access
+)
+result = await agent.run("Implement a REST API endpoint")
+print(result.text, f"Cost: ${result.cost:.4f}")
+```
+
+### Using Presets
+```python
+from kaizen.api import Agent
+from kaizen.api.presets import preset
+
+# Developer preset (autonomous + session memory + constrained tools)
+config = preset("developer")
+agent = Agent(model="gpt-4", **config)
+
+# Available presets: qa_assistant, tutor, researcher, developer, admin,
+# chat_assistant, data_analyst, code_reviewer
+```
+
+### Basic Agent (BaseAgent Approach)
 ```python
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import Signature, InputField, OutputField
