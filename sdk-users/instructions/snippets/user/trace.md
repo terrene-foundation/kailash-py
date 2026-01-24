@@ -2,9 +2,9 @@
 
 These snippets guide Claude Code through systematic analysis of existing repositories and migration to the Kailash SDK template structure.
 
-## 🎯 ULTRATHINK ACTIVATION
+## 🎯 DEEP ANALYSIS ACTIVATION
 
-Before starting any analysis, put on your ultrathink cap and answer these questions:
+Before starting any analysis, think deeply and answer these questions:
 
 1. **What type of application is this likely to be?**
    - Look at root files, dependencies, and structure
@@ -569,7 +569,7 @@ After completing analysis and creating the readiness report:
 ```
 
 The migration-implementation.md guide will take over with:
-1. ULTRATHINK activation for migration
+1. Deep analysis activation for migration
 2. ADR creation for migration decisions
 3. Component-by-component migration with validation
 4. 3-tier test implementation

@@ -6,7 +6,7 @@
 
 You are implementing a feature. Follow these steps exactly and show me complete outputs at each step. Do not summarize or skip any validation steps.
 
-## 1. CONTEXT LOADING AND ULTRATHINK ACTIVATION
+## 1. CONTEXT LOADING AND DEEP ANALYSIS ACTIVATION
 
 ### Essential Context Loading
 Load these files before starting (DO NOT proceed until loaded):
@@ -50,8 +50,8 @@ After loading the essential files, you MUST demonstrate your understanding of th
 
 **Search relevant documentation as needed during implementation using MCP tools instead of loading everything upfront.**
 
-### ULTRATHINK CAP ACTIVATION
-Put on your ultrathink cap. Before we begin any implementation, you MUST analyze deeply and provide specific answers to these questions:
+### DEEP ANALYSIS ACTIVATION
+Think deeply. Before we begin any implementation, you MUST analyze thoroughly and provide specific answers to these questions:
 
 1. **What are the most likely failure points for this specific task?**
    - Consider past patterns from `sdk-users/2-core-concepts/validation/common-mistakes.md`
@@ -428,7 +428,7 @@ Before declaring this implementation complete, you MUST verify every item on thi
 **If any item is unchecked, STOP and fix it before declaring complete. Do not proceed until EVERY item is verified.**
 
 ### Final Validation
-Before considering this implementation complete, put on your ultrathink cap and run through this final validation:
+Before considering this implementation complete, think deeply and run through this final validation:
 
 1. Can another developer understand and maintain this code?
 2. Are all edge cases and error conditions handled?
@@ -475,9 +475,9 @@ Check the `CLAUDE.md` in root and other directories:
    - For each user persona and their workflows, please run through the e2e using temp tests
    - Run through the guidance flow as a user and ensure that you can trace everything to build from basic to advanced
 
-## 10. ULTRATHINK CAP CRITIQUE
+## 10. DEEP ANALYSIS CRITIQUE
 
-Put on your ultrathink cap again. Starting fresh, critique this implementation.
+Think deeply again. Starting fresh, critique this implementation.
 - Read adr, guidance, and documentations thoroughly.
 - Check the detailed todo entries in `todos/`.
 - Make sure you understand the intent and purpose of this project.

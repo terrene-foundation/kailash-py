@@ -133,6 +133,6 @@ from kailash.channels.mcp_channel import MCPChannel
 ## Related Documents
 
 - `/docs/implementation-guide.md` - Updated implementation patterns
-- `/docs/critiques/nexus-v1-ultrathink-critique.md` - Resolved issues
+- `/docs/critiques/nexus-v1-deep-analysis-critique.md` - Resolved issues
 - `/tests/` - Enterprise integration test suite
 - SDK enterprise documentation - Primary reference

@@ -17,7 +17,7 @@ The subagents are designed around the core workflow phases identified in `CLAUDE
 | **testing-specialist** | 3-tier testing strategy with real infrastructure | Understanding testing requirements and strategy |
 | **tdd-implementer** | Test-first development methodology | Implementing features with write-test-then-code |
 | **documentation-validator** | Documentation validation and testing | Testing code examples, ensuring doc accuracy |
-| **ultrathink-analyst** | Deep analysis and failure point identification | Complex features, systemic issues, risk analysis |
+| **deep-analyst** | Deep analysis and failure point identification | Complex features, systemic issues, risk analysis |
 | **requirements-analyst** | Requirements breakdown and ADR creation | Systematic analysis, architecture decisions |
 | **intermediate-reviewer** | Checkpoint reviews and progress critique | Reviewing todos and implementation milestones |
 | **todo-manager** | Task management and project tracking | Creating and managing development task lists |
@@ -70,7 +70,7 @@ Follow this sequence for efficient feature development:
 
 | Phase | Agents (in order) | Purpose |
 |-------|-------------------|---------|
-| **1. Analysis** | ultrathink-analyst → requirements-analyst → sdk-navigator → framework-advisor → (nexus/dataflow/kaizen-specialist) | Deep analysis, requirements, existing patterns, tech selection, framework-specific guidance |
+| **1. Analysis** | deep-analyst → requirements-analyst → sdk-navigator → framework-advisor → (nexus/dataflow/kaizen-specialist) | Deep analysis, requirements, existing patterns, tech selection, framework-specific guidance |
 | **2. Planning** | todo-manager → gh-manager → intermediate-reviewer | Task breakdown, GitHub sync, and validation |
 | **3. Implementation** | tdd-implementer → pattern-expert → (nexus/dataflow/kaizen/react/flutter-specialist) → intermediate-reviewer → gold-standards-validator | Test-first, implement, framework patterns, review, validate (repeat per component) |
 | **4. Testing** | testing-specialist → documentation-validator | Full test coverage, doc accuracy |
@@ -80,7 +80,7 @@ Follow this sequence for efficient feature development:
 
 ### Phase 1: Analysis & Planning (Sequential)
 ```
-1. > Use the ultrathink-analyst subagent to analyze requirements and identify failure points for [feature]
+1. > Use the deep-analyst subagent to analyze requirements and identify failure points for [feature]
 2. > Use the requirements-analyst subagent to create systematic breakdown and ADR for [feature]
 3. > Use the sdk-navigator subagent to find existing patterns similar to [feature]
 4. > Use the framework-advisor subagent to recommend Core SDK vs DataFlow vs Nexus vs Kaizen for [feature]
@@ -91,7 +91,7 @@ Follow this sequence for efficient feature development:
    - If Flutter mobile needed: > Use the flutter-specialist subagent for mobile implementation details
 
 OR chain all Phase 1 agents:
-> Use the ultrathink-analyst, requirements-analyst, sdk-navigator, and framework-advisor subagents to perform complete analysis and planning for [feature]
+> Use the deep-analyst, requirements-analyst, sdk-navigator, and framework-advisor subagents to perform complete analysis and planning for [feature]
 ```
 
 ### Phase 2: Task Planning & Review

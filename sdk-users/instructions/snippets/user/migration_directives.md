@@ -126,7 +126,7 @@ Before proceeding with migration, validate content separation:
 
 ### Four-Pass Critique Strategy (MANDATORY)
 
-Perform 4 ultrathink critique passes to ensure migration completeness:
+Perform 4 deep analysis critique passes to ensure migration completeness:
 In each pass, please:
 - Document all business logic, API calls, state transitions
 - Identify gaps in requirements, performance, security, integration
@@ -497,7 +497,7 @@ Track each component's progress:
 
 ### Phase Completion Critique Checklist
 
-#### **1. UltraThink Analysis - What Did We Actually Accomplish?**
+#### **1. Deep Analysis - What Did We Actually Accomplish?**
 - [ ] List every component implemented with evidence
 - [ ] Verify all acceptance criteria from phase requirements met
 - [ ] Check all tests actually PASS (not skipped or mocked in integration/E2E)

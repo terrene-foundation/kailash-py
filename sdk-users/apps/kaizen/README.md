@@ -64,46 +64,7 @@ class MyAgent(BaseAgent):
 - **Production Observability**: Complete monitoring stack (Jaeger, Prometheus, Grafana, ELK) with zero overhead
 - **Core SDK Compatible**: Seamless integration with Kailash workflows
 
-## 🆕 What's New in v0.10.0
-
-**Unified Agent API (Phase 6)** - Progressive configuration from 2-line quickstart to expert mode:
-
-```python
-from kaizen.api import Agent
-
-# 2-line quickstart
-agent = Agent(model="gpt-4")
-result = await agent.run("What is IRP?")
-
-# With memory, autonomous mode, and tool access
-agent = Agent(
-    model="gpt-4",
-    execution_mode="autonomous",  # TAOD agentic loop
-    memory="session",             # Session memory
-    tool_access="constrained",    # Safe tool access with confirmation
-)
-result = await agent.run("Implement a REST API endpoint")
-print(result.text, f"Cost: ${result.cost:.4f}")
-
-# Using capability presets
-from kaizen.api.presets import preset
-config = preset("developer")  # autonomous + session + constrained
-agent = Agent(model="gpt-4", **config)
-```
-
-**Key Features:**
-- **3-Axis Capability System**: ExecutionMode (SINGLE/MULTI/AUTONOMOUS), MemoryDepth (STATELESS/SESSION/PERSISTENT/LEARNING), ToolAccess (NONE/READ_ONLY/CONSTRAINED/FULL)
-- **9 Capability Presets**: qa_assistant, tutor, researcher, developer, admin, chat_assistant, data_analyst, code_reviewer, custom
-- **LocalKaizenAdapter**: Native TAOD (Think-Act-Observe-Decide) loop works with ANY LLM provider
-- **HierarchicalMemory**: Hot/Warm/Cold tiers with automatic tier management
-- **Multi-LLM Routing**: TaskAnalyzer, LLMRouter, FallbackRouter for intelligent model selection
-- **AgentResult**: Comprehensive execution metrics (cycles, turns, tokens, cost, tool calls)
-
-**Reference**: `kaizen.api` module | **Tests**: 845+ passing | **Docs**: `docs/developers/05-unified-agent-api-guide.md`
-
----
-
-## What's New in v0.9.0
+## 🆕 What's New in v0.9.0
 
 **Journey Orchestration (Layer 5)** - Declarative user journey management:
 
