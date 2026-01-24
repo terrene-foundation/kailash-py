@@ -198,7 +198,7 @@ Phase 3: [Polish] - Z days
 ## Integration Points
 
 ### Before Requirements Analysis
-- Use **ultrathink-analyst** for deep problem analysis
+- Use **deep-analyst** for deep problem analysis
 - Use **sdk-navigator** to find existing patterns
 
 ### After Requirements Analysis

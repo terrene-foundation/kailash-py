@@ -4,62 +4,7 @@
 
 **Kaizen** is a signature-based AI agent framework built on Kailash Core SDK, providing production-ready agents with multi-modal processing, multi-agent coordination, and enterprise features.
 
-## 🆕 What's New in v0.10.0 (2026-01)
-
-**Unified Agent API (Phase 6)** - Progressive configuration from 2-line quickstart to expert mode:
-
-```python
-from kaizen.api import Agent
-
-# 2-line quickstart
-agent = Agent(model="gpt-4")
-result = await agent.run("What is IRP?")
-
-# With memory, autonomous mode, and tool access
-agent = Agent(
-    model="gpt-4",
-    execution_mode="autonomous",  # TAOD agentic loop
-    memory="session",             # Session memory
-    tool_access="constrained",    # Safe tool access with confirmation
-)
-result = await agent.run("Implement a REST API endpoint")
-print(result.text, f"Cost: ${result.cost:.4f}")
-
-# Using capability presets
-from kaizen.api.presets import preset
-config = preset("developer")  # autonomous + session + constrained
-agent = Agent(model="gpt-4", **config)
-```
-
-**Key Components:**
-
-- **Unified Agent API (`kaizen.api`)**:
-  - `Agent` class with progressive configuration
-  - 3-axis capability: ExecutionMode, MemoryDepth, ToolAccess
-  - 9 presets: qa_assistant, tutor, researcher, developer, admin, chat_assistant, data_analyst, code_reviewer
-  - ConfigurationError with helpful suggestions
-
-- **LocalKaizenAdapter (`kaizen.runtime.adapters.kaizen_local`)**:
-  - Native TAOD (Think-Act-Observe-Decide) loop
-  - Works with ANY LLM provider (not limited to Claude)
-  - Full checkpoint/resume/hooks integration
-  - Planning strategies: ReAct, PEV, Tree-of-Thoughts
-
-- **HierarchicalMemory (`kaizen.memory.providers.hierarchical`)**:
-  - Hot/Warm/Cold tier management
-  - Automatic tier migration based on access patterns
-  - Token-aware context building
-
-- **Multi-LLM Routing (`kaizen.llm.routing`)**:
-  - TaskAnalyzer for complexity detection
-  - LLMRouter for intelligent model selection
-  - FallbackRouter for automatic failover
-
-**Reference**: `kaizen.api` module | **Tests**: 845+ passing | **Docs**: `docs/developers/05-unified-agent-api-guide.md`
-
----
-
-## What's New in v0.9.0 (2026-01)
+## 🆕 What's New in v0.9.0 (2026-01)
 
 **Journey Orchestration (Layer 5)** - Declarative user journey management with intent-driven transitions:
 

@@ -6,7 +6,7 @@
 
 You are migrating an existing system to Kailash SDK. Follow these steps exactly and show me complete outputs at each step. Do not summarize or skip any validation steps.
 
-## 1. CONTEXT LOADING AND ULTRATHINK ACTIVATION
+## 1. CONTEXT LOADING AND DEEP ANALYSIS ACTIVATION
 
 ### Essential Context Loading
 Load these files before starting (DO NOT proceed until loaded):
@@ -42,8 +42,8 @@ After loading the essential files, you MUST confirm you understand:
 
 **Search relevant documentation as needed during implementation using MCP tools instead of loading everything upfront.**
 
-### ULTRATHINK CAP ACTIVATION
-Put on your ultrathink cap. Before we begin any migration, you MUST analyze deeply and provide specific answers to these questions:
+### DEEP ANALYSIS ACTIVATION
+Think deeply. Before we begin any migration, you MUST analyze thoroughly and provide specific answers to these questions:
 
 1. **What are the most likely migration failure points for this specific component?**
    - Where might state migration break application continuity?
@@ -439,9 +439,9 @@ Before considering migration complete:
 
 **If you cannot answer "yes" to all questions, continue working until you can.**
 
-## 10. ULTRATHINK CAP CRITIQUE
+## 10. DEEP ANALYSIS CRITIQUE
 
-Put on your ultrathink cap. Review this migration critically:
+Think deeply. Review this migration critically:
 
 1. **Does the migration deliver correct behavior per documentation?**
    - Are workflows operating correctly?
