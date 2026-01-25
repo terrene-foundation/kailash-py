@@ -22,6 +22,9 @@ Kaizen enables building sophisticated AI agents with:
 - **Memory System**: 3-tier hierarchical storage (Hot/Warm/Cold) with DataFlow backend
 - **Security**: RBAC, process isolation, compliance controls (SOC2, GDPR, HIPAA, PCI-DSS)
 - **Enterprise Agent Trust Protocol (v0.8.0)**: Cryptographic trust chains, TrustedAgent, secure messaging, credential rotation
+- **Performance Optimization (v1.0)**: 7 caches with 10-100x speedup (SchemaCache, EmbeddingCache, PromptCache, etc.)
+- **Specialist System (v1.0)**: Claude Code-style specialists and skills with `.kaizen/` directory
+- **GPT-5 Support (v1.0)**: Automatic temperature=1.0 enforcement, 8000 max_tokens for reasoning
 
 ## Quick Start
 
@@ -180,6 +183,20 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
   - Enterprise System Agent (ESA) for legacy system integration
   - A2A HTTP service for cross-organization trust operations
   - Credential rotation, rate limiting, and security audit logging
+
+### v1.0 Developer Guides (NEW)
+Located in `apps/kailash-kaizen/src/kaizen/docs/developers/`:
+
+- **Performance Optimization** (`09-performance-optimization-guide.md`) - Caching (10-100x speedup), parallel execution
+- **Specialist System** (`06-specialist-system-guide.md`) - Claude Code-style specialists and skills
+- **Native Tool System** (`00-native-tools-guide.md`) - TAOD loop tool integration
+- **Runtime Abstraction** (`01-runtime-abstraction-guide.md`) - Multi-runtime support
+- **LocalKaizenAdapter** (`02-local-kaizen-adapter-guide.md`) - TAOD loop implementation
+- **Memory Provider** (`03-memory-provider-guide.md`) - Memory provider interface
+- **Multi-LLM Routing** (`04-multi-llm-routing-guide.md`) - Intelligent LLM selection
+- **Unified Agent API** (`05-unified-agent-api-guide.md`) - Simplified 2-line agent creation
+- **Task/Skill Tools** (`07-task-skill-tools-guide.md`) - Subagent spawning
+- **Claude Code Parity** (`08-claude-code-parity-tools-guide.md`) - 7 parity tools
 
 ### Testing & Quality
 - **[kaizen-testing-patterns](kaizen-testing-patterns.md)** - Testing AI agents
