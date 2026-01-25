@@ -4,7 +4,91 @@
 
 **Kaizen** is a signature-based AI agent framework built on Kailash Core SDK, providing production-ready agents with multi-modal processing, multi-agent coordination, and enterprise features.
 
-## 🆕 What's New in v0.9.0 (2026-01)
+## 🆕 What's New in v1.0.0 (2026-01-25)
+
+**General Availability Release** with performance optimization, specialist system, and GPT-5 support:
+
+### Performance Optimization (10-100x speedup)
+
+```python
+from kaizen.performance import (
+    SchemaCache, EmbeddingCache, PromptCache, MemoryContextCache,
+    HookBatchExecutor, BackgroundCheckpointWriter,
+    get_schema_cache,  # Global singleton
+)
+
+# Schema caching (10-50x speedup)
+cache = get_schema_cache()
+schema = cache.get_or_compute("tool_name", lambda: generate_schema())
+print(f"Hit rate: {cache.get_metrics().hit_rate:.1%}")
+
+# Embedding caching (100x+ API savings)
+from kaizen.performance import get_embedding_cache
+embed_cache = get_embedding_cache()
+vector = embed_cache.get_or_compute(text, model, compute_fn=embed_api_call)
+```
+
+| Cache | Speedup |
+|-------|---------|
+| SchemaCache | 10-50x |
+| EmbeddingCache | 100x+ |
+| PromptCache | 10-20x |
+| MemoryContextCache | 5-10x |
+| HookBatchExecutor | 8x |
+| ParallelToolExecutor | 4-5x |
+
+### Specialist System (ADR-013)
+
+Claude Code-style specialists and skills:
+
+```python
+from kaizen.core import KaizenOptions, SpecialistDefinition
+from kaizen.runtime.adapters import LocalKaizenAdapter
+
+specialists = {
+    "code-reviewer": SpecialistDefinition(
+        description="Expert code reviewer",
+        system_prompt="You are a senior code reviewer...",
+        available_tools=["Read", "Glob", "Grep"],
+        model="gpt-4o",
+        temperature=0.2,
+    ),
+}
+
+options = KaizenOptions(specialists=specialists)
+adapter = LocalKaizenAdapter(kaizen_options=options)
+reviewer = adapter.for_specialist("code-reviewer")
+```
+
+### GPT-5 Support (CRITICAL)
+
+**GPT-5 requires temperature=1.0** - auto-enforced by the provider:
+
+```python
+config = AgentConfig(
+    llm_provider="openai",
+    model="gpt-5-nano-2025-08-07",  # or gpt-5-2025-08-07
+    temperature=1.0,  # REQUIRED - auto-enforced
+    max_tokens=8000,  # Increased for reasoning tokens
+)
+```
+
+### Claude Code Parity Tools
+
+7 tools for autonomous workflows: `TodoWriteTool`, `NotebookEditTool`, `AskUserQuestionTool`, `EnterPlanModeTool`, `ExitPlanModeTool`, `KillShellTool`, `TaskOutputTool`
+
+### Developer Documentation
+
+Full v1.0 docs in `apps/kailash-kaizen/src/kaizen/docs/developers/`:
+- Performance optimization guide
+- Specialist system guide
+- Native tool system
+- Multi-LLM routing
+- Task/Skill tools
+
+---
+
+## What Was New in v0.9.0 (2026-01)
 
 **Journey Orchestration (Layer 5)** - Declarative user journey management with intent-driven transitions:
 

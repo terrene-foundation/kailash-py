@@ -64,7 +64,47 @@ class MyAgent(BaseAgent):
 - **Production Observability**: Complete monitoring stack (Jaeger, Prometheus, Grafana, ELK) with zero overhead
 - **Core SDK Compatible**: Seamless integration with Kailash workflows
 
-## 🆕 What's New in v0.9.0
+## 🆕 What's New in v1.0.0 (GA Release)
+
+**General Availability** with performance optimization, specialist system, and GPT-5 support:
+
+### Performance Optimization (10-100x speedup)
+
+7 production-ready caches in `kaizen.performance`:
+- **SchemaCache**: Tool schema caching (10-50x speedup)
+- **EmbeddingCache**: Embedding vector caching (100x+ API savings)
+- **PromptCache**: System prompt caching (10-20x speedup)
+- **MemoryContextCache**: Incremental context building (5-10x)
+- **HookBatchExecutor**: Parallel hook execution (8x)
+- **BackgroundCheckpointWriter**: Non-blocking I/O
+- **ParallelToolExecutor**: Parallel tool execution (4-5x)
+
+### Specialist System (ADR-013)
+
+Claude Code-style specialists and skills:
+- **SpecialistDefinition**: Define agent personas with tools, models, prompts
+- **SkillDefinition**: Knowledge packages for dynamic loading
+- **Directory Structure**: `.kaizen/specialists/` and `.kaizen/skills/`
+
+### GPT-5 Support
+
+- **temperature=1.0**: Auto-enforced for GPT-5 models
+- **max_tokens=8000**: Increased for reasoning tokens
+- **Reasoning models**: Proper handling of internal chain-of-thought
+
+### Claude Code Parity Tools
+
+7 tools for autonomous workflows:
+- `TodoWriteTool`, `NotebookEditTool`, `AskUserQuestionTool`
+- `EnterPlanModeTool`, `ExitPlanModeTool`, `KillShellTool`, `TaskOutputTool`
+
+### Developer Documentation
+
+Full v1.0 docs in `apps/kailash-kaizen/src/kaizen/docs/developers/` (11 guides)
+
+---
+
+## What Was New in v0.9.0
 
 **Journey Orchestration (Layer 5)** - Declarative user journey management:
 
