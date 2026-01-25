@@ -192,6 +192,6 @@ Use this skill when you need to:
 
 For architecture decisions, invoke:
 - `framework-advisor` - Framework selection and architecture
-- `ultrathink-analyst` - Deep analysis for complex decisions
+- `deep-analyst` - Deep analysis for complex decisions
 - `requirements-analyst` - Requirements breakdown
 - `pattern-expert` - Pattern recommendations

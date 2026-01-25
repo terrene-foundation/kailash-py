@@ -24,7 +24,10 @@
 ### DataFlow (`sdk-users/apps/dataflow/`)
 **Zero-config database framework** built on Core SDK:
 - **Purpose**: Database operations with automatic model-to-node generation
-- **Features**: @db.model decorator generates 9 nodes per model automatically. DataFlow IS NOT AN ORM!
+- **Features**: @db.model decorator generates 11 nodes per model automatically:
+  - CRUD: CREATE, READ, UPDATE, DELETE, LIST, UPSERT, COUNT
+  - Bulk: BULK_CREATE, BULK_UPDATE, BULK_DELETE, BULK_UPSERT
+  - DataFlow IS NOT AN ORM!
 - **Usage**: Database-first applications with enterprise features
 - **Install**: `pip install kailash-dataflow`
 - **Import**: `from dataflow import DataFlow`
@@ -41,9 +44,27 @@
 **AI agent framework** built on Core SDK:
 - **Purpose**: Production-ready AI agents with multi-modal processing, multi-agent coordination, and enterprise features built on Kailash SDK
 - **Features**: Signature-based programming, BaseAgent architecture, automatic optimization, error handling, audit trails
+- **Unified Agent API (v0.10.0)**: Progressive configuration from 2-line quickstart to expert mode
 - **Usage**: Agentic applications requiring robust AI capabilities
 - **Install**: `pip install kailash-kaizen`
-- **Import**: `from kaizen.* import ...`
+- **Import**: `from kaizen.api import Agent` (v0.10.0) or `from kaizen.core.base_agent import BaseAgent`
+
+**Kaizen v0.10.0 Quick Start (Unified Agent API)**:
+```python
+from kaizen.api import Agent
+
+# 2-line quickstart
+agent = Agent(model="gpt-4")
+result = await agent.run("What is IRP?")
+
+# Autonomous mode with memory
+agent = Agent(
+    model="gpt-4",
+    execution_mode="autonomous",  # TAOD loop
+    memory="session",
+    tool_access="constrained",
+)
+```
 
 ### Critical Relationships
 - **DataFlow, Nexus, and Kaizen are built ON Core SDK** - they don't replace it
@@ -53,7 +74,7 @@
 ## 🎯 Specialized Subagents
 
 ### Analysis & Planning
-- **ultrathink-analyst** → Deep failure analysis, complexity assessment
+- **deep-analyst** → Deep failure analysis, complexity assessment
 - **requirements-analyst** → Requirements breakdown, ADR creation
 - **sdk-navigator** → Find patterns before coding, resolve errors during development
 - **framework-advisor** → Choose Core SDK, DataFlow, or Nexus; coordinates with specialists
@@ -232,29 +253,20 @@ This inheritance ensures 100% feature parity between sync and async runtimes, in
 - **Docker/FastAPI**: Use `AsyncLocalRuntime()` or `WorkflowAPI()` (defaults to async)
 - **CLI/Scripts**: Use `LocalRuntime()` for synchronous execution
 
-## 🐳 Docker Deployment
-- WorkflowAPI now defaults to AsyncLocalRuntime (async-first, no threads).
+## 📚 Framework-Specific Guides
 
-### WorkflowAPI (Recommended for Docker)
-```python
-from kailash.api.workflow_api import WorkflowAPI
+For detailed framework documentation, see:
 
-# WorkflowAPI automatically uses AsyncLocalRuntime
-api = WorkflowAPI(my_workflow)  # Docker-optimized by default
-api.run(port=8000)  # No hanging, 10-100x faster
-```
+| Framework | Quick Reference | Full Documentation |
+|-----------|-----------------|-------------------|
+| **DataFlow** | `sdk-users/apps/dataflow/CLAUDE.md` (2,900+ lines) | Database operations, critical gotchas, Docker deployment |
+| **Kaizen** | `sdk-users/apps/kaizen/CLAUDE.md` (1,900+ lines) | AI agents, signatures, multi-modal, v1.0 features |
+| **Nexus** | `sdk-users/apps/nexus/CLAUDE.md` | Multi-channel deployment (API/CLI/MCP) |
+| **Core SDK** | `.claude/skills/01-core-sdk/` | WorkflowBuilder, nodes, runtime patterns |
 
-### Manual Runtime Selection
-```python
-from kailash.runtime import AsyncLocalRuntime, LocalRuntime
-
-# For Docker/FastAPI (async contexts)
-runtime = AsyncLocalRuntime()
-
-# For CLI/scripts (sync contexts)
-runtime = LocalRuntime()
-
-# Or use helper
-from kailash.runtime import get_runtime
-runtime = get_runtime("async")  # or "sync"
-```
+**Key DataFlow Gotchas** (see full guide for details):
+1. NEVER manually set `created_at`/`updated_at` (auto-managed)
+2. CreateNode uses FLAT params; UpdateNode uses `filter` + `fields`
+3. Primary key MUST be named `id`
+4. `soft_delete` only affects DELETE, NOT queries
+5. Use `$null`/`$exists` operators for NULL checking

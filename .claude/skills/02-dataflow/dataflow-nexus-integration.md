@@ -1,6 +1,6 @@
 ---
 name: dataflow-nexus-integration
-description: "Integrate DataFlow with Nexus for multi-channel APIs. Use when DataFlow Nexus, Nexus blocking, Nexus integration, skip_registry auto_discovery, or prevent blocking startup."
+description: "Integrate DataFlow with Nexus for multi-channel APIs. Use when DataFlow Nexus, Nexus blocking, Nexus integration, enable_model_persistence auto_discovery, or prevent blocking startup."
 ---
 
 # DataFlow + Nexus Integration
@@ -15,7 +15,7 @@ Critical configuration patterns to prevent startup blocking when integrating Dat
 
 ## Quick Reference
 
-- **CRITICAL**: Use `skip_registry=True` + `auto_discovery=False` to prevent blocking
+- **CRITICAL**: Use `enable_model_persistence=False` + `auto_discovery=False` to prevent blocking
 - **Cause**: DataFlow table creation blocks Nexus startup
 - **Fix**: Defer schema operations, disable auto-discovery
 - **Pattern**: Initialize DataFlow before Nexus with proper config
@@ -30,13 +30,13 @@ from nexus import Nexus
 db = DataFlow(
     database_url="postgresql://user:pass@localhost/db",
     auto_migrate=False,              # Don't create tables during init (prevents 5-10s startup delay)
-    skip_registry=True,              # Skip automatic model discovery
+    enable_model_persistence=False,  # Skip model registry for fast startup
     existing_schema_mode=True        # Work with existing schema only
 )
 
-# Note: auto_migrate=False prevents blocking during Nexus startup, not for async safety.
-# As of v0.9.5+, auto_migrate=True is safe in async contexts. This config is specifically
-# for preventing the 5-10s startup delay when integrating with Nexus.
+# CRITICAL: auto_migrate=False is REQUIRED for Docker/FastAPI deployments.
+# Despite async_safe_run() improvements, auto_migrate=True still fails due to
+# event loop boundary issues (connections created in wrong loop).
 
 # Define models AFTER init
 @db.model
@@ -85,13 +85,13 @@ nexus = Nexus(
 db = DataFlow(
     database_url="postgresql://...",
 
-    # CRITICAL: Prevent blocking startup (5-10s delay prevention, NOT async safety)
-    auto_migrate=False,           # No automatic schema changes
-    skip_registry=True,           # Don't auto-discover models
-    existing_schema_mode=True,    # Maximum safety
+    # CRITICAL: auto_migrate=False is REQUIRED for Docker/FastAPI deployments
+    auto_migrate=False,              # Prevents event loop conflicts (connections bound to wrong loop)
+    enable_model_persistence=False,  # Skip model registry for fast startup
+    existing_schema_mode=True,       # Maximum safety
 
-    # Note: As of v0.9.5+, auto_migrate=True is safe in async contexts.
-    # This setting is specifically for preventing Nexus startup delays.
+    # Note: Despite async_safe_run() improvements in v0.10.7+, auto_migrate=True
+    # STILL FAILS in Docker/FastAPI due to asyncio event loop boundary issues.
 
     # Performance
     pool_size=20,
@@ -144,7 +144,7 @@ nexus = Nexus(
 
 ```python
 # WRONG - Will block Nexus startup for minutes
-db = DataFlow()  # Default auto_migrate=True
+db = DataFlow()  # Default settings cause blocking
 nexus = Nexus(dataflow_config={"integration": db})
 # Nexus hangs during startup!
 ```
@@ -155,7 +155,7 @@ nexus = Nexus(dataflow_config={"integration": db})
 # CORRECT - Non-blocking startup
 db = DataFlow(
     auto_migrate=False,
-    skip_registry=True,
+    enable_model_persistence=False,
     existing_schema_mode=True
 )
 
@@ -270,7 +270,7 @@ from kailash.workflow.builder import WorkflowBuilder
 db = DataFlow(
     database_url="postgresql://user:pass@localhost/ecommerce",
     auto_migrate=False,
-    skip_registry=True,
+    enable_model_persistence=False,
     existing_schema_mode=True
 )
 
@@ -342,9 +342,9 @@ workflow.add_node("ProductCreateNode", "create", {
 # Connect to existing production database
 db = DataFlow(
     database_url="postgresql://readonly:pass@prod-db:5432/commerce",
-    auto_migrate=False,           # Never modify production
-    skip_registry=True,
-    existing_schema_mode=True     # Maximum safety
+    auto_migrate=False,              # Never modify production
+    enable_model_persistence=False,  # Skip model registry for fast startup
+    existing_schema_mode=True        # Maximum safety
 )
 
 # Discover existing schema
@@ -376,7 +376,7 @@ nexus.run(port=8000)
 
 | Issue | Cause | Solution |
 |-------|-------|----------|
-| Nexus hangs on startup | auto_migrate=True or auto_discovery=True | Set both to False |
+| Nexus hangs on startup | enable_model_persistence=True or auto_discovery=True | Set enable_model_persistence=False and auto_discovery=False |
 | "Table not found" error | existing_schema_mode without actual tables | Either create schema or set existing_schema_mode=False |
 | Endpoints not generated | auto_generate_endpoints=False | Set to True |
 | Permission denied | RBAC enabled without roles | Configure auth_config properly |
@@ -384,7 +384,7 @@ nexus.run(port=8000)
 
 ## Quick Tips
 
-- ALWAYS use `skip_registry=True` + `auto_discovery=False`
+- ALWAYS use `enable_model_persistence=False` + `auto_discovery=False`
 - Define models AFTER DataFlow init, BEFORE Nexus init
 - Use `existing_schema_mode=True` for production databases
 - Enable caching for read-heavy workloads
@@ -394,4 +394,4 @@ nexus.run(port=8000)
 
 ## Keywords for Auto-Trigger
 
-<!-- Trigger Keywords: DataFlow Nexus, Nexus blocking, Nexus integration, skip_registry, auto_discovery, prevent blocking, Nexus startup, DataFlow API, multi-channel, Nexus configuration, blocking startup, slow startup -->
+<!-- Trigger Keywords: DataFlow Nexus, Nexus blocking, Nexus integration, enable_model_persistence, auto_discovery, prevent blocking, Nexus startup, DataFlow API, multi-channel, Nexus configuration, blocking startup, slow startup -->

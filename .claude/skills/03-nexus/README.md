@@ -24,7 +24,7 @@ Complete set of 17 Nexus skills covering all aspects from quickstart to advanced
 
 5. **nexus-dataflow-integration** - CRITICAL blocking fix configuration
    - Priority: CRITICAL
-   - auto_discovery=False, skip_registry=True, performance optimization
+   - auto_discovery=False, enable_model_persistence=False, performance optimization
 
 ### Channel-Specific (6 Skills - HIGH)
 
@@ -90,7 +90,7 @@ Complete set of 17 Nexus skills covering all aspects from quickstart to advanced
 
 ### 2. DataFlow Blocking Fix (Lines 320-386 from nexus-specialist)
 - auto_discovery=False configuration
-- skip_registry=True optimization
+- enable_model_persistence=False optimization
 - Performance comparison (30s → <2s)
 - Trade-off analysis
 

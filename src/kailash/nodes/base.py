@@ -37,6 +37,9 @@ from kailash.sdk_exceptions import (
 )
 from pydantic import BaseModel, Field, ValidationError
 
+# ADR-002: Module-level logger for node registration messages
+_logger = logging.getLogger(__name__)
+
 
 class NodeMetadata(BaseModel):
     """Metadata for a node.
@@ -2148,10 +2151,12 @@ class NodeRegistry:
         node_name = alias or node_class.__name__
 
         if node_name in cls._nodes:
-            logging.warning(f"Overwriting existing node registration for '{node_name}'")
+            # ADR-002: Changed from WARNING to INFO and use named logger
+            # This is expected behavior in DataFlow where model decoration re-registers nodes
+            _logger.info(f"Overwriting existing node registration for '{node_name}'")
 
         cls._nodes[node_name] = node_class
-        logging.info(f"Registered node '{node_name}'")
+        _logger.debug(f"Registered node '{node_name}'")
 
     @classmethod
     def _validate_node_constructor(cls, node_class: type[Node]):

@@ -1,20 +1,71 @@
 # Kaizen Structured Outputs
 
-**Feature**: OpenAI Structured Outputs API with 100% schema compliance and intelligent validation
-**Response Handling**: Dict responses from OpenAI are automatically detected and handled by strategies
-**Compatibility**: Requires Kaizen 0.6.3+, works with both `AsyncSingleShotStrategy` and `SingleShotStrategy`
+**Feature**: Multi-provider Structured Outputs with 100% schema compliance and intelligent validation
+**Response Handling**: Dict responses from providers are automatically detected and handled by strategies
+**Compatibility**: Requires Kaizen 0.8.2+, works with both `AsyncSingleShotStrategy` and `SingleShotStrategy`
 
 ---
 
 ## Overview
 
-Kaizen provides first-class support for OpenAI's Structured Outputs API with comprehensive type introspection, enabling 100% reliable JSON schema compliance. The framework supports all 10 Python typing patterns with intelligent strict mode validation and automatic fallback for incompatible types. This guide covers configuration, type system, signature inheritance, and integration patterns.
+Kaizen provides first-class support for structured outputs across multiple providers (OpenAI, Google/Gemini, Azure AI Foundry) with comprehensive type introspection, enabling 100% reliable JSON schema compliance. The framework supports all 10 Python typing patterns with intelligent strict mode validation and automatic fallback for incompatible types.
+
+**Multi-Provider Support (v0.8.2)**: All providers receive the same OpenAI-style `response_format` configuration. Each provider auto-translates to its native parameters:
+- **OpenAI**: Uses `response_format` directly
+- **Google/Gemini**: Translates to `response_mime_type` + `response_schema`
+- **Azure AI Foundry**: Translates to `JsonSchemaFormat`
+
+This guide covers configuration, type system, signature inheritance, and integration patterns.
 
 ---
 
 ## Quick Start
 
-### Basic Usage with Strict Mode
+### Automatic Configuration (Recommended)
+
+**Most users don't need to configure anything!** When you use BaseAgent with a signature, structured outputs are **automatically configured** for supported providers (OpenAI, Google, Azure).
+
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.signatures import Signature, InputField, OutputField
+from kaizen.core.config import BaseAgentConfig
+
+class QASignature(Signature):
+    """Simple Q&A signature."""
+    question: str = InputField(desc="User question")
+    answer: str = OutputField(desc="Answer to the question")
+    confidence: float = OutputField(desc="Confidence score 0-1")
+
+# Structured outputs auto-configured - NO provider_config needed!
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model="gpt-4o-2024-08-06"
+)
+
+agent = BaseAgent(config=config, signature=QASignature())
+result = agent.run(question="What is AI?")
+
+# Response guaranteed to have all fields with correct types
+print(result['answer'])       # Always present, always string
+print(result['confidence'])   # Always present, always float
+```
+
+**How Auto-Configuration Works** (from `workflow_generator.py`):
+- When a signature is provided and no `provider_config` is set
+- WorkflowGenerator automatically calls `create_structured_output_config()`
+- Uses strict mode for OpenAI (100% schema compliance)
+- Providers that don't support structured outputs (Ollama, Anthropic) use prompt-based schema enforcement
+
+**When to Use Manual Configuration**:
+- Force legacy JSON mode (`strict=False`) instead of strict schema mode
+- Override auto-generated schema with a custom one
+- Disable structured outputs entirely (rare)
+
+---
+
+### Manual Configuration with Strict Mode
+
+For advanced use cases requiring explicit control:
 
 ```python
 from kaizen.core.base_agent import BaseAgent
@@ -341,6 +392,73 @@ agent = BaseAgent(config=config, signature=MySignature())
 - Best-effort schema compliance (70-85%)
 - May produce extra fields or incorrect types
 - Requires additional validation in application code
+
+### Google Gemini Structured Outputs (v0.8.2)
+
+**Supported Models**:
+- `gemini-2.0-flash` (recommended)
+- `gemini-1.5-pro`
+- `gemini-1.5-flash`
+
+**Features**:
+- Auto-translates OpenAI-style `response_format` to native parameters
+- Supports both `json_schema` and `json_object` modes
+- Translation: `response_mime_type="application/json"` + `response_schema`
+
+**Usage**:
+```python
+from kaizen.core.base_agent import BaseAgent
+from kaizen.core.config import BaseAgentConfig
+from kaizen.core.structured_output import create_structured_output_config
+
+config = BaseAgentConfig(
+    llm_provider="google",  # or "gemini"
+    model="gemini-2.0-flash",
+    provider_config=create_structured_output_config(
+        signature=MySignature(),
+        strict=True,
+        name="my_response"
+    )
+)
+
+agent = BaseAgent(config=config, signature=MySignature())
+result = agent.run(input_text="...")  # Returns structured dict
+```
+
+### Azure AI Foundry Structured Outputs (v0.8.2)
+
+**Supported Models**:
+- `gpt-4o` (recommended)
+- `gpt-4o-mini`
+- Other Azure-hosted OpenAI models
+
+**Features**:
+- Auto-translates OpenAI-style `response_format` to Azure's `JsonSchemaFormat`
+- Full `json_schema` support with strict mode
+- Enterprise-grade reliability and compliance
+
+**Usage**:
+```python
+config = BaseAgentConfig(
+    llm_provider="azure",
+    model="gpt-4o",
+    provider_config=create_structured_output_config(
+        signature=MySignature(),
+        strict=True,
+        name="my_response"
+    )
+)
+```
+
+### Provider Support Matrix (v0.8.2)
+
+| Provider | `json_schema` (Strict) | `json_object` (Legacy) | Auto-Translation |
+|----------|------------------------|------------------------|------------------|
+| **OpenAI** | ✅ Full support | ✅ Full support | N/A (native) |
+| **Google/Gemini** | ✅ Full support | ✅ Full support | `response_mime_type` + `response_schema` |
+| **Azure AI Foundry** | ✅ Full support | ✅ Full support | `JsonSchemaFormat` |
+| **Ollama** | ❌ Not supported | ❌ Not supported | N/A |
+| **Anthropic** | ❌ Not supported | ❌ Not supported | N/A |
 
 ---
 

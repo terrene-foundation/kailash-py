@@ -177,8 +177,9 @@ class WorkflowBuilder:
                                 f"Parameter validation error in node '{node_id}': {issue.message}"
                             )
                         elif issue.severity == IssueSeverity.WARNING:
-                            logger.warning(
-                                f"Parameter validation warning in node '{node_id}': {issue.message}"
+                            # ADR-002: Changed from WARNING to DEBUG - extra params safely ignored
+                            logger.debug(
+                                f"Parameter validation info in node '{node_id}': {issue.message}"
                             )
 
             except Exception as e:

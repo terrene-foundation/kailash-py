@@ -64,9 +64,80 @@ class MyAgent(BaseAgent):
 - **Production Observability**: Complete monitoring stack (Jaeger, Prometheus, Grafana, ELK) with zero overhead
 - **Core SDK Compatible**: Seamless integration with Kailash workflows
 
-## 🆕 What's New in v0.6.0
+## 🆕 What's New in v1.0.0 (GA Release)
 
-**Enhanced Autonomy & Memory Systems** (Released 2025-10-29):
+**General Availability** with performance optimization, specialist system, and GPT-5 support:
+
+### Performance Optimization (10-100x speedup)
+
+7 production-ready caches in `kaizen.performance`:
+- **SchemaCache**: Tool schema caching (10-50x speedup)
+- **EmbeddingCache**: Embedding vector caching (100x+ API savings)
+- **PromptCache**: System prompt caching (10-20x speedup)
+- **MemoryContextCache**: Incremental context building (5-10x)
+- **HookBatchExecutor**: Parallel hook execution (8x)
+- **BackgroundCheckpointWriter**: Non-blocking I/O
+- **ParallelToolExecutor**: Parallel tool execution (4-5x)
+
+### Specialist System (ADR-013)
+
+Claude Code-style specialists and skills:
+- **SpecialistDefinition**: Define agent personas with tools, models, prompts
+- **SkillDefinition**: Knowledge packages for dynamic loading
+- **Directory Structure**: `.kaizen/specialists/` and `.kaizen/skills/`
+
+### GPT-5 Support
+
+- **temperature=1.0**: Auto-enforced for GPT-5 models
+- **max_tokens=8000**: Increased for reasoning tokens
+- **Reasoning models**: Proper handling of internal chain-of-thought
+
+### Claude Code Parity Tools
+
+7 tools for autonomous workflows:
+- `TodoWriteTool`, `NotebookEditTool`, `AskUserQuestionTool`
+- `EnterPlanModeTool`, `ExitPlanModeTool`, `KillShellTool`, `TaskOutputTool`
+
+### Developer Documentation
+
+Full v1.0 docs in `apps/kailash-kaizen/src/kaizen/docs/developers/` (11 guides)
+
+---
+
+## What Was New in v0.9.0
+
+**Journey Orchestration (Layer 5)** - Declarative user journey management:
+
+- **Declarative Pathways**: Define multi-step user flows as nested Pathway classes
+- **Intent Detection**: LLM-powered intent classification (not keyword/regex)
+- **Context Accumulation**: Persist data across pathways (REPLACE, APPEND, UNION, SUM strategies)
+- **Return Behaviors**: ReturnToPrevious for detours, ReturnToSpecific for error handling
+- **Nexus Deployment**: Deploy journeys via API/CLI/MCP with `deploy_journey_to_nexus()`
+- **Hooks System**: 9 lifecycle events for observability
+
+```python
+from kaizen.journey import Journey, Pathway, Transition, IntentTrigger
+
+class PatientJourney(Journey):
+    __entry_pathway__ = "intake"
+    __transitions__ = [
+        Transition(trigger=IntentTrigger(intents=["help"]), to_pathway="faq")
+    ]
+
+    class IntakePath(Pathway):
+        __signature__ = IntakeSignature
+        __agents__ = ["intake_agent"]
+        __accumulate__ = ["symptoms"]
+        __next__ = "booking"
+```
+
+**Reference**: `examples/journey/healthcare_referral/` | **Tests**: 301 unit + 50 integration
+
+---
+
+## What Was New in v0.6.0
+
+**Enhanced Autonomy & Memory Systems**:
 
 ### Interrupt Mechanism (Production-Ready)
 Complete graceful shutdown with checkpoint preservation:
@@ -199,15 +270,16 @@ result2 = agent.ask("What's my name?", session_id="user123")
 print(result2["answer"])  # "Your name is Alice"
 ```
 
-## 🔧 LLM Provider Configuration (v0.7.1)
+## 🔧 LLM Provider Configuration (v0.8.2)
 
-Kaizen supports 8 LLM providers with automatic detection:
+Kaizen supports 9 LLM providers with automatic detection:
 
 | Provider | Type | Requirements | Features |
 |----------|------|--------------|----------|
 | `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
-| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings |
+| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings, structured outputs |
 | `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
+| `google` | Cloud | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Gemini 2.0, vision, embeddings, tool calling, structured outputs |
 | `ollama` | Local | Ollama running on port 11434 | Free, local models (llama, mistral, etc.) |
 | `docker` | Local | Docker Desktop Model Runner on port 12434 | Free local inference, GPU acceleration |
 | `cohere` | Cloud | `COHERE_API_KEY` | Command models, embeddings |
@@ -252,6 +324,15 @@ class OllamaConfig:
     llm_provider: str = "ollama"
     model: str = "llama3.2"
     temperature: float = 0.7
+
+# Google Gemini (Cloud, multimodal)
+# Prerequisites: export GOOGLE_API_KEY="your-api-key"
+#               pip install kailash-kaizen[google]
+@dataclass
+class GoogleConfig:
+    llm_provider: str = "google"  # Or "gemini" (alias)
+    model: str = "gemini-2.0-flash"  # Or gemini-1.5-pro, gemini-1.5-flash
+    temperature: float = 0.7
 ```
 
 ### Auto-Detection
@@ -260,8 +341,9 @@ Kaizen automatically detects available providers in this priority order:
 1. OpenAI (if `OPENAI_API_KEY` set)
 2. Azure (if `AZURE_AI_INFERENCE_ENDPOINT` set)
 3. Anthropic (if `ANTHROPIC_API_KEY` set)
-4. Ollama (if running locally)
-5. Docker Model Runner (if running locally)
+4. Google (if `GOOGLE_API_KEY` or `GEMINI_API_KEY` set)
+5. Ollama (if running locally)
+6. Docker Model Runner (if running locally)
 
 Override with `KAIZEN_DEFAULT_PROVIDER` environment variable.
 
@@ -270,12 +352,53 @@ Override with `KAIZEN_DEFAULT_PROVIDER` environment variable.
 Tool calling support is model-dependent. Check capability:
 
 ```python
-from kaizen.providers import DockerModelRunnerProvider
+from kaizen.nodes.ai import DockerModelRunnerProvider
 
 provider = DockerModelRunnerProvider()
 if provider.supports_tools("ai/qwen3"):
     # Tool calling supported
     pass
+```
+
+### Google Gemini Provider
+
+Supports chat, vision (multimodal), embeddings, and tool calling via the `google-genai` SDK:
+
+```python
+from kaizen.nodes.ai import GoogleGeminiProvider
+
+provider = GoogleGeminiProvider()
+
+# Chat completion
+messages = [{"role": "user", "content": "What is 2+2?"}]
+response = provider.chat(
+    messages=messages,
+    model="gemini-2.0-flash",
+    generation_config={"temperature": 0.7, "max_tokens": 100}
+)
+print(response["content"])  # "4"
+
+# Vision (multimodal) - pass base64-encoded images
+import base64
+with open("image.png", "rb") as f:
+    image_b64 = base64.b64encode(f.read()).decode()
+
+messages = [{
+    "role": "user",
+    "content": [
+        {"type": "text", "text": "What's in this image?"},
+        {"type": "image", "base64": image_b64, "media_type": "image/png"}
+    ]
+}]
+response = provider.chat(messages=messages, model="gemini-2.0-flash")
+
+# Embeddings (768-dimensional vectors)
+texts = ["Hello world", "Machine learning"]
+embeddings = provider.embed(texts=texts, model="text-embedding-004")
+
+# Async support
+response = await provider.chat_async(messages=messages, model="gemini-2.0-flash")
+embeddings = await provider.embed_async(texts=texts, model="text-embedding-004")
 ```
 
 **Tool-Capable Models**: `ai/qwen3`, `ai/llama3.3`, `ai/gemma3`
@@ -877,8 +1000,7 @@ result = agent.run(question="What's my communication style?")
 **Performance (Production validated):**
 - <50ms retrieval (p95), <100ms storage (p95)
 - 10,000+ entries per agent (SQLite), millions (PostgreSQL)
-- 281 tests passing (Phase 3 complete)
-
+- 281 tests passing
 **Use Cases:** Conversational agents, customer support, research agents, code generation, multi-agent systems
 
 ## 📄 Document Extraction & RAG
@@ -944,8 +1066,7 @@ for chunk in relevant_chunks:
 | Landing AI    | 2-3s  | 95%+     | ~$0.05          | Mission-critical, max accuracy |
 
 **Production Validated:**
-- 281 tests passing (Phase 3 complete)
-- Real infrastructure testing (NO MOCKING)
+- 281 tests passing - Real infrastructure testing (NO MOCKING)
 - Ollama: $0.00 cost for unlimited processing
 - RAG chunking with page citations for source attribution
 

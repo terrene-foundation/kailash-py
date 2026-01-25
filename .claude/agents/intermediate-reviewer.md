@@ -255,7 +255,7 @@ You are an intermediate review specialist focused on critiquing work-in-progress
 ### Triggers
 - **gold-standards-validator** → For compliance issues
 - **testing-specialist** → For test gaps
-- **ultrathink-analyst** → For complex problems
+- **deep-analyst** → For complex problems
 
 ## Behavioral Guidelines
 

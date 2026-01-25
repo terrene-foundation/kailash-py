@@ -15,6 +15,7 @@ from unittest.mock import Mock
 import pytest
 import requests
 import yaml
+
 from kailash.access_control import (
     AccessControlManager,
     NodePermission,
@@ -45,7 +46,7 @@ asyncio.set_event_loop_policy(
 )
 
 # Configure pytest-asyncio to use strict mode
-pytest_plugins = ("pytest_asyncio", "pytest_forked")
+pytest_plugins = ("pytest_asyncio",)
 
 # ===========================
 # SDK Infrastructure Support
@@ -880,7 +881,7 @@ def isolate_global_state():
     from kailash.nodes.base import NodeRegistry
     from kailash.nodes.data.async_connection import AsyncConnectionManager
 
-    # In forked processes, we need to ensure nodes are registered first
+    # In isolated worker processes (pytest-xdist), we need to ensure nodes are registered first
     if len(NodeRegistry._nodes) == 0:
         from tests.node_registry_utils import ensure_nodes_registered
 

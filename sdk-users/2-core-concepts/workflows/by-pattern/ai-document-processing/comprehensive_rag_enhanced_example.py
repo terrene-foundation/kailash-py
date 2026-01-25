@@ -15,7 +15,6 @@ from typing import Any, Dict, List
 
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
 from kaizen.nodes.rag import (
     AdaptiveQueryProcessorNode,  # Core strategies; Similarity approaches; Query processing; Advanced techniques; Performance optimization; Utilities
 )

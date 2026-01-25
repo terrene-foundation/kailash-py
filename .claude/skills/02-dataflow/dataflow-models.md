@@ -5,7 +5,7 @@ description: "Define DataFlow models with @db.model decorator. Use when creating
 
 # DataFlow Model Definition
 
-Define database models using the `@db.model` decorator that automatically generates 9 workflow nodes for CRUD operations.
+Define database models using the `@db.model` decorator that automatically generates 11 workflow nodes for CRUD operations.
 
 > **Skill Metadata**
 > Category: `dataflow`
@@ -17,7 +17,7 @@ Define database models using the `@db.model` decorator that automatically genera
 
 - **Decorator**: `@db.model` on Python class
 - **Type Hints**: Required for all fields (`name: str`, `age: int`)
-- **Generated Nodes**: 9 per model (Create, Read, Update, Delete, List, Bulk*)
+- **Generated Nodes**: 11 per model (Create, Read, Update, Delete, List, Upsert, Count, BulkCreate, BulkUpdate, BulkDelete, BulkUpsert)
 - **String IDs**: Fully supported (no integer conversion)
 - **Field Config**: Use `__dataflow__` dict for features
 
@@ -53,10 +53,9 @@ class Session:
     user_id: str
     state: str = 'active'
 
-# Automatically generates 9 nodes:
-# UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode,
-# UserListNode, UserBulkCreateNode, UserBulkUpdateNode,
-# UserBulkDeleteNode, UserBulkUpsertNode
+# Automatically generates 11 nodes:
+# CRUD: UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode, UserListNode, UserUpsertNode, UserCountNode
+# Bulk: UserBulkCreateNode, UserBulkUpdateNode, UserBulkDeleteNode, UserBulkUpsertNode
 ```
 
 ## Common Use Cases
@@ -75,7 +74,7 @@ class Session:
 4. **Add Decorator**: `@db.model` above class
 5. **Configure Fields**: Type hints + defaults
 6. **Optional Config**: Add `__dataflow__` dict for features
-7. **Use Nodes**: 9 nodes automatically available
+7. **Use Nodes**: 11 nodes automatically available
 
 ## Key Parameters / Options
 

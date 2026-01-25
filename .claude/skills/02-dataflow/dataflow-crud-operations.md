@@ -1,11 +1,11 @@
 ---
 name: dataflow-crud-operations
-description: "Use 9 auto-generated DataFlow nodes for CRUD operations. Use when DataFlow CRUD, generated nodes, UserCreateNode, UserReadNode, create read update delete, basic operations, or single record operations."
+description: "Use 11 auto-generated DataFlow nodes for CRUD operations. Use when DataFlow CRUD, generated nodes, UserCreateNode, UserReadNode, create read update delete, basic operations, or single record operations."
 ---
 
 # DataFlow CRUD Operations
 
-Use the 9 automatically generated workflow nodes for Create, Read, Update, Delete, and List operations on DataFlow models.
+Use the 11 automatically generated workflow nodes for Create, Read, Update, Delete, List, Upsert, and Count operations on DataFlow models.
 
 > **Skill Metadata**
 > Category: `dataflow`
@@ -15,7 +15,7 @@ Use the 9 automatically generated workflow nodes for Create, Read, Update, Delet
 
 ## Quick Reference
 
-- **9 Generated Nodes**: Create, Read, Update, Delete, List, BulkCreate, BulkUpdate, BulkDelete, BulkUpsert
+- **11 Generated Nodes**: Create, Read, Update, Delete, List, Upsert, Count, BulkCreate, BulkUpdate, BulkDelete, BulkUpsert
 - **Naming Pattern**: `{Model}{Operation}Node` (e.g., `UserCreateNode`)
 - **Performance**: <1ms for single operations
 - **String IDs**: Fully supported
@@ -120,9 +120,9 @@ class User:
     email: str
     active: bool = True
 
-# Automatically generates 9 nodes:
-# UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode, UserListNode,
-# UserBulkCreateNode, UserBulkUpdateNode, UserBulkDeleteNode, UserBulkUpsertNode
+# Automatically generates 11 nodes:
+# CRUD: UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode, UserListNode, UserUpsertNode, UserCountNode
+# Bulk: UserBulkCreateNode, UserBulkUpdateNode, UserBulkDeleteNode, UserBulkUpsertNode
 
 workflow = WorkflowBuilder()
 

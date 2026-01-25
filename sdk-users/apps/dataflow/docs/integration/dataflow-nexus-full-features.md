@@ -27,8 +27,7 @@ db = DataFlow(
     database_url="postgresql://user:pass@localhost/db",
 
     # FULL FEATURES - These cause the slower startup
-    skip_registry=False,              # ✅ Model registry enabled (adds ~5s)
-    enable_model_persistence=True,    # ✅ Model persistence (adds ~5s per model)
+    enable_model_persistence=True,    # ✅ Model persistence enabled (adds ~5s per model)
     auto_migrate=True,                # ✅ Auto-migration (adds ~2-5s)
     skip_migration=False,             # ✅ Migration tracking
     enable_schema_discovery=True,     # ✅ Schema introspection
@@ -160,8 +159,7 @@ db = DataFlow(
     database_url="postgresql://user:pass@localhost/db",
 
     # FAST SETTINGS - Skip slow features
-    skip_registry=True,              # ❌ No model registry
-    enable_model_persistence=False,  # ❌ No persistence
+    enable_model_persistence=False,  # ❌ Skip model persistence for fast startup
     auto_migrate=False,              # ❌ No auto-migration
     skip_migration=True,             # ❌ No migration tracking
 
@@ -212,8 +210,7 @@ print("✅ Server ready!")  # <1 second
 def init_dataflow_async():
     global db
     db = DataFlow(
-        skip_registry=False,  # Full features
-        enable_model_persistence=True,
+        enable_model_persistence=True,  # Full features
         auto_migrate=True
     )
 
@@ -249,7 +246,6 @@ Do you need model persistence across restarts?
 | Feature | Fast Config | Full Config | Time Impact |
 |---------|------------|-------------|-------------|
 | **Startup Time** | <2s ✅ | 10-30s ❌ | - |
-| **Model Registry** | ❌ | ✅ | +5s |
 | **Model Persistence** | ❌ | ✅ | +2s/model |
 | **Auto-Migration** | ❌ | ✅ | +5s |
 | **Migration History** | ❌ | ✅ | +2s |
@@ -266,35 +262,35 @@ Do you need model persistence across restarts?
 ### 1. Production API Server
 ```python
 # Use FAST config - APIs need quick restarts
-db = DataFlow(skip_registry=True, enable_model_persistence=False)
+db = DataFlow(enable_model_persistence=False, auto_migrate=False)
 # Startup: <2s
 ```
 
 ### 2. Enterprise Admin Dashboard
 ```python
 # Use FULL config - Accept slow startup for features
-db = DataFlow(skip_registry=False, enable_model_persistence=True, auto_migrate=True)
+db = DataFlow(enable_model_persistence=True, auto_migrate=True)
 # Startup: 10-30s
 ```
 
 ### 3. Microservices
 ```python
 # Use FAST config - Need quick scaling
-db = DataFlow(skip_registry=True, enable_model_persistence=False)
+db = DataFlow(enable_model_persistence=False, auto_migrate=False)
 # Startup: <1.5s
 ```
 
 ### 4. Development Environment
 ```python
 # Use FAST config - Need quick iteration
-db = DataFlow(skip_registry=True, enable_model_persistence=False, echo=True)
+db = DataFlow(enable_model_persistence=False, auto_migrate=False, echo=True)
 # Startup: <2s
 ```
 
 ### 5. ETL/Migration Tool
 ```python
 # Use FULL config - Migration is core functionality
-db = DataFlow(skip_registry=False, enable_model_persistence=True, auto_migrate=True)
+db = DataFlow(enable_model_persistence=True, auto_migrate=True)
 # Startup: 10-30s (acceptable for batch jobs)
 ```
 

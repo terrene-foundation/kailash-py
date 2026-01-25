@@ -6,7 +6,7 @@
 
 You are implementing a frontend feature. Follow these steps exactly and show me complete outputs at each step. Do not summarize or skip any validation steps.
 
-## 1. CONTEXT LOADING AND ULTRATHINK ACTIVATION
+## 1. CONTEXT LOADING AND DEEP ANALYSIS ACTIVATION
 
 ### Essential Context Loading
 Load these files before starting (DO NOT proceed until loaded):
@@ -43,8 +43,8 @@ After loading the essential files, you MUST confirm you understand:
 
 **Search relevant documentation and existing code as needed during implementation using tools instead of loading everything upfront.**
 
-### ULTRATHINK CAP ACTIVATION
-Put on your ultrathink cap. Before we begin any implementation, you MUST analyze deeply and provide specific answers to these questions:
+### DEEP ANALYSIS ACTIVATION
+Think deeply. Before we begin any implementation, you MUST analyze thoroughly and provide specific answers to these questions:
 
 1. **What are the most likely failure points for this specific frontend task?**
    - Consider common React pitfalls (state updates, useEffect dependencies, memory leaks)
@@ -438,7 +438,7 @@ Before declaring this frontend implementation complete, you MUST verify every it
 **If any item is unchecked, STOP and fix it before declaring complete. Do not proceed until EVERY item is verified to work for actual users.**
 
 ### Final Validation
-Before considering this frontend implementation complete, put on your ultrathink cap and run through this final validation:
+Before considering this frontend implementation complete, think deeply and run through this final validation:
 
 1. Can users easily understand and navigate this feature?
 2. Are all user interactions smooth and responsive?
@@ -488,7 +488,7 @@ Check the `CLAUDE.md` in frontend directory and root:
    - Run through the guidance flow as a user and ensure that you can trace everything from setup to advanced features
 
 ### Final Validation
-Before considering this frontend implementation complete, put on your ultrathink cap and run through this final validation:
+Before considering this frontend implementation complete, think deeply and run through this final validation:
 
 1. Can users easily understand and navigate this feature?
 2. Are all user interactions smooth and responsive?
@@ -500,9 +500,9 @@ Before considering this frontend implementation complete, put on your ultrathink
 
 **Do not declare the feature complete until all validation steps pass and you've shown me the complete outputs for every step.**
 
-## 10. ULTRATHINK CAP CRITIQUE (FRONTEND)
+## 10. DEEP ANALYSIS CRITIQUE (FRONTEND)
 
-Put on your ultrathink cap again. Starting fresh, critique this frontend implementation.
+Think deeply again. Starting fresh, critique this frontend implementation.
 - Read adr, guidance, and documentations thoroughly.
 - Check the detailed todo entries in `todos/`.
 - Make sure you understand the user experience intent and purpose of this frontend feature.

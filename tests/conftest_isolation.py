@@ -1,8 +1,14 @@
 """Pytest plugin for handling tests that require isolation.
 
-This plugin runs tests marked with @pytest.mark.requires_isolation using pytest-forked
-to ensure they run in a clean process without state pollution.
+This plugin manages tests marked with @pytest.mark.requires_isolation.
+When running with pytest-xdist (-n workers), tests naturally run in isolated
+worker processes. For single-process runs, isolation is handled via fixtures.
+
+Note: pytest-forked has been removed due to CVE-2022-42969 in its transitive
+dependency (py library). Process isolation is now provided by pytest-xdist.
 """
+
+import os
 
 import pytest
 
@@ -11,21 +17,17 @@ def pytest_configure(config):
     """Register the isolation handling hooks."""
     config.addinivalue_line(
         "markers",
-        "requires_isolation: mark test to run in isolated process (uses forked)",
+        "requires_isolation: mark test to run in isolated process (uses xdist workers)",
     )
+
+
+def _is_xdist_worker():
+    """Check if we're running as a pytest-xdist worker."""
+    return os.environ.get("PYTEST_XDIST_WORKER") is not None
 
 
 def pytest_collection_modifyitems(config, items):
     """Modify test collection to handle isolation requirements."""
-    # Check if we're already running with --forked
-    try:
-        if config.getoption("--forked"):
-            # Already using forked, no need to modify
-            return
-    except ValueError:
-        # --forked option not available, continue
-        pass
-
     # Check if we should skip isolation tests
     try:
         if config.getoption("--no-isolation"):
@@ -41,13 +43,8 @@ def pytest_collection_modifyitems(config, items):
         # Option not registered yet
         pass
 
-    # Add forked marker to tests that require isolation (only if forked plugin is available)
-    # Check if forked plugin is loaded by checking if the plugin is in the plugin manager
-    if config.pluginmanager.has_plugin("pytest_forked"):
-        for item in items:
-            if item.get_closest_marker("requires_isolation"):
-                # Add the forked marker to run this test in isolation
-                item.add_marker(pytest.mark.forked)
+    # When running with xdist workers, tests are already isolated
+    # No need to add special markers - each worker is a separate process
 
 
 def pytest_addoption(parser):

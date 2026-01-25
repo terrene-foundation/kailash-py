@@ -250,7 +250,7 @@ Your recommendations are successful if:
 
 ### Works Well With
 - **frontend-developer** - For implementation details and Flutter constraints
-- **ultrathink-analyst** - For deep problem analysis before design
+- **deep-analyst** - For deep problem analysis before design
 - **todo-manager** - For creating design task breakdowns
 - **testing-specialist** - For validating design decisions with user testing
 

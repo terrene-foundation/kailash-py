@@ -56,8 +56,7 @@ app = Nexus(auto_discovery=False)
 
 # Also configure DataFlow optimally
 db = DataFlow(
-    skip_registry=True,
-    enable_model_persistence=False
+    enable_model_persistence=False  # Skip model registry for fast startup
 )
 ```
 
@@ -132,8 +131,7 @@ if not app.session_manager.exists(session_id):
 # With DataFlow, use optimized settings
 app = Nexus(auto_discovery=False)
 db = DataFlow(
-    skip_registry=True,
-    enable_model_persistence=False,
+    enable_model_persistence=False,  # Skip model registry for fast startup
     auto_migrate=False,
     skip_migration=True
 )

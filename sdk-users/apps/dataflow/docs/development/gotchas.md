@@ -2,6 +2,73 @@
 
 This guide covers the most common mistakes developers make with DataFlow and how to fix them quickly. Following these patterns can reduce debugging time from 4+ hours to less than 10 minutes.
 
+## 🚨 #1 MOST COMMON MISTAKE: Auto-Managed Timestamp Fields (DF-104)
+
+**This error occurs in almost EVERY new DataFlow project!**
+
+### Error Message
+```
+DatabaseError: multiple assignments to same column "updated_at"
+```
+
+### The Problem
+DataFlow automatically manages `created_at` and `updated_at` fields. When you manually set these fields AND DataFlow also sets them, PostgreSQL throws a "multiple assignments" error.
+
+### Wrong Code (Every New Project Makes This Mistake)
+
+```python
+# ❌ WRONG - Manually setting updated_at in update method
+async def update(self, id: str, data: dict) -> dict:
+    now = datetime.now(UTC).isoformat()
+    data["updated_at"] = now  # ❌ CAUSES DF-104!
+
+    workflow = WorkflowBuilder()
+    workflow.add_node("ModelUpdateNode", "update", {
+        "filter": {"id": id},
+        "fields": data,  # Error: multiple assignments to updated_at
+    })
+```
+
+### Correct Code
+
+```python
+# ✅ CORRECT - Let DataFlow handle timestamps
+async def update(self, id: str, data: dict) -> dict:
+    # NOTE: Do NOT set updated_at - DataFlow manages it automatically
+    # Strip any auto-managed fields if present
+    data.pop("updated_at", None)
+    data.pop("created_at", None)
+
+    workflow = WorkflowBuilder()
+    workflow.add_node("ModelUpdateNode", "update", {
+        "filter": {"id": id},
+        "fields": data,  # DataFlow sets updated_at automatically
+    })
+```
+
+### Auto-Managed Fields (NEVER Include)
+
+| Field | When Set | Impact of Manual Setting |
+|-------|----------|--------------------------|
+| `created_at` | Automatically on record creation | DF-104 error |
+| `updated_at` | Automatically on every update | DF-104 error |
+
+### Affected Operations
+- ❌ CreateNode - Never include `created_at`
+- ❌ UpdateNode - Never include `updated_at` or `created_at`
+- ❌ BulkCreateNode - Never include `created_at`
+- ❌ BulkUpdateNode - Never include `updated_at` or `created_at`
+
+### Why This Happens
+Developers instinctively add timestamp management because that's how other frameworks work:
+- Django ORM requires `auto_now=True` configuration
+- SQLAlchemy requires `onupdate=datetime.utcnow`
+- Raw SQL requires explicit UPDATE SET
+
+**DataFlow is different**: It automatically handles timestamps with NO configuration needed.
+
+---
+
 ## ⚠️ Critical Bug Fix Alert (v0.6.2-v0.6.3)
 
 ### Filter Operators Bug (FIXED in v0.6.2)
@@ -32,6 +99,7 @@ pip install --upgrade kailash-dataflow>=0.6.3
 
 ## Table of Contents
 
+0. [🚨 #1 MOST COMMON: Auto-Managed Timestamp Fields (DF-104)](#-1-most-common-mistake-auto-managed-timestamp-fields-df-104) - **READ FIRST!**
 1. [CreateNode: Wrapping Fields in 'data'](#error-1-createnode-wrapping-fields-in-data)
 2. [UpdateNode: Using CreateNode Pattern](#error-2-updatenode-using-createnode-pattern)
 3. [UpdateNode: Missing Filter Parameter](#error-3-updatenode-missing-filter-parameter)

@@ -1,8 +1,13 @@
 """
-Unit tests for AsyncSQLDatabaseNode pytest-asyncio pool key compatibility.
+Unit tests for AsyncSQLDatabaseNode pool key generation.
 
-Tests the adaptive pool key generation that excludes event loop IDs in test
-environments to enable pool reuse across pytest-asyncio tests.
+Tests the pool key generation that ensures proper event loop isolation
+to prevent "Task got Future attached to a different loop" errors.
+
+NOTE: As of v0.10.15, pool keys ALWAYS include the actual event loop ID.
+The previous behavior of using "test|" prefix in test mode was removed
+because it caused pool sharing across different event loops, leading to
+asyncio errors in Docker/FastAPI deployments.
 
 Tier: 1 (Unit)
 Target: src/kailash/nodes/data/async_sql.py
@@ -179,11 +184,22 @@ class TestEnvironmentDetection:
 
 
 class TestAdaptivePoolKeyGeneration:
-    """Test adaptive _generate_pool_key() behavior."""
+    """Test adaptive _generate_pool_key() behavior.
+
+    NOTE: As of v0.10.15, pool keys ALWAYS include the actual event loop ID
+    to prevent "Task got Future attached to a different loop" errors in
+    Docker/FastAPI deployments. The previous behavior of using "test|" prefix
+    in test mode was removed because it caused pool sharing across different
+    event loops, leading to asyncio errors.
+    """
 
     @pytest.mark.asyncio
-    async def test_pool_key_excludes_loop_id_in_test_mode(self):
-        """Test: In pytest → key = 'test|postgresql|...'."""
+    async def test_pool_key_includes_loop_id_always(self):
+        """Test: Pool key always includes actual event loop ID.
+
+        v0.10.15 change: We always use actual loop ID to prevent
+        "attached to different loop" errors in Docker/FastAPI.
+        """
         # Create node instance with valid config (passed to __init__)
         node = AsyncSQLDatabaseNode(
             database_type="postgresql",
@@ -195,31 +211,29 @@ class TestAdaptivePoolKeyGeneration:
         # Generate pool key in test environment (current context)
         key = node._generate_pool_key()
 
-        # In test mode, should use "test" instead of loop ID
-        assert key.startswith(
-            "test|"
-        ), f"Expected key to start with 'test|', got: {key}"
+        # Get current loop ID - should be in the key
+        loop = asyncio.get_running_loop()
+        loop_id = str(id(loop))
 
-        # Get current loop ID to verify it's NOT in the key
-        try:
-            loop = asyncio.get_running_loop()
-            loop_id = str(id(loop))
-            assert (
-                loop_id not in key
-            ), f"Loop ID {loop_id} should not be in test key: {key}"
-        except RuntimeError:
-            # No running loop, that's ok - just verify "test" is used
-            pass
+        # Key should start with actual loop ID
+        assert key.startswith(
+            f"{loop_id}|"
+        ), f"Expected key to start with loop ID '{loop_id}|', got: {key}"
+
+        # Verify key format is correct: "{loop_id}|postgresql|connection_string|pool_size|max_pool_size"
+        parts = key.split("|")
+        assert len(parts) == 5, f"Expected 5 parts in key, got {len(parts)}: {key}"
+        assert parts[0] == loop_id, f"Expected loop ID as first part, got: {parts[0]}"
+        assert (
+            parts[1] == "postgresql"
+        ), f"Expected 'postgresql' as second part, got: {parts[1]}"
 
     @pytest.mark.asyncio
-    async def test_pool_key_includes_loop_id_in_production(self):
-        """Test: Not in test → key = '{loop_id}|postgresql|...'.
+    async def test_pool_key_format_with_loop_id(self):
+        """Test: Pool key format is consistent with 5 parts.
 
-        Note: Can't fully simulate production in pytest, but we verify the logic
-        works correctly when _is_test_environment() would return False.
+        Format: {loop_id}|{db_type}|{connection}|{pool_size}|{max_pool_size}
         """
-        # Since we're in pytest, this test verifies the "test" prefix is used
-        # The production logic is tested indirectly via the method implementation
         node = AsyncSQLDatabaseNode(
             database_type="postgresql",
             connection_string="postgresql://user:pass@localhost:5432/testdb",
@@ -229,20 +243,30 @@ class TestAdaptivePoolKeyGeneration:
 
         key = node._generate_pool_key()
 
-        # In pytest, should use "test" prefix
-        assert key.startswith("test|"), f"Expected test prefix, got: {key}"
-
-        # Verify key format is correct: "test|postgresql|connection_string|pool_size|max_pool_size"
+        # Verify key format
         parts = key.split("|")
         assert len(parts) == 5, f"Expected 5 parts in key, got {len(parts)}: {key}"
-        assert parts[0] == "test", f"Expected 'test' as first part, got: {parts[0]}"
+
+        # First part should be numeric (loop ID)
+        assert parts[
+            0
+        ].isdigit(), f"First part should be numeric loop ID, got: {parts[0]}"
         assert (
             parts[1] == "postgresql"
         ), f"Expected 'postgresql' as second part, got: {parts[1]}"
+        assert (
+            parts[2] == "postgresql://user:pass@localhost:5432/testdb"
+        ), "Third part should be connection string"
+        assert (
+            parts[3] == "10"
+        ), f"Fourth part should be pool_size '10', got: {parts[3]}"
+        assert (
+            parts[4] == "20"
+        ), f"Fifth part should be max_pool_size '20', got: {parts[4]}"
 
     @pytest.mark.asyncio
-    async def test_same_key_generated_across_different_loops_in_test(self):
-        """Test: Multiple event loops in test → same pool key."""
+    async def test_same_key_on_same_loop(self):
+        """Test: Same event loop + same config → same pool key."""
         # Create two node instances with identical config
         node1 = AsyncSQLDatabaseNode(
             database_type="postgresql",
@@ -258,23 +282,18 @@ class TestAdaptivePoolKeyGeneration:
             max_pool_size=20,
         )
 
-        # Generate keys - both should use "test" prefix regardless of loop
+        # Generate keys on the same event loop
         key1 = node1._generate_pool_key()
         key2 = node2._generate_pool_key()
 
-        # Keys should be identical in test mode
+        # Keys should be identical on the same loop with same config
         assert (
             key1 == key2
-        ), f"Keys should match in test mode:\nKey1: {key1}\nKey2: {key2}"
-        assert key1.startswith("test|"), f"Key should start with 'test|': {key1}"
+        ), f"Keys should match on same loop:\nKey1: {key1}\nKey2: {key2}"
 
     @pytest.mark.asyncio
-    async def test_different_keys_per_loop_in_production(self):
-        """Test: Different loops in production → different keys.
-
-        Note: In pytest, we verify that different connection configs produce different keys.
-        In production (without test detection), different loop IDs would create different keys.
-        """
+    async def test_different_keys_for_different_configs(self):
+        """Test: Different connection configs → different pool keys."""
         # Create two nodes with different database configs
         node1 = AsyncSQLDatabaseNode(
             database_type="postgresql",
@@ -300,11 +319,10 @@ class TestAdaptivePoolKeyGeneration:
         ), f"Keys should differ with different configs:\nKey1: {key1}\nKey2: {key2}"
 
     @pytest.mark.asyncio
-    async def test_backward_compatibility_production_unchanged(self):
-        """Test: Key format remains consistent with 5 parts.
+    async def test_key_format_consistency(self):
+        """Test: Key format is always 5 parts with loop ID first.
 
-        Verifies the key structure is maintained: loop_id|db_type|connection|pool_size|max_pool_size
-        In test mode, loop_id = "test"; in production, loop_id = actual loop ID.
+        Format: {loop_id}|{db_type}|{connection}|{pool_size}|{max_pool_size}
         """
         node = AsyncSQLDatabaseNode(
             database_type="postgresql",
@@ -316,12 +334,18 @@ class TestAdaptivePoolKeyGeneration:
         # Generate pool key
         key = node._generate_pool_key()
 
-        # Verify key format: "test|postgresql|postgresql://user:pass@localhost:5432/testdb|10|20"
+        # Get current loop ID
+        loop = asyncio.get_running_loop()
+        loop_id = str(id(loop))
+
+        # Verify key format
         parts = key.split("|")
         assert len(parts) == 5, f"Key should have 5 parts, got {len(parts)}: {key}"
 
-        # In test mode, first part should be "test"
-        assert parts[0] == "test", f"First part should be 'test', got: {parts[0]}"
+        # First part should be actual loop ID
+        assert (
+            parts[0] == loop_id
+        ), f"First part should be loop ID '{loop_id}', got: {parts[0]}"
         assert (
             parts[1] == "postgresql"
         ), f"Second part should be 'postgresql', got: {parts[1]}"

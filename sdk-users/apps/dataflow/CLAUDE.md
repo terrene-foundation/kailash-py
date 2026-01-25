@@ -1,9 +1,14 @@
-# Kailash DataFlow - Complete Function Access Guide (v0.9.7 Stable)
+# Kailash DataFlow - Complete Function Access Guide (v0.10.15 Stable)
 
-**Current Version: v0.9.7 - Production Ready**
+**Current Version: v0.10.15 - Production Ready**
+- **🔇 LOGGING CONFIGURATION (v0.10.12)**: `LoggingConfig` for centralized log level control - 524 noisy warnings eliminated
+- **✅ DOCKER/FASTAPI (v0.10.15+)**: `auto_migrate=True` NOW WORKS! Uses `SyncDDLExecutor` with psycopg2/sqlite3 for DDL, bypassing event loop issues
+- **⚠️ IN-MEMORY SQLITE**: `:memory:` databases skip sync DDL and use lazy table creation (sync DDL requires separate connection = different database)
+- **🚀 SOFT DELETE AUTO-FILTER (v0.10.6)**: soft_delete models now auto-filter queries - use `include_deleted=True` to override
+- **🚀 TIMESTAMP AUTO-STRIP (v0.10.6)**: `created_at`/`updated_at` now auto-stripped with warning (no more DF-104 errors!)
 - **PYTEST COMPATIBILITY**: Fixed model registration race condition (v0.9.7)
 - **MYSQL SUPPORT**: Full MySQL support with 100% feature parity (aiomysql driver)
-- **THREE DATABASES**: PostgreSQL, MySQL, and SQLite with identical 9 nodes per model
+- **THREE DATABASES**: PostgreSQL, MySQL, and SQLite with identical 11 nodes per model
 - DateTime serialization issues resolved
 - PostgreSQL parameter type casting improved
 - VARCHAR(255) limits removed (now TEXT with unlimited content)
@@ -19,20 +24,173 @@
 - **Qdrant**: Dedicated vector database for billion-scale semantic search
 - **Neo4j**: Graph database for relationship-heavy data models
 
+## 🚨 #1 MOST COMMON MISTAKE: Auto-Managed Timestamp Fields ✅ FIXED in v0.10.6
+
+**v0.10.6+ automatically handles this! Fields are auto-stripped with warning.**
+
+```python
+# v0.10.6+: This now WORKS (with warning) instead of failing
+async def update_record(self, id: str, data: dict):
+    now = datetime.now(UTC).isoformat()
+    data["updated_at"] = now  # ⚠️ Auto-stripped with warning
+
+    workflow.add_node("ModelUpdateNode", "update", {
+        "filter": {"id": id},
+        "fields": data  # ✅ Works! updated_at is auto-removed
+    })
+```
+
+**Warning message logged:**
+```
+⚠️ AUTO-STRIPPED: Fields ['updated_at'] removed from update. DataFlow automatically
+manages created_at/updated_at timestamps. Remove these fields from your code.
+```
+
+**Best Practice (avoid warning):**
+```python
+# ✅ BEST - Don't set timestamps at all
+async def update_record(self, id: str, data: dict):
+    # DataFlow handles timestamps automatically - no need to set them
+    workflow.add_node("ModelUpdateNode", "update", {
+        "filter": {"id": id},
+        "fields": data
+    })
+```
+
 ## ⚠️ Common Mistakes (Critical)
 
 | Mistake | Impact | Solution |
 |---------|--------|----------|
+| **Manually setting `created_at`/`updated_at`** | ⚠️ Warning | **v0.10.6+ auto-strips with warning** - remove from code to avoid warning |
 | **Using `user_id` or `model_id` instead of `id`** | 10-20 min debugging | **MUST use `id`** (not `user_id`, `agent_id`, etc.) |
 | **Applying CreateNode pattern to UpdateNode** | 1-2 hours debugging | CreateNode = flat fields, UpdateNode = `{"filter": {...}, "fields": {...}}` |
-| **Including `created_at`/`updated_at`** | Validation errors | Auto-managed - NEVER include manually |
 | **Wrong node naming** | Node not found | Use `ModelOperationNode` (e.g., `UserCreateNode`) |
+| **Wrong result key for ListNode** | Empty results | ListNode → `records`, CountNode → `count`, ReadNode → direct dict |
 
 **Critical Rules**:
-1. **Primary key MUST be `id`** - DataFlow requires this exact name
-2. **CreateNode ≠ UpdateNode** - Different parameter patterns
-3. **Auto-managed fields** - created_at, updated_at handled by DataFlow
+1. **Timestamp fields (v0.10.6+)** - Auto-stripped with warning; don't set them for clean logs
+2. **Primary key MUST be `id`** - DataFlow requires this exact name
+3. **CreateNode ≠ UpdateNode** - Different parameter patterns
 4. **Node naming** - Always `ModelOperationNode` pattern (v0.6.0+)
+5. **soft_delete (v0.10.6+)** - Auto-filters queries! Use `include_deleted=True` to see deleted records
+6. **Result keys** - ListNode: `records`, CountNode: `count`, ReadNode: direct record
+
+## 🔍 Query Operators for NULL Checking (v0.10.6+)
+
+```python
+# Filter for NULL values (e.g., non-deleted records in soft-delete pattern)
+workflow.add_node("PatientListNode", "active", {
+    "filter": {"deleted_at": {"$null": True}}  # WHERE deleted_at IS NULL
+})
+
+# Filter for NOT NULL values
+workflow.add_node("PatientListNode", "deleted", {
+    "filter": {"deleted_at": {"$exists": True}}  # WHERE deleted_at IS NOT NULL
+})
+
+# Alternative: $eq with None (v0.10.6+)
+workflow.add_node("PatientListNode", "active", {
+    "filter": {"deleted_at": {"$eq": None}}  # Also generates IS NULL
+})
+```
+
+**⚠️ Important**: `soft_delete: True` in model config ONLY affects DeleteNode operations. It does NOT auto-filter queries. You MUST manually add `deleted_at` filters to ListNode/ReadNode queries.
+
+## 🔇 CENTRALIZED LOGGING CONFIGURATION (v0.10.12 - NEW)
+
+Control log verbosity with `LoggingConfig` for cleaner output. Eliminates 524+ noisy diagnostic messages that were incorrectly logged at WARNING level.
+
+### Quick Usage
+```python
+import logging
+from dataflow import DataFlow, LoggingConfig
+
+# Option 1: Simple log level (quick control)
+db = DataFlow("postgresql://...", log_level=logging.WARNING)
+
+# Option 2: Full configuration object
+config = LoggingConfig.production()  # Only WARNING and above
+db = DataFlow("postgresql://...", log_config=config)
+
+# Option 3: Environment variables (12-factor app pattern)
+# Set in .env or shell:
+# DATAFLOW_LOG_LEVEL=WARNING
+# DATAFLOW_NODE_EXECUTION_LOG_LEVEL=ERROR
+# DATAFLOW_SQL_GENERATION_LOG_LEVEL=WARNING
+config = LoggingConfig.from_env()
+db = DataFlow("postgresql://...", log_config=config)
+```
+
+### Configuration Presets
+
+| Preset | Behavior | Use Case |
+|--------|----------|----------|
+| `LoggingConfig.production()` | Only WARNING+ | Production deployments |
+| `LoggingConfig.development()` | DEBUG for all | Local development |
+| `LoggingConfig.quiet()` | Only ERROR+ | Testing with minimal output |
+| `LoggingConfig.from_env()` | Environment-based | Docker/Kubernetes |
+
+### Category-Specific Logging
+
+Fine-grained control over different subsystems:
+
+```python
+import logging
+from dataflow import LoggingConfig
+
+config = LoggingConfig(
+    level=logging.WARNING,           # Default for all categories
+    node_execution=logging.ERROR,    # Node execution traces (only errors)
+    sql_generation=logging.WARNING,  # SQL generation diagnostics
+    list_operations=logging.WARNING, # ListNode field ordering info
+    migration=logging.INFO,          # Migration operations
+    core=logging.WARNING             # Core DataFlow operations
+)
+```
+
+### Sensitive Value Masking
+
+Automatic security for logged data:
+
+```python
+from dataflow import LoggingConfig, mask_sensitive
+
+config = LoggingConfig(
+    mask_sensitive_values=True,
+    sensitive_patterns=["password", "api_key", "secret", "token", "authorization"]
+)
+
+# Usage
+data = {"username": "alice", "password": "secret123", "api_key": "sk-xxx"}
+masked = mask_sensitive(data, config)
+# Result: {'username': 'alice', 'password': '***MASKED***', 'api_key': '***MASKED***'}
+```
+
+### Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `DATAFLOW_LOG_LEVEL` | Default level | `WARNING`, `INFO`, `DEBUG` |
+| `DATAFLOW_NODE_EXECUTION_LOG_LEVEL` | Node execution | `ERROR` |
+| `DATAFLOW_SQL_GENERATION_LOG_LEVEL` | SQL generation | `WARNING` |
+| `DATAFLOW_LIST_OPERATIONS_LOG_LEVEL` | List operations | `WARNING` |
+| `DATAFLOW_MIGRATION_LOG_LEVEL` | Migrations | `INFO` |
+| `DATAFLOW_CORE_LOG_LEVEL` | Core operations | `WARNING` |
+| `DATAFLOW_MASK_SENSITIVE` | Enable masking | `true`, `1` |
+
+### Programmatic Control
+
+```python
+from dataflow import configure_dataflow_logging, restore_dataflow_logging
+
+# Apply configuration manually (useful for testing)
+configure_dataflow_logging(LoggingConfig.quiet())
+
+# Restore original logging levels
+restore_dataflow_logging()
+```
+
+---
 
 ## 🛠️ DEVELOPER EXPERIENCE TOOLS (v0.8.0 - NEW)
 
@@ -57,8 +215,8 @@ db = DataFlow("postgresql://...")
 **Common Error Codes**:
 - **DF-101**: Missing required parameter → Shows which connection to add
 - **DF-102**: Type mismatch → Shows expected vs received types
-- **DF-103**: Auto-managed field conflict → Lists fields to remove
-- **DF-104**: Wrong node pattern (CreateNode vs UpdateNode) → Shows correct structure
+- **DF-103**: Auto-managed field conflict → **Remove `created_at`/`updated_at` from your data!**
+- **DF-104**: UpdateNode parameter error → **Most often caused by manually setting `updated_at`!**
 - **DF-105**: Primary key 'id' missing → Explains 'id' requirement
 - **DF-201**: Invalid connection → Shows correct output names
 - **DF-301**: Migration failed → Provides safe recovery steps

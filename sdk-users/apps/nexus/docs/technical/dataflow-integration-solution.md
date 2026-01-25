@@ -7,9 +7,9 @@
 - **Solution**: Set `auto_discovery=False`
 
 ### Issue 2: 5-10 Second Delay (ROOT CAUSE FOUND)
-- **Cause**: DataFlow's model registry executes workflows synchronously during model registration
+- **Cause**: DataFlow's model persistence executes workflows synchronously during model registration
 - **Each model registration**: Executes `LocalRuntime.execute(workflow.build())` to persist model metadata
-- **Solution**: Disable model persistence and skip registry
+- **Solution**: Disable model persistence for fast startup
 
 ## Complete Fix
 
@@ -27,9 +27,8 @@ app = Nexus(
 # Step 2: Create DataFlow with optimized settings
 db = DataFlow(
     database_url="postgresql://user:pass@host:port/db",
-    skip_registry=True,  # CRITICAL: Skip model registry (eliminates delay)
-    enable_model_persistence=False,  # CRITICAL: Disable persistence
-    auto_migrate=False,
+    enable_model_persistence=False,  # CRITICAL: Skip model persistence for fast startup
+    auto_migrate=False,              # Skip auto table creation
     skip_migration=True
 )
 
@@ -60,15 +59,11 @@ class User:
 - Avoids re-importing Python modules
 - Eliminates infinite blocking issue
 
-### `skip_registry=True` (DataFlow)
-- Skips creating registry tables in database
-- Avoids synchronous workflow execution during init
-- Models still work normally for CRUD operations
-
 ### `enable_model_persistence=False` (DataFlow)
-- Disables persisting model metadata to database
-- Prevents workflow execution for each model registration
-- Models are only stored in memory
+- Skips persisting model metadata to database during initialization
+- Avoids synchronous workflow execution during model registration
+- Models still work normally for CRUD operations
+- Models are stored in memory only (not persisted across restarts)
 
 ## Trade-offs
 
@@ -99,13 +94,12 @@ def create_production_app():
 
     db = DataFlow(
         database_url=os.environ["DATABASE_URL"],
-        skip_registry=True,
-        enable_model_persistence=False,
-        auto_migrate=False,
+        enable_model_persistence=False,  # Skip model persistence for fast startup
+        auto_migrate=False,              # Skip auto table creation
         skip_migration=True,
-        enable_metrics=True,  # Keep monitoring
-        enable_caching=True,  # Keep caching
-        connection_pool_size=20  # Keep pooling
+        enable_metrics=True,             # Keep monitoring
+        enable_caching=True,             # Keep caching
+        connection_pool_size=20          # Keep pooling
     )
 
     # Models register instantly
@@ -124,6 +118,6 @@ def create_production_app():
 The complete solution addresses both issues:
 
 1. **Infinite blocking**: Fixed with `auto_discovery=False`
-2. **5-10s delay**: Fixed with `skip_registry=True` and `enable_model_persistence=False`
+2. **5-10s delay**: Fixed with `enable_model_persistence=False`
 
 With these settings, DataFlow + Nexus integration starts in <2 seconds while maintaining all essential functionality.

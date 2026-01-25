@@ -4,7 +4,196 @@
 
 **Kaizen** is a signature-based AI agent framework built on Kailash Core SDK, providing production-ready agents with multi-modal processing, multi-agent coordination, and enterprise features.
 
-## 🆕 What's New in v0.6.0 (2025-10-29)
+## 🆕 What's New in v1.0.0 (2026-01-25)
+
+**General Availability Release** with performance optimization, specialist system, and GPT-5 support:
+
+### Performance Optimization (10-100x speedup)
+
+```python
+from kaizen.performance import (
+    SchemaCache, EmbeddingCache, PromptCache, MemoryContextCache,
+    HookBatchExecutor, BackgroundCheckpointWriter,
+    get_schema_cache,  # Global singleton
+)
+
+# Schema caching (10-50x speedup)
+cache = get_schema_cache()
+schema = cache.get_or_compute("tool_name", lambda: generate_schema())
+print(f"Hit rate: {cache.get_metrics().hit_rate:.1%}")
+
+# Embedding caching (100x+ API savings)
+from kaizen.performance import get_embedding_cache
+embed_cache = get_embedding_cache()
+vector = embed_cache.get_or_compute(text, model, compute_fn=embed_api_call)
+```
+
+| Cache | Speedup |
+|-------|---------|
+| SchemaCache | 10-50x |
+| EmbeddingCache | 100x+ |
+| PromptCache | 10-20x |
+| MemoryContextCache | 5-10x |
+| HookBatchExecutor | 8x |
+| ParallelToolExecutor | 4-5x |
+
+### Specialist System (ADR-013)
+
+Claude Code-style specialists and skills:
+
+```python
+from kaizen.core import KaizenOptions, SpecialistDefinition
+from kaizen.runtime.adapters import LocalKaizenAdapter
+
+specialists = {
+    "code-reviewer": SpecialistDefinition(
+        description="Expert code reviewer",
+        system_prompt="You are a senior code reviewer...",
+        available_tools=["Read", "Glob", "Grep"],
+        model="gpt-4o",
+        temperature=0.2,
+    ),
+}
+
+options = KaizenOptions(specialists=specialists)
+adapter = LocalKaizenAdapter(kaizen_options=options)
+reviewer = adapter.for_specialist("code-reviewer")
+```
+
+### GPT-5 Support (CRITICAL)
+
+**GPT-5 requires temperature=1.0** - auto-enforced by the provider:
+
+```python
+config = AgentConfig(
+    llm_provider="openai",
+    model="gpt-5-nano-2025-08-07",  # or gpt-5-2025-08-07
+    temperature=1.0,  # REQUIRED - auto-enforced
+    max_tokens=8000,  # Increased for reasoning tokens
+)
+```
+
+### Claude Code Parity Tools
+
+7 tools for autonomous workflows: `TodoWriteTool`, `NotebookEditTool`, `AskUserQuestionTool`, `EnterPlanModeTool`, `ExitPlanModeTool`, `KillShellTool`, `TaskOutputTool`
+
+### Developer Documentation
+
+Full v1.0 docs in `apps/kailash-kaizen/src/kaizen/docs/developers/`:
+- Performance optimization guide
+- Specialist system guide
+- Native tool system
+- Multi-LLM routing
+- Task/Skill tools
+
+---
+
+## What Was New in v0.9.0 (2026-01)
+
+**Journey Orchestration (Layer 5)** - Declarative user journey management with intent-driven transitions:
+
+```python
+from kaizen.journey import Journey, Pathway, Transition, IntentTrigger, JourneyConfig
+
+# Define signatures with Layer 2 enhancements
+class IntakeSignature(Signature):
+    __intent__ = "Gather patient symptoms and preferences"
+    __guidelines__ = ["Ask symptoms before demographics", "Use empathetic language"]
+
+    message: str = InputField(desc="Patient message")
+    symptoms: list = OutputField(desc="Extracted symptoms")
+
+# Define Journey with nested Pathways
+class PatientJourney(Journey):
+    __entry_pathway__ = "intake"
+    __transitions__ = [
+        Transition(
+            trigger=IntentTrigger(intents=["help", "faq"]),
+            to_pathway="faq"
+        )
+    ]
+
+    class IntakePath(Pathway):
+        __signature__ = IntakeSignature
+        __agents__ = ["intake_agent"]
+        __accumulate__ = ["symptoms", "preferences"]
+        __next__ = "booking"
+
+    class FAQPath(Pathway):
+        __return_behavior__ = ReturnToPrevious()  # Returns to previous pathway
+
+# Run the Journey
+journey = PatientJourney(session_id="patient-123", config=JourneyConfig())
+journey.manager.register_agent("intake_agent", intake_agent)
+await journey.start()
+response = await journey.process_message("I have back pain")
+```
+
+**Key Features:**
+- **Declarative Pathways**: Define multi-step user flows as nested classes
+- **Intent Detection**: LLM-powered intent classification (not keyword/regex)
+- **Context Accumulation**: Persist data across pathways with merge strategies (REPLACE, APPEND, UNION, SUM)
+- **Return Behaviors**: ReturnToPrevious for detours (FAQ, help), ReturnToSpecific for error handling
+- **Nexus Deployment**: Deploy journeys via API/CLI/MCP with `deploy_journey_to_nexus()`
+- **Hooks System**: 9 lifecycle events (PRE/POST_PATHWAY_EXECUTE, PRE/POST_TRANSITION, etc.)
+
+**Reference Implementation**: `examples/journey/healthcare_referral/` (5 pathways, 3 transitions)
+
+**Production Validated**: 301 unit + 50 integration tests (351 total)
+
+---
+
+## What Was New in v0.8.0 (2026-01)
+
+**Enterprise Agent Trust Protocol (EATP)**:
+
+- **🔐 Trust Lineage Chains**
+  - Cryptographically linked chain of genesis, capabilities, delegations, and audit anchors
+  - TrustLineageChain with GenesisRecord, CapabilityAttestation, DelegationRecord, AuditAnchor
+  - 4 core operations: ESTABLISH, DELEGATE, VERIFY, AUDIT
+  - PostgresTrustStore for persistent storage with caching
+
+- **🤖 TrustedAgent & TrustedSupervisorAgent**
+  - BaseAgent extensions with built-in trust verification
+  - Automatic trust establishment and capability verification
+  - Trust delegation with constraints and time limits
+  - Trust context propagation through workflows
+
+- **📡 Secure Agent Communication**
+  - SecureChannel with HMAC-based message authentication
+  - Nonce-based replay protection (InMemoryReplayProtection)
+  - Timestamp validation and sender/receiver verification
+  - MessageSigner and MessageVerifier for end-to-end security
+
+- **🏗️ Trust-Aware Orchestration**
+  - TrustAwareOrchestrationRuntime with trust context propagation
+  - TrustPolicyEngine for policy-based trust evaluation
+  - TrustExecutionContext for capability and delegation tracking
+  - Integration with existing orchestration patterns
+
+- **🏢 Enterprise System Agent (ESA)**
+  - Proxy agents for legacy systems with trust verification
+  - SystemMetadata and SystemConnectionInfo for system configuration
+  - Bridge non-AI systems into trust ecosystem
+  - Accountability for external system calls
+
+- **🌐 A2A HTTP Service**
+  - REST/JSON-RPC API for trust operations
+  - AgentCardGenerator for agent capability cards
+  - Cross-organization agent coordination
+  - Integration with existing A2A protocol
+
+- **🛡️ Security Hardening**
+  - CredentialRotationManager for automatic key rotation
+  - TrustRateLimiter for rate limiting trust operations
+  - SecurityAuditLogger for security event logging
+  - SecureKeyStorage for encrypted key storage
+
+**Version**: 0.8.0 | **Dependencies**: Kailash >=0.10.13
+
+---
+
+## What Was New in v0.6.0
 
 **Enhanced Autonomy & Memory Systems**:
 
@@ -28,8 +217,6 @@
   - New hook events: PRE/POST_INTERRUPT, PRE/POST_CHECKPOINT_SAVE
   - Improved performance: <0.01ms overhead (625x better than target)
   - Production-validated: 100+ concurrent hooks supported
-
-**Version**: 0.6.0 | **Dependencies**: Kailash >=0.10.2
 
 ---
 
@@ -57,15 +244,16 @@ class CustomConfig:
 agent = SimpleQAAgent(CustomConfig())
 ```
 
-### LLM Provider Configuration (v0.7.1)
+### LLM Provider Configuration (v0.8.2)
 
-Kaizen supports 8 LLM providers with automatic detection:
+Kaizen supports 9 LLM providers with automatic detection:
 
 | Provider | Type | Requirements | Features |
 |----------|------|--------------|----------|
 | `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
-| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings |
+| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings, structured outputs |
 | `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
+| `google` | Cloud | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Gemini 2.0, vision, embeddings, tool calling, structured outputs |
 | `ollama` | Local | Ollama running on port 11434 | Free, local models |
 | `docker` | Local | Docker Desktop Model Runner on port 12434 | Free local inference, GPU acceleration |
 | `cohere` | Cloud | `COHERE_API_KEY` | Command models, embeddings |
@@ -86,11 +274,21 @@ class DockerConfig:
     llm_provider: str = "docker"
     model: str = "ai/llama3.2"  # Or ai/qwen3, ai/gemma3
     # Prerequisites: docker desktop enable model-runner --tcp 12434
+
+# Google Gemini (Cloud, multimodal, v0.8.2)
+@dataclass
+class GoogleConfig:
+    llm_provider: str = "google"  # Or "gemini" (alias)
+    model: str = "gemini-2.0-flash"  # Or gemini-1.5-pro
+    # Set: GOOGLE_API_KEY or GEMINI_API_KEY
+    # Install: pip install kailash-kaizen[google]
 ```
 
-**Auto-Detection Order**: OpenAI → Azure → Anthropic → Ollama → Docker
+**Auto-Detection Order**: OpenAI → Azure → Anthropic → Google → Ollama → Docker
 
 **Docker Tool Calling**: Model-dependent. Supported: `ai/qwen3`, `ai/llama3.3`, `ai/gemma3`
+
+**Google Gemini**: Chat, vision (multimodal), embeddings (text-embedding-004), tool calling, async support
 
 ### Multi-Modal Processing
 
@@ -128,30 +326,28 @@ best_worker = pattern.supervisor.select_worker_for_task(
 # Returns: {"worker": <DataAnalystAgent>, "score": 0.9}
 ```
 
-### OpenAI Structured Outputs
+### Multi-Provider Structured Outputs (v0.8.2)
 
-**Guarantee LLM responses match your signature** with 100% schema compliance:
+**Guarantee LLM responses match your signature** with 100% schema compliance across OpenAI, Google/Gemini, and Azure.
+
+#### Automatic Configuration (Recommended)
+
+**Most users don't need any configuration!** Structured outputs are **automatically enabled** when you use BaseAgent with a signature:
 
 ```python
-from kaizen.core.base_agent import BaseAgent, BaseAgentConfig
-from kaizen.core.structured_output import create_structured_output_config
+from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import Signature, InputField, OutputField
+from kaizen.core.config import BaseAgentConfig
 
-# Define signature
 class AnalysisSignature(Signature):
     input_text: str = InputField(desc="Text to analyze")
     category: str = OutputField(desc="Classification category")
     confidence: float = OutputField(desc="Confidence 0-1")
 
-# Enable structured outputs (strict mode)
+# Structured outputs auto-configured - NO provider_config needed!
 config = BaseAgentConfig(
-    llm_provider="openai",
-    model="gpt-4o-2024-08-06",  # Required for strict mode
-    provider_config=create_structured_output_config(
-        signature=AnalysisSignature(),
-        strict=True,  # 100% schema compliance
-        name="analysis"
-    )
+    llm_provider="openai",  # or "google", "gemini", "azure"
+    model="gpt-4o-2024-08-06"
 )
 
 agent = BaseAgent(config=config, signature=AnalysisSignature())
@@ -162,14 +358,44 @@ print(result['category'])      # Always present, always string
 print(result['confidence'])    # Always present, always float
 ```
 
+**How Auto-Configuration Works**: When a signature is provided and no `provider_config` is set, WorkflowGenerator automatically calls `create_structured_output_config()` with strict mode enabled.
+
+#### Manual Configuration (Advanced)
+
+For explicit control over structured output behavior:
+
+```python
+from kaizen.core.structured_output import create_structured_output_config
+
+# Only needed when you want to override defaults
+config = BaseAgentConfig(
+    llm_provider="openai",
+    model="gpt-4o-2024-08-06",
+    provider_config=create_structured_output_config(
+        signature=AnalysisSignature(),
+        strict=True,  # 100% schema compliance (default)
+        name="analysis"  # Custom schema name
+    )
+)
+```
+
 **How It Works:**
-- OpenAI returns JSON as a dict object (pre-parsed, not a string)
-- Both `AsyncSingleShotStrategy` and `SingleShotStrategy` detect dict responses automatically
+- All providers receive OpenAI-style `response_format` from `create_structured_output_config()`
+- Each provider auto-translates to native parameters:
+  - **OpenAI**: Uses `response_format` directly
+  - **Google/Gemini**: Translates to `response_mime_type` + `response_schema`
+  - **Azure**: Translates to `JsonSchemaFormat`
 - Dict responses are returned directly without string parsing - transparent to users
 
+**Provider Support Matrix:**
+- ✅ **OpenAI**: Full support (`json_schema` strict, `json_object` legacy)
+- ✅ **Google/Gemini**: Full support (auto-translated)
+- ✅ **Azure AI Foundry**: Full support (auto-translated)
+- ❌ **Ollama/Anthropic**: Not supported
+
 **Modes:**
-- **Strict Mode** (`strict=True`): 100% compliance, requires `gpt-4o-2024-08-06+`
-- **Legacy Mode** (`strict=False`): ~70-85% compliance, works with all models
+- **Strict Mode** (`strict=True`): 100% compliance
+- **Legacy Mode** (`strict=False`): ~70-85% compliance
 
 **Learn More:** [Structured Outputs Guide](docs/guides/signature-programming.md)
 
@@ -392,8 +618,7 @@ result = agent.run(question="test")
 **Production Validated:**
 - -0.06% overhead (essentially zero, tested with 100 real OpenAI API calls)
 - 0.57ms p95 audit latency (<10ms target, 17.5x margin)
-- 281 tests passing (Phase 3 complete)
-- Validated with real infrastructure (NO MOCKING in Tiers 2-3 tests)
+- 281 tests passing - Validated with real infrastructure (NO MOCKING in Tiers 2-3 tests)
 
 **Start Observability Stack:**
 ```bash
@@ -709,8 +934,7 @@ result = agent.run(question="What's my communication style?")
 - <100ms storage (p95)
 - 10,000+ entries per agent (SQLite)
 - Millions of entries (PostgreSQL)
-- 281 tests passing (Phase 3 complete)
-
+- 281 tests passing
 **Use Cases:**
 - Conversational agents with context continuity
 - Customer support bots with preference learning
@@ -796,8 +1020,7 @@ batch_results = agent.extract_batch(
 - **Cost Control**: Prefer-free mode tries Ollama first, falls back to paid
 
 **Production Validated:**
-- 281 tests passing (Phase 3 complete)
-- Real infrastructure testing (NO MOCKING)
+- 281 tests passing - Real infrastructure testing (NO MOCKING)
 - Ollama: $0.00 cost for unlimited processing
 - OpenAI: Budget-controlled, accurate
 - Landing AI: Mission-critical accuracy (95%+)
@@ -1037,8 +1260,7 @@ result = agent.run(question="What is AI?")
 - <0.01ms overhead per event (625x better than 10ms target)
 - 100+ concurrent hooks supported
 - Thread-safe and composable
-- 281 tests passing (Phase 3 complete)
-
+- 281 tests passing
 **See:** `docs/guides/hooks-system-guide.md` for complete documentation.
 
 ### 2. Checkpoint System - Persistent State Management
@@ -1491,8 +1713,7 @@ result = ensemble.run(
    - State: Persistent checkpoints with pluggable storage
    - Interrupts: Graceful execution control (6 signal types)
    - Thread-safe, composable, extensible
-   - 281 tests passing (Phase 3 complete)
-
+   - 281 tests passing
 7. **Permission System** (`src/kaizen/core/autonomy/permissions/`)
    - ExecutionContext: Thread-safe runtime state
    - PermissionRule: Pattern-based access control

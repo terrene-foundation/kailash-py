@@ -14,14 +14,69 @@ High-performance wrapper providing ~23x faster execution by bypassing workflow o
 > Related Subagents: `dataflow-specialist` (enterprise features)
 
 ## Quick Reference
-
-- **Access**: `db.express.<operation>()` after `await db.initialize()`
+- **Access**: `db.express.<operation>()` after `await db.create_tables_async()`
 - **Performance**: ~23x faster than workflow-based operations
-- **Operations**: create, read, update, delete, list, count, bulk_create, bulk_update, bulk_delete, bulk_upsert
-- **Best For**: Simple CRUD operations, high-throughput scenarios
+- **Operations**: create, read, find_one, update, delete, list, count, bulk_create, bulk_update, bulk_delete, bulk_upsert
+- **Best For**: Simple CRUD operations, high-throughput scenarios, API endpoints
 - **NOT For**: Multi-node workflows, conditional execution, transactions
 
-## 30-Second Quick Start
+## Docker/FastAPI Quick Start (RECOMMENDED)
+
+For Docker/FastAPI deployment, use `auto_migrate=False` + `create_tables_async()` to avoid async/sync conflicts:
+
+```python
+from dataflow import DataFlow
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+# Step 1: Initialize with auto_migrate=False for Docker
+db = DataFlow(
+    "postgresql://user:password@postgres:5432/mydb",
+    auto_migrate=False  # CRITICAL for Docker - prevents DF-501 errors
+)
+
+# Step 2: Register models
+@db.model
+class User:
+    id: str
+    name: str
+    email: str
+    active: bool = True
+
+# Step 3: Create tables in lifespan (event loop is ready)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await db.create_tables_async()  # Safe - event loop ready
+    yield
+    await db.close_async()          # Cleanup connections
+
+app = FastAPI(lifespan=lifespan)
+
+# Step 4: Use Express for endpoints - 23x faster than workflows!
+@app.post("/users")
+async def create_user(data: dict):
+    return await db.express.create("User", data)
+
+@app.get("/users/{id}")
+async def get_user(id: str):
+    return await db.express.read("User", id)
+
+@app.put("/users/{id}")
+async def update_user(id: str, data: dict):
+    return await db.express.update("User", {"id": id}, data)
+
+@app.delete("/users/{id}")
+async def delete_user(id: str):
+    return await db.express.delete("User", id)
+
+@app.get("/users")
+async def list_users(skip: int = 0, limit: int = 100):
+    return await db.express.list("User", limit=limit, offset=skip)
+```
+
+## CLI/Script Quick Start
+
+For CLI scripts (no running event loop), the simpler pattern works:
 
 ```python
 from dataflow import DataFlow
@@ -59,6 +114,9 @@ users = await db.express.list("User", filter={"active": True})
 
 # Count
 total = await db.express.count("User")
+
+# Find One - single record by filter (non-PK lookup)
+user = await db.express.find_one("User", {"email": "alice@example.com"})
 ```
 
 ## Complete API Reference
@@ -74,10 +132,16 @@ result = await db.express.create("ModelName", {
 })
 # Returns: {"id": "record-001", "field1": "value1", "field2": "value2", ...}
 
-# Read
+# Read (by primary key)
 result = await db.express.read("ModelName", "record-001")
 result = await db.express.read("ModelName", "record-001", raise_on_not_found=True)
 # Returns: dict or None
+
+# Find One (by filter - non-PK lookup)
+result = await db.express.find_one("ModelName", {"email": "user@example.com"})
+result = await db.express.find_one("ModelName", {"status": "active", "role": "admin"})
+# Returns: dict or None (first matching record)
+# NOTE: Filter MUST be non-empty. For unfiltered queries, use list() with limit=1
 
 # Update
 result = await db.express.update(
@@ -163,16 +227,16 @@ result = await db.express.bulk_upsert(
 
 ## Common Patterns
 
-### Pattern 1: User Registration
+### Pattern 1: User Registration (using find_one)
 
 ```python
 async def register_user(email: str, name: str) -> dict:
     import uuid
 
-    # Check if user exists
-    existing = await db.express.list("User", filter={"email": email}, limit=1)
+    # Check if user exists using find_one (cleaner than list with limit=1)
+    existing = await db.express.find_one("User", {"email": email})
     if existing:
-        return {"error": "Email already registered", "user": existing[0]}
+        return {"error": "Email already registered", "user": existing}
 
     # Create new user
     user = await db.express.create("User", {
@@ -262,7 +326,7 @@ await db.express.create("User", {...})
 
 ### Empty list returned
 
-If using custom `__tablename__`, ensure you're on v0.9.8+:
+If using custom `__tablename__`, ensure you're on v0.10.6+:
 
 ```python
 @db.model
@@ -270,8 +334,24 @@ class User:
     id: str
     __tablename__ = "custom_users"
 
-# Fixed in v0.9.8 - uses correct table name
+# Fixed in v0.10.6 - uses correct table name
 users = await db.express.list("User")
+```
+
+### Pattern 4: Get User by Email (find_one vs read)
+
+```python
+# Use read() for primary key lookups
+user = await db.express.read("User", "user-001")
+
+# Use find_one() for non-primary key lookups
+user = await db.express.find_one("User", {"email": "alice@example.com"})
+user = await db.express.find_one("User", {"username": "alice"})
+user = await db.express.find_one("User", {"status": "active", "role": "admin"})
+
+# find_one() requires non-empty filter (raises ValueError otherwise)
+# For unfiltered single record, use list() with limit=1
+first_user = (await db.express.list("User", limit=1))[0] if await db.express.count("User") > 0 else None
 ```
 
 ## Related Documentation
@@ -283,4 +363,5 @@ users = await db.express.list("User")
 
 ## Version History
 
-- **v0.9.8**: Initial ExpressDataFlow release with full CRUD and bulk operations
+- **v0.10.13**: Added `find_one()` method for single-record non-PK lookups
+- **v0.10.6**: Initial ExpressDataFlow release with full CRUD and bulk operations

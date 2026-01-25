@@ -271,21 +271,20 @@ async def create_user():
 
 ### FastAPI Integration
 
-**✅ FIXED in v0.9.5+**: All async context deadlocks resolved. No workarounds needed!
+**⚠️ Docker/FastAPI Requires `auto_migrate=False`**: Due to event loop boundary issues, you must use the lifespan pattern.
 
 ```python
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 from dataflow import DataFlow
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 import uuid
 
-app = FastAPI()
-
-# ✅ Works in v0.9.5+ - No workaround needed!
+# ⚠️ CRITICAL: auto_migrate=False is REQUIRED for Docker/FastAPI
 db = DataFlow(
     "postgresql://localhost:5432/mydb",
-    auto_migrate=True  # Safe in FastAPI/async contexts
+    auto_migrate=False  # REQUIRED - auto_migrate=True fails in Docker/FastAPI
 )
 
 @db.model
@@ -293,6 +292,14 @@ class User:
     id: str
     name: str
     email: str
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await db.create_tables_async()  # Create tables in FastAPI's event loop
+    yield
+    await db.close_async()
+
+app = FastAPI(lifespan=lifespan)
 
 @app.post("/users")
 async def create_user(name: str, email: str):
@@ -308,11 +315,8 @@ async def create_user(name: str, email: str):
     return results["create"]
 ```
 
-**What Changed in v0.9.5**:
-- All DDL operations now use context-safe runtime execution
-- `auto_migrate=True` works safely in FastAPI/async applications
-- No manual table creation needed
-- Fixed 18 locations across ModelRegistry, migration system, schema inspectors, and testing utilities
+**⚠️ Docker/FastAPI REQUIRES Manual Pattern**:
+`auto_migrate=False` + `create_tables_async()` in lifespan is **REQUIRED** for Docker/FastAPI due to event loop boundary limitations. Database connections are bound to the event loop they're created in - connections from async_safe_run's thread pool cannot be used in uvicorn's main loop.
 
 ## DataFlow + Nexus Integration
 
@@ -326,13 +330,12 @@ from kailash.workflow.builder import WorkflowBuilder
 # Step 1: Create Nexus FIRST with auto_discovery=False
 app = Nexus(auto_discovery=False)  # CRITICAL: Prevents blocking
 
-# Step 2: Create DataFlow with skip_registry=True
+# Step 2: Create DataFlow with enable_model_persistence=False
 db = DataFlow(
     "postgresql://user:pass@localhost/db",
-    skip_registry=True,           # CRITICAL: Prevents 5-10s delay
-    enable_model_persistence=False,  # Fast startup
-    auto_migrate=False,           # v0.9.1: Prevents async deadlock
-    migration_enabled=False        # v0.9.1: Prevents async deadlock
+    enable_model_persistence=False,  # CRITICAL: Prevents 5-10s delay, fast startup
+    auto_migrate=False,              # v0.9.1: Prevents async deadlock
+    migration_enabled=False          # v0.9.1: Prevents async deadlock
 )
 
 # Step 3: Define models
@@ -397,6 +400,7 @@ Use `nexus-specialist` when:
 - 💡 **MongoDB queries**: Use familiar syntax that works across all SQL databases (PostgreSQL/MySQL/SQLite)
 - 💡 **String IDs**: Fully supported - no forced integer conversion
 - 💡 **Existing databases**: Use `existing_schema_mode=True` for safety
-- 💡 **Nexus integration**: Set `skip_registry=True` + `auto_discovery=False` to avoid blocking
+- 💡 **Nexus integration**: Set `enable_model_persistence=False` + `auto_discovery=False` to avoid blocking
+- 💡 **Clean logs (v0.10.12+)**: Use `LoggingConfig.production()` for production, `LoggingConfig.development()` for debugging
 
 <!-- Trigger Keywords: DataFlow tutorial, DataFlow quick start, @db.model, DataFlow setup, database framework, how to use DataFlow, DataFlow installation, DataFlow guide, zero-config database, automatic node generation, DataFlow example, start with DataFlow -->
