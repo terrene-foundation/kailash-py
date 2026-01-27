@@ -2,6 +2,14 @@
 
 Production-ready features for performance optimization, specialist system, and GPT-5 compatibility.
 
+## Deprecation Notes
+
+| Feature | Status | Migration |
+|---------|--------|-----------|
+| `ToolRegistry`, `ToolExecutor` | **REMOVED** | Use MCP via `BaseAgent.execute_mcp_tool()` or `KaizenToolRegistry` for native tools |
+| `kaizen.agents.coordination` | **DEPRECATED** (removal in v0.5.0) | Use `kaizen.orchestration.patterns` |
+| `max_tokens` (OpenAI providers) | **DEPRECATED** | Use `max_completion_tokens` instead |
+
 ## Performance Optimization (TODO-199)
 
 The `kaizen.performance` module provides production-ready optimizations for the TAOD loop:
@@ -66,7 +74,11 @@ reviewer = adapter.for_specialist("code-reviewer")
 
 ## Native Tool System
 
-TAOD loop integration with danger-level approval:
+TAOD loop integration with danger-level approval.
+
+> **IMPORTANT**: The old `ToolRegistry` and `ToolExecutor` classes have been REMOVED and migrated to MCP.
+> - **Old API (REMOVED)**: `from kaizen.tools import ToolRegistry, ToolExecutor`
+> - **New API**: Use `BaseAgent.execute_mcp_tool()` for MCP-based tools, or `KaizenToolRegistry` for native tools
 
 ```python
 from kaizen.tools import BaseTool, NativeToolResult, KaizenToolRegistry

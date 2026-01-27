@@ -44,12 +44,12 @@
 **AI agent framework** built on Core SDK:
 - **Purpose**: Production-ready AI agents with multi-modal processing, multi-agent coordination, and enterprise features built on Kailash SDK
 - **Features**: Signature-based programming, BaseAgent architecture, automatic optimization, error handling, audit trails
-- **Unified Agent API (v0.10.0)**: Progressive configuration from 2-line quickstart to expert mode
+- **Unified Agent API (v1.0.0)**: Progressive configuration from 2-line quickstart to expert mode
 - **Usage**: Agentic applications requiring robust AI capabilities
 - **Install**: `pip install kailash-kaizen`
-- **Import**: `from kaizen.api import Agent` (v0.10.0) or `from kaizen.core.base_agent import BaseAgent`
+- **Import**: `from kaizen.api import Agent` (v1.0.0) or `from kaizen.core.base_agent import BaseAgent`
 
-**Kaizen v0.10.0 Quick Start (Unified Agent API)**:
+**Kaizen v1.0.0 Quick Start (Unified Agent API)**:
 ```python
 from kaizen.api import Agent
 

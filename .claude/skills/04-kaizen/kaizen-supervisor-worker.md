@@ -5,7 +5,9 @@ Task delegation with semantic matching.
 ## Pattern
 
 ```python
-from kaizen.agents.coordination.supervisor_worker import SupervisorWorkerPattern
+# NOTE: kaizen.agents.coordination is DEPRECATED (removal in v0.5.0)
+# Use kaizen.orchestration.patterns instead
+from kaizen.orchestration.patterns import SupervisorWorkerPattern
 
 pattern = SupervisorWorkerPattern(
     supervisor=supervisor_agent,
