@@ -438,7 +438,9 @@ class SafeAgent(BaseAgent):
 ### With Multi-Agent
 
 ```python
-from kaizen.agents.coordination.supervisor_worker import SupervisorWorkerPattern
+# NOTE: kaizen.agents.coordination is DEPRECATED (removal in v0.5.0)
+# Use kaizen.orchestration.patterns instead
+from kaizen.orchestration.patterns import SupervisorWorkerPattern
 
 # Supervisor with tools
 supervisor = SupervisorAgent(config, tools="all"  # Enable 12 builtin tools via MCP

@@ -108,6 +108,14 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **SharedMemoryPool**: Multi-agent coordination
 - **A2A Protocol**: Google Agent-to-Agent protocol for semantic capability matching
 
+### Deprecation Notes (v1.0)
+
+| Feature | Status | Migration |
+|---------|--------|-----------|
+| `ToolRegistry`, `ToolExecutor` | **REMOVED** | Use MCP via `BaseAgent.execute_mcp_tool()` or `KaizenToolRegistry` for native tools |
+| `kaizen.agents.coordination` | **DEPRECATED** (removal in v0.5.0) | Use `kaizen.orchestration.patterns` |
+| `max_tokens` (OpenAI providers) | **DEPRECATED** | Use `max_completion_tokens` instead |
+
 ### LLM Providers (v0.8.2)
 
 | Provider | Type | Requirements | Features |
