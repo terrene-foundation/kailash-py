@@ -414,21 +414,30 @@ workflow.add_connection("create_customer", "id", "create", "customer_id")
 ### 3. Nexus Integration Blocks Startup
 
 ```python
-# WRONG - Blocks Nexus for minutes
-db = DataFlow()  # Default auto_migrate=True
-nexus = Nexus(dataflow_config={"integration": db})
+# WRONG - dataflow_config does NOT exist in Nexus v1.1.3!
+db = DataFlow()
+nexus = Nexus(dataflow_config={"integration": db})  # THIS WILL FAIL
 ```
 
-**Fix: Critical Configuration**
+**Fix: Use auto_discovery=False and manual workflow registration**
 ```python
+# DataFlow v0.10.15+: auto_migrate=True works in Docker/FastAPI
 db = DataFlow(
-    auto_migrate=False,
-    existing_schema_mode=True
+    database_url="postgresql://...",
+    auto_migrate=True,  # Works via SyncDDLExecutor
 )
-nexus = Nexus(dataflow_config={
-    "integration": db,
-    "auto_discovery": False  # CRITICAL
-})
+
+# Nexus v1.1.3: ALWAYS use auto_discovery=False
+nexus = Nexus(
+    api_port=8000,
+    auto_discovery=False,  # CRITICAL: Prevents blocking startup
+)
+
+# Register DataFlow workflows manually with Nexus
+from kailash.workflow.builder import WorkflowBuilder
+workflow = WorkflowBuilder()
+workflow.add_node("ProductCreateNode", "create", {"name": "${input.name}"})
+nexus.register("create_product", workflow.build())
 ```
 
 ### 4. Wrong Result Access Pattern ⚠️

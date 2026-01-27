@@ -1,12 +1,16 @@
 ---
 name: dataflow-specialist
-description: Zero-config database framework specialist for Kailash DataFlow implementation (v0.8.0+). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
+description: Zero-config database framework specialist for Kailash DataFlow implementation (v0.10.15+). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
 ---
 
 # DataFlow Specialist Agent
 
 ## Role
-Zero-config database framework specialist for Kailash DataFlow implementation. Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
+Zero-config database framework specialist for Kailash DataFlow implementation (v0.10.15+). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
+
+> **v0.10.15 Update**: `auto_migrate=True` now works correctly in Docker/FastAPI environments using `SyncDDLExecutor` (psycopg2/sqlite3 for synchronous DDL operations). No event loop issues!
+>
+> **Note**: `existing_schema_mode` and `enable_model_persistence` parameters still exist but are rarely needed. The simple `auto_migrate=True` (default) handles most use cases.
 
 ## Skills Quick Reference
 
@@ -53,11 +57,13 @@ Zero-config database framework specialist for Kailash DataFlow implementation. U
 
 ## DataFlow Quick Config Reference
 
-| Use Case | Config | Startup Time |
-|----------|--------|--------------|
-| **Fast API** | `enable_model_persistence=False, auto_migrate=False` | <2s |
-| **Full Features** | `enable_model_persistence=True, auto_migrate=True` | 10-30s |
-| **With Nexus** | Always use above + `Nexus(auto_discovery=False)` | Same |
+> **DataFlow v0.10.15+**: `auto_migrate=True` now works correctly in Docker/FastAPI environments using `SyncDDLExecutor`. The deprecated parameters (`enable_model_persistence`, `skip_registry`, `skip_migration`, `existing_schema_mode`) have been removed.
+
+| Use Case | Config | Notes |
+|----------|--------|-------|
+| **Development** | `auto_migrate=True` (default) | Safe, automatic schema creation |
+| **Production** | `auto_migrate=True` | Same config works in Docker/FastAPI |
+| **With Nexus** | `auto_migrate=True` + `Nexus(auto_discovery=False)` | Deferred schema operations |
 
 ### Test Mode (v0.7.10+)
 | Use Case | Config |
@@ -194,7 +200,7 @@ DataFlow includes an 8-component enterprise migration system. See [`dataflow-ent
 | Simple CRUD | Basic nodes |
 | Bulk import | BulkCreateNode |
 | Complex queries | ListNode + MongoDB filters |
-| Existing database | `existing_schema_mode=True` |
+| Existing database | `auto_migrate=True` (v0.10.15+ auto-detects) |
 | Schema changes | Enterprise migration system |
 | Risk assessment | RiskAssessmentEngine |
 
@@ -202,7 +208,7 @@ DataFlow includes an 8-component enterprise migration system. See [`dataflow-ent
 
 ### Always
 - Use PostgreSQL for production, SQLite for development
-- Set `existing_schema_mode=True` for existing databases
+- Use `auto_migrate=True` (works in Docker/FastAPI as of v0.10.15+)
 - Use bulk operations for >100 records
 - Use connections for dynamic values
 - Follow 3-tier testing with real infrastructure
@@ -223,13 +229,15 @@ DataFlow includes an 8-component enterprise migration system. See [`dataflow-ent
 - [DataFlow README](../../sdk-users/apps/dataflow/README.md)
 - [Complete Documentation](../../sdk-users/apps/dataflow/docs/)
 
-### Nexus Integration (CRITICAL v0.4.6+)
+### Nexus Integration (v0.10.15+)
 ```python
-# Fast, non-blocking pattern
-app = Nexus(api_port=8000, auto_discovery=False)  # CRITICAL
-db = DataFlow(database_url="postgresql://...",
-              enable_model_persistence=False,
-              auto_migrate=False)
+# Production-ready pattern (auto_migrate=True now works in Docker/FastAPI)
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=True,  # v0.10.15+: Works in Docker/FastAPI via SyncDDLExecutor
+)
+
+app = Nexus(api_port=8000, auto_discovery=False)  # Deferred schema operations
 ```
 
 See: [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-integration.md)
