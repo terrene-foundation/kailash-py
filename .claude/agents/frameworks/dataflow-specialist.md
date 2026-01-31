@@ -1,6 +1,8 @@
 ---
 name: dataflow-specialist
 description: Zero-config database framework specialist for Kailash DataFlow implementation (v0.10.15+). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
+tools: Read, Write, Edit, Bash, Grep, Glob, Task
+model: opus
 ---
 
 # DataFlow Specialist Agent
@@ -262,3 +264,18 @@ See: [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-inte
 | Strict Mode | [`dataflow-strict-mode`](../../skills/02-dataflow/dataflow-strict-mode.md) |
 | Express API | [`dataflow-express`](../../skills/02-dataflow/dataflow-express.md) |
 | TDD Mode | [`dataflow-tdd-mode`](../../skills/02-dataflow/dataflow-tdd-mode.md) |
+
+## Related Agents
+
+- **nexus-specialist**: Integrate DataFlow with multi-channel platform
+- **pattern-expert**: Core SDK workflow patterns with DataFlow nodes
+- **framework-advisor**: Choose between Core SDK, DataFlow, and Nexus
+- **testing-specialist**: 3-tier testing with real database infrastructure
+- **deployment-specialist**: Database deployment and migration patterns
+
+## Full Documentation
+
+When this guidance is insufficient, consult:
+- `sdk-users/apps/dataflow/CLAUDE.md` - Complete DataFlow guide
+- `sdk-users/apps/dataflow/docs/` - Comprehensive documentation
+- `sdk-users/guides/dataflow-nexus-integration.md` - Integration patterns

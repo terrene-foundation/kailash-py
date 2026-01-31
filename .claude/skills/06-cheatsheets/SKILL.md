@@ -78,6 +78,48 @@ This skill provides quick access to:
 - **[data-integration](data-integration.md)** - Data integration patterns
 - **[integration-mastery](integration-mastery.md)** - Advanced integration techniques
 
+## Quick Patterns
+
+### Basic Workflow
+```python
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime import LocalRuntime
+
+workflow = WorkflowBuilder()
+workflow.add_node("NodeType", "node_id", {"param": "value"})
+runtime = LocalRuntime()
+results, run_id = runtime.execute(workflow.build())
+```
+
+### Common Node Selection
+```python
+# Data processing
+workflow.add_node("PythonCode", "transform", {"code": "..."})
+
+# API calls
+workflow.add_node("HTTPRequest", "api", {"url": "...", "method": "GET"})
+
+# AI/LLM
+workflow.add_node("LLMNode", "chat", {"model": "gpt-4", "prompt": "..."})
+```
+
+### Cyclic Pattern
+```python
+workflow.add_node("LoopNode", "loop", {"max_iterations": 5})
+workflow.add_node("ProcessNode", "process", {})
+workflow.add_connection("loop", "item", "process", "input")
+workflow.add_connection("process", "output", "loop", "feedback")
+```
+
+## CRITICAL Gotchas
+
+| Rule | Why |
+|------|-----|
+| ❌ NEVER use raw SQL | Use DataFlow instead |
+| ✅ ALWAYS call `.build()` | Before `runtime.execute()` |
+| ❌ NEVER use relative imports | Use absolute imports |
+| ❌ NEVER mock in Tier 2-3 | Use real infrastructure |
+
 ## When to Use This Skill
 
 Use this skill when you need:
@@ -97,3 +139,10 @@ Use this skill when you need:
 - **[08-nodes-reference](../nodes/SKILL.md)** - Node reference documentation
 - **[09-workflow-patterns](../workflows/SKILL.md)** - Industry workflow patterns
 - **[17-gold-standards](../../17-gold-standards/SKILL.md)** - Mandatory best practices
+
+## Support
+
+For cheatsheet-related questions, invoke:
+- `pattern-expert` - Pattern selection and usage
+- `sdk-navigator` - Find specific patterns in documentation
+- `framework-advisor` - Choose appropriate patterns for your use case

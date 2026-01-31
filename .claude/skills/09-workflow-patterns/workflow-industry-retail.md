@@ -56,11 +56,11 @@ workflow.add_node("APICallNode", "notify_customer", {
     "body": {"to": "{{input.email}}", "subject": "Order Confirmed", "tracking": "{{shipping.tracking_number}}"}
 })
 
-workflow.add_connection("create_order", "check_inventory")
-workflow.add_connection("check_inventory", "reserve_stock")
-workflow.add_connection("reserve_stock", "payment")
-workflow.add_connection("payment", "shipping")
-workflow.add_connection("shipping", "notify_customer")
+workflow.add_connection("create_order", "order_id", "check_inventory", "order_id")
+workflow.add_connection("check_inventory", "quantity", "reserve_stock", "available")
+workflow.add_connection("reserve_stock", "result", "payment", "body")
+workflow.add_connection("payment", "transaction_id", "shipping", "payment_ref")
+workflow.add_connection("shipping", "tracking_number", "notify_customer", "tracking")
 ```
 
 <!-- Trigger Keywords: retail workflow, e-commerce, order processing, inventory sync, order fulfillment -->

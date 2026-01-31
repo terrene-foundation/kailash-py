@@ -47,10 +47,10 @@ workflow.add_node("DatabaseExecuteNode", "audit", {
     "parameters": ["{{authenticate.user_id}}", "{{input.patient_id}}"]
 })
 
-workflow.add_connection("authenticate", "check_access")
-workflow.add_connection("check_access", "fetch_record")
-workflow.add_connection("fetch_record", "decrypt")
-workflow.add_connection("decrypt", "audit")
+workflow.add_connection("authenticate", "user_id", "check_access", "parameters")
+workflow.add_connection("check_access", "role", "fetch_record", "authorization")
+workflow.add_connection("fetch_record", "encrypted_data", "decrypt", "input")
+workflow.add_connection("decrypt", "data", "audit", "parameters")
 ```
 
 <!-- Trigger Keywords: healthcare workflow, patient workflow, HIPAA, medical records, patient data -->

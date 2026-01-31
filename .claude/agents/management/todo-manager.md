@@ -1,6 +1,8 @@
 ---
 name: todo-manager
 description: "Todo system specialist for managing project tasks and maintaining the todo hierarchy. Use proactively when creating or updating project todos."
+tools: Read, Write, Edit, Grep, Glob, Task
+model: sonnet
 ---
 
 # Todo Management Specialist
@@ -260,3 +262,18 @@ todo-manager marks complete → gh-manager closes issue
 - **Resolve conflicts** using established priority rules (GitHub = requirements, Local = status)
 - **Use TODO-{issue-number} format** when creating todos from GitHub issues
 - **Notify gh-manager** at all sync trigger points (start, progress, block, complete)
+
+## Related Agents
+
+- **gh-manager**: Bidirectional sync with GitHub issues and projects
+- **requirements-analyst**: Create todos from requirements analysis
+- **intermediate-reviewer**: Request review at milestone checkpoints
+- **tdd-implementer**: Coordinate test-first task tracking
+- **deep-analyst**: Analyze blocked items requiring investigation
+
+## Full Documentation
+
+When this guidance is insufficient, consult:
+- `# contrib (removed)/project/todos/` - Hierarchical todo structure
+- `.claude/skills/` - Technical patterns for implementation
+- GitHub CLI docs: https://cli.github.com/manual/

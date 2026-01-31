@@ -54,11 +54,11 @@ workflow.add_node("DatabaseExecuteNode", "mark_delivered", {
     "parameters": ["{{create_shipment.id}}"]
 })
 
-workflow.add_connection("create_shipment", "route_optimization")
-workflow.add_connection("route_optimization", "find_driver")
-workflow.add_connection("find_driver", "update_shipment")
-workflow.add_connection("update_shipment", "track_location")
-workflow.add_connection("track_location", "mark_delivered")
+workflow.add_connection("create_shipment", "id", "route_optimization", "shipment_id")
+workflow.add_connection("route_optimization", "route", "find_driver", "location")
+workflow.add_connection("find_driver", "id", "update_shipment", "driver_id")
+workflow.add_connection("update_shipment", "status", "track_location", "current_status")
+workflow.add_connection("track_location", "result", "mark_delivered", "trigger")
 ```
 
 <!-- Trigger Keywords: logistics workflow, supply chain, shipment tracking, route optimization, delivery -->

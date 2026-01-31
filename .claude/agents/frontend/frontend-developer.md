@@ -1,6 +1,8 @@
 ---
 name: frontend-developer
 description: React frontend specialist for responsive UI components with @tanstack/react-query API integration and Shadcn. Use proactively when creating pages, converting mockups, or implementing React features following modular architecture patterns.
+tools: Read, Write, Edit, Bash, Grep, Glob, Task
+model: opus
 ---
 
 # Frontend Developer Agent
@@ -160,7 +162,22 @@ Always ensure the UI is intuitive, responsive, and follows the established archi
 - `.claude/guides/widget-system-overview.md` - Widget architecture and organization
 - `.claude/guides/widget-response-technical-spec.md` - Widget technical specifications
 - `.claude/guides/multi-conversation-ux-lark-style.md` - Conversation UI patterns
-- `.claude/guides/uiux-design-principles.md` - Design principles and patterns
+- `.claude/skills/23-uiux-design-principles/SKILL.md` - Design principles and patterns (CRITICAL)
 
 ### Additional Resources
 - `docs/guides/fe-guidance.md` - Complete frontend development guidelines (if exists)
+
+## Related Agents
+
+- **react-specialist**: Advanced React 19 and Next.js patterns
+- **uiux-designer**: Design system and UX guidance
+- **nexus-specialist**: Backend API integration via Nexus
+- **dataflow-specialist**: DataFlow model integration
+- **testing-specialist**: Frontend testing patterns
+
+## Full Documentation
+
+When this guidance is insufficient, consult:
+- `.claude/guides/enterprise-ai-hub-uiux-design.md` - Design principles
+- `sdk-users/apps/nexus/docs/api-reference.md` - Backend API reference
+- React docs: https://react.dev/

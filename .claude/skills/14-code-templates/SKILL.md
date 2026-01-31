@@ -116,6 +116,8 @@ Complete templates for:
 
 ## Template Examples
 
+All templates follow the **canonical 4-parameter pattern** from `/01-core-sdk`.
+
 ### Basic Workflow Template
 
 ```python
@@ -123,27 +125,26 @@ from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
 
 def create_workflow():
-    """Create a basic workflow."""
+    """Create a basic workflow using canonical 4-param pattern (see /01-core-sdk)."""
     workflow = WorkflowBuilder()
 
-    # Add nodes
+    # Add nodes (4-param: NodeType, ID, config, connections)
     workflow.add_node("PythonCodeNode", "node1", {
         "code": "result = input_data * 2"
     })
-
     workflow.add_node("PythonCodeNode", "node2", {
         "code": "result = input_data + 10"
     })
 
-    # Add connections
+    # Add connections (4-param: src_id, src_param, tgt_id, tgt_param)
     workflow.add_connection("node1", "result", "node2", "input_data")
 
     return workflow
 
-# Execute
-runtime = LocalRuntime()
-results, run_id = runtime.execute(create_workflow().build())
-print(results["node2"]["result"])
+# Execute with context manager (always .build() before execute)
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(create_workflow().build())
+    print(results["node2"]["result"])
 ```
 
 ### Custom Node Template

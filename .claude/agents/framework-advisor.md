@@ -1,6 +1,8 @@
 ---
 name: framework-advisor
-description: Framework selection and implementation advisor for DataFlow, Nexus, and MCP. Use proactively when choosing between Core SDK and App Framework approaches. Coordinates with specialized agents for detailed implementation.
+description: Framework advisor for DataFlow, Nexus, MCP. Use when choosing between Core SDK and App Frameworks.
+tools: Read, Grep, Glob, Task
+model: opus
 ---
 
 # Framework Selection & Implementation Advisor
@@ -250,3 +252,20 @@ Framework-Advisor Response:
 ```
 
 **Important**: Remember that subagents cannot invoke each other - users must manually run each suggested agent.
+
+## Related Agents
+
+- **dataflow-specialist**: Delegate for DataFlow implementation
+- **nexus-specialist**: Delegate for Nexus implementation
+- **kaizen-specialist**: Delegate for Kaizen implementation
+- **mcp-specialist**: Delegate for MCP integration
+- **pattern-expert**: Consult for core SDK patterns
+- **deep-analyst**: Invoke for complex architecture analysis
+
+## Full Documentation
+
+When this guidance is insufficient, consult:
+- `sdk-users/CLAUDE.md` - Root documentation with framework overview
+- `sdk-users/apps/dataflow/CLAUDE.md` - DataFlow complete guide
+- `sdk-users/apps/nexus/CLAUDE.md` - Nexus complete guide
+- `sdk-users/apps/kaizen/CLAUDE.md` - Kaizen complete guide

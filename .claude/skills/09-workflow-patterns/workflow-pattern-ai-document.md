@@ -51,12 +51,12 @@ workflow.add_node("DatabaseExecuteNode", "store", {
     "parameters": "{{validate.valid_data}}"
 })
 
-workflow.add_connection("read_invoice", "extract_fields")
-workflow.add_connection("extract_fields", "validate")
-workflow.add_connection("validate", "store")
+workflow.add_connection("read_invoice", "content", "extract_fields", "image")
+workflow.add_connection("extract_fields", "data", "validate", "input")
+workflow.add_connection("validate", "valid_data", "store", "parameters")
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(workflow.build())
 ```
 
 ## Documentation

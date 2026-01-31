@@ -63,15 +63,15 @@ workflow.add_node("VectorStoreNode", "store_vectors", {
     }
 })
 
-workflow.add_connection("load_doc", "chunk_text")
-workflow.add_connection("chunk_text", "generate_embeddings")
-workflow.add_connection("generate_embeddings", "store_vectors")
+workflow.add_connection("load_doc", "content", "chunk_text", "input")
+workflow.add_connection("chunk_text", "chunks", "generate_embeddings", "text")
+workflow.add_connection("generate_embeddings", "embeddings", "store_vectors", "vectors")
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build(), inputs={
-    "document_path": "docs/manual.pdf",
-    "document_id": "doc_001"
-})
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(workflow.build(), inputs={
+        "document_path": "docs/manual.pdf",
+        "document_id": "doc_001"
+    })
 ```
 
 ## Pattern 2: RAG Query Pipeline
@@ -125,10 +125,10 @@ workflow.add_node("LLMNode", "generate_answer", {
     "temperature": 0.3
 })
 
-workflow.add_connection("query_embedding", "search_similar")
-workflow.add_connection("search_similar", "rerank")
-workflow.add_connection("rerank", "build_prompt")
-workflow.add_connection("build_prompt", "generate_answer")
+workflow.add_connection("query_embedding", "embedding", "search_similar", "query_vector")
+workflow.add_connection("search_similar", "results", "rerank", "documents")
+workflow.add_connection("rerank", "documents", "build_prompt", "input")
+workflow.add_connection("build_prompt", "result", "generate_answer", "prompt")
 ```
 
 ## Pattern 3: Multi-Document RAG
@@ -192,16 +192,16 @@ Provide a comprehensive answer with examples."""
 })
 
 # Parallel searches
-workflow.add_connection("query_embed", "search_docs")
-workflow.add_connection("query_embed", "search_code")
-workflow.add_connection("query_embed", "search_api")
+workflow.add_connection("query_embed", "embedding", "search_docs", "query_vector")
+workflow.add_connection("query_embed", "embedding", "search_code", "query_vector")
+workflow.add_connection("query_embed", "embedding", "search_api", "query_vector")
 
-workflow.add_connection("search_docs", "merge_results")
-workflow.add_connection("search_code", "merge_results")
-workflow.add_connection("search_api", "merge_results")
+workflow.add_connection("search_docs", "results", "merge_results", "input_docs")
+workflow.add_connection("search_code", "results", "merge_results", "input_code")
+workflow.add_connection("search_api", "results", "merge_results", "input_api")
 
-workflow.add_connection("merge_results", "rerank_all")
-workflow.add_connection("rerank_all", "generate")
+workflow.add_connection("merge_results", "combined", "rerank_all", "documents")
+workflow.add_connection("rerank_all", "documents", "generate", "context")
 ```
 
 ## Pattern 4: Conversational RAG with Memory

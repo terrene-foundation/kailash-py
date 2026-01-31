@@ -147,15 +147,14 @@ Complete node catalog covering:
 
 ## Critical Node Patterns
 
-### String-Based API
+All nodes follow the **canonical 4-parameter pattern** from `/01-core-sdk`.
+
+### Usage Example
 ```python
+# See /01-core-sdk for pattern details
 workflow.add_node("PythonCodeNode", "node1", {
     "code": "result = input_data * 2"
 })
-```
-
-### Parameter Passing
-```python
 workflow.add_connection("node1", "result", "node2", "input_data")
 ```
 
@@ -165,6 +164,48 @@ workflow.add_connection("node1", "result", "node2", "input_data")
 - **CSVReaderNode**: Reading CSV files
 - **APICallNode**: HTTP API calls
 - **LoggerNode**: Debug and production logging
+
+## When to Use This Skill
+
+## Quick Patterns
+
+### Common Node Usage
+```python
+# AI/LLM Node
+workflow.add_node("LLMNode", "chat", {"model": "gpt-4", "prompt": "..."})
+
+# API Call
+workflow.add_node("HTTPRequest", "api", {"url": "...", "method": "POST"})
+
+# Python Code
+workflow.add_node("PythonCodeNode", "transform", {"code": "..."})
+```
+
+### Database Node
+```python
+# DataFlow auto-generates these - don't use raw DB nodes
+from dataflow import DataFlow
+db = DataFlow("sqlite:///app.db")
+# Creates: CreateUser, ReadUser, UpdateUser, DeleteUser, etc.
+```
+
+### Conditional Logic
+```python
+workflow.add_node("SwitchNode", "router", {
+    "conditions": [
+        {"name": "path_a", "condition": "$input.type == 'A'"},
+        {"name": "path_b", "condition": "$input.type == 'B'"}
+    ]
+})
+```
+
+## CRITICAL Gotchas
+
+| Rule | Why |
+|------|-----|
+| ❌ NEVER use raw database nodes | Use DataFlow instead |
+| ✅ ALWAYS use string-based node IDs | Variables cause issues |
+| ❌ NEVER forget `.build()` | Required before execution |
 
 ## When to Use This Skill
 

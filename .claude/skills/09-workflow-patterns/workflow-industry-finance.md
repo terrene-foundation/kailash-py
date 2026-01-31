@@ -53,10 +53,10 @@ workflow.add_node("DatabaseExecuteNode", "record", {
     "parameters": ["{{input.amount}}", "completed"]
 })
 
-workflow.add_connection("validate", "fraud_check")
-workflow.add_connection("fraud_check", "assess_risk")
-workflow.add_connection("assess_risk", "process_payment", "low")
-workflow.add_connection("process_payment", "record")
+workflow.add_connection("validate", "valid_data", "fraud_check", "body")
+workflow.add_connection("fraud_check", "risk_score", "assess_risk", "condition")
+workflow.add_connection("assess_risk", "output_low", "process_payment", "body")
+workflow.add_connection("process_payment", "result", "record", "parameters")
 ```
 
 <!-- Trigger Keywords: finance workflow, payment processing, fraud detection, financial compliance -->

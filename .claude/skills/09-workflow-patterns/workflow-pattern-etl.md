@@ -86,14 +86,14 @@ workflow.add_node("CSVWriterNode", "log_errors", {
 })
 
 # Connect nodes
-workflow.add_connection("extract", "validate")
-workflow.add_connection("validate", "clean")
-workflow.add_connection("clean", "enrich_location")
-workflow.add_connection("enrich_location", "load")
-workflow.add_connection("validate", "log_errors")
+workflow.add_connection("extract", "data", "validate", "input")
+workflow.add_connection("validate", "valid_data", "clean", "input")
+workflow.add_connection("clean", "data", "enrich_location", "body")
+workflow.add_connection("enrich_location", "enriched_data", "load", "parameters")
+workflow.add_connection("validate", "invalid_data", "log_errors", "data")
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(workflow.build())
 ```
 
 ## Pattern 2: API to Database ETL
@@ -155,13 +155,13 @@ workflow.add_node("TransformNode", "next_page", {
 })
 
 # Loop for pagination
-workflow.add_connection("init_page", "extract_api")
-workflow.add_connection("extract_api", "normalize")
-workflow.add_connection("normalize", "filter_active")
-workflow.add_connection("filter_active", "load_batch")
-workflow.add_connection("load_batch", "check_more")
-workflow.add_connection("check_more", "next_page", "true")
-workflow.add_connection("next_page", "extract_api")  # Loop!
+workflow.add_connection("init_page", "page", "extract_api", "page")
+workflow.add_connection("extract_api", "data", "normalize", "input")
+workflow.add_connection("normalize", "data", "filter_active", "input")
+workflow.add_connection("filter_active", "filtered_data", "load_batch", "parameters")
+workflow.add_connection("load_batch", "result", "check_more", "input")
+workflow.add_connection("check_more", "output_true", "next_page", "input")
+workflow.add_connection("next_page", "result", "extract_api", "page")  # Loop!
 ```
 
 ## Pattern 3: Database to Database Migration
@@ -232,11 +232,11 @@ workflow.add_node("DatabaseExecuteNode", "log_failures", {
     "parameters": "{{validate_rules.invalid_data}}"
 })
 
-workflow.add_connection("extract_source", "transform_schema")
-workflow.add_connection("transform_schema", "validate_rules")
-workflow.add_connection("validate_rules", "load_target")
-workflow.add_connection("load_target", "mark_migrated")
-workflow.add_connection("validate_rules", "log_failures")
+workflow.add_connection("extract_source", "results", "transform_schema", "input")
+workflow.add_connection("transform_schema", "data", "validate_rules", "input")
+workflow.add_connection("validate_rules", "valid_data", "load_target", "parameters")
+workflow.add_connection("load_target", "inserted_ids", "mark_migrated", "ids")
+workflow.add_connection("validate_rules", "invalid_data", "log_failures", "parameters")
 ```
 
 ## Pattern 4: Real-Time Streaming ETL
@@ -288,10 +288,10 @@ workflow.add_node("MessageQueueAckNode", "ack_messages", {
     "message_ids": "{{extract_stream.message_ids}}"
 })
 
-workflow.add_connection("extract_stream", "parse_events")
-workflow.add_connection("parse_events", "calculate_metrics")
-workflow.add_connection("calculate_metrics", "load_metrics")
-workflow.add_connection("load_metrics", "ack_messages")
+workflow.add_connection("extract_stream", "messages", "parse_events", "input")
+workflow.add_connection("parse_events", "events", "calculate_metrics", "input")
+workflow.add_connection("calculate_metrics", "aggregated", "load_metrics", "parameters")
+workflow.add_connection("load_metrics", "result", "ack_messages", "message_ids")
 ```
 
 ## Best Practices

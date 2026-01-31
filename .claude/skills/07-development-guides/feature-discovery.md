@@ -16,10 +16,17 @@ You are an expert in Kailash SDK feature discovery. Guide users through discover
 
 ### 2. Node Discovery
 ```python
-# List available nodes
-from kailash.nodes import *
+# Discover available nodes via registry (recommended)
+from kailash.nodes.base import NodeRegistry
+available_nodes = NodeRegistry.list_nodes()  # Returns 80+ node types
 
-# Core categories:
+# Or import specific nodes directly (use node registry for exact paths)
+# Example specific imports:
+# from kailash.nodes.code.python import PythonCodeNode
+# from kailash.nodes.data.file_reader import FileReaderNode
+# from kailash.nodes.logic.switch import SwitchNode
+
+# Core node categories:
 # - Data: CSVReaderNode, SQLReaderNode, FileReaderNode
 # - API: HTTPRequestNode, RestClientNode
 # - AI: LLMAgentNode, IterativeLLMAgentNode

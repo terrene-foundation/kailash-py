@@ -51,10 +51,10 @@ workflow.add_node("AggregateNode", "aggregate", {
     "aggregations": {"count": "COUNT(*)", "avg_age": "AVG(age)"}
 })
 
-workflow.add_connection("load", "dedupe")
-workflow.add_connection("dedupe", "validate")
-workflow.add_connection("validate", "clean")
-workflow.add_connection("clean", "aggregate")
+workflow.add_connection("load", "data", "dedupe", "input")
+workflow.add_connection("dedupe", "data", "validate", "input")
+workflow.add_connection("validate", "valid_data", "clean", "input")
+workflow.add_connection("clean", "data", "aggregate", "input")
 ```
 
 ## Documentation

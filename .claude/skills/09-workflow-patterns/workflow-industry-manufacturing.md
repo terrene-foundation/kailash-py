@@ -48,10 +48,10 @@ workflow.add_node("DatabaseExecuteNode", "reject", {
     "parameters": ["{{quality_test.failure_reason}}", "{{get_item.id}}"]
 })
 
-workflow.add_connection("get_item", "quality_test")
-workflow.add_connection("quality_test", "check_quality")
-workflow.add_connection("check_quality", "approve", "true")
-workflow.add_connection("check_quality", "reject", "false")
+workflow.add_connection("get_item", "id", "quality_test", "item_id")
+workflow.add_connection("quality_test", "score", "check_quality", "condition")
+workflow.add_connection("check_quality", "output_true", "approve", "trigger")
+workflow.add_connection("check_quality", "output_false", "reject", "trigger")
 ```
 
 <!-- Trigger Keywords: manufacturing workflow, production line, quality control, inventory management -->

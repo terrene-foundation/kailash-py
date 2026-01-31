@@ -63,8 +63,8 @@ workflow.add_node("DatabaseExecuteNode", "record_transaction", {
     "query": "INSERT INTO transactions ..."
 })
 
-workflow.add_connection("validate_payment", "charge_card")
-workflow.add_connection("charge_card", "record_transaction")
+workflow.add_connection("validate_payment", "result", "charge_card", "payment_data")
+workflow.add_connection("charge_card", "result", "record_transaction", "transaction_data")
 ```
 
 ### 3. README Structure
