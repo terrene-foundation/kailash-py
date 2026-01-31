@@ -210,6 +210,13 @@ Use this skill when you encounter:
 - DataFlow errors
 - Any error message or unexpected behavior
 
+## CRITICAL Debugging Tips
+
+1. **ALWAYS** check `.build()` was called on workflow
+2. **NEVER** ignore connection validation errors
+3. **ALWAYS** verify absolute imports when seeing import errors
+4. **NEVER** assume mock tests found real issues - use real infrastructure
+
 ## Related Skills
 
 - **[16-validation-patterns](../validation/SKILL.md)** - Validation patterns

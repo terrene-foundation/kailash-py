@@ -55,12 +55,12 @@ workflow.add_node("CSVWriterNode", "write_output", {
     "headers": ["id", "name", "value"]
 })
 
-workflow.add_connection("list_files", "process_files")
-workflow.add_connection("process_files", "merge_results")
-workflow.add_connection("merge_results", "write_output")
+workflow.add_connection("list_files", "files", "process_files", "input")
+workflow.add_connection("process_files", "results", "merge_results", "inputs")
+workflow.add_connection("merge_results", "combined", "write_output", "data")
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(workflow.build())
 ```
 
 ## Pattern 2: PDF Document Extraction
@@ -106,10 +106,10 @@ workflow.add_node("JSONWriterNode", "save_results", {
     "indent": 2
 })
 
-workflow.add_connection("extract_pdf", "extract_tables")
-workflow.add_connection("extract_pdf", "extract_text")
-workflow.add_connection("extract_text", "analyze_document")
-workflow.add_connection("analyze_document", "save_results")
+workflow.add_connection("extract_pdf", "content", "extract_tables", "input")
+workflow.add_connection("extract_pdf", "content", "extract_text", "input")
+workflow.add_connection("extract_text", "text", "analyze_document", "prompt")
+workflow.add_connection("analyze_document", "response", "save_results", "data")
 ```
 
 ## Pattern 3: File Format Conversion
@@ -156,8 +156,8 @@ workflow.add_node("ConditionalNode", "write_format", {
     }
 })
 
-workflow.add_connection("detect_format", "normalize")
-workflow.add_connection("normalize", "write_format")
+workflow.add_connection("detect_format", "result", "normalize", "input")
+workflow.add_connection("normalize", "data", "write_format", "input")
 ```
 
 ## Pattern 4: Watch Folder Automation
@@ -197,9 +197,9 @@ workflow.add_node("FileMoveNode", "move_failed", {
     "destination": "data/failed/{{watch_folder.filename}}"
 })
 
-workflow.add_connection("watch_folder", "validate")
-workflow.add_connection("validate", "process")
-workflow.add_connection("process", "move_file")
+workflow.add_connection("watch_folder", "file_path", "validate", "file_path")
+workflow.add_connection("validate", "file_path", "process", "file_path")
+workflow.add_connection("process", "result", "move_file", "source")
 # Error handling connection
 workflow.add_error_handler("process", "move_failed")
 ```

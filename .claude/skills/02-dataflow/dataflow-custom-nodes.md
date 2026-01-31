@@ -52,8 +52,8 @@ workflow.add_node("ConditionalNode", "check_domain", {
     "false_branch": "external_user"
 })
 
-workflow.add_connection("create_user", "send_welcome_email")
-workflow.add_connection("send_welcome_email", "check_domain")
+workflow.add_connection("create_user", "email", "send_welcome_email", "to")
+workflow.add_connection("send_welcome_email", "result", "check_domain", "input")
 ```
 
 ## Custom Aggregation Nodes
@@ -77,7 +77,7 @@ workflow.add_node("TransformNode", "calculate_metrics", {
     """
 })
 
-workflow.add_connection("get_users", "calculate_metrics")
+workflow.add_connection("get_users", "users", "calculate_metrics", "input")
 ```
 
 ## Best Practices

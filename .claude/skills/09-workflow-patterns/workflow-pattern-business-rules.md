@@ -56,8 +56,8 @@ workflow.add_node("ConditionalNode", "check_bulk", {
     "false_branch": "final_price"
 })
 
-workflow.add_connection("load_customer", "check_tier")
-workflow.add_connection("check_tier", "check_bulk")
+workflow.add_connection("load_customer", "tier", "check_tier", "condition")
+workflow.add_connection("check_tier", "result", "check_bulk", "input")
 ```
 
 <!-- Trigger Keywords: business rules, rule engine, conditional logic, decision workflow -->

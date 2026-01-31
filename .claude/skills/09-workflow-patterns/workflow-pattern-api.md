@@ -72,16 +72,16 @@ workflow.add_node("APICallNode", "notify_webhook", {
     }
 })
 
-workflow.add_connection("auth", "get_user")
-workflow.add_connection("get_user", "update_profile")
-workflow.add_connection("update_profile", "notify_webhook")
+workflow.add_connection("auth", "access_token", "get_user", "token")
+workflow.add_connection("get_user", "data", "update_profile", "user_data")
+workflow.add_connection("update_profile", "result", "notify_webhook", "body")
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build(), inputs={
-    "user_id": "12345",
-    "profile_data": {"name": "John Doe"},
-    "webhook_url": "https://webhook.site/..."
-})
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(workflow.build(), inputs={
+        "user_id": "12345",
+        "profile_data": {"name": "John Doe"},
+        "webhook_url": "https://webhook.site/..."
+    })
 ```
 
 ## Pattern 2: Parallel API Calls
@@ -116,9 +116,9 @@ workflow.add_node("MergeNode", "merge_results", {
 })
 
 # No connections between parallel nodes - they run simultaneously
-workflow.add_connection("api_weather", "merge_results")
-workflow.add_connection("api_news", "merge_results")
-workflow.add_connection("api_events", "merge_results")
+workflow.add_connection("api_weather", "data", "merge_results", "weather_data")
+workflow.add_connection("api_news", "data", "merge_results", "news_data")
+workflow.add_connection("api_events", "data", "merge_results", "events_data")
 ```
 
 ## Pattern 3: API with Retry and Backoff
@@ -171,13 +171,13 @@ workflow.add_node("TransformNode", "increment", {
 })
 
 # Loop back
-workflow.add_connection("init_retry", "api_call")
-workflow.add_connection("api_call", "check_status")
-workflow.add_connection("check_status", "check_retry", "false")
-workflow.add_connection("check_retry", "calculate_delay", "true")
-workflow.add_connection("calculate_delay", "backoff")
-workflow.add_connection("backoff", "increment")
-workflow.add_connection("increment", "api_call")  # Retry
+workflow.add_connection("init_retry", "retry_count", "api_call", "retry")
+workflow.add_connection("api_call", "status_code", "check_status", "condition")
+workflow.add_connection("check_status", "output_false", "check_retry", "condition")
+workflow.add_connection("check_retry", "output_true", "calculate_delay", "input")
+workflow.add_connection("calculate_delay", "result", "backoff", "duration_seconds")
+workflow.add_connection("backoff", "done", "increment", "input")
+workflow.add_connection("increment", "result", "api_call", "retry")  # Retry
 ```
 
 ## Pattern 4: GraphQL API Integration
@@ -245,8 +245,8 @@ workflow.add_node("APICallNode", "graphql_mutation", {
     }
 })
 
-workflow.add_connection("graphql_query", "extract_posts")
-workflow.add_connection("extract_posts", "graphql_mutation")
+workflow.add_connection("graphql_query", "data", "extract_posts", "input")
+workflow.add_connection("extract_posts", "result", "graphql_mutation", "posts_data")
 ```
 
 ## Pattern 5: Webhook Receiver Workflow
@@ -301,9 +301,9 @@ workflow.add_node("DatabaseExecuteNode", "delete_user", {
     "parameters": ["{{parse_payload.data.id}}"]
 })
 
-workflow.add_connection("validate_signature", "check_signature")
-workflow.add_connection("check_signature", "parse_payload", "true")
-workflow.add_connection("parse_payload", "route_event")
+workflow.add_connection("validate_signature", "result", "check_signature", "condition")
+workflow.add_connection("check_signature", "output_true", "parse_payload", "input")
+workflow.add_connection("parse_payload", "event_type", "route_event", "condition")
 
 # Deploy as API endpoint
 api = WorkflowAPI(workflow.build())

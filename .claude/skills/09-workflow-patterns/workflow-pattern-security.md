@@ -57,11 +57,11 @@ workflow.add_node("DatabaseExecuteNode", "audit_failure", {
     "parameters": ["{{input.email}}"]
 })
 
-workflow.add_connection("check_user", "verify_password")
-workflow.add_connection("verify_password", "check_auth")
-workflow.add_connection("check_auth", "generate_token", "true")
-workflow.add_connection("generate_token", "audit_success")
-workflow.add_connection("check_auth", "audit_failure", "false")
+workflow.add_connection("check_user", "password_hash", "verify_password", "stored_hash")
+workflow.add_connection("verify_password", "match", "check_auth", "condition")
+workflow.add_connection("check_auth", "output_true", "generate_token", "input")
+workflow.add_connection("generate_token", "token", "audit_success", "parameters")
+workflow.add_connection("check_auth", "output_false", "audit_failure", "trigger")
 ```
 
 ## Documentation

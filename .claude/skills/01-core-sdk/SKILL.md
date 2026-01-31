@@ -28,8 +28,10 @@ from kailash.runtime.local import LocalRuntime
 
 workflow = WorkflowBuilder()
 workflow.add_node("NodeName", "id", {"param": "value"})
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
+
+# Use context manager for proper resource cleanup (recommended)
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(workflow.build())
 ```
 
 ## Reference Documentation
@@ -54,6 +56,41 @@ results, run_id = runtime.execute(workflow.build())
 - **[mcp-integration-guide](mcp-integration-guide.md)** - Model Context Protocol integration
 
 ## Key Concepts
+
+### Canonical Node Pattern (4-Parameter)
+
+**This is the single source of truth for node configuration.** All other skills reference this section.
+
+```python
+workflow.add_node(
+    "NodeClassName",  # 1. Node type (PascalCase, string)
+    "unique_node_id", # 2. Unique ID (snake_case, string)
+    {                 # 3. Configuration dict
+        "param1": "value",
+        "param2": 123
+    },
+    connections=[]    # 4. Optional: input connections
+)
+```
+
+| Parameter | Type | Description | Example |
+|-----------|------|-------------|---------|
+| Node type | str | The node class name (PascalCase) | `"LLMNode"`, `"HTTPRequest"` |
+| Node ID | str | Unique identifier (snake_case) | `"fetch_data"`, `"process_1"` |
+| Config | dict | Node-specific configuration | `{"url": "..."}`  |
+| Connections | list | Optional input connections (4-tuple) | `[("src", "out", "dst", "in")]` |
+
+**Connection Methods**:
+```python
+# Method 1: add_connection (4-positional params - explicit)
+workflow.add_connection("read_file", "content", "transform", "input")
+
+# Method 2: connect (flexible API with keyword args)
+workflow.connect("read_file", "transform", from_output="content", to_input="input")
+
+# Method 3: connect with mapping (multiple outputs)
+workflow.connect("node1", "node2", mapping={"content": "input", "meta": "metadata"})
+```
 
 ### WorkflowBuilder Pattern
 - String-based node API: `workflow.add_node("NodeName", "id", {})`

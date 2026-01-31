@@ -19,8 +19,8 @@ workflow = WorkflowBuilder()
 workflow.add_node("LLMNode", "node1", {})
 workflow.add_node("TransformNode", "node2", {})
 
-# ✅ Valid connection
-workflow.add_connection("node1", "node2")
+# ✅ Valid connection (4-parameter pattern)
+workflow.add_connection("node1", "result", "node2", "input")
 
 # ❌ Invalid: node doesn't exist
 # workflow.add_connection("node1", "node3")  # Error!

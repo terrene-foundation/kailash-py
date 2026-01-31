@@ -208,6 +208,32 @@ workflow.add_node("NodeType", "id", {...})
 - Adapt industry patterns to your domain
 - Layer security patterns on all workflows
 
+## Quick Patterns
+
+### ETL Workflow
+```python
+workflow.add_node("Extract", "extract", {"source": "..."})
+workflow.add_node("Transform", "transform", {"logic": "..."})
+workflow.add_node("Load", "load", {"destination": "..."})
+workflow.add_connection("extract", "data", "transform", "input")
+workflow.add_connection("transform", "output", "load", "data")
+```
+
+### RAG Workflow
+```python
+workflow.add_node("Embed", "embed", {"model": "text-embedding-ada-002"})
+workflow.add_node("Search", "search", {"index": "vectors"})
+workflow.add_node("Generate", "generate", {"model": "gpt-4"})
+```
+
+## CRITICAL Warnings
+
+| Rule | Reason |
+|------|--------|
+| ❌ NEVER hardcode secrets | Use environment variables |
+| ✅ ALWAYS validate inputs | At workflow boundaries |
+| ❌ NEVER skip error handling | Required in production |
+
 ## Related Skills
 
 - **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Core workflow creation

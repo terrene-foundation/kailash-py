@@ -46,8 +46,8 @@ workflow.add_node("APICallNode", "delete_external", {
     "method": "DELETE"
 })
 
-workflow.add_connection("mark_deleted", "anonymize_logs")
-workflow.add_connection("anonymize_logs", "delete_external")
+workflow.add_connection("mark_deleted", "result", "anonymize_logs", "user_id")
+workflow.add_connection("anonymize_logs", "result", "delete_external", "trigger")
 ```
 
 ## Documentation

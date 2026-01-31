@@ -113,6 +113,8 @@ Gold standards are **mandatory** practices for:
 
 ## Critical Gold Standards
 
+All workflow patterns follow the **canonical 4-parameter pattern** from `/01-core-sdk`.
+
 ### 1. Absolute Imports ALWAYS
 ```python
 # ✅ CORRECT (Gold Standard)
@@ -274,6 +276,38 @@ python -m kailash.validation.gold_standards check-security
 **TDD**: Prevent bugs before they exist
 
 **Security Standards**: Prevent credential leaks, injection attacks
+
+## Quick Patterns
+
+### Correct Import Pattern
+```python
+# ✅ CORRECT: Absolute imports
+from kailash.workflow.builder import WorkflowBuilder
+from kailash.runtime import LocalRuntime
+
+# ❌ WRONG: Relative imports
+from ..workflow import builder  # NEVER use this
+```
+
+### Correct Execution Pattern
+```python
+# ✅ CORRECT: Always .build()
+results, run_id = runtime.execute(workflow.build())
+
+# ❌ WRONG: Missing .build()
+results = runtime.execute(workflow)  # WILL FAIL
+```
+
+### Correct Testing Pattern
+```python
+# Tier 2-3: Real infrastructure
+@pytest.fixture
+def db():
+    return DataFlow("sqlite:///:memory:")  # Real DB
+
+# ❌ WRONG in Tier 2-3: Mocking
+@patch('module.function')  # PROHIBITED
+```
 
 ## When to Use This Skill
 

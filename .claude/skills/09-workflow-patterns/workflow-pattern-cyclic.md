@@ -68,15 +68,15 @@ workflow.add_node("DelayNode", "wait", {
 })
 
 # 7. Loop back (connect to check_status)
-workflow.add_connection("init_counter", "check_status")
-workflow.add_connection("check_status", "check_complete")
-workflow.add_connection("check_complete", "increment", "false")
-workflow.add_connection("increment", "check_max")
-workflow.add_connection("check_max", "wait", "true")
-workflow.add_connection("wait", "check_status")  # Loop!
+workflow.add_connection("init_counter", "counter", "check_status", "input")
+workflow.add_connection("check_status", "status", "check_complete", "condition")
+workflow.add_connection("check_complete", "output_false", "increment", "input")
+workflow.add_connection("increment", "result", "check_max", "condition")
+workflow.add_connection("check_max", "output_true", "wait", "trigger")
+workflow.add_connection("wait", "done", "check_status", "input")  # Loop!
 
-runtime = LocalRuntime()
-results, run_id = runtime.execute(workflow.build())
+with LocalRuntime() as runtime:
+    results, run_id = runtime.execute(workflow.build())
 ```
 
 ## Pattern 2: Batch Processing
@@ -114,11 +114,11 @@ workflow.add_node("ConditionalNode", "check_more", {
     "false_branch": "complete"
 })
 
-workflow.add_connection("load_items", "split_batches")
-workflow.add_connection("split_batches", "process_batch")
-workflow.add_connection("process_batch", "mark_processed")
-workflow.add_connection("mark_processed", "check_more")
-workflow.add_connection("check_more", "load_items", "true")
+workflow.add_connection("load_items", "results", "split_batches", "input")
+workflow.add_connection("split_batches", "batches", "process_batch", "input")
+workflow.add_connection("process_batch", "ids", "mark_processed", "ids")
+workflow.add_connection("mark_processed", "result", "check_more", "condition")
+workflow.add_connection("check_more", "output_true", "load_items", "trigger")
 ```
 
 ## Pattern 3: Exponential Backoff Retry
@@ -171,13 +171,13 @@ workflow.add_node("TransformNode", "increment_retry", {
 })
 
 # 8. Loop back to retry
-workflow.add_connection("init_retry", "api_call")
-workflow.add_connection("api_call", "check_success")
-workflow.add_connection("check_success", "check_retry", "false")
-workflow.add_connection("check_retry", "calculate_backoff", "true")
-workflow.add_connection("calculate_backoff", "backoff_wait")
-workflow.add_connection("backoff_wait", "increment_retry")
-workflow.add_connection("increment_retry", "api_call")  # Loop!
+workflow.add_connection("init_retry", "retry_count", "api_call", "retry")
+workflow.add_connection("api_call", "status_code", "check_success", "condition")
+workflow.add_connection("check_success", "output_false", "check_retry", "condition")
+workflow.add_connection("check_retry", "output_true", "calculate_backoff", "input")
+workflow.add_connection("calculate_backoff", "result", "backoff_wait", "duration_seconds")
+workflow.add_connection("backoff_wait", "done", "increment_retry", "input")
+workflow.add_connection("increment_retry", "result", "api_call", "retry")  # Loop!
 ```
 
 ## Pattern 4: Iterative Refinement
@@ -233,13 +233,13 @@ workflow.add_node("TransformNode", "increment", {
 })
 
 # Loop back for refinement
-workflow.add_connection("init_prompt", "generate")
-workflow.add_connection("generate", "evaluate")
-workflow.add_connection("evaluate", "check_quality")
-workflow.add_connection("check_quality", "refine", "false")
-workflow.add_connection("refine", "check_max")
-workflow.add_connection("check_max", "increment", "true")
-workflow.add_connection("increment", "generate")  # Loop!
+workflow.add_connection("init_prompt", "prompt", "generate", "prompt")
+workflow.add_connection("generate", "response", "evaluate", "prompt")
+workflow.add_connection("evaluate", "score", "check_quality", "condition")
+workflow.add_connection("check_quality", "output_false", "refine", "input")
+workflow.add_connection("refine", "response", "check_max", "condition")
+workflow.add_connection("check_max", "output_true", "increment", "input")
+workflow.add_connection("increment", "result", "generate", "iteration")  # Loop!
 ```
 
 ## Best Practices

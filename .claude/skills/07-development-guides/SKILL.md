@@ -80,6 +80,51 @@ In-depth guides for:
 ### RAG Development
 - **[rag-comprehensive](rag-comprehensive.md)** - Comprehensive RAG guide
 
+## Quick Patterns
+
+### Custom Node Development
+```python
+from kailash.nodes.base import BaseNode
+
+class CustomNode(BaseNode):
+    def execute(self, inputs: dict) -> dict:
+        # Process inputs
+        result = self.process(inputs.get("data"))
+        return {"output": result}
+```
+
+### Async Node Pattern
+```python
+from kailash.nodes.base import AsyncBaseNode
+
+class AsyncCustomNode(AsyncBaseNode):
+    async def execute_async(self, inputs: dict) -> dict:
+        result = await self.async_process(inputs)
+        return {"output": result}
+```
+
+### MCP Server Setup
+```python
+from kailash.mcp.server import MCPServer
+
+server = MCPServer()
+
+@server.tool("my_tool")
+async def my_tool(param: str) -> str:
+    return f"Processed: {param}"
+
+server.start()
+```
+
+## CRITICAL Warnings
+
+| Rule | Reason |
+|------|--------|
+| ❌ NEVER override `__init__` without `super().__init__()` | Breaks node initialization |
+| ✅ ALWAYS handle errors in async nodes | Prevents hanging |
+| ❌ NEVER use blocking I/O in async nodes | Blocks event loop |
+| ✅ ALWAYS register MCP tools before start | Required for discovery |
+
 ## When to Use This Skill
 
 Use this skill when you need:
@@ -99,3 +144,11 @@ Use this skill when you need:
 - **[06-cheatsheets](../cheatsheets/SKILL.md)** - Quick reference patterns
 - **[08-nodes-reference](../nodes/SKILL.md)** - Node reference
 - **[17-gold-standards](../../17-gold-standards/SKILL.md)** - Best practices
+
+## Support
+
+For development guide questions, invoke:
+- `pattern-expert` - Implementation patterns and workflows
+- `testing-specialist` - Testing strategies and best practices
+- `deployment-specialist` - Production deployment guidance
+- `mcp-specialist` - MCP server development

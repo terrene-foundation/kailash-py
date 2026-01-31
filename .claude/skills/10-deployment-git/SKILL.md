@@ -47,6 +47,28 @@ Production deployment patterns for:
   - Release management
   - Hotfix procedures
 
+### GitHub Management
+- **[github-management-patterns](github-management-patterns.md)** - GitHub project and issue management
+  - Issue templates (User Story, Bug, Technical Task)
+  - Story points and estimation
+  - Project board organization
+  - Label system
+
+### Project Management
+- **[project-management](project-management.md)** - Project management architecture
+  - Dual-tracking system overview
+  - GitHub Issues vs Local Todos
+  - Agent coordination flow
+  - Sprint management
+
+- **[todo-github-sync](todo-github-sync.md)** - Todo ↔ GitHub issues sync patterns
+  - Naming conventions (Story X format)
+  - Workflow for creating, starting, completing stories
+  - Sub-issue management
+  - Label system
+  - Periodic sync checklists
+  - Agent coordination (todo-manager ↔ gh-manager)
+
 ## Docker Patterns
 
 ### Basic Dockerfile
