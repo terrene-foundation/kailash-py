@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "0.10.15"
+version = "0.10.16"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -28,7 +28,7 @@ dependencies = [
     "pyyaml>=6.0",
     "click>=8.0",
     "pytest>=8.3.5",
-    "mcp[cli]==1.11.0",
+    "mcp[cli]>=1.23.0,<2.0",  # CVE-2025-66416 fix: DNS rebinding protection
     "pandas>=2.2.3",
     "numpy>=2.2.5",
     "scipy>=1.15.3",
@@ -60,7 +60,7 @@ dependencies = [
     "aiosqlite>=0.19.0",
     "websockets>=12.0",
     "httpx>=0.25.0",
-    "python-jose>=3.5.0",
+    "python-jose[cryptography]>=3.5.0",  # Use cryptography backend to mitigate ecdsa CVE-2024-23342
     "pytest-xdist>=3.6.0",
     "pytest-timeout>=2.3.0",
     "pytest-split>=0.9.0",

@@ -3,6 +3,7 @@
 from typing import Any
 
 import pytest
+
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.sdk_exceptions import NodeExecutionError, NodeValidationError
 
@@ -432,3 +433,179 @@ class TestNodeIntegration:
 
         result = processor.execute(uppercase=True)
         assert result["output"] == "HELLO"
+
+
+class TestMetadataPrefixFieldBug:
+    """Test that user fields starting with 'metadata_' are NOT filtered.
+
+    Bug Report: Fields starting with 'metadata_' were silently dropped because
+    is_internal_field() in base.py incorrectly filtered them out.
+    """
+
+    def test_metadata_json_field_preserved(self):
+        """Test that a field named 'metadata_json' is preserved in config."""
+
+        class NodeWithMetadataJson(Node):
+            """Node with a metadata_json user field."""
+
+            def get_parameters(self) -> dict[str, NodeParameter]:
+                return {
+                    "metadata_json": NodeParameter(
+                        name="metadata_json",
+                        type=str,
+                        required=False,
+                        description="User metadata as JSON string",
+                    )
+                }
+
+            def run(self, **kwargs) -> dict[str, Any]:
+                return {"metadata_json": kwargs.get("metadata_json")}
+
+        # Create node with metadata_json field
+        node = NodeWithMetadataJson(
+            name="Test",
+            metadata_json='{"key": "value"}',
+        )
+
+        # BUG: This was returning None because metadata_json was filtered out
+        assert node.config.get("metadata_json") == '{"key": "value"}'
+
+        # Execute and verify the field flows through
+        result = node.execute()
+        assert result["metadata_json"] == '{"key": "value"}'
+
+    def test_metadata_filter_field_preserved(self):
+        """Test that a field named 'metadata_filter' is preserved.
+
+        This is especially important as AsyncVectorSearchNode uses this parameter.
+        """
+
+        class NodeWithMetadataFilter(Node):
+            """Node with a metadata_filter parameter like AsyncVectorSearchNode."""
+
+            def get_parameters(self) -> dict[str, NodeParameter]:
+                return {
+                    "query": NodeParameter(
+                        name="query",
+                        type=str,
+                        required=True,
+                        description="Search query",
+                    ),
+                    "metadata_filter": NodeParameter(
+                        name="metadata_filter",
+                        type=str,
+                        required=False,
+                        description="SQL WHERE clause for filtering",
+                    ),
+                }
+
+            def run(self, **kwargs) -> dict[str, Any]:
+                return {
+                    "query": kwargs.get("query"),
+                    "filter": kwargs.get("metadata_filter"),
+                }
+
+        node = NodeWithMetadataFilter(
+            name="Search",
+            query="test query",
+            metadata_filter="category = 'documents'",
+        )
+
+        # Verify metadata_filter is preserved in config
+        assert node.config.get("metadata_filter") == "category = 'documents'"
+
+        # Execute and verify
+        result = node.execute()
+        assert result["filter"] == "category = 'documents'"
+
+    def test_multiple_metadata_prefix_fields(self):
+        """Test multiple fields with metadata_ prefix are all preserved."""
+
+        class NodeWithMultipleMetadataFields(Node):
+            """Node with multiple metadata_ prefixed fields."""
+
+            def get_parameters(self) -> dict[str, NodeParameter]:
+                return {
+                    "metadata_xml": NodeParameter(
+                        name="metadata_xml",
+                        type=str,
+                        required=False,
+                        description="Metadata as XML",
+                    ),
+                    "metadata_blob": NodeParameter(
+                        name="metadata_blob",
+                        type=bytes,
+                        required=False,
+                        description="Metadata as binary",
+                    ),
+                    "metadata_version": NodeParameter(
+                        name="metadata_version",
+                        type=int,
+                        required=False,
+                        description="Version of metadata format",
+                    ),
+                }
+
+            def run(self, **kwargs) -> dict[str, Any]:
+                return {
+                    "xml": kwargs.get("metadata_xml"),
+                    "version": kwargs.get("metadata_version"),
+                }
+
+        node = NodeWithMultipleMetadataFields(
+            name="Multi",
+            metadata_xml="<data>test</data>",
+            metadata_version=2,
+        )
+
+        # All fields should be preserved
+        assert node.config.get("metadata_xml") == "<data>test</data>"
+        assert node.config.get("metadata_version") == 2
+
+    def test_underscore_prefix_still_filtered(self):
+        """Test that private fields (underscore prefix) are still filtered."""
+
+        class NodeWithPrivateField(Node):
+            def get_parameters(self) -> dict[str, NodeParameter]:
+                return {
+                    "value": NodeParameter(
+                        name="value",
+                        type=int,
+                        required=True,
+                        description="Input value",
+                    )
+                }
+
+            def run(self, **kwargs) -> dict[str, Any]:
+                return {"result": kwargs.get("value")}
+
+        # Private fields starting with _ should still be filtered
+        node = NodeWithPrivateField(
+            name="Test",
+            value=42,
+            _internal_data="should be filtered",
+        )
+
+        assert node.config.get("value") == 42
+        assert "_internal_data" not in node.config
+
+    def test_node_metadata_object_still_filtered(self):
+        """Test that NodeMetadata objects are still filtered correctly."""
+        metadata_obj = NodeMetadata(
+            id="test_id",
+            name="Test",
+            description="A test",
+        )
+
+        node = SimpleNode(
+            name="Test",
+            x=1.0,
+            metadata=metadata_obj,  # This should be filtered
+        )
+
+        # The NodeMetadata object should not appear in config
+        assert "metadata" not in node.config or not isinstance(
+            node.config.get("metadata"), NodeMetadata
+        )
+        # But the node should have proper metadata
+        assert node.metadata.name == "Test"

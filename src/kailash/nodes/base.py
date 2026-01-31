@@ -29,13 +29,14 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Any
 
+from pydantic import BaseModel, Field, ValidationError
+
 from kailash.nodes.ports import InputPort, OutputPort, get_port_registry
 from kailash.sdk_exceptions import (
     NodeConfigurationError,
     NodeExecutionError,
     NodeValidationError,
 )
-from pydantic import BaseModel, Field, ValidationError
 
 # ADR-002: Module-level logger for node registration messages
 _logger = logging.getLogger(__name__)
@@ -277,19 +278,17 @@ class Node(ABC):
                     internal_fields.add(field)
                 # If field IS user-defined, don't add to internal_fields (preserve it)
 
-            # Also filter any field that starts with metadata prefix or other internal patterns
-            # This handles cases like 'metadata_name', 'metadata_*', etc.
+            # Filter internal SDK fields from user parameters
+            # NOTE: Do NOT filter based on field name patterns like "metadata_*"
+            # as users may have legitimate fields with those names (e.g., metadata_json)
             def is_internal_field(field_name: str) -> bool:
                 # Check if it's in our explicit internal fields list
                 if field_name in internal_fields:
                     return True
-                # Check for metadata-related field patterns
-                if field_name.startswith("metadata_"):
+                # Check for private fields (underscore prefix)
+                if field_name.startswith("_"):
                     return True
-                # Check for other internal patterns
-                if field_name.startswith("_"):  # Private fields
-                    return True
-                # FIX: Filter out NodeMetadata objects (they're internal, not user parameters)
+                # Filter out NodeMetadata objects (they're internal, not user parameters)
                 if field_name == "metadata" and isinstance(
                     kwargs.get(field_name), NodeMetadata
                 ):
@@ -1209,8 +1208,9 @@ class Node(ABC):
 
         # Then validate JSON-serializability
         # Skip JSON validation for state management objects
-        from kailash.workflow.state import WorkflowStateWrapper
         from pydantic import BaseModel
+
+        from kailash.workflow.state import WorkflowStateWrapper
 
         non_serializable = []
         for k, v in outputs.items():
