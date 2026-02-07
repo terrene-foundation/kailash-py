@@ -8,10 +8,15 @@ The Kailash Python SDK is an enterprise-grade workflow orchestration
 framework with AI-first architecture, providing 115+ nodes across data,
 AI, security, and transaction categories.
 
-IMPORTANT LICENSING NOTE:
-This software is licensed under the Apache License 2.0 with Additional Terms
-that prohibit standalone commercial distribution. Please see the LICENSE file
-for complete terms and conditions.
+This software is licensed under the Apache License, Version 2.0.
+See the LICENSE file for the full license text.
+
+PATENT NOTICE:
+The technology in this software is the subject of patent applications owned by
+Terrene Foundation See the PATENTS file for details. Under Apache License 2.0,
+Section 3, each Contributor grants a patent license covering claims necessarily
+infringed by their Contribution(s) alone or by combination of their
+Contribution(s) with the Work.
 
 Third-party components included in this distribution may be subject to
 separate license terms as noted in their respective license files.
