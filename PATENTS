@@ -1,0 +1,41 @@
+Terrene Foundation Patent Notice
+
+The technology implemented in this software is covered by the following
+patent applications owned by Terrene Foundation:
+
+1. PCT International Application No. PCT/SG2024/050503
+   Title: "A System and Method for Development of a Service Application
+   on an Application Development Platform"
+   Priority Date: 14 August 2023
+   PCT Filing Date: 8 August 2024
+   IPRP Chapter II: Favorable (4 December 2025) - all 18 claims approved
+   National Phase Status:
+   - Singapore (IPOS): Filed
+   - United States (USPTO): Filed
+   - China (CNIPA): Under Filing
+
+2. Singapore Provisional Application Ref. P251088SG
+   Title: "Method and System for Orchestrating Artificial Intelligence
+   Workflow"
+   Priority Date: 7 October 2025
+   Filing Date: 7 October 2025
+   Status: Provisional filed; complete application deadline 7 October 2026
+
+Patent 1 covers the platform architecture including the data fabric layer,
+composable layer, process orchestrator, and output interface implemented
+by the Kailash Core SDK, DataFlow, and Nexus frameworks.
+
+Patent 2 covers the AI workflow orchestration layer including LLM-guided
+workflow creation, multi-agent orchestration, iterative workflow execution
+with convergence detection, and containerized deployment implemented by
+the Kailash Kaizen framework.
+
+This software is licensed under the Apache License, Version 2.0. Under
+Section 3 of the Apache License, each Contributor grants a patent license
+covering patent claims that are necessarily infringed by their
+Contribution(s) alone or by combination of their Contribution(s) with
+the Work. This grant is perpetual, worldwide, non-exclusive, no-charge,
+royalty-free, and irrevocable, subject to the defensive termination clause
+in Section 3. See the LICENSE file for the complete terms.
+
+For questions, contact: info@terrene.foundation

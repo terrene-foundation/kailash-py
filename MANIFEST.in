@@ -1,6 +1,8 @@
 # Include important files
 include README.md
 include LICENSE
+include NOTICE
+include PATENTS
 include pyproject.toml
 include setup.py
 include setup.cfg

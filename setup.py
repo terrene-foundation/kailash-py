@@ -17,6 +17,7 @@ setup(
     author="Terrene Foundation",
     author_email="info@terrene.foundation",
     description="Python SDK for the Kailash container-node architecture",
+    license="Apache-2.0",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/terrene-foundation/kailash-py",
@@ -71,7 +72,7 @@ setup(
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: Apache Software License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",

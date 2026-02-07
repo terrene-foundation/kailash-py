@@ -4,7 +4,7 @@
   <a href="https://pypi.org/project/kailash/"><img src="https://img.shields.io/pypi/v/kailash.svg" alt="PyPI version"></a>
   <a href="https://pypi.org/project/kailash/"><img src="https://img.shields.io/pypi/pyversions/kailash.svg" alt="Python versions"></a>
   <a href="https://pepy.tech/project/kailash"><img src="https://static.pepy.tech/badge/kailash" alt="Downloads"></a>
-  <img src="https://img.shields.io/badge/license-Apache%202.0%20with%20Additional%20Terms-orange.svg" alt="Apache 2.0 with Additional Terms">
+  <img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="Apache 2.0">
   <img src="https://img.shields.io/badge/code%20style-black-000000.svg" alt="Code style: black">
   <img src="https://img.shields.io/badge/tests-928%20passing-brightgreen.svg" alt="Tests: 928 Passing">
   <img src="https://img.shields.io/badge/performance-11x%20faster-yellow.svg" alt="Performance: 11x Faster">
@@ -29,6 +29,7 @@
 ### 🚨 Breaking Changes
 
 **1. AsyncLocalRuntime Return Structure**
+
 ```python
 # Before (v0.9.x):
 results = await runtime.execute_workflow_async(workflow, {})
@@ -40,12 +41,14 @@ user = results["create_user"]["id"]  # Tuple unpacking required
 ```
 
 **2. Validation Exception Types**
+
 ```python
 # Before: RuntimeExecutionError
 # After: ValueError (for connection_validation mode errors)
 ```
 
 **3. Parameter Scoping (Automatic Unwrapping)**
+
 ```python
 # Before: Manual parameter management required
 parameters = {"node1": {"value": 10}}
@@ -59,22 +62,26 @@ parameters = {
 ```
 
 ### ✨ What's New
+
 - **Runtime Parity (100%)**: LocalRuntime and AsyncLocalRuntime now behave identically
 - **Parameter Scoping**: Automatic unwrapping of node-specific parameters with cross-node isolation
 - **Smart Parameter Filtering**: Global parameters shared, node-specific parameters isolated
 - **CI Performance**: 10x faster test execution (removed coverage overhead)
 
 ### 📈 Impact
+
 - **API Consistency**: Both runtimes return `(results, run_id)` tuple
 - **Parameter Safety**: No more cross-node parameter leakage
 - **Test Coverage**: 928/928 tests passing (100%)
 - **CI Speed**: Shared test suite - 2.53s (was 20-30 min)
 
 ### 📦 Package Updates
+
 - **kailash**: v0.10.0 - Breaking changes for runtime parity
 - **kailash-dataflow**: Updated dependencies to kailash>=0.10.0
 
 ### 🔄 Migration Guide
+
 See [CHANGELOG.md](CHANGELOG.md#0100---2025-10-26) for detailed migration instructions.
 
 [Full Changelog](CHANGELOG.md) | [Core SDK 0.10.0](https://pypi.org/project/kailash/0.10.0/)
@@ -82,6 +89,7 @@ See [CHANGELOG.md](CHANGELOG.md#0100---2025-10-26) for detailed migration instru
 ## 🎯 What Makes Kailash Different
 
 ### 🏗️ **Complete Application Framework**
+
 Not just a toolkit - complete production-ready applications built on enterprise-grade infrastructure:
 
 - **DataFlow**: Zero-config database operations with MongoDB-style queries
@@ -90,12 +98,14 @@ Not just a toolkit - complete production-ready applications built on enterprise-
 - **User Management**: Enterprise RBAC system with comprehensive security
 
 ### 🚀 **Performance & Scale**
+
 - **11x faster test execution** (117s → 10.75s) with smart isolation
 - **31.8M operations/second** query performance baseline
 - **30,000+ iterations/second** cyclic workflow execution
 - **100% test pass rate** across 928 tests
 
 ### 🤖 **AI-First Architecture**
+
 - **A2A Google Protocol** for enterprise multi-agent coordination
 - **Real MCP execution** by default for all AI agents
 - **47+ specialized RAG nodes** for document processing
@@ -106,6 +116,7 @@ Not just a toolkit - complete production-ready applications built on enterprise-
 ## 🏗️ Project Architecture
 
 ### Three-Layer Architecture
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     🎨 Studio UI Layer                         │
@@ -124,6 +135,7 @@ Not just a toolkit - complete production-ready applications built on enterprise-
 ```
 
 ### Current Project Structure
+
 ```
 kailash_python_sdk/
 ├── src/kailash/          # Core SDK - 115+ nodes, workflows, runtime
@@ -234,12 +246,14 @@ results, run_id = runtime.execute(workflow.build())
 ## 🎯 Key Features
 
 ### 🧪 **Testing Excellence**
+
 - **928 tests** with 100% pass rate
 - **11x performance improvement** (117s → 10.75s execution)
 - **Docker integration** for real PostgreSQL, Redis, MongoDB
 - **Smart isolation** without process forking overhead
 
 ### 🏢 **Enterprise Ready**
+
 - **Multi-tenant architecture** with complete isolation
 - **RBAC/ABAC security** with fine-grained permissions
 - **Audit logging** with compliance frameworks (GDPR, CCPA)
@@ -247,12 +261,14 @@ results, run_id = runtime.execute(workflow.build())
 - **Circuit breaker** and resilience patterns
 
 ### 🤖 **AI Integration**
+
 - **115+ production nodes** including 47+ specialized RAG nodes
 - **Real MCP execution** by default for all AI agents
 - **Self-organizing agent pools** with intelligent coordination
 - **Complete LLM integration** with embeddings and vector search
 
 ### ⚡ **Performance & Scale**
+
 - **31.8M operations/second** query performance baseline
 - **Connection pooling** with automatic resource management
 - **Redis caching** with intelligent invalidation patterns
@@ -261,6 +277,7 @@ results, run_id = runtime.execute(workflow.build())
 ## 🏗️ Node Ecosystem (115+ Nodes)
 
 ### Core Categories
+
 - **Data Nodes**: CSVReaderNode, AsyncSQLDatabaseNode, QueryBuilderNode, QueryCacheNode
 - **AI Nodes**: LLMAgentNode, IterativeLLMAgentNode, EmbeddingGeneratorNode, SelfOrganizingAgentNode
 - **A2A Nodes**: A2ACoordinatorNode, HybridSearchNode, AdaptiveSearchNode, SemanticMemoryNode, StreamingAnalyticsNode
@@ -270,6 +287,7 @@ results, run_id = runtime.execute(workflow.build())
 - **Transaction Nodes**: DistributedTransactionManagerNode, SagaCoordinatorNode
 
 ### Advanced Features
+
 - **A2A Communication**: Google Protocol-based multi-agent coordination
 - **Semantic Memory**: Long-term memory management for agent interactions
 - **Hybrid Search**: Multi-strategy agent discovery and matching
@@ -281,12 +299,14 @@ results, run_id = runtime.execute(workflow.build())
 ## 📊 Performance Metrics
 
 ### Recent Achievements
+
 - **11x faster test execution**: 117s → 10.75s with smart isolation
 - **100% test pass rate**: 928 tests across all categories
 - **31.8M operations/second**: Query performance baseline
 - **30,000+ iterations/second**: Cyclic workflow execution
 
 ### Enterprise Benchmarks
+
 - **Query Cache**: 99.9% hit rate with intelligent invalidation
 - **Connection Pooling**: 10,000+ concurrent connections
 - **MCP Integration**: 407 tests with 100% pass rate
@@ -295,9 +315,11 @@ results, run_id = runtime.execute(workflow.build())
 ## 🚀 Applications Built with Kailash
 
 ### 1. DataFlow - Zero-Config Database Platform (v0.3.3)
+
 ```bash
 pip install kailash-dataflow
 ```
+
 - **MongoDB-style queries** across PostgreSQL, MySQL, SQLite
 - **Redis caching** with enterprise-grade invalidation
 - **Automatic API generation** with OpenAPI documentation
@@ -305,9 +327,11 @@ pip install kailash-dataflow
 - **Latest**: v0.3.3 - Critical connection parsing fix for special characters in passwords
 
 ### 2. Nexus - Multi-Channel Platform (v1.1.0)
+
 ```bash
 pip install kailash-nexus
 ```
+
 - **Unified API, CLI, and MCP** from single codebase
 - **Enterprise orchestration** with multi-tenancy
 - **Session management** with cross-channel synchronization
@@ -319,18 +343,22 @@ pip install kailash-nexus
   - Clear v1.0 vs v1.1 feature roadmap
 
 ### 3. AI Registry - Advanced RAG Platform
+
 ```bash
 pip install kailash-ai-registry
 ```
+
 - **47+ specialized RAG nodes** for document processing
 - **Advanced retrieval** with semantic search and re-ranking
 - **Multi-modal support** with image and text processing
 - **Enterprise deployment** with scalable architecture
 
 ### 4. User Management - Enterprise RBAC
+
 ```bash
 pip install kailash-user-management
 ```
+
 - **Complete RBAC system** with role hierarchy
 - **Multi-factor authentication** with enterprise integration
 - **Audit logging** with compliance frameworks
@@ -339,6 +367,7 @@ pip install kailash-user-management
 ## 🧪 Testing & Quality
 
 ### Comprehensive Test Suite
+
 ```bash
 # All tests (928 tests - 100% passing)
 pytest
@@ -360,6 +389,7 @@ pytest tests/e2e/ --timeout=10
 ```
 
 ### Test Infrastructure
+
 - **Docker Integration**: Real PostgreSQL, Redis, MongoDB for testing
 - **Smart Isolation**: Fixture-based isolation without process forking
 - **Performance Monitoring**: Automated benchmarks and regression detection
@@ -368,12 +398,14 @@ pytest tests/e2e/ --timeout=10
 ## 🛡️ Security & Compliance
 
 ### Enterprise Security
+
 - **Multi-factor Authentication**: TOTP, WebAuthn, SMS integration
 - **Threat Detection**: Real-time analysis with behavior monitoring
 - **Access Control**: Fine-grained RBAC/ABAC with policy engines
 - **Audit Logging**: Comprehensive trails with integrity verification
 
 ### Compliance Frameworks
+
 - **GDPR/CCPA**: Built-in data protection and privacy controls
 - **SOX**: Financial reporting controls and audit trails
 - **HIPAA**: Healthcare data protection patterns
@@ -382,17 +414,20 @@ pytest tests/e2e/ --timeout=10
 ## 📚 Documentation & Resources
 
 ### For Users
+
 - **[SDK Users Guide](sdk-users/)**: Complete workflow development guide
 - **[Node Selection Guide](sdk-users/2-core-concepts/nodes/node-selection-guide.md)**: Smart node selection with decision trees
 - **[Enterprise Patterns](sdk-users/5-enterprise/)**: Production deployment patterns
 - **[API Documentation](https://terrene-foundation.github.io/kailash-python-sdk)**: Complete API reference
 
 ### For Contributors
+
 - **[SDK Contributors Guide](# contrib (removed)/)**: Internal SDK development
 - **[Architecture Decisions](# contrib (removed)/architecture/)**: ADRs and design decisions
 - **[Testing Guide](tests/README.md)**: 3-tier testing strategy
 
 ### Quick References
+
 - **[Cheatsheet](sdk-users/2-core-concepts/cheatsheet/)**: 53 copy-paste patterns
 - **[Common Mistakes](sdk-users/2-core-concepts/validation/common-mistakes.md)**: Error patterns and solutions
 - **[Performance Guide](sdk-users/5-enterprise/performance/)**: Optimization patterns
@@ -400,6 +435,7 @@ pytest tests/e2e/ --timeout=10
 ## 🚢 Production Deployment
 
 ### Container Deployment
+
 ```bash
 # Export workflow to container format
 python -c "
@@ -412,6 +448,7 @@ kailash deploy production.yaml --environment prod
 ```
 
 ### Monitoring & Observability
+
 ```python
 from kailash.visualization import DashboardServer
 
@@ -422,6 +459,7 @@ server.start()
 ```
 
 ### Enterprise Features
+
 - **Multi-tenant deployment** with complete isolation
 - **Distributed transactions** with automatic recovery
 - **Circuit breaker patterns** for resilience
@@ -432,9 +470,11 @@ server.start()
 We use a **Claude Code-driven workflow** for all development:
 
 ### New Team Member?
+
 **Start Here → [NEW_TEAM_MEMBER.md](NEW_TEAM_MEMBER.md)**
 
 ### Development Workflow
+
 ```bash
 # Clone and setup
 git clone https://github.com/terrene-foundation/kailash-py.git
@@ -455,7 +495,9 @@ ruff check .
 ```
 
 ### Claude Code Workflow
+
 All project management through conversational AI:
+
 - **No manual TODO editing** - Claude Code handles all updates
 - **No direct GitHub issues** - Created through planning sessions
 - **All progress tracked** - Through natural conversation
@@ -465,6 +507,7 @@ See [Contributing Guide](CONTRIBUTING.md) and [# contrib (removed)/CLAUDE.md](# 
 ## 📈 Project Status
 
 ### ✅ v0.8.4 - A2A Google Protocol Enhancement
+
 - **Advanced Agent Coordination**: A2ACoordinatorNode with Google Protocol patterns
 - **Hybrid Search System**: Multi-strategy agent discovery and matching
 - **Semantic Memory**: Long-term memory management for agent interactions
@@ -473,6 +516,7 @@ See [Contributing Guide](CONTRIBUTING.md) and [# contrib (removed)/CLAUDE.md](# 
 - **Production Ready**: Enterprise-grade multi-agent coordination patterns
 
 ### ✅ v0.10.0 - Runtime Parity & Parameter Scoping (BREAKING CHANGES)
+
 - **Runtime Parity (100%)**: LocalRuntime and AsyncLocalRuntime behave identically
 - **Parameter Scoping**: Automatic unwrapping and cross-node isolation
 - **API Consistency**: Both runtimes return `(results, run_id)` tuple
@@ -480,6 +524,7 @@ See [Contributing Guide](CONTRIBUTING.md) and [# contrib (removed)/CLAUDE.md](# 
 - **CI Performance**: 10x faster test execution (removed coverage overhead)
 
 ### ✅ v0.8.1 - Complete App Framework
+
 - **Complete Application Framework**: DataFlow, Nexus, AI Registry, User Management
 - **PyPI Integration**: All packages available with proper extras support
 - **Performance Breakthrough**: 11x faster test execution
@@ -487,6 +532,7 @@ See [Contributing Guide](CONTRIBUTING.md) and [# contrib (removed)/CLAUDE.md](# 
 - **Enterprise Ready**: Production deployment patterns
 
 ### ✅ v0.7.0 - Major Framework Release
+
 - **DataFlow Platform**: Zero-config database operations
 - **Nexus Platform**: Multi-channel orchestration
 - **AI Registry**: Advanced RAG capabilities
@@ -494,6 +540,7 @@ See [Contributing Guide](CONTRIBUTING.md) and [# contrib (removed)/CLAUDE.md](# 
 - **Testing Infrastructure**: Docker integration, comprehensive validation
 
 ### 🚧 Roadmap
+
 - **Visual Workflow Builder**: Studio UI for drag-and-drop workflow creation
 - **Advanced Analytics**: ML-powered workflow optimization
 - **Cloud Integration**: Native AWS/GCP/Azure deployment
@@ -501,24 +548,11 @@ See [Contributing Guide](CONTRIBUTING.md) and [# contrib (removed)/CLAUDE.md](# 
 
 ## 📄 License
 
-This project is licensed under the **Apache License 2.0 with Additional Terms** that protect against standalone commercial distribution while encouraging innovation.
+This project is licensed under the **Apache License, Version 2.0**. You may use, modify, distribute, and commercialize the software freely, subject to the terms of the license.
 
-### ✅ What You CAN Do:
-- **Use** Kailash SDK in your commercial applications and services
-- **Create and sell** derivative works that add substantial functionality
-- **Integrate** Kailash as a component of larger systems
-- **Use internally** within your organization without restrictions
-- **Provide services** using Kailash without distributing the SDK itself
+See the [LICENSE](LICENSE) file for the full license text.
 
-### ❌ What You CANNOT Do:
-- **Sell the SDK as-is** without substantial modifications
-- **Repackage and sell** with only cosmetic changes
-- **Distribute commercially** as a standalone product
-
-### 📋 Summary:
-We encourage commercial use of Kailash SDK as part of your innovative solutions while preventing direct resale of our work. This ensures the community benefits from continuous development while protecting the project's sustainability.
-
-For complete license terms, see the [LICENSE](LICENSE) file. For commercial licensing inquiries or clarifications, please contact info@terrene.foundation.
+The Kailash SDK is the subject of patent applications owned by Terrene Foundation See the [PATENTS](PATENTS) file for details. Under Apache License 2.0, Section 3, each Contributor grants a patent license covering claims necessarily infringed by their Contribution(s) alone or by combination of their Contribution(s) with the Work, subject to the defensive termination clause in Section 3.
 
 ## 🙏 Acknowledgments
 
