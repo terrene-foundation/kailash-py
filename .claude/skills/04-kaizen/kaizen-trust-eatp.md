@@ -108,6 +108,7 @@ await pseudo.revoke_all_delegations()
 ```
 
 **Key Components**:
+
 - **HumanOrigin**: Immutable (frozen=True) record of the authorizing human
 - **ExecutionContext**: Context propagation via ContextVar for async operations
 - **PseudoAgent**: Human facade - ONLY entity that can initiate trust chains
@@ -206,6 +207,7 @@ chain = TrustLineageChain(
 ```
 
 **Key Components**:
+
 - **GenesisRecord**: Initial trust establishment (who created this agent)
 - **CapabilityAttestation**: Attested capabilities (what can it do)
 - **DelegationRecord**: Delegated capabilities from other agents
@@ -323,6 +325,7 @@ if result.valid:
 ```
 
 **SecureMessageEnvelope Structure**:
+
 - HMAC-based message authentication
 - Nonce-based replay protection
 - Timestamp validation
@@ -429,6 +432,7 @@ result = await esa.execute(
 ```
 
 **ESA Use Cases**:
+
 - Wrap legacy APIs with trust verification
 - Bridge non-AI systems into agent ecosystem
 - Provide accountability for external system calls
@@ -458,12 +462,14 @@ app = create_a2a_app(service)
 ```
 
 **Available Endpoints**:
+
 - `POST /a2a/verify` - Verify agent trust
 - `POST /a2a/delegate` - Delegate capability
 - `GET /a2a/card/{agent_id}` - Get agent card
 - `POST /a2a/audit/query` - Query audit trail
 
 **JSON-RPC Methods**:
+
 - `trust.verify` - Verify trust
 - `trust.delegate` - Delegate capability
 - `trust.audit` - Record audit event
@@ -536,36 +542,37 @@ await audit_logger.log(SecurityEvent(
 
 ## Component Reference
 
-| Component | Purpose | Location |
-|-----------|---------|----------|
-| `TrustLineageChain` | Complete trust chain | `kaizen.trust.chain` |
-| `TrustOperations` | Core trust operations | `kaizen.trust.operations` |
-| `TrustedAgent` | BaseAgent with trust | `kaizen.trust.trusted_agent` |
-| `TrustedSupervisorAgent` | Delegation support | `kaizen.trust.trusted_agent` |
-| `AgentRegistry` | Agent discovery | `kaizen.trust.registry` |
-| `AgentHealthMonitor` | Health monitoring | `kaizen.trust.registry` |
-| `SecureChannel` | Encrypted messaging | `kaizen.trust.messaging` |
-| `MessageSigner/Verifier` | Message auth | `kaizen.trust.messaging` |
-| `TrustExecutionContext` | Context propagation | `kaizen.trust.orchestration` |
-| `TrustPolicyEngine` | Policy enforcement | `kaizen.trust.orchestration` |
-| `TrustAwareOrchestrationRuntime` | Trust-aware runtime | `kaizen.trust.orchestration` |
-| `EnterpriseSystemAgent` | Legacy system proxy | `kaizen.trust.esa` |
-| `A2AService` | HTTP API | `kaizen.trust.a2a` |
-| `CredentialRotationManager` | Key rotation | `kaizen.trust.rotation` |
-| `TrustRateLimiter` | Rate limiting | `kaizen.trust.security` |
-| `SecurityAuditLogger` | Audit logging | `kaizen.trust.security` |
-| `PostgresTrustStore` | Persistent storage | `kaizen.trust.store` |
-| `TrustChainCache` | Performance caching | `kaizen.trust.cache` |
-| `HumanOrigin` | Immutable human record (v0.8.0) | `kaizen.trust.execution_context` |
-| `ExecutionContext` | Human traceability context (v0.8.0) | `kaizen.trust.execution_context` |
-| `PseudoAgent` | Human facade (v0.8.0) | `kaizen.trust.pseudo_agent` |
-| `PseudoAgentFactory` | Create PseudoAgents (v0.8.0) | `kaizen.trust.pseudo_agent` |
-| `ConstraintValidator` | Constraint tightening (v0.8.0) | `kaizen.trust.constraint_validator` |
-| `EATPMigration` | DB migration for v0.8.0 | `kaizen.trust.migrations` |
+| Component                        | Purpose                             | Location                            |
+| -------------------------------- | ----------------------------------- | ----------------------------------- |
+| `TrustLineageChain`              | Complete trust chain                | `kaizen.trust.chain`                |
+| `TrustOperations`                | Core trust operations               | `kaizen.trust.operations`           |
+| `TrustedAgent`                   | BaseAgent with trust                | `kaizen.trust.trusted_agent`        |
+| `TrustedSupervisorAgent`         | Delegation support                  | `kaizen.trust.trusted_agent`        |
+| `AgentRegistry`                  | Agent discovery                     | `kaizen.trust.registry`             |
+| `AgentHealthMonitor`             | Health monitoring                   | `kaizen.trust.registry`             |
+| `SecureChannel`                  | Encrypted messaging                 | `kaizen.trust.messaging`            |
+| `MessageSigner/Verifier`         | Message auth                        | `kaizen.trust.messaging`            |
+| `TrustExecutionContext`          | Context propagation                 | `kaizen.trust.orchestration`        |
+| `TrustPolicyEngine`              | Policy enforcement                  | `kaizen.trust.orchestration`        |
+| `TrustAwareOrchestrationRuntime` | Trust-aware runtime                 | `kaizen.trust.orchestration`        |
+| `EnterpriseSystemAgent`          | Legacy system proxy                 | `kaizen.trust.esa`                  |
+| `A2AService`                     | HTTP API                            | `kaizen.trust.a2a`                  |
+| `CredentialRotationManager`      | Key rotation                        | `kaizen.trust.rotation`             |
+| `TrustRateLimiter`               | Rate limiting                       | `kaizen.trust.security`             |
+| `SecurityAuditLogger`            | Audit logging                       | `kaizen.trust.security`             |
+| `PostgresTrustStore`             | Persistent storage                  | `kaizen.trust.store`                |
+| `TrustChainCache`                | Performance caching                 | `kaizen.trust.cache`                |
+| `HumanOrigin`                    | Immutable human record (v0.8.0)     | `kaizen.trust.execution_context`    |
+| `ExecutionContext`               | Human traceability context (v0.8.0) | `kaizen.trust.execution_context`    |
+| `PseudoAgent`                    | Human facade (v0.8.0)               | `kaizen.trust.pseudo_agent`         |
+| `PseudoAgentFactory`             | Create PseudoAgents (v0.8.0)        | `kaizen.trust.pseudo_agent`         |
+| `ConstraintValidator`            | Constraint tightening (v0.8.0)      | `kaizen.trust.constraint_validator` |
+| `EATPMigration`                  | DB migration for v0.8.0             | `kaizen.trust.migrations`           |
 
 ## When to Use EATP
 
 **Use EATP when you need**:
+
 - Enterprise-grade accountability for AI agents
 - Regulatory compliance (audit trails, provenance)
 - Cross-organization agent coordination
@@ -574,6 +581,7 @@ await audit_logger.log(SecurityEvent(
 - Trust delegation with constraints
 
 **Don't use EATP when**:
+
 - Simple single-agent applications
 - Internal-only prototypes
 - No compliance requirements
@@ -582,24 +590,28 @@ await audit_logger.log(SecurityEvent(
 ## Best Practices
 
 ### Trust Establishment
+
 - ✅ Establish trust before first agent action
 - ✅ Use specific capability types (ACCESS, EXECUTE, DELEGATE)
 - ✅ Set appropriate constraints on capabilities
 - ❌ Never skip trust verification in production
 
 ### Delegation
+
 - ✅ Use time-limited delegations
 - ✅ Apply principle of least privilege
 - ✅ Record delegation chain for audit
 - ❌ Never delegate more capabilities than needed
 
 ### Secure Messaging
+
 - ✅ Always use SecureChannel for inter-agent communication
 - ✅ Enable replay protection
 - ✅ Verify message signatures
 - ❌ Never send sensitive data without encryption
 
 ### Production Deployment
+
 - ✅ Use PostgresTrustStore for persistence
 - ✅ Enable TrustChainCache for performance
 - ✅ Configure credential rotation
@@ -613,8 +625,36 @@ await audit_logger.log(SecurityEvent(
 - **[kaizen-supervisor-worker](kaizen-supervisor-worker.md)** - Supervisor-worker patterns
 - **[kaizen-observability-audit](kaizen-observability-audit.md)** - Compliance audit trails
 
+## Security Testing
+
+### Adversarial Security Tests (CARE-040)
+
+127 adversarial tests verify trust security under active attack:
+
+```bash
+# Run full adversarial security suite
+python -m pytest apps/kailash-kaizen/tests/security/ -v --timeout=120
+```
+
+**Categories**: Key extraction resistance (26), delegation manipulation (23), constraint gaming (42), revocation races (10), cross-org boundaries (13), audit integrity (13).
+
+### Node-Level Trust Verification (CARE-039)
+
+All runtime execution paths verify trust BEFORE each node executes. High-risk nodes (`BashCommand`, `FileWrite`, `HttpRequest`, `DatabaseQuery`, `CodeExecution`, `SystemCommand`) receive full verification (no caching).
+
+```bash
+# Run node trust verification tests
+python -m pytest tests/unit/runtime/trust/test_node_trust_verification.py -v
+```
+
+### CI/CD
+
+- **Trust tests**: `.github/workflows/trust-tests.yml` (Monday schedule + PR triggers)
+- **Security tests**: `.github/workflows/security-tests.yml` (Wednesday schedule + PR triggers)
+
 ## Support
 
 - **Source**: `src/kaizen/trust/`
 - **Tests**: `tests/unit/trust/`, `tests/integration/trust/`, `tests/e2e/trust/`
+- **Security Tests**: `apps/kailash-kaizen/tests/security/`
 - **Examples**: `examples/trust/` (see EATP examples)

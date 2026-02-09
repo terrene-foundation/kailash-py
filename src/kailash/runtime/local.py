@@ -228,6 +228,13 @@ class LocalRuntime(
         circuit_breaker_config: Optional[dict] = None,
         retry_policy_config: Optional[dict] = None,
         connection_pool_config: Optional[dict] = None,
+        # Trust Integration Configuration (CARE-015)
+        trust_context: Optional[Any] = None,
+        trust_verifier: Optional[Any] = None,
+        trust_verification_mode: str = "disabled",
+        # Audit Configuration (CARE-018)
+        audit_generator: Optional[Any] = None,
+        audit_log_to_stdout: bool = False,
     ):
         """Initialize the unified runtime.
 
@@ -283,6 +290,11 @@ class LocalRuntime(
             circuit_breaker_config=circuit_breaker_config,
             retry_policy_config=retry_policy_config,
             connection_pool_config=connection_pool_config,
+            trust_context=trust_context,
+            trust_verifier=trust_verifier,
+            trust_verification_mode=trust_verification_mode,
+            audit_generator=audit_generator,
+            audit_log_to_stdout=audit_log_to_stdout,
         )
 
         # LocalRuntime-specific initialization (not in BaseRuntime)
@@ -757,23 +769,68 @@ class LocalRuntime(
                 stacklevel=2,
             )
 
+        # CARE-017: Get effective trust context
+        effective_trust_ctx = self._get_effective_trust_context()
+
         try:
             # Check if we're already in an event loop
             loop = asyncio.get_running_loop()
             # If we're in an event loop, run synchronously instead
-            return self._execute_sync(
-                workflow=workflow, task_manager=task_manager, parameters=parameters
-            )
+            if effective_trust_ctx is not None:
+                from kailash.runtime.trust.context import runtime_trust_context
+
+                with runtime_trust_context(effective_trust_ctx):
+                    return self._execute_sync(
+                        workflow=workflow,
+                        task_manager=task_manager,
+                        parameters=parameters,
+                    )
+            else:
+                return self._execute_sync(
+                    workflow=workflow, task_manager=task_manager, parameters=parameters
+                )
         except RuntimeError:
             # No event loop running, use persistent loop
             loop = self._ensure_event_loop()
 
-            # Run the async execution in the persistent loop
-            return loop.run_until_complete(
-                self._execute_async(
-                    workflow=workflow, task_manager=task_manager, parameters=parameters
+            # CARE-017: Verify workflow trust before execution (async path)
+            if effective_trust_ctx is not None:
+                from kailash.runtime.trust.context import (
+                    TrustVerificationMode,
+                    runtime_trust_context,
                 )
-            )
+
+                # Run verification before execution if verifier is configured
+                if (
+                    self._trust_verification_mode != TrustVerificationMode.DISABLED
+                    and self._trust_verifier is not None
+                ):
+                    allowed = loop.run_until_complete(
+                        self._verify_workflow_trust(workflow, effective_trust_ctx)
+                    )
+                    if not allowed:
+                        raise WorkflowExecutionError(
+                            "Trust verification denied workflow execution"
+                        )
+
+                # Run the async execution in the persistent loop with trust context
+                with runtime_trust_context(effective_trust_ctx):
+                    return loop.run_until_complete(
+                        self._execute_async(
+                            workflow=workflow,
+                            task_manager=task_manager,
+                            parameters=parameters,
+                        )
+                    )
+            else:
+                # Run the async execution in the persistent loop
+                return loop.run_until_complete(
+                    self._execute_async(
+                        workflow=workflow,
+                        task_manager=task_manager,
+                        parameters=parameters,
+                    )
+                )
 
     async def execute_async(
         self,
@@ -1755,6 +1812,18 @@ class LocalRuntime(
                         # Initialize the workflow context if it doesn't exist
                         node_instance._workflow_context = workflow_context
 
+                    # CARE-039: Node-level trust verification before execution
+                    node_type = node_instance.__class__.__name__
+                    node_trust_allowed = await self._verify_node_trust(
+                        node_id=node_id,
+                        node_type=node_type,
+                        trust_context=self._get_effective_trust_context(),
+                    )
+                    if not node_trust_allowed:
+                        raise WorkflowExecutionError(
+                            f"Trust verification denied execution of node '{node_id}' (type={node_type})"
+                        )
+
                     if self.enable_async and hasattr(node_instance, "execute_async"):
                         # Use async execution method that includes validation
                         outputs = await node_instance.execute_async(**validated_inputs)
@@ -1866,6 +1935,10 @@ class LocalRuntime(
                 if isinstance(e, ContentAwareExecutionError):
                     error_msg = f"Content-aware failure in node '{node_id}': {e}"
                     raise WorkflowExecutionError(error_msg) from e
+
+                # CARE-039: Trust verification denials must always stop execution
+                if "Trust verification denied" in str(e):
+                    raise WorkflowExecutionError(str(e)) from e
 
                 # Determine if we should continue for other exceptions
                 if self._should_stop_on_error(workflow, node_id):

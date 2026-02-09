@@ -50,6 +50,7 @@ You are a multi-channel platform specialist for Kailash Nexus implementation. Ex
 ## Essential Patterns
 
 ### Basic Setup
+
 ```python
 from nexus import Nexus
 app = Nexus()
@@ -57,7 +58,37 @@ app.register("workflow_name", workflow.build())  # ALWAYS .build()
 app.start()
 ```
 
+### Handler Registration (NEW)
+
+```python
+# ✅ RECOMMENDED: Direct handler registration bypasses PythonCodeNode sandbox
+from nexus import Nexus
+
+app = Nexus()
+
+@app.handler("greet", description="Greeting handler")
+async def greet(name: str, greeting: str = "Hello") -> dict:
+    """Direct async function as multi-channel workflow."""
+    return {"message": f"{greeting}, {name}!"}
+
+# Non-decorator method also available
+async def process(data: dict) -> dict:
+    return {"result": data}
+
+app.register_handler("process", process)
+app.start()
+```
+
+**Why Use Handlers?**
+
+- Bypasses PythonCodeNode sandbox restrictions
+- No import blocking (use any library)
+- Simpler syntax for simple workflows
+- Automatic parameter derivation from function signature
+- Multi-channel deployment (API/CLI/MCP) from single function
+
 ### DataFlow Integration (CRITICAL)
+
 ```python
 # ✅ CORRECT: Fast, non-blocking
 app = Nexus(auto_discovery=False)  # CRITICAL
@@ -71,6 +102,7 @@ db = DataFlow(
 ```
 
 ### API Input Access
+
 ```python
 # ✅ CORRECT: Use try/except in PythonCodeNode
 workflow.add_node("PythonCodeNode", "prepare", {
@@ -87,6 +119,7 @@ result = {'filters': {'sector': sector} if sector else {}}
 ```
 
 ### Connection Pattern
+
 ```python
 # ✅ CORRECT: Explicit connections with dot notation
 workflow.add_connection("prepare", "result.filters", "search", "filter")
@@ -97,48 +130,93 @@ workflow.add_connection("prepare", "result.filters", "search", "filter")
 
 ## Configuration Quick Reference
 
-| Use Case | Config |
-|----------|--------|
-| **With DataFlow** | `Nexus(auto_discovery=False)` |
-| **Standalone** | `Nexus()` |
+| Use Case          | Config                                                                  |
+| ----------------- | ----------------------------------------------------------------------- |
+| **With DataFlow** | `Nexus(auto_discovery=False)`                                           |
+| **Standalone**    | `Nexus()`                                                               |
 | **Full Features** | `Nexus(auto_discovery=False, enable_auth=True, enable_monitoring=True)` |
 
 ## Framework Selection
 
 **Choose Nexus when:**
+
 - Need multi-channel access (API + CLI + MCP simultaneously)
 - Want zero-configuration platform deployment
 - Building AI agent integrations with MCP
 - Require unified session management
 
 **Don't Choose Nexus when:**
+
 - Simple single-purpose workflows (use Core SDK)
 - Database-first operations only (use DataFlow)
 - Need fine-grained workflow control (use Core SDK)
 
+## Handler Support Details
+
+### Core Components
+
+**HandlerNode** (`kailash.nodes.handler`):
+
+- Core SDK node that wraps async/sync functions
+- Automatic parameter derivation from function signatures
+- Type annotation mapping to NodeParameter entries
+- Seamless WorkflowBuilder integration
+
+**make_handler_workflow()** utility:
+
+- Builds single-node workflow from handler function
+- Configures workflow-level input mappings
+- Returns ready-to-execute Workflow instance
+
+**Registration-Time Validation** (`_validate_workflow_sandbox`):
+
+- Detects PythonCodeNode/AsyncPythonCodeNode with blocked imports
+- Emits warnings at registration time (not runtime)
+- Helps developers migrate to handlers for restricted code
+
+**Configurable Sandbox Mode**:
+
+- `sandbox_mode="strict"`: Blocks restricted imports (default)
+- `sandbox_mode="permissive"`: Allows all imports (test/dev only)
+- Set via PythonCodeNode/AsyncPythonCodeNode parameter
+
+### Key Files
+
+- `src/kailash/nodes/handler.py` - HandlerNode implementation
+- `apps/kailash-nexus/src/nexus/core.py` - handler() decorator, register_handler()
+- `tests/unit/nodes/test_handler_node.py` - 22 SDK unit tests
+- `apps/kailash-nexus/tests/unit/test_handler_registration.py` - 16 Nexus unit tests
+- `apps/kailash-nexus/tests/integration/test_handler_execution.py` - 7 integration tests
+- `apps/kailash-nexus/tests/e2e/test_handler_e2e.py` - 3 E2E tests
+
 ## Common Issues & Solutions
 
-| Issue | Solution |
-|-------|----------|
-| Nexus blocks on startup | Use `auto_discovery=False` with DataFlow |
-| 5-10s delay per model | Use `enable_model_persistence=False` |
-| Workflow not found | Ensure `.build()` called before registration |
-| Parameter not accessible | Use try/except in PythonCodeNode |
-| Port conflicts | Use custom ports: `Nexus(api_port=8001)` |
+| Issue                            | Solution                                                       |
+| -------------------------------- | -------------------------------------------------------------- |
+| Nexus blocks on startup          | Use `auto_discovery=False` with DataFlow                       |
+| 5-10s delay per model            | Use `enable_model_persistence=False`                           |
+| Workflow not found               | Ensure `.build()` called before registration                   |
+| Parameter not accessible         | Use try/except in PythonCodeNode OR use @app.handler() instead |
+| Port conflicts                   | Use custom ports: `Nexus(api_port=8001)`                       |
+| Import blocked in PythonCodeNode | Use @app.handler() to bypass sandbox restrictions              |
+| Sandbox warnings at registration | Switch to handlers OR set sandbox_mode="permissive" (dev only) |
 
 ## Skill References
 
 ### Quick Start
+
 - **[nexus-quickstart](../../.claude/skills/03-nexus/nexus-quickstart.md)** - Basic setup
 - **[nexus-workflow-registration](../../.claude/skills/03-nexus/nexus-workflow-registration.md)** - Registration patterns
 - **[nexus-multi-channel](../../.claude/skills/03-nexus/nexus-multi-channel.md)** - Multi-channel architecture
 
 ### Channel Patterns
+
 - **[nexus-api-patterns](../../.claude/skills/03-nexus/nexus-api-patterns.md)** - API deployment
 - **[nexus-cli-patterns](../../.claude/skills/03-nexus/nexus-cli-patterns.md)** - CLI integration
 - **[nexus-mcp-channel](../../.claude/skills/03-nexus/nexus-mcp-channel.md)** - MCP server
 
 ### Integration
+
 - **[nexus-dataflow-integration](../../.claude/skills/03-nexus/nexus-dataflow-integration.md)** - DataFlow integration
 - **[nexus-sessions](../../.claude/skills/03-nexus/nexus-sessions.md)** - Session management
 
@@ -153,6 +231,7 @@ workflow.add_connection("prepare", "result.filters", "search", "filter")
 ## Full Documentation
 
 When this guidance is insufficient, consult:
+
 - `sdk-users/apps/nexus/CLAUDE.md` - Complete Nexus guide
 - `sdk-users/guides/dataflow-nexus-integration.md` - Integration patterns
 - `sdk-users/apps/nexus/docs/troubleshooting/input-mapping-guide.md` - Input mapping
@@ -160,6 +239,7 @@ When this guidance is insufficient, consult:
 ---
 
 **Use this agent when:**
+
 - Setting up Nexus production deployments
 - Implementing multi-channel orchestration
 - Resolving DataFlow blocking issues

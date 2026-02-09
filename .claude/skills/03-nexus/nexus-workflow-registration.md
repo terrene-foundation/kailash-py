@@ -9,7 +9,62 @@ tags: [nexus, workflow, registration, auto-discovery, versioning]
 
 Master workflow registration patterns from basic to advanced.
 
-## Basic Registration (v1.1.0)
+## Registration Methods
+
+Nexus provides two registration approaches:
+
+| Method           | Use Case                       | Example                                  |
+| ---------------- | ------------------------------ | ---------------------------------------- |
+| `app.register()` | WorkflowBuilder workflows      | `app.register("name", workflow.build())` |
+| `@app.handler()` | Python functions (recommended) | `@app.handler("name")`                   |
+
+**Recommendation**: Use `@app.handler()` for most cases. It bypasses PythonCodeNode sandbox restrictions and provides better IDE support.
+
+## Handler Registration (Recommended)
+
+Register Python functions directly as multi-channel workflows:
+
+```python
+from nexus import Nexus
+
+app = Nexus()
+
+@app.handler("greet", description="Greet a user")
+async def greet(name: str, greeting: str = "Hello") -> dict:
+    return {"message": f"{greeting}, {name}!"}
+
+# Full Python access - no sandbox restrictions
+@app.handler("search_users")
+async def search_users(query: str, limit: int = 10) -> dict:
+    from my_app.services import UserService
+    service = UserService()
+    users = await service.search(query, limit)
+    return {"users": users}
+
+app.start()
+```
+
+### Non-Decorator Handler Registration
+
+```python
+from my_app.handlers import process_order
+
+app = Nexus()
+app.register_handler("process_order", process_order, description="Process an order")
+app.start()
+```
+
+### Handler Benefits
+
+- Full Python access (no sandbox restrictions)
+- Automatic parameter derivation from function signature
+- Works with async and sync functions
+- IDE support (type hints, autocomplete)
+- Docstrings used as descriptions
+
+See [nexus-handler-support](#) for complete handler documentation.
+
+## Workflow Registration (v1.1.0)
 
 ```python
 from nexus import Nexus
@@ -41,6 +96,7 @@ app.register("data-fetcher", workflow.build())
 ## Critical Rules
 
 ### Always Call .build()
+
 ```python
 # CORRECT
 app.register("workflow-name", workflow.build())
@@ -50,6 +106,7 @@ app.register("workflow-name", workflow)
 ```
 
 ### Correct Parameter Order
+
 ```python
 # CORRECT - name first, workflow second
 app.register(name, workflow.build())
@@ -85,6 +142,7 @@ app._workflow_metadata["data-fetcher"] = {
 ```
 
 **What Changed:**
+
 - ❌ `register(name, workflow, metadata)` not supported in v1.1.0
 - ✅ Only `register(name, workflow)` signature available
 - 🔜 Metadata support planned for future version
@@ -94,12 +152,14 @@ app._workflow_metadata["data-fetcher"] = {
 Nexus automatically discovers workflows in these patterns:
 
 ### File Patterns
+
 - `workflows/*.py`
 - `*.workflow.py`
 - `workflow_*.py`
 - `*_workflow.py`
 
 ### Example Workflow File
+
 ```python
 # my_workflow.py
 from kailash.workflow.builder import WorkflowBuilder
@@ -112,6 +172,7 @@ workflow.add_node("HTTPRequestNode", "fetch", {
 ```
 
 ### Enable/Disable Auto-Discovery
+
 ```python
 # Enable (default)
 app = Nexus(auto_discovery=True)
@@ -123,6 +184,7 @@ app = Nexus(auto_discovery=False)
 ## Dynamic Registration
 
 ### Runtime Workflow Discovery
+
 ```python
 from nexus import Nexus
 import os
@@ -152,6 +214,7 @@ discover_and_register()
 ```
 
 ### Configuration-Driven Registration
+
 ```python
 import yaml
 
@@ -187,6 +250,7 @@ def register_from_config(app, config_file="workflows.yaml"):
 ## Workflow Versioning
 
 ### Version Management
+
 ```python
 class WorkflowVersionManager:
     def __init__(self, nexus_app):
@@ -232,6 +296,7 @@ version_mgr.rollback("data-api", "1.0.0")
 ```
 
 ### Blue-Green Deployment
+
 ```python
 class BlueGreenDeployment:
     def __init__(self, nexus_app):
@@ -278,6 +343,7 @@ bg.switch_traffic("data-service", "green")
 ## Lifecycle Management
 
 ### Lifecycle Hooks
+
 ```python
 class WorkflowLifecycleManager:
     def __init__(self, nexus_app):
@@ -427,18 +493,21 @@ validator.safe_register(app, "my-workflow", workflow)
 ## Common Issues
 
 ### Workflow Not Found
+
 ```python
 # Ensure .build() is called
 app.register("workflow", workflow.build())  # Correct
 ```
 
 ### Auto-Discovery Blocking
+
 ```python
 # Disable when using DataFlow
 app = Nexus(auto_discovery=False)
 ```
 
 ### Registration Order
+
 ```python
 # Name first, workflow second
 app.register(name, workflow.build())  # Correct
@@ -447,17 +516,20 @@ app.register(name, workflow.build())  # Correct
 ## Key Takeaways (v1.1.0)
 
 **Registration Flow:**
+
 - ✅ Single `app.register(name, workflow.build())` call
 - ✅ Automatically exposes on API, CLI, and MCP channels
 - ✅ No ChannelManager - Nexus handles everything directly
 - ✅ Enterprise gateway provides multi-channel support
 
 **Current Limitations:**
+
 - ❌ No metadata parameter (use workaround with `_workflow_metadata`)
 - ❌ Auto-discovery can block with DataFlow (use `auto_discovery=False`)
 - ✅ Versioning and lifecycle management require custom implementation
 
 **Always Remember:**
+
 1. Call `.build()` before registration
 2. Use `auto_discovery=False` when integrating with DataFlow
 3. Single registration → multi-channel exposure
@@ -466,6 +538,7 @@ app.register(name, workflow.build())  # Correct
 ## Related Skills
 
 - [nexus-quickstart](#) - Basic registration
+- [nexus-handler-support](#) - Handler registration (recommended)
 - [nexus-dataflow-integration](#) - DataFlow workflow registration
 - [nexus-production-deployment](#) - Production patterns
 - [nexus-troubleshooting](#) - Fix registration issues

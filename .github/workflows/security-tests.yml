@@ -1,0 +1,98 @@
+name: Security Tests
+
+# Run weekly and on trust module changes for adversarial security testing
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/kailash/runtime/trust/**"
+      - "apps/kailash-kaizen/src/kaizen/trust/**"
+      - "tests/security/**"
+  schedule:
+    - cron: "0 3 * * 3" # Wednesday at 3:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  SDK_DEV_MODE: true
+
+jobs:
+  security-tests:
+    name: Adversarial Security Tests
+    runs-on: self-hosted
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        run: |
+          if command -v pyenv &> /dev/null; then
+            export PYENV_ROOT="$HOME/.pyenv"
+            export PATH="$PYENV_ROOT/bin:$PATH"
+            eval "$(pyenv init -)"
+          fi
+          python3 --version
+
+      - name: Install uv
+        run: |
+          export CARGO_HOME="${GITHUB_WORKSPACE}/.cargo"
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "${GITHUB_WORKSPACE}/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: |
+          uv pip install -e ".[dev]" --system
+          uv pip install -e "apps/kailash-kaizen[dev]" --system
+
+      - name: Run Security Test Suite
+        run: |
+          mkdir -p reports
+          python -m pytest tests/security/ \
+            -v --tb=short --timeout=120 \
+            --junitxml=reports/security-results.xml \
+            2>&1 | tee reports/security.log
+        continue-on-error: false
+
+      - name: Upload Security Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-test-reports
+          path: reports/
+          retention-days: 30
+
+      - name: Security Test Summary
+        if: always()
+        run: |
+          echo "## Security Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f reports/security.log ]; then
+            passed=$(grep -oP '\d+ passed' reports/security.log 2>/dev/null || echo "0 passed")
+            failed=$(grep -oP '\d+ failed' reports/security.log 2>/dev/null || echo "")
+            echo "- **Adversarial Tests**: $passed $failed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Adversarial Tests**: No results found" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Categories" >> $GITHUB_STEP_SUMMARY
+          echo "- Key extraction resistance" >> $GITHUB_STEP_SUMMARY
+          echo "- Delegation chain manipulation" >> $GITHUB_STEP_SUMMARY
+          echo "- Constraint gaming prevention (18 scenarios)" >> $GITHUB_STEP_SUMMARY
+          echo "- Revocation race conditions" >> $GITHUB_STEP_SUMMARY
+          echo "- Cross-org boundary enforcement" >> $GITHUB_STEP_SUMMARY
+          echo "- Audit integrity verification" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on Failure
+        if: failure()
+        run: |
+          echo "::error::Security tests failed! Review reports/security.log for details."
+          echo "Security test failures may indicate critical vulnerabilities."
+          echo "Do NOT merge until all security tests pass."

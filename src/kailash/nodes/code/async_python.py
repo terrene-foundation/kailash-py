@@ -99,7 +99,7 @@ from kailash.security import ExecutionTimeoutError
 logger = logging.getLogger(__name__)
 
 # Import shared constants and utilities
-from kailash.nodes.code.common import (
+from kailash.nodes.code.common import (  # noqa: E402
     ALLOWED_ASYNC_BUILTINS,
     ALLOWED_ASYNC_MODULES,
     ASYNC_FUNCTION_REPLACEMENTS,
@@ -448,8 +448,28 @@ class AsyncPythonCodeNode(AsyncNode):
         self.max_memory_mb = config.get("max_memory_mb", 512)
         self.allowed_imports = set(config.get("imports", []))
 
-        # Validate code at initialization
-        self._validate_code()
+        # Sandbox mode: "restricted" (default) or "trusted"
+        self.sandbox_mode = config.get("sandbox_mode", "restricted")
+        if self.sandbox_mode not in ("restricted", "trusted"):
+            raise NodeConfigurationError(
+                f"sandbox_mode must be 'restricted' or 'trusted', got '{self.sandbox_mode}'"
+            )
+        if self.sandbox_mode == "trusted":
+            logger.warning(
+                "AsyncPythonCodeNode: sandbox_mode='trusted' disables "
+                "import restrictions. Only use this for code you fully control."
+            )
+
+        # Validate code at initialization (skip in trusted mode)
+        if self.sandbox_mode != "trusted":
+            self._validate_code()
+        else:
+            # Still validate syntax even in trusted mode
+            if self.code:
+                try:
+                    ast.parse(self.code)
+                except SyntaxError as e:
+                    raise NodeConfigurationError(f"Code has syntax error: {e}")
 
     def _validate_code(self):
         """Validate code for safety violations."""
@@ -579,33 +599,42 @@ class AsyncPythonCodeNode(AsyncNode):
 
     def _create_safe_namespace(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Create a safe execution namespace."""
-
-        # Custom import function that only allows whitelisted modules
-        def safe_import(name, *args, **kwargs):
-            """Restricted import that only allows whitelisted modules."""
-            module_name = name.split(".")[0]
-            if module_name not in ALLOWED_ASYNC_MODULES:
-                raise ImportError(f"Import of module '{module_name}' is not allowed")
-            return __import__(name, *args, **kwargs)
-
-        # Use shared builtin whitelist for consistency with sync version
-        # Start with the common builtins from shared module
         import builtins as builtin_module
 
-        safe_builtins = {
-            "__import__": safe_import,  # Controlled import (override)
-        }
+        if getattr(self, "sandbox_mode", "restricted") == "trusted":
+            # Trusted mode: full builtins, unrestricted imports
+            namespace = {
+                "__builtins__": builtin_module.__dict__.copy(),
+                **inputs,
+            }
+        else:
+            # Restricted mode (default): limited builtins, import allowlist
 
-        # Add all allowed builtins from shared configuration
-        for name in ALLOWED_ASYNC_BUILTINS:
-            if hasattr(builtin_module, name):
-                safe_builtins[name] = getattr(builtin_module, name)
+            # Custom import function that only allows whitelisted modules
+            def safe_import(name, *args, **kwargs):
+                """Restricted import that only allows whitelisted modules."""
+                module_name = name.split(".")[0]
+                if module_name not in ALLOWED_ASYNC_MODULES:
+                    raise ImportError(
+                        f"Import of module '{module_name}' is not allowed"
+                    )
+                return __import__(name, *args, **kwargs)
 
-        # Create namespace with inputs and safe builtins
-        namespace = {
-            "__builtins__": safe_builtins,
-            **inputs,  # Make inputs available as variables
-        }
+            # Use shared builtin whitelist for consistency with sync version
+            safe_builtins = {
+                "__import__": safe_import,  # Controlled import (override)
+            }
+
+            # Add all allowed builtins from shared configuration
+            for name in ALLOWED_ASYNC_BUILTINS:
+                if hasattr(builtin_module, name):
+                    safe_builtins[name] = getattr(builtin_module, name)
+
+            # Create namespace with inputs and safe builtins
+            namespace = {
+                "__builtins__": safe_builtins,
+                **inputs,  # Make inputs available as variables
+            }
 
         # Add data path utilities (matching sync version)
         try:
@@ -720,6 +749,7 @@ class AsyncPythonCodeNode(AsyncNode):
                 "max_concurrent_tasks",
                 "max_memory_mb",
                 "imports",
+                "sandbox_mode",
                 # Note: "config" removed - it's a valid runtime parameter name
             }
             runtime_inputs = {k: v for k, v in kwargs.items() if k not in config_params}

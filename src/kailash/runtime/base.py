@@ -68,12 +68,17 @@ Notes:
     feature sharing for conditional execution, validation, and resource management.
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple, Union
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from kailash.runtime.trust.context import RuntimeTrustContext
 
 from kailash.sdk_exceptions import (
     RuntimeExecutionError,
@@ -172,6 +177,13 @@ class BaseRuntime(ABC):
         circuit_breaker_config: Optional[Dict] = None,
         retry_policy_config: Optional[Dict] = None,
         connection_pool_config: Optional[Dict] = None,
+        # Trust Integration Configuration (CARE-015)
+        trust_context: Optional["RuntimeTrustContext"] = None,
+        trust_verifier: Optional[Any] = None,
+        trust_verification_mode: str = "disabled",
+        # Audit Configuration (CARE-018)
+        audit_generator: Optional[Any] = None,
+        audit_log_to_stdout: bool = False,
         **kwargs,
     ):
         """
@@ -212,6 +224,14 @@ class BaseRuntime(ABC):
             circuit_breaker_config: Circuit breaker configuration.
             retry_policy_config: Retry policy configuration.
             connection_pool_config: Connection pool configuration.
+            trust_context: Optional RuntimeTrustContext for trust propagation (CARE-015).
+            trust_verifier: Optional TrustVerifier for trust verification (CARE-016).
+            trust_verification_mode: Trust verification mode:
+                - "disabled": No trust verification (default for backward compatibility)
+                - "permissive": Log trust violations but allow execution
+                - "enforcing": Block execution on trust violations
+            audit_generator: Optional RuntimeAuditGenerator for EATP-compliant audit trails (CARE-018).
+            audit_log_to_stdout: Whether to log audit events to stdout (default False).
             **kwargs: Additional configuration (passed to mixins via super())
 
         Raises:
@@ -294,6 +314,44 @@ class BaseRuntime(ABC):
         self._retry_policy_config = retry_policy_config or {}
         self._connection_pool_config = connection_pool_config or {}
 
+        # === Trust Integration Configuration (CARE-015) ===
+        self._trust_context = trust_context
+        self._trust_verifier = trust_verifier
+        # Import TrustVerificationMode locally to avoid circular imports
+        from kailash.runtime.trust.context import TrustVerificationMode
+
+        try:
+            self._trust_verification_mode = TrustVerificationMode(
+                trust_verification_mode
+            )
+        except ValueError:
+            valid_modes = [m.value for m in TrustVerificationMode]
+            raise ValueError(
+                f"Invalid trust_verification_mode: {trust_verification_mode}. "
+                f"Must be one of: {valid_modes}"
+            )
+
+        if self._trust_verification_mode != TrustVerificationMode.DISABLED:
+            if self._trust_verifier is None:
+                logger.warning(
+                    "Trust verification mode is '%s' but no trust_verifier provided. "
+                    "Verification will be skipped.",
+                    trust_verification_mode,
+                )
+
+        # === Audit Configuration (CARE-018) ===
+        self._audit_generator = audit_generator
+        self._audit_log_to_stdout = audit_log_to_stdout
+
+        # Auto-create audit generator if audit is enabled but no generator provided
+        if self.enable_audit and self._audit_generator is None:
+            from kailash.runtime.trust.audit import RuntimeAuditGenerator
+
+            self._audit_generator = RuntimeAuditGenerator(
+                enabled=True,
+                log_to_stdout=audit_log_to_stdout,
+            )
+
         # === Persistent Mode State Management ===
         # Extracted from LocalRuntime lines 306-321
         self._is_persistent_started = False
@@ -375,6 +433,163 @@ class BaseRuntime(ABC):
             "connection_alert_threshold": 0.9,
             "enable_metrics_history": True,
         }
+
+    # === Trust Context Resolution (CARE-015) ===
+
+    def _get_effective_trust_context(self) -> Optional["RuntimeTrustContext"]:
+        """
+        Get trust context with priority: ContextVar > constructor > None.
+
+        Resolves the effective trust context to use for execution by checking:
+        1. ContextVar (set via runtime_trust_context context manager)
+        2. Constructor parameter (self._trust_context)
+        3. None (no trust context)
+
+        Returns:
+            The effective RuntimeTrustContext or None if not set
+
+        Example:
+            >>> runtime = LocalRuntime(trust_context=constructor_ctx)
+            >>> with runtime_trust_context(contextvar_ctx):
+            ...     effective = runtime._get_effective_trust_context()
+            ...     # effective is contextvar_ctx (ContextVar priority)
+        """
+        from kailash.runtime.trust.context import get_runtime_trust_context
+
+        ctx = get_runtime_trust_context()
+        if ctx is not None:
+            return ctx
+        return self._trust_context
+
+    # === Trust Verification (CARE-017) ===
+
+    async def _verify_workflow_trust(
+        self,
+        workflow: Workflow,
+        trust_context: Optional["RuntimeTrustContext"] = None,
+    ) -> bool:
+        """Verify trust for workflow execution.
+
+        Returns True if execution should proceed, False if blocked.
+        In PERMISSIVE mode, always returns True but logs denials.
+        In DISABLED mode or when no verifier is configured, returns True.
+
+        Args:
+            workflow: The workflow to verify access for
+            trust_context: Optional RuntimeTrustContext for trust information
+
+        Returns:
+            True if execution should proceed, False if blocked
+
+        Example:
+            >>> allowed = await runtime._verify_workflow_trust(workflow, ctx)
+            >>> if not allowed:
+            ...     raise WorkflowExecutionError("Trust verification denied")
+        """
+        from kailash.runtime.trust.context import TrustVerificationMode
+
+        if self._trust_verification_mode == TrustVerificationMode.DISABLED:
+            return True
+        if self._trust_verifier is None:
+            return True
+
+        agent_id = "unknown"
+        if trust_context and trust_context.delegation_chain:
+            agent_id = trust_context.delegation_chain[-1]
+
+        workflow_id = getattr(workflow, "workflow_id", None) or "unknown"
+
+        result = await self._trust_verifier.verify_workflow_access(
+            workflow_id=workflow_id,
+            agent_id=agent_id,
+            trust_context=trust_context,
+        )
+
+        if not result.allowed:
+            if self._trust_verification_mode == TrustVerificationMode.PERMISSIVE:
+                logger.warning(
+                    "PERMISSIVE: Trust verification denied workflow '%s' for agent '%s': %s",
+                    workflow_id,
+                    agent_id,
+                    result.reason,
+                )
+                return True  # Allow in PERMISSIVE
+            else:
+                # ENFORCING
+                logger.error(
+                    "ENFORCING: Trust verification denied workflow '%s' for agent '%s': %s",
+                    workflow_id,
+                    agent_id,
+                    result.reason,
+                )
+                return False
+
+        return True
+
+    async def _verify_node_trust(
+        self,
+        node_id: str,
+        node_type: str,
+        trust_context: Optional["RuntimeTrustContext"] = None,
+    ) -> bool:
+        """Verify trust for node execution.
+
+        Returns True if execution should proceed, False if blocked.
+        In PERMISSIVE mode, always returns True but logs denials.
+        In DISABLED mode or when no verifier is configured, returns True.
+
+        Args:
+            node_id: The node instance ID
+            node_type: The node type (e.g., "BashCommand", "HttpRequest")
+            trust_context: Optional RuntimeTrustContext for trust information
+
+        Returns:
+            True if execution should proceed, False if blocked
+
+        Example:
+            >>> allowed = await runtime._verify_node_trust("node-1", "BashCommand", ctx)
+            >>> if not allowed:
+            ...     raise WorkflowExecutionError("Trust verification denied node")
+        """
+        from kailash.runtime.trust.context import TrustVerificationMode
+
+        if self._trust_verification_mode == TrustVerificationMode.DISABLED:
+            return True
+        if self._trust_verifier is None:
+            return True
+
+        agent_id = "unknown"
+        if trust_context and trust_context.delegation_chain:
+            agent_id = trust_context.delegation_chain[-1]
+
+        result = await self._trust_verifier.verify_node_access(
+            node_id=node_id,
+            node_type=node_type,
+            agent_id=agent_id,
+            trust_context=trust_context,
+        )
+
+        if not result.allowed:
+            if self._trust_verification_mode == TrustVerificationMode.PERMISSIVE:
+                logger.warning(
+                    "PERMISSIVE: Trust verification denied node '%s' (type=%s) for agent '%s': %s",
+                    node_id,
+                    node_type,
+                    agent_id,
+                    result.reason,
+                )
+                return True
+            else:
+                logger.error(
+                    "ENFORCING: Trust verification denied node '%s' (type=%s) for agent '%s': %s",
+                    node_id,
+                    node_type,
+                    agent_id,
+                    result.reason,
+                )
+                return False
+
+        return True
 
     # === Run ID and Metadata Management ===
 

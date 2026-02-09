@@ -695,7 +695,32 @@ class AsyncLocalRuntime(LocalRuntime):
         # Add inputs to context
         context.variables.update(inputs)
 
+        # CARE-017: Get effective trust context and set up propagation
+        effective_trust_ctx = self._get_effective_trust_context()
+        trust_token = None
+
         try:
+            # Set trust context in ContextVar if available
+            if effective_trust_ctx is not None:
+                from kailash.runtime.trust.context import (
+                    TrustVerificationMode,
+                    _runtime_trust_context,
+                )
+
+                trust_token = _runtime_trust_context.set(effective_trust_ctx)
+
+                # Verify workflow trust before execution
+                if (
+                    self._trust_verification_mode != TrustVerificationMode.DISABLED
+                    and self._trust_verifier is not None
+                ):
+                    allowed = await self._verify_workflow_trust(
+                        workflow, effective_trust_ctx
+                    )
+                    if not allowed:
+                        raise WorkflowExecutionError(
+                            "Trust verification denied workflow execution"
+                        )
             # P0 Component 1: Timeout Protection
             # Wrap execution with timeout if configured
             if self.execution_timeout and self.execution_timeout > 0:
@@ -743,12 +768,23 @@ class AsyncLocalRuntime(LocalRuntime):
             await context.cancel_all_tasks()
             raise  # Re-raise TimeoutError
 
+        except WorkflowExecutionError:
+            # Re-raise WorkflowExecutionError without wrapping (includes trust verification errors)
+            context.metrics.error_count += 1
+            raise
+
         except Exception as e:
             logger.error(f"Workflow execution failed: {e}")
             context.metrics.error_count += 1
             raise WorkflowExecutionError(f"Async execution failed: {e}") from e
 
         finally:
+            # CARE-017: Reset trust context token
+            if trust_token is not None:
+                from kailash.runtime.trust.context import _runtime_trust_context
+
+                _runtime_trust_context.reset(trust_token)
+
             # P0 Component 1: Cleanup guarantees
             # Always cleanup connections and resources
             try:
@@ -938,6 +974,55 @@ class AsyncLocalRuntime(LocalRuntime):
                 node_outputs[node_id] = None
                 continue
 
+            # CARE-039: Node-level trust verification before execution
+            node_type = node_instance.__class__.__name__
+            # Run trust check synchronously since we're in a sync context
+            import asyncio as _asyncio
+
+            try:
+                _loop = _asyncio.get_event_loop()
+                if _loop.is_running():
+                    # We're inside an executor; create new loop for the check
+                    import concurrent.futures
+
+                    _check_loop = _asyncio.new_event_loop()
+                    try:
+                        node_trust_allowed = _check_loop.run_until_complete(
+                            self._verify_node_trust(
+                                node_id=node_id,
+                                node_type=node_type,
+                                trust_context=self._get_effective_trust_context(),
+                            )
+                        )
+                    finally:
+                        _check_loop.close()
+                else:
+                    node_trust_allowed = _loop.run_until_complete(
+                        self._verify_node_trust(
+                            node_id=node_id,
+                            node_type=node_type,
+                            trust_context=self._get_effective_trust_context(),
+                        )
+                    )
+            except RuntimeError:
+                # No event loop available, create one for the check
+                _check_loop = _asyncio.new_event_loop()
+                try:
+                    node_trust_allowed = _check_loop.run_until_complete(
+                        self._verify_node_trust(
+                            node_id=node_id,
+                            node_type=node_type,
+                            trust_context=self._get_effective_trust_context(),
+                        )
+                    )
+                finally:
+                    _check_loop.close()
+
+            if not node_trust_allowed:
+                raise WorkflowExecutionError(
+                    f"Trust verification denied execution of node '{node_id}' (type={node_type})"
+                )
+
             # Execute node
             try:
                 result = node_instance.execute(**node_inputs)
@@ -1073,6 +1158,18 @@ class AsyncLocalRuntime(LocalRuntime):
                     await tracker.record_result(node_id, None, 0.0)
                     return
 
+                # CARE-039: Node-level trust verification before execution
+                node_type = node_instance.__class__.__name__
+                node_trust_allowed = await self._verify_node_trust(
+                    node_id=node_id,
+                    node_type=node_type,
+                    trust_context=self._get_effective_trust_context(),
+                )
+                if not node_trust_allowed:
+                    raise WorkflowExecutionError(
+                        f"Trust verification denied execution of node '{node_id}' (type={node_type})"
+                    )
+
                 # Execute async node
                 if isinstance(node_instance, AsyncNode):
                     # Add resource registry to inputs if available
@@ -1138,6 +1235,18 @@ class AsyncLocalRuntime(LocalRuntime):
                     )
                     await tracker.record_result(node_id, None, 0.0)
                     return
+
+                # CARE-039: Node-level trust verification before execution
+                node_type = node_instance.__class__.__name__
+                node_trust_allowed = await self._verify_node_trust(
+                    node_id=node_id,
+                    node_type=node_type,
+                    trust_context=self._get_effective_trust_context(),
+                )
+                if not node_trust_allowed:
+                    raise WorkflowExecutionError(
+                        f"Trust verification denied execution of node '{node_id}' (type={node_type})"
+                    )
 
                 # Execute sync node in thread pool
                 result = await self._execute_sync_node_in_thread(node_instance, inputs)

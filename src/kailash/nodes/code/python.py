@@ -78,7 +78,7 @@ from kailash.security import (
 logger = logging.getLogger(__name__)
 
 # Import shared constants and utilities
-from kailash.nodes.code.common import (
+from kailash.nodes.code.common import (  # noqa: E402
     ALLOWED_BUILTINS,
     ALLOWED_MODULES,
     COMPLETELY_BLOCKED_MODULES,
@@ -328,8 +328,9 @@ class CodeExecutor:
             ExecutionTimeoutError: If execution exceeds timeout
             MemoryLimitError: If memory usage exceeds limit
         """
-        # Check code safety first
-        is_safe, violations, imports_found = self.check_code_safety(code)
+        # Check code safety first (skip in trusted mode)
+        if not getattr(self, "_trusted_mode", False):
+            is_safe, violations, imports_found = self.check_code_safety(code)
 
         # Sanitize inputs with python_exec context
         # Python code execution via exec() does not need shell metacharacter sanitization
@@ -340,13 +341,17 @@ class CodeExecutor:
         # Create isolated namespace
         import builtins
 
-        namespace = {
-            "__builtins__": {
-                name: getattr(builtins, name)
-                for name in self.allowed_builtins
-                if hasattr(builtins, name)
+        if getattr(self, "_trusted_mode", False):
+            # Trusted mode: full builtins access (no sandbox restrictions)
+            namespace = {"__builtins__": builtins.__dict__.copy()}
+        else:
+            namespace = {
+                "__builtins__": {
+                    name: getattr(builtins, name)
+                    for name in self.allowed_builtins
+                    if hasattr(builtins, name)
+                }
             }
-        }
 
         # Add allowed modules
         # Check if we're running under coverage to avoid instrumentation conflicts
@@ -1146,6 +1151,7 @@ class PythonCodeNode(Node):
         description: str | None = None,
         max_code_lines: int = 10,
         validate_security: bool = False,
+        sandbox_mode: str = "restricted",
         **kwargs,
     ):
         """Initialize a Python code node.
@@ -1163,6 +1169,10 @@ class PythonCodeNode(Node):
             description: Node description
             max_code_lines: Maximum lines before warning (default: 10)
             validate_security: If True, validate code security at creation time (default: False)
+            sandbox_mode: Sandbox enforcement mode. "restricted" (default) enforces
+                module allowlist and AST safety checks. "trusted" bypasses sandbox
+                restrictions, allowing any import. Use "trusted" only for code you
+                control and trust.
             **kwargs: Additional node parameters
         """
         # Validate inputs
@@ -1199,16 +1209,32 @@ class PythonCodeNode(Node):
                     "code organization and IDE support."
                 )
 
+        # Sandbox mode
+        if sandbox_mode not in ("restricted", "trusted"):
+            raise NodeConfigurationError(
+                f"sandbox_mode must be 'restricted' or 'trusted', got '{sandbox_mode}'"
+            )
+        self.sandbox_mode = sandbox_mode
+        if sandbox_mode == "trusted":
+            logger.warning(
+                f"PythonCodeNode '{name}': sandbox_mode='trusted' disables "
+                f"import restrictions. Only use this for code you fully control."
+            )
+
         # For class-based nodes, maintain instance
         self.instance = None
         if self.class_type:
             self.instance = self.class_type()
 
-        # Initialize executor
-        self.executor = CodeExecutor()
+        # Initialize executor (trusted mode uses unrestricted allowed_modules)
+        if sandbox_mode == "trusted":
+            self.executor = CodeExecutor(allowed_modules=None)
+            self.executor._trusted_mode = True
+        else:
+            self.executor = CodeExecutor()
 
-        # Validate code security if requested
-        if validate_security and self.code:
+        # Validate code security if requested (skip in trusted mode)
+        if validate_security and self.code and sandbox_mode != "trusted":
             self.executor.check_code_safety(self.code)
 
         # Create metadata (avoiding conflicts with kwargs)

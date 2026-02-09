@@ -127,9 +127,23 @@ def __getattr__(name: str) -> Any:
                 raise
         return _LAZY_MODULES[name]
 
+    # Handle direct node class imports (lazy)
+    _DIRECT_NODES = {
+        "HandlerNode": ("handler", "HandlerNode"),
+    }
+    if name in _DIRECT_NODES:
+        module_name, class_name = _DIRECT_NODES[name]
+        mod = _safe_lazy_import(module_name)
+        return getattr(mod, class_name)
+
     # Handle special attributes
     if name == "__all__":
-        return ["Node", "NodeParameter", "NodeRegistry"] + _NODE_CATEGORIES
+        return [
+            "Node",
+            "NodeParameter",
+            "NodeRegistry",
+            "HandlerNode",
+        ] + _NODE_CATEGORIES
 
     # Attribute not found
     raise AttributeError(f"module 'kailash.nodes' has no attribute '{name}'")
@@ -137,7 +151,7 @@ def __getattr__(name: str) -> Any:
 
 def __dir__():
     """Return the list of available attributes for tab completion."""
-    return ["Node", "NodeParameter", "NodeRegistry"] + _NODE_CATEGORIES
+    return ["Node", "NodeParameter", "NodeRegistry", "HandlerNode"] + _NODE_CATEGORIES
 
 
 def check_circular_dependencies() -> Dict[str, Any]:
@@ -225,6 +239,6 @@ def get_import_stats() -> Dict[str, Any]:
 
 
 # Backward compatibility - ensure all existing imports work
-__all__ = ["Node", "NodeParameter", "NodeRegistry"] + _NODE_CATEGORIES
+__all__ = ["Node", "NodeParameter", "NodeRegistry", "HandlerNode"] + _NODE_CATEGORIES
 
 # Export core components directly
