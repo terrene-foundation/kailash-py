@@ -48,6 +48,11 @@ demo_mcp.db
 mcp_registry.db
 mcp_registry.json
 test-env
+*.db
+default.db
+
+# Kaizen checkpoints (local agent state)
+.kaizen/
 
 # Housekeeping
 .temp_cleanup/
