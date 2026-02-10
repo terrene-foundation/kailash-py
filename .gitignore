@@ -1,3 +1,6 @@
+# Dependencies
+node_modules/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -37,6 +40,7 @@ venv.bak/
 *.swp
 *.swo
 .DS_Store
+.jbeval/
 
 # Testing
 .pytest_cache/
@@ -64,6 +68,9 @@ docs/*/_build/
 _build/
 site/
 *.doctree
+
+# Data
+data/
 
 # Generated outputs - all output directories
 outputs/

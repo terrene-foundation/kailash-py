@@ -13,6 +13,7 @@ Traditional web frameworks are built around the **request-response paradigm**:
 5. **Configuration hell** → Hundreds of options to set up
 
 This worked fine for simple websites. But modern applications need:
+
 - **Durability**: Work doesn't disappear when something fails
 - **Multi-channel access**: API, CLI, AI agents, mobile apps
 - **Business process orchestration**: Complex workflows with state
@@ -61,6 +62,7 @@ app.start()
 ```
 
 **Why?** Because the platform makes smart decisions for you:
+
 - **Ports**: Automatically finds available ports (8000, 3001)
 - **Security**: Enterprise defaults, not development defaults
 - **Monitoring**: Built-in observability, not bolt-on
@@ -108,6 +110,7 @@ app = Nexus()                      # Enterprise by default
 ### **1. Convention Over Configuration**
 
 **Smart defaults that work in production**:
+
 - Port 8000 for API (industry standard)
 - Port 3001 for MCP (non-conflicting)
 - Enterprise server type (production-ready)
@@ -119,21 +122,43 @@ app = Nexus()                      # Enterprise by default
 **Simple to start, sophisticated when needed**:
 
 ```python
-# Day 1: Simple
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, TenantConfig, RateLimitConfig, AuditConfig
+
+# Day 1: Simple - zero configuration
 app = Nexus()
 
-# Day 30: Add auth
-app = Nexus(enable_auth=True)
+# Day 30: Add basic auth via NexusAuthPlugin
+auth = NexusAuthPlugin.basic_auth(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+)
+app = Nexus()
+app.add_plugin(auth)
 
-# Day 90: Fine-tune
-app = Nexus(enable_auth=True)
-app.auth.strategy = "custom"
-app.auth.providers = ["google", "github"]
+# Day 90: SaaS with RBAC and SSO
+auth = NexusAuthPlugin.saas_app(
+    jwt=JWTConfig(
+        algorithm="RS256",
+        jwks_url="https://auth.company.com/.well-known/jwks.json",
+    ),
+    rbac={"admin": ["*"], "user": ["read:*"]},
+    tenant_isolation=TenantConfig(admin_role="admin"),
+)
+app = Nexus()
+app.add_plugin(auth)
 
-# Day 365: Enterprise
-app = Nexus(enable_auth=True, enable_monitoring=True, rate_limit=10000)
-app.auth.strategy = "rbac"
-app.monitoring.exporters = ["prometheus", "datadog"]
+# Day 365: Full enterprise
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "editor": ["read:*", "write:*"], "viewer": ["read:*"]},
+    rate_limit=RateLimitConfig(requests_per_minute=10000),
+    tenant_isolation=TenantConfig(admin_role="admin"),
+    audit=AuditConfig(backend="logging"),
+)
+app = Nexus(enable_monitoring=True)
+app.add_plugin(auth)
 ```
 
 ### **3. Explicit Over Implicit**
@@ -152,6 +177,7 @@ app2 = Nexus(api_port=8080, enable_auth=True)  # Production server
 ### **4. Workflow-First Design**
 
 **Every operation is a workflow**:
+
 - **HTTP requests** → Durable workflows with checkpointing
 - **CLI commands** → Workflow executions with state persistence
 - **MCP calls** → Workflow invocations with result caching
@@ -160,6 +186,7 @@ app2 = Nexus(api_port=8080, enable_auth=True)  # Production server
 ### **5. Multi-Channel Native**
 
 **One definition, everywhere access**:
+
 - Register workflow **once**
 - Access via **API, CLI, MCP** automatically
 - Consistent behavior across **all channels**
@@ -170,6 +197,7 @@ app2 = Nexus(api_port=8080, enable_auth=True)  # Production server
 ### **Durable-First Design**
 
 Traditional frameworks treat durability as an **afterthought**:
+
 ```python
 # Traditional: Manual retry logic, lost work
 try:
@@ -182,6 +210,7 @@ except Exception:
 ```
 
 Nexus treats durability as **fundamental**:
+
 ```python
 # Nexus: Automatic checkpointing and resumption
 workflow.add_node("SomeOperationNode", "step1", params)
@@ -191,11 +220,13 @@ workflow.add_node("SomeOperationNode", "step1", params)
 ### **Cross-Channel Session Synchronization**
 
 Traditional frameworks have **isolated channels**:
+
 - Web session doesn't know about CLI session
 - API authentication separate from admin tools
 - Mobile app session isolated from web app
 
 Nexus provides **unified sessions**:
+
 ```python
 # Login via web
 session_id = api_login(credentials)
@@ -217,6 +248,7 @@ await nexus.broadcast_to_session(session_id, {
 ### **Event-Driven Foundation**
 
 Built-in real-time communication:
+
 ```python
 # Broadcast events to all connected clients
 app.broadcast_event("WORKFLOW_STARTED", {
@@ -232,53 +264,60 @@ app.broadcast_event("WORKFLOW_STARTED", {
 ## Competitive Differentiation
 
 ### **vs Django/FastAPI** (Request-Response Frameworks)
-| Traditional | Nexus |
-|-------------|--------|
-| Request → Response | Workflow → Result |
-| Lost work on failure | Resumable from checkpoints |
-| Manual error handling | Automatic retry logic |
-| Single interface (HTTP) | Multi-channel native |
-| Development defaults | Enterprise defaults |
+
+| Traditional             | Nexus                      |
+| ----------------------- | -------------------------- |
+| Request → Response      | Workflow → Result          |
+| Lost work on failure    | Resumable from checkpoints |
+| Manual error handling   | Automatic retry logic      |
+| Single interface (HTTP) | Multi-channel native       |
+| Development defaults    | Enterprise defaults        |
 
 ### **vs Temporal** (Workflow Engines)
-| Temporal | Nexus |
-|----------|--------|
-| External engine required | Embedded workflow engine |
-| Complex infrastructure | Zero infrastructure |
+
+| Temporal                  | Nexus                      |
+| ------------------------- | -------------------------- |
+| External engine required  | Embedded workflow engine   |
+| Complex infrastructure    | Zero infrastructure        |
 | Separate API layer needed | Built-in multi-channel API |
-| Configuration heavy | Zero configuration |
+| Configuration heavy       | Zero configuration         |
 
 ### **vs Serverless** (AWS Lambda, etc.)
-| Serverless | Nexus |
-|------------|--------|
-| Stateless functions | Stateful workflows |
+
+| Serverless               | Nexus                  |
+| ------------------------ | ---------------------- |
+| Stateless functions      | Stateful workflows     |
 | 15-minute timeout limits | Long-running processes |
-| Cold start latency | Always-warm execution |
-| Vendor lock-in | Platform agnostic |
+| Cold start latency       | Always-warm execution  |
+| Vendor lock-in           | Platform agnostic      |
 
 ### **vs API Gateways** (Kong, Envoy, etc.)
-| API Gateway | Nexus |
-|-------------|--------|
-| Request proxying | Business logic execution |
-| Configuration-heavy | Zero configuration |
-| Single protocol | Multi-channel native |
-| External services | Embedded workflows |
+
+| API Gateway         | Nexus                    |
+| ------------------- | ------------------------ |
+| Request proxying    | Business logic execution |
+| Configuration-heavy | Zero configuration       |
+| Single protocol     | Multi-channel native     |
+| External services   | Embedded workflows       |
 
 ## Design Philosophy Impact
 
 ### **For Developers**
+
 - **Faster time-to-market**: Zero config → immediate productivity
 - **Less cognitive overhead**: Enterprise defaults → fewer decisions
 - **Multi-channel by default**: One workflow → all interfaces
 - **Durable by design**: No lost work → better user experience
 
 ### **For DevOps**
+
 - **Simpler deployments**: Single container → full platform
 - **Built-in observability**: Monitoring by default → no setup
 - **Enterprise security**: Production-ready → no security gaps
 - **Unified management**: One platform → all channels
 
 ### **For Organizations**
+
 - **Reduced operational risk**: Durability → no lost transactions
 - **Lower total cost**: Unified platform → fewer tools
 - **Faster innovation**: Zero config → focus on business logic
@@ -294,6 +333,7 @@ Nexus represents the **next generation** of application platforms:
 **4th Generation**: **Workflow-native platforms (Nexus)**
 
 The future is:
+
 - **Workflow-native**: Every operation is a durable workflow
 - **Multi-channel by default**: API, CLI, MCP, mobile in one platform
 - **Enterprise-first**: Production defaults, not development defaults

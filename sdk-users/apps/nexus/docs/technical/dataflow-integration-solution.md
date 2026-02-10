@@ -1,38 +1,39 @@
 # Complete DataFlow + Nexus Integration Solution
 
-## Two Issues Identified
+> **Updated for DataFlow v0.11.0+**: The startup delay caused by model persistence has been resolved. `auto_migrate=True` (the default) now works correctly in all environments including Docker and FastAPI, using `SyncDDLExecutor` for synchronous DDL operations. No special configuration is needed.
 
-### Issue 1: Infinite Blocking (SOLVED)
+## Historical Issues (Resolved)
+
+### Issue 1: Infinite Blocking (Resolved in Nexus v1.1.1+)
+
 - **Cause**: Nexus `auto_discovery=True` triggers re-import of DataFlow models
-- **Solution**: Set `auto_discovery=False`
+- **Solution**: Nexus v1.1.1+ defaults to `auto_discovery=False`
 
-### Issue 2: 5-10 Second Delay (ROOT CAUSE FOUND)
-- **Cause**: DataFlow's model persistence executes workflows synchronously during model registration
-- **Each model registration**: Executes `LocalRuntime.execute(workflow.build())` to persist model metadata
-- **Solution**: Disable model persistence for fast startup
+### Issue 2: 5-10 Second Delay (Resolved in DataFlow v0.11.0+)
 
-## Complete Fix
+- **Historical cause**: In older versions, model persistence executed workflows synchronously during model registration
+- **Resolution**: DataFlow v0.11.0+ uses `SyncDDLExecutor` for DDL operations, eliminating the startup delay. The default `auto_migrate=True` configuration works everywhere.
+
+## Recommended Configuration (v0.11.0+)
 
 ```python
 from nexus import Nexus
-from dataflow.core.engine import DataFlow
+from dataflow import DataFlow
 
-# Step 1: Create Nexus with auto_discovery=False
+# Step 1: Create Nexus with auto_discovery=False (default since v1.1.1)
 app = Nexus(
     api_port=8002,
     mcp_port=3001,
-    auto_discovery=False  # Prevents infinite blocking
+    auto_discovery=False  # Default since Nexus v1.1.1
 )
 
-# Step 2: Create DataFlow with optimized settings
+# Step 2: Create DataFlow with default settings - works everywhere
 db = DataFlow(
     database_url="postgresql://user:pass@host:port/db",
-    enable_model_persistence=False,  # CRITICAL: Skip model persistence for fast startup
-    auto_migrate=False,              # Skip auto table creation
-    skip_migration=True
+    auto_migrate=True  # Default - works in Docker, FastAPI, CLI via SyncDDLExecutor
 )
 
-# Step 3: Register models (now instant!)
+# Step 3: Register models (fast startup with v0.11.0+)
 @db.model
 class User:
     id: str
@@ -40,52 +41,26 @@ class User:
     name: str
 ```
 
-## Performance Results
-
-### With Default Settings
-- Nexus init: 1-2s
-- DataFlow init with persistence: 5-10s per model
-- Total: 10-30s for typical app
-
-### With Optimized Settings
-- Nexus init: <1s
-- DataFlow init without persistence: <0.1s per model
-- Total: <2s for typical app
-
 ## What Each Setting Does
 
 ### `auto_discovery=False` (Nexus)
+
 - Prevents scanning filesystem for workflows
 - Avoids re-importing Python modules
-- Eliminates infinite blocking issue
+- Default since Nexus v1.1.1
 
-### `enable_model_persistence=False` (DataFlow)
-- Skips persisting model metadata to database during initialization
-- Avoids synchronous workflow execution during model registration
-- Models still work normally for CRUD operations
-- Models are stored in memory only (not persisted across restarts)
+### `auto_migrate=True` (DataFlow, default)
 
-## Trade-offs
-
-### What You Lose
-- No persistent model registry across app restarts
-- No automatic model version tracking
-- No multi-application model sharing
-- Must manually register workflows with Nexus
-
-### What You Keep
-- All CRUD operations work normally
-- All DataFlow nodes available
-- Full Nexus multi-channel support
-- Fast initialization (<2s total)
+- Automatically creates and updates tables as needed
+- Uses `SyncDDLExecutor` (psycopg2/sqlite3) for DDL operations
+- No event loop issues in Docker/FastAPI environments
+- Fast startup with no special configuration needed
 
 ## Production Recommendation
 
-For production systems prioritizing fast startup:
-
 ```python
 def create_production_app():
-    # Fast initialization pattern
+    # Standard initialization pattern (v0.11.0+)
     app = Nexus(
         api_port=8002,
         mcp_port=3001,
@@ -94,15 +69,13 @@ def create_production_app():
 
     db = DataFlow(
         database_url=os.environ["DATABASE_URL"],
-        enable_model_persistence=False,  # Skip model persistence for fast startup
-        auto_migrate=False,              # Skip auto table creation
-        skip_migration=True,
-        enable_metrics=True,             # Keep monitoring
-        enable_caching=True,             # Keep caching
-        connection_pool_size=20          # Keep pooling
+        auto_migrate=True,              # Default - works everywhere
+        enable_metrics=True,            # Keep monitoring
+        enable_caching=True,            # Keep caching
+        connection_pool_size=20         # Keep pooling
     )
 
-    # Models register instantly
+    # Models register with fast startup
     @db.model
     class User:
         # ... fields ...
@@ -115,9 +88,9 @@ def create_production_app():
 
 ## Summary
 
-The complete solution addresses both issues:
+As of DataFlow v0.11.0+ and Nexus v1.1.1+, the integration is straightforward:
 
-1. **Infinite blocking**: Fixed with `auto_discovery=False`
-2. **5-10s delay**: Fixed with `enable_model_persistence=False`
+1. **Infinite blocking**: Resolved by Nexus defaulting to `auto_discovery=False`
+2. **Startup delay**: Resolved by `SyncDDLExecutor` - `auto_migrate=True` works everywhere
 
-With these settings, DataFlow + Nexus integration starts in <2 seconds while maintaining all essential functionality.
+No special configuration is needed beyond the defaults. Startup is fast in all environments.

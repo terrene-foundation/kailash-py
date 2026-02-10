@@ -1,19 +1,21 @@
 ---
 skill: nexus-dataflow-integration
-description: CRITICAL DataFlow + Nexus integration patterns with blocking fix configuration (auto_discovery=False, enable_model_persistence=False)
+description: CRITICAL DataFlow + Nexus integration patterns with blocking fix configuration (auto_discovery=False, auto_migrate=True default)
 priority: CRITICAL
 tags: [nexus, dataflow, integration, blocking-fix, performance]
 ---
 
 # Nexus DataFlow Integration
 
-CRITICAL: Proper configuration to prevent blocking and slow startup.
+CRITICAL: Proper configuration to prevent blocking on startup.
+
+> **DataFlow v0.11.0**: The parameters `enable_model_persistence`, `skip_migration`, and `existing_schema_mode` have been **removed**. The only critical Nexus-side setting is `auto_discovery=False`. DataFlow's `auto_migrate=True` (default) now works correctly in Docker/FastAPI via SyncDDLExecutor.
 
 ## The Problem
 
 Without proper configuration, Nexus + DataFlow causes:
-1. **Infinite blocking** during initialization
-2. **5-10 second delay** per DataFlow model
+
+1. **Infinite blocking** during initialization (when `auto_discovery=True`)
 
 ## The Solution
 
@@ -28,15 +30,13 @@ app = Nexus(
     auto_discovery=False  # CRITICAL: Prevents blocking
 )
 
-# Step 2: Create DataFlow with optimized settings
+# Step 2: Create DataFlow (defaults work fine in v0.11.0)
 db = DataFlow(
     database_url="postgresql://user:pass@host:port/db",
-    enable_model_persistence=False,  # CRITICAL: Skip model registry for fast startup
-    auto_migrate=False,
-    skip_migration=True
+    auto_migrate=True,  # Default - works in Docker/FastAPI via SyncDDLExecutor
 )
 
-# Step 3: Register models (now instant!)
+# Step 3: Register models
 @db.model
 class User:
     id: str
@@ -48,41 +48,25 @@ workflow = WorkflowBuilder()
 workflow.add_node("UserCreateNode", "create", {"email": "{{email}}"})
 app.register("create_user", workflow.build())
 
-# Step 5: Start (fast!)
+# Step 5: Start
 app.start()
 ```
 
 ## Why This Configuration
 
 ### `auto_discovery=False` (Nexus)
+
 - Prevents scanning filesystem for workflows
 - Avoids re-importing Python modules
 - Eliminates infinite blocking issue
 - **When to use**: Always when integrating with DataFlow
 
-### `enable_model_persistence=False` (DataFlow)
-- Skips creating registry tables in database
-- Avoids synchronous workflow execution during init
-- Disables persisting model metadata to database
-- Prevents workflow execution for each model registration
-- Models stored in memory only, still work normally for CRUD operations
-- **Impact**: <0.1s per model vs 5-10s with registry, instant model registration
+### `auto_migrate=True` (DataFlow v0.11.0 Default)
 
-## Performance Comparison
-
-### With Default Settings
-```
-Nexus init: 1-2s
-DataFlow init with enable_model_persistence=True: 5-10s per model
-Total for 3 models: 15-30s
-```
-
-### With Optimized Settings (enable_model_persistence=False)
-```
-Nexus init: <1s
-DataFlow init with enable_model_persistence=False: <0.1s per model
-Total for 3 models: <2s
-```
+- Uses SyncDDLExecutor for synchronous DDL operations
+- No event loop issues in Docker/FastAPI
+- Automatic schema creation and updates
+- **This is the default** -- no special configuration needed
 
 ## Complete Working Example
 
@@ -100,15 +84,9 @@ app = Nexus(
 
 db = DataFlow(
     database_url="postgresql://localhost:5432/mydb",
-    enable_model_persistence=False,  # CRITICAL: Skip model registry for fast startup
-    auto_migrate=False,
-    skip_migration=True,
-    enable_metrics=True,  # Keep monitoring
-    enable_caching=True,  # Keep caching
-    connection_pool_size=20  # Keep pooling
 )
 
-# Define models (instant!)
+# Define models
 @db.model
 class Contact:
     id: str
@@ -138,68 +116,32 @@ def create_contact_workflow():
 # Register workflow
 app.register("create_contact", create_contact_workflow())
 
-# Start (fast!)
+# Start
 app.start()
 ```
 
-## What You Keep
+## What You Get
 
-With optimized settings, you still get:
-- All CRUD operations (9 nodes per model)
+With `auto_discovery=False` + DataFlow defaults:
+
+- All CRUD operations (11 nodes per model)
 - Connection pooling, caching, metrics
 - All Nexus channels (API, CLI, MCP)
-- Fast <2 second total startup time
+- Automatic schema migration via SyncDDLExecutor
+- Fast startup
 
 ## What You Lose
 
-With optimized settings, you lose:
-- Model persistence across restarts
-- Automatic migration tracking
-- Runtime model discovery
-- Auto-discovery of workflows
+With `auto_discovery=False`:
 
-## Trade-off Decision
-
-### Use Optimized Settings When:
-- Fast startup is critical (<2s)
-- Running in Docker/Kubernetes
-- Frequent container restarts
-- Development/testing environments
-
-### Use Full Features When:
-- Model persistence required across restarts
-- Automatic migration tracking needed
-- Multiple applications share models
-- Startup time acceptable (10-30s)
-
-## Full Features Configuration
-
-If you need all features and accept 10-30s startup:
-
-```python
-app = Nexus(
-    api_port=8000,
-    mcp_port=3001,
-    auto_discovery=False  # Still recommended with DataFlow
-)
-
-db = DataFlow(
-    database_url="postgresql://localhost:5432/mydb",
-    enable_model_persistence=True,   # Enable persistence (slower startup)
-    auto_migrate=True,
-    skip_migration=False
-)
-```
-
-See [Full Features Guide](../../sdk-users/apps/dataflow/docs/integration/dataflow-nexus-full-features.md) for details.
+- Auto-discovery of workflows (must register manually)
 
 ## Using DataFlow Nodes
 
 ```python
-# DataFlow auto-generates 9 nodes per model:
-# - Create, Read, Update, Delete
-# - List, Search, Count
-# - Bulk operations
+# DataFlow auto-generates 11 nodes per model:
+# CRUD: Create, Read, Update, Delete, List, Upsert, Count
+# Bulk: BulkCreate, BulkUpdate, BulkDelete, BulkUpsert
 
 workflow = WorkflowBuilder()
 
@@ -210,7 +152,7 @@ workflow.add_node("ContactCreateNode", "create", {
 })
 
 # Search node
-workflow.add_node("ContactSearchNode", "search", {
+workflow.add_node("ContactListNode", "search", {
     "filter": {"company": "{{company}}"},
     "limit": 10
 })
@@ -242,7 +184,6 @@ curl -X POST http://localhost:8000/workflows/create_contact/execute \
 import os
 
 def create_production_app():
-    # Fast initialization for production
     app = Nexus(
         api_port=int(os.getenv("API_PORT", "8000")),
         mcp_port=int(os.getenv("MCP_PORT", "3001")),
@@ -253,12 +194,6 @@ def create_production_app():
 
     db = DataFlow(
         database_url=os.getenv("DATABASE_URL"),
-        enable_model_persistence=False,  # Skip model registry for fast startup
-        auto_migrate=False,
-        skip_migration=True,
-        enable_metrics=True,
-        enable_caching=True,
-        connection_pool_size=20
     )
 
     # Register models
@@ -274,44 +209,42 @@ app = create_production_app()
 
 ## Common Issues
 
-### Slow Startup
-```python
-# Ensure both settings are configured
-app = Nexus(auto_discovery=False)
-db = DataFlow(enable_model_persistence=False)
-```
-
 ### Blocking on Start
+
 ```python
 # Must disable auto_discovery
 app = Nexus(auto_discovery=False)
 ```
 
 ### Workflows Not Found
+
 ```python
 # Register manually since auto_discovery is off
 app.register("workflow-name", workflow.build())
 ```
 
-### Models Not Persisting
+### Schema Not Created
+
 ```python
-# Expected behavior with enable_model_persistence=False
-# Models only exist while app is running
-# Use full features config if persistence needed
+# Ensure auto_migrate=True (default in v0.11.0)
+db = DataFlow(
+    database_url="postgresql://...",
+    auto_migrate=True,  # This is the default
+)
 ```
 
 ## Testing Strategy
 
 ```python
 import pytest
-import requests
+import time
 
 def test_nexus_dataflow_integration():
     # Test fast startup
     start_time = time.time()
 
     app = Nexus(auto_discovery=False)
-    db = DataFlow(enable_model_persistence=False)
+    db = DataFlow("sqlite:///:memory:")
 
     @db.model
     class TestModel:
@@ -325,28 +258,19 @@ def test_nexus_dataflow_integration():
     workflow = WorkflowBuilder()
     workflow.add_node("TestModelCreateNode", "create", {"name": "test"})
     app.register("test", workflow.build())
-
-    # Test via API
-    response = requests.post(
-        "http://localhost:8000/workflows/test/execute",
-        json={"inputs": {"name": "test"}}
-    )
-    assert response.status_code == 200
 ```
 
 ## Key Takeaways
 
 - **CRITICAL**: Use `auto_discovery=False` with DataFlow
-- **CRITICAL**: Use `enable_model_persistence=False` for fast startup and instant models
-- Optimized config: <2s startup
-- Full features config: 10-30s startup
-- All CRUD operations work with both configs
-- Manual workflow registration required
+- DataFlow v0.11.0: `auto_migrate=True` (default) works everywhere including Docker/FastAPI
+- The parameters `enable_model_persistence`, `skip_migration`, and `existing_schema_mode` have been removed
+- All CRUD operations work with default DataFlow config
+- Manual workflow registration required with `auto_discovery=False`
 
 ## Related Documentation
 
 - [Main Integration Guide](../../sdk-users/guides/dataflow-nexus-integration.md)
-- [Full Features Config](../../sdk-users/apps/dataflow/docs/integration/dataflow-nexus-full-features.md)
 - [Blocking Issue Analysis](../../sdk-users/apps/dataflow/docs/integration/nexus-blocking-issue-analysis.md)
 - [Working Examples](../../sdk-users/apps/nexus/examples/dataflow-integration/)
 

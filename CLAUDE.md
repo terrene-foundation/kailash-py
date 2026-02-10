@@ -24,7 +24,7 @@
 - **Usage**: Direct workflow construction with full programmatic control
 - **Install**: `pip install kailash`
 
-### DataFlow (`sdk-users/apps/dataflow/`)
+### DataFlow (`sdk-users/apps/dataflow/`) - v0.11.0
 
 **Zero-config database framework** built on Core SDK:
 
@@ -37,13 +37,17 @@
 - **Install**: `pip install kailash-dataflow`
 - **Import**: `from dataflow import DataFlow`
 
-### Nexus (`sdk-users/apps/nexus/`)
+### Nexus (`sdk-users/apps/nexus/`) - v1.3.0
 
 **Multi-channel platform** built on Core SDK:
 
 - **Purpose**: Deploy workflows as API + CLI + MCP simultaneously
-- **Features**: Unified sessions, zero-config platform deployment, handler support
-- **Handler Support**: `@app.handler()` decorator for registering async functions directly as multi-channel workflows, bypassing PythonCodeNode sandbox restrictions
+- **Features**: Unified sessions, zero-config platform deployment, handler support, native middleware API, plugin protocol, preset system
+- **Handler Support**: `@app.handler()` decorator for registering async functions directly as multi-channel workflows, bypassing PythonCodeNode sandbox restrictions (recommended for new workflows)
+- **Middleware API**: `app.add_middleware()`, `app.include_router()`, `app.add_plugin()` for Starlette-compatible middleware and plugins
+- **Preset System**: `Nexus(preset="saas")` for one-line middleware stacks (none, lightweight, standard, saas, enterprise)
+- **Auth Plugin**: `NexusAuthPlugin` with JWT, RBAC, SSO (GitHub/Google/Azure), rate limiting, tenant isolation, audit logging
+- **Security Defaults**: `cors_allow_credentials=False`, JWT secrets >= 32 chars for HS\*, sanitized RBAC errors
 - **Usage**: Platform applications requiring multiple access methods
 - **Install**: `pip install kailash-nexus`
 - **Import**: `from nexus import Nexus`
@@ -71,18 +75,26 @@ app.start()
 - Automatic parameter derivation from function signatures
 - Multi-channel deployment from a single function definition
 
-### Kaizen (`sdk-users/apps/kaizen/`)
+**Golden Patterns for Codegen**:
+
+- 7 production-validated patterns ranked by usage across 382K LOC + 3 scaffolding templates
+- Decision tree for pattern selection, 7 anti-patterns
+- See `.claude/skills/03-nexus/golden-patterns-catalog.md` and `.claude/skills/03-nexus/codegen-decision-tree.md`
+- Auth imports: `from nexus.auth.plugin import NexusAuthPlugin`, `JWTConfig(secret=os.environ["JWT_SECRET"])` (>= 32 chars), `rbac=dict`, `TenantConfig(admin_role=...)`
+
+### Kaizen (`sdk-users/apps/kaizen/`) - v1.1.0
 
 **AI agent framework** built on Core SDK:
 
 - **Purpose**: Production-ready AI agents with multi-modal processing, multi-agent coordination, and enterprise features built on Kailash SDK
 - **Features**: Signature-based programming, BaseAgent architecture, automatic optimization, error handling, audit trails
-- **Unified Agent API (v1.0.0)**: Progressive configuration from 2-line quickstart to expert mode
+- **Unified Agent API (v1.0.0+)**: Progressive configuration from 2-line quickstart to expert mode
+- **CARE/EATP Trust Framework (v1.1.0)**: Cryptographic trust chains, posture system, constraint dimensions, knowledge ledger
 - **Usage**: Agentic applications requiring robust AI capabilities
 - **Install**: `pip install kailash-kaizen`
-- **Import**: `from kaizen.api import Agent` (v1.0.0) or `from kaizen.core.base_agent import BaseAgent`
+- **Import**: `from kaizen.api import Agent` (v1.0.0+) or `from kaizen.core.base_agent import BaseAgent`
 
-**Kaizen v1.0.0 Quick Start (Unified Agent API)**:
+**Kaizen Quick Start (Unified Agent API)**:
 
 ```python
 from kaizen.api import Agent
@@ -117,7 +129,7 @@ agent = Agent(
 
 ### Framework Implementation
 
-- **nexus-specialist** → Multi-channel platform implementation (API/CLI/MCP)
+- **nexus-specialist** → Multi-channel platform (API/CLI/MCP), middleware, auth, handlers, presets
 - **dataflow-specialist** → Database operations with auto-generated nodes. String IDs preserved, multi-instance isolation, deferred schema ops (PostgreSQL + SQLite)
 
 ### Core Implementation
@@ -314,7 +326,7 @@ For detailed framework documentation, see:
 | ------------ | -------------------------------------------------- | -------------------------------------------------------- |
 | **DataFlow** | `sdk-users/apps/dataflow/CLAUDE.md` (2,900+ lines) | Database operations, critical gotchas, Docker deployment |
 | **Kaizen**   | `sdk-users/apps/kaizen/CLAUDE.md` (1,900+ lines)   | AI agents, signatures, multi-modal, v1.0 features        |
-| **Nexus**    | `sdk-users/apps/nexus/CLAUDE.md`                   | Multi-channel deployment (API/CLI/MCP)                   |
+| **Nexus**    | `sdk-users/apps/nexus/CLAUDE.md`                   | Multi-channel, auth, middleware, handlers, presets       |
 | **Core SDK** | `.claude/skills/01-core-sdk/`                      | WorkflowBuilder, nodes, runtime patterns                 |
 
 **Key DataFlow Gotchas** (see full guide for details):

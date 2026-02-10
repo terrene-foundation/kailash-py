@@ -12,12 +12,14 @@ pip install kailash-dataflow
 ## Current Status: v0.9.7 Stable
 
 **Database Support:**
+
 - ✅ **PostgreSQL**: Full support with all enterprise features (asyncpg driver)
 - ✅ **MySQL**: Full support with all enterprise features (aiomysql driver, 100% feature parity)
 - ✅ **SQLite**: Full parity with PostgreSQL and MySQL - all features supported (file-based and in-memory)
   - Recent fixes: Path extraction and connection isolation for memory databases
 
 **🔮 Coming Soon:**
+
 - 🚀 **pgvector** (Next release): PostgreSQL vector similarity search for RAG/AI applications
 - 🚀 **MongoDB**: Document database with PyMongo Async API
 - 🚀 **Qdrant**: Dedicated vector database for billion-scale semantic search
@@ -27,10 +29,12 @@ pip install kailash-dataflow
 **🎉 Recent Bug Fixes:**
 
 **v0.9.7 (Latest):**
+
 - **Pytest Compatibility**: Fixed model registration race condition in pytest test collection
 - **Database Infrastructure**: Fixed DDL operations for all runtime contexts (sync/async/pytest)
 
 **v0.4.0:**
+
 - **DateTime Serialization**: Fixed datetime objects being converted to strings
 - **PostgreSQL Parameter Types**: Added explicit type casting for parameter determination
 - **Content Size Limits**: Changed VARCHAR(255) to TEXT for unlimited content
@@ -47,6 +51,7 @@ pip install kailash-dataflow
 - **Context-Aware Table Creation**: Node-instance coupling for proper isolation
 
 **Enterprise Migration System (v0.4.5+):**
+
 - ✅ **Risk Assessment Engine**: Multi-dimensional risk analysis for all migration operations
 - ✅ **Mitigation Strategy Engine**: Automated risk reduction and safety recommendations
 - ✅ **Foreign Key Analyzer**: FK-aware operations with referential integrity protection
@@ -63,6 +68,7 @@ pip install kailash-dataflow
 DataFlow now includes powerful tools to catch errors early, debug faster, and ship with confidence.
 
 **Phase 1A - ErrorEnhancer (70-80% Debugging Time Reduction):**
+
 - ✅ **60+ Enhanced Errors**: Automatic error enhancement with DF-XXX error codes (DF-101 through DF-801)
 - ✅ **Root Cause Analysis**: AI-powered probability scoring for error causes (3-5 likely causes per error)
 - ✅ **Actionable Solutions**: Code templates and step-by-step fixes with examples
@@ -71,6 +77,7 @@ DataFlow now includes powerful tools to catch errors early, debug faster, and sh
 - ✅ **Pattern Caching**: 90%+ cache hit rate for repeated errors (instant lookups)
 
 **Phase 1B - Inspector (80-90% Workflow Debugging Time Reduction):**
+
 - ✅ **30+ Inspection Methods**: Complete workflow introspection without reading source code
 - ✅ **Connection Analysis**: List connections, find broken connections, trace connection chains
 - ✅ **Parameter Tracing**: Trace parameters back to source, track transformations
@@ -79,6 +86,7 @@ DataFlow now includes powerful tools to catch errors early, debug faster, and sh
 - ✅ **CLI Tools**: Command-line validation tools (dataflow-validate, dataflow-analyze, dataflow-debug)
 
 **Phase 1C - Build-Time Validation (Catch 80% of Errors at Model Registration):**
+
 - ✅ **10+ Validation Checks**: Primary key validation, auto-managed field conflicts, type validation
 - ✅ **3 Validation Modes**: OFF (skip), WARN (backward compatible), STRICT (enforce all rules)
 - ✅ **Enhanced Error Messages**: Context, causes, and solutions for validation failures
@@ -130,18 +138,16 @@ results, run_id = runtime.execute(workflow.build())
 Multiple DataFlow instances now maintain proper isolation:
 
 ```python
-# Development instance with auto-migration
+# Development instance with auto-migration (default)
 db_dev = DataFlow(
     database_url="sqlite:///dev.db",
-    auto_migrate=True,
-    existing_schema_mode=False
+    auto_migrate=True  # Default - works in all environments (Docker, FastAPI, CLI)
 )
 
-# Production instance with safety locks
+# Production instance - same config works everywhere as of v0.11.0
 db_prod = DataFlow(
     database_url="postgresql://user:pass@localhost/prod",
-    auto_migrate=False,
-    existing_schema_mode=True
+    auto_migrate=True  # v0.11.0+: SyncDDLExecutor handles DDL safely
 )
 
 # Models are isolated per instance
@@ -162,19 +168,20 @@ DataFlow is not a traditional ORM. It's a **workflow-native database framework**
 
 ### Architecture Comparison
 
-| Feature | Traditional ORM | DataFlow |
-|---------|----------------|----------|
-| **Model Usage** | Direct instantiation (`User()`) | Workflow-native (`UserCreateNode`) |
-| **Database Operations** | Method calls (`user.save()`) | Workflow nodes (`UserCreateNode`) |
-| **Transaction Handling** | Manual transaction management | Distributed transaction support |
-| **Caching** | External cache integration | Built-in enterprise caching |
-| **Multi-tenancy** | Custom implementation | Automatic tenant isolation |
-| **Performance** | N+1 queries common | Optimized bulk operations |
-| **Scalability** | Vertical scaling focus | Horizontal scaling built-in |
+| Feature                  | Traditional ORM                 | DataFlow                           |
+| ------------------------ | ------------------------------- | ---------------------------------- |
+| **Model Usage**          | Direct instantiation (`User()`) | Workflow-native (`UserCreateNode`) |
+| **Database Operations**  | Method calls (`user.save()`)    | Workflow nodes (`UserCreateNode`)  |
+| **Transaction Handling** | Manual transaction management   | Distributed transaction support    |
+| **Caching**              | External cache integration      | Built-in enterprise caching        |
+| **Multi-tenancy**        | Custom implementation           | Automatic tenant isolation         |
+| **Performance**          | N+1 queries common              | Optimized bulk operations          |
+| **Scalability**          | Vertical scaling focus          | Horizontal scaling built-in        |
 
 ### Why Workflow-Native?
 
 **Traditional ORM Limitations:**
+
 ```python
 # Traditional ORM - doesn't scale well
 user = User(name="John", email="john@example.com")
@@ -183,6 +190,7 @@ user.save()  # Individual database calls
 ```
 
 **DataFlow Advantages:**
+
 ```python
 # DataFlow - @db.model decorator generates 9 nodes automatically
 from dataflow import DataFlow
@@ -238,6 +246,7 @@ workflow.add_node("UserCreateNode", "create", {
 ```
 
 **Why?** Model instantiation bypasses:
+
 - Automatic caching
 - Tenant isolation
 - Transaction coordination
@@ -299,7 +308,7 @@ from kailash.runtime.local import LocalRuntime
 # Connect to existing database safely
 db = DataFlow(
     database_url="postgresql://user:pass@localhost/existing_db",
-    existing_schema_mode=True  # Safe mode - no schema changes
+    auto_migrate=False  # Don't create or modify tables
 )
 
 # Discover and register existing tables as models
@@ -322,24 +331,31 @@ results, run_id = runtime.execute(workflow.build())
 ## Key Features
 
 ### 🔧 Zero Configuration
+
 Start with a single line: `app = DataFlow()` - no database setup, no schema definitions, no configuration files.
 
 ### 🔍 Dynamic Schema Discovery & Model Registration
+
 Connect to existing databases without @db.model decorators. Perfect for LLM agents and dynamic database exploration.
 
 ### 🔄 Cross-Session Model Persistence
+
 Models registered by one user/session are available to others via the model registry.
 
 ### 🛡️ Safe Existing Database Mode
-Connect to production databases safely with `existing_schema_mode=True` - prevents any schema modifications.
+
+Connect to production databases safely with `auto_migrate=False` - prevents any schema modifications.
 
 ### 🗄️ Universal Database Support
+
 MongoDB-style queries work across PostgreSQL, MySQL, SQLite with automatic SQL generation and optimization.
 
 ### ⚡ Redis-Powered Caching
+
 Enterprise-grade caching with intelligent invalidation patterns and 99.9% hit rates.
 
 ### 🚀 Automatic API Generation
+
 REST APIs, OpenAPI documentation, and health checks generated automatically from your queries.
 
 ## Generated Node Types
@@ -347,6 +363,7 @@ REST APIs, OpenAPI documentation, and health checks generated automatically from
 Each `@db.model` automatically generates 9 node types:
 
 ### Basic CRUD Nodes
+
 ```python
 # Create a single record
 workflow.add_node("UserCreateNode", "create", {
@@ -373,6 +390,7 @@ workflow.add_node("UserDeleteNode", "delete", {
 ```
 
 ### List and Query Nodes
+
 ```python
 # List with MongoDB-style filters
 workflow.add_node("UserListNode", "list", {
@@ -389,6 +407,7 @@ workflow.add_node("UserListNode", "list", {
 ```
 
 ### Bulk Operations
+
 ```python
 # Bulk create
 workflow.add_node("UserBulkCreateNode", "bulk_create", {
@@ -435,8 +454,7 @@ from kailash.runtime.local import LocalRuntime
 # Connect safely to existing database
 db = DataFlow(
     database_url="postgresql://user:pass@localhost/existing_db",
-    auto_migrate=False,              # Don't modify existing schema
-    existing_schema_mode=True        # Extra safety - prevents ALL modifications
+    auto_migrate=False  # Don't modify existing schema
 )
 
 # Discover existing database structure
@@ -470,7 +488,7 @@ Models registered by one user/session are automatically available to others via 
 # === SESSION 1: Data Engineer discovers and registers models ===
 db_engineer = DataFlow(
     database_url="postgresql://user:pass@localhost/company_db",
-    existing_schema_mode=True
+    auto_migrate=False  # Read existing schema only
 )
 
 # Engineer discovers and registers models for the team
@@ -483,7 +501,7 @@ print(f"Team models registered: {result['registered_models']}")
 # === SESSION 2: Developer uses registered models ===
 db_developer = DataFlow(
     database_url="postgresql://user:pass@localhost/company_db",
-    existing_schema_mode=True
+    auto_migrate=False  # Read existing schema only
 )
 
 # Developer reconstructs models from registry (no @db.model needed)
@@ -509,7 +527,7 @@ Perfect for AI agents that need to explore and understand database structures dy
 # LLM Agent workflow for database exploration
 db_agent = DataFlow(
     database_url="postgresql://user:pass@localhost/unknown_db",
-    existing_schema_mode=True  # Safe exploration mode
+    auto_migrate=False  # Safe exploration mode - no schema changes
 )
 
 # Agent discovers database structure
@@ -546,21 +564,19 @@ for node_id, result in results.items():
 
 ### Safe Database Connection Modes
 
-DataFlow provides multiple safety levels for connecting to existing databases:
+DataFlow provides simple configuration for connecting to existing databases:
 
 ```python
-# Development Mode - Full auto-migration
+# Development Mode - Full auto-migration (default)
 db_dev = DataFlow(
     database_url="postgresql://user:pass@localhost/dev_db",
-    auto_migrate=True,           # Create/modify tables as needed
-    existing_schema_mode=False   # Allow schema changes
+    auto_migrate=True  # Default - creates/modifies tables as needed
 )
 
 # Production Mode - Read existing schema only
 db_prod = DataFlow(
     database_url="postgresql://user:pass@localhost/prod_db",
-    auto_migrate=False,          # No automatic migrations
-    existing_schema_mode=True    # Prevent ALL schema modifications
+    auto_migrate=False  # No automatic migrations or schema changes
 )
 
 # Even if you accidentally define a new model, no tables will be created
@@ -570,9 +586,9 @@ class NewModel:
     value: int
 
 # Model is registered locally but NO table created in database
-assert 'NewModel' in db_prod.list_models()  # ✓ Local registration
+assert 'NewModel' in db_prod.list_models()  # Local registration
 schema = db_prod.discover_schema(use_real_inspection=True)
-assert 'new_models' not in schema  # ✓ No table in database
+assert 'new_models' not in schema  # No table in database
 ```
 
 ### Key API Methods
@@ -604,11 +620,10 @@ models = db.reconstruct_models_from_registry()
 #   'success_count': 2
 # }
 
-# Model Persistence Control
+# Recommended production configuration (v0.11.0+)
 db = DataFlow(
     database_url="...",
-    enable_model_persistence=True,  # Default: saves models to registry
-    existing_schema_mode=True       # Safety: prevents schema changes
+    auto_migrate=True  # Default - works in Docker, FastAPI, CLI via SyncDDLExecutor
 )
 ```
 
@@ -618,20 +633,21 @@ DataFlow includes a comprehensive enterprise-grade migration system designed for
 
 ### Migration Capabilities Overview
 
-| Component | Purpose | Key Features |
-|-----------|---------|-------------|
-| **Risk Assessment Engine** | Analyze migration safety | Multi-dimensional risk scoring, impact prediction |
-| **Mitigation Strategy Engine** | Generate safety recommendations | Automated risk reduction, strategy prioritization |
-| **Foreign Key Analyzer** | FK-aware operations | Referential integrity, cascade analysis, FK chains |
-| **Table Rename Analyzer** | Safe table restructuring | Dependency tracking, coordinated updates |
-| **Staging Environment Manager** | Migration testing | Production-like environments, data sampling |
-| **Migration Lock Manager** | Concurrency control | Distributed locking, conflict prevention |
-| **Validation Checkpoint Manager** | Quality assurance | Multi-stage validation, automatic rollback |
-| **Schema State Manager** | Change tracking | Schema snapshots, evolution history |
+| Component                         | Purpose                         | Key Features                                       |
+| --------------------------------- | ------------------------------- | -------------------------------------------------- |
+| **Risk Assessment Engine**        | Analyze migration safety        | Multi-dimensional risk scoring, impact prediction  |
+| **Mitigation Strategy Engine**    | Generate safety recommendations | Automated risk reduction, strategy prioritization  |
+| **Foreign Key Analyzer**          | FK-aware operations             | Referential integrity, cascade analysis, FK chains |
+| **Table Rename Analyzer**         | Safe table restructuring        | Dependency tracking, coordinated updates           |
+| **Staging Environment Manager**   | Migration testing               | Production-like environments, data sampling        |
+| **Migration Lock Manager**        | Concurrency control             | Distributed locking, conflict prevention           |
+| **Validation Checkpoint Manager** | Quality assurance               | Multi-stage validation, automatic rollback         |
+| **Schema State Manager**          | Change tracking                 | Schema snapshots, evolution history                |
 
 ### Quick Migration Examples
 
 #### Risk Assessment Before Schema Changes
+
 ```python
 from dataflow.migrations.risk_assessment_engine import RiskAssessmentEngine
 from dataflow.migrations.mitigation_strategy_engine import MitigationStrategyEngine
@@ -658,6 +674,7 @@ if risk_assessment.overall_risk_level in ["HIGH", "CRITICAL"]:
 ```
 
 #### Safe Column Addition with Multiple Strategies
+
 ```python
 from dataflow.migrations.not_null_handler import (
     NotNullColumnHandler, ColumnDefinition, DefaultValueType
@@ -694,6 +711,7 @@ else:
 ```
 
 #### FK-Aware Table Operations
+
 ```python
 from dataflow.migrations.foreign_key_analyzer import ForeignKeyAnalyzer, FKOperationType
 
@@ -718,6 +736,7 @@ if fk_impact.is_safe_to_proceed:
 ```
 
 #### Staging Environment Testing
+
 ```python
 from dataflow.migrations.staging_environment_manager import StagingEnvironmentManager
 
@@ -755,6 +774,7 @@ finally:
 ```
 
 #### Migration with Lock Management
+
 ```python
 from dataflow.migrations.concurrent_access_manager import MigrationLockManager
 
@@ -851,6 +871,7 @@ result = await enterprise_migration_workflow(
 ## Advanced Features
 
 ### Multi-Database Operations
+
 ```python
 # Configure multiple databases
 db = DataFlow(
@@ -879,6 +900,7 @@ class Event:
 ```
 
 ### Enterprise Features
+
 ```python
 # Enable multi-tenancy
 @db.model
@@ -901,6 +923,7 @@ workflow.add_node("OrderCreateNode", "create", {
 ```
 
 ### Transaction Management
+
 ```python
 # Distributed transactions
 workflow.add_node("TransactionManagerNode", "payment_flow", {
@@ -917,6 +940,7 @@ workflow.add_node("TransactionManagerNode", "payment_flow", {
 ## Production Examples
 
 ### E-commerce Order Processing
+
 ```python
 from dataflow import DataFlow
 from kailash.workflow.builder import WorkflowBuilder
@@ -970,6 +994,7 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Analytics Dashboard
+
 ```python
 # Create analytics workflow
 analytics_workflow = WorkflowBuilder()
@@ -1005,6 +1030,7 @@ print(f"Top products: {results['top_products']['result']}")
 - **Automatic query optimization** with SQL generation
 
 ### Performance Monitoring
+
 ```python
 # Built-in performance monitoring with workflow
 workflow.add_node("PerformanceMonitorNode", "monitor", {
@@ -1027,6 +1053,7 @@ results, run_id = runtime.execute(workflow.build())
 ## Enterprise Features
 
 ### Security & Compliance
+
 ```python
 # GDPR/CCPA compliance built-in with workflows
 workflow.add_node("GDPRComplianceNode", "gdpr_handler", {
@@ -1053,6 +1080,7 @@ workflow.add_node("UserDataAnonymizeNode", "anonymize_data", {
 ```
 
 ### Health Monitoring
+
 ```python
 # Automatic health checks with workflow
 workflow.add_node("HealthCheckNode", "health_monitor", {
@@ -1124,6 +1152,7 @@ sqlite:///absolute/path/to/file.db
 ### Database-Specific Connection Examples
 
 #### PostgreSQL (asyncpg driver)
+
 ```python
 # Basic PostgreSQL connection
 db = DataFlow("postgresql://user:password@localhost:5432/mydb")
@@ -1149,6 +1178,7 @@ db = DataFlow(
 ```
 
 #### MySQL (aiomysql driver)
+
 ```python
 # Basic MySQL connection
 db = DataFlow("mysql://user:password@localhost:3306/mydb")
@@ -1189,6 +1219,7 @@ db = DataFlow(
 ```
 
 #### SQLite (aiosqlite driver with custom pooling)
+
 ```python
 # In-memory database (fast, for testing)
 db = DataFlow(":memory:")
@@ -1219,31 +1250,32 @@ db = DataFlow(
 
 All three databases have **100% feature parity** in DataFlow operations. Choose based on your deployment needs:
 
-| Feature | PostgreSQL | MySQL | SQLite | Notes |
-|---------|------------|-------|--------|-------|
-| **Driver** | asyncpg | aiomysql | aiosqlite + custom pooling | All async, high performance |
-| **ACID Transactions** | ✅ Full | ✅ Full (InnoDB) | ✅ Full | Complete transaction support |
-| **Connection Pooling** | ✅ Native | ✅ Native | ✅ Custom | Efficient connection reuse |
-| **Async Operations** | ✅ | ✅ | ✅ | All operations async-first |
-| **JSON Support** | ✅ Native JSONB | ✅ 5.7+ | ✅ JSON1 extension | Full JSON query support |
-| **Full-Text Search** | ✅ ts_vector | ✅ FULLTEXT | ✅ FTS5 | Built-in search capabilities |
-| **Window Functions** | ✅ | ✅ 8.0+ | ✅ 3.25+ | Advanced analytics |
-| **CTEs (WITH)** | ✅ | ✅ 8.0+ | ✅ | Recursive queries supported |
-| **Arrays** | ✅ Native | ❌ Use JSON | ❌ Use JSON | PostgreSQL advantage |
-| **Spatial Data** | ✅ PostGIS | ✅ Native | ✅ R-Tree | Geographic data support |
-| **Stored Procedures** | ✅ PL/pgSQL | ✅ | ❌ | Complex business logic |
-| **Triggers** | ✅ | ✅ | ✅ | Event-driven operations |
-| **Bulk Operations** | ✅ COPY | ✅ LOAD DATA | ✅ executemany | High-throughput imports |
-| **Schema Operations** | ✅ Real DDL | ✅ Real DDL | ✅ Real DDL | All support table creation |
-| **Multi-tenancy** | ✅ | ✅ | ✅ | Automatic tenant isolation |
-| **Soft Deletes** | ✅ | ✅ | ✅ | Audit trail support |
-| **DataFlow Nodes** | ✅ All 9 types | ✅ All 9 types | ✅ All 9 types | Full CRUD + bulk ops |
-| **SSL/TLS** | ✅ | ✅ | N/A | Secure connections |
-| **Best For** | Production, PostGIS | Web apps, MySQL ecosystem | Development, Mobile, Edge | Deployment guidance |
+| Feature                | PostgreSQL          | MySQL                     | SQLite                     | Notes                        |
+| ---------------------- | ------------------- | ------------------------- | -------------------------- | ---------------------------- |
+| **Driver**             | asyncpg             | aiomysql                  | aiosqlite + custom pooling | All async, high performance  |
+| **ACID Transactions**  | ✅ Full             | ✅ Full (InnoDB)          | ✅ Full                    | Complete transaction support |
+| **Connection Pooling** | ✅ Native           | ✅ Native                 | ✅ Custom                  | Efficient connection reuse   |
+| **Async Operations**   | ✅                  | ✅                        | ✅                         | All operations async-first   |
+| **JSON Support**       | ✅ Native JSONB     | ✅ 5.7+                   | ✅ JSON1 extension         | Full JSON query support      |
+| **Full-Text Search**   | ✅ ts_vector        | ✅ FULLTEXT               | ✅ FTS5                    | Built-in search capabilities |
+| **Window Functions**   | ✅                  | ✅ 8.0+                   | ✅ 3.25+                   | Advanced analytics           |
+| **CTEs (WITH)**        | ✅                  | ✅ 8.0+                   | ✅                         | Recursive queries supported  |
+| **Arrays**             | ✅ Native           | ❌ Use JSON               | ❌ Use JSON                | PostgreSQL advantage         |
+| **Spatial Data**       | ✅ PostGIS          | ✅ Native                 | ✅ R-Tree                  | Geographic data support      |
+| **Stored Procedures**  | ✅ PL/pgSQL         | ✅                        | ❌                         | Complex business logic       |
+| **Triggers**           | ✅                  | ✅                        | ✅                         | Event-driven operations      |
+| **Bulk Operations**    | ✅ COPY             | ✅ LOAD DATA              | ✅ executemany             | High-throughput imports      |
+| **Schema Operations**  | ✅ Real DDL         | ✅ Real DDL               | ✅ Real DDL                | All support table creation   |
+| **Multi-tenancy**      | ✅                  | ✅                        | ✅                         | Automatic tenant isolation   |
+| **Soft Deletes**       | ✅                  | ✅                        | ✅                         | Audit trail support          |
+| **DataFlow Nodes**     | ✅ All 9 types      | ✅ All 9 types            | ✅ All 9 types             | Full CRUD + bulk ops         |
+| **SSL/TLS**            | ✅                  | ✅                        | N/A                        | Secure connections           |
+| **Best For**           | Production, PostGIS | Web apps, MySQL ecosystem | Development, Mobile, Edge  | Deployment guidance          |
 
 ### Database Selection Guide
 
 #### Choose PostgreSQL When:
+
 - **Production enterprise applications** - Maximum reliability and features
 - **Geographic data** - PostGIS for spatial queries
 - **Complex analytics** - Advanced window functions and materialized views
@@ -1252,6 +1284,7 @@ All three databases have **100% feature parity** in DataFlow operations. Choose 
 - **Large scale** - Proven for high-traffic applications
 
 #### Choose MySQL When:
+
 - **Existing MySQL infrastructure** - Leverage current expertise
 - **Web hosting environments** - Widely available on hosting platforms
 - **Read-heavy workloads** - Excellent read replica support
@@ -1260,6 +1293,7 @@ All three databases have **100% feature parity** in DataFlow operations. Choose 
 - **InnoDB requirements** - Need InnoDB-specific features
 
 #### Choose SQLite When:
+
 - **Development and testing** - Fast, zero-config local development
 - **Mobile applications** - Embedded database for iOS/Android
 - **Edge computing** - Lightweight deployment on edge devices
@@ -1299,6 +1333,7 @@ class User:
 ### Password Special Characters
 
 DataFlow now handles these special characters in passwords automatically:
+
 - `#` (hash/pound) - commonly used in passwords
 - `$` (dollar sign) - shell variable syntax
 - `@` (at symbol) - email-like passwords
@@ -1306,12 +1341,14 @@ DataFlow now handles these special characters in passwords automatically:
 - And many more URL-sensitive characters
 
 **Before v0.9.4:** Required manual URL encoding
+
 ```python
 # Old workaround (no longer needed)
 password = "MySecret%23123%24"  # %23 = #, %24 = $
 ```
 
 **Since v0.9.4:** Works automatically
+
 ```python
 # Just use the password directly - enhanced in v0.4.0 with better type casting
 db = DataFlow(database_url="postgresql://admin:MySecret#123$@localhost/db")
@@ -1320,6 +1357,7 @@ db = DataFlow(database_url="postgresql://admin:MySecret#123$@localhost/db")
 ## Deployment
 
 ### Docker
+
 ```dockerfile
 FROM python:3.11-slim
 RUN pip install kailash-dataflow
@@ -1329,6 +1367,7 @@ CMD ["python", "app.py"]
 ```
 
 ### Environment Variables
+
 ```bash
 export DATAFLOW_DATABASE_URL="postgresql://..."
 export DATAFLOW_REDIS_URL="redis://..."
@@ -1339,6 +1378,7 @@ export DATAFLOW_ENABLE_METRICS="true"
 ## Migration from Raw SQL/ORM
 
 ### From Raw SQL
+
 ```python
 # Before: Raw SQL
 cursor.execute("""
@@ -1361,6 +1401,7 @@ workflow.add_node("UserListNode", "dept_stats", {
 ```
 
 ### From SQLAlchemy ORM
+
 ```python
 # Before: SQLAlchemy
 users = session.query(User).filter(
@@ -1383,6 +1424,7 @@ workflow.add_node("UserListNode", "filtered_users", {
 ## Migration System Documentation
 
 ### Core Migration Guides
+
 - [NOT NULL Column Addition](docs/development/not-null-column-addition.md) - Complete guide to safely adding NOT NULL columns
 - [Column Removal System](docs/development/column-removal-system.md) - Safe column removal with dependency analysis
 - [Migration System Overview](docs/migration-system.md) - Complete migration system architecture
@@ -1392,6 +1434,7 @@ workflow.add_node("UserListNode", "filtered_users", {
 ### Additional Documentation
 
 ### Guides
+
 - [User Guide](docs/USER_GUIDE.md) - Comprehensive DataFlow guide
 - [Quick Start Guide](docs/quickstart.md) - Get started in minutes
 - [Query Patterns](docs/query-patterns.md) - Advanced query techniques
@@ -1400,6 +1443,7 @@ workflow.add_node("UserListNode", "filtered_users", {
 - [Production Deployment](docs/deployment.md) - Deployment best practices
 
 ### Examples
+
 - [Basic CRUD Operations](examples/01_basic_crud.py) - Simple database operations
 - [Advanced Features](examples/02_advanced_features.py) - Complex queries and caching
 - [Enterprise Integration](examples/03_enterprise_integration.py) - Multi-tenant and security

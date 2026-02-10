@@ -81,16 +81,13 @@ workflow.add_node("ResultWriterNode", "writer", {"output_format": "json"})
 workflow.add_connection("reader", "processor", "output", "data")
 workflow.add_connection("processor", "writer", "output", "result")
 
-# 🎯 ONE REGISTRATION = EVERYTHING
-registration = app.register(workflow, "data-processor", "1.0.0")
+# ONE REGISTRATION = EVERYTHING
+app.register("data-processor", workflow.build())
 
-# ✨ AUTOMATICALLY CREATED:
-print("🌐 REST API:", registration['api_endpoint'])        # /workflows/data-processor/execute
-print("💻 CLI Command:", registration['cli_command'])      # nexus execute data-processor
-print("🔗 WebSocket:", registration['websocket_endpoint']) # ws://host/workflows/data-processor/stream
-print("🤖 MCP Tool:", registration['mcp_tool'])           # process_data
-print("📊 Metrics:", registration['metrics_endpoint'])     # /metrics/data-processor
-print("🔍 Health:", registration['health_endpoint'])       # /health/data-processor
+# AUTOMATICALLY CREATED:
+# - REST API: POST /workflows/data-processor
+# - CLI Command: nexus run data-processor
+# - MCP Tool: data-processor (available to AI assistants)
 
 # 🎉 REVOLUTIONARY BENEFITS:
 # ✅ Single source of truth
@@ -167,19 +164,13 @@ def transform_insights(data):
     workflow.add_connection("ai_analyzer", "transformer", "output", "data")
     workflow.add_connection("transformer", "notifier", "output", "data")
 
-    # 🎯 REVOLUTIONARY: Single registration creates EVERYTHING
-    registration = app.register(workflow, "intelligent-analyzer", "2.0.0")
+    # Single registration creates multi-channel access
+    app.register("intelligent-analyzer", workflow.build())
 
-    print("\n🎉 REVOLUTIONARY RESULTS - From ONE workflow definition:")
-    print(f"   🌐 REST API Endpoint: {registration.get('api_endpoint', 'Auto-generated')}")
-    print(f"   💻 CLI Command: {registration.get('cli_command', 'nexus execute intelligent-analyzer')}")
-    print(f"   🔗 WebSocket Stream: {registration.get('websocket_endpoint', 'Auto-generated')}")
-    print(f"   🤖 MCP Tool: {registration.get('mcp_tool', 'analyze_intelligently')}")
-    print(f"   📊 Metrics Endpoint: {registration.get('metrics_endpoint', 'Auto-generated')}")
-    print(f"   🔍 Health Check: {registration.get('health_endpoint', 'Auto-generated')}")
-    print(f"   📝 OpenAPI Spec: {registration.get('openapi_spec', 'Auto-generated')}")
-    print(f"   🐳 Docker Image: {registration.get('docker_image', 'Auto-generated')}")
-    print(f"   ☸️ Kubernetes Manifests: {registration.get('k8s_manifests', 'Auto-generated')}")
+    # Available on all channels:
+    # - API: POST /workflows/intelligent-analyzer
+    # - CLI: nexus run intelligent-analyzer
+    # - MCP: As tool named intelligent-analyzer
 
     print("\n✨ ZERO CONFIGURATION REQUIRED FOR:")
     zero_config_features = [
@@ -350,10 +341,10 @@ def demonstrate_event_driven_revolution():
     data_pipeline.add_connection("validator", "transformer", "output", "validated_data")
     data_pipeline.add_connection("transformer", "router", "output", "processed_data")
 
-    # 🎯 REGISTER ALL WORKFLOWS - Each becomes a complete system
-    monitoring_reg = app.register(monitoring_workflow, "intelligent-monitoring", "3.0.0")
-    healing_reg = app.register(healing_workflow, "self-healing-infrastructure", "2.5.0")
-    pipeline_reg = app.register(data_pipeline, "ai-data-pipeline", "4.0.0")
+    # Register all workflows - each becomes available on all channels
+    app.register("intelligent-monitoring", monitoring_workflow.build())
+    app.register("self-healing-infrastructure", healing_workflow.build())
+    app.register("ai-data-pipeline", data_pipeline.build())
 
     print("\n🎉 REVOLUTIONARY EVENT-DRIVEN CAPABILITIES:")
 
@@ -509,8 +500,8 @@ def demonstrate_autonomous_evolution():
     data_optimizer.add_connection("modifier", "perf_monitor", "output", "modification_results")
 
     # Register evolutionary workflows
-    service_reg = app.register(customer_service, "evolving-customer-service", "1.0.0")
-    optimizer_reg = app.register(data_optimizer, "self-optimizing-data-processor", "1.0.0")
+    app.register("evolving-customer-service", customer_service.build())
+    app.register("self-optimizing-data-processor", data_optimizer.build())
 
     print("\n🎉 REVOLUTIONARY AUTONOMOUS EVOLUTION CAPABILITIES:")
 
@@ -656,8 +647,8 @@ def demonstrate_universal_integration():
     cloud_orchestrator.add_connection("workload_optimizer", "iac_generator", "output", "optimization_plan")
 
     # Register universal integration workflows
-    business_reg = app.register(business_process, "universal-business-processor", "1.0.0")
-    cloud_reg = app.register(cloud_orchestrator, "multi-cloud-orchestrator", "1.0.0")
+    app.register("universal-business-processor", business_process.build())
+    app.register("multi-cloud-orchestrator", cloud_orchestrator.build())
 
     print("\n🎉 REVOLUTIONARY UNIVERSAL INTEGRATION:")
 
@@ -828,8 +819,8 @@ def demonstrate_infinite_scale_intelligence():
     adaptive_learning.add_connection("intelligence_transfer", "global_optimizer", "output", "transferred_intelligence")
 
     # Register infinite scale workflows
-    intelligence_reg = app.register(global_intelligence, "global-intelligence-network", "∞.0.0")
-    learning_reg = app.register(adaptive_learning, "adaptive-learning-system", "∞.0.0")
+    app.register("global-intelligence-network", global_intelligence.build())
+    app.register("adaptive-learning-system", adaptive_learning.build())
 
     print("\n🎉 REVOLUTIONARY INFINITE SCALE INTELLIGENCE:")
 

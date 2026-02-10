@@ -35,14 +35,23 @@ from nexus import Nexus
 # Start with zero configuration
 app = Nexus()
 
-# Add enterprise features as needed
-app.enable_auth()           # Add authentication
-app.enable_monitoring()     # Add monitoring
-app.use_plugin("audit")     # Add audit logging
-app.use_plugin("compliance") # Add compliance features
+# Add enterprise features via plugin system (v1.3.0)
+import os
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, TenantConfig, AuditConfig
 
-# Enterprise features stack on top of solid foundation
-print("✅ Enterprise features progressively enhanced")
+auth = NexusAuthPlugin.saas_app(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),  # >= 32 chars
+    rbac={"admin": ["*"], "user": ["read:*"]},
+    tenant_isolation=TenantConfig(admin_role="admin"),
+    audit=AuditConfig(enabled=True),
+)
+app.add_plugin(auth)
+
+# Or use presets for one-line middleware stacks
+app_with_preset = Nexus(preset="enterprise")
+
+print("Enterprise features progressively enhanced")
 ```
 
 ## Authentication and Authorization

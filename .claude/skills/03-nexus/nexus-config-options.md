@@ -68,62 +68,93 @@ app = Nexus(
 
 ## Progressive Configuration
 
-### API Configuration
+### CORS Configuration (v1.3.0+)
 
 ```python
+# CORS is configured via constructor
+app = Nexus(
+    cors_origins=["https://example.com"],
+    cors_allow_credentials=False,
+)
+```
+
+### Authentication Configuration (v1.3.0+)
+
+Authentication is configured via the `NexusAuthPlugin`, not attribute access.
+
+```python
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, TenantConfig
+
+# Basic auth (JWT + audit)
+auth = NexusAuthPlugin.basic_auth(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"])
+)
+
+# SaaS auth (JWT + RBAC + tenant isolation)
+auth = NexusAuthPlugin.saas_app(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "user": ["read:*"]},
+    tenant_isolation=TenantConfig(admin_role="admin"),
+)
+
 app = Nexus()
-
-# Fine-tune API behavior
-app.api.response_compression = True
-app.api.request_timeout = 30
-app.api.max_concurrent_requests = 100
-app.api.max_request_size = 10 * 1024 * 1024  # 10MB
-app.api.cors_enabled = True
-app.api.cors_origins = ["https://example.com"]
-app.api.cors_methods = ["GET", "POST"]
-app.api.cors_headers = ["Content-Type", "Authorization"]
+app.add_plugin(auth)
 ```
 
-### CLI Configuration
+### Rate Limiting Configuration (v1.3.0+)
 
 ```python
-app.cli.interactive = True          # Enable interactive prompts
-app.cli.auto_complete = True        # Tab completion
-app.cli.progress_bars = True        # Progress indicators
-app.cli.colored_output = True       # Colorized output
-app.cli.streaming_output = True     # Stream output
-app.cli.command_history = True      # Command history
-```
+from nexus.auth.rate_limit.config import RateLimitConfig
 
-### MCP Configuration
+# Simple: via constructor
+app = Nexus(rate_limit=1000)  # Requests per minute
 
-```python
-app.mcp.tool_caching = True        # Cache tool results
-app.mcp.batch_operations = True    # Batch tool calls
-app.mcp.async_execution = True     # Async execution
-app.mcp.timeout = 30               # Execution timeout
-```
-
-### Authentication Configuration
-
-```python
-app.auth.strategy = "oauth2"       # Auth strategy
-app.auth.provider = "google"       # Auth provider
-app.auth.token_expiry = 3600       # Token expiry (seconds)
-app.auth.refresh_enabled = True    # Enable token refresh
+# Advanced: via NexusAuthPlugin
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"]},
+    rate_limit=RateLimitConfig(
+        requests_per_minute=100,
+        burst_size=20,
+        backend="memory",
+    ),
+)
+app = Nexus()
+app.add_plugin(auth)
 ```
 
 ### Monitoring Configuration
 
 ```python
-app.monitoring.backend = "prometheus"
-app.monitoring.interval = 30
-app.monitoring.metrics = ["requests", "latency", "errors"]
-app.monitoring.enable_alerts = True
-app.monitoring.alert_thresholds = {
-    "error_rate": 0.05,
-    "latency_p95": 1.0
-}
+# Monitoring is enabled via constructor
+app = Nexus(enable_monitoring=True)
+
+# Health check
+health = app.health_check()
+```
+
+### Presets
+
+```python
+# One-line middleware stacks
+app = Nexus(preset="saas")
+app = Nexus(preset="enterprise")
+```
+
+### Middleware and Plugin API
+
+```python
+# Add custom middleware
+app.add_middleware(SomeMiddleware, param="value")
+
+# Include custom routers
+app.include_router(my_router)
+
+# Add plugins (NexusPlugin protocol)
+app.add_plugin(auth_plugin)
 ```
 
 ## Environment Variables
@@ -324,6 +355,7 @@ if validate_config(config):
 Nexus v1.1.1 includes critical security and reliability fixes:
 
 **P0-1: Environment-Aware Authentication**
+
 ```python
 # Production mode (auto-enables auth)
 export NEXUS_ENV=production
@@ -335,6 +367,7 @@ app = Nexus(enable_auth=False)
 ```
 
 **P0-2: Rate Limiting Default**
+
 ```python
 # DoS protection enabled by default
 app = Nexus()  # rate_limit=100 req/min
@@ -345,6 +378,7 @@ app = Nexus(rate_limit=None)
 ```
 
 **P0-3: Auto-Discovery Default Changed**
+
 ```python
 # Fast startup (no blocking)
 app = Nexus()  # auto_discovery=False by default
@@ -356,6 +390,7 @@ app = Nexus(auto_discovery=True)
 **P0-5: Unified Input Validation**
 
 All channels (API, CLI, MCP) now validate inputs automatically:
+
 - ✅ Dangerous keys blocked (`__import__`, `eval`, `exec`, etc.)
 - ✅ Input size limits enforced (10MB default)
 - ✅ Path traversal attacks prevented
