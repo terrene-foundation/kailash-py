@@ -11,50 +11,50 @@ name: CI Pipeline
 on:
   # Trigger on push to development branches (direct branch work only)
   push:
-    branches: [ feat/*, feature/*, fix/*, docs/*, session/*, session-* ]
+    branches: [feat/*, feature/*, fix/*, docs/*, session/*, session-*]
     # Note: release/* excluded to prevent duplicates with release PRs
     # Runs Tier 1 unit tests only (fast mode) - no external dependencies required
   # Trigger on PRs to main (code review process)
   pull_request:
-    branches: [ main ]
+    branches: [main]
     types: [opened, synchronize, reopened]
     # Can run full test suite based on PR requirements
   workflow_dispatch:
     inputs:
       runner-type:
-        description: 'Choose runner type'
+        description: "Choose runner type"
         required: false
-        default: 'local'
+        default: "local"
         type: choice
         options:
-        - local       # Use local runner (auto-detected) - RECOMMENDED
-        - self-hosted-secondary # Use self-hosted-secondary runner
-        - self-hosted-primary # Use self-hosted-primary runner
-        - local-mac   # Use your Mac
-        - self-hosted # Use any self-hosted runner
-        - github      # Use GitHub's runners (EXPENSIVE - avoid unless necessary)
+          - local # Use local runner (auto-detected) - RECOMMENDED
+          - self-hosted-secondary # Use self-hosted-secondary runner
+          - self-hosted-primary # Use self-hosted-primary runner
+          - local-mac # Use your Mac
+          - self-hosted # Use any self-hosted runner
+          - github # Use GitHub's runners (EXPENSIVE - avoid unless necessary)
       test-mode:
-        description: 'Test execution mode'
+        description: "Test execution mode"
         required: false
-        default: 'fast'
+        default: "fast"
         type: choice
         options:
-        - fast        # Tier 1 unit tests only (fast, isolated, no external dependencies) - RECOMMENDED for CI
-        - full        # All tests including slow ones
-        - infrastructure # Docker infrastructure tests only
-        - admin-nodes # Admin nodes tests only
+          - fast # Tier 1 unit tests only (fast, isolated, no external dependencies) - RECOMMENDED for CI
+          - full # All tests including slow ones
+          - infrastructure # Docker infrastructure tests only
+          - admin-nodes # Admin nodes tests only
       force-runner:
-        description: 'Force specific runner for PR (overrides auto-detection)'
+        description: "Force specific runner for PR (overrides auto-detection)"
         required: false
-        default: 'auto'
+        default: "auto"
         type: choice
         options:
-        - auto        # Auto-detect based on branch
-        - github      # Force GitHub runners
-        - local       # Force local runner (auto-detected)
-        - local-mac   # Force local Mac runner
-        - self-hosted-secondary # Force self-hosted-secondary runner
-        - self-hosted-primary # Force self-hosted-primary runner
+          - auto # Auto-detect based on branch
+          - github # Force GitHub runners
+          - local # Force local runner (auto-detected)
+          - local-mac # Force local Mac runner
+          - self-hosted-secondary # Force self-hosted-secondary runner
+          - self-hosted-primary # Force self-hosted-primary runner
 
 permissions:
   contents: read
@@ -82,7 +82,7 @@ jobs:
   # Check if this is a duplicate run (push to a branch with an open PR)
   check-duplicate:
     name: Check for Duplicate Run
-    runs-on: ubuntu-latest  # Lightweight job - okay to use GitHub runner
+    runs-on: self-hosted
     outputs:
       should-skip: ${{ steps.check.outputs.skip }}
       skip-reason: ${{ steps.check.outputs.reason }}
@@ -134,7 +134,7 @@ jobs:
     name: Determine Test Context
     needs: check-duplicate
     if: needs.check-duplicate.outputs.should-skip != 'true'
-    runs-on: ubuntu-latest  # Lightweight job - okay to use GitHub runner
+    runs-on: self-hosted
     outputs:
       test-level: ${{ steps.determine.outputs.level }}
       test-mode: ${{ steps.determine.outputs.mode }}
