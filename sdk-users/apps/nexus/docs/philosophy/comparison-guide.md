@@ -120,8 +120,8 @@ workflow.add_node("DataProcessorNode", "processor", {
     "optimization": "ai_powered"
 })
 
-# Single registration creates EVERYTHING
-registration = app.register(workflow, "data-processor", "1.0.0")
+# Single registration creates multi-channel access
+app.register("data-processor", workflow.build())
 
 # ✅ AUTOMATICALLY CREATED:
 # 🌐 REST API with OpenAPI documentation
@@ -154,17 +154,17 @@ app.run()  # Starts complete enterprise system
 
 ### Comparison Summary: Web Frameworks
 
-| Aspect | Traditional Frameworks | Nexus Workflow-Native |
-|--------|----------------------|----------------------|
-| **Lines of Code** | 500-2000+ per feature | 5-20 per feature |
-| **Configuration Files** | 10-20+ files | 0 files |
-| **Interfaces Supported** | 1 (API only) | 4+ (API, CLI, WebSocket, MCP) |
-| **Authentication** | Manual implementation | Enterprise-grade automatic |
-| **Monitoring** | Manual setup | Comprehensive built-in |
-| **Scaling** | Manual configuration | AI-powered automatic |
-| **Security** | Manual, error-prone | Enterprise-grade by default |
-| **Time to Production** | Weeks to months | Minutes |
-| **Maintenance Overhead** | High | Minimal |
+| Aspect                   | Traditional Frameworks | Nexus Workflow-Native         |
+| ------------------------ | ---------------------- | ----------------------------- |
+| **Lines of Code**        | 500-2000+ per feature  | 5-20 per feature              |
+| **Configuration Files**  | 10-20+ files           | 0 files                       |
+| **Interfaces Supported** | 1 (API only)           | 4+ (API, CLI, WebSocket, MCP) |
+| **Authentication**       | Manual implementation  | Enterprise-grade automatic    |
+| **Monitoring**           | Manual setup           | Comprehensive built-in        |
+| **Scaling**              | Manual configuration   | AI-powered automatic          |
+| **Security**             | Manual, error-prone    | Enterprise-grade by default   |
+| **Time to Production**   | Weeks to months        | Minutes                       |
+| **Maintenance Overhead** | High                   | Minimal                       |
 
 ## Nexus vs Microservices Platforms
 
@@ -190,14 +190,14 @@ spec:
         app: api-gateway
     spec:
       containers:
-      - name: api-gateway
-        image: nginx:latest
-        ports:
-        - containerPort: 80
-        # Requires custom nginx configuration
-        # Manual SSL termination
-        # Manual rate limiting
-        # Manual authentication
+        - name: api-gateway
+          image: nginx:latest
+          ports:
+            - containerPort: 80
+          # Requires custom nginx configuration
+          # Manual SSL termination
+          # Manual rate limiting
+          # Manual authentication
 
 ---
 # 2. Authentication Service
@@ -216,17 +216,17 @@ spec:
         app: auth-service
     spec:
       containers:
-      - name: auth-service
-        image: auth-service:latest
-        env:
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: jwt-secret
-              key: secret
-        # Custom authentication logic
-        # Manual token management
-        # Manual user management
+        - name: auth-service
+          image: auth-service:latest
+          env:
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secret
+                  key: secret
+          # Custom authentication logic
+          # Manual token management
+          # Manual user management
 
 ---
 # 3. Business Logic Service
@@ -245,11 +245,11 @@ spec:
         app: business-service
     spec:
       containers:
-      - name: business-service
-        image: business-service:latest
-        # Custom business logic
-        # Manual data validation
-        # Manual error handling
+        - name: business-service
+          image: business-service:latest
+          # Custom business logic
+          # Manual data validation
+          # Manual error handling
 
 ---
 # 4. Database Service
@@ -268,14 +268,14 @@ spec:
         app: database
     spec:
       containers:
-      - name: database
-        image: postgres:13
-        env:
-        - name: POSTGRES_DB
-          value: appdb
-        # Manual database setup
-        # Manual backup configuration
-        # Manual scaling considerations
+        - name: database
+          image: postgres:13
+          env:
+            - name: POSTGRES_DB
+              value: appdb
+          # Manual database setup
+          # Manual backup configuration
+          # Manual scaling considerations
 
 # Plus 20+ more services for:
 # - Monitoring (Prometheus, Grafana)
@@ -339,7 +339,7 @@ business_process.add_connection("auth", "logic", "output", "authenticated_user")
 business_process.add_connection("logic", "storage", "output", "processed_data")
 
 # Single registration replaces entire microservices architecture
-registration = app.register(business_process, "enterprise-business-process", "1.0.0")
+app.register("enterprise-business-process", business_process.build())
 
 app.run()
 
@@ -358,17 +358,17 @@ app.run()
 
 ### Comparison Summary: Microservices Platforms
 
-| Aspect | Kubernetes + Microservices | Nexus Workflow-Native |
-|--------|---------------------------|----------------------|
-| **Services Required** | 20-50+ services | 1 workflow |
-| **Configuration Files** | 50-200+ YAML files | 0 files |
-| **Infrastructure Complexity** | Extremely high | Zero |
-| **Development Time** | 6-12 months | Hours |
-| **Operational Overhead** | Very high | Minimal |
-| **Network Complexity** | High latency, failure points | Optimized automatically |
-| **Debugging Difficulty** | Extremely complex | Simple and clear |
-| **Cost** | High infrastructure costs | Minimal costs |
-| **Scalability** | Manual, complex | Automatic, infinite |
+| Aspect                        | Kubernetes + Microservices   | Nexus Workflow-Native   |
+| ----------------------------- | ---------------------------- | ----------------------- |
+| **Services Required**         | 20-50+ services              | 1 workflow              |
+| **Configuration Files**       | 50-200+ YAML files           | 0 files                 |
+| **Infrastructure Complexity** | Extremely high               | Zero                    |
+| **Development Time**          | 6-12 months                  | Hours                   |
+| **Operational Overhead**      | Very high                    | Minimal                 |
+| **Network Complexity**        | High latency, failure points | Optimized automatically |
+| **Debugging Difficulty**      | Extremely complex            | Simple and clear        |
+| **Cost**                      | High infrastructure costs    | Minimal costs           |
+| **Scalability**               | Manual, complex              | Automatic, infinite     |
 
 ## Nexus vs Enterprise Integration Platforms
 
@@ -511,7 +511,7 @@ integration.add_connection("source", "transform", "output", "raw_data")
 integration.add_connection("transform", "destination", "output", "transformed_data")
 
 # Single registration creates complete integration platform
-registration = app.register(integration, "universal-integration", "1.0.0")
+app.register("universal-integration", integration.build())
 
 app.run()
 
@@ -530,17 +530,17 @@ app.run()
 
 ### Comparison Summary: Integration Platforms
 
-| Aspect | Traditional ESB/iPaaS | Nexus Universal Integration |
-|--------|----------------------|---------------------------|
-| **Configuration Complexity** | 100s of lines of XML/config | 10-20 lines of code |
-| **Connector Development** | Custom for each system | Universal, auto-adapting |
-| **Data Mapping** | Manual, error-prone | AI-generated, optimal |
-| **Licensing Costs** | $100K-$1M+ annually | $0 |
-| **Development Time** | Months per integration | Minutes per integration |
-| **Maintenance** | High, ongoing | Minimal, self-maintaining |
-| **AI/ML Capabilities** | Limited add-ons | Built-in, comprehensive |
-| **Modern Development** | Legacy XML/GUI | Modern code-based |
-| **Vendor Lock-in** | High | None |
+| Aspect                       | Traditional ESB/iPaaS       | Nexus Universal Integration |
+| ---------------------------- | --------------------------- | --------------------------- |
+| **Configuration Complexity** | 100s of lines of XML/config | 10-20 lines of code         |
+| **Connector Development**    | Custom for each system      | Universal, auto-adapting    |
+| **Data Mapping**             | Manual, error-prone         | AI-generated, optimal       |
+| **Licensing Costs**          | $100K-$1M+ annually         | $0                          |
+| **Development Time**         | Months per integration      | Minutes per integration     |
+| **Maintenance**              | High, ongoing               | Minimal, self-maintaining   |
+| **AI/ML Capabilities**       | Limited add-ons             | Built-in, comprehensive     |
+| **Modern Development**       | Legacy XML/GUI              | Modern code-based           |
+| **Vendor Lock-in**           | High                        | None                        |
 
 ## Nexus vs Serverless Platforms
 
@@ -679,7 +679,7 @@ serverless_process.add_node("ServerlessProcessorNode", "processor", {
 })
 
 # Single registration creates complete serverless platform
-registration = app.register(serverless_process, "serverless-platform", "1.0.0")
+app.register("serverless-platform", serverless_process.build())
 
 app.run()
 
@@ -698,17 +698,17 @@ app.run()
 
 ### Comparison Summary: Serverless Platforms
 
-| Aspect | Traditional Serverless | Nexus Workflow-Native Serverless |
-|--------|----------------------|----------------------------------|
-| **Function Management** | Multiple separate functions | Single workflow |
-| **Cold Starts** | 100-1000ms latency | Zero (intelligent pre-warming) |
-| **Execution Limits** | 15-minute maximum | Unlimited |
-| **Vendor Lock-in** | High (AWS/Azure specific) | None (runs anywhere) |
-| **State Management** | Complex, external | Built-in, automatic |
-| **Debugging** | Difficult, distributed | Simple, unified |
-| **Cost Optimization** | Manual, complex | Automatic, AI-powered |
-| **Monitoring** | Fragmented | Comprehensive, unified |
-| **Development Experience** | Complex, multiple deployments | Simple, single deployment |
+| Aspect                     | Traditional Serverless        | Nexus Workflow-Native Serverless |
+| -------------------------- | ----------------------------- | -------------------------------- |
+| **Function Management**    | Multiple separate functions   | Single workflow                  |
+| **Cold Starts**            | 100-1000ms latency            | Zero (intelligent pre-warming)   |
+| **Execution Limits**       | 15-minute maximum             | Unlimited                        |
+| **Vendor Lock-in**         | High (AWS/Azure specific)     | None (runs anywhere)             |
+| **State Management**       | Complex, external             | Built-in, automatic              |
+| **Debugging**              | Difficult, distributed        | Simple, unified                  |
+| **Cost Optimization**      | Manual, complex               | Automatic, AI-powered            |
+| **Monitoring**             | Fragmented                    | Comprehensive, unified           |
+| **Development Experience** | Complex, multiple deployments | Simple, single deployment        |
 
 ## Nexus vs Low-Code/No-Code Platforms
 
@@ -809,7 +809,7 @@ customer_onboarding.add_connection("validator", "business_logic", "output", "val
 customer_onboarding.add_connection("business_logic", "communication", "output", "business_decisions")
 
 # Single registration creates enterprise-grade application
-registration = app.register(customer_onboarding, "intelligent-customer-onboarding", "1.0.0")
+app.register("intelligent-customer-onboarding", customer_onboarding.build())
 
 app.run()
 
@@ -828,37 +828,37 @@ app.run()
 
 ### Comparison Summary: Low-Code/No-Code Platforms
 
-| Aspect | Traditional Low-Code | Nexus Workflow-Native |
-|--------|---------------------|----------------------|
-| **Flexibility** | Limited to platform components | Unlimited customization |
-| **AI/ML Integration** | Basic or none | Enterprise AI throughout |
-| **Performance** | Degrades with complexity | Scales infinitely |
-| **Licensing** | Expensive per-user model | No per-user licensing |
-| **Enterprise Security** | Platform-limited | Enterprise-grade built-in |
-| **Custom Logic** | Very limited | Full programming power |
-| **Vendor Lock-in** | Complete | None |
-| **Deployment Options** | Platform cloud only | Any infrastructure |
-| **Development Experience** | Visual designer only | Code + visual + AI |
-| **Team Collaboration** | Limited | Full Git-based collaboration |
+| Aspect                     | Traditional Low-Code           | Nexus Workflow-Native        |
+| -------------------------- | ------------------------------ | ---------------------------- |
+| **Flexibility**            | Limited to platform components | Unlimited customization      |
+| **AI/ML Integration**      | Basic or none                  | Enterprise AI throughout     |
+| **Performance**            | Degrades with complexity       | Scales infinitely            |
+| **Licensing**              | Expensive per-user model       | No per-user licensing        |
+| **Enterprise Security**    | Platform-limited               | Enterprise-grade built-in    |
+| **Custom Logic**           | Very limited                   | Full programming power       |
+| **Vendor Lock-in**         | Complete                       | None                         |
+| **Deployment Options**     | Platform cloud only            | Any infrastructure           |
+| **Development Experience** | Visual designer only           | Code + visual + AI           |
+| **Team Collaboration**     | Limited                        | Full Git-based collaboration |
 
 ## Overall Platform Comparison Matrix
 
 ### Comprehensive Feature Comparison
 
-| Feature Category | Traditional Approach | Nexus Workflow-Native | Advantage Factor |
-|-----------------|---------------------|----------------------|------------------|
-| **Development Speed** | Months to years | Minutes to days | 100-1000x faster |
-| **Code Complexity** | 1000s of lines | 10s of lines | 100x simpler |
-| **Configuration Required** | Extensive | Zero | ∞x simpler |
-| **Infrastructure Setup** | Complex, manual | Automatic | ∞x easier |
-| **Enterprise Features** | Add-on, expensive | Built-in, free | 10-100x cheaper |
-| **AI/ML Integration** | Complex, separate | Native, automatic | 1000x easier |
-| **Security** | Manual, error-prone | Enterprise-grade automatic | 100x more secure |
-| **Scalability** | Manual, limited | Automatic, infinite | ∞x better |
-| **Monitoring** | Manual setup | Comprehensive built-in | 100x better |
-| **Multi-Channel Support** | Separate development | Automatic | 10x faster |
-| **Maintenance** | High overhead | Self-maintaining | 10x less effort |
-| **Vendor Lock-in** | High | None | ∞x better |
+| Feature Category           | Traditional Approach | Nexus Workflow-Native      | Advantage Factor |
+| -------------------------- | -------------------- | -------------------------- | ---------------- |
+| **Development Speed**      | Months to years      | Minutes to days            | 100-1000x faster |
+| **Code Complexity**        | 1000s of lines       | 10s of lines               | 100x simpler     |
+| **Configuration Required** | Extensive            | Zero                       | ∞x simpler       |
+| **Infrastructure Setup**   | Complex, manual      | Automatic                  | ∞x easier        |
+| **Enterprise Features**    | Add-on, expensive    | Built-in, free             | 10-100x cheaper  |
+| **AI/ML Integration**      | Complex, separate    | Native, automatic          | 1000x easier     |
+| **Security**               | Manual, error-prone  | Enterprise-grade automatic | 100x more secure |
+| **Scalability**            | Manual, limited      | Automatic, infinite        | ∞x better        |
+| **Monitoring**             | Manual setup         | Comprehensive built-in     | 100x better      |
+| **Multi-Channel Support**  | Separate development | Automatic                  | 10x faster       |
+| **Maintenance**            | High overhead        | Self-maintaining           | 10x less effort  |
+| **Vendor Lock-in**         | High                 | None                       | ∞x better        |
 
 ## Cost-Benefit Analysis
 

@@ -16,11 +16,13 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 ### Use Skills Instead When:
 
 **Quick Start**:
+
 - "Kaizen setup?" -> [`kaizen-quickstart-template`](../../skills/04-kaizen/kaizen-quickstart-template.md)
 - "BaseAgent basics?" -> [`kaizen-baseagent-quick`](../../skills/04-kaizen/kaizen-baseagent-quick.md)
 - "Signatures?" -> [`kaizen-signatures`](../../skills/04-kaizen/kaizen-signatures.md)
 
 **Common Patterns**:
+
 - "Multi-agent?" -> [`kaizen-multi-agent-setup`](../../skills/04-kaizen/kaizen-multi-agent-setup.md)
 - "Chain of thought?" -> [`kaizen-chain-of-thought`](../../skills/04-kaizen/kaizen-chain-of-thought.md)
 - "RAG patterns?" -> [`kaizen-rag-agent`](../../skills/04-kaizen/kaizen-rag-agent.md)
@@ -28,11 +30,13 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - "Control Protocol?" -> [`kaizen-control-protocol`](../../skills/04-kaizen/kaizen-control-protocol.md)
 
 **Multi-Modal**:
+
 - "Vision integration?" -> [`kaizen-vision-processing`](../../skills/04-kaizen/kaizen-vision-processing.md)
 - "Audio processing?" -> [`kaizen-audio-processing`](../../skills/04-kaizen/kaizen-audio-processing.md)
 - "Multi-modal pitfalls?" -> [`kaizen-multimodal-pitfalls`](../../skills/04-kaizen/kaizen-multimodal-pitfalls.md)
 
 **Infrastructure**:
+
 - "Observability?" -> [`kaizen-observability-tracing`](../../skills/04-kaizen/kaizen-observability-tracing.md)
 - "Hooks system?" -> [`kaizen-observability-hooks`](../../skills/04-kaizen/kaizen-observability-hooks.md)
 - "Memory system?" -> [`kaizen-memory-system`](../../skills/04-kaizen/kaizen-memory-system.md)
@@ -40,16 +44,19 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - "Interrupts?" -> [`kaizen-interrupt-mechanism`](../../skills/04-kaizen/kaizen-interrupt-mechanism.md)
 
 **Enterprise**:
+
 - "Trust protocol (EATP)?" -> [`kaizen-trust-eatp`](../../skills/04-kaizen/kaizen-trust-eatp.md)
 - "Agent registry?" -> [`kaizen-agent-registry`](../../skills/04-kaizen/kaizen-agent-registry.md)
 - "Structured outputs?" -> [`kaizen-structured-outputs`](../../skills/04-kaizen/kaizen-structured-outputs.md)
 
 **Troubleshooting**:
+
 - "Common issues?" -> [`kaizen-common-issues`](../../skills/04-kaizen/kaizen-common-issues.md)
 - "Testing patterns?" -> [`kaizen-testing-patterns`](../../skills/04-kaizen/kaizen-testing-patterns.md)
 - "UX helpers?" -> [`kaizen-ux-helpers`](../../skills/04-kaizen/kaizen-ux-helpers.md)
 
 **v1.0 Features**:
+
 - "Performance caches?" -> [`kaizen-v1-features`](../../skills/04-kaizen/kaizen-v1-features.md)
 - "Specialist system?" -> [`kaizen-v1-features`](../../skills/04-kaizen/kaizen-v1-features.md)
 - "GPT-5 support?" -> [`kaizen-v1-features`](../../skills/04-kaizen/kaizen-v1-features.md)
@@ -57,12 +64,14 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 ## Primary Responsibilities
 
 ### Use This Subagent When:
+
 - **Enterprise AI Architecture**: Complex multi-agent systems with coordination
 - **Custom Agent Development**: Novel agent patterns beyond standard examples
 - **Performance Optimization**: Agent-level tuning and cost management
 - **Advanced Multi-Modal**: Complex vision/audio workflows
 
 ### Use Skills Instead When:
+
 - "Basic agent setup" -> Use `kaizen-baseagent-quick` Skill
 - "Simple signatures" -> Use `kaizen-signatures` Skill
 - "Standard multi-agent" -> Use `kaizen-multi-agent-setup` Skill
@@ -71,33 +80,38 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 ## Documentation Navigation
 
 ### Primary References
+
 - **[CLAUDE.md](../../../sdk-users/apps/kaizen/CLAUDE.md)** - Quick reference
 - **[README.md](../../../sdk-users/apps/kaizen/README.md)** - Complete guide
 - **[Example Gallery](../../../apps/kailash-kaizen/examples/autonomy/EXAMPLE_GALLERY.md)** - 15 autonomy examples
 - **[API Reference](../../../sdk-users/apps/kaizen/docs/reference/api-reference.md)** - Complete API docs
 
 ### By Use Case
-| Need | Documentation |
-|------|---------------|
-| Getting started | `sdk-users/apps/kaizen/docs/getting-started/quickstart.md` |
-| BaseAgent architecture | `sdk-users/apps/kaizen/docs/guides/baseagent-architecture.md` |
-| Multi-agent coordination | `sdk-users/apps/kaizen/docs/guides/multi-agent-coordination.md` |
-| Control Protocol | `sdk-users/apps/kaizen/docs/guides/control-protocol-tutorial.md` |
-| Autonomy infrastructure | `sdk-users/apps/kaizen/docs/guides/autonomy-system-overview.md` |
-| Planning agents | `sdk-users/apps/kaizen/docs/guides/planning-agents-guide.md` |
-| Multi-modal APIs | `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` |
-| Memory patterns | `sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md` |
-| Strategy selection | `sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md` |
-| Troubleshooting | `sdk-users/apps/kaizen/docs/reference/troubleshooting.md` |
+
+| Need                     | Documentation                                                       |
+| ------------------------ | ------------------------------------------------------------------- |
+| Getting started          | `sdk-users/apps/kaizen/docs/getting-started/quickstart.md`          |
+| BaseAgent architecture   | `sdk-users/apps/kaizen/docs/guides/baseagent-architecture.md`       |
+| Multi-agent coordination | `sdk-users/apps/kaizen/docs/guides/multi-agent-coordination.md`     |
+| Control Protocol         | `sdk-users/apps/kaizen/docs/guides/control-protocol-tutorial.md`    |
+| Autonomy infrastructure  | `sdk-users/apps/kaizen/docs/guides/autonomy-system-overview.md`     |
+| Planning agents          | `sdk-users/apps/kaizen/docs/guides/planning-agents-guide.md`        |
+| Multi-modal APIs         | `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` |
+| Memory patterns          | `sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md`     |
+| Strategy selection       | `sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md`  |
+| Troubleshooting          | `sdk-users/apps/kaizen/docs/reference/troubleshooting.md`           |
 
 ## Core Architecture
 
 ### Framework Positioning
+
 **Built on Kailash Core SDK** - Uses WorkflowBuilder and LocalRuntime underneath
+
 - **When to use Kaizen**: AI agents, multi-agent systems, signature-based programming, LLM workflows
 - **When NOT to use**: Simple workflows (Core SDK), database apps (DataFlow), multi-channel platforms (Nexus)
 
 ### Key Concepts
+
 - **Signature-Based Programming**: Type-safe I/O with InputField/OutputField
 - **BaseAgent**: Unified agent system with lazy initialization, auto-generates A2A capability cards
 - **Autonomous Tool Calling** (v0.2.0): 12 builtin tools with danger-level approval workflows
@@ -109,36 +123,41 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **Strategy Pattern**: Pluggable execution (AsyncSingleShotStrategy is default)
 - **SharedMemoryPool**: Multi-agent coordination
 - **A2A Protocol**: Google Agent-to-Agent protocol for semantic capability matching
+- **CARE/EATP Trust Framework** (v1.1.0): Cryptographic trust chains, 5-posture enum with state machine, constraint dimensions, knowledge ledger with provenance, enterprise crypto (multi-sig genesis, Merkle audit, CRL)
+- **Performance Caches** (v1.0): 7 caches with 10-100x speedup (Schema, Embedding, Prompt, etc.)
+- **GPT-5 Support** (v1.0): Automatic temperature=1.0 enforcement, 8000 max_tokens for reasoning
 
 ### Deprecation Notes (v1.0)
 
-| Feature | Status | Migration |
-|---------|--------|-----------|
-| `ToolRegistry`, `ToolExecutor` | **REMOVED** | Use MCP via `BaseAgent.execute_mcp_tool()` or `KaizenToolRegistry` for native tools |
-| `kaizen.agents.coordination` | **DEPRECATED** (removal in v0.5.0) | Use `kaizen.orchestration.patterns` |
-| `max_tokens` (OpenAI providers) | **DEPRECATED** | Use `max_completion_tokens` instead |
+| Feature                         | Status                             | Migration                                                                           |
+| ------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------- |
+| `ToolRegistry`, `ToolExecutor`  | **REMOVED**                        | Use MCP via `BaseAgent.execute_mcp_tool()` or `KaizenToolRegistry` for native tools |
+| `kaizen.agents.coordination`    | **DEPRECATED** (removal in v0.5.0) | Use `kaizen.orchestration.patterns`                                                 |
+| `max_tokens` (OpenAI providers) | **DEPRECATED**                     | Use `max_completion_tokens` instead                                                 |
 
 ### LLM Providers (v0.8.2)
 
-| Provider | Type | Requirements | Features |
-|----------|------|--------------|----------|
-| `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
-| `azure` | Cloud | `AZURE_ENDPOINT`, `AZURE_API_KEY` | Unified Azure, vision, embeddings, reasoning models |
-| `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
-| `google` | Cloud | `GOOGLE_API_KEY` | Gemini 2.0, vision, embeddings, tool calling |
-| `ollama` | Local | Ollama on port 11434 | Free, local models |
-| `docker` | Local | Docker Desktop Model Runner | Free local inference |
-| `mock` | Testing | None | Unit test provider |
+| Provider    | Type    | Requirements                      | Features                                            |
+| ----------- | ------- | --------------------------------- | --------------------------------------------------- |
+| `openai`    | Cloud   | `OPENAI_API_KEY`                  | GPT-4, GPT-4o, structured outputs, tool calling     |
+| `azure`     | Cloud   | `AZURE_ENDPOINT`, `AZURE_API_KEY` | Unified Azure, vision, embeddings, reasoning models |
+| `anthropic` | Cloud   | `ANTHROPIC_API_KEY`               | Claude 3.x, vision support                          |
+| `google`    | Cloud   | `GOOGLE_API_KEY`                  | Gemini 2.0, vision, embeddings, tool calling        |
+| `ollama`    | Local   | Ollama on port 11434              | Free, local models                                  |
+| `docker`    | Local   | Docker Desktop Model Runner       | Free local inference                                |
+| `mock`      | Testing | None                              | Unit test provider                                  |
 
 **Auto-Detection Priority**: OpenAI -> Azure -> Anthropic -> Google -> Ollama -> Docker
 
 ### Agent Classification
 
 **Autonomous Agents (3)**: ReActAgent, CodeGenerationAgent, RAGResearchAgent
+
 - Multi-cycle execution with tool calling REQUIRED
 - Use MultiCycleStrategy by default
 
 **Interactive Agents (22)**: All other agents
+
 - Single-shot execution (AsyncSingleShotStrategy)
 - Tool calling OPTIONAL
 
@@ -146,15 +165,16 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 
 ## Model Selection Guide
 
-| Model | Size | Speed | Accuracy | Cost | Best For |
-|-------|------|-------|----------|------|----------|
-| bakllava | 4.7GB | 2-4s | 40-60% | $0 | Development, testing |
-| llava:13b | 7GB | 4-8s | 80-90% | $0 | Production (local) |
-| GPT-4V | API | 1-2s | 95%+ | ~$0.01/img | Production (cloud) |
+| Model     | Size  | Speed | Accuracy | Cost       | Best For             |
+| --------- | ----- | ----- | -------- | ---------- | -------------------- |
+| bakllava  | 4.7GB | 2-4s  | 40-60%   | $0         | Development, testing |
+| llava:13b | 7GB   | 4-8s  | 80-90%   | $0         | Production (local)   |
+| GPT-4V    | API   | 1-2s  | 95%+     | ~$0.01/img | Production (cloud)   |
 
 ## Critical Rules
 
 ### ALWAYS
+
 - Use domain configs (e.g., `QAConfig`), auto-convert to BaseAgentConfig
 - Use UX improvements: `config=domain_config`, `write_to_memory()`, `extract_*()`
 - Let AsyncSingleShotStrategy be default (don't specify)
@@ -173,6 +193,7 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **Testing**: Use `llm_provider="mock"` explicitly in unit tests
 
 ### NEVER
+
 - Manually create BaseAgentConfig (use auto-extraction)
 - Write verbose `write_insight()` (use `write_to_memory()`)
 - Manual JSON parsing (use `extract_*()`)
@@ -233,6 +254,7 @@ result = agent.process("input")
 ## Use This Specialist For
 
 ### Proactive Use Cases
+
 - Implementing AI agents with BaseAgent
 - Designing multi-agent coordination
 - Building autonomous agents with tool calling (v0.2.0)
@@ -251,6 +273,7 @@ result = agent.process("input")
 ## For Detailed Patterns
 
 See the [Kaizen Skills](../../skills/04-kaizen/) (43 skills) for:
+
 - Quick start guide ([`kaizen-quickstart-template`](../../skills/04-kaizen/kaizen-quickstart-template.md))
 - BaseAgent basics ([`kaizen-baseagent-quick`](../../skills/04-kaizen/kaizen-baseagent-quick.md))
 - Signatures ([`kaizen-signatures`](../../skills/04-kaizen/kaizen-signatures.md))
@@ -270,6 +293,7 @@ See the [Kaizen Skills](../../skills/04-kaizen/) (43 skills) for:
 - v1.0 features ([`kaizen-v1-features`](../../skills/04-kaizen/kaizen-v1-features.md))
 
 **This subagent focuses on**:
+
 - Enterprise AI architecture
 - Advanced multi-agent coordination
 - Custom agent development
@@ -289,6 +313,7 @@ See the [Kaizen Skills](../../skills/04-kaizen/) (43 skills) for:
 ## Full Documentation
 
 When this guidance is insufficient, consult:
+
 - `sdk-users/apps/kaizen/CLAUDE.md` - Complete Kaizen guide
 - `sdk-users/apps/kaizen/docs/` - Comprehensive documentation
 - `apps/kailash-kaizen/examples/` - Working examples

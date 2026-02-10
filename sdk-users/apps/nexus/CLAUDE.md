@@ -24,7 +24,8 @@ app.start()
 
 ## 🎯 Core API
 
-### Constructor (v1.1.1+ Security Defaults)
+### Constructor (v1.3.0)
+
 ```python
 app = Nexus(
     api_port=8000,                # API server port (default: 8000)
@@ -48,6 +49,7 @@ app = Nexus(
 ```
 
 ### Registration
+
 ```python
 # Register a workflow
 app.register(name: str, workflow: Workflow)
@@ -61,25 +63,30 @@ app.register(name: str, workflow: Workflow)
 ## 📚 Documentation Structure
 
 ### Getting Started
+
 - **[Quick Start](docs/getting-started/quick-start.md)** - 5-minute tutorial
 - **[Concepts](docs/getting-started/concepts.md)** - Core concepts
 
 ### User Guides
+
 - **[Workflow Registration](docs/user-guides/workflow-registration.md)** - Register workflows
 - **[Multi-Channel Access](docs/user-guides/multi-channel-access.md)** - API, CLI, MCP usage
 
 ### Technical Guides
+
 - **[Architecture](docs/technical/architecture-overview.md)** - System architecture
 - **[Integration](docs/technical/integration-guide.md)** - Integration patterns
 - **[Troubleshooting](docs/technical/troubleshooting.md)** - Common issues
 
 ### Reference
+
 - **[API Reference](docs/reference/api-reference.md)** - Complete API docs
 - **[CLI Reference](docs/reference/cli-reference.md)** - CLI commands
 
 ## 🔧 Common Patterns
 
 ### Basic Workflow Registration
+
 ```python
 from nexus import Nexus
 from kailash.workflow.builder import WorkflowBuilder
@@ -96,22 +103,39 @@ app.register("chat", workflow.build())
 # Note: Use app.start() to run the platform (blocks until stopped)
 ```
 
-### Enterprise Configuration
+### Handler Pattern (Recommended for v1.2.0+)
+
 ```python
-app = Nexus(enable_auth=True, enable_monitoring=True)
+from nexus import Nexus
 
-# Configure auth (optional)
-app.auth.strategy = "oauth2"
-app.auth.provider = "auth0"
+app = Nexus()
 
-# Configure monitoring (optional)
-app.monitoring.backend = "prometheus"
-app.monitoring.interval = 60
+@app.handler("greet", description="Greeting handler")
+async def greet(name: str, greeting: str = "Hello") -> dict:
+    return {"message": f"{greeting}, {name}!"}
 
-# Note: Use app.start() to run the platform (blocks until stopped)
+app.start()
+```
+
+### Enterprise Configuration (v1.3.0+)
+
+```python
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig
+
+# Auth via NexusAuthPlugin
+auth = NexusAuthPlugin.basic_auth(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),  # >= 32 chars
+)
+app = Nexus()
+app.add_plugin(auth)
+app.start()
 ```
 
 ### Parameter Passing
+
 ```python
 # Workflows receive parameters from all channels:
 # API: JSON body
@@ -134,6 +158,7 @@ workflow.add_node("PythonCodeNode", "process", {
 ## 🧪 Testing
 
 ### Unit Tests
+
 ```python
 from nexus import Nexus
 
@@ -144,6 +169,7 @@ def test_workflow_registration():
 ```
 
 ### Integration Tests
+
 See `tests/integration/test_nexus_integration.py` for examples.
 
 ## 🏗️ Architecture
@@ -167,6 +193,7 @@ Nexus uses Kailash SDK's enterprise gateway for unified workflow management:
 ## 🚦 Production Deployment
 
 See [Production Guide](docs/production/deployment.md) for:
+
 - Docker deployment
 - Kubernetes manifests
 - Environment configuration

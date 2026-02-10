@@ -20,10 +20,10 @@ app.start()
 ```
 
 That's it! You now have:
+
 - API Server on `http://localhost:8000`
 - Health Check at `http://localhost:8000/health`
 - MCP Server on port 3001
-- Auto-discovery enabled
 
 ## Add Your First Workflow
 
@@ -51,26 +51,30 @@ app.start()
 ## Test All Three Channels
 
 **API (HTTP)**:
+
 ```bash
 curl -X POST http://localhost:8000/workflows/fetch-data/execute
 ```
 
 **CLI**:
+
 ```bash
 nexus run fetch-data
 ```
 
 **MCP** (for AI agents):
+
 ```json
 {
   "method": "tools/call",
-  "params": {"name": "fetch-data", "arguments": {}}
+  "params": { "name": "fetch-data", "arguments": {} }
 }
 ```
 
 ## Critical Patterns
 
 ### Always Call .build()
+
 ```python
 # CORRECT
 app.register("workflow-name", workflow.build())
@@ -80,6 +84,7 @@ app.register("workflow-name", workflow)
 ```
 
 ### Correct Parameter Order
+
 ```python
 # CORRECT - name first, workflow second
 app.register("name", workflow.build())
@@ -91,17 +96,20 @@ app.register(workflow.build(), "name")
 ## Common Issues
 
 ### Port Conflicts
+
 ```python
 # Use custom ports if defaults are taken
 app = Nexus(api_port=8001, mcp_port=3002)
 ```
 
 ### Import Errors
+
 ```bash
 pip install kailash-nexus
 ```
 
 ### Workflow Not Found
+
 ```python
 # Ensure .build() is called
 workflow = WorkflowBuilder()
@@ -109,15 +117,36 @@ workflow.add_node("PythonCodeNode", "test", {"code": "result = {'ok': True}"})
 app.register("test", workflow.build())  # Don't forget .build()
 ```
 
+## Handler Pattern (Recommended)
+
+For simple workflows, use `@app.handler()` instead of WorkflowBuilder:
+
+```python
+from nexus import Nexus
+
+app = Nexus()
+
+@app.handler("greet", description="Greeting handler")
+async def greet(name: str, greeting: str = "Hello") -> dict:
+    return {"message": f"{greeting}, {name}!"}
+
+app.start()
+```
+
+See [nexus-handler-support](nexus-handler-support.md) for full details.
+
 ## Next Steps
 
-- Add parameters: See [nexus-workflow-registration](#)
-- Use multiple channels: See [nexus-multi-channel](#)
-- Integrate DataFlow: See [nexus-dataflow-integration](#)
+- **Use handlers** (recommended): See [nexus-handler-support](nexus-handler-support.md)
+- Add parameters: See [nexus-workflow-registration](nexus-workflow-registration.md)
+- Use multiple channels: See [nexus-multi-channel](nexus-multi-channel.md)
+- Integrate DataFlow: See [nexus-dataflow-integration](nexus-dataflow-integration.md)
+- Add authentication: See [nexus-auth-plugin](nexus-auth-plugin.md)
 
 ## Key Takeaways
 
 - Zero configuration: Just `Nexus()` and go
-- Always call `.build()` before registration
+- Always call `.build()` before registration (or use `@app.handler()`)
 - Single registration creates API + CLI + MCP
 - Default ports: 8000 (API), 3001 (MCP)
+- `cors_allow_credentials=False` by default (security)

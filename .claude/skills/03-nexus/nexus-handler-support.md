@@ -216,7 +216,28 @@ WARNING: Workflow 'my_workflow': PythonCodeNode node 'code_node' imports
 - [nexus-quickstart](#) - Basic Nexus setup
 - [nexus-dataflow-integration](#) - DataFlow integration
 
+## Migration Documentation
+
+For comprehensive migration from legacy PythonCodeNode workflows to handlers:
+
+- `apps/kailash-nexus/docs/migration/handler-migration-guide.md` - 5 migration patterns, 6-phase checklist, "When NOT to Migrate" guidance
+- `apps/kailash-nexus/docs/migration/real-project-patterns.md` - 8 real-world patterns from 3 production projects (382K LOC)
+
+### Key Migration Insight
+
+HandlerNode's `_derive_params_from_signature()` maps complex generic types (e.g., `List[dict]`) to `str`. Use plain `list` annotation instead:
+
+```python
+# ❌ WRONG: List[dict] maps to str
+async def create_order(items: List[dict]) -> dict: ...
+
+# ✅ CORRECT: list maps to list
+async def create_order(items: list) -> dict: ...
+```
+
 ## Full Documentation
 
 - `apps/kailash-nexus/docs/handler-support.md` - Complete handler guide
+- `apps/kailash-nexus/docs/migration/handler-migration-guide.md` - Migration guide (5 patterns)
+- `apps/kailash-nexus/docs/migration/real-project-patterns.md` - Real project patterns (8 patterns)
 - `src/kailash/nodes/handler.py` - HandlerNode implementation

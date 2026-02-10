@@ -1,6 +1,6 @@
-# Nexus Skills - Phase 2
+# Nexus Skills
 
-Complete set of 17 Nexus skills covering all aspects from quickstart to advanced topics.
+Complete set of 21 Nexus skills covering all aspects from quickstart to advanced topics.
 
 ## Skills Overview
 
@@ -24,7 +24,7 @@ Complete set of 17 Nexus skills covering all aspects from quickstart to advanced
 
 5. **nexus-dataflow-integration** - CRITICAL blocking fix configuration
    - Priority: CRITICAL
-   - auto_discovery=False, enable_model_persistence=False, performance optimization
+   - auto_discovery=False, auto_migrate=True (v0.11.0 default), performance optimization
 
 ### Channel-Specific (6 Skills - HIGH)
 
@@ -80,26 +80,48 @@ Complete set of 17 Nexus skills covering all aspects from quickstart to advanced
     - Priority: LOW
     - Custom plugins, plugin system, extensibility
 
+### v1.3.0 Additions (4 Skills - HIGH)
+
+18. **nexus-handler-support** - Register Python functions as multi-channel workflows
+    - Priority: HIGH
+    - `@app.handler()` decorator, `register_handler()`, parameter derivation, sandbox bypass
+
+19. **nexus-auth-plugin** - NexusAuthPlugin unified authentication
+    - Priority: HIGH
+    - JWT, RBAC, SSO (GitHub/Google/Azure), rate limiting, tenant isolation, audit logging
+
+20. **golden-patterns-catalog** - Top 7 production-validated codegen patterns
+    - Priority: HIGH
+    - Ranked by usage across 382K LOC, with correct imports and security defaults
+
+21. **codegen-decision-tree** - Structured decision logic for pattern selection
+    - Priority: HIGH
+    - Decision tree, 7 anti-patterns, 3 scaffolding templates
+
 ## Critical Patterns Included
 
 ### 1. API Input Mapping (Lines 139-241 from nexus-specialist)
+
 - Complete flow from API request to node parameters
 - try/except pattern for parameter access
 - Broadcasting behavior explained
 - Common pitfalls with solutions
 
 ### 2. DataFlow Blocking Fix (Lines 320-386 from nexus-specialist)
+
 - auto_discovery=False configuration
-- enable_model_persistence=False optimization
+- auto_migrate=True (v0.11.0 default, works in Docker/FastAPI)
 - Performance comparison (30s → <2s)
 - Trade-off analysis
 
 ### 3. Zero-Config Pattern
+
 - Nexus() with no parameters
 - .build() before register
 - Correct parameter order
 
 ### 4. Multi-Channel Architecture
+
 - Single registration, three interfaces
 - Cross-channel sessions
 - Unified parameter handling
@@ -107,8 +129,9 @@ Complete set of 17 Nexus skills covering all aspects from quickstart to advanced
 ## Source Documentation
 
 All skills created from verified sources:
+
 - sdk-users/apps/nexus/README.md
-- sdk-users/apps/nexus/docs/* (getting-started, user-guides, technical, reference, advanced)
+- sdk-users/apps/nexus/docs/\* (getting-started, user-guides, technical, reference, advanced)
 - .claude/agents/frameworks/nexus-specialist.md
 - sdk-users/apps/nexus/CLAUDE.md
 
@@ -140,11 +163,13 @@ nexus-architecture
 ## Quick Reference
 
 ### Start Here
+
 1. Read **nexus-quickstart** for basic setup
 2. Read **nexus-multi-channel** to understand architecture
 3. Read **nexus-api-input-mapping** for critical parameter handling
 
 ### Common Tasks
+
 - **Setup Nexus**: nexus-quickstart
 - **Fix blocking with DataFlow**: nexus-dataflow-integration
 - **Use REST API**: nexus-api-patterns, nexus-api-input-mapping
@@ -152,6 +177,7 @@ nexus-architecture
 - **Fix issues**: nexus-troubleshooting
 
 ### By Priority
+
 - **CRITICAL**: nexus-quickstart, nexus-dataflow-integration, nexus-api-input-mapping
 - **HIGH**: nexus-multi-channel, nexus-workflow-registration, nexus-sessions, channels, monitoring
 - **MEDIUM**: config, enterprise, production, architecture
@@ -160,6 +186,7 @@ nexus-architecture
 ## Coverage
 
 ### What's Covered
+
 - ✅ Zero-configuration setup
 - ✅ Multi-channel architecture (API/CLI/MCP)
 - ✅ Workflow registration patterns
@@ -174,11 +201,15 @@ nexus-architecture
 - ✅ Architecture overview
 - ✅ Event system
 - ✅ Plugin development
+- ✅ Handler support (`@app.handler()` decorator)
+- ✅ Authentication plugin (JWT, RBAC, SSO, rate limiting, tenant, audit)
+- ✅ Golden patterns catalog (7 patterns)
+- ✅ Codegen decision tree (anti-patterns, scaffolding)
 
 ### What's NOT Covered
+
 - Implementation details (covered in docs)
 - Code deep-dives (use source code)
-- Version-specific features (use changelogs)
 
 ## Usage Notes
 
@@ -190,14 +221,11 @@ nexus-architecture
 
 ## Verification
 
-All 17 skills created and verified:
-- Created: 2025-01-15
-- Location: .claude/skills/2-frameworks/nexus/
-- Total files: 17 skills + 1 README
-- Size: ~70KB total documentation
-- Format: Markdown with code examples
-- Tags: Consistent tagging for search
-- Priority: CRITICAL (3), HIGH (8), MEDIUM (4), LOW (2)
+21 skills created and verified:
+
+- Location: .claude/skills/03-nexus/
+- Total files: 21 skills + SKILL.md + README.md
+- Priority: CRITICAL (3), HIGH (12), MEDIUM (4), LOW (2)
 
 ## Related Skill Sets
 

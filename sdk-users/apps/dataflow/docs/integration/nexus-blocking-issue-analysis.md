@@ -1,6 +1,11 @@
 # DataFlow + Nexus Integration Solution
 
-> **✅ RESOLVED IN v1.1.1+**: As of Nexus v1.1.1 (released October 24, 2025), the default for `auto_discovery` has been changed to `False` (P0-3 fix). This blocking issue no longer occurs by default. This document is retained for reference and for users on earlier versions.
+> **RESOLVED**: Both issues described in this document have been fully resolved:
+>
+> - **Nexus v1.1.1+** (October 2025): `auto_discovery` defaults to `False`, eliminating the infinite blocking issue.
+> - **DataFlow v0.11.0+**: `auto_migrate=True` (default) works correctly in Docker/FastAPI via `SyncDDLExecutor`, eliminating the startup delay. The `skip_migration` and `enable_model_persistence` parameters referenced in historical code examples below are no longer needed.
+>
+> This document is retained for historical reference.
 
 ## Problem Summary (Resolved in v1.1.1+)
 
@@ -11,6 +16,7 @@
 ## Root Cause Analysis
 
 ### The Issue
+
 1. **DataFlow Model Registration**: When DataFlow registers models using the `@db.model` decorator, it creates and registers workflow nodes globally (9 nodes per model: CRUD + bulk operations)
 
 2. **Nexus Auto-Discovery**: When Nexus initializes with `auto_discovery=True`, it:
@@ -25,6 +31,7 @@
    - Server initialization never completes
 
 ### Technical Details
+
 ```python
 # The problematic flow:
 1. Import DataFlow models → Registers nodes globally
@@ -37,6 +44,7 @@
 ## Solution
 
 ### Immediate Fix
+
 Set `auto_discovery=False` when creating Nexus instances that will use DataFlow:
 
 ```python
@@ -50,6 +58,7 @@ app = Nexus(
 ```
 
 ### Why This Works
+
 - Prevents Nexus from scanning and importing Python files during initialization
 - Avoids re-triggering DataFlow model registration
 - Allows manual, controlled workflow registration
@@ -81,17 +90,17 @@ def create_production_app():
 ### 2. DataFlow Configuration
 
 ```python
-from dataflow.core.engine import DataFlow
+from dataflow import DataFlow
 
+# v0.11.0+ recommended configuration (works in Docker/FastAPI via SyncDDLExecutor)
 db = DataFlow(
     database_url="postgresql://user:pass@host:port/db",
-    auto_migrate=False,              # Control migrations manually
-    skip_migration=True,             # Skip auto-migration for faster startup
-    enable_model_persistence=True,   # Enable model persistence for multi-app support
+    auto_migrate=True,              # Default - works everywhere as of v0.11.0+
     connection_pool_size=20,
     enable_metrics=True,
     enable_caching=True
 )
+# NOTE: skip_migration and enable_model_persistence are no longer needed in v0.11.0+
 ```
 
 ### 3. Model Registration Pattern
@@ -99,7 +108,7 @@ db = DataFlow(
 ```python
 def setup_dataflow_models():
     """Setup DataFlow models in a function scope."""
-    from dataflow.core.engine import DataFlow
+    from dataflow import DataFlow
 
     db = DataFlow(...)
 
@@ -168,13 +177,12 @@ class DataFlowNexusApp:
 
     def _setup_dataflow(self):
         """Setup DataFlow models."""
-        from dataflow.core.engine import DataFlow
+        from dataflow import DataFlow
 
+        # v0.11.0+ recommended: auto_migrate=True works in Docker/FastAPI
         self.db = DataFlow(
             database_url="postgresql://kailash:kailash@localhost:5432/prod",
-            auto_migrate=False,
-            skip_migration=True,
-            enable_model_persistence=True
+            auto_migrate=True  # Default - SyncDDLExecutor handles DDL safely
         )
 
         # Define models
@@ -225,12 +233,14 @@ if __name__ == "__main__":
 ## Performance Considerations
 
 ### With Fix Applied
+
 - Nexus initialization: ~1-2 seconds
 - DataFlow model registration: ~5-10 seconds (depends on model count)
 - Total startup time: ~10-15 seconds for typical application
 - No blocking or hanging
 
 ### Without Fix (auto_discovery=True)
+
 - Server hangs indefinitely
 - Must be terminated with Ctrl+C
 - Production deployment impossible
@@ -240,6 +250,7 @@ if __name__ == "__main__":
 ### For Existing Applications
 
 1. **Update Nexus Initialization**:
+
    ```python
    # OLD (blocks with DataFlow)
    app = Nexus(api_port=8002)
@@ -249,6 +260,7 @@ if __name__ == "__main__":
    ```
 
 2. **Reorganize Imports**:
+
    ```python
    # OLD (DataFlow imported globally)
    from database.dataflow_models import db
@@ -268,16 +280,19 @@ if __name__ == "__main__":
 ## Troubleshooting
 
 ### Issue: Server Still Hangs
+
 - Verify `auto_discovery=False` is set
 - Check for global DataFlow imports before Nexus creation
 - Ensure no other code triggers workflow discovery
 
 ### Issue: Workflows Not Found
+
 - With `auto_discovery=False`, workflows must be registered manually
 - Use `app.register()` for each workflow
 - Verify workflow names match your API calls
 
 ### Issue: DataFlow Models Not Available
+
 - Import DataFlow models AFTER Nexus initialization
 - Ensure database connection is configured correctly
 - Check model registration completes before starting server
@@ -285,22 +300,26 @@ if __name__ == "__main__":
 ## Future Improvements
 
 ### Planned SDK Enhancements
+
 1. **Lazy Model Registration**: DataFlow models register only when first used
 2. **Discovery Isolation**: Run discovery in separate process/thread
 3. **Smart Discovery**: Exclude DataFlow model files from discovery
 4. **Configuration Option**: Add `dataflow_compatible` mode to Nexus
 
 ### Workaround Until Fix
+
 Use the `auto_discovery=False` pattern as documented above. This is the recommended approach for all DataFlow + Nexus integrations.
 
 ## Summary
 
 The DataFlow + Nexus integration issue occurs because:
+
 1. DataFlow model registration creates workflows that execute during import
 2. Nexus auto_discovery imports Python files, triggering model registration
 3. This creates a blocking loop that prevents server initialization
 
 The solution is simple and effective:
+
 - Set `auto_discovery=False` when creating Nexus instances
 - Initialize Nexus BEFORE importing DataFlow models
 - Register workflows manually after model setup

@@ -79,6 +79,7 @@ app = Nexus(
 ```
 
 **NOTE**: The following parameters do NOT exist in Nexus v1.1.3:
+
 - `title`
 - `enable_api`, `enable_cli`, `enable_mcp`
 - `dataflow_config`
@@ -97,9 +98,11 @@ db = DataFlow(
 )
 ```
 
-**Valid Parameters**:
-- `existing_schema_mode` and `enable_model_persistence` still exist and are functional
-- **Deprecated**: `skip_registry`, `skip_migration`, `connection_pool_size`, `enable_metrics`
+**Removed Parameters** (no longer valid in v0.11.0):
+
+- `existing_schema_mode`, `enable_model_persistence`, `skip_registry`, `skip_migration` - all removed
+- Use `auto_migrate=True` (default) or `auto_migrate=False` instead
+- `connection_pool_size` -> use `pool_size`; `enable_metrics` -> use `monitoring=True`
 
 ## Common Mistakes
 
@@ -111,6 +114,7 @@ app = Nexus(auto_discovery=True)  # BLOCKS! Scans filesystem
 ```
 
 **Fix:**
+
 ```python
 # CORRECT
 app = Nexus(auto_discovery=False)
@@ -126,6 +130,7 @@ app = Nexus(
 ```
 
 **Fix: Register workflows manually:**
+
 ```python
 # CORRECT - Manual workflow registration
 app = Nexus(auto_discovery=False)
@@ -143,6 +148,7 @@ app.register("list_products", workflow.build())
 ## When to Escalate to Subagent
 
 Use `dataflow-specialist` or `nexus-specialist` when:
+
 - Complex workflow registration patterns
 - Performance optimization needed
 - Multi-database integration
@@ -192,11 +198,11 @@ app.start()
 
 ## Troubleshooting
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Nexus hangs on startup | `auto_discovery=True` | Set `auto_discovery=False` |
-| Workflow not found | Not registered | Use `app.register(name, workflow)` |
-| DataFlow tables not created | `auto_migrate=False` | Use `auto_migrate=True` (default) |
+| Issue                       | Cause                 | Solution                           |
+| --------------------------- | --------------------- | ---------------------------------- |
+| Nexus hangs on startup      | `auto_discovery=True` | Set `auto_discovery=False`         |
+| Workflow not found          | Not registered        | Use `app.register(name, workflow)` |
+| DataFlow tables not created | `auto_migrate=False`  | Use `auto_migrate=True` (default)  |
 
 ## Quick Tips
 

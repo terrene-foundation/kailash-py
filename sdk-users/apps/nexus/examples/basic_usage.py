@@ -1,48 +1,81 @@
 #!/usr/bin/env python3
-"""Basic usage example of Kailash Nexus.
+"""Basic usage example of Kailash Nexus v1.3.0.
 
-Shows the new FastAPI-style API with explicit instances and enterprise options.
+Shows the FastAPI-style API with explicit instances, handler registration,
+and enterprise auth via NexusAuthPlugin.
 """
 
-from kailash.workflow.builder import WorkflowBuilder
+import os
+
 from nexus import Nexus
+
+from kailash.workflow.builder import WorkflowBuilder
 
 
 def main():
     """Example of FastAPI-style Nexus usage."""
 
-    # Simple case - like FastAPI
+    # --- Pattern 1: Zero-config (simplest) ---
     app = Nexus()
 
-    # Or with enterprise features at construction
+    # --- Pattern 2: Constructor options ---
     # app = Nexus(
-    #     enable_auth=True,
-    #     enable_monitoring=True,
     #     api_port=8000,
     #     mcp_port=3001,
-    #     rate_limit=100
+    #     enable_auth=True,
+    #     enable_monitoring=True,
+    #     rate_limit=100,
+    #     auto_discovery=False,        # Prevents blocking with DataFlow
+    #     cors_origins=["http://localhost:3000"],
     # )
 
-    # Create a simple workflow
+    # --- Pattern 3: Preset (one-line middleware stack) ---
+    # app = Nexus(preset="saas", cors_origins=["https://app.example.com"])
+
+    # --- Register a workflow (WorkflowBuilder) ---
     workflow = WorkflowBuilder()
     workflow.add_node(
         "PythonCodeNode",
         "greet",
         {
             "code": """
-name = parameters.get('name', 'World')
+try:
+    name = name
+except NameError:
+    name = 'World'
 result = {'greeting': f'Hello, {name}!'}
 """
         },
     )
 
-    # Register the workflow
+    # register() accepts both Workflow and WorkflowBuilder (auto-calls .build())
     app.register("greeter", workflow)
 
-    # Fine-tune configuration via attributes
-    app.auth.strategy = "rbac"
-    app.monitoring.interval = 30
-    app.api.cors_enabled = True
+    # --- Handler pattern (recommended for v1.2.0+) ---
+    # Direct async function as multi-channel workflow -- bypasses PythonCodeNode sandbox.
+    @app.handler("echo", description="Echo a message back", tags=["utility"])
+    async def echo(message: str, uppercase: bool = False) -> dict:
+        """Echo handler available on API, CLI, and MCP."""
+        text = message.upper() if uppercase else message
+        return {"echo": text}
+
+    # --- Enterprise auth via NexusAuthPlugin (v1.3.0) ---
+    # There is NO app.auth.strategy attribute. Use the plugin system instead:
+    #
+    # from nexus.auth.plugin import NexusAuthPlugin
+    # from nexus.auth import JWTConfig, TenantConfig, AuditConfig
+    #
+    # auth = NexusAuthPlugin.basic_auth(
+    #     jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    # )
+    # app.add_plugin(auth)
+
+    # --- CORS configuration ---
+    # Option A: Constructor (preferred)
+    # app = Nexus(cors_origins=["http://localhost:3000"], cors_allow_credentials=True)
+    #
+    # Option B: After construction
+    # app.configure_cors(allow_origins=["http://localhost:3000"])
 
     # Start the platform (API, CLI, MCP all available)
     print("Starting Nexus...")
@@ -57,7 +90,9 @@ result = {'greeting': f'Hello, {name}!'}
 
     # The platform is now running and accessible via:
     # - API: http://localhost:8000
-    # - CLI: nexus-cli
+    #     POST /workflows/greeter/execute  {"name": "Alice"}
+    #     POST /workflows/echo/execute     {"message": "hi", "uppercase": true}
+    # - CLI: nexus execute greeter
     # - MCP: localhost:3001
 
     print("Press Ctrl+C to stop...")

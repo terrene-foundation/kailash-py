@@ -71,8 +71,8 @@ def demonstrate_workflow_first_principle():
     customer_onboarding.add_connection("compliance", "provisioning", "output", "compliance_result")
     customer_onboarding.add_connection("provisioning", "communication", "output", "account_details")
 
-    # 🎯 WORKFLOW-FIRST MAGIC: This single workflow definition creates:
-    registration = app.register(customer_onboarding, "customer-onboarding", "1.0.0")
+    # WORKFLOW-FIRST: This single workflow definition creates multi-channel access:
+    app.register("customer-onboarding", customer_onboarding.build())
 
     workflow_first_capabilities = [
         "🌐 Complete REST API with OpenAPI documentation",
@@ -175,8 +175,8 @@ def demonstrate_zero_configuration_principle():
     enterprise_workflow.add_connection("ingestion", "processor", "output", "data")
     enterprise_workflow.add_connection("processor", "output", "output", "processed_data")
 
-    # Register with zero configuration
-    registration = app.register(enterprise_workflow, "enterprise-data-processor", "1.0.0")
+    # Register with zero configuration (name, workflow)
+    app.register("enterprise-data-processor", enterprise_workflow.build())
 
     print("🎉 ZERO-CONFIGURATION ACHIEVEMENTS:")
 
@@ -326,7 +326,7 @@ def demonstrate_intelligence_first_principle():
     intelligent_process.add_connection("decision_engine", "execution_engine", "output", "decisions")
 
     # Register intelligent process
-    registration = app.register(intelligent_process, "intelligent-business-process", "1.0.0")
+    app.register("intelligent-business-process", intelligent_process.build())
 
     print("🧠 INTELLIGENCE-FIRST CAPABILITIES:")
 
@@ -621,7 +621,7 @@ def demonstrate_evolution_over_configuration():
     evolving_system.add_connection("optimizer", "modifier", "output", "optimization_plan")
 
     # Register evolving system
-    registration = app.register(evolving_system, "self-evolving-system", "∞.0.0")
+    app.register("self-evolving-system", evolving_system.build())
 
     print("🔄 EVOLUTION OVER CONFIGURATION CAPABILITIES:")
 
@@ -765,7 +765,7 @@ def demonstrate_enterprise_first_principle():
     })
 
     # Register simple workflow - automatically gets enterprise features
-    registration = app.register(simple_workflow, "simple-calculator", "1.0.0")
+    app.register("simple-calculator", simple_workflow.build())
 
     print("🏢 ENTERPRISE-FIRST CAPABILITIES (Automatic for ANY Workflow):")
 
@@ -981,7 +981,7 @@ def demonstrate_principles_in_action():
     customer_service.add_connection("analyzer", "responder", "output", "analysis")
 
     # Register with all principles active
-    registration = app.register(customer_service, "enterprise-customer-service", "1.0.0")
+    app.register("enterprise-customer-service", customer_service.build())
 
     print("🎯 DESIGN PRINCIPLES SYNERGY:")
 

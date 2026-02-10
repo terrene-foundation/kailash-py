@@ -9,6 +9,7 @@ Kailash represents a **paradigm shift** from traditional request-response archit
 ### 1. **Durable-First Design** - The Temporal Revolution Applied to Gateways
 
 **Traditional Approach (Django/Express/FastAPI):**
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
@@ -22,6 +23,7 @@ def process_data(data):
 ```
 
 **Kailash Revolutionary Approach:**
+
 ```python
 # Every request is a resumable workflow with automatic checkpointing
 class ProcessDataRequest(DurableRequest):
@@ -45,6 +47,7 @@ class ProcessDataRequest(DurableRequest):
 ### 2. **Enterprise-Default Philosophy** - Production-Ready from Line One
 
 **Traditional Frameworks:**
+
 - Start minimal, bolt on enterprise features later
 - Authentication = external middleware
 - Monitoring = separate APM tools
@@ -52,6 +55,7 @@ class ProcessDataRequest(DurableRequest):
 - Multi-tenancy = application-level code
 
 **Kailash Gateway Architecture:**
+
 ```python
 # Enterprise features enabled by default
 gateway = create_gateway(
@@ -64,6 +68,7 @@ gateway = create_gateway(
 ```
 
 **Architecture Hierarchy:**
+
 - **EnterpriseWorkflowServer** - Full enterprise stack (default)
 - **DurableWorkflowServer** - Durability + basic features
 - **WorkflowServer** - Basic workflow execution
@@ -78,8 +83,8 @@ workflow = WorkflowBuilder()
 workflow.add_node("DataProcessor", "process")
 
 # Automatically available across ALL channels
-nexus = create_nexus()
-nexus.register("data-processor", workflow)
+nexus = Nexus()
+nexus.register("data-processor", workflow.build())
 
 # Now accessible via:
 # - REST API: POST /workflows/data-processor
@@ -94,6 +99,7 @@ nexus.register("data-processor", workflow)
 ### 1. **Unified Orchestration Revolution**
 
 **The Problem with Traditional Approaches:**
+
 - REST API servers (FastAPI/Django) handle only HTTP
 - CLI tools are separate applications
 - AI integration requires custom MCP servers
@@ -101,6 +107,7 @@ nexus.register("data-processor", workflow)
 - Each interface has different auth, monitoring, patterns
 
 **Nexus Breakthrough:**
+
 ```python
 from nexus import Nexus
 
@@ -114,7 +121,7 @@ app = Nexus(
 )
 
 # ONE registration, ALL channels
-app.register("ai-workflow", workflow)
+app.register("ai-workflow", workflow.build())
 app.start()
 
 # Results in:
@@ -130,6 +137,7 @@ app.start()
 ### 2. **FastAPI-Style Evolution** - Solving the Singleton Anti-Pattern
 
 **Before (Singleton Problem):**
+
 ```python
 # Old pattern (removed)
 # from nexus import create_nexus
@@ -138,8 +146,12 @@ app.start()
 ```
 
 **After (FastAPI-Style Solution):**
+
 ```python
+import os
 from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig
 
 # Clear ownership like FastAPI
 app = Nexus()
@@ -149,9 +161,9 @@ enterprise_app = Nexus(enable_auth=True, enable_monitoring=True)
 dev_app = Nexus(api_port=8000)
 prod_app = Nexus(api_port=8080, enable_auth=True)
 
-# Fine-tuning via attributes
-app.auth.strategy = "rbac"
-app.monitoring.interval = 30
+# Fine-tuning via plugins (v1.3.0)
+auth = NexusAuthPlugin.basic_auth(jwt=JWTConfig(secret=os.environ["JWT_SECRET"]))
+prod_app.add_plugin(auth)
 ```
 
 ### 3. **Cross-Channel Session Synchronization**
@@ -180,16 +192,17 @@ await nexus.broadcast_to_session(session_id, {
 
 ### 1. **vs Django/FastAPI - Request-Response vs Workflow-Native**
 
-| Traditional Frameworks | Kailash Gateway |
-|------------------------|-----------------|
-| **Request-Response Model** | **Workflow-Native Model** |
-| Each request isolated | Every operation part of durable workflow |
-| Manual error handling | Automatic retry with exponential backoff |
-| Lost work on failure | Resumable from checkpoints |
-| Stateless execution | Explicit state management |
-| Single interface (HTTP) | Multi-channel unified (API/CLI/MCP) |
+| Traditional Frameworks     | Kailash Gateway                          |
+| -------------------------- | ---------------------------------------- |
+| **Request-Response Model** | **Workflow-Native Model**                |
+| Each request isolated      | Every operation part of durable workflow |
+| Manual error handling      | Automatic retry with exponential backoff |
+| Lost work on failure       | Resumable from checkpoints               |
+| Stateless execution        | Explicit state management                |
+| Single interface (HTTP)    | Multi-channel unified (API/CLI/MCP)      |
 
 **Django Example (Traditional):**
+
 ```python
 # Django - best effort, no durability
 def process_data(request):
@@ -200,6 +213,7 @@ def process_data(request):
 ```
 
 **Kailash Example (Revolutionary):**
+
 ```python
 # Kailash - durable, resumable, enterprise-ready
 class DataProcessingWorkflow(AsyncNode):
@@ -213,15 +227,16 @@ class DataProcessingWorkflow(AsyncNode):
 
 ### 2. **vs Temporal - Integrated vs External Architecture**
 
-| Temporal Approach | Kailash Approach |
-|------------------|------------------|
-| **External Workflow Engine** | **Native SDK Integration** |
-| Separate infrastructure | Built into application framework |
-| Workflow-only focus | Multi-channel orchestration |
-| Complex client integration | Natural SDK patterns |
-| Additional operational complexity | Zero additional infrastructure |
+| Temporal Approach                 | Kailash Approach                 |
+| --------------------------------- | -------------------------------- |
+| **External Workflow Engine**      | **Native SDK Integration**       |
+| Separate infrastructure           | Built into application framework |
+| Workflow-only focus               | Multi-channel orchestration      |
+| Complex client integration        | Natural SDK patterns             |
+| Additional operational complexity | Zero additional infrastructure   |
 
 **Temporal Workflow:**
+
 ```python
 # Requires separate Temporal server infrastructure
 @workflow.defn
@@ -236,6 +251,7 @@ handle = await client.start_workflow(MyWorkflow.run, data)
 ```
 
 **Kailash Workflow:**
+
 ```python
 # No additional infrastructure needed
 workflow = WorkflowBuilder()
@@ -247,29 +263,30 @@ results, run_id = runtime.execute(workflow.build())
 
 ### 3. **vs Serverless Platforms - Stateful vs Stateless**
 
-| Serverless (AWS Lambda/Vercel) | Kailash Platform |
-|--------------------------------|------------------|
-| **Stateless Functions** | **Stateful Workflows** |
-| 15-minute timeout limits | Hours/days-long operations |
-| Cold start latency | Hot workflow state |
-| Event-driven triggers only | Multi-channel interfaces |
-| Manual state management | Automatic state persistence |
+| Serverless (AWS Lambda/Vercel) | Kailash Platform            |
+| ------------------------------ | --------------------------- |
+| **Stateless Functions**        | **Stateful Workflows**      |
+| 15-minute timeout limits       | Hours/days-long operations  |
+| Cold start latency             | Hot workflow state          |
+| Event-driven triggers only     | Multi-channel interfaces    |
+| Manual state management        | Automatic state persistence |
 
 ### 4. **vs Traditional API Gateways - Orchestration vs Proxying**
 
-| Traditional Gateways (Kong/Ambassador) | Kailash Gateway |
-|----------------------------------------|-----------------|
-| **Request Proxying** | **Workflow Orchestration** |
-| Route and forward requests | Execute complex business logic |
-| External service dependencies | Self-contained processing |
-| Configuration-heavy | Code-first approach |
-| Limited business logic | Full computational platform |
+| Traditional Gateways (Kong/Ambassador) | Kailash Gateway                |
+| -------------------------------------- | ------------------------------ |
+| **Request Proxying**                   | **Workflow Orchestration**     |
+| Route and forward requests             | Execute complex business logic |
+| External service dependencies          | Self-contained processing      |
+| Configuration-heavy                    | Code-first approach            |
+| Limited business logic                 | Full computational platform    |
 
 ## 🔬 Technical Architecture Deep Dive
 
 ### 1. **Event-Driven Foundation** - Real-Time by Design
 
 **Comprehensive Event System:**
+
 ```python
 @dataclass
 class WorkflowEvent:
@@ -290,6 +307,7 @@ await event_stream.emit_workflow_started(
 ```
 
 **Real-Time Communication Stack:**
+
 - **WebSocket**: Bi-directional real-time communication
 - **Server-Sent Events**: Unidirectional event streaming
 - **MCP Protocol**: AI agent integration
@@ -298,6 +316,7 @@ await event_stream.emit_workflow_started(
 ### 2. **Production-Grade Enterprise Components**
 
 **Circuit Breaker Pattern:**
+
 ```python
 from kailash.core.resilience import circuit_breaker
 
@@ -309,6 +328,7 @@ class ExternalAPINode(AsyncNode):
 ```
 
 **Bulkhead Isolation:**
+
 ```python
 # Resource partitioning by operation type
 from kailash.core.resilience import bulkhead
@@ -322,6 +342,7 @@ class DatabaseOperations:
 ```
 
 **Transaction Monitoring:**
+
 ```python
 # Real-time deadlock detection and race condition analysis
 from kailash.nodes.monitoring import (
@@ -332,6 +353,7 @@ from kailash.nodes.monitoring import (
 ```
 
 **Distributed Transactions:**
+
 ```python
 # Automatic pattern selection (Saga vs 2PC)
 from kailash.nodes.transaction import DistributedTransactionManagerNode
@@ -346,25 +368,30 @@ transaction_manager = DistributedTransactionManagerNode(
 ### 3. **110+ Node Ecosystem** - Complete Enterprise Coverage
 
 **AI & Machine Learning:**
+
 - LLMAgentNode, IterativeLLMAgentNode (real MCP execution)
 - EmbeddingGeneratorNode, VisionProcessorNode
 - A2AAgentNode, SelfOrganizingAgentNode
 
 **Data & Databases:**
+
 - AsyncSQLDatabaseNode, QueryBuilder, QueryCache
 - BulkOperationNode, WorkflowConnectionPool
 - MongoDBNode, PostgreSQLNode, RedisNode
 
 **Security & Compliance:**
+
 - AccessControlManager (RBAC/ABAC/Hybrid)
 - MultiFactorAuthNode, ThreatDetectionNode
 - GDPRComplianceNode, AuditLogNode
 
 **API & Integration:**
+
 - HTTPRequestNode, RESTClientNode, GraphQLClientNode
 - OAuth2Node, WebhookNode, EventStreamNode
 
 **Enterprise Operations:**
+
 - UserManagementNode, RoleManagementNode
 - SecurityEventNode, ComplianceReportNode
 - PerformanceMonitorNode, HealthCheckNode
@@ -372,6 +399,7 @@ transaction_manager = DistributedTransactionManagerNode(
 ### 4. **Resource Management Architecture**
 
 **Workflow-Scoped Connection Pools:**
+
 ```python
 from kailash.nodes.data import WorkflowConnectionPool
 
@@ -385,6 +413,7 @@ pool = WorkflowConnectionPool(
 ```
 
 **Adaptive Pool Sizing:**
+
 ```python
 # Intelligent pool sizing based on usage patterns
 from kailash.core.actors import AdaptivePoolController
@@ -402,6 +431,7 @@ controller = AdaptivePoolController(
 ### 1. **Developer Experience Revolution**
 
 **Traditional Approach:**
+
 ```bash
 # Complex setup for basic functionality
 npm install express cors helmet morgan
@@ -417,6 +447,7 @@ write cli interface
 ```
 
 **Kailash Approach:**
+
 ```python
 # Single line creates production-ready platform
 from nexus import Nexus
@@ -427,6 +458,7 @@ app.start()  # API + CLI + MCP + WebSocket + Monitoring + Auth ✅
 ### 2. **Operational Excellence by Design**
 
 **Built-In Observability:**
+
 - Prometheus metrics collection
 - OpenTelemetry distributed tracing
 - Comprehensive health checks
@@ -438,15 +470,23 @@ app.start()  # API + CLI + MCP + WebSocket + Monitoring + Auth ✅
 ### 3. **Enterprise Readiness from Day One**
 
 **Security & Compliance:**
+
 ```python
-# Enterprise security built-in
-app = Nexus(
-    enable_auth=True,           # Multi-factor authentication
-    auth_strategy="rbac",       # Role-based access control
-    enable_audit=True,          # SOX/HIPAA compliance
-    threat_detection=True,      # Real-time security monitoring
-    tenant_isolation=True       # Multi-tenant support
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, TenantConfig, RateLimitConfig, AuditConfig
+
+# Enterprise security via NexusAuthPlugin (v1.3.0)
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "editor": ["read:*", "write:*"], "viewer": ["read:*"]},
+    rate_limit=RateLimitConfig(requests_per_minute=100),
+    tenant_isolation=TenantConfig(),
+    audit=AuditConfig(backend="logging"),
 )
+app = Nexus(enable_auth=True, preset="enterprise")
+app.add_plugin(auth)
 ```
 
 **vs Traditional:** Bolt-on security, compliance as afterthought, manual audit implementation
@@ -454,6 +494,7 @@ app = Nexus(
 ### 4. **Natural Scalability Model**
 
 **Workflow Composition Scaling:**
+
 ```python
 # Scaling through composition, not infrastructure
 workflow = WorkflowBuilder()
@@ -474,6 +515,7 @@ runtime = AsyncLocalRuntime(max_concurrency=100)
 **Kailash is not just another framework—we're the first workflow-native, multi-channel, enterprise-ready application platform.**
 
 **Competitive Moats:**
+
 - **Durability by Design**: Only platform with request-level durability
 - **Multi-Channel Native**: Only unified API/CLI/MCP orchestration
 - **Enterprise-First**: Only platform with enterprise features as defaults
@@ -482,16 +524,19 @@ runtime = AsyncLocalRuntime(max_concurrency=100)
 ### 2. **Enterprise Adoption Drivers**
 
 **Faster Time-to-Market:**
+
 - Single-line deployment vs weeks of infrastructure setup
 - Pre-built enterprise components vs custom development
 - Built-in compliance vs afterthought implementation
 
 **Reduced Operational Risk:**
+
 - Automatic durability vs manual retry logic
 - Built-in monitoring vs separate APM setup
 - Enterprise security vs bolt-on approaches
 
 **Lower Total Cost of Ownership:**
+
 - Unified platform vs multiple specialized tools
 - Automatic scaling vs manual infrastructure management
 - Built-in enterprise features vs license proliferation
