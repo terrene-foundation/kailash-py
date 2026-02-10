@@ -29,9 +29,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
-env:
-  SDK_DEV_MODE: true
-
 jobs:
   trust-unit-tests:
     name: Trust Unit Tests
@@ -62,6 +59,9 @@ jobs:
           uv pip install -e "apps/kailash-kaizen[dev]" --system
           uv pip install -e "apps/kailash-dataflow[dev]" --system
           uv pip install -e "apps/kailash-nexus[dev]" --system
+
+      - name: Create reports directory
+        run: mkdir -p reports
 
       - name: Run Core SDK Trust Tests
         run: |

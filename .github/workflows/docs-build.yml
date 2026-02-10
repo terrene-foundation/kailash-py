@@ -2,22 +2,23 @@ name: Build Documentation
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'docs/**'
-      - 'README.md'
-      - 'CHANGELOG.md'
-      - 'mkdocs.yml'
-      - '.github/workflows/docs-build.yml'
-      - '.github/workflows/docs-deploy.yml'
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "mkdocs.yml"
+      - ".github/workflows/docs-build.yml"
+      - ".github/workflows/docs-deploy.yml"
   push:
-    branches: [ feat/*, feature/*, fix/*, docs/*, release/*, session/*, session-* ]
+    branches:
+      [feat/*, feature/*, fix/*, docs/*, release/*, session/*, session-*]
     paths:
-      - 'docs/**'
-      - 'README.md'
-      - 'CHANGELOG.md'
-      - 'mkdocs.yml'
-      - '.github/workflows/docs-build.yml'
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "mkdocs.yml"
+      - ".github/workflows/docs-build.yml"
 
 concurrency:
   # Prevent duplicate runs: Use branch name for both push and PR events
@@ -29,14 +30,14 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Install dependencies
         run: |
