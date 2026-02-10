@@ -99,8 +99,7 @@ db = DataFlow(
 
     # Behavior
     echo=False,                # SQL logging (debug only)
-    auto_migrate=True,         # Auto schema updates
-    existing_schema_mode=False # Use existing schema only
+    auto_migrate=True,         # Auto schema updates (default)
 )
 ```
 
@@ -151,6 +150,7 @@ db = DataFlow(
 ## When to Escalate to Subagent
 
 Use `dataflow-specialist` when:
+
 - Connection pool exhaustion
 - Timeout issues
 - SSL/TLS configuration
@@ -160,10 +160,12 @@ Use `dataflow-specialist` when:
 ## Documentation References
 
 ### Primary Sources
+
 - **README Connection Section**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md#L1033-L1086)
 - **DataFlow CLAUDE**: [`sdk-users/apps/dataflow/CLAUDE.md`](../../../../sdk-users/apps/dataflow/CLAUDE.md#L1033-L1085)
 
 ### Related Documentation
+
 - **Pooling Guide**: [`sdk-users/apps/dataflow/docs/advanced/pooling.md`](../../../../sdk-users/apps/dataflow/docs/advanced/pooling.md)
 - **Deployment**: [`sdk-users/apps/dataflow/docs/production/deployment.md`](../../../../sdk-users/apps/dataflow/docs/production/deployment.md)
 
@@ -192,8 +194,7 @@ else:
         database_url=os.getenv("DATABASE_URL"),
         pool_size=20,
         pool_max_overflow=30,
-        auto_migrate=False,
-        existing_schema_mode=True
+        auto_migrate=False,  # Don't modify existing schema
     )
 ```
 
@@ -211,12 +212,12 @@ db = DataFlow(
 
 ## Troubleshooting
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Connection refused | Wrong host/port | Verify connection string |
-| Password authentication failed | Special chars in password | Use latest DataFlow |
-| Pool exhausted | pool_size too small | Increase pool_size |
-| Connection timeout | Network/firewall | Check connect_timeout |
+| Issue                          | Cause                     | Solution                 |
+| ------------------------------ | ------------------------- | ------------------------ |
+| Connection refused             | Wrong host/port           | Verify connection string |
+| Password authentication failed | Special chars in password | Use latest DataFlow      |
+| Pool exhausted                 | pool_size too small       | Increase pool_size       |
+| Connection timeout             | Network/firewall          | Check connect_timeout    |
 
 ## Quick Tips
 

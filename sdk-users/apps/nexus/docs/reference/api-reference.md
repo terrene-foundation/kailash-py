@@ -236,12 +236,14 @@ def execute_business_logic(data):
 data_workflow = NexusWorkflowIntegration.create_data_processing_workflow()
 api_workflow = NexusWorkflowIntegration.create_api_workflow()
 
-# Register workflows with Nexus
-data_registration = app.register(data_workflow, "data-processor", "1.0.0")
-api_registration = app.register(api_workflow, "api-handler", "1.0.0")
+# Register workflows with Nexus (name, workflow)
+app.register("data-processor", data_workflow)
+app.register("api-handler", api_workflow)
 
-print(f"Data workflow API: {data_registration['api_endpoint']}")
-print(f"API workflow CLI: {api_registration['cli_command']}")
+# Workflows are now available on all channels:
+# - API: POST /workflows/data-processor, POST /workflows/api-handler
+# - CLI: nexus run data-processor, nexus run api-handler
+# - MCP: As tools named data-processor, api-handler
 ```
 
 ## REST API Endpoints

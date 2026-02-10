@@ -1,6 +1,6 @@
 ---
 name: dataflow-existing-database
-description: "Connect DataFlow to existing databases safely. Use when existing database, discover schema, legacy database, register_schema_as_models, existing_schema_mode, or connect to production database."
+description: "Connect DataFlow to existing databases safely. Use when existing database, discover schema, legacy database, register_schema_as_models, auto_migrate=False, or connect to production database."
 ---
 
 # DataFlow Existing Database Integration
@@ -15,7 +15,7 @@ Connect DataFlow to existing databases without @db.model decorators using dynami
 
 ## Quick Reference
 
-- **Safe Mode**: `existing_schema_mode=True` prevents ALL schema changes
+- **Safe Mode**: `auto_migrate=False` prevents ALL schema changes
 - **Discover**: `db.discover_schema(use_real_inspection=True)`
 - **Register**: `db.register_schema_as_models(tables=['users', 'orders'])`
 - **Perfect For**: Legacy databases, production readonly, LLM agents
@@ -28,8 +28,7 @@ from dataflow import DataFlow
 # Connect safely to existing database
 db = DataFlow(
     database_url="postgresql://user:pass@localhost/existing_db",
-    auto_migrate=False,           # Don't modify schema
-    existing_schema_mode=True     # Maximum safety - prevents ALL changes
+    auto_migrate=False,           # Don't modify schema - prevents ALL changes
 )
 
 # Discover existing tables
@@ -117,7 +116,7 @@ result = db.register_schema_as_models(
 # In different session/process
 db2 = DataFlow(
     database_url="postgresql://...",
-    existing_schema_mode=True
+    auto_migrate=False,  # Don't modify existing schema
 )
 
 # Reconstruct models registered by others
@@ -140,11 +139,10 @@ db = DataFlow(
 **Fix: Use Safe Mode**
 
 ```python
-# Safe - readonly access
+# Safe - readonly access, no schema modifications
 db = DataFlow(
     database_url="postgresql://prod-db/database",
-    auto_migrate=False,
-    existing_schema_mode=True
+    auto_migrate=False,  # Don't create or modify tables
 )
 ```
 
@@ -152,7 +150,7 @@ db = DataFlow(
 
 ```python
 # Wrong - assumes tables exist
-db = DataFlow(existing_schema_mode=True)
+db = DataFlow(auto_migrate=False)
 
 @db.model
 class NewModel:
@@ -163,7 +161,7 @@ class NewModel:
 **Fix: Check Schema First**
 
 ```python
-db = DataFlow(existing_schema_mode=True)
+db = DataFlow(auto_migrate=False)
 schema = db.discover_schema(use_real_inspection=True)
 
 if 'new_models' not in schema:
@@ -179,6 +177,7 @@ if 'new_models' not in schema:
 ## When to Escalate to Subagent
 
 Use `dataflow-specialist` when:
+
 - Complex legacy schema analysis
 - Migration planning from existing database
 - Multi-database integration
@@ -188,10 +187,12 @@ Use `dataflow-specialist` when:
 ## Documentation References
 
 ### Primary Sources
+
 - **README Dynamic Models**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md#L249-L536)
 - **DataFlow CLAUDE**: [`sdk-users/apps/dataflow/CLAUDE.md`](../../../../sdk-users/apps/dataflow/CLAUDE.md#L182-L196)
 
 ### Related Documentation
+
 - **Multi-Database**: [`sdk-users/apps/dataflow/docs/features/multi-database.md`](../../../../sdk-users/apps/dataflow/docs/features/multi-database.md)
 - **Schema Management**: [`sdk-users/apps/dataflow/docs/workflows/schema-management.md`](../../../../sdk-users/apps/dataflow/docs/workflows/schema-management.md)
 
@@ -203,8 +204,7 @@ Use `dataflow-specialist` when:
 # Safe readonly access to production
 db_prod = DataFlow(
     database_url="postgresql://readonly:pass@prod-db:5432/ecommerce",
-    auto_migrate=False,
-    existing_schema_mode=True
+    auto_migrate=False,  # Don't modify production schema
 )
 
 # Discover production schema
@@ -232,7 +232,7 @@ workflow.add_node(product_nodes['list'], "active_products", {
 # LLM agent explores unknown database
 db_agent = DataFlow(
     database_url="postgresql://...",
-    existing_schema_mode=True
+    auto_migrate=False,  # Don't modify existing schema
 )
 
 # Agent discovers structure
@@ -269,7 +269,7 @@ for node_id, result_data in results.items():
 # SESSION 1: Data engineer discovers and registers
 db_engineer = DataFlow(
     database_url="postgresql://...",
-    existing_schema_mode=True
+    auto_migrate=False,  # Don't modify existing schema
 )
 
 schema = db_engineer.discover_schema(use_real_inspection=True)
@@ -281,7 +281,7 @@ print(f"Registered for team: {result['registered_models']}")
 # SESSION 2: Developer uses registered models
 db_developer = DataFlow(
     database_url="postgresql://...",
-    existing_schema_mode=True
+    auto_migrate=False,  # Don't modify existing schema
 )
 
 # Reconstruct from registry
@@ -296,22 +296,22 @@ workflow.add_node(user_nodes['list'], "users", {"limit": 20})
 
 ## Troubleshooting
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| "Table not found" | existing_schema_mode without tables | Verify tables exist with discover_schema() |
-| "Permission denied" | Readonly user trying to modify | Correct - existing_schema_mode working |
-| Models not available | Not registered yet | Call register_schema_as_models() |
-| Schema discovery empty | Wrong database or no tables | Check database_url |
+| Issue                  | Cause                             | Solution                                   |
+| ---------------------- | --------------------------------- | ------------------------------------------ |
+| "Table not found"      | auto_migrate=False without tables | Verify tables exist with discover_schema() |
+| "Permission denied"    | Readonly user trying to modify    | Correct - auto_migrate=False working       |
+| Models not available   | Not registered yet                | Call register_schema_as_models()           |
+| Schema discovery empty | Wrong database or no tables       | Check database_url                         |
 
 ## Quick Tips
 
-- ALWAYS use existing_schema_mode=True for production
+- ALWAYS use auto_migrate=False for existing production databases
 - discover_schema() before register_schema_as_models()
-- Skip system tables (dataflow_*) when exploring
+- Skip system tables (dataflow\_\*) when exploring
 - Models persist across sessions via registry
 - Perfect for legacy database integration
 - No @db.model needed - fully dynamic
 
 ## Keywords for Auto-Trigger
 
-<!-- Trigger Keywords: existing database, discover schema, legacy database, register_schema_as_models, existing_schema_mode, production database, readonly database, dynamic models, schema discovery, connect existing -->
+<!-- Trigger Keywords: existing database, discover schema, legacy database, register_schema_as_models, auto_migrate=False, production database, readonly database, dynamic models, schema discovery, connect existing -->

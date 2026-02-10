@@ -45,7 +45,7 @@ workflow.add_node("HTTPRequestNode", "api_call", {
 })
 
 # Revolutionary: Register once, available everywhere
-app.register("data-fetcher", workflow)
+app.register("data-fetcher", workflow.build())
 ```
 
 ### 3. Platform Lifecycle
@@ -116,7 +116,7 @@ def process_users(data):
     "function_name": "process_users"
 })
 
-app.register("user-processor", workflow)
+app.register("user-processor", workflow.build())
 app.start()
 ```
 
@@ -156,7 +156,7 @@ def format_results(data):
     "function_name": "format_results"
 })
 
-app.register("user-query", workflow)
+app.register("user-query", workflow.build())
 app.start()
 ```
 
@@ -204,7 +204,7 @@ def analyze_csv_data(data):
     "function_name": "analyze_csv_data"
 })
 
-app.register("csv-analyzer", workflow)
+app.register("csv-analyzer", workflow.build())
 app.start()
 ```
 
@@ -269,7 +269,7 @@ def process_error(data):
     "function_name": "process_error"
 })
 
-app.register("resilient-api", workflow)
+app.register("resilient-api", workflow.build())
 app.start()
 ```
 
@@ -281,7 +281,7 @@ Test workflows before deployment:
 import requests
 import time
 
-def test_workflow(workflow_name, parameters=None, port=8000):
+def test_workflow(workflow_name, inputs=None, port=8000):
     """Test a registered workflow"""
 
     # Wait for server startup
@@ -419,28 +419,62 @@ else:
 
 ## Progressive Enhancement
 
-Add advanced features as needed:
+Add advanced features as needed using the plugin system:
 
 ```python
+import os
 from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, TenantConfig, RateLimitConfig, AuditConfig
 
 # Start simple
 app = Nexus()
 
-# Add authentication when ready
-app.enable_auth()
+# Add authentication with NexusAuthPlugin
+# Basic auth (JWT + audit logging)
+auth = NexusAuthPlugin.basic_auth(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"])
+)
+app.add_plugin(auth)
 
-# Add monitoring when needed
-app.enable_monitoring()
+# Or for SaaS apps (JWT + RBAC + tenant isolation + audit)
+auth = NexusAuthPlugin.saas_app(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "editor": ["read:*", "write:*"], "viewer": ["read:*"]},
+    tenant_isolation=TenantConfig(admin_role="admin"),
+)
+app.add_plugin(auth)
 
-# Use plugins for specific features
-app.use_plugin("rate_limiting")
-app.use_plugin("audit_logging")
+# CORS, rate limiting, and monitoring are set at construction time
+app = Nexus(
+    cors_origins=["https://myapp.com"],
+    rate_limit=500,             # Requests per minute
+    enable_monitoring=True,
+    preset="saas",              # Preconfigured middleware stack
+)
+app.add_plugin(auth)
+app.start()
+```
 
-# Configuration objects for fine-tuning
-app.auth.strategy = "oauth2"
-app.monitoring.interval = 30
-app.api.cors_enabled = True
+You can also add custom middleware and routers directly:
+
+```python
+from nexus import Nexus
+
+app = Nexus()
+
+# Add custom FastAPI middleware
+app.add_middleware(SomeMiddlewareClass, option="value")
+
+# Include additional FastAPI routers
+app.include_router(my_router, prefix="/custom")
+
+# Register handlers for simple workflows
+@app.handler("ping", description="Health ping")
+async def ping() -> dict:
+    return {"status": "ok"}
+
+app.start()
 ```
 
 ## Best Practices
@@ -448,11 +482,11 @@ app.api.cors_enabled = True
 ### 1. Workflow Organization
 
 ```python
-# Organize workflows by domain
-app.register("user-management/create", user_create_workflow)
-app.register("user-management/update", user_update_workflow)
-app.register("data-processing/transform", transform_workflow)
-app.register("data-processing/validate", validate_workflow)
+# Organize workflows by domain (always call .build() on WorkflowBuilder instances)
+app.register("user-management/create", user_create_workflow.build())
+app.register("user-management/update", user_update_workflow.build())
+app.register("data-processing/transform", transform_workflow.build())
+app.register("data-processing/validate", validate_workflow.build())
 ```
 
 ### 2. Error Handling
@@ -479,9 +513,11 @@ def log_error(data):
 ### 3. Resource Management
 
 ```python
-# Use connection pooling for databases
+import os
+
+# Use connection pooling for databases (never hardcode credentials)
 workflow.add_node("SQLDatabaseNode", "db_operation", {
-    "connection_string": "postgresql://user:pass@localhost/db",
+    "connection_string": os.environ["DATABASE_URL"],
     "pool_size": 10,
     "max_overflow": 20
 })

@@ -1,590 +1,603 @@
 # Enterprise Nexus Patterns
 
-*Advanced multi-channel orchestration for enterprise deployments*
+_Advanced multi-channel orchestration for enterprise deployments_
 
-## 🏢 Overview
+## Overview
 
 Enterprise Nexus patterns provide production-ready multi-channel orchestration with enterprise-grade security, monitoring, and compliance features. Unlike basic gateway patterns that focus on single-channel API access, Nexus orchestrates entire application ecosystems across API, CLI, and MCP interfaces.
 
-## 🌟 Enterprise Nexus Architecture
+## Enterprise Nexus Architecture
 
 ### Core Enterprise Features
-- **Unified Authentication**: SSO/LDAP integration across all channels
-- **Cross-Channel Authorization**: RBAC/ABAC enforcement on API, CLI, and MCP
-- **Multi-Tenant Isolation**: Complete tenant separation with resource quotas
-- **Enterprise Monitoring**: Comprehensive observability across channels
-- **Compliance Integration**: GDPR, HIPAA, SOX compliance patterns
+
+- **Unified Authentication**: SSO/JWKS integration across all channels via NexusAuthPlugin
+- **Cross-Channel Authorization**: RBAC enforcement on API, CLI, and MCP
+- **Multi-Tenant Isolation**: Complete tenant separation via TenantConfig
+- **Audit Logging**: Comprehensive audit trail with configurable backends
+- **Rate Limiting**: Per-route and global rate limiting with Redis support
 - **High Availability**: Load balancing and failover across channel types
 
 ### Production Deployment Pattern
+
 ```python
-from kailash.workflow.builder import WorkflowBuilder
+import os
 from nexus import Nexus
-from kailash.enterprise.auth import EnterpriseAuthProvider
-from kailash.enterprise.monitoring import PrometheusMonitoring
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, TenantConfig, RateLimitConfig, AuditConfig
 
-# Enterprise-grade multi-channel platform
+# Enterprise-grade multi-channel platform with NexusAuthPlugin (v1.3.0)
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(
+        secret=os.environ["JWT_SECRET"],
+        algorithm="RS256",
+        jwks_url="https://sso.company.com/.well-known/jwks.json",  # SSO integration
+    ),
+    rbac={
+        "admin": ["*"],
+        "developer": ["read:*", "write:*", "execute:*"],
+        "operator": ["read:*", "execute:monitoring"],
+        "executive": ["read:dashboards", "read:reports"],
+    },
+    rate_limit=RateLimitConfig(requests_per_minute=1000),
+    tenant_isolation=TenantConfig(
+        jwt_claim="tenant_id",
+        admin_role="admin",
+    ),
+    audit=AuditConfig(
+        backend="logging",
+        log_level="INFO",
+        exclude_paths=["/health", "/metrics"],
+    ),
+)
+
 app = Nexus(
-    # Channel configuration
     api_port=8000,
-    mcp_port=3000,
-
-    # Enterprise features enabled
-    enable_auth=True,
+    mcp_port=3001,
     enable_monitoring=True,
-    rate_limit=1000  # Requests per minute
 )
-
-# Configure enterprise authentication via attributes
-app.auth.provider = EnterpriseAuthProvider(
-    ldap_server="ldap://enterprise.local",
-    sso_endpoint="https://sso.company.com/saml",
-    enable_api_keys=True,
-    enable_mfa=True
-)
-
-# Configure monitoring
-app.monitoring.backend = PrometheusMonitoring(
-    metrics_port=9090,
-    enable_traces=True,
-    enable_logs=True
-)
-
-# Multi-tenancy configuration
-app.auth.multi_tenant = True
-app.auth.tenant_isolation = "strict"
-
-# Compliance configuration
-app.auth.compliance_mode = "enterprise"  # GDPR + HIPAA + SOX
-app.auth.audit_log_retention = 2557  # 7 years
-
-# High availability configuration
-app.api.enable_clustering = True
-app.api.health_check_interval = 30
+app.add_plugin(auth)
 
 # Start the platform
 app.start()
 ```
 
-## 🔐 Enterprise Security Patterns
+## Enterprise Security Patterns
 
-### Multi-Factor Authentication Across Channels
+### SSO Authentication Across Channels
+
 ```python
-from kailash.workflow.builder import WorkflowBuilder
+import os
 from nexus import Nexus
-from kailash.enterprise.auth import MultiFactorAuth
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig
 
-app = Nexus(enable_auth=True)
-
-# MFA configuration for all channels
-mfa_config = MultiFactorAuth(
-    methods=["totp", "sms", "hardware_key"],
-    required_for=["api", "cli", "mcp"],
-    bypass_roles=["system", "automated"],
-    session_binding=True  # Bind MFA to session across channels
+# MFA is handled at the SSO/IdP level (Auth0, Okta, etc.)
+# Nexus validates the JWT issued after MFA completion via JWKS
+auth = NexusAuthPlugin.basic_auth(
+    jwt=JWTConfig(
+        algorithm="RS256",
+        jwks_url="https://sso.company.com/.well-known/jwks.json",  # SSO with MFA
+        jwks_cache_ttl=3600,
+        issuer="https://sso.company.com",
+        audience="nexus-platform",
+    ),
 )
 
-# Configure auth attributes
-app.auth.mfa = mfa_config
-app.auth.session_duration = 28800  # 8 hours
-app.auth.cross_channel_sso = True
-app.auth.require_reauth_for = ["admin", "sensitive_workflows"]
+app = Nexus()
+app.add_plugin(auth)
 
-# MFA flow across channels:
-# 1. User authenticates via any channel (API/CLI/MCP)
-# 2. MFA challenge presented in appropriate format
-# 3. Session token valid across all channels
-# 4. Sensitive operations require re-authentication
+# Authentication flow across channels:
+# 1. User authenticates via SSO provider (which enforces MFA)
+# 2. SSO provider issues JWT after successful authentication
+# 3. JWT is valid across all Nexus channels (API/CLI/MCP)
+# 4. Sensitive operations can require re-authentication via SSO
 
 app.start()
 ```
 
 ### Role-Based Access Control (RBAC)
+
 ```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.enterprise.auth import RBACManager
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig
+from nexus.auth.dependencies import RequireRole, RequirePermission, get_current_user
+from fastapi import Depends
 
-# Define enterprise roles with channel permissions
-rbac = RBACManager()
+# Define enterprise roles with wildcard permissions
+auth = NexusAuthPlugin.saas_app(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={
+        # Executive: read-only dashboards and reports
+        "executive": ["read:dashboards", "read:reports", "read:status"],
+        # Developer: full workflow and tool access
+        "developer": ["read:*", "write:*", "execute:*"],
+        # Operator: monitoring and deployment
+        "operator": ["read:health", "execute:monitoring", "execute:deploy"],
+        # Admin: unrestricted access
+        "admin": ["*"],
+    },
+)
 
-# Executive dashboard access
-rbac.create_role("executive", permissions=[
-    "api:read:dashboards",
-    "api:read:reports",
-    "cli:read:status",
-    "mcp:read:resources"
-])
+app = Nexus()
+app.add_plugin(auth)
 
-# Developer full access
-rbac.create_role("developer", permissions=[
-    "api:*:workflows",
-    "cli:*:*",
-    "mcp:*:tools",
-    "mcp:*:resources"
-])
+# Permission matching supports wildcards:
+#   "*"           matches everything
+#   "read:*"      matches read:users, read:articles, etc.
+#   "*:users"     matches read:users, write:users, etc.
 
-# Operations limited access
-rbac.create_role("operator", permissions=[
-    "api:read:health",
-    "api:execute:monitoring_workflows",
-    "cli:execute:status",
-    "cli:execute:deploy",
-    "mcp:execute:system_tools"
-])
+# Use FastAPI dependencies for fine-grained control on custom routes
+# @custom_router.get("/admin")
+# async def admin_only(user=Depends(RequireRole("admin"))):
+#     return {"admin": True}
 
-# Apply RBAC across all channels
-nexus.set_rbac_manager(rbac)
+# @custom_router.delete("/articles/{id}")
+# async def delete_article(user=Depends(RequirePermission("delete:articles"))):
+#     return {"deleted": True}
+
+app.start()
 ```
 
-### Attribute-Based Access Control (ABAC)
+### ABAC via Custom Middleware
+
+For attribute-based access control (ABAC) beyond RBAC, use custom middleware with Nexus's native middleware API:
+
 ```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.enterprise.auth import ABACPolicyEngine
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+from datetime import datetime
 
-# Advanced policy-based access control
-abac = ABACPolicyEngine()
+class ABACMiddleware(BaseHTTPMiddleware):
+    """Custom ABAC middleware for policy-based access control."""
 
-# Time-based access policy
-abac.add_policy("business_hours_only", {
-    "condition": "current_time between 09:00 and 17:00",
-    "channels": ["api", "cli"],
-    "resources": ["sensitive_workflows", "financial_data"],
-    "effect": "permit"
-})
+    async def dispatch(self, request: Request, call_next):
+        # Example: Business hours policy for sensitive endpoints
+        current_hour = datetime.now().hour
+        if request.url.path.startswith("/api/sensitive"):
+            if not (9 <= current_hour <= 17):
+                return JSONResponse(
+                    {"error": "Access restricted to business hours"},
+                    status_code=403,
+                )
 
-# Location-based policy
-abac.add_policy("location_restricted", {
-    "condition": "user.location in ['US', 'EU']",
-    "channels": ["mcp"],
-    "resources": ["compliance_tools"],
-    "effect": "permit"
-})
+        return await call_next(request)
 
-# Data classification policy
-abac.add_policy("data_access_control", {
-    "condition": "user.clearance_level >= resource.classification_level",
-    "channels": ["*"],
-    "resources": ["classified_workflows"],
-    "effect": "permit"
-})
+# Setup with NexusAuthPlugin + custom ABAC middleware
+auth = NexusAuthPlugin.basic_auth(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+)
 
-nexus.set_abac_engine(abac)
+app = Nexus()
+app.add_plugin(auth)
+app.add_middleware(ABACMiddleware)  # Native Nexus middleware API
+
+app.start()
 ```
 
-## 🏢 Multi-Tenant Enterprise Patterns
+## Multi-Tenant Enterprise Patterns
 
 ### Tenant Isolation Configuration
+
 ```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.enterprise.tenancy import TenantManager
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, TenantConfig, RateLimitConfig, AuditConfig
+from nexus.auth.tenant.config import TenantConfig
 
-# Enterprise tenant management
-tenant_manager = TenantManager(
-    isolation_level="strict",  # strict, moderate, basic
-    resource_quotas={
-        "api_requests_per_hour": 10000,
-        "concurrent_workflows": 50,
-        "cli_sessions": 100,
-        "mcp_tools": 25,
-        "storage_mb": 10000
+# Tenant isolation via NexusAuthPlugin
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={
+        "admin": ["*"],
+        "tenant_admin": ["read:*", "write:*"],
+        "tenant_user": ["read:*"],
     },
-    cross_tenant_policies={
-        "data_sharing": False,
-        "workflow_sharing": "admin_only",
-        "session_isolation": True
-    }
+    tenant_isolation=TenantConfig(
+        tenant_id_header="X-Tenant-ID",
+        jwt_claim="tenant_id",             # Claim name in JWT
+        allow_admin_override=True,
+        admin_role="admin",                # Singular string, NOT admin_roles
+        exclude_paths=["/health", "/docs"],
+    ),
+    rate_limit=RateLimitConfig(
+        requests_per_minute=10000,
+        route_limits={
+            "/api/workflows/*": {"requests_per_minute": 1000},
+        },
+    ),
+    audit=AuditConfig(
+        backend="logging",
+        log_level="INFO",
+    ),
 )
 
-nexus = create_production_nexus(
-    tenant_manager=tenant_manager,
-    tenant_routing={
-        "api": "subdomain",     # tenant1.api.company.com
-        "cli": "prefix",        # nexus --tenant=tenant1
-        "mcp": "port_offset"    # tenant1: 3001, tenant2: 3002
-    }
-)
+app = Nexus()
+app.add_plugin(auth)
 
-# Tenant creation
-await nexus.create_tenant(
-    tenant_id="enterprise_client_001",
-    name="Enterprise Client Corp",
-    config={
-        "api_subdomain": "client001",
-        "cli_prefix": "client001",
-        "mcp_port": 3001,
-        "quota_profile": "enterprise_large",
-        "compliance_level": "hipaa_sox"
-    }
-)
+# Tenant ID is extracted from JWT claims or X-Tenant-ID header
+# Each request is automatically scoped to its tenant
+# Admin roles can override tenant isolation when needed
+
+app.start()
 ```
 
 ### Tenant-Aware Workflows
+
 ```python
+import os
+from nexus import Nexus
 from kailash.workflow.builder import WorkflowBuilder
-# Workflows with tenant context
+
+app = Nexus()
+
+# Handler pattern for tenant-aware processing
+@app.handler("tenant_data_processing", description="Process data with tenant context")
+async def process_tenant_data(tenant_id: str, customer_id: str, compliance_level: str = "standard") -> dict:
+    """Process data with tenant-specific logic.
+
+    The tenant_id is validated by TenantConfig middleware before reaching this handler.
+    """
+    if compliance_level == "hipaa":
+        # Apply HIPAA-specific processing
+        return {"tenant_id": tenant_id, "customer_id": customer_id, "processing": "hipaa"}
+    elif compliance_level == "gdpr":
+        # Apply GDPR-specific processing
+        return {"tenant_id": tenant_id, "customer_id": customer_id, "processing": "gdpr"}
+    else:
+        return {"tenant_id": tenant_id, "customer_id": customer_id, "processing": "standard"}
+
+# Alternatively, register a workflow with .build()
 tenant_workflow = WorkflowBuilder()
-
-tenant_workflow.add_node("TenantAssignmentNode", "assign_tenant", {
-    "tenant_source": "session",  # Extract from session context
-    "enforce_isolation": True,
-    "audit_access": True
-})
-
-tenant_workflow.add_node("AsyncSQLDatabaseNode", "tenant_data", {
-    "connection_string": "postgresql://db:5432/${tenant_id}_database",
-    "query": "SELECT * FROM ${tenant_id}.customer_data WHERE id = :customer_id",
-    "tenant_isolation": True
-})
-
 tenant_workflow.add_node("PythonCodeNode", "process_tenant_data", {
     "code": """
-# Tenant context automatically injected
-tenant_id = tenant_context['tenant_id']
-tenant_config = tenant_context['config']
+try:
+    tenant_id = tenant_id
+except NameError:
+    tenant_id = "unknown"
+try:
+    compliance_level = compliance_level
+except NameError:
+    compliance_level = "standard"
 
-# Process data with tenant-specific logic
-if tenant_config.get('compliance_level') == 'hipaa':
-    result = apply_hipaa_processing(data)
-elif tenant_config.get('compliance_level') == 'gdpr':
-    result = apply_gdpr_processing(data)
-else:
-    result = apply_standard_processing(data)
+result = {"tenant_id": tenant_id, "compliance_level": compliance_level}
 """
 })
+app.register("tenant_workflow", tenant_workflow.build())  # ALWAYS .build()
 
-# Register with tenant scoping
-nexus.register_workflow("tenant_data_processing", tenant_workflow.build(),
-                       tenant_scoped=True)
+app.start()
 ```
 
-## 📊 Enterprise Monitoring & Observability
+## Enterprise Monitoring & Observability
 
-### Comprehensive Monitoring Stack
+### Monitoring with Nexus
+
+Nexus provides built-in monitoring via the `enable_monitoring` flag. For comprehensive observability, combine Nexus monitoring with external tools deployed alongside your application:
+
 ```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.enterprise.monitoring import (
-    PrometheusMonitoring,
-    ElasticsearchLogging,
-    JaegerTracing,
-    GrafanaDashboards
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, AuditConfig
+
+# Enable monitoring and audit logging
+auth = NexusAuthPlugin.basic_auth(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
 )
 
-# Full observability stack
-monitoring_stack = {
-    "metrics": PrometheusMonitoring(
-        port=9090,
-        scrape_interval=15,
-        retention_days=90,
-        custom_metrics=[
-            "nexus_channel_requests_total",
-            "nexus_workflow_duration_seconds",
-            "nexus_session_count",
-            "nexus_tenant_resource_usage"
-        ]
-    ),
+app = Nexus(
+    enable_monitoring=True,  # Built-in Nexus monitoring
+)
+app.add_plugin(auth)
 
-    "logging": ElasticsearchLogging(
-        cluster="https://elastic.company.com:9200",
-        index_pattern="nexus-logs-{YYYY.MM.DD}",
-        retention_days=2557,  # 7 years for compliance
-        log_levels={
-            "api": "INFO",
-            "cli": "WARN",
-            "mcp": "INFO",
-            "security": "DEBUG"
-        }
-    ),
+# Register health-check handler
+@app.handler("system_status", description="Get system status")
+async def system_status() -> dict:
+    """Return system health information."""
+    health = app.health_check()
+    return {"status": "healthy", "health": health}
 
-    "tracing": JaegerTracing(
-        collector="http://jaeger:14268/api/traces",
-        sampling_rate=0.1,
-        cross_channel_traces=True
-    ),
+app.start()
 
-    "dashboards": GrafanaDashboards(
-        url="https://grafana.company.com",
-        templates=[
-            "nexus_overview",
-            "channel_performance",
-            "tenant_usage",
-            "security_events"
-        ]
-    )
-}
-
-nexus = create_production_nexus(monitoring=monitoring_stack)
+# For production observability, deploy alongside:
+# - Prometheus: Scrape /metrics endpoint
+# - Grafana: Dashboard visualization
+# - Elasticsearch + Kibana: Log aggregation
+# - Jaeger/Zipkin: Distributed tracing
+#
+# Configure these as infrastructure (Docker Compose, Kubernetes)
+# rather than in application code.
 ```
 
-### Custom Enterprise Metrics
+### Audit Logging for Compliance
+
 ```python
-from kailash.workflow.builder import WorkflowBuilder
-# Enterprise-specific monitoring
-nexus.register_custom_metrics([
-    {
-        "name": "compliance_audit_events",
-        "type": "counter",
-        "description": "Compliance audit events by type and channel",
-        "labels": ["event_type", "channel", "tenant", "compliance_framework"]
-    },
-    {
-        "name": "tenant_resource_utilization",
-        "type": "gauge",
-        "description": "Resource utilization by tenant",
-        "labels": ["tenant", "resource_type", "channel"]
-    },
-    {
-        "name": "cross_channel_session_duration",
-        "type": "histogram",
-        "description": "Session duration across channels",
-        "labels": ["primary_channel", "secondary_channels", "tenant"]
-    }
-])
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, AuditConfig
 
-# Metrics automatically collected across all channels
+# Audit logging captures all access for compliance
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "user": ["read:*"]},
+    audit=AuditConfig(
+        backend="logging",
+        log_level="INFO",
+        log_request_body=False,              # Disable for PII protection
+        log_response_body=False,
+        exclude_paths=["/health", "/metrics"],
+        redact_headers=["Authorization", "Cookie"],
+        redact_fields=["password", "token", "api_key"],
+    ),
+)
+
+app = Nexus()
+app.add_plugin(auth)
+app.start()
+
+# Audit log captures:
+# - All API requests with user identity
+# - Authentication events (login, logout, failures)
+# - Authorization decisions (permit/deny)
+# - Tenant context for multi-tenant deployments
 ```
 
-## 🔄 High Availability Patterns
+## High Availability Patterns
 
 ### Load Balancing Configuration
+
+For high availability, deploy multiple Nexus instances behind a load balancer. Each instance is stateless (sessions can be shared via Redis):
+
 ```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.enterprise.clustering import NexusCluster
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, RateLimitConfig
 
-# Multi-node Nexus cluster
-cluster = NexusCluster(
-    nodes=[
-        {"host": "nexus-01.company.com", "channels": ["api", "cli", "mcp"]},
-        {"host": "nexus-02.company.com", "channels": ["api", "cli", "mcp"]},
-        {"host": "nexus-03.company.com", "channels": ["api", "cli", "mcp"]}
-    ],
-
-    load_balancing={
-        "api": "round_robin",
-        "cli": "session_affinity",  # CLI sessions stick to node
-        "mcp": "least_connections"
-    },
-
-    failover={
-        "detection_interval": 10,
-        "failover_timeout": 30,
-        "auto_recovery": True
-    },
-
-    session_sharing={
-        "backend": "redis",
-        "cluster": "redis://redis-cluster:6379",
-        "sync_interval": 1
-    }
+# Each Nexus instance is identical and stateless
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "operator": ["read:*", "execute:*"]},
+    rate_limit=RateLimitConfig(
+        requests_per_minute=1000,
+        backend="redis",                    # Shared state across instances
+        redis_url=os.environ["REDIS_URL"],
+    ),
 )
 
-nexus = create_production_nexus(cluster=cluster)
+app = Nexus(
+    api_port=8000,
+    mcp_port=3001,
+    enable_monitoring=True,
+)
+app.add_plugin(auth)
+app.start()
+
+# Deploy behind load balancer (nginx, HAProxy, K8s Ingress):
+# - API channel: Round-robin across instances
+# - Health check: GET /health on each instance
+# - Session affinity: Not required (stateless JWT auth)
+# - Rate limiting: Shared via Redis backend
 ```
 
-### Circuit Breaker Patterns
+### Health Check Integration
+
 ```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.enterprise.resilience import CircuitBreakerManager
+from nexus import Nexus
 
-# Circuit breakers for external dependencies
-circuit_breaker = CircuitBreakerManager()
+app = Nexus()
 
-# Database circuit breaker
-circuit_breaker.add_breaker("database", {
-    "failure_threshold": 5,
-    "timeout": 60,
-    "expected_exception": "DatabaseConnectionError"
-})
+# Built-in health check
+@app.handler("deep_health", description="Deep health check")
+async def deep_health() -> dict:
+    """Comprehensive health check for load balancer integration."""
+    health = app.health_check()
+    return {
+        "status": "healthy" if health else "unhealthy",
+        "channels": {
+            "api": "running",
+            "cli": "available",
+            "mcp": "running",
+        },
+    }
 
-# External API circuit breaker
-circuit_breaker.add_breaker("external_api", {
-    "failure_threshold": 3,
-    "timeout": 30,
-    "expected_exception": "HTTPTimeout"
-})
-
-# Apply across all channels
-nexus.set_circuit_breaker_manager(circuit_breaker)
+# The /health endpoint is automatically available
+# Load balancers should probe: GET /health
+app.start()
 ```
 
-## 📋 Compliance & Governance
+## Compliance & Governance
 
 ### GDPR Compliance Pattern
+
+Implement GDPR compliance using Nexus audit logging and handler patterns:
+
 ```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.enterprise.compliance import GDPRCompliance
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, AuditConfig
 
-gdpr = GDPRCompliance(
-    data_retention_days=2557,  # 7 years
-    encryption_at_rest=True,
-    encryption_in_transit=True,
-
-    # Right to be forgotten
-    enable_data_deletion=True,
-    deletion_verification=True,
-
-    # Data portability
-    enable_data_export=True,
-    export_formats=["json", "csv", "xml"],
-
-    # Consent management
-    consent_tracking=True,
-    consent_channels=["api", "cli", "mcp"],
-
-    # Audit requirements
-    audit_all_access=True,
-    audit_retention_years=7
+# GDPR requires audit trails for all data access
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "dpo": ["read:*", "delete:*"], "user": ["read:own"]},
+    audit=AuditConfig(
+        backend="logging",
+        log_level="INFO",
+        redact_fields=["password", "ssn", "credit_card"],  # PII protection
+    ),
 )
 
-nexus.add_compliance_framework(gdpr)
+app = Nexus()
+app.add_plugin(auth)
+
+# Right to be forgotten (GDPR Article 17)
+@app.handler("gdpr_delete_user_data", description="Delete all user data (GDPR Art. 17)")
+async def gdpr_delete_user_data(user_id: str) -> dict:
+    """Delete all personal data for a user. Requires 'delete:*' permission."""
+    # Implementation would use DataFlow to delete across all tables
+    return {"user_id": user_id, "status": "deleted", "gdpr_article": "17"}
+
+# Data portability (GDPR Article 20)
+@app.handler("gdpr_export_user_data", description="Export user data (GDPR Art. 20)")
+async def gdpr_export_user_data(user_id: str, format: str = "json") -> dict:
+    """Export all personal data for a user."""
+    return {"user_id": user_id, "format": format, "status": "exported"}
+
+app.start()
 ```
 
 ### HIPAA Compliance Pattern
+
 ```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.enterprise.compliance import HIPAACompliance
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, TenantConfig, AuditConfig
 
-hipaa = HIPAACompliance(
-    # Administrative safeguards
-    role_based_access=True,
-    workforce_training_tracking=True,
-    incident_response_procedures=True,
-
-    # Physical safeguards
-    data_center_security=True,
-    workstation_security=True,
-
-    # Technical safeguards
-    audit_logging=True,
-    data_integrity_controls=True,
-    transmission_security=True,
-
-    # PHI handling
-    minimum_necessary_standard=True,
-    authorization_controls=True,
-    person_authentication=True
+# HIPAA requires strict access controls and audit logging
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(
+        secret=os.environ["JWT_SECRET"],
+        verify_exp=True,  # Token expiration required
+    ),
+    rbac={
+        "admin": ["*"],
+        "physician": ["read:phi", "write:phi"],
+        "nurse": ["read:phi"],
+        "billing": ["read:billing"],
+    },
+    tenant_isolation=TenantConfig(
+        jwt_claim="organization_id",
+        admin_role="admin",
+    ),
+    audit=AuditConfig(
+        backend="logging",
+        log_level="INFO",
+        log_request_body=False,      # Never log PHI
+        log_response_body=False,     # Never log PHI
+        redact_fields=["ssn", "dob", "diagnosis", "medication"],
+    ),
 )
 
-nexus.add_compliance_framework(hipaa)
+app = Nexus()
+app.add_plugin(auth)
+
+# PHI access is controlled by RBAC + tenant isolation
+# All access is audit-logged for HIPAA compliance
+# Use RequirePermission("read:phi") on PHI endpoints
+
+app.start()
 ```
 
-## 🚀 Performance Optimization
+## Performance Optimization
 
-### Enterprise Caching Strategy
+### Rate Limiting Strategy
+
 ```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.enterprise.caching import MultiTierCaching
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, RateLimitConfig
 
-# Multi-tier caching across channels
-caching = MultiTierCaching(
-    tiers=[
-        {
-            "name": "memory",
-            "backend": "redis",
-            "cluster": "redis://cache-cluster:6379",
-            "ttl": 300,  # 5 minutes
-            "channels": ["api", "mcp"]
+# Per-route rate limiting for different traffic patterns
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "user": ["read:*", "execute:*"]},
+    rate_limit=RateLimitConfig(
+        requests_per_minute=100,         # Global default
+        burst_size=20,                   # Allow burst traffic
+        backend="redis",                 # Shared across instances
+        redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379"),
+        route_limits={
+            "/api/chat/*": {"requests_per_minute": 30},           # LLM endpoints
+            "/api/auth/login": {"requests_per_minute": 10, "burst_size": 5},  # Login
+            "/health": None,                                       # No limit
         },
-        {
-            "name": "distributed",
-            "backend": "hazelcast",
-            "cluster": "hazelcast://cache-grid:5701",
-            "ttl": 3600,  # 1 hour
-            "channels": ["api", "cli", "mcp"]
-        },
-        {
-            "name": "persistent",
-            "backend": "database",
-            "connection": "postgresql://cache-db:5432/cache",
-            "ttl": 86400,  # 24 hours
-            "channels": ["api", "cli", "mcp"]
-        }
-    ],
-
-    # Cache strategies by channel
-    strategies={
-        "api": "write_through",
-        "cli": "write_back",
-        "mcp": "write_around"
-    }
+        include_headers=True,            # X-RateLimit-* response headers
+        fail_open=True,                  # Allow when Redis is down
+    ),
 )
 
-nexus.set_caching_manager(caching)
+app = Nexus()
+app.add_plugin(auth)
+app.start()
 ```
 
-### Auto-Scaling Configuration
-```python
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.enterprise.scaling import AutoScaler
+### Kubernetes Auto-Scaling
 
-# Kubernetes-based auto-scaling
-auto_scaler = AutoScaler(
-    platform="kubernetes",
-    namespace="nexus-platform",
+For auto-scaling, configure Kubernetes HPA (Horizontal Pod Autoscaler) targeting Nexus metrics:
 
-    scaling_metrics=[
-        {
-            "metric": "cpu_utilization",
-            "target": 70,
-            "channels": ["api", "cli", "mcp"]
-        },
-        {
-            "metric": "memory_utilization",
-            "target": 80,
-            "channels": ["api", "cli", "mcp"]
-        },
-        {
-            "metric": "request_rate",
-            "target": 1000,
-            "channels": ["api"]
-        },
-        {
-            "metric": "session_count",
-            "target": 500,
-            "channels": ["cli"]
-        },
-        {
-            "metric": "tool_call_rate",
-            "target": 200,
-            "channels": ["mcp"]
-        }
-    ],
-
-    scaling_limits={
-        "min_replicas": 3,
-        "max_replicas": 50,
-        "scale_up_cooldown": 60,
-        "scale_down_cooldown": 300
-    }
-)
-
-nexus.set_auto_scaler(auto_scaler)
+```yaml
+# kubernetes/hpa.yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: nexus-platform
+  namespace: nexus
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nexus-platform
+  minReplicas: 3
+  maxReplicas: 50
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
 ```
 
-## 📚 Quick Enterprise Setup Checklist
+## Quick Enterprise Setup Checklist
 
 ### Essential Enterprise Components
+
 - [ ] **Multi-Channel Configuration**: API, CLI, MCP channels enabled
-- [ ] **Enterprise Authentication**: SSO/LDAP integration with MFA
-- [ ] **Authorization**: RBAC/ABAC across all channels
-- [ ] **Multi-Tenancy**: Tenant isolation and resource quotas
-- [ ] **Monitoring Stack**: Prometheus, Elasticsearch, Jaeger, Grafana
-- [ ] **High Availability**: Load balancing and failover configuration
-- [ ] **Compliance**: GDPR, HIPAA, SOX frameworks as needed
-- [ ] **Security Hardening**: Encryption, audit logging, threat detection
-- [ ] **Performance Optimization**: Caching, auto-scaling, circuit breakers
-- [ ] **Disaster Recovery**: Backup strategies and recovery procedures
+- [ ] **Enterprise Authentication**: SSO/JWKS integration via NexusAuthPlugin
+- [ ] **Authorization**: RBAC roles defined for all user types
+- [ ] **Multi-Tenancy**: TenantConfig with JWT claim-based isolation
+- [ ] **Rate Limiting**: RateLimitConfig with per-route limits and Redis backend
+- [ ] **Audit Logging**: AuditConfig with PII redaction
+- [ ] **Monitoring**: `enable_monitoring=True` with external Prometheus/Grafana
+- [ ] **Compliance**: GDPR/HIPAA patterns with appropriate audit and redaction
+- [ ] **High Availability**: Multiple instances behind load balancer
+- [ ] **Secrets Management**: All secrets via environment variables (never hardcoded)
 
 ### Production Deployment Steps
-1. **Infrastructure Setup**: Deploy Kubernetes cluster with monitoring
-2. **Security Configuration**: Configure SSO, LDAP, and certificates
-3. **Database Setup**: Configure tenant databases with encryption
-4. **Load Balancer Setup**: Configure ingress with SSL termination
-5. **Monitoring Deployment**: Deploy Prometheus, Grafana, Elasticsearch
-6. **Compliance Configuration**: Enable audit logging and data controls
-7. **Testing**: Comprehensive security and performance testing
-8. **Documentation**: Enterprise user guides and operational procedures
 
-## 📚 Related Enterprise Patterns
+1. **Infrastructure Setup**: Deploy Kubernetes cluster with monitoring
+2. **Security Configuration**: Configure SSO provider, generate JWT secrets
+3. **NexusAuthPlugin Setup**: Use `NexusAuthPlugin.enterprise()` factory method
+4. **Tenant Configuration**: Configure TenantConfig with JWT claims
+5. **Rate Limiting**: Configure RateLimitConfig with Redis backend
+6. **Monitoring Deployment**: Deploy Prometheus, Grafana, Elasticsearch
+7. **Audit Configuration**: Enable AuditConfig with PII redaction
+8. **Testing**: Comprehensive security and performance testing
+
+## Related Enterprise Patterns
 
 - **[Security Patterns](security-patterns.md)** - Advanced authentication and authorization
 - **[Compliance Patterns](compliance-patterns.md)** - Regulatory compliance frameworks
@@ -594,4 +607,4 @@ nexus.set_auto_scaler(auto_scaler)
 
 ---
 
-**Ready for enterprise multi-channel deployment?** Nexus provides unified orchestration across API, CLI, and MCP with enterprise-grade security, compliance, and monitoring. Start with `create_production_nexus()` for full enterprise features.
+**Ready for enterprise multi-channel deployment?** Nexus provides unified orchestration across API, CLI, and MCP with enterprise-grade security, compliance, and monitoring. Start with `Nexus()` and `NexusAuthPlugin.enterprise()` for full enterprise features.

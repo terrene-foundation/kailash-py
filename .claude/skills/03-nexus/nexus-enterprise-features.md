@@ -9,386 +9,374 @@ tags: [nexus, enterprise, auth, security, monitoring]
 
 Production-grade features for enterprise deployments.
 
-## Authentication
+## Authentication (v1.3.0+)
 
-### Enable Authentication
+### NexusAuthPlugin -- The Unified Auth System
+
+Authentication in Nexus is configured through the `NexusAuthPlugin`, which assembles
+JWT, RBAC, tenant isolation, rate limiting, and audit logging into a single plugin.
 
 ```python
+import os
 from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig
 
-app = Nexus(enable_auth=True)
+# Basic auth (JWT + audit)
+auth = NexusAuthPlugin.basic_auth(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"])  # CRITICAL: use `secret`, NOT `secret_key`
+)
 
-# Configure authentication strategy
-app.auth.strategy = "oauth2"       # oauth2, jwt, api_key, saml
-app.auth.provider = "google"       # google, github, auth0, custom
-app.auth.token_expiry = 3600       # 1 hour
-app.auth.refresh_enabled = True
+app = Nexus()
+app.add_plugin(auth)
+app.start()
 ```
 
-### OAuth2 Configuration
+### JWT Configuration (Symmetric -- HS256)
 
 ```python
-app.auth.configure(
-    provider="oauth2",
-    client_id=os.getenv("OAUTH_CLIENT_ID"),
-    client_secret=os.getenv("OAUTH_CLIENT_SECRET"),
-    authorization_url="https://accounts.google.com/o/oauth2/auth",
-    token_url="https://oauth2.googleapis.com/token",
-    redirect_uri="http://localhost:8000/auth/callback"
+from nexus.auth import JWTConfig
+
+jwt_config = JWTConfig(
+    secret=os.environ["JWT_SECRET"],      # CRITICAL: `secret`, NOT `secret_key`
+    algorithm="HS256",
+    exempt_paths=["/health", "/docs"],    # CRITICAL: `exempt_paths`, NOT `exclude_paths`
+    verify_exp=True,
+    leeway=0,
 )
 ```
 
-### API Key Authentication
+### JWT Configuration (Asymmetric -- RS256 / SSO)
 
 ```python
-app.auth.strategy = "api_key"
-app.auth.api_keys = [
-    {"key": "key123", "name": "Service A", "permissions": ["read", "write"]},
-    {"key": "key456", "name": "Service B", "permissions": ["read"]}
-]
+from nexus.auth import JWTConfig
 
-# Use with API
-curl -X POST http://localhost:8000/workflows/test/execute \
-  -H "X-API-Key: key123" \
-  -H "Content-Type: application/json" \
-  -d '{"inputs": {}}'
+# JWKS for SSO providers (Auth0, Okta, etc.)
+jwt_config = JWTConfig(
+    algorithm="RS256",
+    jwks_url="https://your-tenant.auth0.com/.well-known/jwks.json",
+    jwks_cache_ttl=3600,
+    issuer="https://your-issuer.com",
+    audience="your-api",
+)
 ```
 
-### JWT Authentication
+### SaaS Application (JWT + RBAC + Tenant Isolation)
 
 ```python
-app.auth.strategy = "jwt"
-app.auth.jwt_secret = os.getenv("JWT_SECRET")
-app.auth.jwt_algorithm = "HS256"
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, TenantConfig
 
-# Use with API
-curl -X POST http://localhost:8000/workflows/test/execute \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"inputs": {}}'
+auth = NexusAuthPlugin.saas_app(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "user": ["read:*"]},
+    tenant_isolation=TenantConfig(admin_role="admin"),  # singular `admin_role`
+)
+
+app = Nexus()
+app.add_plugin(auth)
+app.start()
 ```
 
 ## Authorization (RBAC)
 
+RBAC is configured as part of the NexusAuthPlugin. Use FastAPI dependencies
+to enforce roles and permissions on individual endpoints.
+
 ```python
-# Define roles and permissions
-app.auth.rbac_enabled = True
-app.auth.roles = {
-    "admin": ["workflows:*"],
-    "developer": ["workflows:read", "workflows:execute"],
-    "viewer": ["workflows:read"]
-}
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig
+from nexus.auth.dependencies import RequireRole, RequirePermission, get_current_user
+from fastapi import Depends
 
-# Assign roles to users
-app.auth.assign_role("user123", "developer")
+auth = NexusAuthPlugin.saas_app(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={
+        "admin": ["*"],                           # Full access
+        "editor": ["read:*", "write:articles"],   # Wildcard + specific
+        "viewer": ["read:*"],                     # Read-only
+    },
+    rbac_default_role="viewer",
+)
 
-# Check permissions
-@app.require_permission("workflows:execute")
-def execute_workflow(workflow_name, inputs):
-    return app.execute_workflow(workflow_name, inputs)
+app = Nexus()
+app.add_plugin(auth)
+
+# Use dependencies in custom endpoints
+@app.get("/admin")
+async def admin_only(user=Depends(RequireRole("admin"))):
+    return {"admin": True}
+
+@app.delete("/articles/{id}")
+async def delete_article(user=Depends(RequirePermission("delete:articles"))):
+    return {"deleted": True}
+
+@app.get("/profile")
+async def profile(user=Depends(get_current_user)):
+    return {"user_id": user.user_id, "roles": user.roles}
 ```
+
+**Permission matching:**
+
+- `"*"` matches everything
+- `"read:*"` matches `read:users`, `read:articles`, etc.
+- `"*:users"` matches `read:users`, `write:users`, etc.
 
 ## Rate Limiting
 
-### Basic Rate Limiting
+### Constructor-Level Rate Limiting
 
 ```python
 app = Nexus(
-    enable_rate_limiting=True,
-    rate_limit=1000,  # Requests per minute
-    rate_limit_burst=100  # Burst capacity
+    rate_limit=1000,  # Requests per minute (default: 100)
 )
 ```
 
-### Per-User Rate Limiting
+### Fine-Grained Rate Limiting via NexusAuthPlugin
 
 ```python
-app.rate_limiter.strategy = "per_user"
-app.rate_limiter.limits = {
-    "default": {"requests": 100, "window": 60},
-    "premium": {"requests": 1000, "window": 60},
-    "admin": {"requests": 10000, "window": 60}
-}
-```
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig
+from nexus.auth.rate_limit.config import RateLimitConfig
 
-### Custom Rate Limiting
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "user": ["read:*"]},
+    rate_limit=RateLimitConfig(
+        requests_per_minute=100,
+        burst_size=20,
+        backend="memory",                    # or "redis"
+        redis_url="redis://localhost:6379",  # Required if backend="redis"
+        route_limits={
+            "/api/chat/*": {"requests_per_minute": 30},
+            "/api/auth/login": {"requests_per_minute": 10, "burst_size": 5},
+            "/health": None,                 # Disable rate limit for health
+        },
+        include_headers=True,                # X-RateLimit-* headers
+        fail_open=True,                      # Allow when backend fails
+    ),
+)
+# CRITICAL: RateLimitConfig has NO `exclude_paths` parameter
 
-```python
-@app.rate_limit_handler
-def custom_rate_limit(request):
-    user = request.user
-    if user.is_premium:
-        return {"requests": 1000, "window": 60}
-    return {"requests": 100, "window": 60}
-```
-
-## Circuit Breaker
-
-```python
-app = Nexus(enable_circuit_breaker=True)
-
-# Configure circuit breaker
-app.circuit_breaker.failure_threshold = 5  # Open after 5 failures
-app.circuit_breaker.timeout = 60  # Try again after 60 seconds
-app.circuit_breaker.half_open_max_calls = 3  # Test with 3 requests
-
-# Per-workflow circuit breaker
-app.circuit_breaker.enable_for_workflow("critical-workflow")
+app = Nexus()
+app.add_plugin(auth)
+app.start()
 ```
 
 ## Monitoring and Observability
 
-### Prometheus Integration
+### Enable Monitoring via Constructor
 
 ```python
 app = Nexus(
     enable_monitoring=True,
-    monitoring_backend="prometheus"
 )
 
-# Metrics endpoint
-# GET http://localhost:8000/metrics
+# Health endpoint: GET http://localhost:8000/health
 ```
 
-### OpenTelemetry Integration
+### Health Check
 
 ```python
-app.monitoring.backend = "opentelemetry"
-app.monitoring.otlp_endpoint = "http://localhost:4317"
-app.monitoring.service_name = "nexus-platform"
-
-# Distributed tracing
-app.monitoring.enable_tracing = True
-app.monitoring.trace_sampling_rate = 0.1  # 10% sampling
-```
-
-### Custom Metrics
-
-```python
-# Define custom metrics
-app.monitoring.register_metric(
-    name="workflow_custom_metric",
-    type="counter",
-    description="Custom workflow metric"
-)
-
-# Increment metric
-app.monitoring.increment("workflow_custom_metric", labels={"workflow": "my-workflow"})
-```
-
-## Caching
-
-```python
-app = Nexus(enable_caching=True)
-
-# Configure cache backend
-app.cache.backend = "redis"
-app.cache.redis_url = os.getenv("REDIS_URL")
-app.cache.default_ttl = 300  # 5 minutes
-
-# Per-workflow caching
-app.cache.enable_for_workflow("expensive-workflow", ttl=600)
-
-# Cache invalidation
-app.cache.invalidate("workflow-name")
-app.cache.invalidate_all()
-```
-
-## Load Balancing
-
-```python
-# Configure multi-instance deployment
-app.configure_load_balancing({
-    "api": {
-        "instances": 3,
-        "health_check": "/health",
-        "strategy": "round_robin"
-    },
-    "mcp": {
-        "instances": 2,
-        "strategy": "least_connections"
-    }
-})
-```
-
-## High Availability
-
-```python
-# Configure for HA
-app = Nexus(
-    # Distributed sessions
-    session_backend="redis",
-    redis_url=os.getenv("REDIS_URL"),
-
-    # Health checks
-    health_check_interval=30,
-    enable_readiness_probe=True,
-    enable_liveness_probe=True,
-
-    # Graceful shutdown
-    graceful_shutdown_timeout=30,
-
-    # Connection pooling
-    connection_pool_size=20,
-    connection_pool_timeout=30
-)
-```
-
-## Security Hardening
-
-```python
-# Enable security features
-app = Nexus(
-    # HTTPS only
-    force_https=True,
-    ssl_cert="/path/to/cert.pem",
-    ssl_key="/path/to/key.pem",
-
-    # Security headers
-    enable_security_headers=True,
-
-    # CORS
-    enable_cors=True,
-    cors_origins=["https://app.example.com"],
-    cors_credentials=True,
-
-    # Request validation
-    enable_request_validation=True,
-    max_request_size=10 * 1024 * 1024,  # 10MB
-
-    # Rate limiting
-    enable_rate_limiting=True,
-
-    # Authentication
-    enable_auth=True
-)
-
-# Additional security
-app.security.enable_csrf_protection = True
-app.security.enable_xss_protection = True
-app.security.enable_content_security_policy = True
+app = Nexus()
+health = app.health_check()
+print(f"Status: {health['status']}")
 ```
 
 ## Audit Logging
 
 ```python
-app = Nexus(enable_audit_logging=True)
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig
+from nexus.auth.audit.config import AuditConfig
 
-# Configure audit log
-app.audit.log_file = "/var/log/nexus/audit.log"
-app.audit.log_format = "json"
-app.audit.log_events = [
-    "workflow_execute",
-    "workflow_register",
-    "user_login",
-    "user_logout",
-    "permission_denied"
-]
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "user": ["read:*"]},
+    audit=AuditConfig(
+        backend="logging",                   # or "dataflow"
+        log_level="INFO",
+        log_request_body=False,              # PII risk
+        log_response_body=False,
+        exclude_paths=["/health", "/metrics"],
+        redact_headers=["Authorization", "Cookie"],
+        redact_fields=["password", "token", "api_key"],
+    ),
+)
 
-# Custom audit handler
-@app.on_audit_event
-def handle_audit(event):
-    print(f"AUDIT: {event.type} by {event.user} at {event.timestamp}")
-    # Send to SIEM system
+app = Nexus()
+app.add_plugin(auth)
+app.start()
 ```
 
-## Backup and Recovery
+## Tenant Isolation
 
 ```python
-# Backup configuration
-app.backup.enable_auto_backup = True
-app.backup.backup_interval = 3600  # Every hour
-app.backup.backup_location = "/backups/nexus"
-app.backup.retention_days = 7
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig
+from nexus.auth.tenant.config import TenantConfig
 
-# Manual backup
-app.backup.create_backup("manual-backup-2024-01")
+auth = NexusAuthPlugin.saas_app(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "user": ["read:*"]},
+    tenant_isolation=TenantConfig(
+        tenant_id_header="X-Tenant-ID",
+        jwt_claim="tenant_id",               # Claim name in JWT
+        allow_admin_override=True,
+        admin_role="super_admin",            # CRITICAL: singular string, NOT `admin_roles`
+        exclude_paths=["/health", "/docs"],
+    ),
+)
 
-# Restore from backup
-app.backup.restore("backup-2024-01-15")
+app = Nexus()
+app.add_plugin(auth)
+app.start()
+```
+
+## Security Hardening
+
+```python
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, TenantConfig
+from nexus.auth.rate_limit.config import RateLimitConfig
+from nexus.auth.audit.config import AuditConfig
+
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "editor": ["read:*", "write:*"], "viewer": ["read:*"]},
+    rate_limit=RateLimitConfig(requests_per_minute=5000),
+    tenant_isolation=TenantConfig(admin_role="admin"),
+    audit=AuditConfig(backend="logging"),
+)
+
+app = Nexus(
+    cors_origins=["https://app.example.com"],
+    cors_allow_credentials=False,
+    rate_limit=5000,
+)
+app.add_plugin(auth)
+app.start()
+```
+
+## CORS Configuration
+
+```python
+# CORS via constructor
+app = Nexus(
+    cors_origins=["https://app.example.com"],
+    cors_allow_credentials=False,
+)
+```
+
+## Presets
+
+```python
+# One-line middleware stacks
+app = Nexus(preset="saas")          # Sensible SaaS defaults
+app = Nexus(preset="enterprise")    # Full enterprise stack
 ```
 
 ## Production Deployment Example
 
 ```python
 import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, TenantConfig
+from nexus.auth.rate_limit.config import RateLimitConfig
+from nexus.auth.audit.config import AuditConfig
 
 def create_production_app():
+    # Auth via NexusAuthPlugin
+    auth = NexusAuthPlugin.enterprise(
+        jwt=JWTConfig(
+            algorithm="RS256",
+            jwks_url="https://auth.company.com/.well-known/jwks.json",
+            jwks_cache_ttl=3600,
+        ),
+        rbac={"admin": ["*"], "editor": ["read:*", "write:*"], "viewer": ["read:*"]},
+        rate_limit=RateLimitConfig(
+            requests_per_minute=5000,
+            backend="redis",
+            redis_url=os.environ.get("REDIS_URL", "redis://localhost:6379"),
+        ),
+        tenant_isolation=TenantConfig(admin_role="admin"),
+        audit=AuditConfig(backend="logging"),
+    )
+
     app = Nexus(
         # Server
         api_port=int(os.getenv("PORT", "8000")),
         api_host="0.0.0.0",
 
         # Security
-        enable_auth=True,
-        enable_rate_limiting=True,
         rate_limit=5000,
-        force_https=True,
-        ssl_cert=os.getenv("SSL_CERT_PATH"),
-        ssl_key=os.getenv("SSL_KEY_PATH"),
-
-        # Performance
-        max_concurrent_workflows=200,
-        enable_caching=True,
-        enable_circuit_breaker=True,
+        cors_origins=["https://app.example.com"],
+        cors_allow_credentials=False,
 
         # Monitoring
         enable_monitoring=True,
-        monitoring_backend="prometheus",
-        enable_audit_logging=True,
-
-        # High Availability
-        session_backend="redis",
-        redis_url=os.getenv("REDIS_URL"),
-        health_check_interval=30,
 
         # Logging
         log_level="INFO",
-        log_format="json",
-        log_file="/var/log/nexus/app.log",
 
         # Discovery
-        auto_discovery=False
+        auto_discovery=False,
     )
-
-    # Configure components
-    app.auth.strategy = "oauth2"
-    app.auth.provider = "auth0"
-    app.monitoring.enable_tracing = True
-    app.cache.default_ttl = 300
+    app.add_plugin(auth)
 
     return app
 
 # Create and start
 app = create_production_app()
+app.start()
 ```
 
 ## Best Practices
 
-1. **Enable Authentication** in production
-2. **Use HTTPS** for all traffic
-3. **Configure Rate Limiting** appropriately
-4. **Enable Monitoring and Alerting**
-5. **Use Redis for Distributed Sessions**
-6. **Implement Circuit Breakers** for resilience
-7. **Enable Audit Logging** for compliance
-8. **Regular Security Audits**
-9. **Backup Configuration** regularly
-10. **Test Disaster Recovery** procedures
+1. **Use NexusAuthPlugin** for all authentication needs
+2. **Use HTTPS** for all traffic (via reverse proxy)
+3. **Configure Rate Limiting** appropriately (default 100 req/min)
+4. **Enable Monitoring** in production
+5. **Use Redis** for distributed sessions and rate limiting
+6. **Enable Audit Logging** for compliance
+7. **Regular Security Audits**
+8. **Use `auto_discovery=False`** with DataFlow integration
+
+## Common Auth Gotchas
+
+| Issue                                   | Cause                                | Fix                            |
+| --------------------------------------- | ------------------------------------ | ------------------------------ |
+| `TypeError: 'secret_key' unexpected`    | Wrong param name                     | Use `secret`, not `secret_key` |
+| `TypeError: 'exclude_paths' unexpected` | JWTConfig uses different name        | Use `exempt_paths`             |
+| `TypeError: 'admin_roles' unexpected`   | TenantConfig uses singular           | Use `admin_role` (string)      |
+| FastAPI dependency injection fails      | `from __future__ import annotations` | Remove PEP 563 import          |
+| RBAC without JWT                        | RBAC requires JWT                    | Add `jwt=JWTConfig(...)`       |
 
 ## Key Takeaways
 
-- Enterprise features available out-of-the-box
-- Multiple authentication strategies supported
-- RBAC for fine-grained access control
-- Rate limiting prevents abuse
-- Circuit breakers improve resilience
-- Comprehensive monitoring and observability
-- Production-ready security hardening
+- Authentication configured via `NexusAuthPlugin` (not attribute access)
+- Factory methods: `basic_auth()`, `saas_app()`, `enterprise()`
+- Middleware ordering handled automatically by the plugin
+- RBAC uses wildcard patterns for permission matching
+- Rate limiting available at constructor level or via plugin
+- Audit logging integrated into the auth plugin
 
 ## Related Skills
 
+- [nexus-auth-plugin](#) - Full NexusAuthPlugin reference
 - [nexus-config-options](#) - Configuration reference
-- [nexus-production-deployment](#) - Deploy to production
-- [nexus-health-monitoring](#) - Monitor production
+- [nexus-quickstart](#) - Basic setup
 - [nexus-troubleshooting](#) - Fix production issues

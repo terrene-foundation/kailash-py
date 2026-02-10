@@ -27,15 +27,13 @@ from dataflow import DataFlow
 # Development instance
 db_dev = DataFlow(
     database_url="sqlite:///dev.db",
-    auto_migrate=True,
-    existing_schema_mode=False
+    auto_migrate=True,  # Default - auto-creates and migrates tables
 )
 
-# Production instance
+# Production instance (existing database, no schema changes)
 db_prod = DataFlow(
     database_url="postgresql://user:pass@localhost/prod",
-    auto_migrate=False,
-    existing_schema_mode=True
+    auto_migrate=False,  # Don't modify schema
 )
 
 # Models isolated per instance
@@ -93,10 +91,12 @@ class Model1:
 ## Documentation References
 
 ### Primary Sources
+
 - **README Multi-Instance**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md#L87-L116)
 - **DataFlow CLAUDE**: [`sdk-users/apps/dataflow/CLAUDE.md`](../../../../sdk-users/apps/dataflow/CLAUDE.md#L86-L116)
 
 ### Specialist Reference
+
 - **DataFlow Specialist**: [`.claude/skills/dataflow-specialist.md`](../../dataflow-specialist.md#L86-L116)
 
 ## Quick Tips

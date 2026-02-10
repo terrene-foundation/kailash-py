@@ -13,9 +13,9 @@ Automatic schema migrations with safety controls for development and production.
 > Related Skills: [`dataflow-models`](#), [`dataflow-existing-database`](#)
 > Related Subagents: `dataflow-specialist` (complex migrations, production safety)
 
-> **DataFlow v0.10.15 Update**: `auto_migrate=True` now works correctly in Docker/FastAPI environments using `SyncDDLExecutor` (psycopg2/sqlite3 for synchronous DDL). The previous workaround of using `auto_migrate=False` + `create_tables_async()` is **OBSOLETE**.
+> **DataFlow v0.11.0 Update**: `auto_migrate=True` now works correctly in Docker/FastAPI environments using `SyncDDLExecutor` (psycopg2/sqlite3 for synchronous DDL). The previous workaround of using `auto_migrate=False` + `create_tables_async()` is **OBSOLETE**.
 >
-> **Note**: `existing_schema_mode` and `enable_model_persistence` parameters still exist for specific use cases but are rarely needed. The simple `auto_migrate=True` (default) handles most scenarios.
+> The deprecated parameters (`existing_schema_mode`, `enable_model_persistence`, `skip_registry`, `skip_migration`) have been removed. Use `auto_migrate=True` (default) for automatic schema management, or `auto_migrate=False` to skip schema modifications.
 
 ## Quick Reference
 
@@ -190,11 +190,13 @@ db_prod = DataFlow(
 ## Documentation References
 
 ### Primary Sources
+
 - **NOT NULL Handler**: [`sdk-users/apps/dataflow/docs/development/not-null-column-addition.md`](../../../../sdk-users/apps/dataflow/docs/development/not-null-column-addition.md)
 - **Column Removal**: [`sdk-users/apps/dataflow/docs/development/column-removal-system.md`](../../../../sdk-users/apps/dataflow/docs/development/column-removal-system.md)
 - **Auto Migration**: [`sdk-users/apps/dataflow/docs/workflows/auto-migration.md`](../../../../sdk-users/apps/dataflow/docs/workflows/auto-migration.md)
 
 ### Related Documentation
+
 - **DataFlow CLAUDE**: [`sdk-users/apps/dataflow/CLAUDE.md`](../../../../sdk-users/apps/dataflow/CLAUDE.md#L316-L360)
 - **Migration Orchestration**: [`sdk-users/apps/dataflow/docs/workflows/migration-orchestration-engine.md`](../../../../sdk-users/apps/dataflow/docs/workflows/migration-orchestration-engine.md)
 

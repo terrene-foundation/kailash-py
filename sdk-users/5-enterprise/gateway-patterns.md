@@ -1,14 +1,15 @@
 # Enterprise Gateway Patterns
 
-*Single-channel API gateway patterns for REST services and external systems integration*
+_Single-channel API gateway patterns for REST services and external systems integration_
 
 ## 🌐 Overview
 
 This guide covers enterprise gateway implementation using Kailash SDK's `create_gateway()` function for single-channel API gateway deployment. For multi-channel orchestration (API + CLI + MCP), see [Nexus Patterns](nexus-patterns.md).
 
 **Choose Your Architecture:**
+
 - **Single-Channel API Gateway**: Use `create_gateway()` for REST-only services
-- **Multi-Channel Platform**: Use `create_nexus()` for unified API, CLI, and MCP orchestration
+- **Multi-Channel Platform**: Use `Nexus()` for unified API, CLI, and MCP orchestration
 
 This guide focuses on single-channel API gateway patterns with the redesigned server architecture.
 
@@ -101,17 +102,20 @@ gateway = create_gateway(
 The gateway automatically provides these enterprise endpoints:
 
 #### **Core Information**
+
 - `GET /` - Gateway info and available features
 - `GET /health` - Detailed health check with component status
 - `GET /api/stats` - Comprehensive performance statistics
 
 #### **Session Management**
+
 - `POST /api/sessions` - Create new user session
 - `GET /api/sessions/{session_id}` - Get session details
 - `DELETE /api/sessions/{session_id}` - Close session
 - `GET /api/sessions` - List active sessions (admin)
 
 #### **Workflow Operations**
+
 - `POST /api/workflows` - Create dynamic workflow
 - `GET /api/workflows/{workflow_id}` - Get workflow schema
 - `GET /api/workflows` - List available workflows
@@ -119,12 +123,14 @@ The gateway automatically provides these enterprise endpoints:
 - `GET /api/executions/{execution_id}` - Get execution status
 
 #### **Real-time Communication**
+
 - `WS /ws` - WebSocket endpoint with session filtering
 - `GET /events` - Server-Sent Events (SSE) streaming
 - `POST /api/webhooks` - Register webhook endpoint
 - `DELETE /api/webhooks/{webhook_id}` - Unregister webhook
 
 #### **Schema Discovery**
+
 - `GET /api/schemas/nodes` - Get available node schemas
 - `GET /api/schemas/nodes/{node_type}` - Get specific node schema
 - `GET /api/schemas/workflows/{workflow_id}` - Get workflow schema
@@ -771,6 +777,7 @@ CMD ["python", "gateway_app.py"]
 ## 📚 Quick Gateway Implementation Checklist
 
 ### Essential Gateway Components
+
 - [ ] **Gateway Creation**: `create_gateway()` with enterprise configuration
 - [ ] **Authentication**: JWT or API key authentication enabled
 - [ ] **Rate Limiting**: Configured for API protection
@@ -783,6 +790,7 @@ CMD ["python", "gateway_app.py"]
 - [ ] **Documentation**: API documentation for client integration
 
 ### Gateway Endpoints Reference
+
 - **`POST /api/sessions`** - Session management
 - **`POST /api/workflows`** - Dynamic workflow creation
 - **`POST /api/executions`** - Workflow execution
@@ -795,6 +803,7 @@ CMD ["python", "gateway_app.py"]
 ### Server Architecture Options
 
 **Single-Channel API Gateway (This Guide):**
+
 ```python
 from kailash.servers.gateway import create_gateway
 
@@ -803,6 +812,7 @@ gateway = create_gateway(server_type="enterprise")  # EnterpriseWorkflowServer
 ```
 
 **Multi-Channel Platform (Recommended for New Projects):**
+
 ```python
 from nexus import Nexus
 
@@ -811,6 +821,7 @@ nexus = Nexus()  # API, CLI, and MCP channels with session sync
 ```
 
 ### Related Enterprise Guides
+
 - **[Nexus Patterns](nexus-patterns.md)** - Multi-channel orchestration (API + CLI + MCP)
 - **[Security Patterns](security-patterns.md)** - Authentication and authorization
 - **[Middleware Patterns](middleware-patterns.md)** - Advanced middleware setup
@@ -820,5 +831,6 @@ nexus = Nexus()  # API, CLI, and MCP channels with session sync
 ---
 
 **Ready to build enterprise gateways?**
+
 - **Single-channel API**: Start with `create_gateway()` for REST-only services
-- **Multi-channel platform**: Start with `create_nexus()` for unified API, CLI, and MCP orchestration
+- **Multi-channel platform**: Start with `Nexus()` for unified API, CLI, and MCP orchestration

@@ -16,12 +16,14 @@ Common issues and solutions for Nexus platform.
 **Error**: `Address already in use`
 
 **Solution**:
+
 ```python
 # Use custom ports
 app = Nexus(api_port=8001, mcp_port=3002)
 ```
 
 **Check port usage**:
+
 ```bash
 # Find process using port 8000
 lsof -i :8000
@@ -35,6 +37,7 @@ kill -9 <PID>
 **Error**: `Workflow 'my-workflow' not registered`
 
 **Solution**:
+
 ```python
 # Ensure .build() is called
 workflow = WorkflowBuilder()
@@ -50,14 +53,13 @@ print(list(app.workflows.keys()))
 **Error**: Nexus hangs during initialization
 
 **Solution**:
+
 ```python
 # Disable auto_discovery when using DataFlow
 app = Nexus(auto_discovery=False)
 
-# Also configure DataFlow optimally
-db = DataFlow(
-    enable_model_persistence=False  # Skip model registry for fast startup
-)
+# DataFlow v0.11.0: auto_migrate=True (default) works in Docker/FastAPI
+db = DataFlow("postgresql://...")
 ```
 
 ### 4. Import Errors
@@ -65,6 +67,7 @@ db = DataFlow(
 **Error**: `ModuleNotFoundError: No module named 'nexus'`
 
 **Solution**:
+
 ```bash
 # Install Nexus
 pip install kailash-nexus
@@ -78,6 +81,7 @@ python -c "from nexus import Nexus; print('OK')"
 **Error**: `Unauthorized` or `401`
 
 **Solution**:
+
 ```python
 # Configure authentication
 app = Nexus(enable_auth=True)
@@ -94,6 +98,7 @@ curl -X POST http://localhost:8000/workflows/test/execute \
 **Error**: `Invalid parameter type`
 
 **Solution**:
+
 ```python
 # Check parameter types match node requirements
 # Use proper JSON types in API calls
@@ -110,6 +115,7 @@ curl -X POST http://localhost:8000/workflows/test/execute \
 **Error**: `Session 'session-123' not found or expired`
 
 **Solution**:
+
 ```python
 # Create session before use
 session_id = app.create_session(channel="api")
@@ -127,13 +133,13 @@ if not app.session_manager.exists(session_id):
 **Problem**: Nexus takes 10-30 seconds to start
 
 **Solution**:
+
 ```python
 # With DataFlow, use optimized settings
 app = Nexus(auto_discovery=False)
 db = DataFlow(
-    enable_model_persistence=False,  # Skip model registry for fast startup
-    auto_migrate=False,
-    skip_migration=True
+    "postgresql://...",
+    auto_migrate=True,  # v0.11.0 default: Works in Docker/FastAPI via SyncDDLExecutor
 )
 
 # Should now start in <2 seconds
@@ -144,6 +150,7 @@ db = DataFlow(
 **Problem**: Node doesn't receive API parameters
 
 **Solution**:
+
 ```python
 # Use try/except pattern in PythonCodeNode
 workflow.add_node("PythonCodeNode", "process", {
@@ -167,6 +174,7 @@ curl -X POST http://localhost:8000/workflows/process/execute \
 **Problem**: Data not flowing between nodes
 
 **Solution**:
+
 ```python
 # Use explicit connections with correct paths
 workflow.add_connection(
@@ -269,32 +277,38 @@ grep "my-workflow" nexus.log
 ## Common Error Messages
 
 ### "Workflow 'X' not registered"
+
 - Forgot to call `.build()`
 - Wrong workflow name
 - Registration failed (check logs)
 
 ### "Invalid parameter type"
+
 - API request has wrong type
 - Node expects different type
 - Check API schema
 
 ### "Session expired"
+
 - Session timeout reached
 - Session manually ended
 - Session never created
 
 ### "Port already in use"
+
 - Another Nexus instance running
 - Different service using port
 - Change port in config
 
 ### "Auto-discovery blocking"
+
 - Using DataFlow with auto_discovery=True
 - Set auto_discovery=False
 
 ## Performance Issues
 
 ### Slow API Responses
+
 ```python
 # Check workflow execution time
 metrics = app.get_workflow_metrics("workflow-name")
@@ -308,6 +322,7 @@ print(f"Avg execution time: {metrics['avg_execution_time']}s")
 ```
 
 ### High Memory Usage
+
 ```python
 # Check session cleanup
 app.session_manager.cleanup_expired()
@@ -320,6 +335,7 @@ app = Nexus(
 ```
 
 ### High CPU Usage
+
 ```python
 # Check concurrent requests
 metrics = app.get_metrics()
@@ -332,19 +348,23 @@ app.api.max_concurrent_requests = 50
 ## Getting Help
 
 ### 1. Check Documentation
+
 - [Nexus README](../../sdk-users/apps/nexus/README.md)
 - [User Guides](../../sdk-users/apps/nexus/docs/user-guides/)
 - [Technical Docs](../../sdk-users/apps/nexus/docs/technical/)
 
 ### 2. Enable Verbose Logging
+
 ```python
 app = Nexus(log_level="DEBUG", log_format="json")
 ```
 
 ### 3. Check GitHub Issues
+
 Search for similar issues in the repository.
 
 ### 4. Create Minimal Reproduction
+
 ```python
 # Minimal example to reproduce issue
 from nexus import Nexus

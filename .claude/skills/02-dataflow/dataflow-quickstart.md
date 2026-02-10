@@ -70,44 +70,47 @@ print(f"Created user ID: {results['create']['id']}")
 
 ### DataFlow vs Traditional ORM
 
-| Feature | Traditional ORM | DataFlow |
-|---------|----------------|----------|
-| **Usage** | Direct instantiation (`User()`) | Workflow nodes (`UserCreateNode`) |
-| **Operations** | Method calls (`user.save()`) | Workflow execution |
-| **Transactions** | Manual management | Distributed transactions built-in |
-| **Caching** | External integration | Enterprise caching included |
-| **Multi-tenancy** | Custom code | Automatic isolation |
-| **Scalability** | Vertical scaling | Horizontal scaling built-in |
+| Feature           | Traditional ORM                 | DataFlow                          |
+| ----------------- | ------------------------------- | --------------------------------- |
+| **Usage**         | Direct instantiation (`User()`) | Workflow nodes (`UserCreateNode`) |
+| **Operations**    | Method calls (`user.save()`)    | Workflow execution                |
+| **Transactions**  | Manual management               | Distributed transactions built-in |
+| **Caching**       | External integration            | Enterprise caching included       |
+| **Multi-tenancy** | Custom code                     | Automatic isolation               |
+| **Scalability**   | Vertical scaling                | Horizontal scaling built-in       |
 
 ## Generated Node Types (9 per Model)
 
 Each `@db.model` automatically creates:
 
-| Node | Purpose | Example Config |
-|------|---------|----------------|
-| **{Model}CreateNode** | Single insert | `{"name": "John", "email": "john@example.com"}` |
-| **{Model}ReadNode** | Single select | `{"id": 123}` or `{"filter": {"email": "alice@example.com"}}` |
-| **{Model}UpdateNode** | Single update | `{"id": 123, "name": "Jane"}` |
-| **{Model}DeleteNode** | Single delete | `{"id": 123}` or `{"soft_delete": True}` |
-| **{Model}ListNode** | Query with filters | `{"filter": {"age": {"$gt": 18}}, "limit": 10}` |
-| **{Model}BulkCreateNode** | Bulk insert | `{"data": [...], "batch_size": 1000}` |
-| **{Model}BulkUpdateNode** | Bulk update | `{"filter": {...}, "fields": {...}}` |
-| **{Model}BulkDeleteNode** | Bulk delete | `{"filter": {...}}` |
-| **{Model}BulkUpsertNode** | Insert or update | `{"data": [...], "match_fields": ["email"]}` |
+| Node                      | Purpose            | Example Config                                                |
+| ------------------------- | ------------------ | ------------------------------------------------------------- |
+| **{Model}CreateNode**     | Single insert      | `{"name": "John", "email": "john@example.com"}`               |
+| **{Model}ReadNode**       | Single select      | `{"id": 123}` or `{"filter": {"email": "alice@example.com"}}` |
+| **{Model}UpdateNode**     | Single update      | `{"id": 123, "name": "Jane"}`                                 |
+| **{Model}DeleteNode**     | Single delete      | `{"id": 123}` or `{"soft_delete": True}`                      |
+| **{Model}ListNode**       | Query with filters | `{"filter": {"age": {"$gt": 18}}, "limit": 10}`               |
+| **{Model}BulkCreateNode** | Bulk insert        | `{"data": [...], "batch_size": 1000}`                         |
+| **{Model}BulkUpdateNode** | Bulk update        | `{"filter": {...}, "fields": {...}}`                          |
+| **{Model}BulkDeleteNode** | Bulk delete        | `{"filter": {...}}`                                           |
+| **{Model}BulkUpsertNode** | Insert or update   | `{"data": [...], "match_fields": ["email"]}`                  |
 
 ## Database Connection Patterns
 
 ### Option 1: Zero-Config (Development)
+
 ```python
 db = DataFlow()  # Defaults to SQLite in-memory
 ```
 
 ### Option 2: SQLite File (Development/Testing)
+
 ```python
 db = DataFlow("sqlite:///app.db")
 ```
 
 ### Option 3: PostgreSQL or MySQL (Production)
+
 ```python
 # PostgreSQL (recommended for production)
 db = DataFlow("postgresql://user:password@localhost:5432/database")
@@ -120,10 +123,12 @@ db = DataFlow("postgresql://admin:MySecret#123$@localhost/db")
 ```
 
 ### Option 4: Environment Variable (Recommended)
+
 ```bash
 # Set environment variable
 export DATABASE_URL="postgresql://user:pass@localhost/db"
 ```
+
 ```python
 # DataFlow reads automatically
 db = DataFlow()
@@ -153,17 +158,17 @@ workflow.add_node("UserListNode", "search", {
 - **Data Import**: Bulk operations for high-speed data loading (10k+ records/sec)
 - **SaaS Platforms**: Built-in multi-tenancy and tenant isolation
 - **Analytics**: Complex queries with MongoDB-style syntax
-- **Existing Databases**: Connect safely with `existing_schema_mode=True`
+- **Existing Databases**: Connect safely with `auto_migrate=False`
 
 ## Working with Existing Databases
 
 ### Safe Connection Mode
+
 ```python
 # Connect to existing database WITHOUT modifying schema
 db = DataFlow(
     database_url="postgresql://user:pass@localhost/existing_db",
     auto_migrate=False,          # Don't create/modify tables
-    existing_schema_mode=True    # Maximum safety
 )
 
 # Discover existing tables
@@ -189,12 +194,14 @@ results, run_id = runtime.execute(workflow.build())
 ## Common Mistakes
 
 ### ❌ Mistake 1: Direct Model Instantiation
+
 ```python
 # Wrong - models are NOT instantiable
 user = User(name="John")  # ERROR!
 ```
 
 ### ✅ Fix: Use Generated Nodes
+
 ```python
 # Correct - use workflow nodes
 workflow.add_node("UserCreateNode", "create", {
@@ -204,6 +211,7 @@ workflow.add_node("UserCreateNode", "create", {
 ```
 
 ### ❌ Mistake 2: Wrong Template Syntax
+
 ```python
 # Wrong - DataFlow uses ${} syntax in connections, not {{}
 }
@@ -213,12 +221,14 @@ workflow.add_node("OrderCreateNode", "create", {
 ```
 
 ### ✅ Fix: Use Connections
+
 ```python
 # Correct - use explicit connections
 workflow.add_connection("customer", "id", "create_order", "customer_id")
 ```
 
 ### ❌ Mistake 3: String Datetime Values
+
 ```python
 # Wrong - datetime as string
 workflow.add_node("OrderCreateNode", "create", {
@@ -227,6 +237,7 @@ workflow.add_node("OrderCreateNode", "create", {
 ```
 
 ### ✅ Fix: Native Datetime Objects
+
 ```python
 # Correct - use native datetime
 from datetime import datetime
@@ -271,7 +282,7 @@ async def create_user():
 
 ### FastAPI Integration
 
-**⚠️ Docker/FastAPI Requires `auto_migrate=False`**: Due to event loop boundary issues, you must use the lifespan pattern.
+**DataFlow v0.11.0+**: `auto_migrate=True` (default) works correctly in Docker/FastAPI environments via `SyncDDLExecutor`. No special workarounds needed.
 
 ```python
 from fastapi import FastAPI
@@ -281,11 +292,8 @@ from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 import uuid
 
-# ⚠️ CRITICAL: auto_migrate=False is REQUIRED for Docker/FastAPI
-db = DataFlow(
-    "postgresql://localhost:5432/mydb",
-    auto_migrate=False  # REQUIRED - auto_migrate=True fails in Docker/FastAPI
-)
+# auto_migrate=True (default) works in Docker/FastAPI via SyncDDLExecutor
+db = DataFlow("postgresql://localhost:5432/mydb")
 
 @db.model
 class User:
@@ -295,7 +303,6 @@ class User:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await db.create_tables_async()  # Create tables in FastAPI's event loop
     yield
     await db.close_async()
 
@@ -315,8 +322,7 @@ async def create_user(name: str, email: str):
     return results["create"]
 ```
 
-**⚠️ Docker/FastAPI REQUIRES Manual Pattern**:
-`auto_migrate=False` + `create_tables_async()` in lifespan is **REQUIRED** for Docker/FastAPI due to event loop boundary limitations. Database connections are bound to the event loop they're created in - connections from async_safe_run's thread pool cannot be used in uvicorn's main loop.
+**Note**: The previous workaround of `auto_migrate=False` + `create_tables_async()` in lifespan is **OBSOLETE** as of v0.10.15+. `SyncDDLExecutor` handles table creation synchronously without event loop conflicts.
 
 ## DataFlow + Nexus Integration
 
@@ -330,12 +336,10 @@ from kailash.workflow.builder import WorkflowBuilder
 # Step 1: Create Nexus FIRST with auto_discovery=False
 app = Nexus(auto_discovery=False)  # CRITICAL: Prevents blocking
 
-# Step 2: Create DataFlow with enable_model_persistence=False
+# Step 2: Create DataFlow (auto_migrate=True works in Docker/FastAPI as of v0.11.0)
 db = DataFlow(
     "postgresql://user:pass@localhost/db",
-    enable_model_persistence=False,  # CRITICAL: Prevents 5-10s delay, fast startup
-    auto_migrate=False,              # v0.9.1: Prevents async deadlock
-    migration_enabled=False          # v0.9.1: Prevents async deadlock
+    auto_migrate=True,  # DEFAULT - works in Docker/FastAPI via SyncDDLExecutor
 )
 
 # Step 3: Define models
@@ -364,6 +368,7 @@ app.start()
 ## When to Escalate to Subagent
 
 Use `dataflow-specialist` subagent when:
+
 - Implementing enterprise migration system (8 components)
 - Setting up multi-tenant architecture
 - Configuring distributed transactions
@@ -372,6 +377,7 @@ Use `dataflow-specialist` subagent when:
 - Performance tuning and caching strategies
 
 Use `nexus-specialist` when:
+
 - Integrating DataFlow with Nexus platform
 - Troubleshooting blocking/slow startup issues
 - Multi-channel deployment (API/CLI/MCP)
@@ -379,17 +385,20 @@ Use `nexus-specialist` when:
 ## Documentation References
 
 ### Primary Sources
+
 - **DataFlow README**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md)
 - **DataFlow CLAUDE**: [`sdk-users/apps/dataflow/CLAUDE.md`](../../../../sdk-users/apps/dataflow/CLAUDE.md)
 - **Quick Start Guide**: [`sdk-users/apps/dataflow/docs/getting-started/quickstart.md`](../../../../sdk-users/apps/dataflow/docs/getting-started/quickstart.md)
 
 ### Related Documentation
+
 - **User Guide**: [`sdk-users/apps/dataflow/docs/USER_GUIDE.md`](../../../../sdk-users/apps/dataflow/docs/USER_GUIDE.md)
 - **Query Patterns**: [`sdk-users/apps/dataflow/docs/development/query-patterns.md`](../../../../sdk-users/apps/dataflow/docs/development/query-patterns.md)
 - **Model Definition**: [`sdk-users/apps/dataflow/docs/development/models.md`](../../../../sdk-users/apps/dataflow/docs/development/models.md)
 - **Bulk Operations**: [`sdk-users/apps/dataflow/docs/development/bulk-operations.md`](../../../../sdk-users/apps/dataflow/docs/development/bulk-operations.md)
 
 ### Examples
+
 - **Basic CRUD**: [`sdk-users/apps/dataflow/examples/01_basic_crud.py`](../../../../sdk-users/apps/dataflow/examples/01_basic_crud.py)
 - **Advanced Features**: [`sdk-users/apps/dataflow/examples/02_advanced_features.py`](../../../../sdk-users/apps/dataflow/examples/02_advanced_features.py)
 
@@ -399,8 +408,8 @@ Use `nexus-specialist` when:
 - 💡 **9 nodes per model**: Remember - Create, Read, Update, Delete, List, Bulk(Create/Update/Delete/Upsert)
 - 💡 **MongoDB queries**: Use familiar syntax that works across all SQL databases (PostgreSQL/MySQL/SQLite)
 - 💡 **String IDs**: Fully supported - no forced integer conversion
-- 💡 **Existing databases**: Use `existing_schema_mode=True` for safety
-- 💡 **Nexus integration**: Set `enable_model_persistence=False` + `auto_discovery=False` to avoid blocking
+- 💡 **Existing databases**: Use `auto_migrate=False` for safety
+- 💡 **Nexus integration**: Set `auto_discovery=False` in Nexus to avoid blocking
 - 💡 **Clean logs (v0.10.12+)**: Use `LoggingConfig.production()` for production, `LoggingConfig.development()` for debugging
 
 <!-- Trigger Keywords: DataFlow tutorial, DataFlow quick start, @db.model, DataFlow setup, database framework, how to use DataFlow, DataFlow installation, DataFlow guide, zero-config database, automatic node generation, DataFlow example, start with DataFlow -->

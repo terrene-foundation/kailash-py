@@ -16,6 +16,7 @@ app.start()
 No configuration files. No environment variables. No setup scripts. No infrastructure dependencies.
 
 **You immediately get**:
+
 - ✅ **Enterprise-grade API server** on port 8000
 - ✅ **Health monitoring** at `/health`
 - ✅ **Auto-discovery** of workflows
@@ -39,6 +40,7 @@ app = Nexus()
 ```
 
 **If you need specific ports**:
+
 ```python
 app = Nexus(api_port=8080, mcp_port=3002)
 ```
@@ -77,6 +79,7 @@ app.start()
 ```
 
 **Discovery patterns**:
+
 - `workflows/*.py`
 - `*.workflow.py`
 - `workflow_*.py`
@@ -165,46 +168,56 @@ Nexus's zero-config approach covers 80% of use cases. For the remaining 20%, con
 ```python
 from nexus import Nexus
 
-# Add enterprise features
+# Add enterprise features via constructor
 app = Nexus(
-    enable_auth=True,           # OAuth2, RBAC, API keys
-    enable_monitoring=True,     # Prometheus, metrics
-    rate_limit=1000,           # Requests per minute
+    enable_auth=True,           # Enable authentication (use NexusAuthPlugin for config)
+    enable_monitoring=True,     # Enable monitoring
+    rate_limit=1000,           # Requests per minute (default: 100)
     api_port=8080,             # Custom API port
     mcp_port=3002,             # Custom MCP port
-    auto_discovery=False       # Disable auto-discovery
+    auto_discovery=False,      # Auto-discover workflows (default: False)
+    preset="saas",             # Preset: none, lightweight, standard, saas, enterprise
+    cors_origins=["https://myapp.com"],  # CORS allowed origins
 )
 ```
 
-### **Attribute Configuration**
+### **Plugin-Based Configuration**
 
 ```python
-app = Nexus()
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, TenantConfig
 
-# Fine-tune authentication
-app.auth.strategy = "oauth2"
-app.auth.provider = "google"
-app.auth.scopes = ["email", "profile"]
+# Configure authentication via plugin
+auth = NexusAuthPlugin.saas_app(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "user": ["read:*"]},
+    tenant_isolation=TenantConfig(admin_role="admin"),
+)
 
-# Configure monitoring
-app.monitoring.interval = 30
-app.monitoring.exporters = ["prometheus", "datadog"]
-
-# Configure API behavior
-app.api.cors_enabled = True
-app.api.cors_origins = ["https://myapp.com"]
-app.api.max_request_size = 50 * 1024 * 1024  # 50MB
+app = Nexus(
+    cors_origins=["https://myapp.com"],
+    cors_allow_credentials=False,
+)
+app.add_plugin(auth)
 ```
 
 ### **Plugin System**
 
 ```python
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig
+
 app = Nexus()
 
-# Add optional capabilities
-app.enable_auth()                    # Method chaining
-app.enable_monitoring()
-app.use_plugin("custom-auth-plugin")
+# Add capabilities via plugins
+auth = NexusAuthPlugin.basic_auth(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"])
+)
+app.add_plugin(auth)
 
 app.start()
 ```
@@ -214,6 +227,7 @@ app.start()
 Unlike traditional frameworks, Nexus doesn't require configuration files:
 
 **Traditional Framework**:
+
 ```yaml
 # settings.yaml (required)
 server:
@@ -237,6 +251,7 @@ monitoring:
 ```
 
 **Nexus**:
+
 ```python
 # No files needed!
 from nexus import Nexus
@@ -245,16 +260,15 @@ app = Nexus()
 app.start()
 ```
 
-**Optional configuration file** (if you really want one):
-```python
-# nexus.yaml (optional)
-api:
-  port: 8080
-auth:
-  enabled: true
+**Optional preset for common configurations**:
 
-# Use with:
-app = Nexus.from_config("nexus.yaml")
+```python
+# One-line middleware stack via presets
+from nexus import Nexus
+
+app = Nexus(preset="saas", api_port=8080)
+app.start()
+# Presets: none, lightweight, standard, saas, enterprise
 ```
 
 ## Environment Variables (Optional)
@@ -280,6 +294,7 @@ app.start()
 ## Docker Deployment (Zero Config)
 
 **Dockerfile**:
+
 ```dockerfile
 FROM python:3.12-slim
 RUN pip install kailash-nexus
@@ -290,6 +305,7 @@ CMD ["python", "main.py"]
 ```
 
 **main.py**:
+
 ```python
 from nexus import Nexus
 
@@ -298,6 +314,7 @@ app.start()
 ```
 
 **Run**:
+
 ```bash
 docker build -t my-app .
 docker run -p 8000:8000 -p 3001:3001 my-app
@@ -330,6 +347,7 @@ app.start()
 ### **Fewer Bugs**
 
 No configuration means no configuration bugs:
+
 - ✅ No typos in YAML files
 - ✅ No missing environment variables
 - ✅ No port conflicts
@@ -339,6 +357,7 @@ No configuration means no configuration bugs:
 ### **Better Security**
 
 Enterprise defaults mean secure defaults:
+
 - ✅ HTTPS-ready server
 - ✅ Secure session management
 - ✅ Built-in CSRF protection
@@ -348,6 +367,7 @@ Enterprise defaults mean secure defaults:
 ### **Easier Deployment**
 
 Zero configuration means:
+
 - ✅ No config files to manage
 - ✅ No environment-specific settings
 - ✅ No configuration drift between environments
@@ -371,32 +391,52 @@ def test_my_workflow():
 When you do need configuration, Nexus makes it **progressive**:
 
 **Level 1: Zero config** (most users)
+
 ```python
 app = Nexus()
 ```
 
 **Level 2: Constructor options** (some customization)
+
 ```python
 app = Nexus(enable_auth=True, api_port=8080)
 ```
 
-**Level 3: Attribute configuration** (fine-tuning)
+**Level 3: Plugin system** (auth, rate limiting, audit)
+
 ```python
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig
+
+auth = NexusAuthPlugin.basic_auth(jwt=JWTConfig(secret=os.environ["JWT_SECRET"]))
 app = Nexus()
-app.auth.strategy = "custom"
-app.monitoring.exporters = ["prometheus", "datadog"]
+app.add_plugin(auth)
 ```
 
-**Level 4: Plugin system** (advanced features)
+**Level 4: Preset system** (one-line middleware stacks)
+
 ```python
-app = Nexus()
-app.use_plugin("custom-auth")
-app.use_plugin("advanced-monitoring")
+app = Nexus(preset="saas", cors_origins=["https://myapp.com"])
 ```
 
-**Level 5: Configuration file** (enterprise deployment)
+**Level 5: Full enterprise** (plugin + preset + custom middleware)
+
 ```python
-app = Nexus.from_config("production.yaml")
+import os
+from nexus import Nexus
+from nexus.auth.plugin import NexusAuthPlugin
+from nexus.auth import JWTConfig, TenantConfig, RateLimitConfig
+
+auth = NexusAuthPlugin.enterprise(
+    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),
+    rbac={"admin": ["*"], "editor": ["read:*", "write:*"], "viewer": ["read:*"]},
+    rate_limit=RateLimitConfig(requests_per_minute=100),
+    tenant_isolation=TenantConfig(),
+)
+app = Nexus(preset="enterprise", cors_origins=["https://myapp.com"])
+app.add_plugin(auth)
 ```
 
 ## Zero Configuration Philosophy
@@ -410,6 +450,7 @@ app = Nexus.from_config("production.yaml")
 5. **Easier Onboarding**: New team members productive immediately
 
 **When configuration is needed**:
+
 - Specific organizational requirements
 - Integration with existing systems
 - Advanced performance tuning

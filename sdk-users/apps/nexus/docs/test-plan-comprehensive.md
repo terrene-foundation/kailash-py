@@ -9,6 +9,7 @@ This test plan ensures the Nexus platform delivers on its revolutionary promise 
 ## 🎯 Testing Objectives
 
 ### Primary Objectives
+
 1. **Zero-Configuration Validation**: Ensure true zero-config operation with enterprise features
 2. **Revolutionary Capabilities**: Validate durable-first, multi-channel, enterprise-default architecture
 3. **Competitive Differentiation**: Prove superiority over Django/Temporal/Serverless approaches
@@ -16,6 +17,7 @@ This test plan ensures the Nexus platform delivers on its revolutionary promise 
 5. **Developer Experience**: Ensure 1-minute from install to running workflow
 
 ### Strategic Validation Points
+
 - **Durability by Design**: Request-level durability vs best-effort execution
 - **Multi-Channel Native**: Unified API/CLI/MCP vs separate systems
 - **Enterprise-Default**: Production features by default vs bolt-on approach
@@ -24,20 +26,24 @@ This test plan ensures the Nexus platform delivers on its revolutionary promise 
 ## 📋 3-Tier Testing Strategy
 
 ### Tier 1: Unit Tests (Fast, Isolated, <1s per test)
+
 **Focus**: Component functionality and zero-configuration validation
 **Policy**: Can use mocks, no external dependencies, no sleep statements
 
 ### Tier 2: Integration Tests (Real Services, Docker)
+
 **Policy**: **NO MOCKING** - must use real Docker services
 **Setup**: Always run `./tests/utils/test-env up && ./tests/utils/test-env status`
 
 ### Tier 3: E2E Tests (Complete User Flows)
+
 **Policy**: **NO MOCKING** - complete scenarios with real infrastructure
 **Focus**: End-to-end user workflows from install to production deployment
 
 ## 🔧 Tier 1: Unit Test Plan
 
 ### 1.1 Core Nexus Class Tests
+
 **File**: `tests/unit/test_nexus_core.py`
 
 ```python
@@ -68,16 +74,22 @@ class TestNexusCore:
         assert app.enable_monitoring is True
         assert app.rate_limit == 1000
 
-    def test_progressive_enhancement_attributes(self):
-        """Validates fine-tuning via attributes"""
+    def test_progressive_enhancement_via_plugins(self):
+        """Validates fine-tuning via NexusAuthPlugin"""
+        import os
+        from nexus.auth.plugin import NexusAuthPlugin
+        from nexus.auth import JWTConfig
+
         app = Nexus()
-        app.auth.strategy = "rbac"
-        app.monitoring.interval = 30
-        assert app.auth.strategy == "rbac"
-        assert app.monitoring.interval == 30
+        auth = NexusAuthPlugin.basic_auth(
+            jwt=JWTConfig(secret=os.environ["JWT_SECRET"])
+        )
+        app.add_plugin(auth)
+        assert "nexus_auth" in app._plugins
 ```
 
 ### 1.2 Workflow Registration Tests
+
 **File**: `tests/unit/test_workflow_registration.py`
 
 ```python
@@ -110,6 +122,7 @@ class TestWorkflowRegistration:
 ```
 
 ### 1.3 Auto-Discovery Tests
+
 **File**: `tests/unit/test_auto_discovery.py`
 
 ```python
@@ -143,6 +156,7 @@ class TestAutoDiscovery:
 ```
 
 ### 1.4 Plugin System Tests
+
 **File**: `tests/unit/test_plugin_system.py`
 
 ```python
@@ -184,6 +198,7 @@ class TestPluginSystem:
 ```
 
 ### 1.5 Configuration Validation Tests
+
 **File**: `tests/unit/test_configuration.py`
 
 ```python
@@ -221,6 +236,7 @@ class TestConfiguration:
 ## 🔗 Tier 2: Integration Test Plan
 
 ### 2.1 Multi-Channel Integration Tests
+
 **File**: `tests/integration/test_multi_channel.py`
 
 ```python
@@ -269,6 +285,7 @@ class TestMultiChannelIntegration:
 ```
 
 ### 2.2 Cross-Channel Session Tests
+
 **File**: `tests/integration/test_cross_channel_sessions.py`
 
 ```python
@@ -328,6 +345,7 @@ class TestCrossChannelSessions:
 ```
 
 ### 2.3 Durability Integration Tests
+
 **File**: `tests/integration/test_durability.py`
 
 ```python
@@ -380,6 +398,7 @@ class TestDurabilityIntegration:
 ```
 
 ### 2.4 Enterprise Features Integration Tests
+
 **File**: `tests/integration/test_enterprise_features.py`
 
 ```python
@@ -434,6 +453,7 @@ class TestEnterpriseFeatures:
 ## 🚀 Tier 3: E2E Test Plan
 
 ### 3.1 Complete User Journey Tests
+
 **File**: `tests/e2e/test_complete_user_journey.py`
 
 ```python
@@ -534,6 +554,7 @@ app.start()
 ```
 
 ### 3.2 Performance Validation Tests
+
 **File**: `tests/e2e/test_performance_validation.py`
 
 ```python
@@ -631,6 +652,7 @@ class TestPerformanceValidation:
 ```
 
 ### 3.3 Competitive Differentiation Tests
+
 **File**: `tests/e2e/test_competitive_differentiation.py`
 
 ```python
@@ -697,6 +719,7 @@ class TestCompetitiveDifferentiation:
 ### Pre-Release Validation Checklist
 
 #### Zero-Configuration Gates
+
 - [ ] `Nexus()` starts successfully with no parameters
 - [ ] No configuration files required for basic operation
 - [ ] No environment variables required for startup
@@ -704,6 +727,7 @@ class TestCompetitiveDifferentiation:
 - [ ] Smart defaults handle 80% of use cases
 
 #### Revolutionary Capability Gates
+
 - [ ] Request-level durability working with checkpoint/resume
 - [ ] Cross-channel session synchronization <50ms
 - [ ] Multi-channel workflow exposure from single registration
@@ -711,6 +735,7 @@ class TestCompetitiveDifferentiation:
 - [ ] Event-driven real-time communication across channels
 
 #### Performance Gates
+
 - [ ] Workflow registration: <1 second
 - [ ] Cross-channel sync: <50ms
 - [ ] Durability overhead: <10%
@@ -719,6 +744,7 @@ class TestCompetitiveDifferentiation:
 - [ ] Throughput: >1000 requests/second
 
 #### Enterprise Readiness Gates
+
 - [ ] EnterpriseWorkflowServer used by default
 - [ ] Authentication/authorization working
 - [ ] Monitoring and observability active
@@ -728,18 +754,21 @@ class TestCompetitiveDifferentiation:
 ### Test Execution Requirements
 
 #### Infrastructure
+
 - **Docker Environment**: `./tests/utils/test-env up` must succeed
 - **Real Services**: PostgreSQL, Redis, monitoring stack
 - **Network Isolation**: Each test gets clean environment
 - **Resource Cleanup**: Automatic cleanup after each test
 
 #### Coverage Requirements
+
 - **Unit Tests**: >95% line coverage
 - **Integration Tests**: All critical paths covered
 - **E2E Tests**: Complete user journeys validated
 - **Performance Tests**: All targets met under load
 
 #### Failure Handling
+
 - **Graceful Degradation**: Core works when optional features fail
 - **Error Messages**: Clear, actionable error messages
 - **Recovery**: Automatic recovery from transient failures
@@ -748,24 +777,28 @@ class TestCompetitiveDifferentiation:
 ## 📊 Success Metrics Dashboard
 
 ### Zero-Configuration Metrics
+
 - **Setup Time**: Install to working endpoint <60 seconds
 - **Configuration Lines**: 0 required configuration
 - **Error Rate**: <1% for basic use cases
 - **Documentation**: All examples <10 lines of code
 
 ### Performance Metrics
+
 - **Registration Time**: <1 second (workflow → all channels)
 - **Sync Latency**: <50ms (cross-channel session sync)
 - **Recovery Time**: <5 seconds (failure → resumed execution)
 - **Resource Efficiency**: >90% connection pool utilization
 
 ### Enterprise Metrics
+
 - **Feature Coverage**: 100% of essential capabilities
 - **Security Compliance**: All enterprise security features active
 - **Monitoring Coverage**: Complete observability stack
 - **Scalability**: Linear scaling to 10,000+ concurrent workflows
 
 ### Competitive Metrics
+
 - **vs Django**: 100x better failure recovery (durable vs best-effort)
 - **vs Temporal**: 30x faster setup (seconds vs minutes)
 - **vs Serverless**: ∞x longer operations (hours vs 15 minutes)
@@ -774,16 +807,19 @@ class TestCompetitiveDifferentiation:
 ## 🎯 Implementation Priority
 
 ### Phase 1: Foundation (Critical)
+
 1. **Unit Tests**: Core Nexus class, zero-config validation
 2. **Basic Integration**: Multi-channel workflow exposure
 3. **Performance Baseline**: Establish target measurements
 
 ### Phase 2: Revolutionary Features (Essential)
+
 1. **Durability Tests**: Request-level persistence and recovery
 2. **Cross-Channel Tests**: Session sync and real-time events
 3. **Enterprise Tests**: Production-grade feature validation
 
 ### Phase 3: Competitive Validation (Important)
+
 1. **Differentiation Tests**: vs Django/Temporal/Serverless
 2. **Performance Tests**: Target achievement validation
 3. **E2E Tests**: Complete user journey validation
@@ -791,12 +827,14 @@ class TestCompetitiveDifferentiation:
 ## 📝 Test Maintenance
 
 ### Continuous Validation
+
 - **CI Integration**: All tests run on every commit
 - **Performance Monitoring**: Regression detection
 - **Coverage Tracking**: Maintain >95% coverage
 - **Documentation Sync**: Tests match documented examples
 
 ### Quality Assurance
+
 - **Regular Review**: Monthly test plan review
 - **Real-World Validation**: Customer scenario testing
 - **Performance Tuning**: Optimize for target achievement
