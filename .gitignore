@@ -69,6 +69,9 @@ _build/
 site/
 *.doctree
 
+# Data
+data/
+
 # Generated outputs - all output directories
 outputs/
 output/
