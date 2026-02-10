@@ -2,22 +2,23 @@ name: Build Documentation
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
-      - 'docs/**'
-      - 'README.md'
-      - 'CHANGELOG.md'
-      - 'mkdocs.yml'
-      - '.github/workflows/docs-build.yml'
-      - '.github/workflows/docs-deploy.yml'
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "mkdocs.yml"
+      - ".github/workflows/docs-build.yml"
+      - ".github/workflows/docs-deploy.yml"
   push:
-    branches: [ feat/*, feature/*, fix/*, docs/*, release/*, session/*, session-* ]
+    branches:
+      [feat/*, feature/*, fix/*, docs/*, release/*, session/*, session-*]
     paths:
-      - 'docs/**'
-      - 'README.md'
-      - 'CHANGELOG.md'
-      - 'mkdocs.yml'
-      - '.github/workflows/docs-build.yml'
+      - "docs/**"
+      - "README.md"
+      - "CHANGELOG.md"
+      - "mkdocs.yml"
+      - ".github/workflows/docs-build.yml"
 
 concurrency:
   # Prevent duplicate runs: Use branch name for both push and PR events
@@ -29,18 +30,27 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
+      - name: Setup Python (self-hosted)
+        run: |
+          if command -v pyenv &> /dev/null; then
+            export PYENV_ROOT="$HOME/.pyenv"
+            export PATH="$PYENV_ROOT/bin:$PATH"
+            eval "$(pyenv init -)"
+          fi
+          python3 --version
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
+          if command -v pyenv &> /dev/null; then
+            export PYENV_ROOT="$HOME/.pyenv"
+            export PATH="$PYENV_ROOT/bin:$PATH"
+            eval "$(pyenv init -)"
+          fi
+          python3 -m pip install --upgrade pip
           pip install -e .
           pip install -r docs/requirements.txt
 

@@ -9,12 +9,12 @@ on:
     types: [created]
 
 env:
-  PROJECT_NUMBER: 1  # Update with your actual project number
+  PROJECT_NUMBER: 1 # Update with your actual project number
 
 jobs:
   add-to-project:
     name: Add to Project Board
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.event_name == 'issues' && github.event.action == 'opened'
     steps:
       - uses: actions/add-to-project@v0.5.0
@@ -24,7 +24,7 @@ jobs:
 
   label-based-on-files:
     name: Auto-label based on files changed
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.event_name == 'pull_request' && github.event.action == 'opened'
     steps:
       - uses: actions/checkout@v4
@@ -37,7 +37,7 @@ jobs:
 
   session-milestone:
     name: Create Session Milestone
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.event_name == 'issue_comment' && contains(github.event.comment.body, '/session start')
     steps:
       - name: Parse session number
@@ -59,7 +59,7 @@ jobs:
 
   priority-assignment:
     name: Auto-assign based on priority
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     if: github.event_name == 'issues' && github.event.action == 'labeled'
     steps:
       - name: Check for P0 or P1 labels
@@ -74,16 +74,16 @@ jobs:
 
   stale-management:
     name: Manage stale issues
-    runs-on: ubuntu-latest
-    if: github.event.schedule == '0 0 * * *'  # Daily at midnight
+    runs-on: self-hosted
+    if: github.event.schedule == '0 0 * * *' # Daily at midnight
     steps:
       - uses: actions/stale@v9
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          stale-issue-message: '👋 This issue has been inactive for 30 days. Please update or it will be closed.'
-          stale-pr-message: '👋 This PR has been inactive for 14 days. Please update or it will be closed.'
-          stale-issue-label: 'status/stale'
-          stale-pr-label: 'status/stale'
+          stale-issue-message: "👋 This issue has been inactive for 30 days. Please update or it will be closed."
+          stale-pr-message: "👋 This PR has been inactive for 14 days. Please update or it will be closed."
+          stale-issue-label: "status/stale"
+          stale-pr-label: "status/stale"
           days-before-issue-stale: 30
           days-before-pr-stale: 14
           days-before-close: 7
