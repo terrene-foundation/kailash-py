@@ -8,51 +8,52 @@ The subagents are designed around the core workflow phases identified in `CLAUDE
 
 ### Core Specialists
 
-| Agent | Purpose | When to Use |
-|-------|---------|-------------|
-| **sdk-navigator** | Documentation navigation with file indexes | Finding specific patterns, guides, examples |
-| **framework-advisor** | Framework selection and coordination | Choosing between Core SDK, DataFlow, Nexus, MCP |
-| **pattern-expert** | Core SDK patterns (workflows, nodes, parameters) | Implementing workflows, debugging pattern issues |
-| **gold-standards-validator** | Compliance checking against gold standards | Code validation, catching violations early |
-| **testing-specialist** | 3-tier testing strategy with real infrastructure | Understanding testing requirements and strategy |
-| **tdd-implementer** | Test-first development methodology | Implementing features with write-test-then-code |
-| **documentation-validator** | Documentation validation and testing | Testing code examples, ensuring doc accuracy |
-| **deep-analyst** | Deep analysis and failure point identification | Complex features, systemic issues, risk analysis |
-| **requirements-analyst** | Requirements breakdown and ADR creation | Systematic analysis, architecture decisions |
-| **intermediate-reviewer** | Checkpoint reviews and progress critique | Reviewing todos and implementation milestones |
-| **todo-manager** | Task management and project tracking | Creating and managing development task lists |
-| **mcp-specialist** | MCP server implementation and integration | Model Context Protocol patterns and debugging |
-| **git-release-specialist** | Git workflows, CI validation, and releases | Pre-commit checks, PR creation, version releases |
-| **gh-manager** | GitHub project and issue management | Syncing requirements with GitHub Projects, managing sprints |
+| Agent                        | Purpose                                          | When to Use                                                 |
+| ---------------------------- | ------------------------------------------------ | ----------------------------------------------------------- |
+| **sdk-navigator**            | Documentation navigation with file indexes       | Finding specific patterns, guides, examples                 |
+| **framework-advisor**        | Framework selection and coordination             | Choosing between Core SDK, DataFlow, Nexus, MCP             |
+| **pattern-expert**           | Core SDK patterns (workflows, nodes, parameters) | Implementing workflows, debugging pattern issues            |
+| **gold-standards-validator** | Compliance checking against gold standards       | Code validation, catching violations early                  |
+| **testing-specialist**       | 3-tier testing strategy with real infrastructure | Understanding testing requirements and strategy             |
+| **tdd-implementer**          | Test-first development methodology               | Implementing features with write-test-then-code             |
+| **documentation-validator**  | Documentation validation and testing             | Testing code examples, ensuring doc accuracy                |
+| **deep-analyst**             | Deep analysis and failure point identification   | Complex features, systemic issues, risk analysis            |
+| **requirements-analyst**     | Requirements breakdown and ADR creation          | Systematic analysis, architecture decisions                 |
+| **intermediate-reviewer**    | Checkpoint reviews and progress critique         | Reviewing todos and implementation milestones               |
+| **todo-manager**             | Task management and project tracking             | Creating and managing development task lists                |
+| **mcp-specialist**           | MCP server implementation and integration        | Model Context Protocol patterns and debugging               |
+| **git-release-specialist**   | Git workflows, CI validation, and releases       | Pre-commit checks, PR creation, version releases            |
+| **gh-manager**               | GitHub project and issue management              | Syncing requirements with GitHub Projects, managing sprints |
 
 ### Framework Specialists
 
-| Agent | Purpose | When to Use |
-|-------|---------|-------------|
-| **nexus-specialist** | Nexus multi-channel platform implementation | Zero-config deployment, API/CLI/MCP orchestration, **DataFlow integration** |
-| **dataflow-specialist** | DataFlow database framework implementation | Database operations, bulk processing, auto node generation, **Nexus integration** |
-| **kaizen-specialist** | Kaizen AI framework implementation | Signature-based programming, multi-agent coordination, multi-modal workflows |
+| Agent                   | Purpose                                     | When to Use                                                                       |
+| ----------------------- | ------------------------------------------- | --------------------------------------------------------------------------------- |
+| **nexus-specialist**    | Nexus multi-channel platform implementation | Zero-config deployment, API/CLI/MCP orchestration, **DataFlow integration**       |
+| **dataflow-specialist** | DataFlow database framework implementation  | Database operations, bulk processing, auto node generation, **Nexus integration** |
+| **kaizen-specialist**   | Kaizen AI framework implementation          | Signature-based programming, multi-agent coordination, multi-modal workflows      |
 
 ### Frontend & Mobile Specialists
 
-| Agent | Purpose | When to Use |
-|-------|---------|-------------|
-| **react-specialist** | React and Next.js frontend implementation | Workflow editors, admin dashboards, AI agent interfaces with React Flow |
-| **flutter-specialist** | Flutter cross-platform mobile/desktop apps | Mobile workflow builders, AI agent interfaces, enterprise mobile apps |
-| **frontend-developer** | General responsive UI components | Creating pages, converting mockups, implementing React features |
+| Agent                  | Purpose                                    | When to Use                                                             |
+| ---------------------- | ------------------------------------------ | ----------------------------------------------------------------------- |
+| **react-specialist**   | React and Next.js frontend implementation  | Workflow editors, admin dashboards, AI agent interfaces with React Flow |
+| **flutter-specialist** | Flutter cross-platform mobile/desktop apps | Mobile workflow builders, AI agent interfaces, enterprise mobile apps   |
+| **frontend-developer** | General responsive UI components           | Creating pages, converting mockups, implementing React features         |
 
 ### Infrastructure Specialists
 
-| Agent | Purpose | When to Use |
-|-------|---------|-------------|
+| Agent                     | Purpose                          | When to Use                                                           |
+| ------------------------- | -------------------------------- | --------------------------------------------------------------------- |
 | **deployment-specialist** | Docker and Kubernetes deployment | Production deployments, environment management, service orchestration |
 
 ### Critical Integration Guides
 
 **⚠️ IMPORTANT: DataFlow + Nexus Integration**
+
 - See: `sdk-users/guides/dataflow-nexus-integration.md` for tested configurations
-- Key settings to prevent blocking: `Nexus(auto_discovery=False)` + `DataFlow(enable_model_persistence=False)`
-- Full featured config available with 10-30s startup time
+- Key setting to prevent blocking: `Nexus(auto_discovery=False)`
+- DataFlow v0.11.0: `auto_migrate=True` (default) works in Docker/FastAPI via SyncDDLExecutor
 - Both specialists updated with integration warnings
 
 ### Design Principles
@@ -68,17 +69,18 @@ Follow this sequence for efficient feature development:
 
 ### Quick Reference: Agents by Phase
 
-| Phase | Agents (in order) | Purpose |
-|-------|-------------------|---------|
-| **1. Analysis** | deep-analyst → requirements-analyst → sdk-navigator → framework-advisor → (nexus/dataflow/kaizen-specialist) | Deep analysis, requirements, existing patterns, tech selection, framework-specific guidance |
-| **2. Planning** | todo-manager → gh-manager → intermediate-reviewer | Task breakdown, GitHub sync, and validation |
-| **3. Implementation** | tdd-implementer → pattern-expert → (nexus/dataflow/kaizen/react/flutter-specialist) → intermediate-reviewer → gold-standards-validator | Test-first, implement, framework patterns, review, validate (repeat per component) |
-| **4. Testing** | testing-specialist → documentation-validator | Full test coverage, doc accuracy |
-| **5. Deployment** | deployment-specialist | Docker/Kubernetes setup, environment management |
-| **6. Release** | git-release-specialist | Pre-commit validation, PR creation, version management |
-| **7. Final** | intermediate-reviewer | Final critique |
+| Phase                 | Agents (in order)                                                                                                                      | Purpose                                                                                     |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **1. Analysis**       | deep-analyst → requirements-analyst → sdk-navigator → framework-advisor → (nexus/dataflow/kaizen-specialist)                           | Deep analysis, requirements, existing patterns, tech selection, framework-specific guidance |
+| **2. Planning**       | todo-manager → gh-manager → intermediate-reviewer                                                                                      | Task breakdown, GitHub sync, and validation                                                 |
+| **3. Implementation** | tdd-implementer → pattern-expert → (nexus/dataflow/kaizen/react/flutter-specialist) → intermediate-reviewer → gold-standards-validator | Test-first, implement, framework patterns, review, validate (repeat per component)          |
+| **4. Testing**        | testing-specialist → documentation-validator                                                                                           | Full test coverage, doc accuracy                                                            |
+| **5. Deployment**     | deployment-specialist                                                                                                                  | Docker/Kubernetes setup, environment management                                             |
+| **6. Release**        | git-release-specialist                                                                                                                 | Pre-commit validation, PR creation, version management                                      |
+| **7. Final**          | intermediate-reviewer                                                                                                                  | Final critique                                                                              |
 
 ### Phase 1: Analysis & Planning (Sequential)
+
 ```
 1. > Use the deep-analyst subagent to analyze requirements and identify failure points for [feature]
 2. > Use the requirements-analyst subagent to create systematic breakdown and ADR for [feature]
@@ -95,6 +97,7 @@ OR chain all Phase 1 agents:
 ```
 
 ### Phase 2: Task Planning & Review
+
 ```
 1. > Use the todo-manager subagent to create detailed task breakdown based on requirements
 2. > Use the gh-manager subagent to sync tasks with GitHub Projects and create issues
@@ -105,6 +108,7 @@ OR chain Phase 2:
 ```
 
 ### Phase 3: Implementation (Iterative per component)
+
 ```
 For each component:
 1. > Use the tdd-implementer subagent to write tests first for [component]
@@ -125,6 +129,7 @@ POST Phase 3:
 ```
 
 ### Phase 4: Testing & Documentation
+
 ```
 1. > Use the testing-specialist subagent to verify 3-tier test coverage
 2. > Use the documentation-validator subagent to test all code examples in documentation
@@ -135,6 +140,7 @@ OR chain Phase 4:
 ```
 
 ### Phase 5: Deployment Setup
+
 ```
 1. > Use the deployment-specialist subagent to set up Docker Compose for local development
 2. > Use the deployment-specialist subagent to configure Kubernetes for production deployment
@@ -145,6 +151,7 @@ OR chain Phase 5:
 ```
 
 ### Phase 6: Release & Git Management
+
 ```
 1. > Use the git-release-specialist subagent to run pre-commit validation (black, isort, ruff)
 2. > Use the git-release-specialist subagent to create feature branch and PR workflow
@@ -155,11 +162,13 @@ OR chain Phase 6:
 ```
 
 ### Phase 7: Final Review
+
 ```
 > Use the intermediate-reviewer subagent to perform final critique of complete implementation
 ```
 
 ### Quick Debugging Sequence
+
 ```
 When facing issues:
 1. > Use the sdk-navigator subagent to find solutions in common-mistakes.md
@@ -188,25 +197,30 @@ Since subagents cannot invoke other subagents, coordination happens at the main 
 ## File References
 
 ### Primary Workflow Sources
+
 - **Root CLAUDE.md**: 18-step enterprise workflow, core patterns
 - **feature-implementation.md**: 4-phase detailed implementation process
 - **sdk-users/CLAUDE.md**: Essential SDK patterns navigation
 
 ### Framework Documentation
+
 - **sdk-users/apps/dataflow/**: Zero-config database patterns and guides
 - **sdk-users/apps/nexus/**: Multi-channel platform patterns and guides
 - **sdk-users/apps/kaizen/**: Signature-based AI framework patterns and guides
 - **src/kailash/mcp_server/**: Production MCP server implementation
 
 ### Frontend & Mobile Documentation
+
 - **docs/guides/frontend_guidance.md**: React/Vue integration patterns
 - **React Flow Templates**: Official workflow editor templates
 
 ### Infrastructure Documentation
+
 - **Docker Compose**: Multi-service orchestration patterns
 - **Kubernetes**: Production deployment patterns
 
 ### Gold Standards
+
 - **sdk-users/7-gold-standards/**: All compliance standards
 - **sdk-users/2-core-concepts/validation/common-mistakes.md**: Error solutions
 
@@ -215,6 +229,7 @@ This focused architecture maintains the essential workflow while dramatically re
 ## Framework-Specific Workflows
 
 ### DataFlow Database Applications
+
 ```
 1. > Use the framework-advisor subagent to confirm DataFlow is appropriate
 2. > Use the dataflow-specialist subagent for:
@@ -226,6 +241,7 @@ This focused architecture maintains the essential workflow while dramatically re
 ```
 
 ### Nexus Multi-Channel Platforms
+
 ```
 1. > Use the framework-advisor subagent to confirm Nexus is appropriate
 2. > Use the nexus-specialist subagent for:
@@ -237,6 +253,7 @@ This focused architecture maintains the essential workflow while dramatically re
 ```
 
 ### Kaizen AI Agent Applications
+
 ```
 1. > Use the framework-advisor subagent to confirm Kaizen is appropriate
 2. > Use the kaizen-specialist subagent for:
@@ -248,6 +265,7 @@ This focused architecture maintains the essential workflow while dramatically re
 ```
 
 ### React Frontend Applications
+
 ```
 1. > Use the react-specialist subagent for:
    - React 19 and Next.js 15 App Router patterns
@@ -258,6 +276,7 @@ This focused architecture maintains the essential workflow while dramatically re
 ```
 
 ### Flutter Mobile Applications
+
 ```
 1. > Use the flutter-specialist subagent for:
    - Flutter 3.27+ Material Design 3 patterns
@@ -275,6 +294,7 @@ This focused architecture maintains the essential workflow while dramatically re
 ```
 
 ### Combined Framework Applications
+
 ```
 For DataFlow + Nexus integration:
 1. > Use the framework-advisor subagent for architecture guidance
@@ -293,6 +313,7 @@ For Full-Stack Application (Backend + Frontend):
 ## GitHub Project Management Workflow
 
 ### Syncing Requirements with GitHub
+
 ```
 1. > Use the requirements-analyst subagent to create systematic breakdown
 2. > Use the todo-manager subagent to create detailed task breakdown
@@ -306,6 +327,7 @@ For Full-Stack Application (Backend + Frontend):
 ## Production Deployment Workflow
 
 ### Setting Up Production Infrastructure
+
 ```
 1. > Use the deployment-specialist subagent to:
    - Create Docker Compose configuration for local development

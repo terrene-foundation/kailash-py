@@ -17,6 +17,7 @@ Fix Nexus blocking and 5-30 second startup delays when integrating with DataFlow
 ## The Problem
 
 **Symptoms**:
+
 - Nexus startup hangs or blocks indefinitely
 - 5-10 second delay per DataFlow model
 - Server never starts
@@ -27,6 +28,7 @@ Fix Nexus blocking and 5-30 second startup delays when integrating with DataFlow
 ## Quick Fix
 
 ### ❌ WRONG: Default Configuration (Blocks)
+
 ```python
 from nexus import Nexus
 from dataflow import DataFlow
@@ -43,6 +45,7 @@ app.start()  # ✗ HANGS or very slow
 ```
 
 ### ✅ FIX: Critical Settings (<2s Startup)
+
 ```python
 from nexus import Nexus
 from dataflow import DataFlow
@@ -53,10 +56,10 @@ app = Nexus(
     auto_discovery=False  # CRITICAL: Prevents blocking
 )
 
-# Step 2: Create DataFlow with enable_model_persistence=False
+# Step 2: Create DataFlow (v0.11.0 defaults work correctly)
 db = DataFlow(
     "postgresql://user:pass@localhost/db",
-    enable_model_persistence=False  # CRITICAL: Prevents 5-10s delay per model, fast startup
+    auto_migrate=True,  # Default - works in Docker/FastAPI via SyncDDLExecutor
 )
 
 # Step 3: Define models (now instant!)
@@ -85,37 +88,21 @@ app.start()
 3. Each model registration → Runs `LocalRuntime.execute()` synchronously
 4. Creates blocking loop → Prevents server startup
 
-## What You Keep (Fast Config)
+## What You Keep
 
-✅ All CRUD operations (9 nodes per model)
-✅ Connection pooling, caching, metrics
-✅ All Nexus channels (API, CLI, MCP)
-✅ <2 second total startup time
+With `auto_discovery=False` + DataFlow v0.11.0 defaults:
 
-## What You Lose (Trade-off)
+- All CRUD operations (11 nodes per model)
+- Connection pooling, caching, metrics
+- All Nexus channels (API, CLI, MCP)
+- Automatic schema migration via SyncDDLExecutor
+- Fast startup
 
-❌ Model persistence across restarts
-❌ Automatic migration tracking
-❌ Runtime model discovery
-❌ Auto-discovery of workflows
+## What You Lose
 
-## Alternative: Full Features (10-30s Startup)
+With `auto_discovery=False`:
 
-If you need all features and can accept slower startup:
-
-```python
-app = Nexus(
-    auto_discovery=False  # Still recommended
-)
-
-db = DataFlow(
-    "postgresql://...",
-    enable_model_persistence=True,  # Enable full features (slower startup)
-    auto_migrate=True               # Auto migrations
-)
-
-# Startup time: 10-30 seconds (acceptable for some use cases)
-```
+- Auto-discovery of workflows (must register manually with `app.register()`)
 
 ## Related Patterns
 
@@ -126,6 +113,7 @@ db = DataFlow(
 ## When to Escalate to Subagent
 
 Use `nexus-specialist` subagent when:
+
 - Still experiencing blocking after fix
 - Need full-feature configuration guidance
 - Complex multi-framework integration
@@ -134,19 +122,21 @@ Use `nexus-specialist` subagent when:
 ## Documentation References
 
 ### Primary Sources
+
 - **Nexus Specialist**: [`.claude/agents/frameworks/nexus-specialist.md` (lines 320-386)](../../../../.claude/agents/frameworks/nexus-specialist.md#L320-L386)
 - **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md` (lines 13-25)](../../../../.claude/agents/frameworks/dataflow-specialist.md#L13-L25)
 - **Integration Guide**: [`sdk-users/guides/dataflow-nexus-integration.md`](../../../../sdk-users/guides/dataflow-nexus-integration.md)
 
 ### Related Documentation
+
 - **Blocking Analysis**: [`sdk-users/apps/dataflow/docs/integration/nexus-blocking-issue-analysis.md`](../../../../sdk-users/apps/dataflow/docs/integration/nexus-blocking-issue-analysis.md)
 - **Working Examples**: [`sdk-users/apps/nexus/examples/dataflow-integration/`](../../../../sdk-users/apps/nexus/examples/dataflow-integration/)
 
 ## Quick Tips
 
-- 💡 **Two critical settings**: `auto_discovery=False` + `enable_model_persistence=False`
+- 💡 **Critical setting**: `auto_discovery=False` when using DataFlow with Nexus
 - 💡 **Order matters**: Create Nexus FIRST, then DataFlow
 - 💡 **Manual registration**: Register workflows explicitly with `app.register()`
-- 💡 **Fast is fine**: <2s startup with enable_model_persistence=False is production-ready
+- 💡 **DataFlow v0.11.0**: `auto_migrate=True` (default) works correctly in Docker/FastAPI
 
 <!-- Trigger Keywords: Nexus blocking, Nexus slow startup, Nexus hangs, DataFlow Nexus integration slow, startup delay, Nexus initialization slow, blocking on startup, slow Nexus, integration blocking -->

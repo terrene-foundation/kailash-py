@@ -1,6 +1,7 @@
 # Kailash DataFlow - Complete Function Access Guide (v0.10.15 Stable)
 
 **Current Version: v0.10.15 - Production Ready**
+
 - **🔇 LOGGING CONFIGURATION (v0.10.12)**: `LoggingConfig` for centralized log level control - 524 noisy warnings eliminated
 - **✅ DOCKER/FASTAPI (v0.10.15+)**: `auto_migrate=True` NOW WORKS! Uses `SyncDDLExecutor` with psycopg2/sqlite3 for DDL, bypassing event loop issues
 - **⚠️ IN-MEMORY SQLITE**: `:memory:` databases skip sync DDL and use lazy table creation (sync DDL requires separate connection = different database)
@@ -19,6 +20,7 @@
 - **CONTEXT-AWARE TABLE CREATION**: Node-instance coupling for context preservation
 
 **🔮 Coming Soon: Vector & Document Database Support**
+
 - **pgvector** (Next release): PostgreSQL vector similarity search for RAG/AI applications
 - **MongoDB**: Document database with PyMongo Async API for flexible schema applications
 - **Qdrant**: Dedicated vector database for billion-scale semantic search
@@ -41,12 +43,14 @@ async def update_record(self, id: str, data: dict):
 ```
 
 **Warning message logged:**
+
 ```
 ⚠️ AUTO-STRIPPED: Fields ['updated_at'] removed from update. DataFlow automatically
 manages created_at/updated_at timestamps. Remove these fields from your code.
 ```
 
 **Best Practice (avoid warning):**
+
 ```python
 # ✅ BEST - Don't set timestamps at all
 async def update_record(self, id: str, data: dict):
@@ -59,15 +63,16 @@ async def update_record(self, id: str, data: dict):
 
 ## ⚠️ Common Mistakes (Critical)
 
-| Mistake | Impact | Solution |
-|---------|--------|----------|
-| **Manually setting `created_at`/`updated_at`** | ⚠️ Warning | **v0.10.6+ auto-strips with warning** - remove from code to avoid warning |
-| **Using `user_id` or `model_id` instead of `id`** | 10-20 min debugging | **MUST use `id`** (not `user_id`, `agent_id`, etc.) |
-| **Applying CreateNode pattern to UpdateNode** | 1-2 hours debugging | CreateNode = flat fields, UpdateNode = `{"filter": {...}, "fields": {...}}` |
-| **Wrong node naming** | Node not found | Use `ModelOperationNode` (e.g., `UserCreateNode`) |
-| **Wrong result key for ListNode** | Empty results | ListNode → `records`, CountNode → `count`, ReadNode → direct dict |
+| Mistake                                           | Impact              | Solution                                                                    |
+| ------------------------------------------------- | ------------------- | --------------------------------------------------------------------------- |
+| **Manually setting `created_at`/`updated_at`**    | ⚠️ Warning          | **v0.10.6+ auto-strips with warning** - remove from code to avoid warning   |
+| **Using `user_id` or `model_id` instead of `id`** | 10-20 min debugging | **MUST use `id`** (not `user_id`, `agent_id`, etc.)                         |
+| **Applying CreateNode pattern to UpdateNode**     | 1-2 hours debugging | CreateNode = flat fields, UpdateNode = `{"filter": {...}, "fields": {...}}` |
+| **Wrong node naming**                             | Node not found      | Use `ModelOperationNode` (e.g., `UserCreateNode`)                           |
+| **Wrong result key for ListNode**                 | Empty results       | ListNode → `records`, CountNode → `count`, ReadNode → direct dict           |
 
 **Critical Rules**:
+
 1. **Timestamp fields (v0.10.6+)** - Auto-stripped with warning; don't set them for clean logs
 2. **Primary key MUST be `id`** - DataFlow requires this exact name
 3. **CreateNode ≠ UpdateNode** - Different parameter patterns
@@ -101,6 +106,7 @@ workflow.add_node("PatientListNode", "active", {
 Control log verbosity with `LoggingConfig` for cleaner output. Eliminates 524+ noisy diagnostic messages that were incorrectly logged at WARNING level.
 
 ### Quick Usage
+
 ```python
 import logging
 from dataflow import DataFlow, LoggingConfig
@@ -123,12 +129,12 @@ db = DataFlow("postgresql://...", log_config=config)
 
 ### Configuration Presets
 
-| Preset | Behavior | Use Case |
-|--------|----------|----------|
-| `LoggingConfig.production()` | Only WARNING+ | Production deployments |
-| `LoggingConfig.development()` | DEBUG for all | Local development |
-| `LoggingConfig.quiet()` | Only ERROR+ | Testing with minimal output |
-| `LoggingConfig.from_env()` | Environment-based | Docker/Kubernetes |
+| Preset                        | Behavior          | Use Case                    |
+| ----------------------------- | ----------------- | --------------------------- |
+| `LoggingConfig.production()`  | Only WARNING+     | Production deployments      |
+| `LoggingConfig.development()` | DEBUG for all     | Local development           |
+| `LoggingConfig.quiet()`       | Only ERROR+       | Testing with minimal output |
+| `LoggingConfig.from_env()`    | Environment-based | Docker/Kubernetes           |
 
 ### Category-Specific Logging
 
@@ -168,15 +174,15 @@ masked = mask_sensitive(data, config)
 
 ### Environment Variables
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `DATAFLOW_LOG_LEVEL` | Default level | `WARNING`, `INFO`, `DEBUG` |
-| `DATAFLOW_NODE_EXECUTION_LOG_LEVEL` | Node execution | `ERROR` |
-| `DATAFLOW_SQL_GENERATION_LOG_LEVEL` | SQL generation | `WARNING` |
-| `DATAFLOW_LIST_OPERATIONS_LOG_LEVEL` | List operations | `WARNING` |
-| `DATAFLOW_MIGRATION_LOG_LEVEL` | Migrations | `INFO` |
-| `DATAFLOW_CORE_LOG_LEVEL` | Core operations | `WARNING` |
-| `DATAFLOW_MASK_SENSITIVE` | Enable masking | `true`, `1` |
+| Variable                             | Description     | Example                    |
+| ------------------------------------ | --------------- | -------------------------- |
+| `DATAFLOW_LOG_LEVEL`                 | Default level   | `WARNING`, `INFO`, `DEBUG` |
+| `DATAFLOW_NODE_EXECUTION_LOG_LEVEL`  | Node execution  | `ERROR`                    |
+| `DATAFLOW_SQL_GENERATION_LOG_LEVEL`  | SQL generation  | `WARNING`                  |
+| `DATAFLOW_LIST_OPERATIONS_LOG_LEVEL` | List operations | `WARNING`                  |
+| `DATAFLOW_MIGRATION_LOG_LEVEL`       | Migrations      | `INFO`                     |
+| `DATAFLOW_CORE_LOG_LEVEL`            | Core operations | `WARNING`                  |
+| `DATAFLOW_MASK_SENSITIVE`            | Enable masking  | `true`, `1`                |
 
 ### Programmatic Control
 
@@ -213,6 +219,7 @@ db = DataFlow("postgresql://...")
 ```
 
 **Common Error Codes**:
+
 - **DF-101**: Missing required parameter → Shows which connection to add
 - **DF-102**: Type mismatch → Shows expected vs received types
 - **DF-103**: Auto-managed field conflict → **Remove `created_at`/`updated_at` from your data!**
@@ -259,6 +266,7 @@ if not report['is_valid']:
 ```
 
 **Inspector Commands for Common Issues**:
+
 - **"Missing parameter" error**: `inspector.trace_parameter(node_id, param)` → Find source
 - **Connection not working**: `inspector.find_broken_connections()` → Identify issues
 - **Node not executing**: `inspector.node_dependencies(node_id)` → Check upstream
@@ -274,11 +282,13 @@ if not report['is_valid']:
 Build-time validation catches 80% of common configuration errors at model registration time (not runtime).
 
 **Validation Modes**:
+
 - **OFF**: No validation (use `skip_validation=True`)
 - **WARN**: Default mode - warns but allows (backward compatible)
 - **STRICT**: Raises errors on validation failures (recommended for new projects)
 
 **Usage**:
+
 ```python
 from dataflow import DataFlow
 
@@ -307,6 +317,7 @@ class LegacyModel:
 ```
 
 **Validation Checks**:
+
 - **VAL-002**: Missing primary key (error) → Add `id` field to model
 - **VAL-003**: Primary key not named 'id' (warning) → Rename to `id`
 - **VAL-004**: Auto-managed field conflict (error) → Remove `created_at`/`updated_at`
@@ -318,6 +329,7 @@ class LegacyModel:
 - **VAL-010**: Invalid relationship configuration (warning) → Check relationship parameters
 
 **Error Messages with Context**:
+
 ```python
 # Example: Missing primary key
 @db.model(strict=True)
@@ -339,6 +351,7 @@ class Order:
 ```
 
 **When to Use Each Mode**:
+
 - **OFF**: Legacy codebases, custom primary keys (advanced)
 - **WARN**: Existing projects, gradual migration
 - **STRICT**: New projects, strict validation requirements
@@ -352,6 +365,7 @@ class Order:
 Command-line validation and debugging tools matching pytest/mypy patterns for CI/CD integration.
 
 **Available Commands**:
+
 - **dataflow-validate**: Validate workflow structure, connections, and parameters
 - **dataflow-analyze**: Workflow metrics, complexity analysis, and execution order
 - **dataflow-generate**: Generate reports, diagrams (ASCII), and documentation
@@ -359,6 +373,7 @@ Command-line validation and debugging tools matching pytest/mypy patterns for CI
 - **dataflow-perf**: Performance profiling, bottleneck detection, and recommendations
 
 **Installation**:
+
 ```bash
 pip install kailash-dataflow
 # CLI tools installed automatically as dataflow-validate, dataflow-analyze, etc.
@@ -367,6 +382,7 @@ pip install kailash-dataflow
 **Usage Examples**:
 
 **1. Workflow Validation**:
+
 ```bash
 # Validate workflow structure
 dataflow-validate my_workflow.py
@@ -382,6 +398,7 @@ dataflow-validate my_workflow.py --output json > validation.json
 ```
 
 **2. Workflow Analysis**:
+
 ```bash
 # Analyze workflow metrics
 dataflow-analyze my_workflow.py
@@ -394,6 +411,7 @@ dataflow-analyze my_workflow.py --format json
 ```
 
 **3. Generate Reports**:
+
 ```bash
 # Generate HTML report
 dataflow-generate my_workflow.py report --output-dir ./reports
@@ -406,6 +424,7 @@ dataflow-generate my_workflow.py docs --output-dir ./docs
 ```
 
 **4. Interactive Debugging**:
+
 ```bash
 # Debug with breakpoint at node
 dataflow-debug my_workflow.py --breakpoint create_user
@@ -421,6 +440,7 @@ dataflow-debug my_workflow.py --interactive
 ```
 
 **5. Performance Profiling**:
+
 ```bash
 # Profile workflow execution
 dataflow-perf my_workflow.py
@@ -436,6 +456,7 @@ dataflow-perf my_workflow.py --format json > perf.json
 ```
 
 **CI/CD Integration**:
+
 ```yaml
 # .github/workflows/validate.yml
 name: Validate DataFlow Workflows
@@ -456,11 +477,13 @@ jobs:
 ```
 
 **Exit Codes**:
+
 - **0**: Success (validation passed, no errors)
 - **1**: Validation errors found
 - **2**: Tool error (invalid arguments, file not found)
 
 **Use Cases**:
+
 - Pre-commit validation hooks
 - CI/CD pipeline integration
 - Pre-deployment validation
@@ -473,9 +496,11 @@ jobs:
 ---
 
 ### CreateNode vs UpdateNode Guide
+
 **Time Saved**: 1-2 hours per mistake (most common error)
 
 **Quick Reference**:
+
 - **CreateNode**: Flat fields → `{"id": "123", "name": "Alice"}`
 - **UpdateNode**: Nested structure → `{"filter": {"id": "123"}, "fields": {"name": "Alice"}}`
 
@@ -484,12 +509,14 @@ jobs:
 ---
 
 ### Top 10 Errors Quick Fix Guide
+
 **Coverage**: 90% of user issues
 **Time Saved**: 30-120 minutes per error
 
 **See**: `sdk-users/apps/dataflow/troubleshooting/top-10-errors.md`
 
 **Quick Diagnosis**:
+
 1. "Missing parameter" → DF-101 → Add connection or parameter
 2. "Type mismatch" → DF-102 → Check parameter types
 3. "Auto-managed field" → DF-103 → Remove created_at/updated_at
@@ -503,6 +530,7 @@ jobs:
 ## 🔧 STRING ID & CONTEXT-AWARE PATTERNS (NEW)
 
 ### String ID Support (No More Forced Integer Conversion)
+
 ```python
 from dataflow import DataFlow
 from kailash.workflow.builder import WorkflowBuilder
@@ -537,19 +565,18 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Multi-Instance DataFlow with Context Isolation
+
 ```python
-# Instance 1: Development database with auto-migration
+# Instance 1: Development database with auto-migration (default)
 db_dev = DataFlow(
     database_url="sqlite:///dev.db",
-    auto_migrate=True,           # Allow schema changes
-    existing_schema_mode=False   # Full development mode
+    auto_migrate=True  # Default - works in all environments via SyncDDLExecutor
 )
 
-# Instance 2: Production database with safety locks
+# Instance 2: Production database - same config works everywhere as of v0.11.0
 db_prod = DataFlow(
     database_url="postgresql://user:pass@localhost/prod",
-    auto_migrate=False,          # No automatic migrations
-    existing_schema_mode=True    # Maximum safety - no schema changes
+    auto_migrate=True  # v0.11.0+: SyncDDLExecutor handles DDL safely
 )
 
 # Context isolation - models registered on one instance don't affect the other
@@ -571,6 +598,7 @@ print(f"Prod models: {list(db_prod.models.keys())}")  # ['ProdModel']
 ```
 
 ### Deferred Schema Operations (Synchronous Registration, Async Table Creation)
+
 ```python
 # Schema operations are deferred until workflow execution
 db = DataFlow(auto_migrate=True)
@@ -604,12 +632,14 @@ Production-ready features for Docker, Kubernetes, and enterprise deployments.
 AsyncLocalRuntime provides production features for FastAPI/Docker deployments.
 
 **Key Features**:
+
 - Execution timeouts (prevent hanging)
 - Automatic cleanup (connection/task management)
 - Context manager support
 - Metrics tracking
 
 **Basic Usage**:
+
 ```python
 from kailash.runtime import AsyncLocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
@@ -625,6 +655,7 @@ results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs=
 ```
 
 **Configuration**:
+
 ```python
 # Via constructor
 runtime = AsyncLocalRuntime(
@@ -639,6 +670,7 @@ runtime = AsyncLocalRuntime()  # Uses 120s from environment
 ```
 
 **FastAPI Integration**:
+
 ```python
 from fastapi import FastAPI, HTTPException
 from kailash.runtime import AsyncLocalRuntime
@@ -663,6 +695,7 @@ async def execute_workflow(data: dict):
 ```
 
 **Context Manager Support**:
+
 ```python
 from kailash.runtime.async_local import ExecutionContext
 
@@ -680,12 +713,14 @@ async with ExecutionContext() as ctx:
 Connection pooling enables 100-1000+ concurrent users by reusing database connections.
 
 **Key Features**:
+
 - Per-database connection pools (PostgreSQL, MySQL, SQLite)
 - Configurable pool sizes (default: pool_size=10, max_overflow=20)
 - Connection health checking (pre_ping)
 - Pool metrics and monitoring
 
 **Basic Usage**:
+
 ```python
 from dataflow import DataFlow
 
@@ -699,6 +734,7 @@ db = DataFlow(
 ```
 
 **Configuration Options**:
+
 ```python
 # 1. Environment variables
 # export DATAFLOW_POOL_SIZE=25
@@ -722,6 +758,7 @@ db = DataFlow("postgresql://...", enable_connection_pooling=False)
 ```
 
 **Pool Metrics**:
+
 ```python
 # Get pool metrics for monitoring
 metrics = db._pool_manager.get_pool_metrics(database_url)
@@ -732,6 +769,7 @@ print(f"Is exhausted: {metrics['is_exhausted']}")
 ```
 
 **Scalability**:
+
 - Without pooling: ~50 concurrent users (connection exhaustion)
 - With pooling (default): 100-1000+ concurrent users
 - Production recommended: pool_size=25-50, max_overflow=50-100
@@ -743,12 +781,14 @@ print(f"Is exhausted: {metrics['is_exhausted']}")
 Health monitoring provides /health, /ready, and /metrics endpoints for Kubernetes deployments.
 
 **Key Features**:
+
 - Kubernetes liveness and readiness probes
 - Component health checks (database, cache, pool)
 - Prometheus metrics integration
 - Configurable endpoint paths
 
 **FastAPI Integration**:
+
 ```python
 from fastapi import FastAPI
 from dataflow import DataFlow
@@ -768,6 +808,7 @@ add_health_endpoints(app, monitor)
 ```
 
 **Manual Health Checks**:
+
 ```python
 from dataflow.platform import HealthMonitor
 
@@ -785,6 +826,7 @@ if not is_ready:
 ```
 
 **Environment Configuration**:
+
 ```python
 # Customize endpoint paths
 # export DATAFLOW_HEALTH_ENDPOINT=/healthz
@@ -796,6 +838,7 @@ monitor = HealthMonitor(db)
 ```
 
 **Component Health Checks**:
+
 - **Database**: Connection health and query execution
 - **Schema Cache**: Hit rate monitoring (degraded if <50%)
 - **Connection Pool**: Utilization monitoring (degraded if >80%)
@@ -807,12 +850,14 @@ monitor = HealthMonitor(db)
 Automatic retry for transient failures and circuit breaking for failing dependencies.
 
 **Key Features**:
+
 - Exponential backoff with jitter (prevents thundering herd)
 - Circuit breaker with three states (CLOSED/OPEN/HALF_OPEN)
 - Configurable thresholds and timeouts
 - Metrics tracking
 
 **Retry Configuration**:
+
 ```python
 from dataflow.platform import RetryConfig, RetryHandler
 
@@ -832,6 +877,7 @@ result = await handler.execute_with_retry(database_operation, arg1, arg2)
 ```
 
 **Circuit Breaker Configuration**:
+
 ```python
 from dataflow.platform import CircuitBreakerConfig, CircuitBreaker
 
@@ -849,6 +895,7 @@ result = await breaker.execute(external_api_call, arg1, arg2)
 ```
 
 **Combined Usage** (Recommended):
+
 ```python
 # Combine retry + circuit breaker for maximum resilience
 async def protected_database_call():
@@ -858,6 +905,7 @@ result = await retry_handler.execute_with_retry(protected_database_call)
 ```
 
 **Metrics**:
+
 ```python
 # Retry metrics
 retry_metrics = handler.get_metrics()
@@ -876,6 +924,7 @@ print(f"Rejected: {breaker_metrics['rejected_requests']}")
 ### Docker Deployment
 
 **Dockerfile Example**:
+
 ```dockerfile
 FROM python:3.12-slim
 
@@ -901,8 +950,9 @@ CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 **docker-compose.yml Example**:
+
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   dataflow-app:
@@ -946,6 +996,7 @@ volumes:
 ### Kubernetes Deployment
 
 **Deployment YAML**:
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -962,60 +1013,60 @@ spec:
         app: dataflow-app
     spec:
       containers:
-      - name: dataflow-app
-        image: your-registry/dataflow-app:latest
-        ports:
-        - containerPort: 8000
-        env:
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: dataflow-secrets
-              key: database-url
-        - name: DATAFLOW_EXECUTION_TIMEOUT
-          value: "60"
-        - name: DATAFLOW_POOL_SIZE
-          value: "25"
-        - name: DATAFLOW_MAX_OVERFLOW
-          value: "50"
+        - name: dataflow-app
+          image: your-registry/dataflow-app:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: dataflow-secrets
+                  key: database-url
+            - name: DATAFLOW_EXECUTION_TIMEOUT
+              value: "60"
+            - name: DATAFLOW_POOL_SIZE
+              value: "25"
+            - name: DATAFLOW_MAX_OVERFLOW
+              value: "50"
 
-        # Liveness probe (is app responsive?)
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          timeoutSeconds: 5
-          failureThreshold: 3
+          # Liveness probe (is app responsive?)
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
 
-        # Readiness probe (is app ready for traffic?)
-        readinessProbe:
-          httpGet:
-            path: /ready
-            port: 8000
-          initialDelaySeconds: 10
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 3
+          # Readiness probe (is app ready for traffic?)
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
 
-        # Startup probe (initial startup check)
-        startupProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 0
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 30
+          # Startup probe (initial startup check)
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 0
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
 
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
 
 ---
 apiVersion: v1
@@ -1026,13 +1077,14 @@ spec:
   selector:
     app: dataflow-app
   ports:
-  - protocol: TCP
-    port: 80
-    targetPort: 8000
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
   type: LoadBalancer
 ```
 
 **Secrets Configuration**:
+
 ```yaml
 apiVersion: v1
 kind: Secret
@@ -1048,18 +1100,21 @@ stringData:
 ### Production Best Practices
 
 **1. Always Set Execution Timeouts**:
+
 ```python
 # Prevent workflows from hanging indefinitely
 runtime = AsyncLocalRuntime(execution_timeout=60)
 ```
 
 **2. Enable Connection Pooling**:
+
 ```python
 # Scale to 1000+ concurrent users
 db = DataFlow("postgresql://...", pool_size=25, max_overflow=50)
 ```
 
 **3. Add Health Monitoring**:
+
 ```python
 # Enable Kubernetes orchestration
 monitor = HealthMonitor(db)
@@ -1067,6 +1122,7 @@ add_health_endpoints(app, monitor)
 ```
 
 **4. Use Retry + Circuit Breaking**:
+
 ```python
 # Automatic resilience for transient failures
 async def protected_call():
@@ -1076,6 +1132,7 @@ result = await retry_handler.execute_with_retry(protected_call)
 ```
 
 **5. Monitor Metrics**:
+
 ```python
 # Track pool utilization, circuit breaker state, retry attempts
 pool_metrics = db._pool_manager.get_pool_metrics(url)
@@ -1084,6 +1141,7 @@ retry_metrics = handler.get_metrics()
 ```
 
 **6. Set Resource Limits**:
+
 ```yaml
 # Kubernetes resource limits prevent resource exhaustion
 resources:
@@ -1096,6 +1154,7 @@ resources:
 ```
 
 **7. Use Environment Variables**:
+
 ```bash
 # Configurable per environment
 export DATAFLOW_EXECUTION_TIMEOUT=60
@@ -1170,6 +1229,7 @@ results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs=
 ```
 
 **Environment Variables**:
+
 - `STRIPE_API_KEY`: Your Stripe API key
 
 **Usage**: `examples/payment/stripe_subscription.py`
@@ -1243,6 +1303,7 @@ results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs=
 ```
 
 **Environment Variables**:
+
 - `SENDGRID_API_KEY`: Your SendGrid API key
 
 **Usage**: `examples/email/sendgrid_transactional.py`
@@ -1318,6 +1379,7 @@ results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs=
 ```
 
 **Environment Variables**:
+
 - `OPENAI_API_KEY`: Your OpenAI API key
 
 **Usage**: `examples/ai/openai_chat.py`
@@ -1398,6 +1460,7 @@ results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs=
 ```
 
 **Environment Variables**:
+
 - `AWS_ACCESS_KEY_ID`: Your AWS access key
 - `AWS_SECRET_ACCESS_KEY`: Your AWS secret key
 - `S3_BUCKET`: Your S3 bucket name
@@ -1504,6 +1567,7 @@ results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs=
 ```
 
 **Environment Variables**:
+
 - `JWT_SECRET`: Secret key for JWT signing
 
 **Usage**: `examples/auth/jwt_oauth2.py`
@@ -1513,6 +1577,7 @@ results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs=
 ### Example Gallery Features
 
 All examples demonstrate:
+
 - **Phase 1 Features**: ErrorEnhancer, Inspector API, build-time validation
 - **Phase 2 Features**: AsyncLocalRuntime, connection pooling, health monitoring, retry logic
 - **DataFlow Best Practices**: @db.model patterns, workflow connections, error handling
@@ -1524,6 +1589,7 @@ All examples demonstrate:
 ## 🗄️ DATABASE SUPPORT (ALL DATABASES 100% FEATURE PARITY)
 
 DataFlow supports **PostgreSQL, MySQL, and SQLite** with identical functionality. All databases provide:
+
 - ✅ **9 nodes per model** - Full CRUD + bulk operations
 - ✅ **Async operations** - All database operations are async-first
 - ✅ **Connection pooling** - Efficient connection management
@@ -1531,6 +1597,7 @@ DataFlow supports **PostgreSQL, MySQL, and SQLite** with identical functionality
 - ✅ **Enterprise features** - Multi-tenancy, soft deletes, audit logging
 
 ### PostgreSQL (asyncpg driver)
+
 ```python
 # Production-grade database with advanced features
 db = DataFlow("postgresql://user:password@localhost:5432/mydb")
@@ -1550,6 +1617,7 @@ db = DataFlow(
 **Best for:** Enterprise production, PostGIS spatial data, complex analytics, JSONB operations
 
 ### MySQL (aiomysql driver)
+
 ```python
 # Web hosting and MySQL ecosystem
 db = DataFlow("mysql://user:password@localhost:3306/mydb")
@@ -1572,6 +1640,7 @@ db = DataFlow(
 **Best for:** Web hosting environments, existing MySQL infrastructure, read-heavy workloads
 
 ### SQLite (aiosqlite + custom pooling)
+
 ```python
 # Fast local development and testing
 db = DataFlow(":memory:")  # In-memory database
@@ -1592,19 +1661,20 @@ db = DataFlow(
 
 ### Database Feature Comparison
 
-| Feature | PostgreSQL | MySQL | SQLite |
-|---------|------------|-------|--------|
-| **Driver** | asyncpg | aiomysql | aiosqlite + custom pooling |
-| **ACID Transactions** | ✅ | ✅ InnoDB | ✅ |
-| **Connection Pooling** | ✅ Native | ✅ Native | ✅ Custom |
-| **DataFlow Nodes** | ✅ All 9 | ✅ All 9 | ✅ All 9 |
-| **JSON Support** | ✅ JSONB | ✅ 5.7+ | ✅ JSON1 |
-| **Full-Text Search** | ✅ | ✅ | ✅ FTS5 |
-| **Window Functions** | ✅ | ✅ 8.0+ | ✅ 3.25+ |
-| **Spatial Data** | ✅ PostGIS | ✅ Native | ✅ R-Tree |
-| **Best For** | Production | Web apps | Development, Mobile |
+| Feature                | PostgreSQL | MySQL     | SQLite                     |
+| ---------------------- | ---------- | --------- | -------------------------- |
+| **Driver**             | asyncpg    | aiomysql  | aiosqlite + custom pooling |
+| **ACID Transactions**  | ✅         | ✅ InnoDB | ✅                         |
+| **Connection Pooling** | ✅ Native  | ✅ Native | ✅ Custom                  |
+| **DataFlow Nodes**     | ✅ All 9   | ✅ All 9  | ✅ All 9                   |
+| **JSON Support**       | ✅ JSONB   | ✅ 5.7+   | ✅ JSON1                   |
+| **Full-Text Search**   | ✅         | ✅        | ✅ FTS5                    |
+| **Window Functions**   | ✅         | ✅ 8.0+   | ✅ 3.25+                   |
+| **Spatial Data**       | ✅ PostGIS | ✅ Native | ✅ R-Tree                  |
+| **Best For**           | Production | Web apps  | Development, Mobile        |
 
 ### Multi-Database Workflows
+
 ```python
 # Development: Fast SQLite
 dev_db = DataFlow(":memory:")
@@ -1633,6 +1703,7 @@ class User:
 ## 🚀 IMMEDIATE SUCCESS PATTERNS
 
 ### Zero-Config Basic Pattern (30 seconds)
+
 ```python
 from dataflow import DataFlow
 from kailash.workflow.builder import WorkflowBuilder
@@ -1666,6 +1737,7 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Production Pattern (Database Connection)
+
 ```python
 # Environment-based (recommended) - works with any database
 # DATABASE_URL=postgresql://user:pass@localhost/db
@@ -1703,6 +1775,7 @@ db = DataFlow(
 ```
 
 ### Configuration Patterns (Complete Access)
+
 ```python
 # Database configuration
 db_config = {
@@ -1749,6 +1822,7 @@ db = DataFlow(**db_config, **tenant_config, **security_config, **performance_con
 ```
 
 ### Enterprise Pattern (Multi-Tenant + Audit)
+
 ```python
 @db.model
 class Order:
@@ -1776,21 +1850,23 @@ class Order:
 ## 🎯 COMPLETE FUNCTION ACCESS MATRIX
 
 ### Generated Nodes (Per Model)
+
 Every `@db.model` class automatically generates these 9 nodes:
 
-| Node Type | Function | Use Case | Performance |
-|-----------|----------|----------|-------------|
-| **{Model}CreateNode** | Single insert | User registration | <1ms |
-| **{Model}ReadNode** | Single select by ID | Profile lookup | <1ms |
-| **{Model}UpdateNode** | Single update | Profile edit | <1ms |
-| **{Model}DeleteNode** | Single delete | Account removal | <1ms |
-| **{Model}ListNode** | Query with filters | Search/pagination | <10ms |
-| **{Model}BulkCreateNode** | Bulk insert | Data import | 1000/sec |
-| **{Model}BulkUpdateNode** | Bulk update | Price updates | 5000/sec |
-| **{Model}BulkDeleteNode** | Bulk delete | Cleanup | 10000/sec |
-| **{Model}BulkUpsertNode** | Insert or update | Sync operations | 3000/sec |
+| Node Type                 | Function            | Use Case          | Performance |
+| ------------------------- | ------------------- | ----------------- | ----------- |
+| **{Model}CreateNode**     | Single insert       | User registration | <1ms        |
+| **{Model}ReadNode**       | Single select by ID | Profile lookup    | <1ms        |
+| **{Model}UpdateNode**     | Single update       | Profile edit      | <1ms        |
+| **{Model}DeleteNode**     | Single delete       | Account removal   | <1ms        |
+| **{Model}ListNode**       | Query with filters  | Search/pagination | <10ms       |
+| **{Model}BulkCreateNode** | Bulk insert         | Data import       | 1000/sec    |
+| **{Model}BulkUpdateNode** | Bulk update         | Price updates     | 5000/sec    |
+| **{Model}BulkDeleteNode** | Bulk delete         | Cleanup           | 10000/sec   |
+| **{Model}BulkUpsertNode** | Insert or update    | Sync operations   | 3000/sec    |
 
 ### Enterprise Features Access
+
 ```python
 # Multi-tenant operations
 workflow.add_node("UserCreateNode", "create", {
@@ -1821,6 +1897,7 @@ workflow.add_node("UserAuditNode", "audit", {
 ```
 
 ### Bulk Operations (High Performance)
+
 ```python
 # Bulk create with conflict resolution
 workflow.add_node("ProductBulkCreateNode", "import", {
@@ -1849,6 +1926,7 @@ workflow.add_node("ProductBulkDeleteNode", "cleanup", {
 ```
 
 ### Advanced Query Patterns
+
 ```python
 # Complex filtering with MongoDB-style operators
 workflow.add_node("OrderListNode", "search", {
@@ -1878,6 +1956,7 @@ workflow.add_node("OrderAggregateNode", "analytics", {
 ```
 
 ### Transaction Management
+
 ```python
 # Distributed transaction with compensation
 workflow.add_node("TransactionManagerNode", "payment_flow", {
@@ -1909,6 +1988,7 @@ workflow.add_node("TransactionScopeNode", "atomic_operation", {
 ```
 
 ### Performance Optimization
+
 ```python
 # Connection pooling configuration
 db = DataFlow(
@@ -1935,6 +2015,7 @@ workflow.add_node("UserReadNode", "profile", {
 ```
 
 ### Change Data Capture (CDC)
+
 ```python
 # Monitor database changes
 workflow.add_node("CDCListenerNode", "order_changes", {
@@ -1953,6 +2034,7 @@ workflow.add_node("EventTriggerNode", "order_processor", {
 ```
 
 ### Multi-Database Support
+
 ```python
 # Primary database - PostgreSQL for production
 db_primary = DataFlow("postgresql://primary/db")
@@ -1979,6 +2061,7 @@ workflow.add_node("OrderCacheNode", "cache", {
 ```
 
 ### Security & Compliance
+
 ```python
 # Encryption at rest
 @db.model
@@ -2010,6 +2093,7 @@ workflow.add_node("GDPRDeleteNode", "right_to_be_forgotten", {
 ```
 
 ### Monitoring & Observability
+
 ```python
 # Performance monitoring
 workflow.add_node("MonitoringNode", "perf_tracker", {
@@ -2037,6 +2121,7 @@ workflow.add_node("SlowQueryDetectorNode", "query_analyzer", {
 ## ⚠️ CRITICAL: Parameter Validation Patterns
 
 ### Dynamic Parameter Resolution
+
 ```python
 # ❌ WRONG: Template string syntax causes validation errors
 workflow.add_node("OrderCreateNode", "create_order", {
@@ -2058,6 +2143,7 @@ workflow.add_node("OrderCreateNode", "create_order", {
 ```
 
 ### Nexus Integration Parameters
+
 ```python
 # ✅ CORRECT: Double braces for Nexus parameter templates ONLY
 nexus_workflow.add_node("ProductCreateNode", "create", {
@@ -2069,6 +2155,7 @@ nexus_workflow.add_node("ProductCreateNode", "create", {
 ## 🏗️ ARCHITECTURE INTEGRATION
 
 ### DataFlow + Nexus Integration
+
 ```python
 from dataflow import DataFlow
 from nexus import Nexus
@@ -2097,6 +2184,7 @@ nexus = Nexus(
 ```
 
 ### Gateway API Generation
+
 ```python
 from kailash.servers.gateway import create_gateway
 
@@ -2118,6 +2206,7 @@ gateway = create_gateway(
 ```
 
 ### Complete Nexus Integration Pattern
+
 ```python
 from nexus import Nexus
 from dataflow import DataFlow
@@ -2174,6 +2263,7 @@ nexus = Nexus(
 ```
 
 ### Event-Driven Architecture
+
 ```python
 # Database events trigger workflows
 workflow.add_node("EventSourceNode", "order_events", {
@@ -2193,6 +2283,7 @@ workflow.add_node("EventProcessorNode", "order_processor", {
 ## 📊 PERFORMANCE BENCHMARKS
 
 ### Throughput Metrics
+
 - **Single operations**: 1,000+ ops/sec
 - **Bulk create**: 10,000+ records/sec
 - **Bulk update**: 50,000+ records/sec
@@ -2200,12 +2291,14 @@ workflow.add_node("EventProcessorNode", "order_processor", {
 - **Transaction throughput**: 500+ txns/sec
 
 ### Memory Usage
+
 - **Base overhead**: <10MB
 - **Per model**: <1MB
 - **Connection pool**: 2MB per connection
 - **Cache overhead**: 50MB per 1M records
 
 ### Latency Targets
+
 - **Single CRUD**: <1ms
 - **Bulk operations**: <10ms per 1000 records
 - **Complex queries**: <100ms
@@ -2215,21 +2308,22 @@ workflow.add_node("EventProcessorNode", "order_processor", {
 
 ## 🎯 DECISION MATRIX
 
-| Use Case | Best Pattern | Performance | Complexity |
-|----------|-------------|-------------|------------|
-| **Single record CRUD** | Basic nodes | <1ms | Low |
-| **Bulk data import** | BulkCreateNode | 10k/sec | Medium |
-| **Complex queries** | ListNode + filters | <100ms | Medium |
-| **Multi-tenant app** | Enterprise features | Variable | High |
-| **Real-time updates** | CDC + Events | <10ms | High |
-| **Analytics queries** | Read replicas | <1sec | Medium |
-| **Distributed systems** | Saga transactions | <100ms | High |
+| Use Case                | Best Pattern        | Performance | Complexity |
+| ----------------------- | ------------------- | ----------- | ---------- |
+| **Single record CRUD**  | Basic nodes         | <1ms        | Low        |
+| **Bulk data import**    | BulkCreateNode      | 10k/sec     | Medium     |
+| **Complex queries**     | ListNode + filters  | <100ms      | Medium     |
+| **Multi-tenant app**    | Enterprise features | Variable    | High       |
+| **Real-time updates**   | CDC + Events        | <10ms       | High       |
+| **Analytics queries**   | Read replicas       | <1sec       | Medium     |
+| **Distributed systems** | Saga transactions   | <100ms      | High       |
 
 ---
 
 ## 🔧 ADVANCED MIGRATION PATTERNS
 
 ### Complete Migration Workflow (Enterprise)
+
 ```python
 from dataflow.migrations.integrated_risk_assessment_system import IntegratedRiskAssessmentSystem
 
@@ -2341,18 +2435,19 @@ success = await enterprise_migration_workflow(
 
 ### Migration Decision Matrix
 
-| Migration Type | Risk Level | Required Tools | Recommended Pattern |
-|---------------|------------|----------------|---------------------|
-| **Add Column (nullable)** | LOW | Basic validation | Direct execution |
-| **Add NOT NULL Column** | MEDIUM | NotNullHandler + Validation | Plan → Validate → Execute |
-| **Drop Column** | HIGH | DependencyAnalyzer + Risk Assessment | Full enterprise workflow |
-| **Rename Table** | CRITICAL | TableRenameAnalyzer + FK Analysis | Staging → Lock → Validate |
-| **Change Column Type** | HIGH | Risk Assessment + Mitigation | Staging test required |
-| **Drop Table** | CRITICAL | Full risk assessment + Staging | Maximum safety protocol |
+| Migration Type            | Risk Level | Required Tools                       | Recommended Pattern       |
+| ------------------------- | ---------- | ------------------------------------ | ------------------------- |
+| **Add Column (nullable)** | LOW        | Basic validation                     | Direct execution          |
+| **Add NOT NULL Column**   | MEDIUM     | NotNullHandler + Validation          | Plan → Validate → Execute |
+| **Drop Column**           | HIGH       | DependencyAnalyzer + Risk Assessment | Full enterprise workflow  |
+| **Rename Table**          | CRITICAL   | TableRenameAnalyzer + FK Analysis    | Staging → Lock → Validate |
+| **Change Column Type**    | HIGH       | Risk Assessment + Mitigation         | Staging test required     |
+| **Drop Table**            | CRITICAL   | Full risk assessment + Staging       | Maximum safety protocol   |
 
 ## 🔧 ADVANCED DEVELOPMENT
 
 ### Custom Node Development
+
 ```python
 from dataflow.nodes import BaseDataFlowNode
 
@@ -2374,6 +2469,7 @@ db.register_node(CustomAnalyticsNode)
 DataFlow includes a comprehensive enterprise-grade migration system with 8 specialized engines for safe schema evolution:
 
 #### 1. Risk Assessment Engine
+
 ```python
 from dataflow.migrations.risk_assessment_engine import RiskAssessmentEngine, RiskCategory
 
@@ -2399,6 +2495,7 @@ for category, risk in risk_assessment.category_risks.items():
 ```
 
 #### 2. Mitigation Strategy Engine
+
 ```python
 from dataflow.migrations.mitigation_strategy_engine import MitigationStrategyEngine
 
@@ -2423,6 +2520,7 @@ for strategy in strategy_plan.recommended_strategies:
 ```
 
 #### 3. Foreign Key Analyzer (FK-Aware Operations)
+
 ```python
 from dataflow.migrations.foreign_key_analyzer import ForeignKeyAnalyzer, FKOperationType
 
@@ -2452,6 +2550,7 @@ else:
 ```
 
 #### 4. Table Rename Analyzer
+
 ```python
 from dataflow.migrations.table_rename_analyzer import TableRenameAnalyzer
 
@@ -2480,6 +2579,7 @@ if rename_impact.can_rename_safely:
 ```
 
 #### 5. Staging Environment Manager
+
 ```python
 from dataflow.migrations.staging_environment_manager import StagingEnvironmentManager
 
@@ -2518,6 +2618,7 @@ await staging_manager.cleanup_staging_environment(staging_env)
 ```
 
 #### 6. Migration Lock Manager
+
 ```python
 from dataflow.migrations.concurrent_access_manager import MigrationLockManager
 
@@ -2541,6 +2642,7 @@ async with lock_manager.acquire_migration_lock(
 ```
 
 #### 7. Validation Checkpoint Manager
+
 ```python
 from dataflow.migrations.validation_checkpoints import ValidationCheckpointManager
 
@@ -2578,6 +2680,7 @@ else:
 ```
 
 #### 8. Schema State Manager
+
 ```python
 from dataflow.migrations.schema_state_manager import SchemaStateManager
 
@@ -2616,6 +2719,7 @@ for change in evolution_report.schema_changes:
 ```
 
 ### Advanced Query Optimization
+
 ```python
 # Query optimization patterns
 workflow.add_node("QueryOptimizerNode", "optimize", {
@@ -2635,6 +2739,7 @@ workflow.add_node("PerformanceTunerNode", "tune", {
 ```
 
 ### Testing Patterns
+
 ```python
 # Test database setup
 test_db = DataFlow(":memory:")  # In-memory SQLite (100% feature parity with PostgreSQL and MySQL)
@@ -2655,6 +2760,7 @@ workflow.add_node("PerformanceTestNode", "benchmark", {
 ```
 
 ### Production Database Management
+
 ```python
 # Database backup and restore
 workflow.add_node("DatabaseBackupNode", "backup", {
@@ -2686,6 +2792,7 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 ## 🚨 CRITICAL SUCCESS FACTORS
 
 ### ✅ ALWAYS DO
+
 - Use `@db.model` decorator for automatic node generation
 - Leverage bulk operations for >100 records
 - Enable multi-tenancy for SaaS applications
@@ -2703,6 +2810,7 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 - **NEW: Use migration locks to prevent concurrent schema modifications**
 
 ### ❌ NEVER DO
+
 - Direct database session management
 - Manual transaction handling
 - Raw SQL queries without query builder
@@ -2721,6 +2829,7 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 - **NEW: Run concurrent migrations without lock coordination**
 
 ### 🔧 MAJOR BUG FIXES COMPLETED (v0.9.11 & v0.4.0 → v0.5.6)
+
 - **✅ MySQL Support**: Full MySQL support with 100% feature parity (v0.5.6)
 - **✅ DateTime Serialization**: Fixed datetime objects being converted to strings
 - **✅ PostgreSQL Parameter Types**: Added explicit type casting for parameter determination
@@ -2733,12 +2842,13 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 - **✅ Schema Inspection**: Fixed bounds checking errors
 - **✅ Test Fixtures**: Improved migration test configuration
 - **✅ auto_migrate=False**: Fixed tables being created despite disabled auto-migration
-- **✅ String ID Preservation**: No more forced integer conversion - IDs preserve original type**
-- **✅ Multi-Instance Isolation**: Proper context separation between DataFlow instances**
-- **✅ Deferred Schema Operations**: Table creation deferred until workflow execution**
-- **✅ Context-Aware Table Creation**: Node-instance coupling for proper isolation**
+- **✅ String ID Preservation**: No more forced integer conversion - IDs preserve original type\*\*
+- **✅ Multi-Instance Isolation**: Proper context separation between DataFlow instances\*\*
+- **✅ Deferred Schema Operations**: Table creation deferred until workflow execution\*\*
+- **✅ Context-Aware Table Creation**: Node-instance coupling for proper isolation\*\*
 
 ### 🎯 OPTIMIZATION CHECKLIST
+
 - [ ] Connection pool sized for workload
 - [ ] Indexes defined for query patterns
 - [ ] Bulk operations for high-volume data
@@ -2752,17 +2862,20 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 ## 📚 COMPLETE NAVIGATION
 
 ### **🔗 Hierarchical Navigation Path**
+
 1. **Start**: [Root CLAUDE.md](../../../CLAUDE-archive.md) → Essential patterns
 2. **SDK Guidance**: [SDK Users](../../../sdk-users/) → Complete SDK navigation
 3. **This Guide**: DataFlow-specific complete function access
 4. **Integration**: [Nexus CLAUDE.md](../../kailash-nexus/CLAUDE.md) → Multi-channel platform
 
 ### **Quick Start**
+
 - [Installation Guide](docs/getting-started/installation.md)
 - [First App in 5 Minutes](docs/getting-started/quickstart.md)
 - [Core Concepts](docs/getting-started/concepts.md)
 
 ### **Development**
+
 - [Model Definition](docs/development/models.md)
 - [Generated Nodes](docs/development/nodes.md)
 - [Bulk Operations](docs/development/bulk-operations.md)
@@ -2770,18 +2883,21 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 - [Custom Development](docs/development/custom-nodes.md)
 
 ### **Enterprise**
+
 - [Multi-Tenancy](docs/enterprise/multi-tenant.md)
 - [Security](docs/enterprise/security.md)
 - [Audit & Compliance](docs/enterprise/compliance.md)
 - [Performance](docs/enterprise/performance.md)
 
 ### **Production**
+
 - [Deployment Guide](docs/production/deployment.md)
 - [Monitoring](docs/production/monitoring.md)
 - [Backup & Recovery](docs/production/backup.md)
 - [Troubleshooting](docs/production/troubleshooting.md)
 
 ### **Integration**
+
 - [Nexus Integration](docs/integration/nexus.md)
 - [Gateway APIs](docs/integration/gateway.md)
 - [Event-Driven Architecture](docs/integration/events.md)
@@ -2792,20 +2908,21 @@ workflow.add_node("DatabaseMonitorNode", "monitor", {
 
 ### Migration Engine Components (v0.4.5+)
 
-| Component | Purpose | Performance | Use Cases |
-|-----------|---------|-------------|----------|
-| **Risk Assessment Engine** | Multi-dimensional risk analysis | <100ms analysis | Pre-migration risk evaluation |
-| **Mitigation Strategy Engine** | Automated risk reduction plans | <200ms generation | Risk mitigation planning |
-| **Foreign Key Analyzer** | FK-aware operations & integrity | <30s for 1000+ FKs | FK dependency analysis |
-| **Table Rename Analyzer** | Safe table renaming with deps | <5s analysis | Table restructuring |
-| **Staging Environment Manager** | Safe migration testing | <5min setup | Production-like testing |
-| **Migration Lock Manager** | Concurrent migration prevention | <10ms lock ops | Multi-instance safety |
-| **Validation Checkpoint Manager** | Multi-stage validation | <1s validation | Migration quality assurance |
-| **Schema State Manager** | Schema evolution tracking | <2s snapshot | Change history & rollback |
+| Component                         | Purpose                         | Performance        | Use Cases                     |
+| --------------------------------- | ------------------------------- | ------------------ | ----------------------------- |
+| **Risk Assessment Engine**        | Multi-dimensional risk analysis | <100ms analysis    | Pre-migration risk evaluation |
+| **Mitigation Strategy Engine**    | Automated risk reduction plans  | <200ms generation  | Risk mitigation planning      |
+| **Foreign Key Analyzer**          | FK-aware operations & integrity | <30s for 1000+ FKs | FK dependency analysis        |
+| **Table Rename Analyzer**         | Safe table renaming with deps   | <5s analysis       | Table restructuring           |
+| **Staging Environment Manager**   | Safe migration testing          | <5min setup        | Production-like testing       |
+| **Migration Lock Manager**        | Concurrent migration prevention | <10ms lock ops     | Multi-instance safety         |
+| **Validation Checkpoint Manager** | Multi-stage validation          | <1s validation     | Migration quality assurance   |
+| **Schema State Manager**          | Schema evolution tracking       | <2s snapshot       | Change history & rollback     |
 
 ### Migration Safety Levels
 
 #### Level 1: Basic (Development)
+
 ```python
 db = DataFlow(auto_migrate=True)  # Default behavior
 # ✅ Safe: auto_migrate preserves existing data on repeat runs
@@ -2813,16 +2930,17 @@ db = DataFlow(auto_migrate=True)  # Default behavior
 ```
 
 #### Level 2: Production-Safe
+
 ```python
 db = DataFlow(
-    auto_migrate=False,         # No automatic changes
-    existing_schema_mode=True    # Use existing schema only
+    auto_migrate=False  # No automatic changes - use existing schema only
 )
-# ✅ Maximum safety for existing databases
-# ✅ No accidental schema modifications
+# Maximum safety for existing databases
+# No accidental schema modifications
 ```
 
 #### Level 3: Enterprise (Full Migration System)
+
 ```python
 from dataflow.migrations.integrated_risk_assessment_system import IntegratedRiskAssessmentSystem
 
@@ -2846,21 +2964,22 @@ async def enterprise_migration():
 
 ### Migration Operation Reference
 
-| Operation | Risk Level | Required Tools | Example Usage |
-|-----------|------------|----------------|---------------|
-| **Add Nullable Column** | LOW | Basic validation | `ALTER TABLE users ADD COLUMN phone TEXT` |
-| **Add NOT NULL Column** | MEDIUM | NotNullHandler + constraints | Safe default value strategies |
-| **Drop Column** | HIGH | DependencyAnalyzer + Risk Assessment | Full dependency impact analysis |
-| **Rename Column** | MEDIUM | Dependency analysis | Update all references |
-| **Change Column Type** | HIGH | Risk assessment + validation | Data conversion safety |
-| **Rename Table** | CRITICAL | TableRenameAnalyzer + FK Analysis | Coordinate all dependencies |
-| **Drop Table** | CRITICAL | Full enterprise workflow | Maximum safety protocol |
-| **Add Foreign Key** | MEDIUM | FK analyzer + validation | Referential integrity checks |
-| **Drop Foreign Key** | HIGH | FK impact analysis | Cascade safety analysis |
+| Operation               | Risk Level | Required Tools                       | Example Usage                             |
+| ----------------------- | ---------- | ------------------------------------ | ----------------------------------------- |
+| **Add Nullable Column** | LOW        | Basic validation                     | `ALTER TABLE users ADD COLUMN phone TEXT` |
+| **Add NOT NULL Column** | MEDIUM     | NotNullHandler + constraints         | Safe default value strategies             |
+| **Drop Column**         | HIGH       | DependencyAnalyzer + Risk Assessment | Full dependency impact analysis           |
+| **Rename Column**       | MEDIUM     | Dependency analysis                  | Update all references                     |
+| **Change Column Type**  | HIGH       | Risk assessment + validation         | Data conversion safety                    |
+| **Rename Table**        | CRITICAL   | TableRenameAnalyzer + FK Analysis    | Coordinate all dependencies               |
+| **Drop Table**          | CRITICAL   | Full enterprise workflow             | Maximum safety protocol                   |
+| **Add Foreign Key**     | MEDIUM     | FK analyzer + validation             | Referential integrity checks              |
+| **Drop Foreign Key**    | HIGH       | FK impact analysis                   | Cascade safety analysis                   |
 
 ### Complete API Reference
 
 #### Core Migration Classes
+
 ```python
 # Risk Assessment
 from dataflow.migrations.risk_assessment_engine import RiskAssessmentEngine, RiskLevel
@@ -2890,6 +3009,7 @@ from dataflow.migrations.integrated_risk_assessment_system import IntegratedRisk
 #### Migration Best Practices Checklist
 
 ##### Pre-Migration (Required)
+
 - [ ] **Risk Assessment**: Analyze potential impact and risks
 - [ ] **Dependency Analysis**: Identify all affected database objects
 - [ ] **Backup Strategy**: Ensure recovery options are available
@@ -2897,12 +3017,14 @@ from dataflow.migrations.integrated_risk_assessment_system import IntegratedRisk
 - [ ] **Lock Acquisition**: Prevent concurrent migrations
 
 ##### During Migration (Required)
+
 - [ ] **Validation Checkpoints**: Multi-stage validation throughout process
 - [ ] **Performance Monitoring**: Track execution metrics
 - [ ] **Rollback Readiness**: Prepared rollback procedures if needed
 - [ ] **Progress Logging**: Detailed execution logging for audit
 
 ##### Post-Migration (Required)
+
 - [ ] **Integrity Validation**: Verify data and referential integrity
 - [ ] **Performance Validation**: Check query performance impact
 - [ ] **Schema Documentation**: Update schema documentation

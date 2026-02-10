@@ -41,6 +41,7 @@ nexus.run(port=8000)
 ## Reference Documentation
 
 ### Getting Started
+
 - **[nexus-quickstart](nexus-quickstart.md)** - Quick start guide
 - **[nexus-installation](nexus-installation.md)** - Installation and setup
 - **[nexus-architecture](nexus-architecture.md)** - Architecture overview
@@ -48,52 +49,71 @@ nexus.run(port=8000)
 - **[nexus-comparison](nexus-comparison.md)** - Nexus vs FastAPI/Flask
 
 ### Core Concepts
+
 - **[nexus-workflow-registration](nexus-workflow-registration.md)** - Registering workflows
 - **[nexus-multi-channel](nexus-multi-channel.md)** - Multi-channel architecture
 - **[nexus-sessions](nexus-sessions.md)** - Session management
 - **[nexus-config-options](nexus-config-options.md)** - Configuration options
 
 ### Channel-Specific Patterns
+
 - **[nexus-api-patterns](nexus-api-patterns.md)** - HTTP API patterns
 - **[nexus-api-input-mapping](nexus-api-input-mapping.md)** - API input handling
 - **[nexus-cli-patterns](nexus-cli-patterns.md)** - CLI usage patterns
 - **[nexus-mcp-channel](nexus-mcp-channel.md)** - MCP channel configuration
 
 ### Integration
+
 - **[nexus-dataflow-integration](nexus-dataflow-integration.md)** - DataFlow + Nexus patterns
 - **[nexus-plugins](nexus-plugins.md)** - Plugin system
 - **[nexus-event-system](nexus-event-system.md)** - Event-driven architecture
 
 ### Production & Operations
+
 - **[nexus-production-deployment](nexus-production-deployment.md)** - Production deployment
 - **[nexus-health-monitoring](nexus-health-monitoring.md)** - Health checks and monitoring
 - **[nexus-enterprise-features](nexus-enterprise-features.md)** - Enterprise capabilities
 - **[nexus-troubleshooting](nexus-troubleshooting.md)** - Common issues and solutions
 
+### v1.3.0 Additions
+
+- **[nexus-handler-support](nexus-handler-support.md)** - `@app.handler()` decorator for direct function registration
+- **[nexus-auth-plugin](nexus-auth-plugin.md)** - NexusAuthPlugin unified auth (JWT, RBAC, SSO, rate limiting, tenant, audit)
+- **[golden-patterns-catalog](golden-patterns-catalog.md)** - Top 7 production-validated codegen patterns
+- **[codegen-decision-tree](codegen-decision-tree.md)** - Decision tree, anti-patterns, scaffolding templates
+
 ## Key Concepts
 
 ### Zero-Config Platform
+
 Nexus eliminates boilerplate:
+
 - **No FastAPI routes** - Automatic API generation from workflows
 - **No CLI arg parsing** - Automatic CLI creation
 - **No MCP server setup** - Automatic MCP integration
 - **Unified deployment** - One command for all channels
 
 ### Multi-Channel Architecture
+
 Single deployment, three access methods:
+
 1. **HTTP API**: RESTful JSON endpoints
 2. **CLI**: Command-line interface
 3. **MCP**: Model Context Protocol server
 
 ### Unified Sessions
+
 Consistent session management:
+
 - Cross-channel session tracking
 - Session state persistence
 - Session-scoped workflows
 - Concurrent session support
 
 ### Enterprise Features
+
 Production-ready capabilities:
+
 - Health monitoring endpoints
 - Plugin system for extensibility
 - Event system for integrations
@@ -104,6 +124,7 @@ Production-ready capabilities:
 ## When to Use This Skill
 
 Use Nexus when you need to:
+
 - Deploy workflows as production platforms
 - Provide multiple access methods (API/CLI/MCP)
 - Build enterprise platforms quickly
@@ -115,6 +136,7 @@ Use Nexus when you need to:
 ## Integration Patterns
 
 ### With DataFlow (Auto CRUD API)
+
 ```python
 from nexus import Nexus
 from dataflow import DataFlow
@@ -138,6 +160,7 @@ nexus.run()
 ```
 
 ### With Kaizen (Agent Platform)
+
 ```python
 from nexus import Nexus
 from kaizen.base import BaseAgent
@@ -151,6 +174,7 @@ nexus.run()
 ```
 
 ### With Core SDK (Custom Workflows)
+
 ```python
 from nexus import Nexus
 from kailash.workflow.builder import WorkflowBuilder
@@ -167,6 +191,7 @@ nexus.run(port=8000)
 ```
 
 ### Standalone Platform
+
 ```python
 from nexus import Nexus
 
@@ -199,12 +224,14 @@ nexus.run(
 ## Deployment Patterns
 
 ### Development
+
 ```python
 nexus = Nexus(workflows)
 nexus.run(port=8000)  # Single process, hot reload
 ```
 
 ### Production (Docker)
+
 ```python
 from kailash.runtime import AsyncLocalRuntime
 
@@ -216,6 +243,7 @@ nexus.run(host="0.0.0.0", port=8000, workers=4)
 ```
 
 ### With Load Balancer
+
 ```bash
 # Deploy multiple Nexus instances behind nginx/traefik
 docker-compose up --scale nexus=3
@@ -223,14 +251,14 @@ docker-compose up --scale nexus=3
 
 ## Channel Comparison
 
-| Feature | API | CLI | MCP |
-|---------|-----|-----|-----|
-| **Access** | HTTP | Terminal | MCP Clients |
-| **Input** | JSON | Args/JSON | Structured |
-| **Output** | JSON | Text/JSON | Structured |
-| **Sessions** | ✓ | ✓ | ✓ |
-| **Auth** | ✓ | ✓ | ✓ |
-| **Streaming** | ✓ | ✓ | ✓ |
+| Feature       | API  | CLI       | MCP         |
+| ------------- | ---- | --------- | ----------- |
+| **Access**    | HTTP | Terminal  | MCP Clients |
+| **Input**     | JSON | Args/JSON | Structured  |
+| **Output**    | JSON | Text/JSON | Structured  |
+| **Sessions**  | ✓    | ✓         | ✓           |
+| **Auth**      | ✓    | ✓         | ✓           |
+| **Streaming** | ✓    | ✓         | ✓           |
 
 ## Related Skills
 
@@ -243,6 +271,7 @@ docker-compose up --scale nexus=3
 ## Support
 
 For Nexus-specific questions, invoke:
+
 - `nexus-specialist` - Nexus implementation and deployment
 - `deployment-specialist` - Production deployment patterns
 - `framework-advisor` - When to use Nexus vs other approaches

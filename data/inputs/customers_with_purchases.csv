@@ -1,6 +1,0 @@
-customer_id,name,email,purchase_total
-cust1,Alice,alice@example.com,1500
-cust2,Bob,bob@example.com,750
-cust3,Charlie,charlie@example.com,250
-cust4,Diana,diana@example.com,1200
-cust5,Evan,evan@example.com,600
