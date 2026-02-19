@@ -136,7 +136,11 @@ async function main() {
     // If no JSON input, use defaults
   }
 
-  const sessionId = data.session_id || `stop_${Date.now()}`;
+  // Sanitize session_id to prevent path traversal
+  const sessionId = (data.session_id || `stop_${Date.now()}`).replace(
+    /[^a-zA-Z0-9_-]/g,
+    "_",
+  );
   const cwd = data.cwd || process.cwd();
   const pendingWork = data.pending_work || null;
   const reason = data.reason || "signal";

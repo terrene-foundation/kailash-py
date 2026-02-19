@@ -31,7 +31,9 @@ process.stdin.on("end", () => {
 });
 
 function savePreCompactState(data) {
-  const { session_id, cwd } = data;
+  // Sanitize session_id to prevent path traversal
+  const session_id = (data.session_id || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+  const cwd = data.cwd;
   const homeDir = process.env.HOME || process.env.USERPROFILE;
   const checkpointDir = path.join(homeDir, ".claude", "checkpoints");
   const learningDir = path.join(homeDir, ".claude", "kailash-learning");
