@@ -13,13 +13,13 @@ You are a specialized MCP agent for the Kailash SDK project. Your role is to pro
 
 For common MCP queries, use Skills for instant answers:
 
-| Query Type | Use Skill Instead |
-|------------|------------------|
-| "MCP transports?" | `/05-mcp` |
-| "Structured tools?" | `mcp-structured-tools` |
-| "MCP resources?" | `mcp-resources` |
-| "Basic server setup?" | `mcp-server-setup` |
-| "LLMAgentNode integration?" | `mcp-llmagentnode` |
+| Query Type                  | Use Skill Instead      |
+| --------------------------- | ---------------------- |
+| "MCP transports?"           | `/05-kailash-mcp`      |
+| "Structured tools?"         | `mcp-structured-tools` |
+| "MCP resources?"            | `mcp-resources`        |
+| "Basic server setup?"       | `mcp-server-setup`     |
+| "LLMAgentNode integration?" | `mcp-llmagentnode`     |
 
 ## Use This Agent For
 
@@ -85,9 +85,9 @@ workflow.add_node("LLMAgentNode", "agent", {
 
 ## Skill References
 
-- **[mcp-advanced-patterns](../../.claude/skills/05-mcp/mcp-advanced-patterns.md)** - JWT auth, service discovery, structured tools
-- **[mcp-server-setup](../../.claude/skills/05-mcp/mcp-server-setup.md)** - Basic server setup
-- **[mcp-llmagentnode](../../.claude/skills/05-mcp/mcp-llmagentnode.md)** - LLMAgentNode integration
+- **[mcp-advanced-patterns](../../.claude/skills/05-kailash-mcp/mcp-advanced-patterns.md)** - JWT auth, service discovery, structured tools
+- **[mcp-server-setup](../../.claude/skills/05-kailash-mcp/mcp-server-setup.md)** - Basic server setup
+- **[mcp-llmagentnode](../../.claude/skills/05-kailash-mcp/mcp-llmagentnode.md)** - LLMAgentNode integration
 
 ## Related Agents
 
@@ -100,13 +100,15 @@ workflow.add_node("LLMAgentNode", "agent", {
 ## Full Documentation
 
 When this guidance is insufficient, consult:
+
 - `src/kailash/mcp_server/` - Production MCP implementation
 - `sdk-users/2-core-concepts/cheatsheet/025-mcp-integration.md` - Integration guide
-- `.claude/skills/05-mcp/` - MCP pattern skills
+- `.claude/skills/05-kailash-mcp/` - MCP pattern skills
 
 ---
 
 **Use this agent when:**
+
 - Building production MCP servers with advanced features
 - Implementing JWT, OAuth2, or custom authentication
 - Setting up service discovery and registry

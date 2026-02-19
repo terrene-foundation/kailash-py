@@ -5,6 +5,7 @@
 In the previous guide, you learned what Claude Code is. This guide explains how **this specific setup** (Kailash Vibe CC Setup) enhances Claude Code with specialized knowledge, automation, and quality enforcement.
 
 By the end of this guide, you will understand:
+
 - Why this setup exists and what problems it solves
 - The architecture and how components work together
 - The philosophy driving design decisions
@@ -19,15 +20,18 @@ By the end of this guide, you will understand:
 Out of the box, Claude Code is a **generalist**. It knows a lot about many things but isn't an expert in any specific domain.
 
 When you ask generic Claude Code:
+
 > "Create a user registration workflow"
 
 Claude might:
+
 - Use raw SQL instead of your ORM
 - Skip important security checks
 - Write tests that use mocking (which hides real bugs)
 - Miss framework-specific patterns
 
 **This setup transforms Claude from a generalist into a Kailash SDK specialist** who knows:
+
 - The exact patterns for workflows, DataFlow, Nexus, and Kaizen
 - When to use which framework
 - How to test properly (NO MOCKING in integration tests)
@@ -41,6 +45,7 @@ The first principle of this setup is:
 > **Enable extreme levels of code generation automation through Claude Code's natural language ability.**
 
 This means:
+
 1. You describe what you want in plain English
 2. Claude knows exactly how to implement it using the right patterns
 3. Automation enforces quality at every step
@@ -49,6 +54,7 @@ This means:
 ### What "Extreme Automation" Looks Like
 
 **Without this setup:**
+
 ```
 You: "Add user registration"
 Claude: [Writes generic code, may use wrong patterns]
@@ -62,6 +68,7 @@ You: [Review finds more issues...]
 ```
 
 **With this setup:**
+
 ```
 You: "Add user registration with DataFlow, proper security, and integration tests"
 Claude: [Uses DataFlow patterns from skills]
@@ -98,7 +105,7 @@ Claude: [Uses DataFlow patterns from skills]
 │         22 directories of domain expertise                   │
 │                                                              │
 │  01-core-sdk    02-dataflow     03-nexus       04-kaizen    │
-│  05-mcp         06-cheatsheets  07-dev-guides  08-nodes     │
+│  05-kailash-mcp 06-cheatsheets  07-dev-guides  08-nodes     │
 │  09-workflows   10-deployment   11-frontend    12-testing   │
 │  13-decisions   14-templates    15-errors      16-validation │
 │  17-standards   18-security     19-flutter     20-widgets   │
@@ -223,24 +230,24 @@ The setup follows a progressive detail model:
 
 Each component has ONE job:
 
-| Component | Job | NOT its job |
-|-----------|-----|-------------|
-| Commands | Quick access | Contain patterns |
-| Skills | Provide patterns | Make decisions |
-| Agents | Make complex decisions | Contain all knowledge |
-| Hooks | Enforce rules automatically | Make judgment calls |
-| Rules | Define constraints | Explain why |
+| Component | Job                         | NOT its job           |
+| --------- | --------------------------- | --------------------- |
+| Commands  | Quick access                | Contain patterns      |
+| Skills    | Provide patterns            | Make decisions        |
+| Agents    | Make complex decisions      | Contain all knowledge |
+| Hooks     | Enforce rules automatically | Make judgment calls   |
+| Rules     | Define constraints          | Explain why           |
 
 ### Philosophy 3: Determinism Where Possible
 
 Some things should NOT require AI judgment:
 
-| Deterministic (Hooks) | Requires Judgment (Agents) |
-|-----------------------|---------------------------|
-| Block `rm -rf /` | Choose between DataFlow and raw SQL |
-| Format Python code | Design API architecture |
-| Warn about long-running commands | Prioritize security issues |
-| Detect mocking in test files | Decide if mocking is acceptable |
+| Deterministic (Hooks)            | Requires Judgment (Agents)          |
+| -------------------------------- | ----------------------------------- |
+| Block `rm -rf /`                 | Choose between DataFlow and raw SQL |
+| Format Python code               | Design API architecture             |
+| Warn about long-running commands | Prioritize security issues          |
+| Detect mocking in test files     | Decide if mocking is acceptable     |
 
 **Why this matters**: Deterministic enforcement is faster, more reliable, and doesn't use AI tokens.
 
@@ -248,11 +255,11 @@ Some things should NOT require AI judgment:
 
 Each piece of information exists in ONE place:
 
-| Information | Lives In | Referenced By |
-|-------------|----------|---------------|
-| DataFlow patterns | `02-dataflow` skill | `dataflow-specialist` agent |
-| Testing rules | `testing.md` rule | `testing-specialist` agent |
-| Node reference | `08-nodes-reference` skill | Multiple agents |
+| Information       | Lives In                   | Referenced By               |
+| ----------------- | -------------------------- | --------------------------- |
+| DataFlow patterns | `02-dataflow` skill        | `dataflow-specialist` agent |
+| Testing rules     | `testing.md` rule          | `testing-specialist` agent  |
+| Node reference    | `08-nodes-reference` skill | Multiple agents             |
 
 **Why this matters**: Updates happen in one place. No contradictions. No drift.
 
@@ -264,40 +271,40 @@ Each piece of information exists in ONE place:
 
 You don't have to remember all the rules. The setup enforces them:
 
-| Rule | Enforcement Mechanism |
-|------|----------------------|
-| No dangerous bash commands | `validate-bash-command.js` hook |
-| Correct SDK patterns | `validate-workflow.js` hook |
-| Security review before commit | `agents.md` rule + hook |
-| No mocking in integration tests | `testing.md` rule + hook |
-| Absolute imports | `validate-workflow.js` hook |
+| Rule                            | Enforcement Mechanism           |
+| ------------------------------- | ------------------------------- |
+| No dangerous bash commands      | `validate-bash-command.js` hook |
+| Correct SDK patterns            | `validate-workflow.js` hook     |
+| Security review before commit   | `agents.md` rule + hook         |
+| No mocking in integration tests | `testing.md` rule + hook        |
+| Absolute imports                | `validate-workflow.js` hook     |
 
 ### Specialized Expertise on Demand
 
 When you need deep knowledge, agents provide it:
 
-| Task | Specialist Agent |
-|------|-----------------|
-| Database operations | `dataflow-specialist` |
-| API deployment | `nexus-specialist` |
-| AI/ML features | `kaizen-specialist` |
-| Complex planning | `deep-analyst` |
-| Test architecture | `testing-specialist` |
-| Security audit | `security-reviewer` |
-| Code review | `intermediate-reviewer` |
+| Task                | Specialist Agent        |
+| ------------------- | ----------------------- |
+| Database operations | `dataflow-specialist`   |
+| API deployment      | `nexus-specialist`      |
+| AI/ML features      | `kaizen-specialist`     |
+| Complex planning    | `deep-analyst`          |
+| Test architecture   | `testing-specialist`    |
+| Security audit      | `security-reviewer`     |
+| Code review         | `intermediate-reviewer` |
 
 ### Quick Access to Patterns
 
 Commands load relevant skills instantly:
 
-| Command | Loads | Use Case |
-|---------|-------|----------|
-| `/sdk` | Core SDK patterns | Workflow, nodes, runtime |
-| `/db` | DataFlow patterns | Database operations |
-| `/api` | Nexus patterns | API deployment |
-| `/ai` | Kaizen patterns | AI agents |
-| `/test` | Testing patterns | Writing tests |
-| `/validate` | Gold standards | Checking compliance |
+| Command     | Loads             | Use Case                 |
+| ----------- | ----------------- | ------------------------ |
+| `/sdk`      | Core SDK patterns | Workflow, nodes, runtime |
+| `/db`       | DataFlow patterns | Database operations      |
+| `/api`      | Nexus patterns    | API deployment           |
+| `/ai`       | Kaizen patterns   | AI agents                |
+| `/test`     | Testing patterns  | Writing tests            |
+| `/validate` | Gold standards    | Checking compliance      |
 
 ### Continuous Learning
 
@@ -319,14 +326,17 @@ The setup gets smarter over time:
 ### How to Phrase Requests
 
 **Effective requests specify:**
+
 - The frameworks to use (DataFlow, Nexus, Kaizen)
 - Quality requirements (tests, security)
 - The outcome you want
 
 **Example:**
+
 > "Create a user management system with DataFlow for the database, Nexus for the API, and integration tests. Include proper error handling."
 
 Claude will:
+
 1. Load appropriate skills
 2. Consult appropriate agents
 3. Follow all rules
@@ -363,13 +373,13 @@ When you make a request:
 
 ### Quick Reference
 
-| Component | Count | Purpose |
-|-----------|-------|---------|
-| Commands | 9 | Quick access to skills |
-| Skills | 22 | Domain knowledge |
-| Agents | 14 | Specialized processing |
-| Hooks | 8 | Automatic enforcement |
-| Rules | 5 | Behavioral constraints |
+| Component | Count | Purpose                |
+| --------- | ----- | ---------------------- |
+| Commands  | 9     | Quick access to skills |
+| Skills    | 22    | Domain knowledge       |
+| Agents    | 14    | Specialized processing |
+| Hooks     | 8     | Automatic enforcement  |
+| Rules     | 5     | Behavioral constraints |
 
 ---
 
