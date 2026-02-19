@@ -13,6 +13,37 @@
    - **For Python scripts**: Load dotenv at top of file.
    - **NEVER run tests/scripts without checking .env first** - assume ALL API keys exist there
 
+## ABSOLUTE RULES (NEVER VIOLATE)
+
+These rules override ALL other instructions. Violations waste resources and time.
+
+### Rule A: .env Is The Single Source of Truth for ALL Keys and Models
+
+- ALL API keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`, etc.) MUST be in `.env`
+- ALL model names (`OPENAI_PROD_MODEL`, `DEFAULT_LLM_MODEL`, etc.) MUST be in `.env`
+- NEVER hardcode model strings like `"gpt-4"`, `"claude-3-opus"`, `"gemini-pro"` — always read from `.env`
+- Before ANY operation that touches LLM, API keys, or model names: check `.env` for current values.
+- When creating agents or any AI entity: read model from `.env`, NEVER hardcode.
+- The `conftest.py` at project root auto-loads `.env` for all pytest sessions.
+- Hooks enforce this automatically: `validate-workflow.js` BLOCKS Python writes with hardcoded models missing keys, WARNS for JS/TS.
+
+### Rule B: God-Mode E2E Testing
+
+When running E2E tests or validations:
+
+1. **Create ALL missing records** - If a required record is missing (404/403), CREATE IT via API or direct DB.
+2. **Assume the correct role** - Use the appropriate credentials for each persona/role.
+3. **Adapt to data changes** - Query the API to discover actual records. NEVER hardcode emails, IDs, or names.
+4. **Implement missing endpoints** - If an API endpoint doesn't exist and you need it, IMPLEMENT IT. Do not document it as a "gap".
+5. **Follow up on failures** - NEVER move on from a failure without attempting to resolve it.
+
+### Rule C: Implement, Don't Document
+
+- When you discover a missing feature, endpoint, or capability: IMPLEMENT IT, don't just note it.
+- When a test fails due to missing infrastructure: CREATE the infrastructure, don't skip the test.
+- When an API returns 404/403 due to missing data: CREATE the data, don't report it as expected.
+- The only acceptable reason to skip is if the user explicitly says "skip this".
+
 ## 🏗️ Documentation
 
 ### Core SDK (`sdk-users/`)
@@ -97,15 +128,20 @@ app.start()
 **Kaizen Quick Start (Unified Agent API)**:
 
 ```python
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 from kaizen.api import Agent
 
-# 2-line quickstart
-agent = Agent(model="gpt-4")
+# Read model from .env — NEVER hardcode
+model = os.environ.get("OPENAI_PROD_MODEL", os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o"))
+agent = Agent(model=model)
 result = await agent.run("What is IRP?")
 
 # Autonomous mode with memory
 agent = Agent(
-    model="gpt-4",
+    model=model,
     execution_mode="autonomous",  # TAOD loop
     memory="session",
     tool_access="constrained",

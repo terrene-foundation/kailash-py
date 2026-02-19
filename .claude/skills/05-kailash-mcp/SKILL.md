@@ -1,5 +1,5 @@
 ---
-name: mcp
+name: kailash-mcp
 description: "Kailash MCP (Model Context Protocol) - production-ready MCP server implementation for AI agent integration. Use when asking about 'MCP', 'Model Context Protocol', 'MCP server', 'MCP client', 'MCP tools', 'MCP resources', 'MCP prompts', 'MCP authentication', 'MCP transports', 'stdio transport', 'SSE transport', 'HTTP transport', 'MCP testing', 'progress reporting', or 'structured tools'."
 ---
 

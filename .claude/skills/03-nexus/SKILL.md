@@ -265,7 +265,7 @@ docker-compose up --scale nexus=3
 - **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Core workflow patterns
 - **[02-dataflow](../dataflow/SKILL.md)** - Auto CRUD API generation
 - **[04-kaizen](../kaizen/SKILL.md)** - AI agent deployment
-- **[05-mcp](../mcp/SKILL.md)** - MCP channel details
+- **[05-kailash-mcp](../05-kailash-mcp/SKILL.md)** - MCP channel details
 - **[17-gold-standards](../../17-gold-standards/SKILL.md)** - Best practices
 
 ## Support

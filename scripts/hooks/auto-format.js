@@ -11,25 +11,27 @@
  *   other = non-blocking error (warn and continue)
  */
 
-const fs = require('fs');
-const { execSync } = require('child_process');
-const path = require('path');
+const fs = require("fs");
+const { execFileSync } = require("child_process");
+const path = require("path");
 
-let input = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', chunk => input += chunk);
-process.stdin.on('end', () => {
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => (input += chunk));
+process.stdin.on("end", () => {
   try {
     const data = JSON.parse(input);
     const result = autoFormat(data);
-    console.log(JSON.stringify({
-      continue: true,
-      hookSpecificOutput: {
-        hookEventName: 'PostToolUse',
-        formatted: result.formatted,
-        formatter: result.formatter
-      }
-    }));
+    console.log(
+      JSON.stringify({
+        continue: true,
+        hookSpecificOutput: {
+          hookEventName: "PostToolUse",
+          formatted: result.formatted,
+          formatter: result.formatter,
+        },
+      }),
+    );
     process.exit(0);
   } catch (error) {
     console.error(`[HOOK ERROR] ${error.message}`);
@@ -40,51 +42,63 @@ process.stdin.on('end', () => {
 
 function autoFormat(data) {
   const filePath = data.tool_input?.file_path;
+  const cwd = data.cwd || process.cwd();
 
   if (!filePath || !fs.existsSync(filePath)) {
-    return { formatted: false, formatter: 'none' };
+    return { formatted: false, formatter: "none" };
+  }
+
+  // Validate file is within the project directory to prevent symlink attacks
+  const resolvedPath = path.resolve(filePath);
+  const resolvedCwd = path.resolve(cwd);
+  if (!resolvedPath.startsWith(resolvedCwd)) {
+    return { formatted: false, formatter: "path outside project" };
   }
 
   const ext = path.extname(filePath).toLowerCase();
 
   try {
     // Python files: black or ruff
-    if (ext === '.py') {
+    if (ext === ".py") {
       try {
-        execSync(`black "${filePath}" 2>/dev/null`, { stdio: 'pipe' });
-        return { formatted: true, formatter: 'black' };
+        execFileSync("black", [filePath], { stdio: "pipe" });
+        return { formatted: true, formatter: "black" };
       } catch {
         // Try ruff if black not available
         try {
-          execSync(`ruff format "${filePath}" 2>/dev/null`, { stdio: 'pipe' });
-          return { formatted: true, formatter: 'ruff' };
+          execFileSync("ruff", ["format", filePath], { stdio: "pipe" });
+          return { formatted: true, formatter: "ruff" };
         } catch {
-          return { formatted: false, formatter: 'none (black/ruff not found)' };
+          return { formatted: false, formatter: "none (black/ruff not found)" };
         }
       }
     }
 
     // JavaScript/TypeScript files: prettier
-    if (['.js', '.jsx', '.ts', '.tsx', '.json'].includes(ext)) {
+    if ([".js", ".jsx", ".ts", ".tsx", ".json"].includes(ext)) {
       try {
-        execSync(`npx prettier --write "${filePath}" 2>/dev/null`, { stdio: 'pipe' });
-        return { formatted: true, formatter: 'prettier' };
+        execFileSync("npx", ["prettier", "--write", filePath], {
+          stdio: "pipe",
+        });
+        return { formatted: true, formatter: "prettier" };
       } catch {
-        return { formatted: false, formatter: 'none (prettier not found)' };
+        return { formatted: false, formatter: "none (prettier not found)" };
       }
     }
 
     // YAML/Markdown: prettier
-    if (['.yaml', '.yml', '.md'].includes(ext)) {
+    if ([".yaml", ".yml", ".md"].includes(ext)) {
       try {
-        execSync(`npx prettier --write "${filePath}" 2>/dev/null`, { stdio: 'pipe' });
-        return { formatted: true, formatter: 'prettier' };
+        execFileSync("npx", ["prettier", "--write", filePath], {
+          stdio: "pipe",
+        });
+        return { formatted: true, formatter: "prettier" };
       } catch {
-        return { formatted: false, formatter: 'none' };
+        return { formatted: false, formatter: "none" };
       }
     }
 
-    return { formatted: false, formatter: 'unsupported file type' };
+    return { formatted: false, formatter: "unsupported file type" };
   } catch (error) {
     return { formatted: false, formatter: `error: ${error.message}` };
   }
