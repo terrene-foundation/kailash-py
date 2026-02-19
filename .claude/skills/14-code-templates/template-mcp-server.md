@@ -119,11 +119,12 @@ if __name__ == "__main__":
 
 - **MCP integration**: [`mcp-integration-guide`](../../06-cheatsheets/mcp-integration-guide.md)
 - **MCP in workflows**: Use with LLMAgentNode
-- **Advanced MCP**: [`mcp-advanced-features`](../../05-mcp/mcp-advanced-features.md)
+- **Advanced MCP**: [`mcp-advanced-features`](../../05-kailash-mcp/mcp-advanced-features.md)
 
 ## When to Escalate
 
 Use `mcp-specialist` subagent when:
+
 - Enterprise MCP architecture
 - Multi-transport configuration
 - Advanced features (structured tools, resources, progress)
@@ -132,6 +133,7 @@ Use `mcp-specialist` subagent when:
 ## Documentation References
 
 ### Primary Sources
+
 - **MCP Specialist**: [`.claude/agents/frameworks/mcp-specialist.md` (lines 39-59)](../../../../.claude/agents/frameworks/mcp-specialist.md#L39-L59)
 - **MCP Integration**: [`sdk-users/2-core-concepts/cheatsheet/025-mcp-integration.md`](../../../../sdk-users/2-core-concepts/cheatsheet/025-mcp-integration.md)
 - **MCP Development**: [`sdk-users/3-development/17-mcp-development-guide.md`](../../../../sdk-users/3-development/17-mcp-development-guide.md)

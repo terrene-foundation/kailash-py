@@ -29,6 +29,7 @@ Kaizen enables building sophisticated AI agents with:
 ## Quick Start
 
 ### Basic Agent
+
 ```python
 from kaizen.core.base_agent import BaseAgent
 from kaizen.signatures import Signature, InputField, OutputField
@@ -61,6 +62,7 @@ print(result['summary'])
 ```
 
 ### Pipeline Patterns (Orchestration)
+
 ```python
 from kaizen.orchestration.pipeline import Pipeline
 
@@ -97,6 +99,7 @@ blackboard = Pipeline.blackboard(
 For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 
 **Core Guides:**
+
 - **[BaseAgent Architecture](../../../apps/kailash-kaizen/docs/guides/baseagent-architecture.md)** - Complete unified agent system guide
 - **[Multi-Agent Coordination](../../../apps/kailash-kaizen/docs/guides/multi-agent-coordination.md)** - Google A2A protocol, 5 coordination patterns
 - **[Signature Programming](../../../apps/kailash-kaizen/docs/guides/signature-programming.md)** - Complete signature system guide
@@ -106,6 +109,7 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 - **[Planning System Guide](../../../apps/kailash-kaizen/docs/guides/planning-system-guide.md)** - Structured workflow orchestration
 
 **Reference Documentation:**
+
 - **[Example Gallery](../../../apps/kailash-kaizen/examples/autonomy/EXAMPLE_GALLERY.md)** - 15 production-ready autonomy examples with learning paths
 - **[API Reference](../../../apps/kailash-kaizen/docs/reference/api-reference.md)** - Complete API documentation
 - **[Checkpoint API](../../../apps/kailash-kaizen/docs/reference/checkpoint-api.md)** - State persistence API
@@ -119,6 +123,7 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 - **[Troubleshooting](../../../apps/kailash-kaizen/docs/reference/troubleshooting.md)** - Common issues and solutions
 
 ### Quick Start (Skills)
+
 - **[kaizen-quickstart-template](kaizen-quickstart-template.md)** - Quick start guide with templates
 - **[kaizen-baseagent-quick](kaizen-baseagent-quick.md)** - BaseAgent fundamentals
 - **[kaizen-signatures](kaizen-signatures.md)** - Signature-based programming
@@ -126,6 +131,7 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 - **[README](README.md)** - Framework overview
 
 ### Agent Patterns
+
 - **[kaizen-agent-patterns](kaizen-agent-patterns.md)** - Common agent design patterns
 - **[kaizen-chain-of-thought](kaizen-chain-of-thought.md)** - Chain of thought reasoning
 - **[kaizen-react-pattern](kaizen-react-pattern.md)** - ReAct (Reason + Act) pattern
@@ -133,6 +139,7 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 - **[kaizen-config-patterns](kaizen-config-patterns.md)** - Agent configuration strategies
 
 ### Multi-Agent Systems & Orchestration
+
 - **[kaizen-multi-agent-setup](kaizen-multi-agent-setup.md)** - Multi-agent system setup
 - **[kaizen-supervisor-worker](kaizen-supervisor-worker.md)** - Supervisor-worker coordination
 - **[kaizen-a2a-protocol](kaizen-a2a-protocol.md)** - Agent-to-agent communication
@@ -140,6 +147,7 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 - **[kaizen-agent-registry](kaizen-agent-registry.md)** - Distributed agent coordination for 100+ agent systems
 
 **Pipeline Patterns** (9 Composable Patterns):
+
 - **Ensemble**: Multi-perspective collaboration with A2A discovery + synthesis
 - **Blackboard**: Controller-driven iterative problem-solving
 - **Router** (Meta-Controller): Intelligent task routing via A2A matching
@@ -151,12 +159,14 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 - **Debate**: Adversarial deliberation
 
 ### Multimodal Processing
+
 - **[kaizen-multimodal-orchestration](kaizen-multimodal-orchestration.md)** - Multimodal coordination
 - **[kaizen-vision-processing](kaizen-vision-processing.md)** - Vision and image processing
 - **[kaizen-audio-processing](kaizen-audio-processing.md)** - Audio processing agents
 - **[kaizen-multimodal-pitfalls](kaizen-multimodal-pitfalls.md)** - Common pitfalls and solutions
 
 ### Advanced Features
+
 - **[kaizen-control-protocol](kaizen-control-protocol.md)** - Bidirectional agent ↔ client communication
 - **[kaizen-tool-calling](kaizen-tool-calling.md)** - Autonomous tool execution with approval workflows
 - **[kaizen-memory-system](kaizen-memory-system.md)** - Persistent memory, learning, FAQ detection
@@ -168,6 +178,7 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 - **[kaizen-ux-helpers](kaizen-ux-helpers.md)** - UX enhancement utilities
 
 ### Observability & Monitoring
+
 - **[kaizen-observability-hooks](kaizen-observability-hooks.md)** - Lifecycle event hooks, production security (RBAC)
 - **[kaizen-observability-tracing](kaizen-observability-tracing.md)** - Distributed tracing with OpenTelemetry
 - **[kaizen-observability-metrics](kaizen-observability-metrics.md)** - Prometheus metrics collection
@@ -175,6 +186,7 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
 - **[kaizen-observability-audit](kaizen-observability-audit.md)** - Compliance audit trails
 
 ### Enterprise Agent Trust Protocol (v0.8.0)
+
 - **[kaizen-trust-eatp](kaizen-trust-eatp.md)** - Complete trust infrastructure for AI agents
   - Trust lineage chains with cryptographic verification
   - TrustedAgent and TrustedSupervisorAgent with built-in trust
@@ -185,6 +197,7 @@ For in-depth documentation, see `apps/kailash-kaizen/docs/`:
   - Credential rotation, rate limiting, and security audit logging
 
 ### v1.0 Developer Guides (NEW)
+
 Located in `apps/kailash-kaizen/src/kaizen/docs/developers/`:
 
 - **Performance Optimization** (`09-performance-optimization-guide.md`) - Caching (10-100x speedup), parallel execution
@@ -199,20 +212,25 @@ Located in `apps/kailash-kaizen/src/kaizen/docs/developers/`:
 - **Claude Code Parity** (`08-claude-code-parity-tools-guide.md`) - 7 parity tools
 
 ### Testing & Quality
+
 - **[kaizen-testing-patterns](kaizen-testing-patterns.md)** - Testing AI agents
 - **[Performance Benchmarks](../../../apps/kailash-kaizen/docs/benchmarks/BENCHMARK_GUIDE.md)** - Measure Kaizen performance
 
 ## Key Concepts
 
 ### Signature-Based Programming
+
 Signatures define type-safe interfaces for agents:
+
 - **Input**: Define expected inputs with descriptions
 - **Output**: Specify output format and structure
 - **Validation**: Automatic type checking and validation
 - **Optimization**: Framework can optimize prompts automatically
 
 ### BaseAgent Architecture
+
 Foundation for all Kaizen agents:
+
 - **Error Handling**: Built-in retry logic and error recovery
 - **Audit Trails**: Automatic logging of agent actions
 - **Cost Tracking**: Monitor API usage and costs
@@ -223,42 +241,50 @@ Foundation for all Kaizen agents:
 ### Autonomy Infrastructure (6 Subsystems)
 
 **1. Hooks System** - Event-driven observability framework
+
 - Zero-code-change monitoring via lifecycle events (PRE/POST hooks)
 - 6 builtin hooks: Logging, Metrics, Cost, Performance, Audit, Tracing
 - Production security: RBAC, Ed25519 signatures, process isolation, rate limiting
 - Performance: <0.01ms overhead (625x better than 10ms target)
 
 **2. Checkpoint System** - Persistent state management
+
 - Save/load/fork agent state for failure recovery
 - 4 storage backends: Filesystem, Redis, PostgreSQL, S3
 - Automatic compression and incremental checkpoints
 - State manager with deduplication and versioning
 
 **3. Interrupt Mechanism** - Graceful shutdown and execution control
+
 - 3 interrupt sources: USER (Ctrl+C), SYSTEM (timeout/budget), PROGRAMMATIC (API)
 - 2 shutdown modes: GRACEFUL (finish cycle + checkpoint) vs IMMEDIATE (stop now)
 - Signal propagation across multi-agent hierarchies
 
 **4. Memory System** - 3-tier hierarchical storage
+
 - Hot tier: In-memory buffer (<1ms retrieval, last 100 messages)
 - Warm tier: Database (10-50ms, agent-specific history with JSONL compression)
 - Cold tier: Object storage (100ms+, long-term archival with S3/MinIO)
 - DataFlow-backed with auto-persist and cross-session continuity
 
 **5. Planning Agents** - Structured workflow orchestration
+
 - PlanningAgent: Plan before you act (pre-execution validation)
 - PEVAgent: Plan, Execute, Verify, Refine (iterative refinement)
 - Tree-of-Thoughts: Explore multiple reasoning paths
 - Multi-step decomposition, validation, and replanning
 
 **6. Meta-Controller Routing** - Intelligent task delegation
+
 - A2A-based semantic capability matching (no hardcoded if/else)
 - Automatic agent discovery, ranking, and selection
 - Fallback strategies and load balancing
 - Integrated with Router, Ensemble, and Supervisor-Worker patterns
 
 ### AgentRegistry - Distributed Coordination
+
 For 100+ agent distributed systems:
+
 - O(1) capability-based discovery with semantic matching
 - Event broadcasting (6 event types for cross-runtime coordination)
 - Health monitoring with automatic deregistration
@@ -268,6 +294,7 @@ For 100+ agent distributed systems:
 ## When to Use This Skill
 
 Use Kaizen when you need to:
+
 - Build AI agents with type-safe interfaces
 - Implement multi-agent systems with orchestration patterns
 - Process multimodal inputs (vision, audio, text)
@@ -286,6 +313,7 @@ Use Kaizen when you need to:
   - Secure inter-agent communication
 
 **Use Pipeline Patterns When:**
+
 - **Ensemble**: Need diverse perspectives synthesized (code review, research)
 - **Blackboard**: Iterative problem-solving (optimization, debugging)
 - **Router**: Intelligent task delegation to specialists
@@ -295,6 +323,7 @@ Use Kaizen when you need to:
 ## Integration Patterns
 
 ### With DataFlow (Data-Driven Agents)
+
 ```python
 from kaizen.core.base_agent import BaseAgent
 from dataflow import DataFlow
@@ -306,6 +335,7 @@ class DataAgent(BaseAgent):
 ```
 
 ### With Nexus (Multi-Channel Agents)
+
 ```python
 from kaizen.core.base_agent import BaseAgent
 from nexus import Nexus
@@ -317,6 +347,7 @@ nexus.run()  # Agents available via all channels
 ```
 
 ### With Core SDK (Custom Workflows)
+
 ```python
 from kaizen.core.base_agent import BaseAgent
 from kailash.workflow.builder import WorkflowBuilder
@@ -347,12 +378,13 @@ workflow.add_node("KaizenAgent", "agent1", {
 - **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Core workflow patterns
 - **[02-dataflow](../dataflow/SKILL.md)** - Database integration
 - **[03-nexus](../nexus/SKILL.md)** - Multi-channel deployment
-- **[05-mcp](../mcp/SKILL.md)** - MCP server integration
+- **[05-kailash-mcp](../05-kailash-mcp/SKILL.md)** - MCP server integration
 - **[17-gold-standards](../../17-gold-standards/SKILL.md)** - Best practices
 
 ## Support
 
 For Kaizen-specific questions, invoke:
+
 - `kaizen-specialist` - Kaizen framework implementation
 - `testing-specialist` - Agent testing strategies
 - `framework-advisor` - When to use Kaizen vs other frameworks

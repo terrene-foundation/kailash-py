@@ -5,6 +5,7 @@
 Skills are the **knowledge base** of this setup. They contain patterns, templates, references, and best practices organized by domain. When Claude needs to know HOW to do something, it consults skills.
 
 By the end of this guide, you will understand:
+
 - What skills are and how they're organized
 - All 22 skill directories and their purposes
 - How skills relate to commands and agents
@@ -18,12 +19,14 @@ By the end of this guide, you will understand:
 ### The Problem Skills Solve
 
 Development requires extensive domain knowledge:
+
 - Database operations have specific patterns
 - Testing requires understanding of strategies
 - Security involves many checklist items
 - Each framework has its own conventions
 
 Without organization, this knowledge would be:
+
 - Scattered across random files
 - Hard to find when needed
 - Inconsistent in format
@@ -62,13 +65,13 @@ Skills provide **organized, accessible domain expertise**:
 
 ### Skills vs. Other Components
 
-| Component | Contains | Purpose |
-|-----------|----------|---------|
-| **Skills** | Patterns, templates, references | Show HOW to do things |
-| **Agents** | Processes, analysis methods | DECIDE what to do |
-| **Hooks** | Validation scripts | ENFORCE rules automatically |
-| **Rules** | Constraints, requirements | Define MUST/MUST NOT |
-| **Commands** | Shortcuts to skills | Quick access |
+| Component    | Contains                        | Purpose                     |
+| ------------ | ------------------------------- | --------------------------- |
+| **Skills**   | Patterns, templates, references | Show HOW to do things       |
+| **Agents**   | Processes, analysis methods     | DECIDE what to do           |
+| **Hooks**    | Validation scripts              | ENFORCE rules automatically |
+| **Rules**    | Constraints, requirements       | Define MUST/MUST NOT        |
+| **Commands** | Shortcuts to skills             | Quick access                |
 
 ---
 
@@ -76,30 +79,30 @@ Skills provide **organized, accessible domain expertise**:
 
 ### All 22 Skill Directories
 
-| Directory | Name | Domain |
-|-----------|------|--------|
-| `01-core-sdk` | Core SDK | Workflows, nodes, runtime |
-| `02-dataflow` | DataFlow | Database operations |
-| `03-nexus` | Nexus | Multi-channel platform |
-| `04-kaizen` | Kaizen | AI agents |
-| `05-mcp` | MCP | Model Context Protocol |
-| `06-cheatsheets` | Cheatsheets | Quick reference |
-| `07-development-guides` | Dev Guides | Advanced features |
-| `08-nodes-reference` | Nodes | 110+ node documentation |
-| `09-workflow-patterns` | Workflows | Industry patterns |
-| `10-deployment-git` | Deployment | Docker, K8s, Git |
-| `11-frontend-integration` | Frontend | React, Flutter |
-| `12-testing-strategies` | Testing | 3-tier strategy |
-| `13-architecture-decisions` | Architecture | Framework selection |
-| `14-code-templates` | Templates | Starter code |
-| `15-error-troubleshooting` | Errors | Debugging guides |
-| `16-validation-patterns` | Validation | Input validation |
-| `17-gold-standards` | Standards | Mandatory practices |
-| `18-security-patterns` | Security | OWASP, secrets |
-| `19-flutter-patterns` | Flutter | Mobile patterns |
-| `20-interactive-widgets` | Widgets | Dynamic UI |
-| `21-enterprise-ai-ux` | Enterprise UX | Professional AI apps |
-| `22-conversation-ux` | Conversation | Chat interfaces |
+| Directory                   | Name          | Domain                    |
+| --------------------------- | ------------- | ------------------------- |
+| `01-core-sdk`               | Core SDK      | Workflows, nodes, runtime |
+| `02-dataflow`               | DataFlow      | Database operations       |
+| `03-nexus`                  | Nexus         | Multi-channel platform    |
+| `04-kaizen`                 | Kaizen        | AI agents                 |
+| `05-kailash-mcp`            | MCP           | Model Context Protocol    |
+| `06-cheatsheets`            | Cheatsheets   | Quick reference           |
+| `07-development-guides`     | Dev Guides    | Advanced features         |
+| `08-nodes-reference`        | Nodes         | 110+ node documentation   |
+| `09-workflow-patterns`      | Workflows     | Industry patterns         |
+| `10-deployment-git`         | Deployment    | Docker, K8s, Git          |
+| `11-frontend-integration`   | Frontend      | React, Flutter            |
+| `12-testing-strategies`     | Testing       | 3-tier strategy           |
+| `13-architecture-decisions` | Architecture  | Framework selection       |
+| `14-code-templates`         | Templates     | Starter code              |
+| `15-error-troubleshooting`  | Errors        | Debugging guides          |
+| `16-validation-patterns`    | Validation    | Input validation          |
+| `17-gold-standards`         | Standards     | Mandatory practices       |
+| `18-security-patterns`      | Security      | OWASP, secrets            |
+| `19-flutter-patterns`       | Flutter       | Mobile patterns           |
+| `20-interactive-widgets`    | Widgets       | Dynamic UI                |
+| `21-enterprise-ai-ux`       | Enterprise UX | Professional AI apps      |
+| `22-conversation-ux`        | Conversation  | Chat interfaces           |
 
 ---
 
@@ -110,6 +113,7 @@ Skills provide **organized, accessible domain expertise**:
 **Purpose**: Workflow creation, node patterns, runtime execution
 
 **Key files**:
+
 - `workflow-quickstart.md` - Basic workflow creation
 - `node-patterns-common.md` - Common node usage
 - `connection-patterns.md` - Linking nodes
@@ -120,6 +124,7 @@ Skills provide **organized, accessible domain expertise**:
 **When to use**: Building any workflow from scratch, understanding fundamentals
 
 **Example content**:
+
 ```python
 # Canonical 4-parameter node pattern
 workflow.add_node(
@@ -135,6 +140,7 @@ workflow.add_node(
 **Purpose**: Zero-config database framework patterns
 
 **Key files**:
+
 - `model-definition.md` - `@db.model` decorator
 - `crud-operations.md` - Create, Read, Update, Delete
 - `bulk-operations.md` - Mass data processing
@@ -143,6 +149,7 @@ workflow.add_node(
 **When to use**: Any database operation, model creation, CRUD
 
 **Critical gotchas**:
+
 ```python
 # ❌ NEVER set timestamps manually
 user = User(created_at=datetime.now())  # WRONG
@@ -156,6 +163,7 @@ user = User(name="Test", email="test@test.com")  # CORRECT
 **Purpose**: Deploy workflows as API + CLI + MCP
 
 **Key files**:
+
 - `quickstart.md` - Zero-config setup
 - `workflow-registration.md` - Adding workflows
 - `session-management.md` - State handling
@@ -164,6 +172,7 @@ user = User(name="Test", email="test@test.com")  # CORRECT
 **When to use**: API deployment, CLI creation, multi-channel apps
 
 **Example content**:
+
 ```python
 from nexus import Nexus
 
@@ -180,6 +189,7 @@ def create_user(name: str, email: str):
 **Purpose**: Production-ready AI agents
 
 **Key files**:
+
 - `agent-quickstart.md` - Basic agent creation
 - `signatures.md` - Signature-based programming
 - `multi-agent.md` - Agent coordination
@@ -188,6 +198,7 @@ def create_user(name: str, email: str):
 **When to use**: AI features, LLM integration, agent systems
 
 **Example content**:
+
 ```python
 from kaizen.api import Agent
 
@@ -202,7 +213,7 @@ agent = Agent(
 
 ## Part 4: Supporting Skills (05-12)
 
-### 05-mcp: Model Context Protocol
+### 05-kailash-mcp: Model Context Protocol
 
 **Purpose**: MCP server implementation
 
@@ -213,6 +224,7 @@ agent = Agent(
 **Purpose**: At-a-glance patterns for common tasks
 
 **Key files**:
+
 - `workflow-patterns.md` - Common workflow structures
 - `node-selection.md` - Choosing the right node
 - `common-mistakes.md` - Gotchas to avoid
@@ -228,6 +240,7 @@ agent = Agent(
 **Purpose**: Reference for all 110+ SDK nodes
 
 **Categories**:
+
 - AI nodes (LLMNode, EmbeddingNode, etc.)
 - API nodes (HTTPRequest, GraphQL, etc.)
 - Data nodes (Transform, Filter, etc.)
@@ -246,6 +259,7 @@ agent = Agent(
 **Purpose**: Docker, Kubernetes, Git workflows
 
 **Key files**:
+
 - `docker-compose.md` - Local development
 - `kubernetes.md` - Production deployment
 - `git-workflows.md` - Branch strategies
@@ -255,6 +269,7 @@ agent = Agent(
 **Purpose**: React and Flutter with Kailash
 
 **Key files**:
+
 - `react-setup.md` - React integration
 - `flutter-setup.md` - Flutter integration
 - `api-client.md` - SDK API clients
@@ -264,6 +279,7 @@ agent = Agent(
 **Purpose**: 3-tier testing strategy
 
 **Key content**:
+
 ```
 Tier 1: Unit Tests
 ├── Mocking allowed
@@ -290,6 +306,7 @@ Tier 3: E2E Tests
 **Purpose**: Guides for choosing frameworks
 
 **Key files**:
+
 - `core-vs-dataflow.md` - When to use each
 - `runtime-selection.md` - Async vs sync
 - `database-selection.md` - PostgreSQL vs SQLite
@@ -299,6 +316,7 @@ Tier 3: E2E Tests
 **Purpose**: Production-ready templates
 
 **Templates**:
+
 - Basic workflow template
 - Cyclic workflow template
 - Custom node template
@@ -322,6 +340,7 @@ Tier 3: E2E Tests
 **Purpose**: Non-negotiable best practices
 
 **Key rules**:
+
 - Absolute imports only
 - NO MOCKING in Tier 2-3
 - Primary key named `id`
@@ -380,27 +399,35 @@ description: "What this skill does. Use when [trigger conditions]."
 Overview paragraph explaining the skill's purpose.
 
 ## Features
+
 [List of capabilities]
 
 ## Quick Start
+
 [Minimal working example]
 
 ## Reference Documentation
+
 [Links to detailed files in the directory]
 
 ## Key Concepts
+
 [Important patterns and rules]
 
 ## Critical Rules
+
 [MUST/MUST NOT items]
 
 ## When to Use This Skill
+
 [Guidance on when to load this skill]
 
 ## Related Skills
+
 [Links to complementary skills]
 
 ## Support
+
 [Which agents to consult for help]
 ```
 
@@ -508,13 +535,13 @@ Deep dive: "Explain DataFlow internals"
 
 Every agent knows which skills to consult:
 
-| Agent | Primary Skills |
-|-------|----------------|
-| `dataflow-specialist` | `02-dataflow` |
-| `nexus-specialist` | `03-nexus` |
-| `kaizen-specialist` | `04-kaizen` |
-| `testing-specialist` | `12-testing-strategies` |
-| `pattern-expert` | `01-core-sdk`, `09-workflow-patterns` |
+| Agent                 | Primary Skills                        |
+| --------------------- | ------------------------------------- |
+| `dataflow-specialist` | `02-dataflow`                         |
+| `nexus-specialist`    | `03-nexus`                            |
+| `kaizen-specialist`   | `04-kaizen`                           |
+| `testing-specialist`  | `12-testing-strategies`               |
+| `pattern-expert`      | `01-core-sdk`, `09-workflow-patterns` |
 
 ### Skills Reference Agents
 
@@ -524,6 +551,7 @@ Every skill knows which agents to invoke:
 ## Support
 
 For complex workflows or debugging, invoke:
+
 - `pattern-expert` - Workflow patterns
 - `sdk-navigator` - Find specific patterns
 - `testing-specialist` - Test implementations
@@ -549,14 +577,14 @@ For complex workflows or debugging, invoke:
 
 ### Quick Reference
 
-| Domain | Skill | Command |
-|--------|-------|---------|
-| Workflows | `01-core-sdk` | `/sdk` |
-| Database | `02-dataflow` | `/db` |
-| API | `03-nexus` | `/api` |
-| AI | `04-kaizen` | `/ai` |
-| Testing | `12-testing-strategies` | `/test` |
-| Standards | `17-gold-standards` | `/validate` |
+| Domain    | Skill                   | Command     |
+| --------- | ----------------------- | ----------- |
+| Workflows | `01-core-sdk`           | `/sdk`      |
+| Database  | `02-dataflow`           | `/db`       |
+| API       | `03-nexus`              | `/api`      |
+| AI        | `04-kaizen`             | `/ai`       |
+| Testing   | `12-testing-strategies` | `/test`     |
+| Standards | `17-gold-standards`     | `/validate` |
 
 ---
 

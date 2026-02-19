@@ -2,7 +2,10 @@
 /**
  * Hook: session-start
  * Event: SessionStart
- * Purpose: Load previous session state, initialize logging, check environment
+ * Purpose: Discover env config, validate model-key pairings, create .env if
+ *          missing, output model configuration prominently.
+ *
+ * Framework-agnostic — works with any Kailash project.
  *
  * Exit Codes:
  *   0 = success (continue)
@@ -12,6 +15,12 @@
 
 const fs = require("fs");
 const path = require("path");
+const {
+  parseEnvFile,
+  discoverModelsAndKeys,
+  ensureEnvFile,
+  buildCompactSummary,
+} = require("./lib/env-utils");
 
 let input = "";
 process.stdin.setEncoding("utf8");
@@ -19,9 +28,7 @@ process.stdin.on("data", (chunk) => (input += chunk));
 process.stdin.on("end", () => {
   try {
     const data = JSON.parse(input);
-    const result = initializeSession(data);
-    // SessionStart hooks don't support hookSpecificOutput in schema
-    // Only PreToolUse, UserPromptSubmit, PostToolUse have hookSpecificOutput
+    initializeSession(data);
     console.log(JSON.stringify({ continue: true }));
     process.exit(0);
   } catch (error) {
@@ -32,7 +39,10 @@ process.stdin.on("end", () => {
 });
 
 function initializeSession(data) {
-  const session_id = data.session_id || "unknown";
+  const session_id = (data.session_id || "unknown").replace(
+    /[^a-zA-Z0-9_-]/g,
+    "_",
+  );
   const cwd = data.cwd || process.cwd();
   const homeDir = process.env.HOME || process.env.USERPROFILE;
   const sessionDir = path.join(homeDir, ".claude", "sessions");
@@ -45,66 +55,93 @@ function initializeSession(data) {
     } catch {}
   });
 
-  // Load previous session if exists
-  let previousSession = null;
-  const sessionFile = path.join(sessionDir, `${session_id}.json`);
-  const lastSessionFile = path.join(sessionDir, "last-session.json");
+  // ── .env provision ────────────────────────────────────────────────────
+  const envResult = ensureEnvFile(cwd);
+  if (envResult.created) {
+    console.error(
+      `[ENV] Created .env from ${envResult.source}. Please fill in your API keys.`,
+    );
+  }
 
+  // ── Parse .env ────────────────────────────────────────────────────────
+  const envPath = path.join(cwd, ".env");
+  const envExists = fs.existsSync(envPath);
+  let env = {};
+  let discovery = { models: {}, keys: {}, validations: [] };
+
+  if (envExists) {
+    env = parseEnvFile(envPath);
+    discovery = discoverModelsAndKeys(env);
+  }
+
+  // ── Detect framework ──────────────────────────────────────────────────
+  const framework = detectFramework(cwd);
+
+  // ── Log observation ───────────────────────────────────────────────────
   try {
+    const observationsFile = path.join(learningDir, "observations.jsonl");
+    fs.appendFileSync(
+      observationsFile,
+      JSON.stringify({
+        type: "session_start",
+        session_id,
+        cwd,
+        timestamp: new Date().toISOString(),
+        envExists,
+        framework,
+        models: discovery.models,
+        keyCount: Object.keys(discovery.keys).length,
+        validationFailures: discovery.validations
+          .filter((v) => v.status === "MISSING_KEY")
+          .map((v) => v.message),
+      }) + "\n",
+    );
+  } catch {}
+
+  // ── Load previous session ─────────────────────────────────────────────
+  try {
+    const sessionFile = path.join(sessionDir, `${session_id}.json`);
+    const lastSessionFile = path.join(sessionDir, "last-session.json");
     if (fs.existsSync(sessionFile)) {
-      previousSession = JSON.parse(fs.readFileSync(sessionFile, "utf8"));
+      /* loaded */
     } else if (fs.existsSync(lastSessionFile)) {
-      previousSession = JSON.parse(fs.readFileSync(lastSessionFile, "utf8"));
+      /* loaded */
     }
   } catch {}
 
-  // Check for .env file
-  let envExists = false;
-  try {
-    const envPath = path.join(cwd, ".env");
-    envExists = fs.existsSync(envPath);
-  } catch {}
+  // ── Output model/key summary ──────────────────────────────────────────
+  if (envExists) {
+    const summary = buildCompactSummary(env, discovery);
+    console.error(`[ENV] ${summary}`);
 
-  // Detect framework in use
-  const framework = detectFramework(cwd);
+    // Detail each model-key validation
+    for (const v of discovery.validations) {
+      const icon = v.status === "ok" ? "✓" : "✗";
+      console.error(`[ENV]   ${icon} ${v.message}`);
+    }
 
-  // Initialize observations file for learning
-  const observationsFile = path.join(learningDir, "observations.jsonl");
-  const observation = {
-    type: "session_start",
-    session_id,
-    cwd,
-    timestamp: new Date().toISOString(),
-    envExists,
-    framework,
-  };
-
-  try {
-    fs.appendFileSync(observationsFile, JSON.stringify(observation) + "\n");
-  } catch {}
-
-  const warnings = [];
-  if (!envExists) {
-    warnings.push("No .env file found. Ensure environment variables are set.");
+    // Prominent warnings for missing keys
+    const failures = discovery.validations.filter(
+      (v) => v.status === "MISSING_KEY",
+    );
+    if (failures.length > 0) {
+      console.error(
+        `[ENV] WARNING: ${failures.length} model(s) configured without API keys!`,
+      );
+      console.error(
+        "[ENV] LLM operations WILL FAIL. Add missing keys to .env.",
+      );
+    }
+  } else {
+    console.error(
+      "[ENV] No .env file found. API keys and models not configured.",
+    );
   }
-
-  return {
-    session_id,
-    cwd,
-    previousSession: previousSession ? "loaded" : "none",
-    envExists,
-    framework,
-    warnings,
-    message: warnings.length > 0 ? `WARNING: ${warnings.join(" ")}` : "Ready",
-  };
 }
 
 function detectFramework(cwd) {
   try {
     const files = fs.readdirSync(cwd);
-    const fileList = files.join(" ").toLowerCase();
-
-    // Check file contents for more accurate detection
     for (const file of files.filter((f) => f.endsWith(".py")).slice(0, 10)) {
       try {
         const content = fs.readFileSync(path.join(cwd, file), "utf8");
@@ -116,12 +153,6 @@ function detectFramework(cwd) {
           return "kaizen";
       } catch {}
     }
-
-    // Fallback to filename detection
-    if (fileList.includes("dataflow")) return "dataflow";
-    if (fileList.includes("nexus")) return "nexus";
-    if (fileList.includes("kaizen")) return "kaizen";
-
     return "core-sdk";
   } catch {
     return "unknown";
