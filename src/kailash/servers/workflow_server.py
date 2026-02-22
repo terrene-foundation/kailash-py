@@ -309,11 +309,23 @@ class WorkflowServer:
             timeout = aiohttp.ClientTimeout(total=30)
 
             async with aiohttp.ClientSession(timeout=timeout) as session:
-                # Forward headers (excluding host)
+                # Forward headers, excluding host and sensitive headers
+                _sensitive_headers = frozenset(
+                    {
+                        "host",
+                        "content-length",
+                        "authorization",
+                        "cookie",
+                        "x-api-key",
+                        "x-auth-token",
+                        "proxy-authorization",
+                        "set-cookie",
+                    }
+                )
                 headers = {
                     k: v
                     for k, v in request.headers.items()
-                    if k.lower() not in ("host", "content-length")
+                    if k.lower() not in _sensitive_headers
                 }
 
                 body = (
