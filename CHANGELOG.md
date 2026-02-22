@@ -15,6 +15,27 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [0.12.1] - 2026-02-22
+
+**V4 Audit Hardening Patch**
+
+Post-release security and reliability hardening from V4 final audit (22 fixes across 12 files).
+
+#### Fixed
+
+- **Error Sanitization**: Health check and proxy error responses use `type(e).__name__` instead of `str(e)` to prevent internal detail leakage
+- **Silent Exception Swallows**: 16 bare `except: pass` blocks replaced with debug-level logging across engine, transaction nodes, migration API, timestamping, and cloud integration
+- **Proxy Header Filtering**: Workflow server proxy now strips sensitive headers (Authorization, Cookie, X-API-Key) before forwarding requests
+- **Custom Node Timing**: Actual `time.monotonic()` execution timing replaces hardcoded `0` placeholder
+- **Hardcoded Model Removal**: `BaseAgent._execute_signature` no longer falls back to hardcoded `"gpt-4o"`
+- **NotImplementedError Cleanup**: Cloud integration uses `RuntimeError` for unsupported operations instead of `NotImplementedError`
+- **DB URL Masking**: Database health check masks credentials in URL before including in responses
+
+#### Test Results
+
+- Core SDK: 4,479 passed
+- All pre-commit hooks passed
+
 ### [0.12.0] - 2026-02-21
 
 **Quality Milestone Release - V4 Audit Cleared**

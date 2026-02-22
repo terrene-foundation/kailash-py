@@ -1,6 +1,6 @@
-# Kailash DataFlow - Complete Function Access Guide (v0.12.0 Stable)
+# Kailash DataFlow - Complete Function Access Guide (v0.12.1 Stable)
 
-**Current Version: v0.12.0 - Production Ready**
+**Current Version: v0.12.1 - Production Ready**
 
 - **🔇 LOGGING CONFIGURATION (v0.10.12)**: `LoggingConfig` for centralized log level control - 524 noisy warnings eliminated
 - **✅ DOCKER/FASTAPI (v0.10.15+)**: `auto_migrate=True` NOW WORKS! Uses `SyncDDLExecutor` with psycopg2/sqlite3 for DDL, bypassing event loop issues

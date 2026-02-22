@@ -128,7 +128,7 @@ workflow.add_connection("prepare", "result.filters", "search", "filter")
 # "filter": "${prepare.result}"
 ```
 
-## Middleware & Plugin API (v1.4.0)
+## Middleware & Plugin API (v1.4.1)
 
 ```python
 # Native middleware (Starlette-compatible)
@@ -227,7 +227,7 @@ app = Nexus(preset="saas", cors_origins=["https://app.example.com"])
 
 Complete auth package with JWT, RBAC, tenant isolation, rate limiting, and audit logging.
 
-**Security Defaults (v1.4.0)**:
+**Security Defaults (v1.4.1)**:
 
 - `cors_allow_credentials=False` in both `Nexus()` and `NexusConfig` (safe with wildcard origins)
 - JWTConfig enforces **32-character minimum** for HS\* algorithm secrets
