@@ -80,7 +80,7 @@ class TestCLIChannel:
             patch("kailash.channels.cli_channel.CommandParserNode"),
             patch("kailash.channels.cli_channel.InteractiveShellNode"),
             patch("kailash.channels.cli_channel.CommandRouterNode"),
-            patch("kailash.channels.cli_channel.LocalRuntime"),
+            patch("kailash.channels.cli_channel.AsyncLocalRuntime"),
         ):
 
             return CLIChannel(
@@ -97,7 +97,7 @@ class TestCLIChannel:
             patch("kailash.channels.cli_channel.CommandParserNode"),
             patch("kailash.channels.cli_channel.InteractiveShellNode"),
             patch("kailash.channels.cli_channel.CommandRouterNode"),
-            patch("kailash.channels.cli_channel.LocalRuntime"),
+            patch("kailash.channels.cli_channel.AsyncLocalRuntime"),
         ):
 
             channel = CLIChannel(
@@ -118,7 +118,7 @@ class TestCLIChannel:
             patch("kailash.channels.cli_channel.CommandParserNode"),
             patch("kailash.channels.cli_channel.InteractiveShellNode"),
             patch("kailash.channels.cli_channel.CommandRouterNode"),
-            patch("kailash.channels.cli_channel.LocalRuntime"),
+            patch("kailash.channels.cli_channel.AsyncLocalRuntime"),
         ):
 
             channel = CLIChannel(config=channel_config)
@@ -443,13 +443,13 @@ class TestCLIChannel:
 
     @pytest.mark.asyncio
     async def test_execute_workflow_command(self, cli_channel):
-        """Test executing workflow command."""
-        execution_params = {"workflow": "test_workflow", "inputs": {}}
+        """Test executing workflow command with no registered workflow returns error."""
+        execution_params = {"command_arguments": {"workflow": "test_workflow"}}
 
         result = await cli_channel._execute_workflow_command(execution_params)
 
-        assert result["success"] is True
-        assert "not yet implemented" in result["message"]
+        assert result["success"] is False
+        assert "not found" in result["error"]
 
     @pytest.mark.asyncio
     async def test_execute_handler_command_help(self, cli_channel):
@@ -530,14 +530,14 @@ class TestCLIChannel:
 
     @pytest.mark.asyncio
     async def test_handle_list_workflows(self, cli_channel):
-        """Test list workflows command."""
+        """Test list workflows command with no workflows registered."""
         params = {}
 
         result = await cli_channel._handle_list_workflows(params)
 
         assert result["success"] is True
-        assert "not yet implemented" in result["message"]
         assert result["workflows"] == []
+        assert result["count"] == 0
 
     @pytest.mark.asyncio
     async def test_handle_list_sessions(self, cli_channel):
@@ -611,7 +611,7 @@ class TestCLIChannel:
             patch("kailash.channels.cli_channel.CommandParserNode"),
             patch("kailash.channels.cli_channel.InteractiveShellNode"),
             patch("kailash.channels.cli_channel.CommandRouterNode"),
-            patch("kailash.channels.cli_channel.LocalRuntime"),
+            patch("kailash.channels.cli_channel.AsyncLocalRuntime"),
         ):
 
             channel = CLIChannel(config=channel_config, output_stream=None)

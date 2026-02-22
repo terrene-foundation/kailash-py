@@ -15,10 +15,55 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [0.12.0] - 2026-02-21
+
+**Quality Milestone Release - V4 Audit Cleared**
+
+This release completes 4 rounds of production quality audits (V1-V4) remediating 15 of 16 identified gaps. C5 (AWS KMS integration) is deferred to SDK 2.0.
+
+#### Added
+
+- **Custom Node Execution**: Fully async pipeline with CodeExecutor, AsyncLocalRuntime, and aiohttp for custom node API/Python execution
+- **Azure Cloud Integration**: Azure support alongside AWS in edge resource management (DefaultAzureCredential, VM operations, monitoring)
+- **Cache TTL**: MemoryCache supports TTL-based expiration with background reaper thread for automatic cleanup
+- **Resource Resolver**: Centralized resource resolution with SecretManager credential handling and health checks
+
+#### Changed
+
+- **CORS Hardening**: `cors_allow_credentials=False` when wildcard origins used; restricted allowed headers whitelist
+- **Sensitive Header Filtering**: DurableGateway strips authorization, cookie, x-api-key, x-auth-token, proxy-authorization, set-cookie from request metadata
+- **DSN Encoding**: `quote_plus()` for special characters in database connection strings
+- **Error Sanitization**: Only `type(e).__name__` returned to clients; full errors logged server-side
+- **WebSocket Error Messages**: Sanitized to prevent internal detail leakage (type-only responses)
+- **Bare Exception Cleanup**: All bare `except:` blocks replaced with `except Exception:` across engine.py
+
+#### Fixed
+
+- **Runtime Crash**: Fixed crash path in custom node execution when CodeExecutor unavailable
+- **S3 Client Resolution**: Fixed MessageQueueFactory credential exclusion from config output
+- **CLI Channel Execution**: Fixed async execution flow in CLI channel
+- **Cost Optimizer**: Removed hardcoded sample data, now requires real infrastructure data
+
+#### Security
+
+- No hardcoded model names (all from environment variables)
+- No secrets in logs or error messages
+- Parameterized SQL throughout (no f-string interpolation)
+- V4 audit: 0 CRITICAL, 0 blocking findings
+
+#### Test Results
+
+- Core SDK: 4,479 passed
+- DataFlow: 794 passed
+- Kaizen: 385 passed (+1 pre-existing)
+- Nexus: 638 passed (+1 pre-existing)
+
 ### Application Framework Releases
 
 #### DataFlow [0.3.1] - 2025-01-22
+
 **Test Infrastructure & Reliability Release**
+
 - **Test Coverage**: Improved from ~40% to 90.7% pass rate (330/364 tests)
 - **Zero Failures**: All tests now pass or are properly skipped
 - **Enhanced Multi-Database Integration**: Fixed PostgreSQL precision and context passing
@@ -27,7 +72,9 @@ The changelog has been reorganized into individual files for better management. 
 - **Documentation**: Enhanced CLAUDE.md guidance for parameter validation
 
 #### Nexus [1.0.3] - 2025-01-22
+
 **Production Ready Release**
+
 - **100% Documentation Validation**: All code examples verified with real infrastructure
 - **77% Test Coverage**: Comprehensive test suite with 248 passing unit tests
 - **WebSocket Transport**: Full MCP protocol implementation with concurrent clients
@@ -45,6 +92,7 @@ Critical bug fix for SQLite and MySQL database adapters not capturing rowcount f
 #### 🐛 Fixed
 
 **Database Adapter Rowcount Capture**
+
 - **Fixed**: SQLite and MySQL adapters not capturing `cursor.rowcount` for DML operations (DELETE, UPDATE, INSERT)
 - **Location**: `src/kailash/nodes/data/async_sql.py`
   - **SQLiteAdapter**: Lines 1554-1558 (transaction path), 1594-1599 (memory DB), 1638-1643 (file DB)
@@ -59,6 +107,7 @@ Critical bug fix for SQLite and MySQL database adapters not capturing rowcount f
 #### 📊 Test Results
 
 All comprehensive tests passing:
+
 - ✅ Bulk CREATE: Correctly reports inserted count
 - ✅ Bulk UPDATE: Correctly reports updated count
 - ✅ Bulk DELETE: Correctly reports deleted count and persists to database
@@ -79,6 +128,7 @@ This release achieves 100% runtime parity between LocalRuntime and AsyncLocalRun
 #### 🚨 Breaking Changes
 
 1. **AsyncLocalRuntime Return Structure**
+
    ```python
    # Before (v0.9.31):
    result = await runtime.execute_workflow_async(workflow, inputs={})
@@ -88,9 +138,11 @@ This release achieves 100% runtime parity between LocalRuntime and AsyncLocalRun
    # After (v0.10.0):
    results, run_id = await runtime.execute_workflow_async(workflow, inputs={})
    ```
+
    **Migration**: Update all AsyncLocalRuntime calls to unpack the tuple return value.
 
 2. **Validation Exception Types**
+
    ```python
    # Before (v0.9.31):
    except RuntimeExecutionError:  # For validation errors
@@ -98,6 +150,7 @@ This release achieves 100% runtime parity between LocalRuntime and AsyncLocalRun
    # After (v0.10.0):
    except ValueError:  # For validation errors
    ```
+
    **Migration**: Update exception handlers for runtime configuration validation.
 
 3. **Parameter Scoping (Behavior Change)**
@@ -188,29 +241,35 @@ Total: 896/900 passing (99.6%)
 This release resolves a P0 critical bug where AsyncLocalRuntime failed to pass node configuration parameters to async_run(), causing ALL DataFlow operations to fail.
 
 #### Fixed
+
 - 🐛 **CRITICAL: AsyncLocalRuntime Parameter Passing Bug**: AsyncLocalRuntime now correctly calls `execute_async()` instead of `async_run()` directly, ensuring node.config parameters are merged before execution
 - 🐛 **DataFlow Complete Failure**: Fixed 100% failure rate for ALL DataFlow CRUD operations (Create, Update, Delete, List) with AsyncLocalRuntime
 - 🐛 **Parameter Loss**: Resolved issue where node configuration parameters (from `workflow.add_node()`) were never passed to nodes
 - 🐛 **Docker/FastAPI Impact**: Fixed recommended runtime for Docker deployments being completely non-functional
 
 #### Changed
+
 - ⚡ **Pattern Alignment**: AsyncLocalRuntime now follows same pattern as LocalRuntime (calls `execute_async()` which merges config at base_async.py:190)
 - ⚡ **Resource Registry Handling**: Resource registry now passed via inputs dict instead of separate parameter
 
 #### Added
+
 - ✅ **Regression Tests**: Comprehensive test suite ensuring parameter passing stays fixed (tests/runtime/test_async_local_bug_fix_v0926.py)
 - ✅ **Integration Tests**: DataFlow integration tests verify end-to-end CRUD operations work correctly
 
 #### Impact
+
 - 🚀 **Success Rate**: DataFlow with AsyncLocalRuntime - 0% → 100% success rate
 - 🚀 **Production Ready**: AsyncLocalRuntime now fully functional for Docker/FastAPI deployments
 - 🚀 **Backward Compatible**: Pure bug fix - no API changes, existing code works unchanged
 - 🚀 **Zero Regressions**: 587/588 runtime tests passing (1 unrelated timeout)
 
 #### Technical Details
+
 **Root Cause**: AsyncLocalRuntime called `node_instance.async_run(**inputs)` directly at async_local.py:753, bypassing `execute_async()` which merges node.config with runtime inputs (base_async.py:190).
 
 **Solution**: Changed async_local.py:745-756 to call `execute_async()` instead, matching LocalRuntime's pattern (local.py:1362):
+
 ```python
 # Before (BROKEN):
 result = await node_instance.async_run(**inputs)
@@ -230,31 +289,37 @@ result = await node_instance.execute_async(**inputs)  # Merges config internally
 This release resolves a P0 critical bug where all multi-node workflows with connections failed in Docker deployments due to threading issues.
 
 #### Fixed
+
 - 🐛 **CRITICAL: Multi-Node Workflow Threading Bug**: AsyncLocalRuntime now properly overrides `execute()` and `execute_async()` methods to prevent thread creation in async contexts
 - 🐛 **Docker Deployment Failures**: Fixed 100% failure rate for multi-node workflows in Docker/FastAPI environments
 - 🐛 **Thread Creation in Async Contexts**: Eliminated problematic thread creation when LocalRuntime.execute() was called in async contexts
 - 🐛 **MemoryError in Docker**: Resolved file descriptor issues causing MemoryError in containerized deployments
 
 #### Changed
+
 - ⚡ **Performance Improvement**: Multi-node workflow execution time reduced from timeout (>2min) to ~1.4 seconds
 - ⚡ **Async Context Detection**: Added helpful error message when execute() called from async context, guiding users to execute_workflow_async()
 - ⚡ **DataFlow Version**: Bumped to 0.5.4 for consistency with release cycle
 
 #### Added
+
 - ✅ **Method Overrides**: AsyncLocalRuntime.execute() and execute_async() now properly override parent methods
 - ✅ **CLI Context Support**: execute() uses asyncio.run() in CLI contexts (no event loop)
 - ✅ **Comprehensive Testing**: 84/84 tests passing (8 custom tests + 76 regression tests)
 
 #### Impact
+
 - 🚀 **Success Rate**: Multi-node workflows - 0% → 100% success rate in Docker
 - 🚀 **Execution Speed**: 99%+ faster execution (~1.4s vs >2min timeout)
 - 🚀 **Production Ready**: All Example-Project workflows now functional
 - 🚀 **Backward Compatible**: Fully compatible with existing code patterns
 
 #### Technical Details
+
 **Root Cause**: AsyncLocalRuntime inherited execute() from LocalRuntime without overriding it, causing thread creation (line 808 in local.py) when called in Docker/FastAPI async contexts.
 
 **Solution**: Added two method overrides in AsyncLocalRuntime (src/kailash/runtime/async_local.py:374-452):
+
 1. `execute()` - Uses asyncio.run() in CLI context, raises helpful error in async context
 2. `execute_async()` - Delegates to execute_workflow_async() (pure async, no threads)
 
@@ -267,6 +332,7 @@ This release resolves a P0 critical bug where all multi-node workflows with conn
 Critical bug fix enabling custom mock providers and Kaizen AI framework integration, plus enhanced test infrastructure.
 
 #### Fixed
+
 - 🐛 **Mock Provider Bypass**: Removed hardcoded `if provider == "mock"` logic from LLMAgentNode
 - 🐛 **Tool Execution Flow**: Unified provider response generation for all providers
 - 🐛 **Provider Registry**: All providers now use consistent registry path
@@ -274,12 +340,14 @@ Critical bug fix enabling custom mock providers and Kaizen AI framework integrat
 - 🐛 **Test Timeouts**: Marked slow tests with @pytest.mark.slow for CI optimization
 
 #### Added
+
 - ✅ **Custom Mock Provider Support**: Enables signature-aware mock providers (e.g., KaizenMockProvider)
 - ✅ **Multi-Modal Foundation**: Foundation for vision/audio processing in Kaizen framework
 - ✅ **Enhanced Testing**: 510+ tests passing with custom mock providers
 - ✅ **Tool Call Generation**: MockProvider generates mock tool_calls for action-oriented messages
 
 #### Changed
+
 - ⚡ **Consistent Registry Usage**: All providers use `_provider_llm_response()` method
 - ⚡ **MockProvider Model**: Always returns "mock-model" to indicate mocked response
 - 🧹 **Code Cleanup**: Removed obsolete a2a_backup.py (1,807 lines)
@@ -293,22 +361,26 @@ Critical bug fix enabling custom mock providers and Kaizen AI framework integrat
 This release focuses on testing infrastructure excellence and enhanced DataFlow integration capabilities, achieving a major milestone of 4,000+ passing tier 1 tests.
 
 #### Added
+
 - ✅ **Testing Milestone Achievement**: 4,072 passing tier 1 tests with comprehensive coverage
 - ✅ **Enhanced DataFlow Integration**: Improved AsyncSQL node compatibility with DataFlow parameters
 - ✅ **Test Infrastructure Hardening**: Better test isolation and cleanup mechanisms
 - ✅ **Performance Optimization**: Test execution optimization for development workflows
 
 #### Changed
+
 - 🔄 **Code Quality**: Comprehensive formatting updates with black, isort, and ruff compliance
 - 🔄 **Documentation**: Enhanced integration examples and troubleshooting guides
 - 🔄 **Test Organization**: Restructured test suite for better maintainability
 
 #### Fixed
+
 - 🐛 **AsyncSQL Parameter Handling**: Improved parameter conversion for DataFlow integration
 - 🐛 **Import Order**: Corrected import ordering across test modules
 - 🐛 **Connection Management**: Enhanced connection pool handling in test environments
 
 #### Infrastructure
+
 - 🏗️ **Test Excellence**: Achieved comprehensive test coverage milestone
 - 🏗️ **CI/CD Readiness**: Enhanced build validation and quality gates
 - 🏗️ **Development Experience**: Streamlined development and testing procedures
@@ -320,6 +392,7 @@ This release focuses on testing infrastructure excellence and enhanced DataFlow 
 This release completes the MCP ecosystem with comprehensive parameter validation, 100% protocol compliance, and enterprise-grade subscriptions.
 
 #### Added
+
 - ✅ **MCP Parameter Validation Tool**: 7 validation endpoints, 28 error types, 132 unit tests
 - ✅ **MCP Protocol Compliance**: 4 missing handlers implemented for 100% compliance
 - ✅ **MCP Subscriptions Phase 2**: GraphQL optimization, WebSocket compression, Redis coordination
@@ -331,6 +404,7 @@ This release completes the MCP ecosystem with comprehensive parameter validation
 **Enhanced Parameter Validation & Debugging Release**
 
 #### Added
+
 - ✅ **Enhanced Parameter Validation**: 4 modes (off/warn/strict/debug) with <1ms overhead
 - ✅ **Parameter Debugging Tools**: ParameterDebugger provides 10x faster issue resolution
 - ✅ **Comprehensive Documentation**: 1,300+ lines of troubleshooting guides
@@ -342,6 +416,7 @@ This release completes the MCP ecosystem with comprehensive parameter validation
 This release removes the confusing `src/kailash/nexus` module, adds comprehensive edge computing infrastructure, implements enterprise-grade connection parameter validation, and introduces advanced monitoring capabilities.
 
 #### Added
+
 - ✅ **Connection Parameter Validation**: Enterprise-grade validation framework with type safety
 - ✅ **Edge Computing Infrastructure**: 50+ new nodes for geo-distributed computing
 - ✅ **AlertManager**: Proactive monitoring with configurable thresholds
@@ -352,17 +427,20 @@ This release removes the confusing `src/kailash/nexus` module, adds comprehensiv
 - ✅ **Comprehensive Monitoring**: Enhanced monitoring patterns and guides
 
 #### Changed
+
 - Updated all documentation to use correct Nexus imports (`from nexus import Nexus`)
 - Enhanced LocalRuntime with validation enabled by default
 - Improved error messages with validation suggestions
 - Updated DataFlow integration to use proper imports
 
 #### Removed
+
 - ⚠️ **BREAKING**: Removed `src/kailash/nexus` module (use `apps/kailash-nexus` instead)
 - Removed `tests/integration/test_nexus_framework.py`
 - Removed outdated nexus import references from documentation
 
 #### Security
+
 - Enterprise-grade connection parameter validation
 - Real-time security event monitoring
 - Compliance-aware edge routing
@@ -375,6 +453,7 @@ This release removes the confusing `src/kailash/nexus` module, adds comprehensiv
 This release implements comprehensive Agent-to-Agent (A2A) communication enhancements with Google protocol best practices, significantly improving multi-agent insight quality and coordination capabilities.
 
 #### Added
+
 - ✅ **Enhanced Agent Cards**: Detailed capability descriptions with performance metrics and collaboration styles
 - ✅ **Structured Task Management**: Complete lifecycle management with state machine (CREATED → COMPLETED)
 - ✅ **Multi-stage LLM Insight Pipeline**: Quality-focused insight extraction with confidence scoring
@@ -386,11 +465,13 @@ This release implements comprehensive Agent-to-Agent (A2A) communication enhance
 - ✅ **Integration Examples**: Working multi-agent coordination patterns
 
 #### Changed
+
 - Enhanced A2ACoordinatorNode with backward-compatible action-based routing
 - Improved insight extraction quality from ~0.6 to >0.8 average scores
 - Updated root CLAUDE.md with A2A quick start and multi-step guidance
 
 #### Technical Details
+
 - Full backward compatibility maintained (all existing tests pass)
 - Action-based routing preserves legacy API usage patterns
 - Integration with existing workflow builder and runtime systems
@@ -403,20 +484,23 @@ This release implements comprehensive Agent-to-Agent (A2A) communication enhance
 This release addresses developer experience issues identified in comprehensive SDK critique, implements critical architectural fixes, and establishes comprehensive documentation structure with Claude Code integration patterns.
 
 #### Added
+
 - ✅ **DataFlow CLAUDE.md**: Comprehensive usage patterns guide (412 lines) for Claude Code integration
 - ✅ **Nexus CLAUDE.md**: Multi-channel platform patterns guide (542 lines) for Claude Code integration
 - ✅ **Enhanced Connection Error Messages**: Improved validation with helpful suggestions and port discovery
 - ✅ **hashlib Support**: Added to PythonCodeNode ALLOWED_MODULES for cryptographic operations
-- ✅ **Documentation Structure**: Migrated 90+ missing files from apps/*/docs/ to sdk-users/4-apps/
+- ✅ **Documentation Structure**: Migrated 90+ missing files from apps/\*/docs/ to sdk-users/4-apps/
 - ✅ **Comprehensive API Guidance**: Quick reference system and developer onboarding paths
 
 #### Changed
-- 🔄 **Documentation Architecture**: Established apps/*/docs/ as gold standard for ALL documentation
+
+- 🔄 **Documentation Architecture**: Established apps/\*/docs/ as gold standard for ALL documentation
 - 🔄 **API Patterns**: Cleaned up deprecated patterns in core cheatsheet files
 - 🔄 **Parameter Access**: Fixed Claude Code patterns to use try/except NameError (not parameters.get())
 - 🔄 **Nexus Documentation**: Corrected import paths, method signatures, and API examples
 
 #### Fixed
+
 - 🐛 **CRITICAL: DataFlow-Kailash Integration**: Resolved type annotation incompatibility making DataFlow unusable
 - 🐛 **Type Normalization**: Added system to convert complex types (List[str], Optional[str]) to simple types
 - 🐛 **NodeParameter Validation**: Fixed ValidationError on all DataFlow models with complex type annotations
@@ -424,12 +508,14 @@ This release addresses developer experience issues identified in comprehensive S
 - 🐛 **Documentation Links**: Fixed broken references and navigation paths
 
 #### Impact
+
 - 🚀 **DataFlow Usability**: Made DataFlow usable in real-world scenarios (91.7% success rate)
 - 🚀 **Claude Code Integration**: Enabled correct implementation of both frameworks on first try
 - 🚀 **Developer Experience**: Eliminated frustration through comprehensive documentation access
 - 🚀 **Architecture Validation**: Confirmed sophisticated design patterns enable enterprise features
 
 #### Package Updates
+
 - **kailash-dataflow**: 0.1.0 → 0.1.1 (critical bug fix)
 - **kailash-nexus**: 1.0.0 → 1.0.1 (documentation fixes)
 - **kailash**: 0.8.1 → 0.8.3 (comprehensive improvements)
@@ -441,6 +527,7 @@ This release addresses developer experience issues identified in comprehensive S
 This release focuses on comprehensive test infrastructure improvements, systematic test fixing, and better SDK organization for enhanced developer experience and CI/CD reliability.
 
 #### Added
+
 - ✅ **Centralized Node Registry Management**: New `node_registry_utils.py` for consistent test isolation
 - ✅ **Automatic Timeout Enforcement**: `conftest_timeouts.py` with 1s/5s/10s timeout compliance
 - ✅ **TODO System Organization**: Clear separation between completed infrastructure work (TODO-111c) and remaining feature implementation (TODO-115)
@@ -448,12 +535,14 @@ This release focuses on comprehensive test infrastructure improvements, systemat
 - ✅ **Node Execution Pattern Guide**: `node-execution-pattern.md` clarifying run() vs execute()
 
 #### Changed
+
 - 🔄 **Test Infrastructure Overhaul**: Fixed test execution problems that were masking real functionality issues
 - 🔄 **Improved Test Isolation**: All tests now use proper process isolation with `--forked` requirement
 - 🔄 **Enhanced Performance**: Reduced test execution times from 10s/5s/2s to 0.1-0.2s across multiple test files
 - 🔄 **Better Error Handling**: Fixed Ruff violations, circuit breaker timeouts, and eval() usage patterns
 
 #### Fixed
+
 - 🐛 **Test Timeout Issues**: Resolved hanging tests and timeout violations across all test tiers
 - 🐛 **FastMCP Import Timeout**: Fixed MCP server test timing out due to slow external imports
 - 🐛 **Import Order Dependencies**: Resolved circular import test subprocess timeout issues
@@ -463,12 +552,14 @@ This release focuses on comprehensive test infrastructure improvements, systemat
 - 🐛 **API Gateway Tests**: Resolved NodeRegistry empty state issues
 
 #### Infrastructure
+
 - 🏗️ **CI/CD Readiness**: Achieved 100% test infrastructure readiness for merge and deployment
 - 🏗️ **Test Quality Assurance**: 2798 passed tests with proper isolation and timeout compliance
 - 🏗️ **Code Quality**: Fixed all linting violations and improved code consistency
 - 🏗️ **Docker E2E Optimization**: Reduced from 50000→500 operations, 100→10 workers for faster execution
 
 #### Security
+
 - 🔒 **Enhanced Security Testing**: Improved security node test coverage and validation
 - 🔒 **Better Timeout Handling**: Prevents test hangs that could mask security issues
 
@@ -477,6 +568,7 @@ This release focuses on comprehensive test infrastructure improvements, systemat
 **Major Framework Release: Complete Application Ecosystem & Infrastructure Hardening**
 
 **🚀 New Framework Applications:**
+
 - **DataFlow Framework**: Complete standalone ETL/database framework with 100% documentation validation
   - 4 production-ready example applications (simple CRUD, enterprise, data migration, API backend)
   - MongoDB-style query builder with Redis caching
@@ -487,6 +579,7 @@ This release focuses on comprehensive test infrastructure improvements, systemat
   - Unified session management across all channels
 
 **🔧 Enterprise Resilience & Monitoring:**
+
 - **Distributed Transaction Management**: Automatic pattern selection (Saga/2PC) with compensation logic
   - 122 unit tests + 23 integration tests (100% pass rate)
   - State persistence with Memory, Redis, and PostgreSQL backends
@@ -497,6 +590,7 @@ This release focuses on comprehensive test infrastructure improvements, systemat
   - Complete documentation with enterprise patterns
 
 **🗄️ Data Management Enhancements:**
+
 - **MongoDB-Style Query Builder**: Production-ready query builder with cross-database support
   - Supports PostgreSQL, MySQL, SQLite with MongoDB-style operators ($eq, $ne, $lt, $gt, $in, $regex)
   - 33 unit tests + 8 integration tests with automatic tenant isolation
@@ -505,18 +599,21 @@ This release focuses on comprehensive test infrastructure improvements, systemat
   - Multiple invalidation strategies and performance optimization
 
 **🤖 AI & MCP Enhancements:**
+
 - **Real MCP Execution**: Default behavior for all AI agents (breaking change from mock execution)
   - IterativeLLMAgent and LLMAgentNode now use real MCP tools by default
   - Enhanced error handling and protocol compliance
   - Backward compatibility with `use_real_mcp=False` option
 
 **📚 Documentation & Standards:**
+
 - **Complete Documentation Validation**: 100% test pass rate across all examples
   - Updated all frameworks with standardized documentation structure
   - Created comprehensive validation framework for all code examples
   - Application documentation standards across DataFlow and Nexus
 
 **🏗️ Infrastructure Enhancements (TODO-109):**
+
 - **Enhanced AsyncNode Event Loop Handling**: Thread-safe async execution with automatic event loop detection
   - Fixed "RuntimeError: no running event loop" in threaded contexts
   - Smart detection and handling of different async contexts
@@ -531,6 +628,7 @@ This release focuses on comprehensive test infrastructure improvements, systemat
   - Stable Docker test environment (PostgreSQL:5434, Redis:6380)
 
 **🔧 Technical Improvements:**
+
 - **Gateway Architecture Cleanup**: Renamed server classes for clarity
   - WorkflowAPIGateway → WorkflowServer
   - DurableAPIGateway → DurableWorkflowServer
@@ -542,10 +640,12 @@ This release focuses on comprehensive test infrastructure improvements, systemat
   - E2E: 21 core tests (100% pass rate achieved)
 
 **Breaking Changes:**
+
 - Real MCP execution is now default for AI agents (can be disabled with `use_real_mcp=False`)
 - Gateway class names updated (backward compatibility maintained with deprecation warnings)
 
 **Migration Guide:**
+
 - DataFlow and Nexus are new frameworks - no migration needed
 - MCP execution change requires explicit `use_real_mcp=False` if mock execution is needed
 - Gateway class renames are backward compatible
@@ -558,12 +658,15 @@ This release focuses on comprehensive test infrastructure improvements, systemat
 **AgentUIMiddleware Shared Workflow Fix & API Standardization**
 
 **Fixed:**
+
 - **AgentUIMiddleware Shared Workflow Execution**: Shared workflows registered with `make_shared=True` couldn't be executed from sessions. Now automatically copied to sessions when first executed.
 
 **Changed:**
+
 - **API Method Standardization**: Deprecated `AgentUIMiddleware.execute_workflow()` in favor of `execute()` for consistency with runtime API
 
 **Enhanced:**
+
 - **Documentation**: Updated Agent-UI communication guide with shared workflow behavior section
 - **Testing**: Added 4 comprehensive integration tests for shared workflow functionality
 - **Migration Guide**: Added v0.6.5+ migration guide explaining the fix
@@ -575,18 +678,21 @@ This release focuses on comprehensive test infrastructure improvements, systemat
 **Enterprise AsyncSQL Enhancements & Production Testing**
 
 **Major Features:**
+
 - **AsyncSQL Transaction Management**: Auto, manual, and none modes for precise control
 - **Optimistic Locking**: Version-based concurrency control with conflict resolution
 - **Advanced Parameter Handling**: PostgreSQL ANY(), JSON, arrays, date/datetime support
 - **100% Test Pass Rate**: All AsyncSQL tests passing with strict policy compliance
 
 **Fixed:**
+
 - **PostgreSQL ANY() Parameters**: Fixed list parameter conversion for array operations
 - **DNS/Network Error Retries**: Added missing error patterns for network failures
 - **Optimistic Locking Version Check**: Fixed WHERE clause detection for version validation
 - **E2E Transaction Timeouts**: Added timeout configurations to prevent deadlocks
 
 **Enhanced:**
+
 - **Testing Infrastructure**: Removed ALL mocks from integration tests (policy compliance)
 - **Documentation Quality**: Complete AsyncSQL enterprise patterns with validated examples
 - **Connection Pool Sharing**: Event loop management for shared pools across instances
@@ -598,16 +704,19 @@ This release focuses on comprehensive test infrastructure improvements, systemat
 **Enterprise Parameter Injection & E2E Test Excellence**
 
 **Major Features:**
+
 - **Enterprise Parameter Injection**: WorkflowBuilder `add_workflow_inputs()` with dot notation support
 - **E2E Test Excellence**: 100% pass rate on all comprehensive E2E tests
 - **Documentation Quality**: Updated based on E2E test findings with correct patterns
 
 **Fixed:**
+
 - **Permission Check Structure**: Fixed nested result structure (`result.check.allowed`)
 - **PythonCodeNode Parameters**: Direct namespace injection now working correctly
 - **Integration Test Stability**: Improved cache handling and async node behavior
 
 **Enhanced:**
+
 - **Test Infrastructure**: Achieved 100% E2E test pass rate with improved stability
 - **Documentation Updates**: Comprehensive updates based on E2E test findings
 - **Parameter Injection**: Enterprise-grade system with complex workflow support
@@ -619,17 +728,20 @@ This release focuses on comprehensive test infrastructure improvements, systemat
 **Comprehensive MCP Platform, Testing Infrastructure & Documentation Quality**
 
 **Major Features:**
+
 - **MCP Testing Infrastructure**: 407 comprehensive tests (391 unit, 14 integration, 2 E2E) with 100% pass rate
 - **MCP Tool Execution**: Complete LLMAgent automatic tool execution with multi-round support
 - **Enterprise MCP Testing**: 4 E2E tests with custom enterprise nodes for real-world scenarios
 - **Documentation Validation**: Framework achieving 100% test pass rate across all patterns
 
 **Fixed:**
+
 - **MCP Namespace Collision**: Resolved critical import error (`kailash.mcp` → `kailash.mcp_server`)
 - **Core SDK Issues**: EdgeDiscovery, SSOAuthenticationNode, PythonCodeNode, StreamPublisherNode fixes
 - **Documentation**: 200+ pattern corrections ensuring all examples work correctly
 
 **Enhanced:**
+
 - **Migration Guide Consolidation**: Unified location at `sdk-users/6-reference/migration-guides/`
 - **MCP Platform Unification**: Created `apps/mcp_platform/` from 6 scattered directories
 - **Documentation Quality**: 100% coverage (up from 72.7%), all examples validated

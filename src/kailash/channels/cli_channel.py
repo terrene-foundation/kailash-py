@@ -1,8 +1,10 @@
 """CLI Channel implementation for interactive command-line interface."""
 
 import asyncio
+import json
 import logging
 import sys
+import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, TextIO
 
@@ -12,7 +14,7 @@ from ..nodes.system.command_parser import (
     InteractiveShellNode,
     ParsedCommand,
 )
-from ..runtime.local import LocalRuntime
+from ..runtime.async_local import AsyncLocalRuntime
 from ..workflow.builder import WorkflowBuilder
 from .base import (
     Channel,
@@ -50,6 +52,7 @@ class CLIChannel(Channel):
         config: ChannelConfig,
         input_stream: Optional[TextIO] = None,
         output_stream: Optional[TextIO] = None,
+        workflow_server: Optional[Any] = None,
     ):
         """Initialize CLI channel.
 
@@ -57,11 +60,16 @@ class CLIChannel(Channel):
             config: Channel configuration
             input_stream: Input stream (defaults to sys.stdin)
             output_stream: Output stream (defaults to sys.stdout)
+            workflow_server: Optional workflow server for accessing registered workflows
         """
         super().__init__(config)
 
         self.input_stream = input_stream or sys.stdin
         self.output_stream = output_stream or sys.stdout
+
+        # Workflow server and direct registrations
+        self.workflow_server = workflow_server
+        self._registered_workflows: Dict[str, Any] = {}
 
         # CLI-specific components
         self.command_parser = CommandParserNode()
@@ -77,13 +85,23 @@ class CLIChannel(Channel):
         self._routing_config = self._setup_default_routing()
 
         # Runtime for executing workflows
-        self.runtime = LocalRuntime()
+        self.runtime = AsyncLocalRuntime()
 
         # CLI state
         self._running = False
         self._main_task: Optional[asyncio.Task] = None
 
         logger.info(f"Initialized CLI channel {self.name}")
+
+    def register_workflow(self, name: str, workflow_definition: Any) -> None:
+        """Register a workflow for CLI execution.
+
+        Args:
+            name: Unique workflow name
+            workflow_definition: A WorkflowBuilder or built Workflow object
+        """
+        self._registered_workflows[name] = workflow_definition
+        logger.info(f"Registered workflow '{name}' in CLI channel")
 
     def _setup_default_commands(self) -> Dict[str, Any]:
         """Set up default command definitions."""
@@ -246,7 +264,7 @@ class CLIChannel(Channel):
             # Emit startup event
             await self.emit_event(
                 ChannelEvent(
-                    event_id=f"cli_startup_{asyncio.get_event_loop().time()}",
+                    event_id=f"cli_startup_{asyncio.get_running_loop().time()}",
                     channel_name=self.name,
                     channel_type=self.channel_type,
                     event_type="channel_started",
@@ -273,7 +291,7 @@ class CLIChannel(Channel):
             # Emit shutdown event
             await self.emit_event(
                 ChannelEvent(
-                    event_id=f"cli_shutdown_{asyncio.get_event_loop().time()}",
+                    event_id=f"cli_shutdown_{asyncio.get_running_loop().time()}",
                     channel_name=self.name,
                     channel_type=self.channel_type,
                     event_type="channel_stopping",
@@ -334,8 +352,24 @@ class CLIChannel(Channel):
             )
 
     async def _cli_loop(self) -> None:
-        """Main CLI interaction loop."""
+        """Main CLI interaction loop.
+
+        Reads commands from input_stream using run_in_executor to avoid
+        blocking the event loop, then processes each command through the
+        standard handle_request pipeline.
+        """
         self._write_output("Kailash CLI started. Type 'help' for available commands.\n")
+
+        interactive = self.config.extra_config.get("interactive_mode", False)
+        if not interactive:
+            # Non-interactive mode: show prompt and return immediately.
+            # Commands are processed via handle_request() instead.
+            prompt = await self._generate_prompt()
+            self._write_output(prompt)
+            return
+
+        loop = asyncio.get_running_loop()
+        input_stream = self.config.extra_config.get("input_stream", sys.stdin)
 
         while self._running:
             try:
@@ -343,14 +377,30 @@ class CLIChannel(Channel):
                 prompt = await self._generate_prompt()
                 self._write_output(prompt)
 
-                # Read command (this would be blocking in real implementation)
-                # For now, we'll simulate with a small delay
-                await asyncio.sleep(0.1)
+                # Read command from input_stream without blocking the event loop
+                line = await loop.run_in_executor(None, input_stream.readline)
 
-                # In a real implementation, this would read from input_stream
-                # For testing/simulation purposes, we'll break here
-                if not self.config.extra_config.get("interactive_mode", False):
+                # EOF (e.g. piped input exhausted, or Ctrl-D)
+                if not line:
                     break
+
+                command = line.strip()
+                if not command:
+                    continue
+
+                # Exit commands handled locally
+                if command.lower() in ("exit", "quit"):
+                    self._write_output("Goodbye.\n")
+                    break
+
+                # Process command through the standard request pipeline
+                response = await self.handle_request(
+                    {"command": command, "session_id": "default"}
+                )
+                if response.data is not None:
+                    self._write_output(f"{response.data}\n")
+                if response.error:
+                    self._write_output(f"Error: {response.error}\n")
 
             except asyncio.CancelledError:
                 break
@@ -390,7 +440,7 @@ class CLIChannel(Channel):
         try:
             # Update session
             session.command_history.append(command_input)
-            session.last_command_time = asyncio.get_event_loop().time()
+            session.last_command_time = asyncio.get_running_loop().time()
 
             # Parse command
             parse_result = self.command_parser.execute(
@@ -497,17 +547,82 @@ class CLIChannel(Channel):
         """Execute a workflow command.
 
         Args:
-            execution_params: Execution parameters
+            execution_params: Execution parameters containing workflow name and inputs
 
         Returns:
             Workflow execution results
         """
-        # This would integrate with the workflow execution system
-        # For now, return a placeholder
+        command_args = execution_params.get("command_arguments", {})
+        workflow_name = command_args.get("workflow") or execution_params.get(
+            "workflow_name"
+        )
+
+        if not workflow_name:
+            return {
+                "success": False,
+                "error": "No workflow name provided. Usage: run <workflow_name>",
+            }
+
+        # Look up workflow in registered workflows first, then workflow_server
+        workflow_def = self._registered_workflows.get(workflow_name)
+
+        if workflow_def is None and self.workflow_server is not None:
+            server_workflows = getattr(self.workflow_server, "workflows", {})
+            registration = server_workflows.get(workflow_name)
+            if registration is not None:
+                workflow_def = getattr(registration, "workflow", registration)
+
+        if workflow_def is None:
+            available = list(self._registered_workflows.keys())
+            if self.workflow_server is not None:
+                server_workflows = getattr(self.workflow_server, "workflows", {})
+                available.extend(server_workflows.keys())
+            return {
+                "success": False,
+                "error": f"Workflow '{workflow_name}' not found. "
+                f"Available workflows: {available}",
+            }
+
+        # Parse input parameters
+        inputs = {}
+        raw_input = command_args.get("input")
+        if raw_input:
+            try:
+                inputs = json.loads(raw_input)
+            except json.JSONDecodeError as e:
+                return {
+                    "success": False,
+                    "error": f"Invalid JSON input: {e}",
+                }
+
+        # Build the workflow if it has a .build() method (WorkflowBuilder)
+        if hasattr(workflow_def, "build"):
+            workflow = workflow_def.build()
+        else:
+            workflow = workflow_def
+
+        # Execute workflow
+        start_time = time.monotonic()
+        try:
+            results, run_id = await self.runtime.execute_workflow_async(
+                workflow, inputs=inputs
+            )
+        except Exception as e:
+            logger.error(f"Workflow execution failed for '{workflow_name}': {e}")
+            return {
+                "success": False,
+                "error": f"Workflow execution failed: {e}",
+                "workflow_name": workflow_name,
+            }
+        end_time = time.monotonic()
+        execution_time_ms = round((end_time - start_time) * 1000, 2)
+
         return {
             "success": True,
-            "message": "Workflow execution not yet implemented in CLI channel",
-            "params": execution_params,
+            "workflow_name": workflow_name,
+            "run_id": run_id,
+            "results": results,
+            "execution_time_ms": execution_time_ms,
         }
 
     async def _execute_handler_command(
@@ -589,11 +704,31 @@ class CLIChannel(Channel):
 
     async def _handle_list_workflows(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle list workflows command."""
-        # This would integrate with workflow registry
+        workflows = []
+
+        # Collect directly registered workflows
+        for name, wf_def in self._registered_workflows.items():
+            description = getattr(wf_def, "description", None) or "Registered workflow"
+            workflows.append(
+                {"name": name, "description": description, "source": "registered"}
+            )
+
+        # Collect workflows from workflow_server if available
+        if self.workflow_server is not None:
+            server_workflows = getattr(self.workflow_server, "workflows", {})
+            for name, registration in server_workflows.items():
+                if name not in self._registered_workflows:
+                    description = (
+                        getattr(registration, "description", None) or "Server workflow"
+                    )
+                    workflows.append(
+                        {"name": name, "description": description, "source": "server"}
+                    )
+
         return {
             "success": True,
-            "message": "Workflow listing not yet implemented",
-            "workflows": [],
+            "workflows": workflows,
+            "count": len(workflows),
         }
 
     async def _handle_list_sessions(self, params: Dict[str, Any]) -> Dict[str, Any]:

@@ -804,14 +804,53 @@ class CostOptimizer:
     def _get_resource_utilization(
         self, edge_node: str, resource_type: str
     ) -> Optional[float]:
-        """Get average resource utilization."""
-        # This would integrate with monitoring data
-        # For now, return simulated utilization
+        """Get average resource utilization from monitoring data.
 
-        import random
+        Queries the edge monitor for recent metrics and computes the average.
+        Falls back to psutil for local node measurements if no monitor
+        is configured.
+        """
+        # Try edge monitor first (if available via dependency injection)
+        if hasattr(self, "_edge_monitor") and self._edge_monitor is not None:
+            try:
+                import asyncio
 
-        random.seed(hash(f"{edge_node}_{resource_type}"))
-        return random.uniform(0.3, 0.9)
+                loop = asyncio.get_running_loop()
+                if loop.is_running():
+                    # Can't await in sync context - use cached metrics
+                    return self._get_cached_utilization(edge_node, resource_type)
+            except RuntimeError:
+                pass
+
+        # Fall back to psutil for local measurements
+        try:
+            import psutil
+
+            if resource_type == "cpu":
+                return psutil.cpu_percent(interval=0.1) / 100.0
+            elif resource_type == "memory":
+                return psutil.virtual_memory().percent / 100.0
+            elif resource_type == "disk":
+                return psutil.disk_usage("/").percent / 100.0
+            elif resource_type == "network":
+                # Network utilization is harder to measure directly
+                # Return None to indicate no data available
+                return None
+        except ImportError:
+            pass
+
+        return None
+
+    def _get_cached_utilization(
+        self, edge_node: str, resource_type: str
+    ) -> Optional[float]:
+        """Get utilization from cached monitoring metrics."""
+        cache_key = f"{edge_node}_{resource_type}"
+        if hasattr(self, "_utilization_cache"):
+            cached = self._utilization_cache.get(cache_key)
+            if cached is not None:
+                return cached
+        return None
 
     def _is_peak_usage_time(self) -> bool:
         """Check if current time is peak usage."""

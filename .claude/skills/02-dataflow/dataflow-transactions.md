@@ -82,12 +82,24 @@ workflow.add_node("TransactionManagerNode", "2pc", {
 ### Related Documentation
 - **README**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md#L863-L874)
 
+## Async Transaction Nodes
+
+Transaction nodes are `AsyncNode` subclasses. Use `async_run()` instead of `run()`:
+
+```python
+# Transaction nodes require async execution
+result = await transaction_node.async_run(context)
+```
+
+When using `AsyncLocalRuntime`, transaction nodes are executed natively in the async pipeline. With `LocalRuntime`, they are automatically wrapped in the thread pool.
+
 ## Quick Tips
 
 - Use saga for long-running transactions
 - Use 2PC for strong consistency
 - Define compensation actions
 - Set appropriate timeouts
+- Transaction nodes are AsyncNode -- use `async_run()` not `run()`
 
 ## Keywords for Auto-Trigger
 

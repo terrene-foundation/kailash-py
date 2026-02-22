@@ -13,6 +13,7 @@ EATP provides complete trust infrastructure for AI agents:
 - **Trust-Aware Orchestration**: Workflow runtime with trust context propagation
 - **Enterprise System Agent (ESA)**: Proxy agents for legacy systems
 - **A2A HTTP Service**: REST/JSON-RPC API for trust operations
+- **RFC 3161 Timestamping** (v1.1.0): Cryptographic timestamping for audit records with TSA integration
 
 **Location**: `kaizen.trust` module
 

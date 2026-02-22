@@ -130,11 +130,13 @@ class DatabasePoolFactory(ResourceFactory):
         user = self.user or "postgres"
         password = self.password or ""
 
-        # Extract options if present
-        options = self.extra_config.pop("options", None)
+        # Extract options if present (use .get to avoid mutating extra_config)
+        options = self.extra_config.get("options")
 
-        # Build DSN
-        dsn = f"postgresql://{user}:{password}@{self.host}:{self.port}/{self.database}"
+        # Build DSN with URL-encoded credentials to handle special characters
+        from urllib.parse import quote_plus
+
+        dsn = f"postgresql://{quote_plus(user)}:{quote_plus(password)}@{self.host}:{self.port}/{self.database}"
         if options:
             # Add options to DSN as query parameters
             dsn += f"?options={options}"
@@ -378,27 +380,73 @@ class CacheFactory(ResourceFactory):
         return client
 
     def _create_memory_cache(self):
-        """Create in-memory cache."""
-        logger.info("Creating in-memory cache")
+        """Create in-memory cache with TTL support."""
+        import time
+
+        logger.info("Creating in-memory cache with TTL support")
 
         class MemoryCache:
-            """Simple in-memory cache implementation."""
+            """In-memory cache with TTL expiration."""
 
             def __init__(self):
-                self._cache = {}
+                self._cache: Dict[str, Any] = {}
+                self._expiry: Dict[str, float] = {}
+                self._reaper_task: Optional[asyncio.Task] = None
 
             async def get(self, key: str) -> Any:
+                if key in self._expiry and time.monotonic() > self._expiry[key]:
+                    self._cache.pop(key, None)
+                    self._expiry.pop(key, None)
+                    return None
                 return self._cache.get(key)
 
             async def set(self, key: str, value: Any, ttl: int = None) -> None:
                 self._cache[key] = value
-                # TODO: Implement expiration
+                if ttl is not None and ttl > 0:
+                    self._expiry[key] = time.monotonic() + ttl
+                elif key in self._expiry:
+                    del self._expiry[key]
+                self._ensure_reaper()
 
             async def delete(self, key: str) -> None:
                 self._cache.pop(key, None)
+                self._expiry.pop(key, None)
 
             async def clear(self) -> None:
                 self._cache.clear()
+                self._expiry.clear()
+
+            async def ping(self) -> bool:
+                return True
+
+            async def aclose(self) -> None:
+                if self._reaper_task and not self._reaper_task.done():
+                    self._reaper_task.cancel()
+                    try:
+                        await self._reaper_task
+                    except asyncio.CancelledError:
+                        pass
+
+            def _ensure_reaper(self) -> None:
+                """Start background reaper if not already running."""
+                if self._reaper_task is None or self._reaper_task.done():
+                    try:
+                        loop = asyncio.get_running_loop()
+                        self._reaper_task = loop.create_task(self._reaper_loop())
+                    except RuntimeError:
+                        pass
+
+            async def _reaper_loop(self) -> None:
+                """Background task that evicts expired keys every 30 seconds."""
+                while True:
+                    await asyncio.sleep(30)
+                    now = time.monotonic()
+                    expired = [k for k, exp in self._expiry.items() if now > exp]
+                    for key in expired:
+                        self._cache.pop(key, None)
+                        self._expiry.pop(key, None)
+                    if not self._expiry:
+                        break
 
         return MemoryCache()
 
@@ -474,7 +522,9 @@ class MessageQueueFactory(ResourceFactory):
 
         logger.info(f"Creating RabbitMQ connection: {self.host}:{self.port}")
 
-        url = f"amqp://{self.username}:{self.password}@{self.host}:{self.port}/"
+        from urllib.parse import quote_plus
+
+        url = f"amqp://{quote_plus(self.username or '')}:{quote_plus(self.password or '')}@{self.host}:{self.port}/"
 
         return await aio_pika.connect_robust(url, **self.extra_config)
 
@@ -531,3 +581,84 @@ class MessageQueueFactory(ResourceFactory):
         config.update(self.extra_config)
         # Don't include password
         return {k: v for k, v in config.items() if k != "password"}
+
+
+class S3ClientFactory(ResourceFactory):
+    """
+    Factory for creating S3-compatible object storage clients.
+
+    Uses aioboto3 for async S3 operations.
+
+    Example:
+        ```python
+        factory = S3ClientFactory(
+            region='us-east-1',
+            aws_access_key_id='...',
+            aws_secret_access_key='...',
+            default_bucket='my-bucket'
+        )
+        ```
+    """
+
+    def __init__(
+        self,
+        region: str = "us-east-1",
+        endpoint_url: Optional[str] = None,
+        aws_access_key_id: Optional[str] = None,
+        aws_secret_access_key: Optional[str] = None,
+        default_bucket: Optional[str] = None,
+        **kwargs,
+    ):
+        """Initialize S3 client factory."""
+        self.region = region
+        self.endpoint_url = endpoint_url
+        self.aws_access_key_id = aws_access_key_id
+        self.aws_secret_access_key = aws_secret_access_key
+        self.default_bucket = default_bucket
+        self.extra_config = kwargs
+
+    async def create(self) -> Any:
+        """Create S3 client via aioboto3."""
+        try:
+            import aioboto3
+        except ImportError:
+            raise ImportError(
+                "aioboto3 is required for S3 support. "
+                "Install with: pip install aioboto3"
+            )
+
+        logger.info(f"Creating S3 client: region={self.region}")
+
+        session = aioboto3.Session()
+        client_kwargs = {
+            "region_name": self.region,
+        }
+        if self.endpoint_url:
+            client_kwargs["endpoint_url"] = self.endpoint_url
+        if self.aws_access_key_id:
+            client_kwargs["aws_access_key_id"] = self.aws_access_key_id
+        if self.aws_secret_access_key:
+            client_kwargs["aws_secret_access_key"] = self.aws_secret_access_key
+        client_kwargs.update(self.extra_config)
+
+        # Store the context manager so __aexit__ can be called during cleanup
+        ctx = session.client("s3", **client_kwargs)
+        client = await ctx.__aenter__()
+        # Attach the context manager to the client for proper cleanup
+        client._aioboto3_ctx = ctx
+        return client
+
+    def get_config(self) -> Dict[str, Any]:
+        """Get factory configuration."""
+        config = {
+            "region": self.region,
+            "endpoint_url": self.endpoint_url,
+            "default_bucket": self.default_bucket,
+        }
+        config.update(self.extra_config)
+        # Never include secrets
+        return {
+            k: v
+            for k, v in config.items()
+            if k not in ("aws_secret_access_key", "aws_access_key_id")
+        }

@@ -2,7 +2,7 @@
 
 A truly zero-configuration platform that allows enterprise users to focus on creating workflows without learning infrastructure complexity.
 
-**Current Version: v1.3.0**
+**Current Version: v1.4.0**
 
 ## What is Nexus?
 

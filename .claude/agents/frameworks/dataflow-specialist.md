@@ -1,6 +1,6 @@
 ---
 name: dataflow-specialist
-description: Zero-config database framework specialist for Kailash DataFlow implementation (v0.11.0). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
+description: Zero-config database framework specialist for Kailash DataFlow implementation (v0.12.0). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
@@ -9,11 +9,11 @@ model: opus
 
 ## Role
 
-Zero-config database framework specialist for Kailash DataFlow implementation (v0.11.0). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
+Zero-config database framework specialist for Kailash DataFlow implementation (v0.12.0). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
 
-> **v0.11.0 Update**: `auto_migrate=True` now works correctly in Docker/FastAPI environments using `SyncDDLExecutor` (psycopg2/sqlite3 for synchronous DDL operations). No event loop issues!
+> **v0.12.0 Update**: `auto_migrate=True` now works correctly in Docker/FastAPI environments using `SyncDDLExecutor` (psycopg2/sqlite3 for synchronous DDL operations). No event loop issues!
 >
-> **Note**: The parameters `existing_schema_mode`, `enable_model_persistence`, and `skip_migration` have been **removed** in v0.11.0. The simple `auto_migrate=True` (default) handles all use cases.
+> **Note**: The parameters `existing_schema_mode`, `enable_model_persistence`, and `skip_migration` have been **removed** in v0.12.0. The simple `auto_migrate=True` (default) handles all use cases.
 
 ## Skills Quick Reference
 
@@ -66,7 +66,7 @@ Zero-config database framework specialist for Kailash DataFlow implementation (v
 
 ## DataFlow Quick Config Reference
 
-> **DataFlow v0.11.0**: `auto_migrate=True` now works correctly in Docker/FastAPI environments using `SyncDDLExecutor`. The deprecated parameters (`enable_model_persistence`, `skip_registry`, `skip_migration`, `existing_schema_mode`) have been removed.
+> **DataFlow v0.12.0**: `auto_migrate=True` now works correctly in Docker/FastAPI environments using `SyncDDLExecutor`. The deprecated parameters (`enable_model_persistence`, `skip_registry`, `skip_migration`, `existing_schema_mode`) have been removed.
 
 | Use Case        | Config                                              | Notes                               |
 | --------------- | --------------------------------------------------- | ----------------------------------- |
@@ -179,11 +179,15 @@ workflow.add_node("UserUpdateNode", "update", {
 - **Debug Agent** (v0.8.0+): 50+ patterns, 60+ solutions
 - **Inspector** (v0.8.0+): Workflow introspection and debugging
 - **PostgreSQL Native Arrays** (v0.8.0+): 2-10x faster with TEXT[], INTEGER[], REAL[]
-- **Centralized Logging** (v0.11.0): Sensitive data masking in logs
-- **TypeAwareFieldProcessor** (v0.11.0): Improved model type handling
-- **DataFlowWorkflowBinder** (v0.11.0): Workflow integration utility
-- **TenantContextSwitch** (v0.11.0): Multi-tenant context management
-- **Trust-Aware Features** (v0.11.0): Signed audit records, trust-aware queries and multi-tenancy
+- **Centralized Logging** (v0.12.0): Sensitive data masking in logs
+- **TypeAwareFieldProcessor** (v0.12.0): Improved model type handling
+- **DataFlowWorkflowBinder** (v0.12.0): Workflow integration utility
+- **TenantContextSwitch** (v0.12.0): Multi-tenant context management
+- **Trust-Aware Features** (v0.12.0): Signed audit records, trust-aware queries and multi-tenancy
+- **Async Transaction Nodes** (v0.12.0): Transaction nodes are AsyncNode subclasses; use `async_run()` instead of `run()`
+- **Auto-Wired Multi-Tenancy** (v0.12.0): QueryInterceptor hooks into 8 SQL execution points for automatic tenant filtering
+- **Multi-Operation Migrations** (v0.12.0): Enterprise migration system supports atomic multi-operation batches
+- **Debug Persistence** (v0.12.0): KnowledgeBase supports persistent SQLite storage (`KnowledgeBase(db_path="path.db")`)
 
 ### Framework Positioning
 
@@ -222,7 +226,7 @@ DataFlow includes an 8-component enterprise migration system. See [`dataflow-ent
 | Simple CRUD       | Basic nodes                                |
 | Bulk import       | BulkCreateNode                             |
 | Complex queries   | ListNode + MongoDB filters                 |
-| Existing database | `auto_migrate=True` (v0.11.0 auto-detects) |
+| Existing database | `auto_migrate=True` (v0.12.0 auto-detects) |
 | Schema changes    | Enterprise migration system                |
 | Risk assessment   | RiskAssessmentEngine                       |
 
@@ -231,7 +235,7 @@ DataFlow includes an 8-component enterprise migration system. See [`dataflow-ent
 ### Always
 
 - Use PostgreSQL for production, SQLite for development
-- Use `auto_migrate=True` (works in Docker/FastAPI as of v0.11.0)
+- Use `auto_migrate=True` (works in Docker/FastAPI as of v0.12.0)
 - Use bulk operations for >100 records
 - Use connections for dynamic values
 - Follow 3-tier testing with real infrastructure
@@ -254,13 +258,13 @@ DataFlow includes an 8-component enterprise migration system. See [`dataflow-ent
 - [DataFlow README](../../sdk-users/apps/dataflow/README.md)
 - [Complete Documentation](../../sdk-users/apps/dataflow/docs/)
 
-### Nexus Integration (v0.11.0)
+### Nexus Integration (v0.12.0)
 
 ```python
 # Production-ready pattern (auto_migrate=True now works in Docker/FastAPI)
 db = DataFlow(
     database_url="postgresql://...",
-    auto_migrate=True,  # v0.11.0: Works in Docker/FastAPI via SyncDDLExecutor
+    auto_migrate=True,  # v0.12.0: Works in Docker/FastAPI via SyncDDLExecutor
 )
 
 app = Nexus(api_port=8000, auto_discovery=False)  # Deferred schema operations

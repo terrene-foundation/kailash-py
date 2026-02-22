@@ -3,10 +3,13 @@
 import asyncio
 import base64
 import json
+import logging
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
+
+logger = logging.getLogger(__name__)
 
 try:
     import boto3
@@ -536,6 +539,295 @@ class GCPIntegration:
             }
 
 
+class AzureIntegration:
+    """Azure cloud integration."""
+
+    # Map common instance type names to Azure VM sizes
+    INSTANCE_TYPE_MAP = {
+        "micro": "Standard_B1s",
+        "small": "Standard_B1ms",
+        "medium": "Standard_B2s",
+        "large": "Standard_D2s_v3",
+        "xlarge": "Standard_D4s_v3",
+    }
+
+    def __init__(
+        self,
+        subscription_id: str,
+        resource_group: str,
+        location: str = "eastus",
+    ):
+        if not AZURE_AVAILABLE:
+            raise ImportError(
+                "Azure SDK not available. Install with: pip install azure-mgmt-compute azure-identity azure-mgmt-resource"
+            )
+
+        self.subscription_id = subscription_id
+        self.resource_group = resource_group
+        self.location = location
+
+        # Azure clients
+        credential = DefaultAzureCredential()
+        self.compute_client = ComputeManagementClient(credential, subscription_id)
+        self.resource_client = ResourceManagementClient(credential, subscription_id)
+
+    async def create_instance(self, spec: InstanceSpec) -> Dict[str, Any]:
+        """Create Azure Virtual Machine."""
+        try:
+            vm_size = self.INSTANCE_TYPE_MAP.get(spec.instance_type, spec.instance_type)
+
+            # Build VM parameters
+            vm_parameters: Dict[str, Any] = {
+                "location": spec.region or self.location,
+                "hardware_profile": {"vm_size": vm_size},
+                "storage_profile": {
+                    "image_reference": {"id": spec.image_id},
+                    "os_disk": {
+                        "create_option": "FromImage",
+                        "managed_disk": {"storage_account_type": "Standard_LRS"},
+                    },
+                },
+                "os_profile": {
+                    "computer_name": spec.name[:15],  # Azure limit: 15 chars
+                    "admin_username": "azureuser",
+                },
+                "network_profile": {"network_interfaces": []},
+                "tags": spec.tags.copy(),
+            }
+
+            # Add edge node tag
+            if spec.edge_node:
+                vm_parameters["tags"]["edge-node"] = spec.edge_node
+
+            # Add SSH key if provided
+            if spec.key_name:
+                vm_parameters["os_profile"]["linux_configuration"] = {
+                    "disable_password_authentication": True,
+                    "ssh": {
+                        "public_keys": [
+                            {
+                                "path": "/home/azureuser/.ssh/authorized_keys",
+                                "key_data": spec.key_name,
+                            }
+                        ]
+                    },
+                }
+
+            # Add user data (custom data in Azure)
+            if spec.user_data:
+                vm_parameters["os_profile"]["custom_data"] = base64.b64encode(
+                    spec.user_data.encode()
+                ).decode()
+
+            # Add network interface if subnet specified
+            if spec.subnet_id:
+                vm_parameters["network_profile"]["network_interfaces"].append(
+                    {"id": spec.subnet_id, "properties": {"primary": True}}
+                )
+
+            # Create VM (long-running operation)
+            poller = await asyncio.to_thread(
+                self.compute_client.virtual_machines.begin_create_or_update,
+                self.resource_group,
+                spec.name,
+                vm_parameters,
+            )
+
+            vm_result = await asyncio.to_thread(poller.result)
+
+            return {
+                "status": "created",
+                "instance_id": vm_result.vm_id,
+                "instance_name": vm_result.name,
+                "instance_type": vm_result.hardware_profile.vm_size,
+                "image_id": spec.image_id,
+                "state": vm_result.provisioning_state,
+                "location": vm_result.location,
+                "created_at": datetime.now().isoformat(),
+            }
+
+        except Exception as e:
+            error_msg = str(e)
+            return {
+                "status": "error",
+                "error": f"Failed to create Azure VM: {error_msg}",
+            }
+
+    async def get_instance_status(self, instance_id: str) -> Dict[str, Any]:
+        """Get Azure VM status.
+
+        Args:
+            instance_id: The VM name (Azure uses names for resource identification
+                        within a resource group).
+        """
+        try:
+            # Get VM with instance view for power state
+            vm = await asyncio.to_thread(
+                self.compute_client.virtual_machines.get,
+                self.resource_group,
+                instance_id,
+                expand="instanceView",
+            )
+
+            # Extract power state from instance view statuses
+            power_state = "unknown"
+            if vm.instance_view and vm.instance_view.statuses:
+                for status in vm.instance_view.statuses:
+                    if status.code and status.code.startswith("PowerState/"):
+                        power_state = status.code.split("/", 1)[1]
+                        break
+
+            # Extract network info
+            public_ip = None
+            private_ip = None
+            if vm.network_profile and vm.network_profile.network_interfaces:
+                for nic_ref in vm.network_profile.network_interfaces:
+                    try:
+                        # Extract NIC name from resource ID
+                        nic_name = nic_ref.id.split("/")[-1]
+                        nic = await asyncio.to_thread(
+                            self.resource_client.resources.get_by_id,
+                            nic_ref.id,
+                            "2023-09-01",
+                        )
+                        if hasattr(nic, "properties"):
+                            ip_configs = nic.properties.get("ipConfigurations", [])
+                            for ip_config in ip_configs:
+                                props = ip_config.get("properties", {})
+                                private_ip = props.get("privateIPAddress", private_ip)
+                    except Exception:
+                        pass
+
+            return {
+                "instance_id": vm.vm_id,
+                "instance_name": vm.name,
+                "state": power_state,
+                "instance_type": vm.hardware_profile.vm_size,
+                "location": vm.location,
+                "provisioning_state": vm.provisioning_state,
+                "public_ip": public_ip,
+                "private_ip": private_ip,
+                "tags": dict(vm.tags) if vm.tags else {},
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Failed to get Azure VM status: {str(e)}",
+            }
+
+    async def terminate_instance(self, instance_id: str) -> Dict[str, Any]:
+        """Deallocate and delete an Azure VM.
+
+        Args:
+            instance_id: The VM name within the resource group.
+        """
+        try:
+            # First deallocate the VM
+            dealloc_poller = await asyncio.to_thread(
+                self.compute_client.virtual_machines.begin_deallocate,
+                self.resource_group,
+                instance_id,
+            )
+            await asyncio.to_thread(dealloc_poller.result)
+
+            # Then delete the VM
+            delete_poller = await asyncio.to_thread(
+                self.compute_client.virtual_machines.begin_delete,
+                self.resource_group,
+                instance_id,
+            )
+            await asyncio.to_thread(delete_poller.result)
+
+            return {
+                "status": "terminated",
+                "instance_name": instance_id,
+                "resource_group": self.resource_group,
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": f"Failed to terminate Azure VM: {str(e)}",
+            }
+
+    async def list_instances(
+        self, filters: Optional[Dict[str, List[str]]] = None
+    ) -> List[Dict[str, Any]]:
+        """List Azure VMs in the resource group."""
+        try:
+            vms_iterator = await asyncio.to_thread(
+                self.compute_client.virtual_machines.list,
+                self.resource_group,
+            )
+
+            vms = await asyncio.to_thread(list, vms_iterator)
+
+            instances = []
+            for vm in vms:
+                # Apply tag-based filters if provided
+                if filters:
+                    vm_tags = vm.tags or {}
+                    skip = False
+                    for key, values in filters.items():
+                        if vm_tags.get(key) not in values:
+                            skip = True
+                            break
+                    if skip:
+                        continue
+
+                instances.append(
+                    {
+                        "instance_id": vm.vm_id,
+                        "instance_name": vm.name,
+                        "state": vm.provisioning_state,
+                        "instance_type": vm.hardware_profile.vm_size,
+                        "location": vm.location,
+                        "tags": dict(vm.tags) if vm.tags else {},
+                    }
+                )
+
+            return instances
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to list Azure VMs: {str(e)}")
+
+    async def get_instance_metrics(
+        self, instance_id: str, start_time: datetime, end_time: datetime
+    ) -> List[CloudMetrics]:
+        """Get Azure Monitor metrics for a VM.
+
+        Note: Azure Monitor metrics require the azure-mgmt-monitor package.
+        This method returns basic metrics using the compute client's instance view.
+        """
+        try:
+            vm = await asyncio.to_thread(
+                self.compute_client.virtual_machines.get,
+                self.resource_group,
+                instance_id,
+                expand="instanceView",
+            )
+
+            # Build a single metrics entry from instance view
+            # Azure Monitor detailed metrics require azure-mgmt-monitor,
+            # but basic status is available from the instance view
+            metrics = []
+            if vm.instance_view and vm.instance_view.statuses:
+                metrics.append(
+                    CloudMetrics(
+                        instance_id=instance_id,
+                        provider=CloudProvider.AZURE,
+                        timestamp=datetime.now(),
+                        cpu_utilization=0.0,  # Detailed CPU requires azure-mgmt-monitor
+                    )
+                )
+
+            return metrics
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to get Azure VM metrics: {str(e)}")
+
+
 class CloudIntegration:
     """Unified cloud integration for edge resource management."""
 
@@ -572,14 +864,19 @@ class CloudIntegration:
         except ImportError as e:
             raise RuntimeError(f"Failed to register GCP integration: {e}")
 
-    def register_azure(self, subscription_id: str, resource_group: str) -> None:
+    def register_azure(
+        self,
+        subscription_id: str,
+        resource_group: str,
+        location: str = "eastus",
+    ) -> None:
         """Register Azure integration."""
-        if not AZURE_AVAILABLE:
-            raise ImportError(
-                "Azure SDK not available. Install with: pip install azure-mgmt-compute azure-identity"
+        try:
+            self.integrations[CloudProvider.AZURE] = AzureIntegration(
+                subscription_id, resource_group, location
             )
-        # Azure integration would be implemented here
-        raise NotImplementedError("Azure integration not yet implemented")
+        except ImportError as e:
+            raise RuntimeError(f"Failed to register Azure integration: {e}")
 
     async def create_instance(self, spec: InstanceSpec) -> Dict[str, Any]:
         """Create cloud instance."""
@@ -626,6 +923,8 @@ class CloudIntegration:
             return await integration.get_instance_status(instance_id)
         elif provider == CloudProvider.GCP:
             return await integration.get_instance_status(instance_id, zone)
+        elif provider == CloudProvider.AZURE:
+            return await integration.get_instance_status(instance_id)
         else:
             return {
                 "status": "error",
@@ -648,6 +947,8 @@ class CloudIntegration:
             result = await integration.terminate_instance(instance_id)
         elif provider == CloudProvider.GCP:
             result = await integration.delete_instance(instance_id, zone)
+        elif provider == CloudProvider.AZURE:
+            result = await integration.terminate_instance(instance_id)
         else:
             return {
                 "status": "error",
@@ -669,7 +970,8 @@ class CloudIntegration:
 
         integration = self.integrations[provider]
 
-        if provider == CloudProvider.AWS:
+        # All registered providers support list_instances via their integration
+        if hasattr(integration, "list_instances"):
             return await integration.list_instances(filters)
         else:
             raise NotImplementedError(
@@ -689,7 +991,8 @@ class CloudIntegration:
 
         integration = self.integrations[provider]
 
-        if provider == CloudProvider.AWS:
+        # All registered providers support get_instance_metrics via their integration
+        if hasattr(integration, "get_instance_metrics"):
             return await integration.get_instance_metrics(
                 instance_id, start_time, end_time
             )
@@ -729,6 +1032,19 @@ class CloudIntegration:
             ]
             provider_info["project_id"] = self.integrations[provider].project_id
             provider_info["zone"] = self.integrations[provider].zone
+        elif provider == CloudProvider.AZURE:
+            provider_info["features"] = [
+                "create_instance",
+                "get_instance_status",
+                "terminate_instance",
+                "list_instances",
+                "get_instance_metrics",
+            ]
+            provider_info["subscription_id"] = self.integrations[
+                provider
+            ].subscription_id
+            provider_info["resource_group"] = self.integrations[provider].resource_group
+            provider_info["location"] = self.integrations[provider].location
 
         return provider_info
 
@@ -763,11 +1079,23 @@ class CloudIntegration:
                         if status.get("state"):
                             if status["state"] in ["running", "RUNNING"]:
                                 instance.state = InstanceState.RUNNING
-                            elif status["state"] in ["stopped", "TERMINATED"]:
+                            elif status["state"] in [
+                                "stopped",
+                                "TERMINATED",
+                                "deallocated",
+                            ]:
                                 instance.state = InstanceState.STOPPED
-                            elif status["state"] in ["stopping", "STOPPING"]:
+                            elif status["state"] in [
+                                "stopping",
+                                "STOPPING",
+                                "deallocating",
+                            ]:
                                 instance.state = InstanceState.STOPPING
-                            elif status["state"] in ["pending", "PROVISIONING"]:
+                            elif status["state"] in [
+                                "pending",
+                                "PROVISIONING",
+                                "starting",
+                            ]:
                                 instance.state = InstanceState.PENDING
                             elif status["state"] in ["terminated", "TERMINATED"]:
                                 instance.state = InstanceState.TERMINATED
@@ -792,5 +1120,5 @@ class CloudIntegration:
                 break
             except Exception as e:
                 # Log error and continue monitoring
-                print(f"Cloud monitoring error: {e}")
+                logger.error(f"Cloud monitoring error: {e}")
                 await asyncio.sleep(self.monitoring_interval)

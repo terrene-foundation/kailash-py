@@ -52,10 +52,13 @@ When running E2E tests or validations:
 
 - **Purpose**: Custom workflows, fine-grained control, integrations
 - **Components**: WorkflowBuilder, LocalRuntime, 110+ nodes, MCP integration
+- **Custom Node Execution**: Fully async pipeline (CodeExecutor, AsyncLocalRuntime, aiohttp) for custom nodes
+- **Cloud Integration**: Azure cloud support alongside AWS
+- **Cache TTL**: MemoryCache supports TTL-based expiration with background reaper for automatic cleanup
 - **Usage**: Direct workflow construction with full programmatic control
 - **Install**: `pip install kailash`
 
-### DataFlow (`sdk-users/apps/dataflow/`) - v0.11.0
+### DataFlow (`sdk-users/apps/dataflow/`) - v0.12.0
 
 **Zero-config database framework** built on Core SDK:
 
@@ -64,11 +67,14 @@ When running E2E tests or validations:
   - CRUD: CREATE, READ, UPDATE, DELETE, LIST, UPSERT, COUNT
   - Bulk: BULK_CREATE, BULK_UPDATE, BULK_DELETE, BULK_UPSERT
   - DataFlow IS NOT AN ORM!
+- **Async Transactions**: Transaction nodes are AsyncNode subclasses (use `async_run()`)
+- **Auto-Wired Multi-Tenancy**: QueryInterceptor injects tenant filtering at 8 SQL execution points automatically
+- **Debug Persistence**: KnowledgeBase supports persistent SQLite storage for debug patterns
 - **Usage**: Database-first applications with enterprise features
 - **Install**: `pip install kailash-dataflow`
 - **Import**: `from dataflow import DataFlow`
 
-### Nexus (`sdk-users/apps/nexus/`) - v1.3.0
+### Nexus (`sdk-users/apps/nexus/`) - v1.4.0
 
 **Multi-channel platform** built on Core SDK:
 
@@ -113,14 +119,17 @@ app.start()
 - See `.claude/skills/03-nexus/golden-patterns-catalog.md` and `.claude/skills/03-nexus/codegen-decision-tree.md`
 - Auth imports: `from nexus.auth.plugin import NexusAuthPlugin`, `JWTConfig(secret=os.environ["JWT_SECRET"])` (>= 32 chars), `rbac=dict`, `TenantConfig(admin_role=...)`
 
-### Kaizen (`sdk-users/apps/kaizen/`) - v1.1.0
+### Kaizen (`sdk-users/apps/kaizen/`) - v1.2.0
 
 **AI agent framework** built on Core SDK:
 
 - **Purpose**: Production-ready AI agents with multi-modal processing, multi-agent coordination, and enterprise features built on Kailash SDK
 - **Features**: Signature-based programming, BaseAgent architecture, automatic optimization, error handling, audit trails
 - **Unified Agent API (v1.0.0+)**: Progressive configuration from 2-line quickstart to expert mode
-- **CARE/EATP Trust Framework (v1.1.0)**: Cryptographic trust chains, posture system, constraint dimensions, knowledge ledger
+- **CARE/EATP Trust Framework (v1.2.0)**: Cryptographic trust chains, posture system, constraint dimensions, knowledge ledger, RFC 3161 timestamping
+- **FallbackRouter Safety**: `on_fallback` callback fires before each fallback (raise `FallbackRejectedError` to block), WARNING-level logging on every fallback, model capability validation
+- **AgentTeam Deprecated**: Use `OrchestrationRuntime` instead of `AgentTeam` for multi-agent coordination
+- **MCP Session Methods**: `discover_mcp_resources()`, `read_mcp_resource()`, `discover_mcp_prompts()`, `get_mcp_prompt()` are now wired and functional
 - **Usage**: Agentic applications requiring robust AI capabilities
 - **Install**: `pip install kailash-kaizen`
 - **Import**: `from kaizen.api import Agent` (v1.0.0+) or `from kaizen.core.base_agent import BaseAgent`
