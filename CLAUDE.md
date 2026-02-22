@@ -58,7 +58,7 @@ When running E2E tests or validations:
 - **Usage**: Direct workflow construction with full programmatic control
 - **Install**: `pip install kailash`
 
-### DataFlow (`sdk-users/apps/dataflow/`) - v0.12.0
+### DataFlow (`sdk-users/apps/dataflow/`) - v0.12.1
 
 **Zero-config database framework** built on Core SDK:
 
@@ -74,7 +74,7 @@ When running E2E tests or validations:
 - **Install**: `pip install kailash-dataflow`
 - **Import**: `from dataflow import DataFlow`
 
-### Nexus (`sdk-users/apps/nexus/`) - v1.4.0
+### Nexus (`sdk-users/apps/nexus/`) - v1.4.1
 
 **Multi-channel platform** built on Core SDK:
 
@@ -119,7 +119,7 @@ app.start()
 - See `.claude/skills/03-nexus/golden-patterns-catalog.md` and `.claude/skills/03-nexus/codegen-decision-tree.md`
 - Auth imports: `from nexus.auth.plugin import NexusAuthPlugin`, `JWTConfig(secret=os.environ["JWT_SECRET"])` (>= 32 chars), `rbac=dict`, `TenantConfig(admin_role=...)`
 
-### Kaizen (`sdk-users/apps/kaizen/`) - v1.2.0
+### Kaizen (`sdk-users/apps/kaizen/`) - v1.2.1
 
 **AI agent framework** built on Core SDK:
 
