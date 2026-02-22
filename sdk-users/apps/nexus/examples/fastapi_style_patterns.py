@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FastAPI-style Nexus usage patterns (v1.3.0).
+"""FastAPI-style Nexus usage patterns (v1.4.0).
 
 Shows different ways to use the Nexus API:
 - Zero-config instances
@@ -12,9 +12,8 @@ Shows different ways to use the Nexus API:
 
 import os
 
-from nexus import Nexus
-
 from kailash.workflow.builder import WorkflowBuilder
+from nexus import Nexus
 
 # ---------------------------------------------------------------------------
 # Pattern 1: Simple -- like FastAPI
@@ -233,7 +232,7 @@ def preset_pattern():
 
 
 if __name__ == "__main__":
-    print("FastAPI-style Nexus Patterns Demo (v1.3.0)")
+    print("FastAPI-style Nexus Patterns Demo (v1.4.0)")
     print("=" * 50)
 
     # Show the main startup pattern

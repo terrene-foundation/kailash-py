@@ -18,16 +18,16 @@
 
 ---
 
-## Latest Release: v0.11.0
+## Latest Release: v0.12.0
 
-**Core SDK v0.11.0** | **DataFlow v0.11.0** | **Nexus v1.3.0** | **Kaizen v1.1.0**
+**Core SDK v0.12.0** | **DataFlow v0.12.0** | **Nexus v1.4.0** | **Kaizen v1.2.0**
 
 ### What's New
 
-- **Nexus v1.3.0**: Native middleware API, NexusAuthPlugin (JWT/RBAC/SSO/rate-limiting/tenant-isolation/audit), handler support (`@app.handler()`), preset system, CORS configuration
-- **DataFlow v0.11.0**: `auto_migrate=True` works in Docker/FastAPI via SyncDDLExecutor, centralized logging with sensitive data masking, trust-aware features
-- **Kaizen v1.1.0**: CARE framework (Context, Action, Reasoning, Evidence), EATP trust protocol, enhanced multi-agent coordination
-- **Core SDK v0.11.0**: 115+ production nodes, runtime parity between sync/async
+- **Core SDK v0.12.0**: Custom node async execution pipeline, Azure cloud integration, TTL-based cache expiration, health check endpoints
+- **DataFlow v0.12.0**: Auto-wired multi-tenancy with QueryInterceptor, async transaction nodes, debug persistence with SQLite storage
+- **Nexus v1.4.0**: Improved MCP transport reliability, enhanced middleware pipeline
+- **Kaizen v1.2.0**: FallbackRouter safety (on_fallback callback, model validation), OrchestrationRuntime replaces AgentTeam, RFC 3161 timestamping, MCP session wiring
 
 ## Project Architecture
 
@@ -47,9 +47,9 @@ Application Frameworks (built ON Core SDK)
 kailash_python_sdk/
 ├── src/kailash/          # Core SDK - 115+ nodes, workflows, runtime
 ├── apps/
-│   ├── kailash-dataflow/ # Zero-config database framework (v0.11.0)
-│   ├── kailash-nexus/    # Multi-channel platform (v1.3.0)
-│   └── kailash-kaizen/   # AI agent framework (v1.1.0)
+│   ├── kailash-dataflow/ # Zero-config database framework (v0.12.0)
+│   ├── kailash-nexus/    # Multi-channel platform (v1.4.0)
+│   └── kailash-kaizen/   # AI agent framework (v1.2.0)
 ├── tests/                # 7,800+ core SDK tests
 ├── sdk-users/            # Complete user documentation
 ├── docs/                 # API reference (Sphinx)
@@ -158,7 +158,7 @@ results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs=
 
 ## Key Features
 
-### Core SDK (v0.11.0)
+### Core SDK (v0.12.0)
 
 - **115+ production nodes**: AI, API, Code, Data, Database, File, Logic, Monitoring, Transform
 - **Runtime parity**: `LocalRuntime` (sync) and `AsyncLocalRuntime` (async) with identical APIs
@@ -166,7 +166,7 @@ results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs=
 - **MCP integration**: Built-in Model Context Protocol server support
 - **Conditional execution**: SwitchNode branching and skip patterns
 
-### DataFlow (v0.11.0)
+### DataFlow (v0.12.0)
 
 - **11 nodes per model**: Automatic CRUD, query, and bulk operation node generation
 - **Multi-database**: PostgreSQL, MySQL, SQLite with full parity
@@ -174,7 +174,7 @@ results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs=
 - **ExpressDataFlow**: ~23x faster direct CRUD via `db.express`
 - **Enterprise migrations**: 8-component migration system with risk assessment
 
-### Nexus (v1.3.0)
+### Nexus (v1.4.0)
 
 - **Multi-channel**: Single registration deploys to API + CLI + MCP simultaneously
 - **Handler support**: `@app.handler()` bypasses PythonCodeNode sandbox restrictions
@@ -182,7 +182,7 @@ results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs=
 - **Native middleware**: `app.add_middleware()`, `app.include_router()`, `app.add_plugin()`
 - **Preset system**: none, lightweight, standard, saas, enterprise configurations
 
-### Kaizen (v1.1.0)
+### Kaizen (v1.2.0)
 
 - **Signature-based programming**: Declarative AI agent definitions
 - **Multi-agent coordination**: Supervisor-worker, router, ensemble, pipeline patterns

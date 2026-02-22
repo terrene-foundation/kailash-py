@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Basic usage example of Kailash Nexus v1.3.0.
+"""Basic usage example of Kailash Nexus v1.4.0.
 
 Shows the FastAPI-style API with explicit instances, handler registration,
 and enterprise auth via NexusAuthPlugin.
@@ -7,9 +7,8 @@ and enterprise auth via NexusAuthPlugin.
 
 import os
 
-from nexus import Nexus
-
 from kailash.workflow.builder import WorkflowBuilder
+from nexus import Nexus
 
 
 def main():

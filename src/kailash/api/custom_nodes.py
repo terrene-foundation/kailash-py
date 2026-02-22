@@ -8,10 +8,15 @@ This module provides endpoints for users to:
 - Share nodes within a tenant
 """
 
+import asyncio
+import logging
+import time
 from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 class CustomNodeCreate(BaseModel):
@@ -241,45 +246,140 @@ def setup_custom_node_routes(app, SessionLocal, tenant_id: str):
 
             # Execute node based on implementation type
             try:
+                start_time = time.monotonic()
+
                 if node.implementation_type == "python":
-                    # Execute Python code
-                    result = _execute_python_node(node, test_data)
+                    result = await _execute_python_node(node, test_data)
                 elif node.implementation_type == "workflow":
-                    # Execute workflow
-                    result = _execute_workflow_node(node, test_data)
+                    result = await _execute_workflow_node(node, test_data)
                 elif node.implementation_type == "api":
-                    # Execute API call
-                    result = _execute_api_node(node, test_data)
+                    result = await _execute_api_node(node, test_data)
                 else:
                     raise ValueError(
                         f"Unknown implementation type: {node.implementation_type}"
                     )
 
+                elapsed_ms = round((time.monotonic() - start_time) * 1000, 2)
+
                 return {
                     "success": True,
                     "result": result,
-                    "execution_time_ms": 0,  # TODO: Track actual execution time
+                    "execution_time_ms": elapsed_ms,
                 }
             except Exception as e:
-                return {"success": False, "error": str(e), "execution_time_ms": 0}
+                elapsed_ms = round((time.monotonic() - start_time) * 1000, 2)
+                # Sanitize error: return type only, log full details server-side
+                import logging as _logging
+
+                _logging.getLogger(__name__).error(
+                    f"Custom node execution failed: {e}", exc_info=True
+                )
+                return {
+                    "success": False,
+                    "error": f"Execution failed: {type(e).__name__}",
+                    "execution_time_ms": elapsed_ms,
+                }
 
 
-def _execute_python_node(node, test_data):
-    """Execute a Python-based custom node"""
-    # This would execute the Python code in a sandboxed environment
-    # For now, return mock result
-    return {"output": f"Executed {node.name} with Python implementation"}
+async def _execute_python_node(node, test_data: dict[str, Any]) -> dict[str, Any]:
+    """Execute a Python-based custom node using CodeExecutor.
+
+    The node's implementation dict should contain a 'code' key with the Python
+    source code string. Input variables from test_data are injected into the
+    execution namespace.
+    """
+    from ..nodes.code.python import CodeExecutor
+
+    code = node.implementation.get("code", "")
+    if not code:
+        raise ValueError(
+            f"Custom node '{node.name}' has no Python code in implementation"
+        )
+
+    executor = CodeExecutor()
+    # Run synchronous CodeExecutor in a thread to keep the event loop free
+    result = await asyncio.to_thread(
+        executor.execute_code, code, test_data, node_instance=None
+    )
+    return result
 
 
-def _execute_workflow_node(node, test_data):
-    """Execute a workflow-based custom node"""
-    # This would create and execute a workflow from the stored definition
-    # For now, return mock result
-    return {"output": f"Executed {node.name} with Workflow implementation"}
+async def _execute_workflow_node(node, test_data: dict[str, Any]) -> dict[str, Any]:
+    """Execute a workflow-based custom node using AsyncLocalRuntime.
+
+    The node's implementation dict should contain a 'workflow_definition' key
+    with the serialized workflow structure (nodes, connections, etc.).
+    """
+    from ..runtime import AsyncLocalRuntime
+    from ..workflow.builder import WorkflowBuilder
+
+    workflow_def = node.implementation.get("workflow_definition")
+    if not workflow_def:
+        raise ValueError(
+            f"Custom node '{node.name}' has no workflow_definition in implementation"
+        )
+
+    builder = WorkflowBuilder()
+
+    # Rebuild workflow from stored definition
+    for node_def in workflow_def.get("nodes", []):
+        builder.add_node(
+            node_def["type"],
+            node_def["id"],
+            node_def.get("config", {}),
+        )
+    for conn in workflow_def.get("connections", []):
+        builder.connect(
+            conn["source"],
+            conn["target"],
+            conn.get("source_port", "output"),
+            conn.get("target_port", "input"),
+        )
+
+    runtime = AsyncLocalRuntime()
+    results, run_id = await runtime.execute_workflow_async(
+        builder.build(), inputs=test_data
+    )
+    return {"results": results, "run_id": run_id}
 
 
-def _execute_api_node(node, test_data):
-    """Execute an API-based custom node"""
-    # This would make HTTP requests based on the API configuration
-    # For now, return mock result
-    return {"output": f"Executed {node.name} with API implementation"}
+async def _execute_api_node(node, test_data: dict[str, Any]) -> dict[str, Any]:
+    """Execute an API-based custom node using aiohttp.
+
+    The node's implementation dict should contain:
+    - 'url': The endpoint URL (required)
+    - 'method': HTTP method (default: POST)
+    - 'headers': Optional headers dict
+    - 'timeout': Optional timeout in seconds (default: 30)
+    """
+    try:
+        import aiohttp
+    except ImportError:
+        raise ImportError(
+            "aiohttp is required for API custom nodes. Install with: pip install aiohttp"
+        )
+
+    url = node.implementation.get("url")
+    if not url:
+        raise ValueError(f"Custom node '{node.name}' has no 'url' in implementation")
+
+    method = node.implementation.get("method", "POST").upper()
+    headers = node.implementation.get("headers", {})
+    timeout_seconds = node.implementation.get("timeout", 30)
+
+    timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        request_kwargs: dict[str, Any] = {"headers": headers}
+
+        if method in ("POST", "PUT", "PATCH"):
+            request_kwargs["json"] = test_data
+        elif test_data:
+            request_kwargs["params"] = {k: str(v) for k, v in test_data.items()}
+
+        async with session.request(method, url, **request_kwargs) as response:
+            response_data = await response.json()
+            return {
+                "status_code": response.status,
+                "body": response_data,
+                "headers": dict(response.headers),
+            }

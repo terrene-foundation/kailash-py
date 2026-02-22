@@ -57,12 +57,30 @@ workflow.add_node("OrderListNode", "list", {
 })
 ```
 
+## Auto-Wired Multi-Tenancy (v0.11.0)
+
+Multi-tenancy is now auto-wired into the engine via `QueryInterceptor`, which hooks into 8 SQL execution points:
+
+- All SELECT, INSERT, UPDATE, DELETE operations are automatically intercepted
+- Tenant filtering is injected at the SQL level, not the application level
+- No manual `tenant_id` parameter needed in workflow nodes when tenant context is set
+
+```python
+# Set tenant context once; all queries are automatically filtered
+from dataflow.tenancy import TenantContextSwitch
+
+async with TenantContextSwitch(db, tenant_id="tenant_abc"):
+    # All operations inside this block are tenant-scoped
+    results = await runtime.execute_workflow_async(workflow.build(), inputs={})
+```
+
 ## Multi-Tenant Features
 
 - **Tenant Isolation**: Automatic filtering by tenant_id
 - **Data Partitioning**: Separate data per tenant
 - **Security**: Prevents cross-tenant access
 - **Audit Trails**: Track tenant-specific changes
+- **Auto-Wired Interceptor**: QueryInterceptor at 8 SQL execution points (v0.11.0)
 
 ## Documentation References
 

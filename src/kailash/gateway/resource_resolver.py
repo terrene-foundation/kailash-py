@@ -10,7 +10,13 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
-from ..resources.factory import CacheFactory, DatabasePoolFactory, HttpClientFactory
+from ..resources.factory import (
+    CacheFactory,
+    DatabasePoolFactory,
+    HttpClientFactory,
+    MessageQueueFactory,
+    S3ClientFactory,
+)
 from ..resources.registry import ResourceFactory, ResourceRegistry
 from .security import SecretManager
 
@@ -94,7 +100,7 @@ class ResourceResolver:
         try:
             # Try to get existing pool
             return await self.resource_registry.get_resource(pool_key)
-        except:
+        except Exception:
             # Register and create new pool
             factory = DatabasePoolFactory(**connection_config)
 
@@ -138,7 +144,7 @@ class ResourceResolver:
 
         try:
             return await self.resource_registry.get_resource(client_key)
-        except:
+        except Exception:
             factory = HttpClientFactory(**config)
 
             async def cleanup(session):
@@ -163,7 +169,7 @@ class ResourceResolver:
 
         try:
             return await self.resource_registry.get_resource(cache_key)
-        except:
+        except Exception:
             factory = CacheFactory(**config)
 
             async def health_check(cache):
@@ -185,33 +191,120 @@ class ResourceResolver:
         self, config: Dict[str, Any], credentials: Optional[Dict[str, Any]]
     ) -> Any:
         """Resolve message queue resource."""
-        # Implementation depends on the message queue system
-        # This is a placeholder
-        queue_type = config.get("type", "rabbitmq")
+        connection_config = {**config}
+        queue_type = connection_config.pop("type", "rabbitmq")
 
-        if queue_type == "rabbitmq":
-            # Would implement RabbitMQ connection
-            pass
-        elif queue_type == "kafka":
-            # Would implement Kafka connection
-            pass
+        if credentials:
+            for key in ["username", "password", "host", "port", "vhost"]:
+                if key in credentials:
+                    connection_config[key] = credentials[key]
 
-        raise NotImplementedError(f"Message queue type {queue_type} not implemented")
+        # Create unique key for this configuration
+        config_str = json.dumps(
+            {**connection_config, "type": queue_type}, sort_keys=True
+        )
+        mq_key = f"mq_{queue_type}_{hashlib.md5(config_str.encode()).hexdigest()[:8]}"
+
+        try:
+            return await self.resource_registry.get_resource(mq_key)
+        except Exception:
+            factory = MessageQueueFactory(backend=queue_type, **connection_config)
+
+            if queue_type == "rabbitmq":
+
+                async def health_check(connection):
+                    try:
+                        channel = await connection.channel()
+                        await channel.declare_queue(
+                            "", exclusive=True, auto_delete=True
+                        )
+                        await channel.close()
+                        return True
+                    except Exception:
+                        return False
+
+                async def cleanup(connection):
+                    await connection.close()
+
+            elif queue_type == "kafka":
+
+                async def health_check(client):
+                    try:
+                        await client.producer.partitions_for("__consumer_offsets")
+                        return True
+                    except Exception:
+                        return False
+
+                async def cleanup(client):
+                    await client.close()
+
+            else:
+
+                async def health_check(resource):
+                    return True
+
+                async def cleanup(resource):
+                    if hasattr(resource, "close"):
+                        await resource.close()
+                    elif hasattr(resource, "aclose"):
+                        await resource.aclose()
+
+            self.resource_registry.register_factory(
+                mq_key,
+                factory,
+                health_check=health_check,
+                cleanup_handler=cleanup,
+            )
+            return await self.resource_registry.get_resource(mq_key)
 
     async def _resolve_s3_client(
         self, config: Dict[str, Any], credentials: Optional[Dict[str, Any]]
     ) -> Any:
         """Resolve S3 client resource."""
-        # Implementation would depend on boto3 or aioboto3
-        # This is a placeholder
+        connection_config = {**config}
         if credentials:
             if "access_key" in credentials:
-                config["aws_access_key_id"] = credentials["access_key"]
+                connection_config["aws_access_key_id"] = credentials["access_key"]
             if "secret_key" in credentials:
-                config["aws_secret_access_key"] = credentials["secret_key"]
+                connection_config["aws_secret_access_key"] = credentials["secret_key"]
+            if "region" in credentials:
+                connection_config["region"] = credentials["region"]
+            if "endpoint_url" in credentials:
+                connection_config["endpoint_url"] = credentials["endpoint_url"]
 
-        # Create unique key
-        s3_key = f"s3_{config.get('region', 'us-east-1')}"
+        # Create unique key for this configuration
+        region = connection_config.get("region", "us-east-1")
+        config_str = json.dumps(connection_config, sort_keys=True)
+        s3_key = f"s3_{region}_{hashlib.md5(config_str.encode()).hexdigest()[:8]}"
 
-        # Would implement S3 client creation here
-        raise NotImplementedError("S3 client resolution not yet implemented")
+        try:
+            return await self.resource_registry.get_resource(s3_key)
+        except Exception:
+            factory = S3ClientFactory(**connection_config)
+
+            default_bucket = connection_config.get("default_bucket", "")
+
+            async def health_check(client):
+                try:
+                    if default_bucket:
+                        await client.head_bucket(Bucket=default_bucket)
+                    else:
+                        await client.list_buckets()
+                    return True
+                except Exception:
+                    return False
+
+            async def cleanup(client):
+                # Use the stored context manager for proper aioboto3 cleanup
+                if hasattr(client, "_aioboto3_ctx"):
+                    await client._aioboto3_ctx.__aexit__(None, None, None)
+                else:
+                    await client.close()
+
+            self.resource_registry.register_factory(
+                s3_key,
+                factory,
+                health_check=health_check,
+                cleanup_handler=cleanup,
+            )
+            return await self.resource_registry.get_resource(s3_key)

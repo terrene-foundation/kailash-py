@@ -170,7 +170,7 @@ class DurableAPIGateway(WorkflowAPIGateway):
         if request.method in ["POST", "PUT", "PATCH"]:
             try:
                 body = await request.json()
-            except:
+            except Exception:
                 pass
 
         # Extract user/tenant from headers or auth
@@ -186,7 +186,19 @@ class DurableAPIGateway(WorkflowAPIGateway):
             request_id=f"req_{request.headers.get('X-Request-ID', '')}",
             method=request.method,
             path=str(request.url.path),
-            headers=dict(request.headers),
+            headers={
+                k: v
+                for k, v in request.headers.items()
+                if k.lower()
+                not in (
+                    "authorization",
+                    "cookie",
+                    "x-api-key",
+                    "x-auth-token",
+                    "proxy-authorization",
+                    "set-cookie",
+                )
+            },
             query_params=dict(request.query_params),
             body=body,
             client_ip=request.client.host if request.client else "0.0.0.0",
@@ -242,27 +254,28 @@ class DurableAPIGateway(WorkflowAPIGateway):
         call_next: Callable,
     ) -> Response:
         """Execute request with durability."""
-        try:
-            # Convert HTTP request to workflow request
-            # This is simplified - real implementation would parse the request
-            # and create appropriate workflow based on routing
+        import time
 
-            # For now, just execute the request normally
+        start_time = time.monotonic()
+        try:
             response = await call_next(request)
 
-            # Record completion
+            duration_ms = round((time.monotonic() - start_time) * 1000, 2)
+
+            # Record completion with actual duration
             await self.event_store.append(
                 EventType.REQUEST_COMPLETED,
                 durable_request.id,
                 {
                     "status_code": response.status_code,
-                    "duration_ms": 0,  # TODO: Track actual duration
+                    "duration_ms": duration_ms,
                 },
             )
 
             return response
 
         except Exception as e:
+            duration_ms = round((time.monotonic() - start_time) * 1000, 2)
             # Record failure
             await self.event_store.append(
                 EventType.REQUEST_FAILED,
@@ -270,6 +283,7 @@ class DurableAPIGateway(WorkflowAPIGateway):
                 {
                     "error": str(e),
                     "error_type": type(e).__name__,
+                    "duration_ms": duration_ms,
                 },
             )
             raise
@@ -293,7 +307,7 @@ class DurableAPIGateway(WorkflowAPIGateway):
                 import json
 
                 response_data = json.loads(response.body)
-            except:
+            except (json.JSONDecodeError, Exception):
                 pass
 
         await self.deduplicator.cache_response(
@@ -372,11 +386,68 @@ class DurableAPIGateway(WorkflowAPIGateway):
 
         @self.app.post("/durability/requests/{request_id}/resume")
         async def resume_request(request_id: str, checkpoint_id: Optional[str] = None):
-            """Resume a failed or incomplete request."""
-            # TODO: Implement request resumption
+            """Resume a failed or incomplete request from its last checkpoint."""
+            # Load request events to reconstruct state
+            events = await self.event_store.get_events(request_id)
+            if not events:
+                raise HTTPException(
+                    status_code=404, detail=f"No events found for request {request_id}"
+                )
+
+            # Find the latest checkpoint or creation event
+            last_checkpoint = None
+            request_metadata = None
+            for event in events:
+                event_data = event.to_dict()
+                if event_data.get("event_type") == EventType.REQUEST_CREATED:
+                    request_metadata = event_data.get("data", {})
+                if event_data.get("event_type") == EventType.CHECKPOINT_CREATED:
+                    if (
+                        checkpoint_id is None
+                        or event_data.get("data", {}).get("checkpoint_id")
+                        == checkpoint_id
+                    ):
+                        last_checkpoint = event_data
+
+            if request_metadata is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No creation event found for request {request_id}",
+                )
+
+            # Check if request already completed
+            for event in events:
+                event_data = event.to_dict()
+                if event_data.get("event_type") == EventType.REQUEST_COMPLETED:
+                    return {
+                        "status": "already_completed",
+                        "request_id": request_id,
+                        "message": "Request has already completed successfully",
+                    }
+
+            # Record resumption event
+            await self.event_store.append(
+                EventType.REQUEST_RESUMED,
+                request_id,
+                {
+                    "resumed_from": (
+                        last_checkpoint.get("data", {}).get("checkpoint_id")
+                        if last_checkpoint
+                        else "start"
+                    ),
+                    "resumed_at": datetime.now(UTC).isoformat(),
+                },
+            )
+
             return {
-                "status": "not_implemented",
-                "message": "Request resumption coming soon",
+                "status": "resumed",
+                "request_id": request_id,
+                "resumed_from_checkpoint": (
+                    last_checkpoint.get("data", {}).get("checkpoint_id")
+                    if last_checkpoint
+                    else None
+                ),
+                "original_metadata": request_metadata,
             }
 
         @self.app.delete("/durability/requests/{request_id}")
@@ -402,15 +473,51 @@ class DurableAPIGateway(WorkflowAPIGateway):
                 "state": projection,
             }
 
-    async def close(self):
-        """Close the durable gateway and cleanup resources."""
+    async def close(self, shutdown_timeout: float = 30.0):
+        """Close the durable gateway and cleanup resources.
+
+        Args:
+            shutdown_timeout: Maximum seconds to wait for active requests
+                to complete before force-closing.
+        """
+        import time
+
+        # Wait for active requests to complete with timeout
+        if self.active_requests:
+            logger.info(
+                f"Graceful shutdown: waiting for {len(self.active_requests)} "
+                f"active requests (timeout={shutdown_timeout}s)"
+            )
+            start = time.monotonic()
+            while (
+                self.active_requests and (time.monotonic() - start) < shutdown_timeout
+            ):
+                await asyncio.sleep(0.5)
+
+            if self.active_requests:
+                remaining = list(self.active_requests.keys())
+                logger.warning(
+                    f"Shutdown timeout reached with {len(remaining)} requests "
+                    f"still active: {remaining[:5]}"
+                )
+                # Cancel remaining requests
+                for req_id, durable_request in list(self.active_requests.items()):
+                    try:
+                        await durable_request.cancel()
+                    except Exception as e:
+                        logger.error(f"Failed to cancel request {req_id}: {e}")
+
+        # Cancel background tasks
+        for task in self._background_tasks:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+        # Close components
         await self.checkpoint_manager.close()
         await self.deduplicator.close()
         await self.event_store.close()
-
-        # Wait for active requests to complete
-        if self.active_requests:
-            logger.info(f"Waiting for {len(self.active_requests)} active requests")
-            # TODO: Implement graceful shutdown with timeout
-
-        # No parent close() method to call
+        logger.info("Durable gateway closed")

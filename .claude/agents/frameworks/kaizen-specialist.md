@@ -123,7 +123,10 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **Strategy Pattern**: Pluggable execution (AsyncSingleShotStrategy is default)
 - **SharedMemoryPool**: Multi-agent coordination
 - **A2A Protocol**: Google Agent-to-Agent protocol for semantic capability matching
-- **CARE/EATP Trust Framework** (v1.1.0): Cryptographic trust chains, 5-posture enum with state machine, constraint dimensions, knowledge ledger with provenance, enterprise crypto (multi-sig genesis, Merkle audit, CRL)
+- **CARE/EATP Trust Framework** (v1.2.0): Cryptographic trust chains, 5-posture enum with state machine, constraint dimensions, knowledge ledger with provenance, enterprise crypto (multi-sig genesis, Merkle audit, CRL), RFC 3161 timestamping
+- **FallbackRouter Safety Hardening**: `on_fallback` callback fires before each fallback (raise `FallbackRejectedError` to block unsafe fallbacks), WARNING-level logging on every fallback, model capability validation before routing
+- **AgentTeam Deprecated**: Use `OrchestrationRuntime` instead for multi-agent coordination
+- **MCP Session Wiring**: `discover_mcp_resources()`, `read_mcp_resource()`, `discover_mcp_prompts()`, `get_mcp_prompt()` are wired and functional on agent sessions
 - **Performance Caches** (v1.0): 7 caches with 10-100x speedup (Schema, Embedding, Prompt, etc.)
 - **GPT-5 Support** (v1.0): Automatic temperature=1.0 enforcement, 8000 max_tokens for reasoning
 
@@ -134,6 +137,7 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 | `ToolRegistry`, `ToolExecutor`  | **REMOVED**                        | Use MCP via `BaseAgent.execute_mcp_tool()` or `KaizenToolRegistry` for native tools |
 | `kaizen.agents.coordination`    | **DEPRECATED** (removal in v0.5.0) | Use `kaizen.orchestration.patterns`                                                 |
 | `max_tokens` (OpenAI providers) | **DEPRECATED**                     | Use `max_completion_tokens` instead                                                 |
+| `AgentTeam`                     | **DEPRECATED**                     | Use `OrchestrationRuntime` for multi-agent coordination                             |
 
 ### LLM Providers (v0.8.2)
 

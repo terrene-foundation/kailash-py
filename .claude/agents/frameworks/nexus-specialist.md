@@ -128,7 +128,7 @@ workflow.add_connection("prepare", "result.filters", "search", "filter")
 # "filter": "${prepare.result}"
 ```
 
-## Middleware & Plugin API (v1.3.0)
+## Middleware & Plugin API (v1.4.0)
 
 ```python
 # Native middleware (Starlette-compatible)
@@ -227,7 +227,7 @@ app = Nexus(preset="saas", cors_origins=["https://app.example.com"])
 
 Complete auth package with JWT, RBAC, tenant isolation, rate limiting, and audit logging.
 
-**Security Defaults (v1.3.0)**:
+**Security Defaults (v1.4.0)**:
 
 - `cors_allow_credentials=False` in both `Nexus()` and `NexusConfig` (safe with wildcard origins)
 - JWTConfig enforces **32-character minimum** for HS\* algorithm secrets
@@ -433,6 +433,10 @@ async def admin(user=Depends(RequireRole("admin"))):  # Works
 ```
 
 PEP 563 turns type annotations into strings, preventing FastAPI from recognizing `Request` and other special types.
+
+## MCP Transport
+
+- **`receive_message()`**: MCP transport now supports `receive_message()` for bidirectional communication in custom MCP transports
 
 ## Common Issues & Solutions
 
