@@ -695,8 +695,10 @@ class AzureIntegration:
                             for ip_config in ip_configs:
                                 props = ip_config.get("properties", {})
                                 private_ip = props.get("privateIPAddress", private_ip)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(
+                            "Failed to read NIC properties: %s", type(e).__name__
+                        )
 
             return {
                 "instance_id": vm.vm_id,
@@ -974,9 +976,7 @@ class CloudIntegration:
         if hasattr(integration, "list_instances"):
             return await integration.list_instances(filters)
         else:
-            raise NotImplementedError(
-                f"List operation not implemented for {provider.value}"
-            )
+            raise RuntimeError(f"List operation not supported for {provider.value}")
 
     async def get_instance_metrics(
         self,
@@ -997,9 +997,7 @@ class CloudIntegration:
                 instance_id, start_time, end_time
             )
         else:
-            raise NotImplementedError(
-                f"Metrics operation not implemented for {provider.value}"
-            )
+            raise RuntimeError(f"Metrics operation not supported for {provider.value}")
 
     async def get_supported_providers(self) -> List[str]:
         """Get list of registered cloud providers."""
@@ -1110,9 +1108,11 @@ class CloudIntegration:
                         if status.get("private_ip"):
                             instance.private_ip = status["private_ip"]
 
-                    except Exception:
-                        # Instance might have been deleted
-                        pass
+                    except Exception as e:
+                        logger.debug(
+                            "Instance status check failed (may have been deleted): %s",
+                            type(e).__name__,
+                        )
 
                 await asyncio.sleep(self.monitoring_interval)
 

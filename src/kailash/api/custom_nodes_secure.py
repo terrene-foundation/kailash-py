@@ -8,6 +8,8 @@ This module provides secure endpoints for users to:
 - Share nodes within a tenant
 """
 
+import logging
+import time
 from datetime import datetime
 from typing import Any
 
@@ -269,6 +271,8 @@ def setup_custom_node_routes(app, SessionLocal):
 
         # Execute node based on implementation type
         try:
+            start_time = time.monotonic()
+
             if node.implementation_type == "python":
                 # Execute Python code in sandboxed environment
                 result = await _execute_python_node(node, test_data, tenant.id)
@@ -283,13 +287,23 @@ def setup_custom_node_routes(app, SessionLocal):
                     f"Unknown implementation type: {node.implementation_type}"
                 )
 
+            elapsed_ms = round((time.monotonic() - start_time) * 1000, 2)
+
             return {
                 "success": True,
                 "result": result,
-                "execution_time_ms": 0,  # TODO: Track actual execution time
+                "execution_time_ms": elapsed_ms,
             }
         except Exception as e:
-            return {"success": False, "error": str(e), "execution_time_ms": 0}
+            elapsed_ms = round((time.monotonic() - start_time) * 1000, 2)
+            logging.getLogger(__name__).error(
+                "Custom node execution failed: %s", e, exc_info=True
+            )
+            return {
+                "success": False,
+                "error": f"Execution failed: {type(e).__name__}",
+                "execution_time_ms": elapsed_ms,
+            }
 
 
 async def _execute_python_node(
