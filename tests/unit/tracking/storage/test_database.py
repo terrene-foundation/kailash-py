@@ -65,7 +65,12 @@ class TestDatabaseStorageInitialization:
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
             tables = {row[0] for row in cursor.fetchall()}
 
-            expected_tables = {"workflow_runs", "tasks", "task_runs", "metrics"}
+            expected_tables = {
+                "workflow_runs",
+                "tasks",
+                "audit_events",
+                "schema_version",
+            }
             assert expected_tables.issubset(tables)
 
             # Check indexes exist
@@ -73,17 +78,13 @@ class TestDatabaseStorageInitialization:
             indexes = {row[0] for row in cursor.fetchall()}
 
             expected_indexes = {
-                "idx_runs_workflow",
-                "idx_runs_status",
+                "idx_workflow_runs_status",
+                "idx_workflow_runs_name",
                 "idx_tasks_run",
                 "idx_tasks_node",
                 "idx_tasks_status",
-                "idx_node_id",
-                "idx_status",
-                "idx_created_at",
-                "idx_task_runs_run",
-                "idx_task_runs_node",
-                "idx_task_runs_status",
+                "idx_audit_events_type",
+                "idx_audit_events_trace",
             }
             assert expected_indexes.issubset(indexes)
 
@@ -194,6 +195,17 @@ class TestTaskOperations:
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = f"{tmpdir}/test.db"
             storage = DatabaseStorage(db_path)
+            # Create parent workflow_runs for FK constraints
+            for run_id in ["run-123", "run-456"]:
+                run = WorkflowRun(
+                    run_id=run_id,
+                    workflow_name="test_workflow",
+                    status="running",
+                    started_at=datetime.now(timezone.utc),
+                    metadata={},
+                    tasks=[],
+                )
+                storage.save_run(run)
             yield storage
             storage.conn.close()
 
@@ -372,11 +384,11 @@ class TestTaskOperations:
 
     def test_get_all_tasks(self, storage):
         """Test getting all tasks."""
-        # Save multiple tasks
+        # Save multiple tasks (using run-123 which exists from fixture)
         for i in range(3):
             task = TaskRun(
-                task_id=f"task-{i}",
-                run_id=f"run-{i}",
+                task_id=f"task-all-{i}",
+                run_id="run-123",
                 node_id=f"node-{i}",
                 node_type="ProcessorNode",
                 status=TaskStatus.COMPLETED,
@@ -629,22 +641,28 @@ class TestDatabaseStorageEdgeCases:
         # Clear data
         storage.clear()
 
-        # Verify data is gone from the tables that clear() affects
+        # Verify data is gone
         assert storage.load_run("clear-run") is None
-        # Note: clear() only clears task_runs table, not tasks table
-        # So we check get_all_tasks which queries task_runs
         assert len(storage.get_all_tasks()) == 0
-
-        # The load_task method might still find data in the tasks table
-        # This is an inconsistency in the implementation
 
     def test_json_parsing_edge_cases(self, storage):
         """Test handling of malformed JSON data."""
-        # Insert task with malformed JSON directly
+        # Create parent run for FK constraint
+        run = WorkflowRun(
+            run_id="run-123",
+            workflow_name="workflow",
+            status="running",
+            started_at=datetime.now(timezone.utc),
+            metadata={},
+            tasks=[],
+        )
+        storage.save_run(run)
+
+        # Insert task with malformed JSON directly into tasks table
         cursor = storage.conn.cursor()
         cursor.execute(
             """
-            INSERT INTO task_runs
+            INSERT INTO tasks
             (task_id, run_id, node_id, node_type, status, started_at, result, metadata, input_data, output_data)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
@@ -667,7 +685,7 @@ class TestDatabaseStorageEdgeCases:
         task = storage.load_task("malformed-task")
         assert task is not None
         assert task.result == {"valid": "json"}
-        assert task.input_data == {"value": "not valid json"}  # Wrapped in dict
+        assert task.input_data is None  # Invalid JSON gracefully set to None
         assert task.output_data == {"valid": "output"}
 
     def test_execute_query_helper(self, storage):
@@ -700,8 +718,19 @@ class TestDatabaseStorageEdgeCases:
             with pytest.raises(sqlite3.ProgrammingError):
                 conn.execute("SELECT 1")
 
-    def test_concurrent_table_compatibility(self, storage):
-        """Test that both tasks and task_runs tables stay in sync."""
+    def test_task_storage_consistency(self, storage):
+        """Test that tasks are stored and retrievable consistently."""
+        # Create parent run for FK constraint
+        run = WorkflowRun(
+            run_id="run-123",
+            workflow_name="workflow",
+            status="running",
+            started_at=datetime.now(timezone.utc),
+            metadata={},
+            tasks=[],
+        )
+        storage.save_run(run)
+
         # Save a task
         task = TaskRun(
             task_id="sync-task",
@@ -714,15 +743,9 @@ class TestDatabaseStorageEdgeCases:
         )
         storage.save_task(task)
 
-        # Verify task exists in both tables
+        # Verify task exists in tasks table
         cursor = storage.conn.cursor()
-
         cursor.execute("SELECT COUNT(*) FROM tasks WHERE task_id = ?", ("sync-task",))
-        assert cursor.fetchone()[0] == 1
-
-        cursor.execute(
-            "SELECT COUNT(*) FROM task_runs WHERE task_id = ?", ("sync-task",)
-        )
         assert cursor.fetchone()[0] == 1
 
         # Load from tasks table should work
