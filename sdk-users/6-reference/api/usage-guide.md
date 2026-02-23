@@ -64,24 +64,30 @@ workflow.add_connection("producer", "result.data", "consumer", "input_data")
 ### Node Type Patterns
 
 #### 1. String-based Node Types (Recommended)
+
 ```python
+import os
+
 # Use string names for built-in nodes
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
-workflow.add_node("LLMAgentNode", "analyzer", {"model": "gpt-4"})
+workflow.add_node("LLMAgentNode", "analyzer", {"model": os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")})
 workflow.add_node("JSONWriterNode", "writer", {"file_path": "output.json"})
 ```
 
 #### 2. Class-based Node Types
+
 ```python
+import os
 from kailash.nodes.data import CSVReaderNode
 from kailash.nodes.ai import LLMAgentNode
 
 # Use string references (recommended pattern)
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
-workflow.add_node("LLMAgentNode", "analyzer", {"model": "gpt-4"})
+workflow.add_node("LLMAgentNode", "analyzer", {"model": os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")})
 ```
 
 #### 3. Instance-based Node Types
+
 ```python
 # Use string-based approach instead (recommended)
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
@@ -91,6 +97,7 @@ workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 ### Connection Patterns
 
 #### Basic Connections
+
 ```python
 # Simple field mapping
 workflow.add_connection("source_node", "output_field", "target_node", "input_field")
@@ -100,6 +107,7 @@ workflow.add_connection("source_node", "result", "target_node", "input_data")
 ```
 
 #### Advanced Connection Mapping
+
 ```python
 # Multiple field mapping with dict
 workflow.add_connection("source_node", "result", "target_node", "input")
@@ -108,6 +116,7 @@ workflow.add_connection("source_node", "result", "target_node", "input")
 ### Runtime Patterns
 
 #### Local Runtime (Most Common)
+
 ```python
 from kailash.runtime.local import LocalRuntime
 
@@ -118,6 +127,7 @@ results, run_id = runtime.execute(workflow.build(), parameters={
 ```
 
 #### Async Runtime Execution
+
 ```python
 from kailash.runtime.local import LocalRuntime
 
@@ -128,6 +138,7 @@ results, run_id = await runtime.execute_async(workflow.build(), parameters={
 ```
 
 #### Sync Runtime Execution
+
 ```python
 from kailash.runtime.local import LocalRuntime
 
@@ -140,6 +151,7 @@ results, run_id = runtime.execute(workflow.build(), parameters={
 ### Parameter Passing
 
 #### Runtime Parameters
+
 ```python
 # Pass parameters at execution time
 results, run_id = runtime.execute(workflow.build(), parameters={
@@ -149,12 +161,13 @@ results, run_id = runtime.execute(workflow.build(), parameters={
     },
     "llm_agent": {
         "prompt": "Analyze this data and provide insights",
-        "model": "gpt-4"
+        "model": os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
     }
 })
 ```
 
 #### Node Configuration (Build-time)
+
 ```python
 # Configure nodes at build time
 workflow.add_node("CSVReaderNode", "reader", {
@@ -167,6 +180,7 @@ workflow.add_node("CSVReaderNode", "reader", {
 ### Error Handling Patterns
 
 #### Basic Error Handling
+
 ```python
 from kailash.sdk_exceptions import WorkflowValidationError, RuntimeExecutionError
 
@@ -187,6 +201,7 @@ except Exception as e:
 ```
 
 #### Connection Validation
+
 ```python
 # This will raise WorkflowValidationError if nodes don't exist
 try:
@@ -198,6 +213,7 @@ except WorkflowValidationError as e:
 ### Data Flow Patterns
 
 #### Linear Pipeline
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -218,6 +234,7 @@ workflow.add_connection("processor", "result", "writer", "data")
 ```
 
 #### Parallel Processing
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -243,6 +260,7 @@ workflow.add_connection("analyzer2", "result", "merger", "input2")
 ```
 
 #### Conditional Routing
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -280,26 +298,31 @@ workflow.add_connection("router", "standard", "standard_processor", "input")
 ## 🎯 Best Practices
 
 ### 1. Node Naming
+
 - Use descriptive names: `"csv_reader"` not `"node1"`
 - Follow snake_case convention
 - Include purpose: `"customer_data_processor"`
 
 ### 2. Parameter Management
+
 - Use runtime parameters for dynamic values
 - Use build-time config for static settings
 - Validate parameters before execution
 
 ### 3. Error Handling
+
 - Always wrap execution in try-catch
 - Handle specific SDK exceptions
 - Provide meaningful error messages
 
 ### 4. Data Flow Design
+
 - Keep connections simple and clear
 - Use dot notation for nested data access
 - Test with sample data before production
 
 ### 5. Performance
+
 - Use async runtime for I/O heavy workflows
 - Minimize data copying between nodes
 - Consider parallel processing for independent operations
@@ -307,6 +330,7 @@ workflow.add_connection("router", "standard", "standard_processor", "input")
 ## 🔧 Debugging Tips
 
 ### Inspect Workflow Structure
+
 ```python
 workflow = WorkflowBuilder()
 # ... add nodes and connections ...
@@ -319,6 +343,7 @@ built_workflow = workflow.build()
 ```
 
 ### Test Individual Nodes
+
 ```python
 # Test nodes in isolation first
 test_workflow = WorkflowBuilder()
@@ -334,6 +359,7 @@ print(results)
 ```
 
 ### Validate Connections
+
 ```python
 # Test data flow with simple data
 test_data = {"sample": "value"}

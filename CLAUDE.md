@@ -51,14 +51,15 @@ When running E2E tests or validations:
 **Foundational building blocks** for workflow automation:
 
 - **Purpose**: Custom workflows, fine-grained control, integrations
-- **Components**: WorkflowBuilder, LocalRuntime, 110+ nodes, MCP integration
+- **Components**: WorkflowBuilder, LocalRuntime, 140+ nodes, MCP integration
+- **CARE Audit Storage** (v0.12.2): SQLite WAL-mode backend for CARE/EATP audit persistence with ACID guarantees, batch inserts, and deferred in-memory tracking (~35us/node overhead)
 - **Custom Node Execution**: Fully async pipeline (CodeExecutor, AsyncLocalRuntime, aiohttp) for custom nodes
 - **Cloud Integration**: Azure cloud support alongside AWS
 - **Cache TTL**: MemoryCache supports TTL-based expiration with background reaper for automatic cleanup
 - **Usage**: Direct workflow construction with full programmatic control
 - **Install**: `pip install kailash`
 
-### DataFlow (`sdk-users/apps/dataflow/`) - v0.12.1
+### DataFlow (`sdk-users/apps/dataflow/`) - v0.12.2
 
 **Zero-config database framework** built on Core SDK:
 
@@ -74,7 +75,7 @@ When running E2E tests or validations:
 - **Install**: `pip install kailash-dataflow`
 - **Import**: `from dataflow import DataFlow`
 
-### Nexus (`sdk-users/apps/nexus/`) - v1.4.1
+### Nexus (`sdk-users/apps/nexus/`) - v1.4.2
 
 **Multi-channel platform** built on Core SDK:
 
@@ -119,7 +120,7 @@ app.start()
 - See `.claude/skills/03-nexus/golden-patterns-catalog.md` and `.claude/skills/03-nexus/codegen-decision-tree.md`
 - Auth imports: `from nexus.auth.plugin import NexusAuthPlugin`, `JWTConfig(secret=os.environ["JWT_SECRET"])` (>= 32 chars), `rbac=dict`, `TenantConfig(admin_role=...)`
 
-### Kaizen (`sdk-users/apps/kaizen/`) - v1.2.1
+### Kaizen (`sdk-users/apps/kaizen/`) - v1.2.2
 
 **AI agent framework** built on Core SDK:
 
@@ -362,6 +363,10 @@ This inheritance ensures 100% feature parity between sync and async runtimes, in
 - **Return Structure**: Both LocalRuntime and AsyncLocalRuntime return `(results, run_id)` - identical structure
 - **Docker/FastAPI**: Use `AsyncLocalRuntime()` or `WorkflowAPI()` (defaults to async)
 - **CLI/Scripts**: Use `LocalRuntime()` for synchronous execution
+- **Performance**: Resource limit checks are opt-in via `enable_resource_limits=True` (default: `False`)
+- **Caching**: Topological sort and cycle edge classification are cached per workflow; invalidated on `add_node()`/`connect()`
+- **networkx**: Removed from hot-path execution in `local.py` and `async_local.py`; still used in `graph.py` for core DAG ops
+- **Regression Tests**: `tests/unit/runtime/test_phase0{a,b,c}_optimizations.py` (53 tests) guard performance optimizations
 
 ## 📚 Framework-Specific Guides
 

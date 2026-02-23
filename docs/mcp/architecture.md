@@ -9,6 +9,7 @@ The Model Context Protocol (MCP) in Kailash SDK provides a standardized way for 
 ### 1. Protocol-First Design
 
 MCP is designed around a clear protocol specification that ensures:
+
 - **Interoperability**: Any client can talk to any server that implements the protocol
 - **Extensibility**: New capabilities can be added without breaking existing implementations
 - **Type Safety**: Strong typing throughout the system prevents runtime errors
@@ -33,6 +34,7 @@ MCP is designed around a clear protocol specification that ensures:
 ### 3. Transport Layer Flexibility
 
 MCP supports multiple transport mechanisms:
+
 - **stdio**: For local process communication
 - **SSE (Server-Sent Events)**: For HTTP-based real-time communication
 - **WebSocket**: For bidirectional real-time communication
@@ -56,21 +58,25 @@ class MCPServer:
 ```
 
 #### 1. Tool Registry
+
 - Manages available tools and their metadata
 - Handles tool discovery and validation
 - Provides tool execution context
 
 #### 2. Resource Manager
+
 - Manages access to external resources
 - Handles resource lifecycle
 - Implements caching strategies
 
 #### 3. Transport Handler
+
 - Abstracts communication details
 - Manages connection lifecycle
 - Handles protocol negotiation
 
 #### 4. Middleware Pipeline
+
 - Authentication and authorization
 - Request/response transformation
 - Logging and monitoring
@@ -90,16 +96,19 @@ class MCPClient:
 ```
 
 #### 1. Server Connection Manager
+
 - Maintains connections to multiple servers
 - Handles connection pooling
 - Implements retry logic
 
 #### 2. Service Discovery
+
 - Discovers available MCP servers
 - Manages server metadata
 - Handles server health checks
 
 #### 3. Session Management
+
 - Maintains conversation state
 - Handles context switching
 - Manages tool execution history
@@ -133,14 +142,20 @@ class MCPAgentNode(BaseNode):
 MCP servers can be integrated into Kailash workflows as nodes:
 
 ```python
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 # Workflow integration
+model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
+
 workflow = WorkflowBuilder()
 workflow.add_node("mcp_tools", MCPToolNode(
     server_url="http://localhost:3000",
     tools=["search", "calculate", "analyze"]
 ))
 workflow.add_node("llm", LLMAgentNode(
-    model="claude-3",
+    model=model,
     mcp_enabled=True
 ))
 workflow.add_connection("input", "llm", "query")
@@ -290,15 +305,15 @@ spec:
         app: mcp-server
     spec:
       containers:
-      - name: mcp-server
-        image: kailash/mcp-server:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: MCP_AUTH_ENABLED
-          value: "true"
-        - name: MCP_TRANSPORT
-          value: "sse"
+        - name: mcp-server
+          image: kailash/mcp-server:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: MCP_AUTH_ENABLED
+              value: "true"
+            - name: MCP_TRANSPORT
+              value: "sse"
 ```
 
 ### 3. Service Mesh Integration
@@ -491,16 +506,19 @@ class VersionAwareMCPServer(MCPServer):
 ## Future Architecture Considerations
 
 ### 1. Federation
+
 - Multi-server coordination
 - Distributed tool execution
 - Cross-server authentication
 
 ### 2. Advanced Features
+
 - Tool composition and chaining
 - Conditional tool execution
 - Dynamic tool generation
 
 ### 3. AI-Native Enhancements
+
 - Tool recommendation
 - Automatic parameter inference
 - Learning from usage patterns

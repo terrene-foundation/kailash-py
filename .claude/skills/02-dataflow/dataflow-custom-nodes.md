@@ -1,6 +1,6 @@
 ---
 name: dataflow-custom-nodes
-description: "Extend DataFlow with custom nodes beyond the auto-generated 9. Use when asking 'custom dataflow nodes', 'extend dataflow', or 'custom operations'."
+description: "Extend DataFlow with custom nodes beyond the auto-generated 11. Use when asking 'custom dataflow nodes', 'extend dataflow', or 'custom operations'."
 ---
 
 # Custom DataFlow Nodes
@@ -13,7 +13,7 @@ description: "Extend DataFlow with custom nodes beyond the auto-generated 9. Use
 
 ## Add Custom Workflow Nodes
 
-DataFlow auto-generates 9 nodes per model, but you can add custom business logic:
+DataFlow auto-generates 11 nodes per model, but you can add custom business logic:
 
 ```python
 from dataflow import DataFlow

@@ -15,7 +15,8 @@ description: "SQL database support in DataFlow - PostgreSQL, MySQL, and SQLite w
 ## 100% SQL Feature Parity
 
 **All three SQL databases support identical operations:**
-- ✅ Same 9 nodes per model (Create, Read, Update, Delete, List, BulkCreate, BulkUpdate, BulkDelete, Count)
+
+- ✅ Same 11 nodes per model (Create, Read, Update, Delete, List, Upsert, Count, BulkCreate, BulkUpdate, BulkDelete, BulkUpsert)
 - ✅ Identical workflows work across all databases
 - ✅ Same query syntax and filtering
 - ✅ Full async operations with connection pooling
@@ -89,18 +90,18 @@ db = DataFlow("sqlite:///app.db", enable_wal=True)
 
 ## Feature Comparison
 
-| Feature | PostgreSQL | MySQL | SQLite |
-|---------|------------|-------|--------|
-| **Driver** | asyncpg | aiomysql | aiosqlite + custom pooling |
-| **Concurrency** | Multi-writer | Multi-writer (InnoDB) | Single-writer (WAL improves) |
-| **Multi-Instance** | ✅ Safe | ✅ Safe | ⚠️ Not for concurrent writes |
-| **Setup** | Requires server | Requires server | Zero config |
-| **DataFlow Nodes** | ✅ All 9 | ✅ All 9 | ✅ All 9 |
-| **Connection Pooling** | ✅ Native | ✅ Native | ✅ Custom |
-| **Transactions** | ✅ ACID | ✅ ACID (InnoDB) | ✅ ACID |
-| **JSON Support** | ✅ JSONB | ✅ 5.7+ | ✅ JSON1 |
-| **Full-Text Search** | ✅ | ✅ | ✅ FTS5 |
-| **Best Performance** | Complex queries | Read-heavy | Small datasets |
+| Feature                | PostgreSQL      | MySQL                 | SQLite                       |
+| ---------------------- | --------------- | --------------------- | ---------------------------- |
+| **Driver**             | asyncpg         | aiomysql              | aiosqlite + custom pooling   |
+| **Concurrency**        | Multi-writer    | Multi-writer (InnoDB) | Single-writer (WAL improves) |
+| **Multi-Instance**     | ✅ Safe         | ✅ Safe               | ⚠️ Not for concurrent writes |
+| **Setup**              | Requires server | Requires server       | Zero config                  |
+| **DataFlow Nodes**     | ✅ All 11       | ✅ All 11             | ✅ All 11                    |
+| **Connection Pooling** | ✅ Native       | ✅ Native             | ✅ Custom                    |
+| **Transactions**       | ✅ ACID         | ✅ ACID (InnoDB)      | ✅ ACID                      |
+| **JSON Support**       | ✅ JSONB        | ✅ 5.7+               | ✅ JSON1                     |
+| **Full-Text Search**   | ✅              | ✅                    | ✅ FTS5                      |
+| **Best Performance**   | Complex queries | Read-heavy            | Small datasets               |
 
 ## Switching Between Databases
 
@@ -130,7 +131,7 @@ class User:
     name: str
     email: str
 
-# Same 9 nodes generated regardless of database
+# Same 11 nodes generated regardless of database
 ```
 
 ## Multi-Database Workflows
@@ -153,6 +154,7 @@ class Order:
 ## Connection Examples
 
 ### PostgreSQL
+
 ```python
 # Basic
 db = DataFlow("postgresql://user:pass@localhost:5432/mydb")
@@ -169,6 +171,7 @@ db = DataFlow(
 ```
 
 ### MySQL
+
 ```python
 # Basic
 db = DataFlow("mysql://user:pass@localhost:3306/mydb")
@@ -185,6 +188,7 @@ db = DataFlow(
 ```
 
 ### SQLite
+
 ```python
 # In-memory
 db = DataFlow(":memory:")
@@ -199,6 +203,7 @@ db = DataFlow("sqlite:///db.db", enable_wal=True, pool_size=5)
 ## Database Selection Guide
 
 ### Choose PostgreSQL When:
+
 - Enterprise production applications
 - PostGIS spatial data needed
 - Complex analytics and reporting
@@ -206,6 +211,7 @@ db = DataFlow("sqlite:///db.db", enable_wal=True, pool_size=5)
 - Advanced features (arrays, JSONB)
 
 ### Choose MySQL When:
+
 - Web hosting environments (cPanel, shared hosting)
 - Existing MySQL infrastructure
 - Read-heavy workloads
@@ -213,6 +219,7 @@ db = DataFlow("sqlite:///db.db", enable_wal=True, pool_size=5)
 - Integration with MySQL-specific tools
 
 ### Choose SQLite When:
+
 - Development and testing
 - Mobile applications (iOS/Android)
 - Edge computing and IoT

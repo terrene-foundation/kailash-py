@@ -24,7 +24,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-import networkx as nx
 from kailash.nodes.base import Node
 from kailash.nodes.base_async import AsyncNode
 from kailash.resources import ResourceRegistry
@@ -942,9 +941,10 @@ class AsyncLocalRuntime(LocalRuntime):
         # This is a simplified version - in practice, you'd call the parent's method
         results = {}
 
+        # P0C-003: Use cached topological sort from Workflow
         try:
-            execution_order = list(nx.topological_sort(workflow.graph))
-        except nx.NetworkXError as e:
+            execution_order = workflow.get_execution_order()
+        except Exception as e:
             raise WorkflowExecutionError(
                 f"Failed to determine execution order: {e}"
             ) from e

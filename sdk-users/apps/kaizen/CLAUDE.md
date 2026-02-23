@@ -28,14 +28,14 @@ embed_cache = get_embedding_cache()
 vector = embed_cache.get_or_compute(text, model, compute_fn=embed_api_call)
 ```
 
-| Cache | Speedup |
-|-------|---------|
-| SchemaCache | 10-50x |
-| EmbeddingCache | 100x+ |
-| PromptCache | 10-20x |
-| MemoryContextCache | 5-10x |
-| HookBatchExecutor | 8x |
-| ParallelToolExecutor | 4-5x |
+| Cache                | Speedup |
+| -------------------- | ------- |
+| SchemaCache          | 10-50x  |
+| EmbeddingCache       | 100x+   |
+| PromptCache          | 10-20x  |
+| MemoryContextCache   | 5-10x   |
+| HookBatchExecutor    | 8x      |
+| ParallelToolExecutor | 4-5x    |
 
 ### Specialist System (ADR-013)
 
@@ -80,6 +80,7 @@ config = AgentConfig(
 ### Developer Documentation
 
 Full v1.0 docs in `apps/kailash-kaizen/src/kaizen/docs/developers/`:
+
 - Performance optimization guide
 - Specialist system guide
 - Native tool system
@@ -130,6 +131,7 @@ response = await journey.process_message("I have back pain")
 ```
 
 **Key Features:**
+
 - **Declarative Pathways**: Define multi-step user flows as nested classes
 - **Intent Detection**: LLM-powered intent classification (not keyword/regex)
 - **Context Accumulation**: Persist data across pathways with merge strategies (REPLACE, APPEND, UNION, SUM)
@@ -248,17 +250,17 @@ agent = SimpleQAAgent(CustomConfig())
 
 Kaizen supports 9 LLM providers with automatic detection:
 
-| Provider | Type | Requirements | Features |
-|----------|------|--------------|----------|
-| `openai` | Cloud | `OPENAI_API_KEY` | GPT-4, GPT-4o, structured outputs, tool calling |
-| `azure` | Cloud | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings, structured outputs |
-| `anthropic` | Cloud | `ANTHROPIC_API_KEY` | Claude 3.x, vision support |
-| `google` | Cloud | `GOOGLE_API_KEY` or `GEMINI_API_KEY` | Gemini 2.0, vision, embeddings, tool calling, structured outputs |
-| `ollama` | Local | Ollama running on port 11434 | Free, local models |
-| `docker` | Local | Docker Desktop Model Runner on port 12434 | Free local inference, GPU acceleration |
-| `cohere` | Cloud | `COHERE_API_KEY` | Command models, embeddings |
-| `huggingface` | Local | None | Sentence transformers, embeddings |
-| `mock` | Testing | None | Unit test provider |
+| Provider      | Type    | Requirements                                                | Features                                                         |
+| ------------- | ------- | ----------------------------------------------------------- | ---------------------------------------------------------------- |
+| `openai`      | Cloud   | `OPENAI_API_KEY`                                            | GPT-4, GPT-4o, structured outputs, tool calling                  |
+| `azure`       | Cloud   | `AZURE_AI_INFERENCE_ENDPOINT`, `AZURE_AI_INFERENCE_API_KEY` | Azure AI Foundry, vision, embeddings, structured outputs         |
+| `anthropic`   | Cloud   | `ANTHROPIC_API_KEY`                                         | Claude 3.x, vision support                                       |
+| `google`      | Cloud   | `GOOGLE_API_KEY` or `GEMINI_API_KEY`                        | Gemini 2.0, vision, embeddings, tool calling, structured outputs |
+| `ollama`      | Local   | Ollama running on port 11434                                | Free, local models                                               |
+| `docker`      | Local   | Docker Desktop Model Runner on port 12434                   | Free local inference, GPU acceleration                           |
+| `cohere`      | Cloud   | `COHERE_API_KEY`                                            | Command models, embeddings                                       |
+| `huggingface` | Local   | None                                                        | Sentence transformers, embeddings                                |
+| `mock`        | Testing | None                                                        | Unit test provider                                               |
 
 ```python
 # Azure AI Foundry (v0.7.1)
@@ -380,6 +382,7 @@ config = BaseAgentConfig(
 ```
 
 **How It Works:**
+
 - All providers receive OpenAI-style `response_format` from `create_structured_output_config()`
 - Each provider auto-translates to native parameters:
   - **OpenAI**: Uses `response_format` directly
@@ -388,12 +391,14 @@ config = BaseAgentConfig(
 - Dict responses are returned directly without string parsing - transparent to users
 
 **Provider Support Matrix:**
+
 - ✅ **OpenAI**: Full support (`json_schema` strict, `json_object` legacy)
 - ✅ **Google/Gemini**: Full support (auto-translated)
 - ✅ **Azure AI Foundry**: Full support (auto-translated)
 - ❌ **Ollama/Anthropic**: Not supported
 
 **Modes:**
+
 - **Strict Mode** (`strict=True`): 100% compliance
 - **Legacy Mode** (`strict=False`): ~70-85% compliance
 
@@ -438,6 +443,7 @@ agent = pipeline.to_agent(name="my_pipeline")
 ```
 
 **A2A Integration** (4 patterns):
+
 - ✅ **Router**: Semantic routing to best agent
 - ✅ **Supervisor-Worker**: Semantic worker selection
 - ✅ **Ensemble**: Agent discovery (top-k)
@@ -484,21 +490,23 @@ result = agent.run(task="Strategic decision: choose go-to-market strategy")
 ```
 
 **Pattern Selection Guide**:
+
 - **Planning**: Structured workflows with validation BEFORE execution (research, compliance)
 - **PEV**: Iterative refinement with verification AFTER execution (code generation, quality-critical)
 - **Tree-of-Thoughts**: Explore multiple alternatives, select best (strategic decisions, creative tasks)
 
 **Comparison Table**:
 
-| Pattern | Planning Phase | Verification | Cycles | Best For |
-|---------|---------------|--------------|--------|----------|
-| **Planning** | ✅ Upfront | Pre-execution | 1 (or replan) | Structured workflows |
-| **PEV** | ✅ Initial | Post-execution | Multiple refine | Quality-critical |
-| **ToT** | ❌ | Score evaluation | 1 generation | Alternatives exploration |
-| **ReAct** | ❌ | Observation | Variable | Real-time adaptation |
-| **CoT** | ❌ | ❌ | 1 | Step-by-step reasoning |
+| Pattern      | Planning Phase | Verification     | Cycles          | Best For                 |
+| ------------ | -------------- | ---------------- | --------------- | ------------------------ |
+| **Planning** | ✅ Upfront     | Pre-execution    | 1 (or replan)   | Structured workflows     |
+| **PEV**      | ✅ Initial     | Post-execution   | Multiple refine | Quality-critical         |
+| **ToT**      | ❌             | Score evaluation | 1 generation    | Alternatives exploration |
+| **ReAct**    | ❌             | Observation      | Variable        | Real-time adaptation     |
+| **CoT**      | ❌             | ❌               | 1               | Step-by-step reasoning   |
 
 **See Comprehensive Guides**:
+
 - [Planning Agent Guide](docs/guides/planning-agent.md) - 200+ lines
 - [PEV Agent Guide](docs/guides/pev-agent.md) - 200+ lines
 - [Tree-of-Thoughts Guide](docs/guides/tree-of-thoughts-agent.md) - 200+ lines
@@ -509,6 +517,7 @@ result = agent.run(task="Strategic decision: choose go-to-market strategy")
 ### Available Specialized Agents
 
 **Implemented and Production-Ready:**
+
 ```python
 from kaizen.agents import (
     # Single-Agent Patterns (8 agents)
@@ -556,6 +565,7 @@ result = await agent.execute_mcp_tool(
 ```
 
 **12 Builtin Tools** (via kaizen_builtin MCP server):
+
 - **File (5)**: read_file, write_file, delete_file, list_directory, file_exists
 - **HTTP (4)**: http_get, http_post, http_put, http_delete
 - **Bash (1)**: bash_command
@@ -566,6 +576,7 @@ result = await agent.execute_mcp_tool(
 ### Control Protocol
 
 **Bidirectional agent ↔ client communication:**
+
 ```python
 from kaizen.core.autonomy.control import ControlProtocol
 from kaizen.core.autonomy.control.transports import CLITransport
@@ -589,6 +600,7 @@ await agent.report_progress("Processing...", percentage=50)
 ### Observability & Performance Monitoring
 
 **Production-ready observability with zero overhead (-0.06%):**
+
 ```python
 from kaizen.core.base_agent import BaseAgent
 
@@ -609,6 +621,7 @@ result = agent.run(question="test")
 ```
 
 **Complete Monitoring Stack:**
+
 - **Distributed Tracing**: OpenTelemetry + Jaeger (UI: http://localhost:16686)
 - **Metrics Collection**: Prometheus with p50/p95/p99 percentiles (UI: http://localhost:9090)
 - **Structured Logging**: JSON logs for ELK Stack (UI: http://localhost:5601)
@@ -616,11 +629,13 @@ result = agent.run(question="test")
 - **Grafana Dashboards**: 10+ pre-built dashboards (UI: http://localhost:3000)
 
 **Production Validated:**
+
 - -0.06% overhead (essentially zero, tested with 100 real OpenAI API calls)
 - 0.57ms p95 audit latency (<10ms target, 17.5x margin)
 - 281 tests passing - Validated with real infrastructure (NO MOCKING in Tiers 2-3 tests)
 
 **Start Observability Stack:**
+
 ```bash
 cd docs/observability
 docker-compose up -d  # Starts Jaeger, Prometheus, Grafana, ELK Stack
@@ -692,6 +707,7 @@ except InterruptedError as e:
 ```
 
 **Key Components:**
+
 - **6 Builtin Hooks**: LoggingHook, MetricsHook, CostTrackingHook, PerformanceProfilerHook, AuditHook, TracingHook
 - **4 Storage Backends**: Filesystem, Redis, PostgreSQL, S3
 - **Interrupt System**: Graceful shutdown for Ctrl+C, timeouts, budget limits with automatic checkpointing
@@ -739,6 +755,7 @@ memory_loaded.load_from_db()  # Restores conversation history
 ```
 
 **Conversational Agent Pattern:**
+
 ```python
 from kaizen.agents import SimpleQAAgent
 from kaizen.memory import PersistentBufferMemory
@@ -781,6 +798,7 @@ result3 = agent2.ask("What did we discuss?")  # Remembers previous conversation
 ```
 
 **Key Features:**
+
 - **Dual-Buffer**: In-memory buffer (<1ms retrieval) + database storage
 - **Auto-Persist**: Configurable auto-persist interval (every N messages)
 - **Compression**: JSONL compression reduces storage by 60%+
@@ -841,6 +859,7 @@ if context.has_budget():
 ```
 
 **Features:**
+
 - **4 Permission Modes**: DEFAULT, ACCEPT_EDITS, PLAN, BYPASS
 - **3 Permission Types**: ALLOW, DENY, ASK
 - **Budget Tracking**: Cost limits and usage monitoring
@@ -914,28 +933,32 @@ result = agent.run(question="What's my communication style?")
 ```
 
 **3 Memory Types:**
+
 - **ShortTermMemory**: Session-scoped, in-memory, fast retrieval (<10ms)
 - **LongTermMemory**: Persistent, SQLite/File/PostgreSQL backends, semantic search
 - **SemanticMemory**: Vector-based similarity search with embeddings
 
 **3 Storage Backends:**
+
 - **SQLiteStorage**: Local file-based, 10,000+ entries per agent
 - **FileStorage**: JSONL append-only, portable, audit-friendly
 - **PostgreSQLStorage**: Enterprise scale, millions of entries, distributed
 
 **4 Learning Mechanisms:**
+
 - **PatternRecognition**: Detect FAQs, common workflows, repetitive tasks
 - **PreferenceLearning**: Learn user preferences from interactions
 - **ErrorCorrection**: Record errors and corrections to avoid repeat mistakes
 - **AdaptiveLearning**: Adjust strategies based on success rates
 
 **Performance (Production validated):**
+
 - <50ms retrieval (p95)
 - <100ms storage (p95)
 - 10,000+ entries per agent (SQLite)
 - Millions of entries (PostgreSQL)
 - 281 tests passing
-**Use Cases:**
+  **Use Cases:**
 - Conversational agents with context continuity
 - Customer support bots with preference learning
 - Research agents that learn from feedback
@@ -1006,13 +1029,14 @@ batch_results = agent.extract_batch(
 
 **3 Provider Options:**
 
-| Provider      | Speed | Accuracy | Cost (per page) | Best For                     |
-|---------------|-------|----------|-----------------|------------------------------|
-| Ollama        | 2-4s  | 70-80%   | $0.00           | Unlimited processing, dev    |
-| OpenAI Vision | 1-2s  | 85-90%   | ~$0.01          | Production, good accuracy    |
+| Provider      | Speed | Accuracy | Cost (per page) | Best For                       |
+| ------------- | ----- | -------- | --------------- | ------------------------------ |
+| Ollama        | 2-4s  | 70-80%   | $0.00           | Unlimited processing, dev      |
+| OpenAI Vision | 1-2s  | 85-90%   | ~$0.01          | Production, good accuracy      |
 | Landing AI    | 2-3s  | 95%+     | ~$0.05          | Mission-critical, max accuracy |
 
 **RAG Optimization Features:**
+
 - **Chunking**: Configurable size (default 512 tokens) with overlap
 - **Page Citations**: Every chunk tracks source page for attribution
 - **Table Extraction**: Structured table data with bounding boxes
@@ -1020,12 +1044,14 @@ batch_results = agent.extract_batch(
 - **Cost Control**: Prefer-free mode tries Ollama first, falls back to paid
 
 **Production Validated:**
+
 - 281 tests passing - Real infrastructure testing (NO MOCKING)
 - Ollama: $0.00 cost for unlimited processing
 - OpenAI: Budget-controlled, accurate
 - Landing AI: Mission-critical accuracy (95%+)
 
 **Use Cases:**
+
 - RAG systems with source attribution
 - Enterprise document search
 - Research paper analysis
@@ -1067,11 +1093,13 @@ class MyAgent(BaseAgent):
 ## 📚 Documentation Structure
 
 ### Getting Started
+
 - **[Installation](docs/getting-started/installation.md)** - Setup and dependencies
 - **[Quickstart](docs/getting-started/quickstart.md)** - Your first Kaizen agent
 - **[First Agent](docs/getting-started/first-agent.md)** - Detailed agent creation
 
 ### Core Guides
+
 - **[Signature Programming](docs/guides/signature-programming.md)** - Type-safe I/O with Signatures
 - **[BaseAgent Architecture](docs/guides/baseagent-architecture.md)** - Unified agent system with strategies, memory, tools
 - **[Hooks System](docs/guides/hooks-system.md)** - Event-driven monitoring and lifecycle hooks
@@ -1083,6 +1111,7 @@ class MyAgent(BaseAgent):
 - **[Ollama Quickstart](docs/guides/ollama-quickstart.md)** - Local LLM setup
 
 ### Reference
+
 - **[API Reference](docs/reference/api-reference.md)** - Complete API documentation
 - **[Control Protocol API](docs/reference/control-protocol-api.md)** - Bidirectional communication API
 - **[Multi-Modal API](docs/reference/multi-modal-api-reference.md)** - Vision, audio APIs with common pitfalls
@@ -1093,6 +1122,7 @@ class MyAgent(BaseAgent):
 - **[Troubleshooting](docs/reference/troubleshooting.md)** - Common issues
 
 ### Examples
+
 - **[Autonomy Example Gallery](../../../apps/kailash-kaizen/examples/autonomy/EXAMPLE_GALLERY.md)** - 15 production-ready autonomy examples with learning paths (Tool Calling, Planning, Meta-Controller, Memory, Checkpoints, Interrupts, Full Integration)
 - **[Single-Agent Patterns](../../../apps/kailash-kaizen/examples/1-single-agent/)** - 10 basic patterns
 - **[Multi-Agent Patterns](../../../apps/kailash-kaizen/examples/2-multi-agent/)** - 6 coordination patterns
@@ -1104,6 +1134,7 @@ class MyAgent(BaseAgent):
 ## 🔧 Common Patterns
 
 ### Basic Agent Pattern
+
 ```python
 from kaizen.agents import SimpleQAAgent
 from kaizen.agents.specialized.simple_qa import QAConfig
@@ -1123,6 +1154,7 @@ confidence = result.get("confidence", 0.0)
 ```
 
 ### Memory-Enabled Agent
+
 ```python
 # Enable memory with max_turns parameter
 config = QAConfig(
@@ -1140,6 +1172,7 @@ result2 = agent.ask("What's my name?", session_id="user123")
 ```
 
 ### Vision Processing
+
 ```python
 from kaizen.agents import VisionAgent, VisionAgentConfig
 
@@ -1157,6 +1190,7 @@ result = agent.analyze(
 ```
 
 ### Multi-Agent Coordination
+
 ```python
 from kaizen.orchestration.patterns import SupervisorWorkerPattern
 from kaizen.agents import SimpleQAAgent, CodeGenerationAgent, RAGResearchAgent
@@ -1181,6 +1215,7 @@ result = pattern.execute_task("Analyze this codebase and suggest improvements")
 ## ⚠️ Common Mistakes to Avoid
 
 ### 1. Wrong Vision Agent Parameters
+
 ```python
 # ❌ WRONG: Using 'prompt' instead of 'question'
 result = agent.analyze(image=img, prompt="What is this?")
@@ -1197,6 +1232,7 @@ answer = result['answer']
 ```
 
 ### 2. Missing API Keys
+
 ```python
 # ❌ WRONG: Not loading .env
 agent = SimpleQAAgent(QAConfig(llm_provider="openai"))
@@ -1208,6 +1244,7 @@ agent = SimpleQAAgent(QAConfig(llm_provider="openai"))
 ```
 
 ### 3. Incorrect Configuration Pattern
+
 ```python
 # ❌ WRONG: Using BaseAgentConfig directly
 config = BaseAgentConfig(model="gpt-4")  # Don't do this!
@@ -1226,6 +1263,7 @@ Kaizen provides production-ready autonomy infrastructure for building self-manag
 Zero-code-change monitoring via lifecycle events with production security.
 
 **Quick Start:**
+
 ```python
 from kaizen.core.base_agent import BaseAgent
 from kaizen.core.autonomy.hooks.builtin import LoggingHook, MetricsHook, AuditHook
@@ -1243,12 +1281,14 @@ result = agent.run(question="What is AI?")
 ```
 
 **Lifecycle Events:**
+
 - PRE/POST_AGENT_LOOP: Agent execution start/end
 - PRE/POST_TOOL_USE: Tool invocation monitoring
 - PRE/POST_CHECKPOINT_SAVE: State persistence events
 - PRE/POST_INTERRUPT: Graceful shutdown events
 
 **Production Security:**
+
 - RBAC authorization with role-based access control
 - Ed25519 signature verification for hook authenticity
 - Process isolation with resource limits (CPU/memory/timeout)
@@ -1257,17 +1297,19 @@ result = agent.run(question="What is AI?")
 - Rate limiting and input validation
 
 **Performance:**
+
 - <0.01ms overhead per event (625x better than 10ms target)
 - 100+ concurrent hooks supported
 - Thread-safe and composable
 - 281 tests passing
-**See:** `docs/guides/hooks-system-guide.md` for complete documentation.
+  **See:** `docs/guides/hooks-system-guide.md` for complete documentation.
 
 ### 2. Checkpoint System - Persistent State Management
 
 Save/load/fork agent state for failure recovery, debugging, and experimentation.
 
 **Quick Start:**
+
 ```python
 from kaizen.core.autonomy.state import StateManager, FilesystemStorage
 from kaizen.core.autonomy.checkpoints import CheckpointManager
@@ -1294,12 +1336,14 @@ except Exception as e:
 ```
 
 **Storage Backends:**
+
 - **FilesystemStorage**: Local file-based, compressed checkpoints
 - **RedisStorage**: Fast in-memory checkpoints with TTL
 - **PostgreSQLStorage**: Enterprise-scale with versioning
 - **S3Storage**: Distributed, highly available storage
 
 **Features:**
+
 - Automatic compression (50-70% reduction)
 - Incremental checkpoints (only changed state)
 - State versioning and deduplication
@@ -1307,6 +1351,7 @@ except Exception as e:
 - Automatic cleanup of old checkpoints
 
 **Use Cases:**
+
 - Failure recovery for long-running agents
 - Debugging by forking from specific states
 - A/B testing with different strategies
@@ -1319,6 +1364,7 @@ except Exception as e:
 Graceful execution control for autonomous agents with Ctrl+C handling, timeouts, and budget limits.
 
 **Quick Start:**
+
 ```python
 from kaizen.agents.autonomous.base import BaseAutonomousAgent
 from kaizen.agents.autonomous.config import AutonomousConfig
@@ -1352,15 +1398,18 @@ except InterruptedError as e:
 ```
 
 **Interrupt Sources:**
+
 - **USER**: Ctrl+C (SIGTERM/SIGINT), user-initiated stop
 - **SYSTEM**: Timeout, budget limit, resource exhaustion
 - **PROGRAMMATIC**: API calls, hook-triggered stops
 
 **Shutdown Modes:**
+
 - **GRACEFUL**: Finish current cycle, save checkpoint, clean shutdown (default)
 - **IMMEDIATE**: Stop now, best-effort checkpoint, fast exit
 
 **Features:**
+
 - Signal propagation across multi-agent hierarchies
 - Automatic checkpoint preservation
 - Graceful timeout with configurable shutdown window
@@ -1376,6 +1425,7 @@ except InterruptedError as e:
 Production-ready memory system with hot/warm/cold tiers for conversational agents.
 
 **Quick Start:**
+
 ```python
 from kaizen.memory import PersistentBufferMemory
 from dataflow import DataFlow
@@ -1412,13 +1462,14 @@ memory_loaded.load_from_db()  # Restores conversation history
 
 **3-Tier Architecture:**
 
-| Tier | Storage | Latency | Capacity | Use Case |
-|------|---------|---------|----------|----------|
-| **Hot** | In-memory buffer | <1ms | Last 100 messages | Active conversation |
-| **Warm** | Database (SQLite/PostgreSQL) | 10-50ms | Agent-specific history | Session continuity |
-| **Cold** | Object storage (S3/MinIO) | 100ms+ | Long-term archival | Multi-hour conversations |
+| Tier     | Storage                      | Latency | Capacity               | Use Case                 |
+| -------- | ---------------------------- | ------- | ---------------------- | ------------------------ |
+| **Hot**  | In-memory buffer             | <1ms    | Last 100 messages      | Active conversation      |
+| **Warm** | Database (SQLite/PostgreSQL) | 10-50ms | Agent-specific history | Session continuity       |
+| **Cold** | Object storage (S3/MinIO)    | 100ms+  | Long-term archival     | Multi-hour conversations |
 
 **Features:**
+
 - **Dual-Buffer Architecture**: In-memory + database for optimal performance
 - **Auto-Persist**: Configurable intervals (every N messages)
 - **JSONL Compression**: 60%+ storage reduction for warm/cold tiers
@@ -1427,6 +1478,7 @@ memory_loaded.load_from_db()  # Restores conversation history
 - **DataFlow Integration**: Automatic schema creation and migration
 
 **Conversational Agent Pattern:**
+
 ```python
 from kaizen.agents import SimpleQAAgent
 from kaizen.memory import PersistentBufferMemory
@@ -1469,6 +1521,7 @@ result3 = agent2.ask("What did we discuss?")  # Remembers previous conversation
 ```
 
 **Production Metrics:**
+
 - 28 E2E tests with real database operations
 - <1ms hot tier retrieval (p95)
 - <50ms warm tier retrieval (p95)
@@ -1482,6 +1535,7 @@ result3 = agent2.ask("What did we discuss?")  # Remembers previous conversation
 Two planning patterns for structured workflows with validation and iterative refinement.
 
 **PlanningAgent - Plan Before You Act:**
+
 ```python
 from kaizen.agents.specialized.planning import PlanningAgent, PlanningConfig
 
@@ -1508,6 +1562,7 @@ result = agent.run(
 ```
 
 **PEVAgent - Plan, Execute, Verify, Refine:**
+
 ```python
 from kaizen.agents.specialized.pev import PEVAgent, PEVAgentConfig
 
@@ -1536,16 +1591,18 @@ result = agent.run(
 
 **Pattern Comparison:**
 
-| Pattern | Planning | Validation | Cycles | Best For |
-|---------|----------|------------|--------|----------|
-| **PlanningAgent** | Upfront | Pre-execution | 1 (or replan) | Structured workflows, research, compliance |
-| **PEVAgent** | Initial | Post-execution | Multiple refine | Code generation, quality-critical tasks |
+| Pattern           | Planning | Validation     | Cycles          | Best For                                   |
+| ----------------- | -------- | -------------- | --------------- | ------------------------------------------ |
+| **PlanningAgent** | Upfront  | Pre-execution  | 1 (or replan)   | Structured workflows, research, compliance |
+| **PEVAgent**      | Initial  | Post-execution | Multiple refine | Code generation, quality-critical tasks    |
 
 **Use Cases:**
+
 - **PlanningAgent**: Research reports, compliance workflows, structured analysis
 - **PEVAgent**: Code generation, content creation, iterative improvement
 
 **Key Features:**
+
 - Multi-step decomposition with dependency tracking
 - Validation before (Planning) or after (PEV) execution
 - Automatic replanning on failure
@@ -1559,6 +1616,7 @@ result = agent.run(
 A2A-based semantic capability matching for intelligent agent selection and routing.
 
 **Quick Start:**
+
 ```python
 from kaizen.orchestration.meta_controller import MetaController
 from kaizen.orchestration.pipeline import Pipeline
@@ -1585,6 +1643,7 @@ result = meta_controller.route_task(
 ```
 
 **Router Pipeline Pattern:**
+
 ```python
 # Router pattern with semantic routing
 router = Pipeline.router(
@@ -1601,12 +1660,14 @@ result2 = router.run(task="Write product description")
 ```
 
 **Selection Strategies:**
+
 - **semantic**: A2A-based capability matching (recommended)
 - **round_robin**: Simple load balancing
 - **random**: Random selection
 - **capability**: Explicit capability scoring
 
 **Fallback Strategies:**
+
 - **round_robin**: Try next agent in rotation
 - **all**: Try all agents until success
 - **fail**: Fail if no match found
@@ -1622,6 +1683,7 @@ Router pattern automatically integrates with 4 pipeline patterns:
 4. **Blackboard**: Dynamic specialist selection
 
 **Example - Ensemble with A2A Discovery:**
+
 ```python
 # Ensemble pattern with A2A agent discovery
 ensemble = Pipeline.ensemble(
@@ -1640,6 +1702,7 @@ result = ensemble.run(
 ```
 
 **Key Features:**
+
 - No hardcoded if/else routing logic (semantic matching)
 - Automatic capability discovery via A2A protocol
 - Load balancing and fallback strategies
@@ -1647,6 +1710,7 @@ result = ensemble.run(
 - Multi-criteria ranking (capability + availability + cost)
 
 **Use Cases:**
+
 - Multi-specialist task delegation
 - Dynamic agent selection based on task requirements
 - Load-balanced agent pools
@@ -1659,6 +1723,7 @@ result = ensemble.run(
 ## 🏗️ Architecture
 
 ### Framework Position
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Kaizen Framework                         │
@@ -1669,7 +1734,7 @@ result = ensemble.run(
 │                           │                                 │
 │  ┌─────────────────────────────────────────────────────┐  │
 │  │          Kailash Core SDK                           │  │
-│  │  WorkflowBuilder │ LocalRuntime │ 110+ Nodes       │  │
+│  │  WorkflowBuilder │ LocalRuntime │ 140+ Nodes       │  │
 │  └─────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -1723,6 +1788,7 @@ result = ensemble.run(
 ## 🧪 Testing
 
 ### 3-Tier Testing Strategy
+
 1. **Tier 1 (Unit)**: Fast, mocked LLM providers
 2. **Tier 2 (Integration)**: Real Ollama inference (local, free)
 3. **Tier 3 (E2E)**: Real OpenAI inference (paid API, budget-controlled)
@@ -1730,6 +1796,7 @@ result = ensemble.run(
 **CRITICAL**: NO MOCKING in Tiers 2-3 (real infrastructure only)
 
 ### Test Execution
+
 ```bash
 # Run all tests
 pytest
@@ -1752,12 +1819,14 @@ pytest tests/e2e/autonomy/ -v
 **E2E tests validate complete autonomous workflows with real infrastructure:**
 
 **What E2E Tests Validate:**
+
 - ✅ **Real LLM inference** using Ollama llama3.2:1b (FREE, no API costs)
 - ✅ **Real database** operations with DataFlow (SQLite/PostgreSQL)
 - ✅ **Real tools** execution (file system, HTTP, bash commands)
 - ✅ **Complete workflows** end-to-end with NO MOCKING
 
 **Prerequisites:**
+
 ```bash
 # Install Ollama (first time only)
 # macOS:
@@ -1776,6 +1845,7 @@ ollama pull llama3.2:1b
 ```
 
 **Running E2E Tests:**
+
 ```bash
 # Run all E2E tests
 pytest tests/e2e/autonomy/ -v
@@ -1834,22 +1904,24 @@ async def test_autonomous_workflow():
 
 **Available E2E Test Suites:**
 
-| Test Suite | File | Tests | What It Validates |
-|------------|------|-------|-------------------|
-| **Tool Calling** | `test_tool_calling_e2e.py` | 4 | File/HTTP/bash tools with permission policies and approval workflows |
-| **Planning** | `test_planning_e2e.py` | 3 | Planning/PEV/ToT agents with multi-step decomposition |
-| **Meta-Controller** | `test_meta_controller_e2e.py` | 3 | Semantic routing, fallback strategies, task decomposition |
-| **Memory** | `test_memory_e2e.py` | 4 | Hot/warm/cold tier persistence, multi-hour conversations |
-| **Checkpoints** | `checkpoints/` | 3 | Auto-checkpoint creation, resume from checkpoint, compression |
+| Test Suite          | File                          | Tests | What It Validates                                                    |
+| ------------------- | ----------------------------- | ----- | -------------------------------------------------------------------- |
+| **Tool Calling**    | `test_tool_calling_e2e.py`    | 4     | File/HTTP/bash tools with permission policies and approval workflows |
+| **Planning**        | `test_planning_e2e.py`        | 3     | Planning/PEV/ToT agents with multi-step decomposition                |
+| **Meta-Controller** | `test_meta_controller_e2e.py` | 3     | Semantic routing, fallback strategies, task decomposition            |
+| **Memory**          | `test_memory_e2e.py`          | 4     | Hot/warm/cold tier persistence, multi-hour conversations             |
+| **Checkpoints**     | `checkpoints/`                | 3     | Auto-checkpoint creation, resume from checkpoint, compression        |
 
 **Cost Analysis:**
 
 **E2E Tests Cost**: $0.00
+
 - Ollama LLM: FREE (local inference)
 - SQLite: FREE (local database)
 - No API calls to paid services
 
 If using OpenAI for quality validation:
+
 - Use `gpt-4o-mini` ($0.15/1M input, $0.60/1M output)
 - Budget: <$20 for full E2E suite
 - Cost tracking built into tests
@@ -1857,6 +1929,7 @@ If using OpenAI for quality validation:
 ## 🚦 Production Deployment
 
 ### Environment Configuration
+
 ```bash
 # Required API Keys (.env)
 OPENAI_API_KEY=sk-...
@@ -1869,6 +1942,7 @@ KAIZEN_ERROR_HANDLING=true
 ```
 
 ### Integration with DataFlow
+
 ```python
 from dataflow import DataFlow
 from kaizen.agents import SimpleQAAgent
@@ -1896,6 +1970,7 @@ workflow.add_node("QASessionCreateNode", "store", {
 ```
 
 ### Integration with Nexus
+
 ```python
 from nexus import Nexus
 from kaizen.agents import SimpleQAAgent

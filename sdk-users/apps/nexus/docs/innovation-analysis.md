@@ -365,7 +365,7 @@ transaction_manager = DistributedTransactionManagerNode(
 )
 ```
 
-### 3. **110+ Node Ecosystem** - Complete Enterprise Coverage
+### 3. **140+ Node Ecosystem** - Complete Enterprise Coverage
 
 **AI & Machine Learning:**
 
@@ -519,7 +519,7 @@ runtime = AsyncLocalRuntime(max_concurrency=100)
 - **Durability by Design**: Only platform with request-level durability
 - **Multi-Channel Native**: Only unified API/CLI/MCP orchestration
 - **Enterprise-First**: Only platform with enterprise features as defaults
-- **110+ Node Ecosystem**: Most comprehensive enterprise capability library
+- **140+ Node Ecosystem**: Most comprehensive enterprise capability library
 
 ### 2. **Enterprise Adoption Drivers**
 

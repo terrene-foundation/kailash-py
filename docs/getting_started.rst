@@ -2,314 +2,225 @@
 Getting Started
 ===============
 
-Welcome to the Kailash Python SDK v0.3.0! This guide will help you get up and running quickly.
-
-**New in v0.3.0**: Parameter Lifecycle Architecture with flexible node construction,
-Centralized Data Management, enhanced PythonCodeNode capabilities, and comprehensive
-Enterprise Workflow Library for production-ready patterns.
+Welcome to the Kailash SDK v0.12.0. This guide walks you through core concepts and
+patterns you will use in every Kailash project.
 
 Prerequisites
 =============
 
-Before you begin, ensure you have:
+- Python 3.11 or higher
+- pip or uv package manager
+- A ``.env`` file with your API keys (see :doc:`installation`)
 
-- Python 3.8 or higher installed
-- pip (Python package installer)
-- Basic understanding of Python programming
-- (Optional) Docker for containerized execution
+Core Concepts
+=============
 
-Installation
-============
+The Kailash SDK is built around three pillars:
 
-Install Using pip
------------------
+1. **Workflows** -- Directed graphs of nodes that define what to do
+2. **Runtimes** -- Engines that execute workflows
+3. **Trust** -- Cryptographic chains that verify who authorized what
 
-The easiest way to install the Kailash SDK is using pip:
-
-.. code-block:: bash
-
-   pip install kailash
-
-Install from Source
--------------------
-
-For development or to get the latest features:
-
-.. code-block:: bash
-
-   git clone https://github.com/terrene-foundation/kailash-py.git
-   cd kailash-python-sdk
-   pip install -e .
-
-Install with Optional Dependencies
-----------------------------------
-
-For additional features, install with extras:
-
-.. code-block:: bash
-
-   # For API testing support
-   pip install kailash[api-testing]
-
-   # For development tools
-   pip install kailash[dev]
-
-   # For all optional dependencies
-   pip install kailash[all]
-
-Verify Installation
--------------------
-
-Verify the installation by checking the version:
-
-.. code-block:: bash
-
-   python -c "import kailash; print(kailash.__version__)"
-
-Or use the CLI:
-
-.. code-block:: bash
-
-   kailash --version
-
-Key Features in v0.3.0
-=======================
-
-Before we create your first workflow, here are the major improvements in v0.3.0:
-
-**Parameter Lifecycle Architecture**
-------------------------------------
-
-Nodes can now be created without required parameters, making workflow construction more flexible:
+Everything follows one pattern:
 
 .. code-block:: python
 
-   # v0.3.0: Create nodes without parameters
-   reader = CSVReaderNode(name="reader")
-   workflow.add_node("reader", reader)
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.runtime import LocalRuntime
 
-   # Parameters provided at execution
-   results = runtime.execute(workflow, parameters={"reader": {"file_path": "data.csv"}})
+   workflow = WorkflowBuilder()
+   # ... add nodes and connections ...
+   runtime = LocalRuntime()
+   results, run_id = runtime.execute(workflow.build())
 
-**Centralized Data Management**
--------------------------------
+Building Workflows
+==================
 
-Access data files using the new centralized utilities:
+WorkflowBuilder is the entry point for all workflow construction.
 
-.. code-block:: python
+Adding Nodes
+------------
 
-   from examples.utils.data_paths import get_input_data_path, get_output_data_path
-
-   input_file = get_input_data_path("customers.csv")
-   output_file = get_output_data_path("results.csv")
-
-**Enhanced PythonCodeNode**
----------------------------
-
-Better support for data science and function-based development:
+Nodes are the building blocks. Each node has a type, a unique string ID, and a
+configuration dictionary:
 
 .. code-block:: python
 
-   # Create from function with IDE support
-   def process_data(input_data: list) -> dict:
-       return {"count": len(input_data), "processed": True}
+   from kailash.workflow.builder import WorkflowBuilder
 
-   processor = PythonCodeNode.from_function(process_data, name="processor")
+   workflow = WorkflowBuilder()
 
-Your First Workflow
-===================
+   # Pattern: workflow.add_node("NodeType", "node_id", {config})
+   workflow.add_node("PythonCodeNode", "step_1", {
+       "code": "result = {'value': input_data * 2}"
+   })
 
-Let's create a simple workflow that reads data, processes it, and saves the results.
+   workflow.add_node("PythonCodeNode", "step_2", {
+       "code": "result = {'final': input_data + 100}"
+   })
 
-Step 1: Import Required Components
-----------------------------------
+.. important::
 
-.. code-block:: python
+   Node IDs must be string literals. The 4-parameter pattern is:
+   ``workflow.add_node("NodeType", "node_id", {config}, connections)``
+   where connections is optional.
 
-   from kailash import Workflow
-   from kailash.nodes import NodeRegistry
-
-Step 2: Create a Workflow
--------------------------
-
-.. code-block:: python
-
-   # Create a new workflow
-   workflow = Workflow("my_first_workflow")
-
-Step 3: Add Nodes
------------------
-
-.. code-block:: python
-
-   # Add a CSV reader node
-   reader = workflow.add_node(
-       node_type="CSVReaderNode",
-       node_id="read_customers",
-       config={
-           "file_path": "customers.csv"
-       }
-   )
-
-   # Add a data filter node
-   filter_node = workflow.add_node(
-       node_type="DataFilter",
-       node_id="filter_active",
-       config={
-           "column": "status",
-           "value": "active",
-           "operation": "equals"
-       }
-   )
-
-   # Add a CSV writer node
-   writer = workflow.add_node(
-       node_type="CSVWriterNode",
-       node_id="save_results",
-       config={
-           "file_path": "active_customers.csv"
-       }
-   )
-
-Step 4: Connect Nodes
----------------------
-
-.. code-block:: python
-
-   # Connect the nodes in sequence
-   workflow.add_edge("read_customers", "filter_active")
-   workflow.add_edge("filter_active", "save_results")
-
-Step 5: Execute the Workflow
-----------------------------
-
-.. code-block:: python
-
-   # Run the workflow
-   results = workflow.run()
-
-   # Check the results
-   print(f"Workflow completed: {results.get('success')}")
-   print(f"Output saved to: active_customers.csv")
-
-Complete Example
+Connecting Nodes
 ----------------
 
-Here's the complete script:
+Connections define data flow between nodes:
 
 .. code-block:: python
 
-   from kailash import Workflow
+   # Connect output of step_1 to input of step_2
+   workflow.add_connection("step_1", "step_2", "result", "input_data")
 
-   # Create and configure workflow
-   workflow = Workflow("customer_processing")
+   # Parameters:
+   #   source_node_id, target_node_id, source_output, target_input
 
-   # Add nodes
-   workflow.add_node("CSVReaderNode", "read_data", config={
-       "file_path": "customers.csv"
+Executing Workflows
+===================
+
+LocalRuntime (Sync)
+-------------------
+
+For CLI scripts and synchronous contexts:
+
+.. code-block:: python
+
+   import os
+   from dotenv import load_dotenv
+   load_dotenv()
+
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.runtime import LocalRuntime
+
+   workflow = WorkflowBuilder()
+   workflow.add_node("PythonCodeNode", "hello", {
+       "code": "result = {'message': 'Hello from Kailash!'}"
    })
 
-   workflow.add_node("DataFilter", "filter_active", config={
-       "column": "status",
-       "value": "active"
+   runtime = LocalRuntime()
+   results, run_id = runtime.execute(workflow.build())
+
+   print(results["hello"]["result"]["message"])
+
+AsyncLocalRuntime (Async)
+-------------------------
+
+For Docker, FastAPI, and async contexts:
+
+.. code-block:: python
+
+   import os
+   from dotenv import load_dotenv
+   load_dotenv()
+
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.runtime import AsyncLocalRuntime
+
+   workflow = WorkflowBuilder()
+   workflow.add_node("PythonCodeNode", "hello", {
+       "code": "result = {'message': 'Hello from async Kailash!'}"
    })
 
-   workflow.add_node("CSVWriterNode", "save_data", config={
-       "file_path": "active_customers.csv"
-   })
+   runtime = AsyncLocalRuntime()
+   results, run_id = await runtime.execute_workflow_async(
+       workflow.build(), inputs={}
+   )
 
-   # Connect nodes
-   workflow.add_edge("read_data", "filter_active")
-   workflow.add_edge("filter_active", "save_data")
+Auto-Detection
+--------------
 
-   # Execute
-   results = workflow.run()
+Let the SDK choose the right runtime:
 
-   if results["success"]:
-       print("Workflow completed successfully!")
-   else:
-       print(f"Workflow failed: {results.get('error')}")
+.. code-block:: python
 
-Understanding Node Types
-========================
+   from kailash.runtime import get_runtime
 
-The SDK provides several categories of nodes:
+   runtime = get_runtime()  # AsyncLocalRuntime for Docker, LocalRuntime otherwise
 
-Data Nodes
-----------
+Runtime Configuration
+---------------------
 
-For reading and writing data:
+Both runtimes inherit from ``BaseRuntime`` with 29 configuration parameters:
 
-- **CSVReaderNode/CSVWriterNode**: Handle CSV files
-- **JSONReaderNode/JSONWriterNode**: Handle JSON files
-- **TextReaderNode/TextWriterNode**: Handle text files
-- **SQLReader/Writer**: Database operations
-- **SharePointReader/Writer**: SharePoint integration
+.. code-block:: python
 
-Transform Nodes
----------------
+   runtime = LocalRuntime(
+       debug=True,
+       enable_cycles=True,                    # CycleExecutionMixin
+       conditional_execution="skip_branches",  # ConditionalExecutionMixin
+       connection_validation="strict",         # ValidationMixin (strict/warn/off)
+   )
 
-For data manipulation:
+CARE Trust Framework
+====================
 
-- **DataFilter**: Filter rows based on conditions
-- **DataMapper**: Transform data with custom logic
-- **DataSorter**: Sort data by columns
-- **DataTransformer**: Apply complex transformations
+The CARE (Context, Action, Reasoning, Evidence) framework is what
+makes Kailash unique among AI platforms. It provides verifiable trust chains from
+human authorization through agent delegation.
 
-Logic Nodes
------------
+**Three verification modes:**
 
-For workflow control:
+- **disabled** (default): No trust checks. Existing code works unchanged.
+- **permissive**: Logs trust events but does not block execution.
+- **enforcing**: Blocks workflows that fail trust verification.
 
-- **SwitchNode**: Conditional routing based on data
-- **MergeNode**: Combine multiple data streams
-- **Validator**: Validate data against schemas
+.. code-block:: python
 
-AI/ML Nodes
------------
+   import os
+   from dotenv import load_dotenv
+   load_dotenv()
 
-For AI and machine learning:
+   from kailash.runtime import LocalRuntime
+   from kailash.runtime.trust import (
+       RuntimeTrustContext,
+       TrustVerificationMode,
+   )
 
-- **TextClassifier**: Classify text data
-- **EmbeddingGeneratorNode**: Generate embeddings
-- **LLMAgentNode**: Interact with language models
+   ctx = RuntimeTrustContext(
+       trace_id="trace-001",
+       delegation_chain=["human-alice", "agent-coordinator", "agent-worker"],
+       verification_mode=TrustVerificationMode.PERMISSIVE,
+   )
 
-API Nodes
----------
+   runtime = LocalRuntime(
+       trust_context=ctx,
+       trust_verification_mode="permissive",
+   )
 
-For external integrations:
+   results, run_id = runtime.execute(workflow.build())
 
-- **HTTPClient**: Make HTTP requests
-- **RESTClient**: RESTful API interactions
-- **GraphQLClient**: GraphQL queries
+See :doc:`core/trust` for the full trust framework documentation.
 
-Code Nodes
-----------
+Choosing a Framework
+====================
 
-For custom logic:
+The Core SDK is always available. Frameworks build on top of it for specific use cases:
 
-- **PythonCodeNode**: Execute Python code safely
+.. list-table::
+   :widths: 20 40 40
+   :header-rows: 1
 
-Cycle-Aware Nodes (Enhanced in v0.3.0)
----------------------------------------
+   * - Framework
+     - Use Case
+     - Install
+   * - **Core SDK**
+     - Custom workflows, fine-grained control
+     - ``pip install kailash``
+   * - **Kaizen** (v1.2.1)
+     - AI agents, signatures, multi-agent teams
+     - ``pip install kailash-kaizen``
+   * - **Nexus** (v1.4.1)
+     - Multi-channel (API + CLI + MCP)
+     - ``pip install kailash-nexus``
+   * - **DataFlow** (v0.12.1)
+     - Database operations, auto-generated nodes
+     - ``pip install kailash-dataflow``
 
-For iterative processing with improved lifecycle management:
-
-- **CycleAwareNode**: Base class with convergence detection and flexible parameter handling
-- **Built-in cycle support**: All nodes can participate in cycles with runtime parameter support
-- **Automatic state management**: Track iterations and convergence with centralized data paths
-
-Next Steps
-==========
-
-Now that you've created your first workflow:
-
-1. **Master Cyclic Workflows**: Learn about enhanced :doc:`guides/cyclic_workflows` with v0.3.0 improvements
-2. **Explore Examples**: Check out the :doc:`examples/index` section
-3. **Build Complex Workflows**: See :doc:`guides/workflows`
-4. **Create Custom Nodes**: Learn in :doc:`guides/custom_nodes`
-5. **Best Practices**: Review :doc:`guides/best_practices`
-6. **Developer Tools**: Explore CycleAnalyzer, CycleDebugger, and CycleProfiler
+All frameworks use the same underlying workflow execution:
+``runtime.execute(workflow.build())``.
 
 Common Patterns
 ===============
@@ -319,120 +230,96 @@ Data Processing Pipeline
 
 .. code-block:: python
 
-   workflow = Workflow("etl_pipeline")
+   import os
+   from dotenv import load_dotenv
+   load_dotenv()
 
-   # Extract
-   workflow.add_node("CSVReaderNode", "extract", config={
-       "file_path": "raw_data.csv"
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.runtime import LocalRuntime
+
+   workflow = WorkflowBuilder()
+
+   workflow.add_node("CSVReaderNode", "read_data", {
+       "file_path": "customers.csv"
    })
 
-   # Transform
-   workflow.add_node("DataTransformer", "transform", config={
-       "operations": [
-           {"type": "rename", "old": "cust_id", "new": "customer_id"},
-           {"type": "cast", "column": "amount", "dtype": "float"},
-           {"type": "filter", "condition": "amount > 0"}
-       ]
+   workflow.add_node("PythonCodeNode", "transform", {
+       "code": """
+   # Filter and transform
+   active = [r for r in input_data if r.get('status') == 'active']
+   result = {'data': active, 'count': len(active)}
+   """
    })
 
-   # Load
-   workflow.add_node("SQLWriter", "load", config={
-       "connection_string": "postgresql://...",
-       "table_name": "processed_data"
-   })
+   workflow.add_connection("read_data", "transform", "data", "input_data")
 
-   workflow.connect_sequential(["extract", "transform", "load"])
-   workflow.run()
+   runtime = LocalRuntime()
+   results, run_id = runtime.execute(workflow.build())
 
-API Integration
----------------
+AI-Powered Workflow
+-------------------
 
 .. code-block:: python
 
-   workflow = Workflow("api_integration")
+   import os
+   from dotenv import load_dotenv
+   load_dotenv()
 
-   # Read input data
-   workflow.add_node("JSONReaderNode", "read_requests", config={
-       "file_path": "api_requests.json"
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.runtime import LocalRuntime
+
+   model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
+
+   workflow = WorkflowBuilder()
+
+   workflow.add_node("LLMAgentNode", "analyzer", {
+       "model": model,
+       "prompt": "Analyze the following data and provide insights: {input_data}"
    })
 
-   # Make API calls
-   workflow.add_node("RESTClient", "call_api", config={
-       "base_url": "https://api.example.com",
-       "method": "POST",
-       "endpoint": "/process"
-   })
-
-   # Save responses
-   workflow.add_node("JSONWriterNode", "save_responses", config={
-       "file_path": "api_responses.json"
-   })
-
-   workflow.connect_sequential(["read_requests", "call_api", "save_responses"])
-   workflow.run()
-
-Iterative Processing (Enhanced in v0.3.0)
-------------------------------------------
-
-Create workflows that iterate until convergence:
-
-.. code-block:: python
-
-   from kailash.workflow import CycleBuilder
-   from kailash.nodes import PythonCodeNode
-
-   # Use the new CycleBuilder API
-   builder = CycleBuilder("iterative_refinement")
-
-   # Add a node that refines results iteratively
-   refiner_code = '''
-   # Access previous iteration's state
-   try:
-       quality = cycle_state["quality"]
-       data = cycle_state["data"]
-   except:
-       quality = 0.0
-       data = input_data
-
-   # Refine the data
-   refined_data = [x * 1.1 for x in data]  # Simple refinement
-   new_quality = min(quality + 0.2, 1.0)  # Improve quality
-
-   # Check if we've reached target quality
-   converged = new_quality >= 0.95
-
-   result = {
-       "data": refined_data,
-       "quality": new_quality,
-       "converged": converged
-   }
-   '''
-
-   builder.add_cycle_node(
-       "refiner",
-       PythonCodeNode(name="refiner", code=refiner_code),
-       input_mapping={"input_data": "data"},
-       convergence_check="converged == True",
-       max_iterations=10
+   runtime = LocalRuntime()
+   results, run_id = runtime.execute(
+       workflow.build(),
+       parameters={"analyzer": {"input_data": "Q1 revenue up 15%, costs down 8%"}}
    )
 
-   # Build and run
-   workflow = builder.build()
-   results = workflow.run(parameters={
-       "refiner": {"data": [1, 2, 3, 4, 5]}
+Cyclic Workflow
+---------------
+
+For iterative processing with convergence detection:
+
+.. code-block:: python
+
+   import os
+   from dotenv import load_dotenv
+   load_dotenv()
+
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.runtime import LocalRuntime
+
+   workflow = WorkflowBuilder()
+
+   workflow.add_node("PythonCodeNode", "optimizer", {
+       "code": """
+   # Iterative optimization
+   x = cycle_state.get('x', 5.0)
+   gradient = 2 * (x - 2)
+   new_x = x - 0.1 * gradient
+   converged = abs(gradient) < 0.001
+   result = {'x': new_x, 'converged': converged}
+   """
    })
 
-   print(f"Final quality: {results['refiner']['quality']}")
-   print(f"Refined data: {results['refiner']['data']}")
+   runtime = LocalRuntime(enable_cycles=True)
+   results, run_id = runtime.execute(workflow.build())
 
-Getting Help
-============
+Next Steps
+==========
 
-If you need help:
-
-- Check the :doc:`troubleshooting` guide
-- Review the API documentation sections
-- Visit our `GitHub Issues <https://github.com/terrene-foundation/kailash-py/issues>`_
-- Join our community discussions
-
-Happy workflow building! 🚀
+- :doc:`core/workflows` -- Advanced workflow patterns, connections, and cycles
+- :doc:`core/nodes` -- Node types and custom node development
+- :doc:`core/runtime` -- Runtime architecture and configuration
+- :doc:`core/trust` -- CARE trust framework deep dive
+- :doc:`frameworks/kaizen` -- Build AI agents
+- :doc:`frameworks/nexus` -- Deploy multi-channel platforms
+- :doc:`frameworks/dataflow` -- Zero-config database operations

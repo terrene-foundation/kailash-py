@@ -880,13 +880,16 @@ LLMAgentNode
 
 .. code-block:: python
 
+   import os
    from kailash.nodes.ai import LLMAgentNode
+
+   model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
 
    # Basic question-answering
    agent = LLMAgentNode()
    result = agent.run(
        provider="openai",
-       model="gpt-4",
+       model=model,
        prompt="What is the capital of France?",
        operation="qa"
    )
@@ -894,7 +897,7 @@ LLMAgentNode
    # Conversation with memory
    result = agent.run(
        provider="anthropic",
-       model="claude-3-sonnet-20240229",
+       model=os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest"),
        prompt="Explain quantum computing",
        operation="conversation",
        memory_config={
@@ -906,7 +909,7 @@ LLMAgentNode
    # Tool calling with functions
    result = agent.run(
        provider="openai",
-       model="gpt-4",
+       model=model,
        prompt="What's the weather in Paris?",
        operation="tool_calling",
        tools=[{

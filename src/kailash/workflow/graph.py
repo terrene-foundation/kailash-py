@@ -126,7 +126,17 @@ class Workflow:
         self.nodes = {}  # Maps node_id to NodeInstance metadata objects
         self.connections = []  # List of Connection objects
 
+        # P0B-004/005: Cached graph computations (invalidated on mutation)
+        # P0D-003: Use tuple for immutability — prevents callers from corrupting cache
+        self._topo_cache: tuple[str, ...] | None = None
+        self._dag_cycle_cache: tuple[list[tuple], list[tuple]] | None = None
+
         logger.info(f"Created workflow '{name}' (ID: {workflow_id})")
+
+    def _invalidate_graph_caches(self) -> None:
+        """Invalidate cached graph computations after mutation."""
+        self._topo_cache = None
+        self._dag_cycle_cache = None
 
     def _create_node_instance(
         self, node_class: type, node_id: str, config: dict
@@ -274,6 +284,7 @@ class Workflow:
         self.graph.add_node(
             node_id, node=node_instance, type=node_type, config=actual_config
         )
+        self._invalidate_graph_caches()
         logger.info(f"Added node '{node_id}' of type '{node_type}'")
 
     def _add_node_internal(
@@ -565,6 +576,7 @@ class Workflow:
 
         # Add or update the edge with merged data
         self.graph.add_edge(source_node, target_node, **edge_data)
+        self._invalidate_graph_caches()
 
         # Enhanced logging for cycles
         if cycle:
@@ -701,6 +713,10 @@ class Workflow:
         Returns:
             Tuple of (dag_edges, cycle_edges) where each edge is (source, target, data)
         """
+        # P0B-005: Return cached result if available
+        if self._dag_cycle_cache is not None:
+            return self._dag_cycle_cache
+
         dag_edges = []
         cycle_edges = []
 
@@ -710,7 +726,8 @@ class Workflow:
             else:
                 dag_edges.append((source, target, data))
 
-        return dag_edges, cycle_edges
+        self._dag_cycle_cache = (dag_edges, cycle_edges)
+        return self._dag_cycle_cache
 
     def get_cycle_groups(self) -> dict[str, list[tuple]]:
         """Get cycle edges grouped by cycle_id with enhanced multi-node cycle detection.
@@ -817,15 +834,19 @@ class Workflow:
         _, cycle_edges = self.separate_dag_and_cycle_edges()
         return len(cycle_edges) > 0
 
-    def get_execution_order(self) -> list[str]:
+    def get_execution_order(self) -> tuple[str, ...] | list[str]:
         """Get topological execution order for nodes, handling cycles gracefully.
 
         Returns:
-            List of node IDs in execution order
+            Sequence of node IDs in execution order (tuple when cached, list on first compute)
 
         Raises:
             WorkflowValidationError: If workflow contains unmarked cycles
         """
+        # P0B-004: Return cached result if available
+        if self._topo_cache is not None:
+            return self._topo_cache
+
         # Create a copy of the graph without cycle edges for topological sort
         dag_edges, cycle_edges = self.separate_dag_and_cycle_edges()
 
@@ -837,7 +858,11 @@ class Workflow:
 
         try:
             # Get topological order for DAG portion
-            return list(nx.topological_sort(dag_graph))
+            # P0D-003: Store as tuple for immutability — prevents callers from
+            # corrupting the cache by mutating the returned sequence
+            result = tuple(nx.topological_sort(dag_graph))
+            self._topo_cache = result
+            return result
         except nx.NetworkXUnfeasible:
             # Check if there are unmarked cycles
             cycles = list(nx.simple_cycles(dag_graph))

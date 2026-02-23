@@ -43,8 +43,6 @@ from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
-import networkx as nx
-import psutil
 from kailash.nodes import Node
 from kailash.runtime.base import BaseRuntime
 from kailash.runtime.compatibility_reporter import CompatibilityReporter
@@ -72,12 +70,17 @@ from kailash.sdk_exceptions import (
 from kailash.tracking import TaskManager, TaskStatus
 from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.tracking.models import TaskMetrics
+from kailash.utils.data_validation import DataTypeValidator
 from kailash.workflow import Workflow
 from kailash.workflow.contracts import ConnectionContract, ContractValidator
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
 
-# Import resource management components (lazy import for avoiding circular dependencies)
-# These will be imported when needed in _initialize_persistent_resources()
+# Resource management error classes (moved from in-loop lazy imports for P0A-001)
+from kailash.runtime.resource_manager import (
+    CPULimitExceededError,
+    ConnectionLimitExceededError,
+    MemoryLimitExceededError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +238,8 @@ class LocalRuntime(
         # Audit Configuration (CARE-018)
         audit_generator: Optional[Any] = None,
         audit_log_to_stdout: bool = False,
+        # P0A-003: Opt-in resource limit checks
+        enable_resource_limits: bool = False,
     ):
         """Initialize the unified runtime.
 
@@ -295,6 +300,7 @@ class LocalRuntime(
             trust_verification_mode=trust_verification_mode,
             audit_generator=audit_generator,
             audit_log_to_stdout=audit_log_to_stdout,
+            enable_resource_limits=enable_resource_limits,
         )
 
         # LocalRuntime-specific initialization (not in BaseRuntime)
@@ -1323,10 +1329,11 @@ class LocalRuntime(
             raise RuntimeExecutionError("No workflow provided")
 
         run_id = None
+        _deferred_storage = None  # P0D-007: Initialize before try block
 
         try:
-            # Resource Limit Enforcement: Check limits before execution
-            if self._resource_enforcer:
+            # Resource Limit Enforcement: Check limits before execution (P0A-003: opt-in only)
+            if self._resource_enforcer and self.enable_resource_limits:
                 resource_check_results = self._resource_enforcer.check_all_limits()
 
                 # Enforce limits based on policy
@@ -1335,26 +1342,14 @@ class LocalRuntime(
                         if self._resource_enforcer.enforcement_policy.value == "strict":
                             # Strict policy - raise appropriate error immediately
                             if resource_type == "memory":
-                                from kailash.runtime.resource_manager import (
-                                    MemoryLimitExceededError,
-                                )
-
                                 raise MemoryLimitExceededError(
                                     result.current_usage, result.limit
                                 )
                             elif resource_type == "cpu":
-                                from kailash.runtime.resource_manager import (
-                                    CPULimitExceededError,
-                                )
-
                                 raise CPULimitExceededError(
                                     result.current_usage, result.limit
                                 )
                             elif resource_type == "connections":
-                                from kailash.runtime.resource_manager import (
-                                    ConnectionLimitExceededError,
-                                )
-
                                 raise ConnectionLimitExceededError(
                                     int(result.current_usage), int(result.limit)
                                 )
@@ -1411,8 +1406,14 @@ class LocalRuntime(
                 )
 
             # Initialize enhanced tracking with enterprise context
+            # P0D-007: Use DeferredStorageBackend to batch all tracking writes.
+            # Instead of 5 disk writes per node (create, start, complete, metrics, run_update),
+            # all writes are buffered in memory and flushed once at the end of execution.
             if task_manager is None and self.enable_monitoring:
-                task_manager = TaskManager()
+                from kailash.tracking.storage.deferred import DeferredStorageBackend
+
+                _deferred_storage = DeferredStorageBackend()
+                task_manager = TaskManager(storage_backend=_deferred_storage)
 
             if task_manager:
                 try:
@@ -1571,6 +1572,12 @@ class LocalRuntime(
                 except Exception as e:
                     self.logger.warning(f"Failed to update run status: {e}")
 
+            # P0E-003: Persist deferred tracking data to SQLite (CARE audit record).
+            # Passes RuntimeAuditGenerator events into the storage backend before flush
+            # so both task tracking and EATP audit events are written atomically.
+            if _deferred_storage is not None:
+                self._flush_deferred_storage_sqlite(_deferred_storage, log_warning=True)
+
             # Final cleanup of all node instances
             for node_id, node_instance in workflow._node_instances.items():
                 if hasattr(node_instance, "cleanup"):
@@ -1601,6 +1608,11 @@ class LocalRuntime(
                     )
                 except Exception:
                     pass
+            # P0E-003: Persist deferred tracking on error path (CARE audit trail)
+            if _deferred_storage is not None:
+                self._flush_deferred_storage_sqlite(
+                    _deferred_storage, log_warning=False
+                )
             raise
         except PermissionError as e:
             # Enterprise Audit: Log access denial
@@ -1619,6 +1631,11 @@ class LocalRuntime(
                     task_manager.update_run_status(run_id, "failed", error=str(e))
                 except Exception:
                     pass
+            # P0E-003: Persist deferred tracking on error path (CARE audit trail)
+            if _deferred_storage is not None:
+                self._flush_deferred_storage_sqlite(
+                    _deferred_storage, log_warning=False
+                )
             raise
         except Exception as e:
             # Enterprise Audit: Log execution failure
@@ -1636,6 +1653,11 @@ class LocalRuntime(
                     task_manager.update_run_status(run_id, "failed", error=str(e))
                 except Exception:
                     pass
+            # P0E-003: Persist deferred tracking on error path (CARE audit trail)
+            if _deferred_storage is not None:
+                self._flush_deferred_storage_sqlite(
+                    _deferred_storage, log_warning=False
+                )
 
             # Wrap other errors in RuntimeExecutionError
             raise RuntimeExecutionError(
@@ -1664,11 +1686,12 @@ class LocalRuntime(
         Raises:
             WorkflowExecutionError: If execution fails.
         """
-        # Get execution order
+        # P0C-001: Use cached topological sort from Workflow
         try:
-            execution_order = list(nx.topological_sort(workflow.graph))
-            self.logger.info(f"Execution order: {execution_order}")
-        except nx.NetworkXError as e:
+            execution_order = workflow.get_execution_order()
+            # P0D-006: Use lazy % formatting to avoid string construction when logging disabled
+            self.logger.info("Execution order: %s", execution_order)
+        except Exception as e:
             raise WorkflowExecutionError(
                 f"Failed to determine execution order: {e}"
             ) from e
@@ -1688,9 +1711,35 @@ class LocalRuntime(
         # Store the workflow context for cleanup later
         self._current_workflow_context = workflow_context
 
+        # P0A-002: Create shared MetricsCollector once per workflow execution
+        # P0D-001: Disable psutil resource monitoring when enable_resource_limits=False
+        # to avoid spawning a background thread per node (~2ms/node overhead)
+        _shared_collector = MetricsCollector(
+            enable_resource_monitoring=self.enable_resource_limits,
+        )
+
+        # P0A-005: Cache node IDs set once per execution (avoids redundant set() calls)
+        _node_ids = (
+            frozenset(workflow.graph.nodes())
+            if hasattr(workflow, "graph")
+            else frozenset()
+        )
+
+        # P0D-004: Hoist trust verification mode check before execution loop.
+        # When DISABLED (default), skip all per-node trust calls entirely,
+        # avoiding 2 lazy imports per node (_verify_node_trust + _get_effective_trust_context).
+        from kailash.runtime.trust.context import TrustVerificationMode
+
+        _trust_enabled = (
+            self._trust_verification_mode != TrustVerificationMode.DISABLED
+            and self._trust_verifier is not None
+        )
+        _trust_context = self._get_effective_trust_context() if _trust_enabled else None
+
         # Execute each node
         for node_id in execution_order:
-            self.logger.info(f"Executing node: {node_id}")
+            # P0D-006: Use lazy % formatting (avoids string construction per node)
+            self.logger.info("Executing node: %s", node_id)
 
             # Get node instance
             node_instance = workflow._node_instances.get(node_id)
@@ -1753,6 +1802,7 @@ class LocalRuntime(
                     node_instance=node_instance,
                     node_outputs=node_outputs,
                     parameters=parameters,  # Pass full dict - filtering happens inside
+                    _node_ids=_node_ids,  # P0A-005: Pre-computed node IDs
                 )
 
                 # CRITICAL FIX: DO NOT modify node_instance.config with runtime parameters!
@@ -1795,15 +1845,10 @@ class LocalRuntime(
                     continue
 
                 # Execute node with unified async/sync support and metrics collection
-                collector = MetricsCollector()
-                with collector.collect(node_id=node_id) as metrics_context:
+                with _shared_collector.collect(node_id=node_id) as metrics_context:
                     # Unified async/sync execution
-                    # Validate inputs before execution
-                    from kailash.utils.data_validation import DataTypeValidator
-
-                    validated_inputs = DataTypeValidator.validate_node_input(
-                        node_id, inputs
-                    )
+                    # P0B-001: Removed VP#1 (DataTypeValidator.validate_node_input)
+                    # Node.execute() performs authoritative validation via VP#3
 
                     # Set workflow context on the node instance
                     if hasattr(node_instance, "_workflow_context"):
@@ -1813,23 +1858,25 @@ class LocalRuntime(
                         node_instance._workflow_context = workflow_context
 
                     # CARE-039: Node-level trust verification before execution
-                    node_type = node_instance.__class__.__name__
-                    node_trust_allowed = await self._verify_node_trust(
-                        node_id=node_id,
-                        node_type=node_type,
-                        trust_context=self._get_effective_trust_context(),
-                    )
-                    if not node_trust_allowed:
-                        raise WorkflowExecutionError(
-                            f"Trust verification denied execution of node '{node_id}' (type={node_type})"
+                    # P0D-004: Only call _verify_node_trust when trust is enabled.
+                    # When DISABLED (default), this entire block is skipped,
+                    # avoiding 2 lazy imports + function calls per node.
+                    if _trust_enabled:
+                        node_type = node_instance.__class__.__name__
+                        node_trust_allowed = await self._verify_node_trust(
+                            node_id=node_id,
+                            node_type=node_type,
+                            trust_context=_trust_context,
                         )
+                        if not node_trust_allowed:
+                            raise WorkflowExecutionError(
+                                f"Trust verification denied execution of node '{node_id}' (type={node_type})"
+                            )
 
                     if self.enable_async and hasattr(node_instance, "execute_async"):
-                        # Use async execution method that includes validation
-                        outputs = await node_instance.execute_async(**validated_inputs)
+                        outputs = await node_instance.execute_async(**inputs)
                     else:
-                        # Standard synchronous execution
-                        outputs = node_instance.execute(**validated_inputs)
+                        outputs = node_instance.execute(**inputs)
 
                 # Get performance metrics
                 performance_metrics = metrics_context.result()
@@ -1967,6 +2014,7 @@ class LocalRuntime(
         node_instance: Node,
         node_outputs: dict[str, dict[str, Any]],
         parameters: dict[str, Any],
+        _node_ids: Optional[frozenset] = None,
     ) -> dict[str, Any]:
         """Prepare inputs for a node execution.
 
@@ -1976,6 +2024,7 @@ class LocalRuntime(
             node_instance: Current node instance.
             node_outputs: Outputs from previously executed nodes.
             parameters: Parameter overrides.
+            _node_ids: Pre-computed frozenset of node IDs (P0A-005 optimization).
 
         Returns:
             Dictionary of inputs for the node.
@@ -2023,8 +2072,6 @@ class LocalRuntime(
                     )
 
                 # Validate source outputs before mapping
-                from kailash.utils.data_validation import DataTypeValidator
-
                 try:
                     source_outputs = DataTypeValidator.validate_node_output(
                         source_node_id, source_outputs
@@ -2148,8 +2195,15 @@ class LocalRuntime(
         # maintaining the format nodes expect.
 
         if parameters:
+            # P0A-005: Use pre-computed node IDs if available, else compute
             node_ids_in_graph = (
-                set(workflow.graph.nodes()) if hasattr(workflow, "graph") else set()
+                _node_ids
+                if _node_ids is not None
+                else (
+                    frozenset(workflow.graph.nodes())
+                    if hasattr(workflow, "graph")
+                    else frozenset()
+                )
             )
 
             # Build filtered parameters for this node
@@ -2491,6 +2545,50 @@ class LocalRuntime(
             # Audit logging failures shouldn't stop execution
             self.logger.warning(f"Audit logging failed: {e}")
 
+    def _flush_deferred_storage_sqlite(
+        self, deferred_storage: Any, log_warning: bool = True
+    ) -> None:
+        """Flush deferred tracking data to SQLite (P0E-003).
+
+        Passes RuntimeAuditGenerator events to the deferred storage backend
+        before flushing, so the CARE audit record includes both task tracking
+        data and EATP audit events in a single SQLite transaction.
+
+        Falls back to flush_to_filesystem() if flush_to_sqlite() is not
+        available on the storage object.
+
+        Args:
+            deferred_storage: DeferredStorageBackend instance to flush.
+            log_warning: Whether to log a warning if flush fails (True on happy path,
+                         False on error paths where we avoid noisy logs).
+        """
+        try:
+            # Pass RuntimeAuditGenerator events into the storage backend
+            # so they are included in the SQLite CARE audit record.
+            if self._audit_generator is not None and hasattr(
+                deferred_storage, "add_audit_events"
+            ):
+                try:
+                    events = self._audit_generator.get_events()
+                    if events:
+                        deferred_storage.add_audit_events(
+                            [
+                                e.to_dict() if hasattr(e, "to_dict") else e
+                                for e in events
+                            ]
+                        )
+                except Exception:
+                    pass  # Audit event collection failures must not break flush
+
+            # Use SQLite flush (preferred, ACID) if available; otherwise filesystem
+            if hasattr(deferred_storage, "flush_to_sqlite"):
+                deferred_storage.flush_to_sqlite()
+            else:
+                deferred_storage.flush_to_filesystem()
+        except Exception as exc:
+            if log_warning:
+                self.logger.warning("Failed to persist deferred tracking data: %s", exc)
+
     async def _log_audit_event_async(
         self, event_type: str, event_data: dict[str, Any]
     ) -> None:
@@ -2549,8 +2647,8 @@ class LocalRuntime(
         Raises:
             Various enterprise exceptions based on configured policies
         """
-        # Pre-execution resource check
-        if self._resource_enforcer:
+        # Pre-execution resource check (P0A-003: opt-in only)
+        if self._resource_enforcer and self.enable_resource_limits:
             resource_check_results = self._resource_enforcer.check_all_limits()
 
             # Apply resource limits based on enforcement policy
@@ -2559,26 +2657,14 @@ class LocalRuntime(
                     if self._resource_enforcer.enforcement_policy.value == "strict":
                         # Strict policy - raise appropriate error immediately
                         if resource_type == "memory":
-                            from kailash.runtime.resource_manager import (
-                                MemoryLimitExceededError,
-                            )
-
                             raise MemoryLimitExceededError(
                                 result.current_usage, result.limit
                             )
                         elif resource_type == "cpu":
-                            from kailash.runtime.resource_manager import (
-                                CPULimitExceededError,
-                            )
-
                             raise CPULimitExceededError(
                                 result.current_usage, result.limit
                             )
                         elif resource_type == "connections":
-                            from kailash.runtime.resource_manager import (
-                                ConnectionLimitExceededError,
-                            )
-
                             raise ConnectionLimitExceededError(
                                 int(result.current_usage), int(result.limit)
                             )
@@ -3192,14 +3278,20 @@ class LocalRuntime(
                 self.logger.info("No SwitchNodes found in workflow")
                 return all_phase1_results
 
-            # Get topological order for all nodes
-            all_nodes_order = list(nx.topological_sort(workflow.graph))
+            # P0C-002: Use cached topological sort from Workflow
+            all_nodes_order = workflow.get_execution_order()
 
             # Find all nodes that switches depend on (need to execute these too)
             nodes_to_execute = set(switch_node_ids)
             for switch_id in switch_node_ids:
-                # Get all predecessors (direct and indirect) of this switch
-                predecessors = nx.ancestors(workflow.graph, switch_id)
+                # P0C-004: Pure-Python BFS ancestors (avoids nx.ancestors overhead)
+                predecessors = set()
+                queue = list(workflow.graph.predecessors(switch_id))
+                while queue:
+                    pred = queue.pop()
+                    if pred not in predecessors:
+                        predecessors.add(pred)
+                        queue.extend(workflow.graph.predecessors(pred))
                 nodes_to_execute.update(predecessors)
 
             # Execute nodes in topological order, but only those needed for switches
@@ -3467,10 +3559,8 @@ class LocalRuntime(
         Returns:
             Node execution results
         """
-        # Validate inputs before execution
-        from kailash.utils.data_validation import DataTypeValidator
-
-        validated_inputs = DataTypeValidator.validate_node_input(node_id, node_inputs)
+        # P0B-001: Removed VP#1 (DataTypeValidator.validate_node_input)
+        # Node.execute() performs authoritative validation via VP#3
 
         # Set workflow context on the node instance
         if hasattr(node_instance, "_workflow_context"):
@@ -3484,19 +3574,15 @@ class LocalRuntime(
             # Define node execution function for retry wrapper
             async def node_execution_func():
                 if self.enable_async and hasattr(node_instance, "execute_async"):
-                    # Use async execution method that includes validation
-                    return await node_instance.execute_async(**validated_inputs)
+                    return await node_instance.execute_async(**node_inputs)
                 else:
-                    # Standard synchronous execution
-                    return node_instance.execute(**validated_inputs)
+                    return node_instance.execute(**node_inputs)
 
             # Execute with retry policy
             try:
                 retry_result = await self._retry_policy_engine.execute_with_retry(
                     node_execution_func,
-                    timeout=validated_inputs.get(
-                        "timeout"
-                    ),  # Use node timeout if specified
+                    timeout=node_inputs.get("timeout"),  # Use node timeout if specified
                 )
 
                 if retry_result.success:
@@ -3554,17 +3640,15 @@ class LocalRuntime(
                 logger.error(f"Retry policy engine error for node {node_id}: {e}")
                 # Fall back to direct execution
                 if self.enable_async and hasattr(node_instance, "execute_async"):
-                    outputs = await node_instance.execute_async(**validated_inputs)
+                    outputs = await node_instance.execute_async(**node_inputs)
                 else:
-                    outputs = node_instance.execute(**validated_inputs)
+                    outputs = node_instance.execute(**node_inputs)
         else:
             # Execute directly without retry policy
             if self.enable_async and hasattr(node_instance, "execute_async"):
-                # Use async execution method that includes validation
-                outputs = await node_instance.execute_async(**validated_inputs)
+                outputs = await node_instance.execute_async(**node_inputs)
             else:
-                # Standard synchronous execution
-                outputs = node_instance.execute(**validated_inputs)
+                outputs = node_instance.execute(**node_inputs)
 
         return outputs
 
@@ -3689,7 +3773,7 @@ class LocalRuntime(
 
     def get_execution_plan_cached(
         self, workflow: Workflow, switch_results: Dict[str, Dict[str, Any]]
-    ) -> List[str]:
+    ) -> List[str] | tuple[str, ...]:
         """
         Get execution plan with caching for improved performance.
 
@@ -3728,8 +3812,8 @@ class LocalRuntime(
 
         except Exception as e:
             self.logger.warning(f"Error creating cached execution plan: {e}")
-            # Fallback to basic topological order
-            execution_plan = list(nx.topological_sort(workflow.graph))
+            # P0C-002: Fallback to cached topological order
+            execution_plan = workflow.get_execution_order()
 
         return execution_plan
 
@@ -3935,6 +4019,8 @@ class LocalRuntime(
         """
         import os
         import time
+
+        import psutil  # P0D-005: Lazy import — only used in this cold-path diagnostic method
 
         diagnostics = {
             "timestamp": time.time(),

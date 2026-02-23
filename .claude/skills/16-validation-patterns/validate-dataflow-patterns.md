@@ -23,7 +23,7 @@ class User:
     id: str
     email: str
 
-# Auto-generates 9 nodes: UserCreateNode, UserReadNode, etc.
+# Auto-generates 11 nodes: UserCreateNode, UserReadNode, UserUpsertNode, UserCountNode, etc.
 
 # ❌ WRONG: Manual node creation for database ops
 # workflow.add_node("DatabaseExecuteNode", "create_user", {
