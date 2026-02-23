@@ -26,6 +26,7 @@ graph TD
 ### Workflow Approach (Recommended)
 
 **When to Use** (90% of cases):
+
 - Any multi-step process
 - Business logic implementation
 - Data transformation pipelines
@@ -33,6 +34,7 @@ graph TD
 - Integration scenarios
 
 **Benefits**:
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 # ✅ RECOMMENDED: Workflow approach
@@ -50,6 +52,7 @@ results = runtime.execute(workflow.build(), parameters={
 ```
 
 **Advantages**:
+
 - 📊 Built-in observability and metrics
 - 🔄 Easy to modify and extend
 - ✅ Automatic validation
@@ -61,6 +64,7 @@ results = runtime.execute(workflow.build(), parameters={
 ### Direct Node Usage (Exception)
 
 **When Acceptable** (10% of cases):
+
 - Single atomic operations
 - Performance-critical paths (<5ms)
 - CLI utilities
@@ -68,6 +72,7 @@ results = runtime.execute(workflow.build(), parameters={
 - Emergency hotfixes
 
 **Example**:
+
 ```python
 # ⚠️ ONLY when justified by requirements
 from kailash.nodes.auth import UserManagementNode
@@ -82,6 +87,7 @@ result = node.execute(
 ```
 
 **Limitations**:
+
 - ❌ No automatic tracking
 - ❌ Manual error handling
 - ❌ No built-in validation
@@ -92,6 +98,7 @@ result = node.execute(
 ## Common Scenarios
 
 ### Scenario 1: User Registration
+
 ```python
 # ❌ AVOID: Direct node chain
 from kailash.nodes.validation import ValidationNode
@@ -108,6 +115,7 @@ results = runtime.execute(workflow, parameters=user_data)
 ```
 
 ### Scenario 2: Single Query
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 # ✅ ACCEPTABLE: True single operation
@@ -123,6 +131,7 @@ def get_user_by_id(user_id: str):
 ```
 
 ### Scenario 3: Performance Critical
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 # ⚠️ ONLY if measured and proven necessary
@@ -147,16 +156,18 @@ workflow.metadata["performance_mode"] = "ultra"
 ### From Direct Nodes to Workflows
 
 1. **Identify Direct Node Usage**
+
    ```python
-from kailash.workflow.builder import WorkflowBuilder
+   from kailash.workflow.builder import WorkflowBuilder
    # Before
    result1 = node1.execute(data)
    result2 = node2.execute(result1["output"])
    ```
 
 2. **Convert to Workflow**
+
    ```python
-from kailash.workflow.builder import WorkflowBuilder
+   from kailash.workflow.builder import WorkflowBuilder
    # After
    workflow = WorkflowBuilder()
    workflow.add_node("step1", node1)
@@ -166,7 +177,7 @@ from kailash.workflow.builder import WorkflowBuilder
 
 3. **Use Parameter Injection**
    ```python
-from kailash.workflow.builder import WorkflowBuilder
+   from kailash.workflow.builder import WorkflowBuilder
    # Simplified execution
    results = runtime.execute(workflow, parameters={"data": input_data})
    ```
@@ -174,11 +185,13 @@ from kailash.workflow.builder import WorkflowBuilder
 ## Performance Considerations
 
 ### Workflow Overhead
+
 - Typical overhead: 2-5ms
 - Includes: validation, tracking, metrics
 - Usually negligible compared to business logic
 
 ### When Performance Matters
+
 1. **Measure First**: Profile actual performance
 2. **Optimize Workflow**: Try caching, parallel execution
 3. **Hybrid Approach**: Critical path direct, rest workflow
@@ -187,6 +200,7 @@ from kailash.workflow.builder import WorkflowBuilder
 ## Best Practices Summary
 
 ### ✅ DO
+
 - Use workflows by default
 - Leverage parameter injection
 - Measure before optimizing
@@ -194,6 +208,7 @@ from kailash.workflow.builder import WorkflowBuilder
 - Consider maintenance cost
 
 ### ❌ DON'T
+
 - Default to direct nodes
 - Optimize prematurely
 - Sacrifice features for minimal gains
@@ -203,6 +218,7 @@ from kailash.workflow.builder import WorkflowBuilder
 ## Decision Checklist
 
 Before using direct nodes, confirm ALL of these:
+
 - [ ] Single atomic operation
 - [ ] Measured performance requirement <5ms
 - [ ] No need for tracking/metrics
@@ -235,6 +251,7 @@ async def test_user_creation(self):
 ## Conclusion
 
 The Kailash SDK is designed around workflows. They provide the best balance of:
+
 - **Performance**: Negligible overhead
 - **Maintainability**: Clear, modifiable structure
 - **Features**: Built-in tracking, validation, etc.
@@ -245,7 +262,8 @@ Direct node usage should be a carefully considered exception, not a shortcut.
 **Remember**: The new parameter injection feature (v0.6.2) removes the main pain point of workflows while preserving all their benefits. There's now even less reason to use direct nodes.
 
 ## Related Documentation
+
 - [Workflow Parameter Injection Guide](../developer/22-workflow-parameter-injection.md)
 - [Workflow Creation Patterns](../developer/02-workflows.md)
 - [Performance Guidelines](../architecture/adr/0047-performance-guidelines.md)
-- [Architecture Decision Matrix](../decision-matrix.md)
+- Architecture decision guides are in `.claude/skills/13-architecture-decisions/`

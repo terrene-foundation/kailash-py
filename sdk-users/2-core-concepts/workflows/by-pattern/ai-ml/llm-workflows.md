@@ -5,6 +5,7 @@
 ## 📋 Pattern Overview
 
 LLM workflows enable:
+
 - **Document Q&A**: RAG-based question answering with embedding search
 - **Text Generation**: Content creation with proper AI nodes
 - **Multi-Agent Systems**: Coordinated AI reasoning chains
@@ -14,6 +15,7 @@ LLM workflows enable:
 ## 🚀 Quick Start Examples
 
 ### 30-Second Document Q&A (RAG Pattern)
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
@@ -128,6 +130,7 @@ result, run_id = await runtime.execute_async(workflow, parameters={
 ```
 
 ### Multi-Agent Reasoning Chain
+
 ```python
 from kailash.nodes.ai import IterativeLLMAgentNode
 
@@ -170,7 +173,7 @@ result, run_id = runtime.execute(workflow, parameters={
         "mcp_servers": [{
             "name": "ai-registry",
             "command": "python",
-            "args": ["scripts/start-ai-registry-server.py"]
+            "args": ["-m", "your_mcp_server"]  # Replace with your MCP server module
         }],
         "auto_discover_tools": True,
         "max_iterations": 3
@@ -188,6 +191,7 @@ result, run_id = runtime.execute(workflow, parameters={
 ```
 
 ### Enterprise RAG System with Advanced Document Processing
+
 ```python
 from kailash.nodes.data import VectorDBNode, DatabaseReaderNode, DocumentLoaderNode
 from kailash.nodes.logic import SwitchNode, MergeNode, LoopNode
@@ -709,6 +713,7 @@ enterprise_rag.connect("answer_generator", "answer_validator", # mapping removed
 ```
 
 ### Simple Content Processing (when specialized nodes don't exist)
+
 ```python
 from kailash.nodes.transform import DataTransformer
 
@@ -734,6 +739,7 @@ result = enhanced_content
 ## 📝 Content Generation with LLM Nodes
 
 ### Automated Report Generation
+
 ```python
 from kailash.nodes.data import JSONWriterNode
 
@@ -781,6 +787,7 @@ workflow.add_connection("report_gen", "writer", "response", "data")
 ## 🎨 Multi-Modal Content Creation
 
 ### Content Adaptation Pipeline
+
 ```python
 # Content generation with LLM
 content_generator = LLMAgentNode(
@@ -826,18 +833,21 @@ workflow.add_connection("generator", "adapter", "response", "data")
 ## 🔗 LLM Best Practices
 
 ### Performance Optimization
+
 - **Use Specialized Nodes**: Prefer `LLMAgentNode`, `EmbeddingGeneratorNode`, `HierarchicalChunkerNode`
 - **Temperature Control**: Use 0.1-0.3 for factual content, 0.7-0.9 for creative content
 - **Proper Connections**: Map outputs correctly (`{"response": "data"}`, `{"chunks": "texts"}`)
 - **MCP Integration**: Use `IterativeLLMAgentNode` for tool access
 
 ### Quality Assurance
+
 - **Prompt Engineering**: Use clear system prompts with specific instructions
 - **Output Validation**: Check response structure before downstream processing
 - **Error Handling**: Handle missing or malformed LLM responses gracefully
 - **Context Management**: Use proper chunking for long documents
 
 ### Production Deployment
+
 - **Rate Limiting**: Built into `LLMAgentNode` and `EmbeddingGeneratorNode`
 - **Error Recovery**: Nodes handle API failures automatically
 - **Monitoring**: Track token usage through workflow execution logs
@@ -846,6 +856,7 @@ workflow.add_connection("generator", "adapter", "response", "data")
 ## ⚠️ Common Mistakes to Avoid
 
 ### Don't Use PythonCodeNode for LLM Operations
+
 ```python
 # WRONG: Manual LLM API calls
 llm_node = PythonCodeNode(
@@ -861,6 +872,7 @@ llm_node = LLMAgentNode(
 ```
 
 ### Don't Implement Embedding Generation Manually
+
 ```python
 # WRONG: Manual embedding calls
 embed_node = PythonCodeNode(
@@ -875,6 +887,7 @@ embed_node = EmbeddingGeneratorNode(
 ```
 
 ### Don't Implement Document Chunking Manually
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -906,4 +919,4 @@ chunk_node = HierarchicalChunkerNode(
 
 ---
 
-*These LLM workflow patterns use the correct Kailash nodes for maximum efficiency and maintainability. Always prefer specialized AI nodes over manual implementations.*
+_These LLM workflow patterns use the correct Kailash nodes for maximum efficiency and maintainability. Always prefer specialized AI nodes over manual implementations._

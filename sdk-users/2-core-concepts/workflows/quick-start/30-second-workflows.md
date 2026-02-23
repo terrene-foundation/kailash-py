@@ -5,6 +5,7 @@
 ## 📊 Data Processing Workflows
 
 ### CSV Analysis Pipeline
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode
@@ -41,6 +42,7 @@ results, run_id = runtime.execute(workflow, parameters={
 ```
 
 ### Data Validation & Cleaning
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -105,6 +107,7 @@ workflow = WorkflowBuilder()
 ## 🌐 API Integration Workflows
 
 ### REST API Data Pipeline
+
 ```python
 from kailash.nodes.api import RestClientNode
 
@@ -140,6 +143,7 @@ runtime.execute(workflow, parameters={
 ```
 
 ### Multi-API Aggregation
+
 ```python
 from kailash.nodes.logic import MergeNode
 
@@ -170,6 +174,7 @@ workflow.add_connection("merger", "aggregator", "merged", "input")
 ## 🤖 AI-Powered Workflows
 
 ### Document Analysis with AI
+
 ```python
 from kailash.nodes.ai import LLMAgentNode
 
@@ -202,6 +207,7 @@ runtime.execute(workflow, parameters={
 ```
 
 ### AI Strategy Consultation (Using AI Registry MCP)
+
 ```python
 from kailash.nodes.ai import IterativeLLMAgentNode
 
@@ -234,7 +240,7 @@ runtime.execute(workflow, parameters={
             "name": "ai-registry",
             "transport": "stdio",
             "command": "python",
-            "args": ["scripts/start-ai-registry-server.py"]
+            "args": ["-m", "your_mcp_server"]  # Replace with your MCP server module
         }],
         "auto_discover_tools": True,
         "max_iterations": 3
@@ -246,6 +252,7 @@ runtime.execute(workflow, parameters={
 ## 🔄 Real-Time Processing Workflows
 
 ### Stream Processing Simulation
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -302,6 +309,7 @@ workflow = WorkflowBuilder()
 ```
 
 ### Event-Driven Workflow
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -363,6 +371,7 @@ workflow.{
 ## 📈 Business Intelligence Workflows
 
 ### Sales Analytics Dashboard
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -423,6 +432,7 @@ workflow = WorkflowBuilder()
 ```
 
 ### Customer Segmentation
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -483,6 +493,7 @@ workflow = WorkflowBuilder()
 ## 🔧 System Integration Workflows
 
 ### Database to API Pipeline
+
 ```python
 from kailash.nodes.data import SQLReaderNode
 
@@ -524,6 +535,7 @@ runtime.execute(workflow, parameters={
 ```
 
 ### File Processing Automation
+
 ```python
 from kailash.nodes.data import FileReaderNode, FileWriterNode
 
@@ -598,6 +610,7 @@ os.makedirs("outputs", exist_ok=True)
 ## 🔔 Alert & Notification Workflows
 
 ### Instant Error Alerts
+
 ```python
 from kailash.nodes.alerts import DiscordAlertNode
 from kailash.nodes.logic import SwitchNode
@@ -640,6 +653,7 @@ runtime.execute(workflow, parameters={
 ```
 
 ### System Health Dashboard
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -702,6 +716,7 @@ workflow.{
 ```
 
 ### Business KPI Alerts
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -779,4 +794,4 @@ workflow.{
 
 ---
 
-*Each workflow is production-ready and can be executed immediately. Modify parameters to match your data sources and requirements.*
+_Each workflow is production-ready and can be executed immediately. Modify parameters to match your data sources and requirements._

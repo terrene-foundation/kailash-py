@@ -265,7 +265,10 @@ Use multiple iterations to build a comprehensive strategic analysis.""",
                     "name": "ai-registry",
                     "transport": "stdio",
                     "command": "python",
-                    "args": ["scripts/start-ai-registry-server.py"],
+                    "args": [
+                        "-m",
+                        "your_mcp_server",
+                    ],  # Replace with your MCP server module
                 }
             ],
             "auto_discover_tools": True,

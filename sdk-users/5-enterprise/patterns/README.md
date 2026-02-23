@@ -1,6 +1,6 @@
 # Architecture Patterns - SDK User Guide
 
-*Simplified architectural guidance for building with Kailash SDK*
+_Simplified architectural guidance for building with Kailash SDK_
 
 ## 📋 Quick Architecture Decisions
 
@@ -14,6 +14,7 @@ Before building any application, make these key decisions:
 ## 🎯 Common Architecture Patterns
 
 ### 1. **Microservice Pattern**
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -42,9 +43,11 @@ gateway = create_gateway(
 )
 
 ```
+
 **When to use**: Multiple teams, independent scaling, service isolation
 
 ### 2. **Monolithic Pattern**
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -68,9 +71,11 @@ app = create_gateway(
 )
 
 ```
+
 **When to use**: Small teams, simpler deployment, shared resources
 
 ### 3. **Event-Driven Pattern**
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -92,9 +97,11 @@ runtime = LocalRuntime()
 workflow.add_node("EventListenerNode", "listener", {})
 
 ```
+
 **When to use**: Reactive systems, loose coupling, async processing
 
 ### 4. **Batch Processing Pattern**
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -115,6 +122,7 @@ runtime = LocalRuntime()
 workflow.add_node("BatchReaderNode", "reader", {})
 
 ```
+
 **When to use**: Large data volumes, scheduled jobs, ETL pipelines
 
 ## 🏗️ Architectural Components
@@ -147,6 +155,7 @@ workflow.add_node("BatchReaderNode", "reader", {})
 ## 🔄 Common Integration Patterns
 
 ### API Gateway Pattern
+
 ```python
 from kailash.api.gateway import create_gateway
 
@@ -163,6 +172,7 @@ gateway = create_gateway(
 ```
 
 ### Middleware Stack Pattern
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -193,6 +203,7 @@ gateway = create_gateway(
 ```
 
 ### Agent Distribution Pattern
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -220,6 +231,7 @@ workflow.add_node("AgentPoolManagerNode", "pool", {})
 ## 📊 Performance Patterns
 
 ### Caching Strategy
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -245,6 +257,7 @@ workflow.add_node("IntelligentCacheNode", "l3_cache", {})
 ```
 
 ### Async Processing
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -271,6 +284,7 @@ runtime = LocalRuntime(
 ```
 
 ### Load Balancing
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -296,6 +310,7 @@ workflow.add_node("LoadBalancerNode", "balancer", {})
 ## 🔒 Security Patterns
 
 ### Authentication & Authorization
+
 ```python
 from kailash.access_control import AccessControlManager, PolicyEngine, AccessControlledRuntime
 
@@ -311,6 +326,7 @@ runtime = AccessControlledRuntime(
 ```
 
 ### Data Protection
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -337,6 +353,7 @@ workflow.add_node("DataValidationNode", "validator", {})
 ## 🚀 Deployment Patterns
 
 ### Container Deployment
+
 ```dockerfile
 FROM python:3.11-slim
 COPY requirements.txt .
@@ -346,6 +363,7 @@ CMD ["python", "-m", "kailash.api.gateway", "--workflows", "all"]
 ```
 
 ### Serverless Deployment
+
 ```python
 import json
 from kailash.runtime.local import LocalRuntime
@@ -363,6 +381,7 @@ def lambda_handler(event, context):
 ```
 
 ### Kubernetes Deployment
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -373,47 +392,46 @@ spec:
   template:
     spec:
       containers:
-      - name: kailash
-        image: myapp/kailash:latest
-        env:
-        - name: KAILASH_WORKERS
-          value: "10"
+        - name: kailash
+          image: myapp/kailash:latest
+          env:
+            - name: KAILASH_WORKERS
+              value: "10"
 ```
 
 ## 📐 Decision Framework
 
 ### Choose Your Architecture
 
-| **If you need...** | **Use this pattern** | **Key components** |
-|-------------------|---------------------|-------------------|
-| Simple REST API | API Gateway | `create_gateway()` |
-| Real-time updates | WebSocket + SSE | `RealtimeMiddleware` |
-| AI tool integration | MCP Integration | `mcp_servers` config |
-| High throughput | Async + Caching | `LocalRuntime(enable_async=True)` |
-| Multi-tenant | Access Control | `AccessControlledRuntime` |
-| Microservices | Service Mesh | Multiple gateways + discovery |
+| **If you need...**  | **Use this pattern** | **Key components**                |
+| ------------------- | -------------------- | --------------------------------- |
+| Simple REST API     | API Gateway          | `create_gateway()`                |
+| Real-time updates   | WebSocket + SSE      | `RealtimeMiddleware`              |
+| AI tool integration | MCP Integration      | `mcp_servers` config              |
+| High throughput     | Async + Caching      | `LocalRuntime(enable_async=True)` |
+| Multi-tenant        | Access Control       | `AccessControlledRuntime`         |
+| Microservices       | Service Mesh         | Multiple gateways + discovery     |
 
 ### Performance Guidelines
 
-| **Latency Target** | **Architecture Choice** |
-|-------------------|----------------------|
-| <10ms | Direct execution, in-memory cache |
-| <100ms | API Gateway with caching |
-| <1s | Standard REST API |
-| >1s | Async processing with callbacks |
+| **Latency Target** | **Architecture Choice**           |
+| ------------------ | --------------------------------- |
+| <10ms              | Direct execution, in-memory cache |
+| <100ms             | API Gateway with caching          |
+| <1s                | Standard REST API                 |
+| >1s                | Async processing with callbacks   |
 
 ### Scale Guidelines
 
 | **Load Profile** | **Architecture Choice** |
-|-----------------|----------------------|
-| <100 req/s | Single instance |
-| 100-1000 req/s | Load balanced instances |
-| >1000 req/s | Distributed + caching |
-| Burst traffic | Auto-scaling + queue |
+| ---------------- | ----------------------- |
+| <100 req/s       | Single instance         |
+| 100-1000 req/s   | Load balanced instances |
+| >1000 req/s      | Distributed + caching   |
+| Burst traffic    | Auto-scaling + queue    |
 
 ## 🔗 Related Resources
 
-- **[Decision Matrix](../decision-matrix.md)** - Detailed decision guide
 - **[Developer Guide](../developer/)** - Implementation details
 - **[Production Patterns](../production-patterns/)** - Real examples
 - **[Apps Guide](../../apps/ARCHITECTURAL_GUIDE.md)** - Complete app guide
@@ -476,6 +494,7 @@ gateway.run(
 ```
 
 This architecture provides:
+
 - Modular workflow organization
 - Built-in auth and monitoring
 - Real-time updates for cart/orders
