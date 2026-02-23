@@ -15,7 +15,7 @@ from .models import (
     WorkflowRun,
 )
 from .storage.base import StorageBackend
-from .storage.filesystem import FileSystemStorage
+from .storage.database import SQLiteStorage
 
 logger = logging.getLogger(__name__)
 
@@ -27,13 +27,13 @@ class TaskManager:
         """Initialize task manager.
 
         Args:
-            storage_backend: Storage backend for persistence. Defaults to FileSystemStorage.
+            storage_backend: Storage backend for persistence. Defaults to SQLiteStorage.
 
         Raises:
             TaskException: If initialization fails
         """
         try:
-            self.storage = storage_backend or FileSystemStorage()
+            self.storage = storage_backend or SQLiteStorage()
             self.logger = logger
 
             # In-memory caches
