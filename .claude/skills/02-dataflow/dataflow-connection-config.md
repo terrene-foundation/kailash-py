@@ -17,7 +17,7 @@ Configure database connections with full support for special characters in passw
 
 - **Format**: `scheme://[user[:pass]@]host[:port]/database`
 - **Special Chars**: Fully supported in passwords
-- **SQL Databases**: PostgreSQL, MySQL, SQLite (9 nodes per @db.model)
+- **SQL Databases**: PostgreSQL, MySQL, SQLite (11 nodes per @db.model)
 - **Document Database**: MongoDB (8 specialized nodes, flexible schema)
 - **Vector Search**: PostgreSQL pgvector (3 vector nodes for RAG/semantic search)
 - **Pooling**: Automatic, configurable

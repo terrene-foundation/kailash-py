@@ -17,7 +17,7 @@
 
 ### The Issue
 
-1. **DataFlow Model Registration**: When DataFlow registers models using the `@db.model` decorator, it creates and registers workflow nodes globally (9 nodes per model: CRUD + bulk operations)
+1. **DataFlow Model Registration**: When DataFlow registers models using the `@db.model` decorator, it creates and registers workflow nodes globally (11 nodes per model: CRUD + bulk operations)
 
 2. **Nexus Auto-Discovery**: When Nexus initializes with `auto_discovery=True`, it:
    - Scans the filesystem for Python files matching workflow patterns

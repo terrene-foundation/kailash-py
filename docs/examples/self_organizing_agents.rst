@@ -73,6 +73,9 @@ Simple Self-Organizing System
         {"id": "visualizer", "capabilities": ["visualization", "reporting"]}
     ]
 
+    import os
+    model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
+
     for spec in agent_specs:
         workflow.add_node(
             spec["id"],
@@ -80,7 +83,7 @@ Simple Self-Organizing System
             config={
                 "agent_id": spec["id"],
                 "provider": "openai",  # or your preferred provider
-                "model": "gpt-4"
+                "model": model
             }
         )
 
@@ -256,8 +259,11 @@ Here's a complete example of a self-organizing research system:
 
 .. code-block:: python
 
+    import os
+
     class SelfOrganizingResearchSystem:
         def __init__(self, num_agents=20):
+            self.model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
             self.workflow = Workflow(
                 workflow_id="research_system",
                 name="Self-Organizing Research System"
@@ -298,7 +304,7 @@ Here's a complete example of a self-organizing research system:
                         "agent_id": agent_id,
                         "agent_role": spec["role"],
                         "provider": "openai",
-                        "model": "gpt-4"
+                        "model": self.model
                     }
                 )
 

@@ -1,6 +1,7 @@
 # ADR-0055: Kailash Studio Dual-Persona Shared Foundation
 
 ## Status
+
 Proposed
 
 ## Context
@@ -10,12 +11,14 @@ Proposed
 Kailash Studio is being designed to serve TWO distinct user personas with fundamentally different workflow preferences:
 
 **Sarah - Marketing Manager (No-Code Persona)**:
+
 - Primary interface: Visual canvas (drag-drop)
 - Workflow source of truth: Canvas JSON (Studio-managed, database-stored)
 - Interaction model: UI-driven (forms, buttons, visual feedback)
 - Success metric: Build workflow in < 15 minutes without code
 
 **Alex - Software Engineer (Code-First Persona)**:
+
 - Primary interface: Python code editor
 - Workflow source of truth: Python files (Git-managed, version controlled)
 - Interaction model: Code-driven (type, compile, debug)
@@ -51,6 +54,7 @@ Canvas JSON Only Approach (Current):
 **Problem**: Canvas JSON is the ONLY workflow representation, forcing developers into a no-code workflow that is unnatural for their skillset.
 
 **Evidence**:
+
 - `apps/kailash-studio/DUAL_PERSONA_ARCHITECTURE_ANALYSIS.md:59-78` - Canvas-first excludes developers
 - `apps/kailash-studio/user-scenarios/02-customer-feedback-analysis-developer-vscode.md:1-698` - Developer workflow analysis
 
@@ -105,6 +109,7 @@ Abstraction Layer Architecture:
 ```
 
 **Key Principle**: WorkflowDefinition is **source-agnostic**:
+
 - Sarah creates via canvas → Converts to WorkflowDefinition → Can export as Python
 - Alex writes Python → Parses to WorkflowDefinition → Can visualize in canvas
 - Both representations are **equal first-class citizens**
@@ -116,6 +121,7 @@ Abstraction Layer Architecture:
 ### Component 1: WorkflowDefinition Type System
 
 **TypeScript Types** (`packages/studio-core/src/types/WorkflowDefinition.ts`):
+
 ```typescript
 export interface WorkflowNode {
   id: string;
@@ -149,6 +155,7 @@ export interface WorkflowDefinition {
 ```
 
 **Python Dataclasses** (`backend/src/kailash_studio/types/workflow_definition.py`):
+
 ```python
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, Literal
@@ -193,6 +200,7 @@ class WorkflowDefinition:
 **Strategy**: Extract `WorkflowBuilder` patterns from Python files without executing code.
 
 **Parser Class** (`backend/src/kailash_studio/sdk/workflow_parser.py`):
+
 ```python
 import ast
 from typing import Dict, Any
@@ -277,6 +285,7 @@ class PythonWorkflowParser:
 ```
 
 **API Endpoint** (`backend/src/kailash_studio/api_routes.py`):
+
 ```python
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -300,6 +309,7 @@ async def parse_python_workflow(request: ParseRequest):
 **Effort**: 12 hours
 
 **Evidence**:
+
 - `src/kailash/workflow/builder.py:1-350` - WorkflowBuilder patterns to extract
 - `apps/kailash-studio/IMPLEMENTATION_ROADMAP_DETAILED_TODOS.md:70-122` - Parser implementation tasks
 
@@ -310,6 +320,7 @@ async def parse_python_workflow(request: ParseRequest):
 **Strategy**: Convert WorkflowDefinition to executable Python code using Jinja2 templates.
 
 **Generator Class** (`backend/src/kailash_studio/sdk/code_generator.py`):
+
 ```python
 from jinja2 import Template
 from kailash_studio.types.workflow_definition import WorkflowDefinition
@@ -365,6 +376,7 @@ if __name__ == "__main__":
 ```
 
 **API Endpoint**:
+
 ```python
 @router.post("/api/workflows/generate")
 async def generate_python_code(workflow_def: WorkflowDefinition):
@@ -444,11 +456,13 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Approach**: Keep current canvas-first architecture, no Python file support.
 
 **Pros**:
+
 - Simple: One source of truth
 - Works perfectly for Sarah
 - Zero additional implementation time
 
 **Cons**:
+
 - ❌ Excludes Alex entirely (developers forced into no-code)
 - ❌ Not Git-friendly (JSON diffs hard to review)
 - ❌ Limits Studio adoption to non-technical users only
@@ -457,6 +471,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Why Rejected**: Fails to serve 50% of target audience (developers).
 
 **Evidence**:
+
 - `apps/kailash-studio/DUAL_PERSONA_ARCHITECTURE_ANALYSIS.md:176-183` - Canvas-only analysis
 
 ---
@@ -466,11 +481,13 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Approach**: Python files as ONLY workflow representation, no visual canvas.
 
 **Pros**:
+
 - Works perfectly for Alex
 - Git-friendly (code review, version control)
 - Simple: One source of truth
 
 **Cons**:
+
 - ❌ Excludes Sarah entirely (requires coding skills)
 - ❌ No visual workflow builder
 - ❌ Limits Studio to developers only
@@ -479,6 +496,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Why Rejected**: Fails to serve no-code persona, contradicts Studio's mission.
 
 **Evidence**:
+
 - `apps/kailash-studio/DUAL_PERSONA_ARCHITECTURE_ANALYSIS.md:184-189` - Python-only analysis
 
 ---
@@ -488,22 +506,26 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Approach**: Build web app and VS Code extension independently.
 
 **Pros**:
+
 - Optimized for each platform
 - No abstraction layer complexity
 - Independent release cycles
 
 **Cons**:
+
 - ❌ Duplicate code (~60% overlap wasted)
 - ❌ Double maintenance burden
 - ❌ Bug fixes must be applied twice
 - ❌ 200 hours effort (vs 156 hours with sharing)
 
 **Why Rejected**:
+
 - 28% more implementation time (200h vs 156h)
 - 40% more maintenance code
 - Violates DRY principle
 
 **Evidence**:
+
 - `apps/kailash-studio/DUAL_PERSONA_ARCHITECTURE_ANALYSIS.md:456-536` - Effort comparison
 
 ---
@@ -515,6 +537,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Goal**: Build abstraction layer before persona-specific features.
 
 **Tasks**:
+
 1. **WorkflowDefinition Types** (4h):
    - TypeScript: `packages/studio-core/src/types/WorkflowDefinition.ts`
    - Python: `backend/src/kailash_studio/types/workflow_definition.py`
@@ -537,6 +560,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Deliverable**: Universal workflow representation supporting both personas.
 
 **Evidence**:
+
 - `apps/kailash-studio/IMPLEMENTATION_ROADMAP_DETAILED_TODOS.md:28-164` - Phase 0 detailed todos
 
 ---
@@ -546,6 +570,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Depends On**: Phase 0 complete
 
 **Tasks**:
+
 1. Kaizen Agent Integration (10h)
 2. Shared Canvas Package (8h)
 3. Auto-Form Properties Panel (14h)
@@ -555,6 +580,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Outcome**: Sarah can execute customer feedback scenario end-to-end (90% complete).
 
 **Evidence**:
+
 - `apps/kailash-studio/IMPLEMENTATION_ROADMAP_DETAILED_TODOS.md:166-413` - Phase 1A todos
 - `apps/kailash-studio/user-scenarios/01-customer-feedback-analysis-no-code.md` - Sarah's scenario
 
@@ -565,6 +591,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Depends On**: Phase 0 + Shared Canvas Package (Phase 1A.2)
 
 **Tasks**:
+
 1. Python Parser Integration (4h)
 2. Canvas Webview - Readonly Mode (8h)
 3. Bidirectional Sync Engine (16h)
@@ -576,6 +603,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Outcome**: Alex can write code, visualize, and debug workflows (90% complete).
 
 **Evidence**:
+
 - `apps/kailash-studio/IMPLEMENTATION_ROADMAP_DETAILED_TODOS.md:415-690` - Phase 1B todos
 - `apps/kailash-studio/user-scenarios/02-customer-feedback-analysis-developer-vscode.md` - Alex's scenario
 
@@ -586,6 +614,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Depends On**: Phase 1A + Phase 1B
 
 **Tasks**:
+
 1. Real-Time Progress Monitoring (8h)
 2. Nexus Deployment UI (16h)
 3. Advanced Parameter Validation (6h)
@@ -595,6 +624,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Outcome**: Production-ready for both personas (100% scenario completion).
 
 **Evidence**:
+
 - `apps/kailash-studio/IMPLEMENTATION_ROADMAP_DETAILED_TODOS.md:692-897` - Phase 2 todos
 
 ---
@@ -604,16 +634,19 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 ### Kailash SDK Integration
 
 **DO NOT Recreate**:
+
 - WorkflowBuilder patterns: `src/kailash/workflow/builder.py:1-350`
 - LocalRuntime execution: `src/kailash/runtime/local.py:1-400`
-- Node signatures: `src/kailash/nodes/` (110+ nodes)
+- Node signatures: `src/kailash/nodes/` (140+ nodes)
 
 **Parser Must Extract**:
+
 - `workflow.add_node()` calls → WorkflowNode objects
 - `workflow.add_connection()` calls → WorkflowEdge objects
 - Node parameters → Preserve SDK 3-method parameter pattern
 
 **Generator Must Produce**:
+
 - Valid WorkflowBuilder code
 - Executable with `runtime.execute(workflow.build())`
 - PEP-8 compliant (Black formatted)
@@ -623,6 +656,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 ### React Flow Integration
 
 **Canvas Package** (`packages/studio-canvas/`):
+
 ```typescript
 export interface WorkflowCanvasProps {
   mode: "interactive" | "readonly";  // Interactive: Sarah, Readonly: Alex
@@ -650,6 +684,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 ```
 
 **Reusability**:
+
 - Web App: `mode="interactive"` (full editing)
 - VS Code: `mode="readonly"` (visualization only)
 - 90% code sharing achieved
@@ -659,6 +694,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 ### FastAPI Backend Integration
 
 **Parser/Generator Endpoints**:
+
 ```python
 # backend/src/kailash_studio/api_routes.py
 
@@ -676,6 +712,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 ```
 
 **Shared with**:
+
 - Execution service: `POST /api/workflows/execute` (accepts WorkflowDefinition)
 - Discovery service: `GET /api/nodes` (parameter schemas for forms)
 - Deployment service: `POST /api/deployments` (Nexus configuration)
@@ -700,12 +737,14 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Target**: 60-65% code sharing
 
 **Measurement**:
+
 - Backend services: 100% shared (execution, discovery, DataFlow, Kaizen)
 - Canvas package: 90% shared (mode-aware design)
 - Properties panel: 60% shared (dual-mode: forms vs quick-edit)
 - Execution UI: 50% shared (different rendering, shared logic)
 
 **Evidence**:
+
 - `apps/kailash-studio/DUAL_PERSONA_ARCHITECTURE_ANALYSIS.md:123-169` - Component reusability matrix
 
 ### Scenario Completion Rates
@@ -713,6 +752,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 **Target**: 90% after Phase 0 + Phase 1A/1B
 
 **Sarah's Scenario** (No-Code):
+
 - Load customer feedback template ✅
 - Configure 5 nodes via auto-generated forms ✅
 - Execute workflow with visual progress ✅
@@ -720,6 +760,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 - Deploy to Nexus API (Phase 2) ⏳
 
 **Alex's Scenario** (Code-First):
+
 - Write Python workflow file ✅
 - Visualize in canvas (VS Code webview) ✅
 - Edit code → Canvas auto-updates ✅
@@ -727,6 +768,7 @@ async def generate_python_code(workflow_def: WorkflowDefinition):
 - Deploy via generated Dockerfile (Phase 2) ⏳
 
 **Evidence**:
+
 - `apps/kailash-studio/PHASE_5_SCENARIO_VALIDATION_SUMMARY.md:461-500` - Scenario completion analysis
 
 ---
@@ -797,5 +839,6 @@ This architectural decision is **critical** because it determines whether Kailas
 **Date**: 2025-10-06
 **Last Updated**: 2025-10-06
 **Related ADRs**:
+
 - ADR-0050: Kailash Studio Visual Workflow Platform
 - Future ADR: Bidirectional Sync Engine Architecture (Phase 1B)

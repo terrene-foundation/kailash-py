@@ -88,12 +88,15 @@ Quick Start
 
    app = Nexus()
 
+   import os
+
    # Register complex Kailash workflows
    def create_analysis_workflow():
+       model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
        workflow = WorkflowBuilder()
        workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
        workflow.add_node("LLMAgentNode", "analyzer", {
-           "model": "gpt-4",
+           "model": model,
            "use_real_mcp": True
        })
        workflow.add_connection("reader", "data", "analyzer", "input")
@@ -268,6 +271,7 @@ Production Examples
 
 .. code-block:: python
 
+   import os
    from nexus import Nexus
    from kailash.nodes.ai import LLMAgentNode
 
@@ -276,16 +280,17 @@ Production Examples
    @app.workflow
    def ai_analysis(text: str, analysis_type: str = "sentiment") -> dict:
        """Multi-AI agent analysis pipeline."""
+       model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
 
        # Create specialized agents
        if analysis_type == "sentiment":
            agent = LLMAgentNode(
-               model="gpt-4",
+               model=model,
                system_prompt="Analyze sentiment of the provided text."
            )
        elif analysis_type == "summarize":
            agent = LLMAgentNode(
-               model="gpt-4",
+               model=model,
                system_prompt="Provide a concise summary of the text."
            )
 

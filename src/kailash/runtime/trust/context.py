@@ -5,7 +5,7 @@ for propagating trust information through Kailash workflow execution.
 
 Design Principles:
     - Immutable context updates (with_node, with_constraints create new instances)
-    - Constraint tightening only (can add/tighten, never loosen)
+    - Constraint tightening enforced (numeric min, set intersection, bool AND)
     - Thread-safe context propagation via ContextVar
     - Optional Kaizen integration (graceful handling if Kaizen not installed)
 
@@ -48,6 +48,44 @@ if TYPE_CHECKING:
     pass
 
 logger = logging.getLogger(__name__)
+
+
+def _tighten_value(existing: Any, new_value: Any) -> Any:
+    """Apply tightening semantics when merging constraint values.
+
+    Rules:
+        - Numeric (int/float): return the minimum (tighter limit)
+        - Boolean: once False (restricted), stays False
+        - Set: return intersection (fewer allowed items)
+        - List: return intersection preserving order from existing
+        - Other types: return new value (caller's responsibility)
+
+    Args:
+        existing: The current constraint value
+        new_value: The proposed new constraint value
+
+    Returns:
+        The tightened value
+    """
+    # Numeric: take minimum (tighter limit)
+    if isinstance(existing, (int, float)) and isinstance(new_value, (int, float)):
+        return min(existing, new_value)
+
+    # Boolean: once False (restricted), stays False
+    if isinstance(existing, bool) and isinstance(new_value, bool):
+        return existing and new_value
+
+    # Set: intersection (fewer allowed items)
+    if isinstance(existing, set) and isinstance(new_value, set):
+        return existing & new_value
+
+    # List: intersection preserving order
+    if isinstance(existing, list) and isinstance(new_value, list):
+        new_set = set(new_value)
+        return [item for item in existing if item in new_set]
+
+    # Fallback: accept new value (strings, dicts, etc.)
+    return new_value
 
 
 class TrustVerificationMode(Enum):
@@ -160,30 +198,43 @@ class RuntimeTrustContext:
     def with_constraints(
         self, additional_constraints: Dict[str, Any]
     ) -> RuntimeTrustContext:
-        """Create new context with merged constraints.
+        """Create new context with tightened constraints.
 
         This method creates a new RuntimeTrustContext instance with the
-        additional constraints merged into the existing ones. The original
-        context remains unchanged (immutable pattern).
+        additional constraints merged into the existing ones using
+        tightening semantics. The original context remains unchanged
+        (immutable pattern).
 
-        Note: This performs a simple merge where new values override existing
-        ones. Semantic tightening (e.g., taking the minimum of numeric limits)
-        is the responsibility of the caller.
+        Tightening rules:
+            - Numeric values: takes the minimum (tighter limit)
+            - Sets/lists: takes the intersection (fewer allowed items)
+            - Booleans: once False (restricted), stays False
+            - New keys: added freely (adding a constraint is tightening)
+            - Strings: new value replaces old (caller's responsibility)
 
         Args:
-            additional_constraints: Constraints to merge/add
+            additional_constraints: Constraints to merge/tighten
 
         Returns:
-            New RuntimeTrustContext with merged constraints
+            New RuntimeTrustContext with tightened constraints
 
         Example:
             >>> ctx = RuntimeTrustContext(constraints={"max_tokens": 1000})
-            >>> new_ctx = ctx.with_constraints({"allowed_tools": ["read"]})
+            >>> new_ctx = ctx.with_constraints({"max_tokens": 500, "allowed_tools": ["read"]})
             >>> new_ctx.constraints
-            {'max_tokens': 1000, 'allowed_tools': ['read']}
+            {'max_tokens': 500, 'allowed_tools': ['read']}
+            >>> loosened = ctx.with_constraints({"max_tokens": 9999})
+            >>> loosened.constraints["max_tokens"]  # Stays at 1000 (tighter)
+            1000
         """
         merged = dict(self.constraints)
-        merged.update(additional_constraints)
+        for key, new_value in additional_constraints.items():
+            if key not in merged:
+                # New constraint — adding constraints is always tightening
+                merged[key] = new_value
+            else:
+                existing = merged[key]
+                merged[key] = _tighten_value(existing, new_value)
 
         return RuntimeTrustContext(
             trace_id=self.trace_id,

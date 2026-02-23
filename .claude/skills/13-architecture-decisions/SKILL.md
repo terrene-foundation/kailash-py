@@ -10,6 +10,7 @@ Decision guides for selecting the right frameworks, runtimes, databases, nodes, 
 ## Overview
 
 Comprehensive decision guides for:
+
 - Framework selection (Core SDK, DataFlow, Nexus, Kaizen)
 - Runtime selection (AsyncLocalRuntime vs LocalRuntime)
 - Database selection (PostgreSQL vs SQLite)
@@ -19,6 +20,7 @@ Comprehensive decision guides for:
 ## Reference Documentation
 
 ### Framework Selection
+
 - **[decide-framework](decide-framework.md)** - Choose the right framework
   - Core SDK: Custom workflows with full control
   - DataFlow: Database-first applications
@@ -28,6 +30,7 @@ Comprehensive decision guides for:
   - Combining frameworks
 
 ### Runtime Selection
+
 - **[decide-runtime](decide-runtime.md)** - AsyncLocalRuntime vs LocalRuntime
   - Docker/FastAPI → AsyncLocalRuntime
   - CLI/Scripts → LocalRuntime
@@ -36,6 +39,7 @@ Comprehensive decision guides for:
   - Auto-detection with get_runtime()
 
 ### Database Selection
+
 - **[decide-database-postgresql-sqlite](decide-database-postgresql-sqlite.md)** - PostgreSQL vs SQLite
   - Production → PostgreSQL
   - Development/Testing → SQLite
@@ -44,6 +48,7 @@ Comprehensive decision guides for:
   - Multi-database support
 
 ### Node Selection
+
 - **[decide-node-for-task](decide-node-for-task.md)** - Choose the right node
   - AI tasks → AI nodes
   - API calls → API nodes
@@ -53,6 +58,7 @@ Comprehensive decision guides for:
   - Conditional logic → SwitchNode
 
 ### Test Tier Selection
+
 - **[decide-test-tier](decide-test-tier.md)** - Unit vs Integration vs E2E
   - Tier 1: Unit tests (fast, mocking allowed)
   - Tier 2: Integration tests (real infrastructure)
@@ -64,13 +70,13 @@ Comprehensive decision guides for:
 
 ### Framework Selection Matrix
 
-| Need | Framework | Why |
-|------|-----------|-----|
-| **Custom workflows** | Core SDK | Full control, 110+ nodes |
-| **Database CRUD** | DataFlow | Auto-generated nodes |
-| **Multi-channel API** | Nexus | API + CLI + MCP instantly |
-| **AI agents** | Kaizen | Signature-based agents |
-| **All of above** | Combine them | They work together |
+| Need                  | Framework    | Why                       |
+| --------------------- | ------------ | ------------------------- |
+| **Custom workflows**  | Core SDK     | Full control, 140+ nodes  |
+| **Database CRUD**     | DataFlow     | Auto-generated nodes      |
+| **Multi-channel API** | Nexus        | API + CLI + MCP instantly |
+| **AI agents**         | Kaizen       | Signature-based agents    |
+| **All of above**      | Combine them | They work together        |
 
 ### Runtime Selection Flow
 
@@ -120,6 +126,7 @@ What are you testing?
 ## Critical Decision Rules
 
 ### Framework Decisions
+
 - ✅ Use Core SDK for custom workflows
 - ✅ Use DataFlow for database operations (don't use SQLAlchemy/Django ORM)
 - ✅ Use Nexus for multi-channel platforms (don't use FastAPI directly)
@@ -130,6 +137,7 @@ What are you testing?
 - ❌ NEVER skip framework evaluation
 
 ### Runtime Decisions
+
 - ✅ Docker/FastAPI → AsyncLocalRuntime (mandatory)
 - ✅ CLI/Scripts → LocalRuntime
 - ✅ Use get_runtime() when unsure
@@ -137,6 +145,7 @@ What are you testing?
 - ❌ NEVER mix runtimes in same application
 
 ### Database Decisions
+
 - ✅ Production → PostgreSQL
 - ✅ Development → SQLite (for speed)
 - ✅ Testing → SQLite in Docker (for isolation)
@@ -147,6 +156,7 @@ What are you testing?
 ## When to Use This Skill
 
 Use this skill when you need to:
+
 - Choose between Core SDK, DataFlow, Nexus, or Kaizen
 - Select AsyncLocalRuntime vs LocalRuntime
 - Decide between PostgreSQL and SQLite
@@ -158,6 +168,7 @@ Use this skill when you need to:
 ## Decision Templates
 
 ### Starting a New Project
+
 ```
 1. What's the primary use case?
    - Database CRUD → Start with DataFlow
@@ -191,6 +202,7 @@ Use this skill when you need to:
 ## Support
 
 For architecture decisions, invoke:
+
 - `framework-advisor` - Framework selection and architecture
 - `deep-analyst` - Deep analysis for complex decisions
 - `requirements-analyst` - Requirements breakdown

@@ -8,17 +8,16 @@ from the SDK's docstrings and provides interactive examples.
 
 import os
 import sys
-from datetime import datetime
 
 # Add the source directory to Python path
 sys.path.insert(0, os.path.abspath("../../src"))
 
 # Project information
 project = "Kailash Python SDK"
-copyright = f"{datetime.now().year}, Terrene Foundation"
+copyright = "2026, Terrene Foundation"
 author = "Terrene Foundation"
-release = "0.8.6"
-version = "0.8"
+release = "0.12.0"
+version = "0.12"
 
 # General configuration
 extensions = [
@@ -52,6 +51,36 @@ exclude_patterns = [
     "import_cheatsheets.py",
     ".archive/*",
     "mcp/README.md",
+    "repivot/*",
+    "studio/*",
+    "critiques/*",
+    "requirements/*",
+    "runtime-refactoring-*.md",
+    "phase4-integration-plan.md",
+    "features/*",
+    "enhancements/*",
+    "trust/*",
+    "data-consolidation-guide.*",
+    "workflow_studio.*",
+    "unimplemented_nodes_tracker.*",
+    "v0.2.0-release-summary.*",
+    "apps/*",
+    "guides/*",
+    "glossary.*",
+    "architecture_overview.*",
+    "adr/*",
+    "tutorials/*",
+    "changelog.*",
+    "security.*",
+    "troubleshooting.*",
+    "performance.*",
+    "mcp/*",
+    "examples/self_organizing_agents.*",
+    "examples/mcp_ecosystem.*",
+    "examples/runtime.*",
+    "examples/utils.*",
+    "api/gateway.*",
+    "archive_stale_files.sh",
 ]
 
 # The suffix(es) of source filenames
@@ -172,7 +201,7 @@ texinfo_documents = [
         "Kailash Python SDK Documentation",
         author,
         "KailashPythonSDK",
-        "Python SDK for Kailash container-node architecture.",
+        "Enterprise AI Agent Platform with Cryptographic Trust.",
         "Miscellaneous",
     ),
 ]

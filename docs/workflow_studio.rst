@@ -112,7 +112,7 @@ For local development and testing:
 
    # Clone the repository
    git clone https://github.com/terrene-foundation/kailash-py.git
-   cd kailash-python-sdk
+   cd kailash_python_sdk
 
    # Start the Studio in development mode
    ./studio/start-studio.sh

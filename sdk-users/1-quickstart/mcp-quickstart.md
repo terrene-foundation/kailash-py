@@ -5,6 +5,7 @@ Welcome to the MCP Quick Start Guide! This guide will help you get started with 
 ## What is MCP?
 
 Model Context Protocol (MCP) is a standardized protocol that enables AI models to interact with external tools and resources. With MCP, your AI agents can:
+
 - Execute tools and functions
 - Access external data sources
 - Integrate with third-party services
@@ -58,6 +59,7 @@ npm install -g @modelcontextprotocol/server-filesystem
 ### 2. Create Your First MCP Workflow
 
 ```python
+import os
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.nodes.ai import LLMAgentNode
 from kailash.runtime.local import LocalRuntime
@@ -73,7 +75,7 @@ workflow.add_node("LLMAgentNode", "assistant", {}))
 results, run_id = runtime.execute(workflow, parameters={
     "assistant": {
         "provider": "openai",  # or "ollama", "anthropic"
-        "model": "gpt-4",      # or "llama3.2", "claude-3"
+        "model": os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o"),
         "messages": [
             {"role": "user", "content": "List all files in the current directory"}
         ],
@@ -95,6 +97,7 @@ print(results["assistant"]["response"])
 ### 3. Common MCP Server Configurations
 
 #### Local File System Access
+
 ```python
 mcp_servers = [{
     "name": "filesystem",
@@ -105,6 +108,7 @@ mcp_servers = [{
 ```
 
 #### SQLite Database Access
+
 ```python
 mcp_servers = [{
     "name": "database",
@@ -115,6 +119,7 @@ mcp_servers = [{
 ```
 
 #### HTTP API Server
+
 ```python
 mcp_servers = [{
     "name": "api",
@@ -127,6 +132,7 @@ mcp_servers = [{
 ```
 
 #### Custom Python MCP Server
+
 ```python
 mcp_servers = [{
     "name": "custom",
@@ -206,21 +212,23 @@ if __name__ == "__main__":
 
 ### When to Use Which Server
 
-| Use Case | Server Type | Why |
-|----------|-------------|-----|
+| Use Case         | Server Type       | Why                                   |
+| ---------------- | ----------------- | ------------------------------------- |
 | **Learning MCP** | `SimpleMCPServer` | Focus on concepts, not infrastructure |
-| **Prototyping** | `SimpleMCPServer` | Fast iteration, minimal setup |
-| **Production** | `MCPServer` | Authentication, caching, monitoring |
-| **Enterprise** | `MCPServer` | Full production features required |
+| **Prototyping**  | `SimpleMCPServer` | Fast iteration, minimal setup         |
+| **Production**   | `MCPServer`       | Authentication, caching, monitoring   |
+| **Enterprise**   | `MCPServer`       | Full production features required     |
 
 ## Key MCP Parameters
 
 ### Essential Parameters
+
 - `mcp_servers`: List of MCP server configurations
 - `auto_discover_tools`: Automatically discover available tools (default: False)
 - `auto_execute_tools`: Allow agent to execute tools automatically (default: False)
 
 ### Advanced Parameters
+
 ```python
 parameters = {
     "agent": {
@@ -243,6 +251,7 @@ parameters = {
 ## Common Use Cases
 
 ### 1. File Analysis Assistant
+
 ```python
 # Agent that can read and analyze files
 results, run_id = runtime.execute(workflow, parameters={
@@ -265,12 +274,13 @@ results, run_id = runtime.execute(workflow, parameters={
 ```
 
 ### 2. Database Query Assistant
+
 ```python
 # Agent that can query databases
 results, run_id = runtime.execute(workflow, parameters={
     "agent": {
         "provider": "openai",
-        "model": "gpt-4",
+        "model": os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o"),
         "messages": [
             {"role": "user", "content": "Show me all users who joined this month"}
         ],
@@ -287,12 +297,13 @@ results, run_id = runtime.execute(workflow, parameters={
 ```
 
 ### 3. Multi-Tool Assistant
+
 ```python
 # Agent with multiple MCP servers
 results, run_id = runtime.execute(workflow, parameters={
     "agent": {
         "provider": "anthropic",
-        "model": "claude-3",
+        "model": os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest"),
         "messages": [
             {"role": "user", "content": "Get weather data and save it to a file"}
         ],
@@ -318,17 +329,20 @@ results, run_id = runtime.execute(workflow, parameters={
 ## Best Practices
 
 ### 1. Security
+
 - Only connect to trusted MCP servers
 - Use authentication when available
 - Limit file system access to specific directories
 - Review tool permissions before enabling `auto_execute_tools`
 
 ### 2. Performance
+
 - Enable tool discovery caching for repeated use
 - Set appropriate timeouts for tool execution
 - Use connection pooling for HTTP transports
 
 ### 3. Error Handling
+
 ```python
 # Always check for success
 if results["agent"]["success"]:
@@ -363,6 +377,7 @@ if "tools_executed" in results["agent"]["context"]:
    - Verify server resources
 
 ### Debug Mode
+
 ```python
 # Enable debug logging
 import logging

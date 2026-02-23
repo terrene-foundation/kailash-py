@@ -1,10 +1,10 @@
 .. _examples-index:
 
-
 Examples
 ========
 
-This section contains various examples demonstrating how to use the Kailash Python SDK.
+This section contains examples demonstrating how to use the Kailash SDK with
+current API patterns.
 
 .. toctree::
    :maxdepth: 2
@@ -13,29 +13,49 @@ This section contains various examples demonstrating how to use the Kailash Pyth
    advanced
    integrations
    patterns
-   mcp_ecosystem
+
+.. note::
+
+   All code examples use ``os.environ`` for model names and API keys.
+   Never hardcode model names like ``"gpt-4"`` -- always read from ``.env``.
+
+Example Categories
+------------------
+
+**Basic Examples**
+   Simple workflows demonstrating WorkflowBuilder, node creation, and runtime execution.
+
+**Advanced Examples**
+   Complex patterns including cyclic workflows, conditional execution, and parallel branches.
+
+**Integration Examples**
+   External system integrations including APIs, databases, and AI providers.
+
+**Patterns**
+   Production-ready workflow patterns for common use cases.
+
+Quick Example
+-------------
+
+.. code-block:: python
+
+   import os
+   from dotenv import load_dotenv
+   load_dotenv()
+
+   from kailash.workflow.builder import WorkflowBuilder
+   from kailash.runtime import LocalRuntime
+
+   workflow = WorkflowBuilder()
+   workflow.add_node("PythonCodeNode", "hello", {
+       "code": "result = {'message': 'Hello from Kailash!'}"
+   })
+
+   runtime = LocalRuntime()
+   results, run_id = runtime.execute(workflow.build())
+   print(results["hello"]["result"]["message"])
 
 For the complete collection of runnable examples, visit the
 `examples directory
 <https://github.com/terrene-foundation/kailash-py/tree/main/examples>`_
 in the GitHub repository.
-
-Example Categories
-------------------
-
-- **Node Examples**: Individual node usage and configuration
-- **Workflow Examples**: Complete workflow patterns and use cases
-- **Integration Examples**: External system integrations (APIs, databases, etc.)
-- **Visualization Examples**: Performance monitoring and reporting
-
-Production Workflow Library
----------------------------
-
-For production-ready workflows organized by use case, explore the comprehensive workflow library at ``sdk-users/workflows/``:
-
-- **By Pattern** (``by-pattern/``): Technical patterns like ETL, API integration, event-driven
-- **By Industry** (``by-industry/``): Domain-specific solutions for healthcare, finance, manufacturing
-- **By Enterprise** (``by-enterprise/``): Business workflows like Customer 360°, process automation
-- **Quick Start** (``quick-start/``): Copy-paste solutions and essential patterns
-
-Each workflow includes complete Python scripts, real data examples, and deployment instructions.

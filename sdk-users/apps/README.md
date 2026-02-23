@@ -5,17 +5,20 @@ This directory contains documentation for Kailash application frameworks that ar
 ## Available Applications
 
 ### 🗄️ [DataFlow](dataflow/) - Zero-Config Database Platform
+
 Transform database operations with MongoDB-style queries that work across any database.
 
 **Installation:** `pip install kailash-dataflow`
 
 **Features:**
+
 - MongoDB-style queries across PostgreSQL, MySQL, SQLite
 - Redis-powered caching with smart invalidation
 - Automatic API generation with OpenAPI docs
 - Enterprise features: multi-tenancy, audit logging, compliance
 
 **Quick Start:**
+
 ```python
 from dataflow import DataFlow
 
@@ -25,21 +28,25 @@ app.start()  # API at http://localhost:8000
 ```
 
 ### 🔄 [Nexus](nexus/) - Multi-Channel Platform
+
 Expose workflows through API, CLI, and MCP interfaces from a single codebase.
 
 **Installation:** `pip install kailash-nexus`
 
 **Features:**
+
 - Single workflow registration → API + CLI + MCP
 - Zero configuration required
 - Cross-channel session management
 - Enterprise orchestration with RBAC
 
 ### [Kaizen](kaizen/) - AI Agent Framework
+
 Build production-ready AI agents with multi-modal processing, multi-agent coordination, and enterprise features.
 **Installation:** `pip install kailash-kaizen`
 
 **Features:**
+
 - **Unified Architecture**: BaseAgent provides common infrastructure (87% code reduction)
 - **Type-Safe Signatures**: Define inputs/outputs, framework handles validation
 - **Auto-Optimization**: Automatic async execution, lazy initialization, performance tracking
@@ -48,8 +55,8 @@ Build production-ready AI agents with multi-modal processing, multi-agent coordi
 - **Multi-Agent**: Google A2A protocol for semantic capability matching
 - **Core SDK Compatible**: Seamless integration with Kailash workflows
 
-
 **Quick Start:**
+
 ```python
 from nexus import Nexus
 
@@ -65,6 +72,7 @@ app.start()  # Available as API, CLI, and MCP
 ## Documentation Structure
 
 Each application includes:
+
 - **README.md** - Overview and quick start guide
 - **docs/** - Detailed documentation and guides
 - **examples/** - Runnable code examples

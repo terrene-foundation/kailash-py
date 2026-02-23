@@ -1,6 +1,7 @@
 # Basic Imports - Essential Components
 
 ## Core Runtime
+
 ```python
 # Essential workflow components
 from kailash.workflow.builder import WorkflowBuilder
@@ -8,6 +9,7 @@ from kailash.runtime.local import LocalRuntime
 ```
 
 ## Core Nodes
+
 ```python
 # Essential processing nodes
 from kailash.nodes.code import PythonCodeNode
@@ -15,6 +17,7 @@ from kailash.nodes.logic import SwitchNode, MergeNode
 ```
 
 ## Common Nodes
+
 ```python
 # Data I/O
 from kailash.nodes.data import CSVReaderNode, CSVWriterNode, JSONReaderNode
@@ -30,6 +33,7 @@ from kailash.nodes.ai import LLMAgentNode, EmbeddingGeneratorNode
 ```
 
 ## Advanced Components
+
 ```python
 # Security & Access Control
 from kailash.runtime.access_controlled import AccessControlledRuntime
@@ -46,6 +50,7 @@ from kailash.nodes.ai.self_organizing import SelfOrganizingAgentNode
 ```
 
 ## Quick Start Pattern
+
 ```python
 # Minimal imports for basic workflow
 from kailash.workflow.builder import WorkflowBuilder
@@ -73,6 +78,7 @@ print(f"Processed {results['processor']['result']['processed_count']} items")
 ```
 
 ## Next Steps
+
 - [Quick Workflow Creation](003-quick-workflow-creation.md) - Build workflows
 - [Common Node Patterns](004-common-node-patterns.md) - Node usage examples
-- [Node Catalog](../nodes/comprehensive-node-catalog.md) - All 110+ nodes
+- [Node Catalog](../nodes/comprehensive-node-catalog.md) - All 140+ nodes

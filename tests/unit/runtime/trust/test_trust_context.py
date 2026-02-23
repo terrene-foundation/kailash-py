@@ -179,14 +179,66 @@ class TestRuntimeTrustContextWithConstraints:
             "allowed_tools": ["read"],
         }
 
-    def test_with_constraints_tightens_not_loosens(self):
-        """Test with_constraints can tighten but constraints are merged (implementation specific)."""
+    def test_with_constraints_tightens_numeric(self):
+        """Test with_constraints takes minimum for numeric values (tighter limit)."""
         original = RuntimeTrustContext(constraints={"max_tokens": 1000})
         new_ctx = original.with_constraints({"max_tokens": 500})
 
-        # The new constraint should override (tightening behavior is caller responsibility)
-        # This tests that merge happens correctly
+        # Tighter (lower) value wins
         assert new_ctx.constraints == {"max_tokens": 500}
+
+    def test_with_constraints_rejects_loosening_numeric(self):
+        """Test with_constraints prevents loosening numeric constraints."""
+        original = RuntimeTrustContext(constraints={"max_tokens": 1000})
+        new_ctx = original.with_constraints({"max_tokens": 9999})
+
+        # Cannot loosen — original tighter value preserved
+        assert new_ctx.constraints == {"max_tokens": 1000}
+
+    def test_with_constraints_tightens_boolean(self):
+        """Test with_constraints uses AND for boolean (False stays False)."""
+        original = RuntimeTrustContext(constraints={"allow_network": False})
+        new_ctx = original.with_constraints({"allow_network": True})
+
+        # Once restricted (False), stays False
+        assert new_ctx.constraints == {"allow_network": False}
+
+    def test_with_constraints_tightens_list_intersection(self):
+        """Test with_constraints takes intersection for lists."""
+        original = RuntimeTrustContext(
+            constraints={"allowed_tools": ["read", "write", "execute"]}
+        )
+        new_ctx = original.with_constraints({"allowed_tools": ["read", "write"]})
+
+        # Intersection: only items in both lists
+        assert new_ctx.constraints == {"allowed_tools": ["read", "write"]}
+
+    def test_with_constraints_tightens_set_intersection(self):
+        """Test with_constraints takes intersection for sets."""
+        original = RuntimeTrustContext(
+            constraints={"allowed_models": {"gpt-4", "gpt-3.5", "claude-3"}}
+        )
+        new_ctx = original.with_constraints({"allowed_models": {"gpt-4", "claude-3"}})
+
+        # Set intersection
+        assert new_ctx.constraints == {"allowed_models": {"gpt-4", "claude-3"}}
+
+    def test_with_constraints_adds_new_keys(self):
+        """Test with_constraints adds new constraint keys (adding is tightening)."""
+        original = RuntimeTrustContext(constraints={"max_tokens": 1000})
+        new_ctx = original.with_constraints({"timeout_seconds": 30})
+
+        # New key added alongside existing
+        assert new_ctx.constraints == {"max_tokens": 1000, "timeout_seconds": 30}
+
+    def test_with_constraints_float_tightening(self):
+        """Test with_constraints handles float tightening."""
+        original = RuntimeTrustContext(constraints={"temperature": 0.7})
+        tighter = original.with_constraints({"temperature": 0.3})
+        looser = original.with_constraints({"temperature": 0.9})
+
+        assert tighter.constraints == {"temperature": 0.3}  # Tighter wins
+        assert looser.constraints == {"temperature": 0.7}  # Cannot loosen
 
     def test_with_constraints_preserves_other_fields(self):
         """Test with_constraints preserves all other fields."""
