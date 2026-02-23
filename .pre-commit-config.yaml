@@ -32,7 +32,7 @@ repos:
         name: Lint with Ruff
         description: "Run Ruff linter"
         args: [--fix, --exit-non-zero-on-fix]
-        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|examples/workflow_examples/|scripts/start-ai-registry-server\.py|src/kailash/mcp/server_new\.py|src/kailash/api/studio_secure\.py|src/kailash/nodes/ai/a2a\.py)
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|examples/workflow_examples/|src/kailash/mcp/server_new\.py|src/kailash/api/studio_secure\.py|src/kailash/nodes/ai/a2a\.py)
 
   # Built-in pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks

@@ -6,7 +6,7 @@ name: CI Pipeline
 # - For push/PR events: Automatically prefers self-hosted-primary runner
 # - For manual runs: Can choose specific runner via workflow_dispatch
 # - Maintainers can use their own runner names
-# - Start your runner with: RUNNER_NAME=your-name ./scripts/start-runner-foreground.sh
+# - Start your runner with the Actions Runner application configured for this repository
 
 on:
   # Trigger on push to development branches (direct branch work only)

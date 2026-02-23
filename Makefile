@@ -3,7 +3,7 @@
 
 .PHONY: help install install-dev test test-unit test-integration test-all
 .PHONY: format lint type-check quality security pre-commit clean docs
-.PHONY: build publish pre-release examples studio-dev studio-build
+.PHONY: build publish pre-release examples
 
 # Default target
 help:
@@ -41,9 +41,7 @@ help:
 	@echo "  clean           Clean build artifacts and cache"
 	@echo "  update          Update dependencies and pre-commit hooks"
 	@echo ""
-	@echo "Workflow Studio Commands:"
-	@echo "  studio-dev      Start Workflow Studio in development mode"
-	@echo "  studio-build    Build Workflow Studio for production"
+	@echo "Note: Workflow Studio has moved to a separate repo (enterprise-app)"
 
 # Installation commands
 install:
@@ -159,12 +157,3 @@ push-ready: quality test security
 # CI simulation
 ci: quality test security docs
 	@echo "CI checks completed successfully"
-
-# Workflow Studio commands
-studio-dev:
-	@echo "Starting Kailash Workflow Studio in development mode..."
-	./scripts/start-studio.sh
-
-studio-build:
-	@echo "Building Workflow Studio for production..."
-	cd studio && npm run build

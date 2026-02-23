@@ -194,7 +194,7 @@ This release achieves 100% runtime parity between LocalRuntime and AsyncLocalRun
   - AsyncLocalRuntime and LocalRuntime now return identical tuple structure: `(results, run_id)`
   - Both runtimes share identical parameter passing semantics
   - 28 shared parity tests ensure ongoing compatibility
-  - Comprehensive parity documentation in `CHANGELOG-RUNTIME-PARITY.md`
+  - Comprehensive parity documentation (incorporated into main changelog)
 
 - **Parameter Scoping System**:
   - Automatic unwrapping of node-specific parameters
@@ -224,7 +224,7 @@ This release achieves 100% runtime parity between LocalRuntime and AsyncLocalRun
 - Updated 4 runtime execution docs with tuple return structure
 - Updated 2 error handling docs with new exception types
 - Marked cyclic workflow documentation status clearly
-- Added comprehensive migration guide in `CHANGELOG-RUNTIME-PARITY.md`
+- Added comprehensive migration guide (incorporated into main changelog)
 
 #### 🗑️ Removed
 
@@ -249,7 +249,7 @@ Total: 896/900 passing (99.6%)
 
 #### 🔗 Related
 
-- See `CHANGELOG-RUNTIME-PARITY.md` for detailed migration guide
+- Runtime parity migration details are incorporated into this changelog above
 - See `sdk-users/3-development/parameter-passing-guide.md` for parameter scoping docs
 - See `sdk-users/3-development/10-unified-async-runtime-guide.md` for async runtime docs
 

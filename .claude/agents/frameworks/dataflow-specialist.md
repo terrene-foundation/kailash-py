@@ -309,4 +309,4 @@ When this guidance is insufficient, consult:
 
 - `sdk-users/apps/dataflow/CLAUDE.md` - Complete DataFlow guide
 - `sdk-users/apps/dataflow/docs/` - Comprehensive documentation
-- `sdk-users/guides/dataflow-nexus-integration.md` - Integration patterns
+- `.claude/skills/03-nexus/nexus-dataflow-integration.md` - Integration patterns
