@@ -304,8 +304,8 @@ Examples:
         )
 
     if fixed_count > 0 and not args.dry_run:
-        print("\n💡 Re-run the test script to see improvements!")
-        print("   python scripts/testing/test-all-examples.py")
+        print("\n💡 Re-run the test suite to see improvements!")
+        print("   python -m pytest tests/")
 
     return 0 if error_count == 0 else 1
 

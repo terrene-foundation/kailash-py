@@ -114,16 +114,8 @@ For local development and testing:
    git clone https://github.com/terrene-foundation/kailash-py.git
    cd kailash_python_sdk
 
-   # Start the Studio in development mode
-   ./studio/start-studio.sh
-
-   # Access the Studio at http://localhost:3000
-
-This starts:
-
-- Backend API on port 8000
-- Frontend development server on port 3000
-- PostgreSQL and Redis in Docker containers
+   # Note: Workflow Studio has been moved to the enterprise-app repository.
+   # See https://github.com/terrene-foundation/enterprise-app for setup instructions.
 
 Production Deployment
 ---------------------

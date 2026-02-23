@@ -957,7 +957,10 @@ Use the AI Registry tools to find relevant healthcare AI use cases that can info
                     "name": "ai-registry",
                     "transport": "stdio",
                     "command": "python",
-                    "args": ["scripts/start-ai-registry-server.py"],
+                    "args": [
+                        "-m",
+                        "your_mcp_server",
+                    ],  # Replace with your MCP server module
                 }
             ],
             "auto_discover_tools": True,

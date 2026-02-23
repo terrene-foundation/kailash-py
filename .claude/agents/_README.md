@@ -51,7 +51,7 @@ The subagents are designed around the core workflow phases identified in `CLAUDE
 
 **⚠️ IMPORTANT: DataFlow + Nexus Integration**
 
-- See: `sdk-users/guides/dataflow-nexus-integration.md` for tested configurations
+- See: `.claude/skills/03-nexus/nexus-dataflow-integration.md` for tested configurations
 - Key setting to prevent blocking: `Nexus(auto_discovery=False)`
 - DataFlow v0.11.0: `auto_migrate=True` (default) works in Docker/FastAPI via SyncDDLExecutor
 - Both specialists updated with integration warnings
