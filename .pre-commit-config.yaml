@@ -32,7 +32,7 @@ repos:
         name: Lint with Ruff
         description: "Run Ruff linter"
         args: [--fix, --exit-non-zero-on-fix]
-        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|examples/workflow_examples/|scripts/start-ai-registry-server\.py|src/kailash/mcp/server_new\.py|src/kailash/api/studio_secure\.py|src/kailash/nodes/ai/a2a\.py)
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|examples/workflow_examples/)
 
   # Built-in pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -69,7 +69,7 @@ repos:
         name: Check for deprecated log.warn
       - id: python-no-eval
         name: Check for eval() usage
-        exclude: ^(src/kailash/nodes/transform/processors\.py|src/kailash/nodes/ai/ai_providers\.py|apps/kailash-kaizen/src/kaizen/nodes/ai/ai_providers\.py|guide/reference/templates/.*|src/kailash/api/mcp_integration\.py|tests/test_security/.*|examples/.*|src/kailash/nodes/logic/convergence\.py|src/kailash/nodes/logic/loop\.py|src/kailash/workflow/convergence\.py|src/kailash/workflow/cycle_builder\.py|src/kailash/workflow/cycle_config\.py|sdk-users/templates/.*\.py|apps/mcp_platform/.*/security\.py|apps/mcp_platform/.*/tool_executor_node\.py|src/kailash/nodes/rag/agentic\.py|apps/kailash-kaizen/src/kaizen/nodes/rag/agentic\.py|src/kailash/runtime/local\.py|apps/kailash-nexus/src/nexus/auth/rate_limit/backends/redis\.py|tests/.*/(test_pythoncode_.*|test_security_.*|test_.*_security\.py|test_mcp_.*|test_ai\.py|test_.*_e2e\.py|test_.*_integration\.py|test_tpc_migration_.*\.py))$
+        exclude: ^(src/kailash/nodes/transform/processors\.py|src/kailash/nodes/ai/ai_providers\.py|apps/kailash-kaizen/src/kaizen/nodes/ai/ai_providers\.py|src/kailash/api/mcp_integration\.py|tests/test_security/.*|examples/.*|src/kailash/nodes/logic/convergence\.py|src/kailash/nodes/logic/loop\.py|src/kailash/workflow/convergence\.py|src/kailash/workflow/cycle_builder\.py|src/kailash/workflow/cycle_config\.py|src/kailash/nodes/rag/agentic\.py|apps/kailash-kaizen/src/kaizen/nodes/rag/agentic\.py|src/kailash/runtime/local\.py|apps/kailash-nexus/src/nexus/auth/rate_limit/backends/redis\.py|tests/.*/(test_pythoncode_.*|test_security_.*|test_.*_security\.py|test_mcp_.*|test_ai\.py|test_.*_e2e\.py|test_.*_integration\.py|test_tpc_migration_.*\.py))$
       - id: python-use-type-annotations
         name: Require type annotations
       - id: python-check-blanket-noqa
@@ -133,7 +133,7 @@ repos:
         name: Check documentation style
         args: [--max-line-length=100, --ignore=D001]
         files: \.(rst|md)$
-        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|.*_mermaid\.md|docs/build_output\.txt|guide/.*\.md|releases/.*\.md|docs/v0\.2\.0-release-summary\.md|DOCSTRING_UPDATES_SUMMARY\.md)$
+        exclude: ^(data/outputs/|outputs/|examples/outputs/|docs/.*/_build/|_build/|.*_mermaid\.md)$
 
   # Type checking with mypy (temporarily disabled due to type errors)
   # - repo: https://github.com/pre-commit/mirrors-mypy

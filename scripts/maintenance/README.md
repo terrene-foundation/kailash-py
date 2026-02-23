@@ -4,16 +4,17 @@ Code quality, cleanup, and refactoring scripts for the Kailash SDK codebase.
 
 ## 📁 Scripts Overview
 
-| Script | Purpose | Scope | Safe to Run |
-|--------|---------|-------|-------------|
-| `fix-imports.py` | Fix import errors and code issues | Examples directory | ✅ Yes |
-| `refactor-pythoncode.py` | Convert string code to functions | Specific files | ⚠️ Review changes |
-| `consolidate-outputs.py` | Merge scattered output directories | Project-wide | ✅ Yes |
-| `fix-hardcoded-paths.py` | Replace hardcoded paths | Examples directory | ✅ Yes |
+| Script                   | Purpose                            | Scope              | Safe to Run       |
+| ------------------------ | ---------------------------------- | ------------------ | ----------------- |
+| `fix-imports.py`         | Fix import errors and code issues  | Examples directory | ✅ Yes            |
+| `refactor-pythoncode.py` | Convert string code to functions   | Specific files     | ⚠️ Review changes |
+| `consolidate-outputs.py` | Merge scattered output directories | Project-wide       | ✅ Yes            |
+| `fix-hardcoded-paths.py` | Replace hardcoded paths            | Examples directory | ✅ Yes            |
 
 ## 🚀 Quick Start
 
 ### Daily Maintenance
+
 ```bash
 # Fix common import and code issues
 ./fix-imports.py
@@ -26,6 +27,7 @@ Code quality, cleanup, and refactoring scripts for the Kailash SDK codebase.
 ```
 
 ### Code Refactoring
+
 ```bash
 # Refactor PythonCodeNode patterns (review changes!)
 ./refactor-pythoncode.py examples/feature_examples/ai/
@@ -37,9 +39,11 @@ Code quality, cleanup, and refactoring scripts for the Kailash SDK codebase.
 ## 📋 Detailed Script Documentation
 
 ### `fix-imports.py`
+
 **Purpose**: Comprehensive fixing of common import errors and code issues
 
 **What It Fixes**:
+
 - **MonitoredLLMAgentNode** → `LLMAgentNode(enable_monitoring=True)`
 - **LocalWorkflowRunner** → `LocalRuntime`
 - **EnhancedAccessControlManager** → `AccessControlManager`
@@ -49,6 +53,7 @@ Code quality, cleanup, and refactoring scripts for the Kailash SDK codebase.
 - **Deprecated parameters** - Removes obsolete route parameters
 
 **Features**:
+
 - Dry run mode to preview changes
 - Verbose output showing all modifications
 - File-specific targeting
@@ -56,6 +61,7 @@ Code quality, cleanup, and refactoring scripts for the Kailash SDK codebase.
 - Regex-based pattern matching
 
 **Usage**:
+
 ```bash
 # Fix all examples
 ./fix-imports.py
@@ -74,6 +80,7 @@ Code quality, cleanup, and refactoring scripts for the Kailash SDK codebase.
 ```
 
 **Example Output**:
+
 ```
 🔧 Fixing Common Import Errors and Code Issues
 ============================================================
@@ -95,11 +102,13 @@ Summary:
 All replacements are safe and backward-compatible, following SDK best practices established in recent sessions.
 
 ### `refactor-pythoncode.py`
+
 **Purpose**: Convert PythonCodeNode string code blocks to `.from_function()` pattern
 
 **⚠️ Important**: This script makes significant code changes. Always review results before committing.
 
 **What It Does**:
+
 1. Finds PythonCodeNode instances with multi-line string code (>3 lines)
 2. Extracts code and converts to standalone function
 3. Analyzes code to determine function parameters
@@ -107,6 +116,7 @@ All replacements are safe and backward-compatible, following SDK best practices 
 5. Formats result with black (if available)
 
 **Features**:
+
 - Smart parameter detection (`input_data`, `iteration`, `model`, etc.)
 - Import handling (moves imports inside functions)
 - Return value detection
@@ -114,6 +124,7 @@ All replacements are safe and backward-compatible, following SDK best practices 
 - Automatic code formatting
 
 **Usage**:
+
 ```bash
 # Refactor specific file
 ./refactor-pythoncode.py examples/ai/complex_workflow.py
@@ -130,7 +141,8 @@ All replacements are safe and backward-compatible, following SDK best practices 
 
 **Before/After Example**:
 
-*Before*:
+_Before_:
+
 ```python
 processor = PythonCodeNode(
     name="data_processor",
@@ -149,7 +161,8 @@ result = {'mean': mean_value, 'count': len(df)}
 )
 ```
 
-*After*:
+_After_:
+
 ```python
 def process_data(input_data: dict, **kwargs):
     """Auto-converted from PythonCodeNode string code."""
@@ -173,15 +186,18 @@ processor = PythonCodeNode.from_function(
 ```
 
 **When NOT to Use**:
+
 - Single-line code blocks
 - Code blocks ≤ 3 lines
 - Dynamic code generation
 - Template-based code
 
 ### `consolidate-outputs.py`
+
 **Purpose**: Consolidate scattered output directories into centralized `data/outputs/` structure
 
 **What It Consolidates**:
+
 - `outputs/` (root level)
 - `examples/outputs/`
 - `examples/workflow_examples/outputs/`
@@ -190,18 +206,21 @@ processor = PythonCodeNode.from_function(
 - Any other scattered output directories
 
 **Organization Strategy**:
+
 - **cycle_analysis/** - Cycle analysis outputs
 - **visualizations/** - Visualization outputs
 - **workflows/** - Workflow outputs
 - **misc/** - Other outputs
 
 **Features**:
+
 - Safe file moving (preserves relative structure)
 - Automatic directory creation
 - File count reporting
 - Empty directory cleanup
 
 **Usage**:
+
 ```bash
 # Consolidate all outputs
 ./consolidate-outputs.py
@@ -210,6 +229,7 @@ processor = PythonCodeNode.from_function(
 ```
 
 **Example Output**:
+
 ```
 🔄 Consolidating output directories to data/outputs/
 ============================================================
@@ -234,9 +254,11 @@ Organized into:
 ```
 
 ### `fix-hardcoded-paths.py`
+
 **Purpose**: Replace hardcoded file paths with proper data path utilities
 
 **What It Fixes**:
+
 - `data/` → `get_input_data_path()`
 - `examples/data/` → `get_input_data_path()`
 - `../data/` → `get_input_data_path()`
@@ -244,12 +266,14 @@ Organized into:
 - Hardcoded absolute paths
 
 **Features**:
+
 - Preserves URLs and Docker paths
 - Smart context detection
 - Dry run mode
 - Detailed change reporting
 
 **Usage**:
+
 ```bash
 # Fix all hardcoded paths
 ./fix-hardcoded-paths.py
@@ -266,41 +290,48 @@ Organized into:
 ### Before Running Scripts
 
 **1. Always backup important work**:
+
 ```bash
 git add -A
 git commit -m "Before maintenance scripts"
 ```
 
 **2. Use dry-run mode first**:
+
 ```bash
 ./fix-imports.py --dry-run
 ./refactor-pythoncode.py --dry-run examples/
 ```
 
 **3. Run tests after changes**:
+
 ```bash
 # After maintenance
-../testing/test-all-examples.py
+python -m pytest tests/
 ```
 
 ### Script Usage Guidelines
 
 **fix-imports.py**:
+
 - ✅ Safe to run anytime
 - ✅ Run before commits
 - ✅ Part of daily workflow
 
 **refactor-pythoncode.py**:
+
 - ⚠️ Review all changes
 - ⚠️ Test thoroughly after running
 - ⚠️ Use on one file at a time initially
 
 **consolidate-outputs.py**:
+
 - ✅ Safe to run
 - ✅ Run when outputs are scattered
 - ✅ Improves project organization
 
 **fix-hardcoded-paths.py**:
+
 - ✅ Safe to run with dry-run first
 - ✅ Follow up with path validation
 - ✅ Part of code quality workflow
@@ -308,11 +339,13 @@ git commit -m "Before maintenance scripts"
 ### Maintenance Workflow
 
 **Daily** (as needed):
+
 ```bash
 ./fix-imports.py
 ```
 
 **Weekly** (code quality):
+
 ```bash
 ./fix-imports.py --verbose
 ./consolidate-outputs.py
@@ -320,6 +353,7 @@ git commit -m "Before maintenance scripts"
 ```
 
 **Before Release** (comprehensive):
+
 ```bash
 ./fix-imports.py
 ./consolidate-outputs.py
@@ -333,12 +367,14 @@ git commit -m "Before maintenance scripts"
 ### Common Issues
 
 **Permission errors**:
+
 ```bash
 # Ensure files are writable
 chmod u+w examples/**/*.py
 ```
 
 **Encoding issues**:
+
 ```bash
 # Scripts handle UTF-8 encoding
 # Ensure your files are UTF-8 encoded
@@ -346,6 +382,7 @@ file examples/some_file.py
 ```
 
 **Git conflicts after changes**:
+
 ```bash
 # Review changes carefully
 git diff
@@ -357,37 +394,42 @@ git add -p
 ### Script-Specific Issues
 
 **fix-imports.py fails**:
+
 - Check file permissions
 - Verify Python syntax before running
 - Use `--verbose` to see detailed errors
 
 **refactor-pythoncode.py breaks code**:
+
 - Always use `--dry-run` first
 - Review generated functions manually
 - Test examples after refactoring
 
 **consolidate-outputs.py moves wrong files**:
+
 - Check that files are actually output files
 - Verify no important source files in output directories
 
 ## 📊 Integration with Testing
 
 ### Automated Workflow
+
 ```bash
 # 1. Fix imports and common issues
 ./fix-imports.py
 
 # 2. Test that fixes work
-../testing/test-quick-examples.py
+python -m pytest tests/ -x
 
 # 3. If tests pass, run full suite
-../testing/test-all-examples.py
+python -m pytest tests/
 
 # 4. Clean up outputs
 ./consolidate-outputs.py
 ```
 
 ### CI/CD Integration
+
 ```yaml
 # GitHub Actions example
 - name: Fix Common Issues
@@ -396,24 +438,27 @@ git add -p
     ./scripts/maintenance/consolidate-outputs.py
 
 - name: Test After Fixes
-  run: ./scripts/testing/test-all-examples.py
+  run: python -m pytest tests/
 ```
 
 ## 🤝 Contributing
 
 ### Adding New Fixes
+
 1. Add patterns to appropriate script's fix list
 2. Test with various examples
 3. Ensure changes are safe and reversible
 4. Update documentation
 
 ### Creating New Maintenance Scripts
+
 1. Follow existing script patterns
 2. Include dry-run mode
 3. Add comprehensive error handling
 4. Document all changes made
 
 ### Modifying Existing Scripts
+
 - Maintain backward compatibility
 - Test with edge cases
 - Update help text and documentation

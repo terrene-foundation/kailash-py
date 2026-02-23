@@ -14,11 +14,6 @@ scripts/
 │   ├── reset-development.sh          # Reset development environment
 │   ├── check-status.sh               # Check development environment status
 │   └── setup-databases.sh            # Setup test databases
-├── testing/                          # Testing and validation scripts
-│   ├── test-all-examples.py          # Comprehensive example testing
-│   ├── test-quick-examples.py        # Quick smoke tests
-│   ├── profile-tests.py              # Performance profiling
-│   └── mark-slow-tests.py            # Mark slow-running tests
 ├── maintenance/                      # Code maintenance and fixes
 │   ├── fix-imports.py                # Fix common import/code issues
 │   ├── refactor-pythoncode.py        # Refactor PythonCodeNode patterns
@@ -34,41 +29,31 @@ scripts/
 │   ├── deploy-tenant.sh              # Deploy tenant environments
 │   ├── setup-github-projects.sh      # Setup GitHub project boards
 │   └── teardown-databases.sh         # Teardown test databases
-├── studio/                          # Studio-specific scripts
-│   ├── start-studio.sh              # Start Kailash Studio
-│   ├── start-studio-dev.sh          # Start Studio in development mode
-│   └── start-runner-service.sh      # Start workflow runner service
-├── collaboration/                   # Team collaboration tools
-│   ├── sync-tools.py               # Sync between TODOs, Projects, and Issues
-│   ├── team-status.py              # Team workload and status
-│   └── claude-helper.py            # Claude Code response parser
-└── utils/                          # Utility scripts
-    └── start-ai-registry.py        # Start AI model registry server
+└── collaboration/                   # Team collaboration tools
+    ├── sync-tools.py               # Sync between TODOs, Projects, and Issues
+    ├── team-status.py              # Team workload and status
+    └── claude-helper.py            # Claude Code response parser
 ```
 
 ## 🚀 Quick Start
 
 ### First Time Setup
+
 ```bash
 # Setup complete development environment
 ./development/setup-environment.sh
 
 # Start development services
 ./development/start-development.sh
-
-# Verify everything is working
-./testing/test-quick-examples.py
 ```
 
 ### Daily Development Workflow
+
 ```bash
 # Check environment status
 ./development/check-status.sh
 
-# Run comprehensive tests
-./testing/test-all-examples.py
-
-# Fix common issues if tests fail
+# Fix common issues if needed
 ./maintenance/fix-imports.py
 
 # Check daily metrics
@@ -76,6 +61,7 @@ scripts/
 ```
 
 ### Maintenance Tasks
+
 ```bash
 # Fix import errors and code issues
 ./maintenance/fix-imports.py --verbose
@@ -90,48 +76,39 @@ scripts/
 ## 📋 Script Categories
 
 ### 🔧 Development Scripts
+
 **Purpose**: Setup and manage development environment
 **Location**: `development/`
 **Key Scripts**: `setup-environment.sh`, `start-development.sh`
 
-### 🧪 Testing Scripts
-**Purpose**: Test validation and performance analysis
-**Location**: `testing/`
-**Key Scripts**: `test-all-examples.py`, `profile-tests.py`
-
 ### 🛠️ Maintenance Scripts
+
 **Purpose**: Code quality and cleanup
 **Location**: `maintenance/`
 **Key Scripts**: `fix-imports.py`, `refactor-pythoncode.py`
 
 ### 📊 Metrics Scripts
+
 **Purpose**: Development metrics and reporting
 **Location**: `metrics/`
 **Key Scripts**: `daily-metrics.sh`, `github-metrics.sh`
 
 ### 🚀 Deployment Scripts
+
 **Purpose**: Infrastructure and deployment
 **Location**: `deployment/`
 **Key Scripts**: `deploy-tenant.sh`, `setup-github-projects.sh`
 
-### 🎨 Studio Scripts
-**Purpose**: Kailash Studio management
-**Location**: `studio/`
-**Key Scripts**: `start-studio.sh`, `start-runner-service.sh`
-
 ### 🤝 Collaboration Scripts
+
 **Purpose**: Team coordination and workflow
 **Location**: `collaboration/`
 **Key Scripts**: `sync-tools.py`, `team-status.py`
 
-### ⚙️ Utility Scripts
-**Purpose**: Miscellaneous utilities
-**Location**: `utils/`
-**Key Scripts**: `start-ai-registry.py`
-
 ## 🔧 Prerequisites
 
 ### Required Tools
+
 - **Docker** - For development environment
 - **Python 3.8+** - For Python scripts
 - **Bash** - For shell scripts
@@ -139,6 +116,7 @@ scripts/
 - **curl** - For health checks
 
 ### Installation
+
 ```bash
 # macOS
 brew install gh jq
@@ -155,12 +133,13 @@ gh --version
 ## 📖 Usage Patterns
 
 ### Running Scripts
+
 ```bash
 # From project root
 ./scripts/category/script-name.sh
 
 # With arguments
-./scripts/testing/test-all-examples.py --verbose
+./scripts/maintenance/fix-imports.py --verbose
 
 # Get help
 ./scripts/maintenance/fix-imports.py --help
@@ -169,34 +148,36 @@ gh --version
 ### Common Workflows
 
 #### 🔄 Daily Development Cycle
+
 1. `./development/check-status.sh` - Verify environment
-2. `./testing/test-quick-examples.py` - Quick validation
-3. `./maintenance/fix-imports.py` - Fix any issues
-4. `./metrics/daily-metrics.sh` - Check progress
+2. `./maintenance/fix-imports.py` - Fix any issues
+3. `./metrics/daily-metrics.sh` - Check progress
 
 #### 🧹 Weekly Maintenance
-1. `./testing/test-all-examples.py` - Full test suite
-2. `./maintenance/refactor-pythoncode.py` - Code improvements
-3. `./metrics/weekly-summary.sh` - Progress report
-4. `./maintenance/consolidate-outputs.py` - Cleanup
+
+1. `./maintenance/refactor-pythoncode.py` - Code improvements
+2. `./metrics/weekly-summary.sh` - Progress report
+3. `./maintenance/consolidate-outputs.py` - Cleanup
 
 #### 🚀 Release Preparation
-1. `./testing/test-all-examples.py` - Comprehensive testing
-2. `./metrics/github-metrics.sh` - Release metrics
-3. `./deployment/setup-github-projects.sh` - Project board
-4. `./collaboration/sync-tools.py` - Sync collaboration tools
+
+1. `./metrics/github-metrics.sh` - Release metrics
+2. `./deployment/setup-github-projects.sh` - Project board
+3. `./collaboration/sync-tools.py` - Sync collaboration tools
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
 **Scripts don't execute**
+
 ```bash
 # Make scripts executable
 chmod +x scripts/**/*.sh
 ```
 
 **Docker not running**
+
 ```bash
 # Start Docker and retry
 docker info
@@ -204,18 +185,21 @@ docker info
 ```
 
 **GitHub CLI not authenticated**
+
 ```bash
 # Authenticate with GitHub
 gh auth login
 ```
 
 **Python import errors**
+
 ```bash
 # Fix common import issues
 ./maintenance/fix-imports.py --verbose
 ```
 
 ### Getting Help
+
 - Each script supports `--help` flag for usage information
 - Check individual category READMEs for detailed documentation
 - Review script headers for specific requirements and examples
@@ -223,6 +207,7 @@ gh auth login
 ## 🤝 Contributing
 
 ### Adding New Scripts
+
 1. Choose appropriate category directory
 2. Follow naming conventions:
    - Shell scripts: `kebab-case.sh`
@@ -232,6 +217,7 @@ gh auth login
 5. Update main README if needed
 
 ### Script Standards
+
 - Include `#!/usr/bin/env python3` or `#!/bin/bash` shebang
 - Add descriptive docstring/comment header
 - Support `--help` flag
@@ -239,6 +225,7 @@ gh auth login
 - Include usage examples
 
 ## 📚 Related Documentation
+
 - [SDK Development Guide](../sdk-users/3-development/)
 - [Testing Guide](../sdk-users/1-essentials/)
 - [Troubleshooting](../sdk-users/3-development/07-troubleshooting.md)
