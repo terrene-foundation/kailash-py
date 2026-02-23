@@ -158,6 +158,7 @@ class BaseRuntime(ABC):
         max_concurrency: int = 10,
         user_context: Optional[Any] = None,
         enable_monitoring: bool = True,
+        enable_resource_limits: bool = False,
         enable_security: bool = False,
         enable_audit: bool = False,
         resource_limits: Optional[Dict[str, Any]] = None,
@@ -289,6 +290,7 @@ class BaseRuntime(ABC):
         self.user_context = user_context
         self.secret_provider = secret_provider
         self.enable_monitoring = enable_monitoring
+        self.enable_resource_limits = enable_resource_limits
         self.enable_security = enable_security
         self.enable_audit = enable_audit
         self.resource_limits = resource_limits or {}

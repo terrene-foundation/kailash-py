@@ -431,6 +431,249 @@ def validate_command_string(command: str, config: SecurityConfig | None = None) 
     return command
 
 
+# P0D-002: Module-level cache for allowed_types in sanitize_input().
+# Previously, sanitize_input() performed 13+ lazy imports (pandas, numpy, torch,
+# tensorflow, scipy, sklearn, xgboost, lightgbm, matplotlib, plotly, statsmodels,
+# PIL, spacy, networkx, prophet) on EVERY call when allowed_types=None.
+# This caused ~1.6ms overhead per node from import machinery lookups.
+# The cache is computed once on first access and reused for all subsequent calls.
+_CACHED_ALLOWED_TYPES: tuple[type, ...] | None = None
+
+
+def _get_cached_allowed_types() -> list[type]:
+    """Return cached allowed_types list, computing on first call.
+
+    P0D-002: This eliminates 13+ per-call lazy imports that caused ~1.6ms
+    overhead per sanitize_input() invocation.
+    """
+    global _CACHED_ALLOWED_TYPES
+    if _CACHED_ALLOWED_TYPES is not None:
+        # Return a mutable copy so callers can safely extend if needed
+        return list(_CACHED_ALLOWED_TYPES)
+
+    allowed_types: list[type] = [
+        str,
+        int,
+        float,
+        bool,
+        list,
+        dict,
+        tuple,
+        set,
+        type(None),
+    ]
+
+    # Core data science types
+    try:
+        import pandas as pd
+
+        allowed_types.extend(
+            [
+                pd.DataFrame,
+                pd.Series,
+                pd.Index,
+                pd.MultiIndex,
+                pd.Categorical,
+                pd.Timestamp,
+                pd.Timedelta,
+                pd.Period,
+                pd.DatetimeIndex,
+                pd.TimedeltaIndex,
+                pd.PeriodIndex,
+            ]
+        )
+    except ImportError:
+        pass
+
+    try:
+        import numpy as np
+
+        numpy_types: list[type] = [
+            np.ndarray,
+            np.ma.MaskedArray,
+            np.int8,
+            np.int16,
+            np.int32,
+            np.int64,
+            np.uint8,
+            np.uint16,
+            np.uint32,
+            np.uint64,
+            np.float16,
+            np.float32,
+            np.float64,
+            np.complex64,
+            np.complex128,
+            np.bool_,
+            np.object_,
+            np.datetime64,
+            np.timedelta64,
+        ]
+
+        if hasattr(np, "matrix"):
+            numpy_types.append(np.matrix)
+        if hasattr(np, "string_"):
+            numpy_types.append(np.string_)
+        elif hasattr(np, "bytes_"):
+            numpy_types.append(np.bytes_)
+        if hasattr(np, "unicode_"):
+            numpy_types.append(np.unicode_)
+        elif hasattr(np, "str_"):
+            numpy_types.append(np.str_)
+        if hasattr(np, "float128"):
+            numpy_types.append(np.float128)
+        if hasattr(np, "complex256"):
+            numpy_types.append(np.complex256)
+        if hasattr(np, "generic"):
+            numpy_types.append(np.generic)
+
+        allowed_types.extend(numpy_types)
+    except ImportError:
+        pass
+
+    # Deep learning frameworks
+    try:
+        import torch
+
+        allowed_types.extend(
+            [
+                torch.Tensor,
+                torch.nn.Module,
+                torch.nn.Parameter,
+                torch.cuda.FloatTensor,
+                torch.cuda.DoubleTensor,
+                torch.cuda.IntTensor,
+                torch.cuda.LongTensor,
+            ]
+        )
+    except ImportError:
+        pass
+
+    try:
+        import tensorflow as tf
+
+        allowed_types.extend(
+            [
+                tf.Tensor,
+                tf.Variable,
+                tf.constant,
+                tf.keras.Model,
+                tf.keras.layers.Layer,
+                tf.data.Dataset,
+            ]
+        )
+    except ImportError:
+        pass
+
+    # Scientific computing
+    try:
+        import scipy.sparse
+
+        allowed_types.extend(
+            [
+                scipy.sparse.csr_matrix,
+                scipy.sparse.csc_matrix,
+                scipy.sparse.coo_matrix,
+                scipy.sparse.dia_matrix,
+                scipy.sparse.dok_matrix,
+                scipy.sparse.lil_matrix,
+            ]
+        )
+    except ImportError:
+        pass
+
+    # Machine learning frameworks
+    try:
+        import sys
+
+        if "coverage" not in sys.modules:
+            from sklearn.base import BaseEstimator, TransformerMixin
+
+            allowed_types.extend([BaseEstimator, TransformerMixin])
+    except ImportError:
+        pass
+
+    try:
+        import xgboost as xgb
+
+        allowed_types.extend([xgb.DMatrix, xgb.Booster])
+    except ImportError:
+        pass
+
+    try:
+        import lightgbm as lgb
+
+        allowed_types.extend([lgb.Dataset, lgb.Booster])
+    except ImportError:
+        pass
+
+    # Data visualization
+    try:
+        from matplotlib.axes import Axes
+        from matplotlib.figure import Figure
+
+        allowed_types.extend([Figure, Axes])
+    except ImportError:
+        pass
+
+    try:
+        import plotly.graph_objects as go
+
+        allowed_types.append(go.Figure)
+    except ImportError:
+        pass
+
+    # Statistical modeling
+    try:
+        import statsmodels.api as sm
+
+        allowed_types.extend([sm.OLS, sm.GLM, sm.GLS, sm.WLS])
+    except ImportError:
+        pass
+
+    # Image processing
+    try:
+        from PIL import Image
+
+        allowed_types.append(Image.Image)
+    except ImportError:
+        pass
+
+    try:
+        import cv2  # noqa: F401
+    except ImportError:
+        pass
+
+    # NLP libraries
+    try:
+        from spacy.tokens import Doc, Span, Token
+
+        allowed_types.extend([Doc, Span, Token])
+    except ImportError:
+        pass
+
+    # Graph/Network analysis
+    try:
+        import networkx as nx
+
+        allowed_types.extend([nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph])
+    except ImportError:
+        pass
+
+    # Time series
+    try:
+        from prophet import Prophet
+        from prophet.forecaster import Prophet as ProphetModel
+
+        allowed_types.extend([Prophet, ProphetModel])
+    except ImportError:
+        pass
+
+    # Freeze as tuple for thread safety and immutability
+    _CACHED_ALLOWED_TYPES = tuple(allowed_types)
+    return list(_CACHED_ALLOWED_TYPES)
+
+
 @contextmanager
 def execution_timeout(
     timeout: float | None = None, config: SecurityConfig | None = None
@@ -506,224 +749,9 @@ def sanitize_input(
         config = get_security_config()
 
     if allowed_types is None:
-        allowed_types = [str, int, float, bool, list, dict, tuple, set, type(None)]
-
-        # Core data science types
-        try:
-            import pandas as pd
-
-            allowed_types.extend(
-                [
-                    pd.DataFrame,
-                    pd.Series,
-                    pd.Index,
-                    pd.MultiIndex,
-                    pd.Categorical,
-                    pd.Timestamp,
-                    pd.Timedelta,
-                    pd.Period,
-                    pd.DatetimeIndex,
-                    pd.TimedeltaIndex,
-                    pd.PeriodIndex,
-                ]
-            )
-        except ImportError:
-            pass
-
-        try:
-            import numpy as np
-
-            numpy_types = [
-                np.ndarray,
-                np.ma.MaskedArray,
-                # All numpy scalar types
-                np.int8,
-                np.int16,
-                np.int32,
-                np.int64,
-                np.uint8,
-                np.uint16,
-                np.uint32,
-                np.uint64,
-                np.float16,
-                np.float32,
-                np.float64,
-                np.complex64,
-                np.complex128,
-                np.bool_,
-                np.object_,
-                np.datetime64,
-                np.timedelta64,
-            ]
-
-            # Add matrix if available (deprecated in NumPy 2.0)
-            if hasattr(np, "matrix"):
-                numpy_types.append(np.matrix)
-
-            # Handle NumPy version differences
-            if hasattr(np, "string_"):
-                numpy_types.append(np.string_)
-            elif hasattr(np, "bytes_"):
-                numpy_types.append(np.bytes_)
-
-            if hasattr(np, "unicode_"):
-                numpy_types.append(np.unicode_)
-            elif hasattr(np, "str_"):
-                numpy_types.append(np.str_)
-
-            # Add platform-specific types if available
-            if hasattr(np, "float128"):
-                numpy_types.append(np.float128)
-            if hasattr(np, "complex256"):
-                numpy_types.append(np.complex256)
-
-            # Add generic numpy type to catch all numpy scalars
-            if hasattr(np, "generic"):
-                numpy_types.append(np.generic)
-
-            allowed_types.extend(numpy_types)
-        except ImportError:
-            pass
-
-        # Deep learning frameworks
-        try:
-            import torch
-
-            allowed_types.extend(
-                [
-                    torch.Tensor,
-                    torch.nn.Module,
-                    torch.nn.Parameter,
-                    torch.cuda.FloatTensor,
-                    torch.cuda.DoubleTensor,
-                    torch.cuda.IntTensor,
-                    torch.cuda.LongTensor,
-                ]
-            )
-        except ImportError:
-            pass
-
-        try:
-            import tensorflow as tf
-
-            allowed_types.extend(
-                [
-                    tf.Tensor,
-                    tf.Variable,
-                    tf.constant,
-                    tf.keras.Model,
-                    tf.keras.layers.Layer,
-                    tf.data.Dataset,
-                ]
-            )
-        except ImportError:
-            pass
-
-        # Scientific computing
-        try:
-            import scipy.sparse
-
-            allowed_types.extend(
-                [
-                    scipy.sparse.csr_matrix,
-                    scipy.sparse.csc_matrix,
-                    scipy.sparse.coo_matrix,
-                    scipy.sparse.dia_matrix,
-                    scipy.sparse.dok_matrix,
-                    scipy.sparse.lil_matrix,
-                ]
-            )
-        except ImportError:
-            pass
-
-        # Machine learning frameworks
-        try:
-            # Check if we're running under coverage to avoid instrumentation conflicts
-            import sys
-
-            if "coverage" not in sys.modules:
-                from sklearn.base import BaseEstimator, TransformerMixin
-
-                allowed_types.extend([BaseEstimator, TransformerMixin])
-        except ImportError:
-            pass
-
-        try:
-            import xgboost as xgb
-
-            allowed_types.extend([xgb.DMatrix, xgb.Booster])
-        except ImportError:
-            pass
-
-        try:
-            import lightgbm as lgb
-
-            allowed_types.extend([lgb.Dataset, lgb.Booster])
-        except ImportError:
-            pass
-
-        # Data visualization
-        try:
-            from matplotlib.axes import Axes
-            from matplotlib.figure import Figure
-
-            allowed_types.extend([Figure, Axes])
-        except ImportError:
-            pass
-
-        try:
-            import plotly.graph_objects as go
-
-            allowed_types.append(go.Figure)
-        except ImportError:
-            pass
-
-        # Statistical modeling
-        try:
-            import statsmodels.api as sm
-
-            allowed_types.extend([sm.OLS, sm.GLM, sm.GLS, sm.WLS])
-        except ImportError:
-            pass
-
-        # Image processing
-        try:
-            from PIL import Image
-
-            allowed_types.append(Image.Image)
-        except ImportError:
-            pass
-
-        try:
-            # OpenCV uses numpy arrays, already covered
-            import cv2  # noqa: F401
-        except ImportError:
-            pass
-
-        # NLP libraries
-        try:
-            from spacy.tokens import Doc, Span, Token
-
-            allowed_types.extend([Doc, Span, Token])
-        except ImportError:
-            pass
-
-        # Graph/Network analysis
-        try:
-            import networkx as nx
-
-            allowed_types.extend([nx.Graph, nx.DiGraph, nx.MultiGraph, nx.MultiDiGraph])
-        except ImportError:
-            pass
-
-        # Time series
-        try:
-            from prophet import Prophet
-            from prophet.forecaster import Prophet as ProphetModel
-
-            allowed_types.extend([Prophet, ProphetModel])
-        except ImportError:
-            pass
+        # P0D-002: Use cached allowed_types to avoid 13+ lazy imports per call.
+        # The cache is computed once on first access and reused for all subsequent calls.
+        allowed_types = _get_cached_allowed_types()
 
     # Type validation - allow data science types
     # Filter out non-types to avoid isinstance errors

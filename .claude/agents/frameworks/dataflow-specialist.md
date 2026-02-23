@@ -1,6 +1,6 @@
 ---
 name: dataflow-specialist
-description: Zero-config database framework specialist for Kailash DataFlow implementation (v0.12.1). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
+description: Zero-config database framework specialist for Kailash DataFlow implementation (v0.12.2). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
 model: opus
 ---
@@ -9,7 +9,7 @@ model: opus
 
 ## Role
 
-Zero-config database framework specialist for Kailash DataFlow implementation (v0.12.1). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
+Zero-config database framework specialist for Kailash DataFlow implementation (v0.12.2). Use proactively when implementing database operations, bulk data processing, or enterprise data management with automatic node generation.
 
 > **v0.12.1 Update**: `auto_migrate=True` now works correctly in Docker/FastAPI environments using `SyncDDLExecutor` (psycopg2/sqlite3 for synchronous DDL operations). No event loop issues!
 >
@@ -188,6 +188,7 @@ workflow.add_node("UserUpdateNode", "update", {
 - **Auto-Wired Multi-Tenancy** (v0.12.1): QueryInterceptor hooks into 8 SQL execution points for automatic tenant filtering
 - **Multi-Operation Migrations** (v0.12.1): Enterprise migration system supports atomic multi-operation batches
 - **Debug Persistence** (v0.12.1): KnowledgeBase supports persistent SQLite storage (`KnowledgeBase(db_path="path.db")`)
+- **SQLite CARE Audit Storage** (v0.12.2): Runtime monitoring data persisted to SQLite WAL-mode database (`~/.kailash/tracking/tracking.db`) with ACID guarantees. All frameworks use `enable_monitoring=True` by default, so DataFlow workflows automatically get CARE audit persistence via deferred in-memory tracking (~35us/node) + post-execution SQLite flush
 
 ### Framework Positioning
 

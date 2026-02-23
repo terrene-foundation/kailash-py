@@ -7,11 +7,13 @@ This section provides comprehensive guides for understanding and effectively usi
 ## 📚 Guide Overview
 
 ### [Signature Programming](signature-programming.md)
+
 **Master declarative AI development**
 
 Learn Kaizen's signature-based programming approach - the core feature that makes AI development declarative and optimized. Covers signature syntax, patterns, optimization, and best practices.
 
 **What you'll learn:**
+
 - Signature syntax and advanced patterns
 - Input/output type definitions
 - Automatic optimization and error handling
@@ -22,11 +24,13 @@ Learn Kaizen's signature-based programming approach - the core feature that make
 **Prerequisites:** Completed getting started section
 
 ### [Async Execution](async-execution.md)
+
 **Production async for FastAPI and high-throughput**
 
 Master async execution with `run_async()` for production FastAPI deployments and concurrent agent workflows. Learn when to use async vs sync, configuration patterns, and performance optimization.
 
 **What you'll learn:**
+
 - run_async() configuration and usage
 - FastAPI integration patterns
 - Concurrent batch processing
@@ -37,11 +41,13 @@ Master async execution with `run_async()` for production FastAPI deployments and
 **Prerequisites:** Basic agent creation knowledge
 
 ### [Enterprise Features](enterprise-features.md)
+
 **Production-ready AI with audit trails and compliance**
 
 Comprehensive guide to Kaizen's enterprise capabilities including memory systems, audit trails, multi-tenancy, and compliance features for production deployments.
 
 **What you'll learn:**
+
 - Tiered memory systems (basic, standard, enterprise)
 - Audit trail configuration and compliance
 - Multi-tenant deployments with isolation
@@ -52,11 +58,13 @@ Comprehensive guide to Kaizen's enterprise capabilities including memory systems
 **Prerequisites:** Basic agent creation knowledge
 
 ### [MCP Integration](mcp-integration.md)
+
 **Connect external tools and services**
 
 Learn to integrate Kaizen agents with external tools using the Model Context Protocol (MCP). Covers tool exposure, auto-discovery, server deployment, and client integration.
 
 **What you'll learn:**
+
 - Exposing agents as MCP tools
 - Discovering and using external MCP tools
 - MCP server deployment patterns
@@ -67,11 +75,13 @@ Learn to integrate Kaizen agents with external tools using the Model Context Pro
 **Prerequisites:** Basic agent creation and execution
 
 ### [Multi-Agent Workflows](multi-agent-workflows.md)
+
 **Coordinate multiple agents for complex tasks**
 
 Master multi-agent coordination patterns including collaborative workflows, hierarchical structures, consensus building, and debate patterns for sophisticated AI applications.
 
 **What you'll learn:**
+
 - Agent team creation and management
 - Coordination patterns (collaborative, hierarchical, consensus, debate)
 - Session management for complex workflows
@@ -82,11 +92,13 @@ Master multi-agent coordination patterns including collaborative workflows, hier
 **Prerequisites:** Understanding of individual agent creation
 
 ### [Enterprise Agent Trust Protocol](enterprise-trust-protocol.md) (v0.8.0)
+
 **Cryptographically verifiable trust chains for AI agents**
 
 Complete guide to EATP (Enterprise Agent Trust Protocol) for enterprise-grade accountability, authorization, and secure multi-agent communication.
 
 **What you'll learn:**
+
 - Trust lineage chains with cryptographic verification
 - TrustedAgent and TrustedSupervisorAgent usage
 - Trust operations: ESTABLISH, DELEGATE, VERIFY, AUDIT
@@ -100,11 +112,13 @@ Complete guide to EATP (Enterprise Agent Trust Protocol) for enterprise-grade ac
 **Prerequisites:** Multi-agent coordination, enterprise requirements
 
 ### [Optimization](optimization.md)
+
 **Performance tuning and reliability**
 
 Learn to optimize Kaizen agents and workflows for production performance, including caching strategies, batch processing, resource management, and monitoring.
 
 **What you'll learn:**
+
 - Performance profiling and monitoring
 - Caching strategies and optimization
 - Batch processing patterns
@@ -117,18 +131,21 @@ Learn to optimize Kaizen agents and workflows for production performance, includ
 ## 🎯 Recommended Learning Path
 
 ### For New Users
+
 1. Complete [Getting Started](../getting-started/) section first
 2. **[Signature Programming](signature-programming.md)** - Core concept mastery
 3. **[Optimization](optimization.md)** - Performance best practices
 4. **[MCP Integration](mcp-integration.md)** - External tool connections
 
 ### For Enterprise Users
+
 1. **[Signature Programming](signature-programming.md)** - Foundation concepts
 2. **[Enterprise Features](enterprise-features.md)** - Production requirements
 3. **[Multi-Agent Workflows](multi-agent-workflows.md)** - Complex coordination
 4. **[Optimization](optimization.md)** - Scale and performance
 
 ### For Integration Developers
+
 1. **[Signature Programming](signature-programming.md)** - Core patterns
 2. **[MCP Integration](mcp-integration.md)** - External connections
 3. **[Multi-Agent Workflows](multi-agent-workflows.md)** - System coordination
@@ -139,6 +156,7 @@ Learn to optimize Kaizen agents and workflows for production performance, includ
 ### Essential Patterns
 
 **Basic Agent Creation:**
+
 ```python
 import kaizen
 framework = kaizen.Kaizen(signature_programming_enabled=True)
@@ -146,6 +164,7 @@ agent = framework.create_agent("analyzer", signature="text -> summary")
 ```
 
 **Enterprise Configuration:**
+
 ```python
 config = kaizen.KaizenConfig(
     memory_enabled=True,
@@ -156,6 +175,7 @@ framework = kaizen.Kaizen(config=config)
 ```
 
 **Multi-Agent Coordination:**
+
 ```python
 team = framework.create_agent_team(
     "analysis_team",
@@ -165,6 +185,7 @@ team = framework.create_agent_team(
 ```
 
 **MCP Tool Exposure:**
+
 ```python
 framework.expose_agent_as_mcp_tool(
     agent=search_agent,
@@ -174,7 +195,9 @@ framework.expose_agent_as_mcp_tool(
 ```
 
 ### Core SDK Integration
+
 Always remember the essential pattern:
+
 ```python
 from kailash.runtime.local import LocalRuntime
 runtime = LocalRuntime()
@@ -185,12 +208,14 @@ results, run_id = runtime.execute(workflow.build())
 ## 🔗 Integration with Kailash Ecosystem
 
 ### Core SDK Foundation
+
 - **Built ON Core SDK**: Kaizen extends Core SDK patterns
 - **Workflow Integration**: Agents work as Core SDK nodes
 - **Runtime Compatibility**: Use LocalRuntime for all execution
-- **Node System**: 110+ nodes available for integration
+- **Node System**: 140+ nodes available for integration
 
 ### Framework Integration
+
 - **DataFlow**: Database-first development with AI agents
 - **Nexus**: Multi-channel deployment (API/CLI/MCP)
 - **Unified Patterns**: Consistent patterns across frameworks
@@ -208,17 +233,18 @@ After completing these guides, you'll be able to:
 
 ## 📊 Guide Complexity Levels
 
-| Guide | Complexity | Time | Prerequisites |
-|-------|------------|------|---------------|
-| Signature Programming | ⭐⭐ | 20-30 min | Getting started |
-| Optimization | ⭐⭐ | 25-35 min | Basic agents |
-| MCP Integration | ⭐⭐⭐ | 25-35 min | Agent execution |
-| Enterprise Features | ⭐⭐⭐ | 30-45 min | Configuration |
-| Multi-Agent Workflows | ⭐⭐⭐⭐ | 35-45 min | Agent coordination |
+| Guide                 | Complexity | Time      | Prerequisites      |
+| --------------------- | ---------- | --------- | ------------------ |
+| Signature Programming | ⭐⭐       | 20-30 min | Getting started    |
+| Optimization          | ⭐⭐       | 25-35 min | Basic agents       |
+| MCP Integration       | ⭐⭐⭐     | 25-35 min | Agent execution    |
+| Enterprise Features   | ⭐⭐⭐     | 30-45 min | Configuration      |
+| Multi-Agent Workflows | ⭐⭐⭐⭐   | 35-45 min | Agent coordination |
 
 ## 🛠️ Practical Applications
 
 ### Document Processing Pipeline
+
 ```python
 # Signature-based document processing
 doc_processor = framework.create_agent(
@@ -228,6 +254,7 @@ doc_processor = framework.create_agent(
 ```
 
 ### Customer Service Automation
+
 ```python
 # Multi-agent customer service
 service_team = framework.create_agent_team(
@@ -238,6 +265,7 @@ service_team = framework.create_agent_team(
 ```
 
 ### Research and Analysis
+
 ```python
 # Collaborative research workflow
 research_agents = [
@@ -250,18 +278,21 @@ research_agents = [
 ## 🚨 Best Practices
 
 ### Development Guidelines
+
 - Start with simple signatures, add complexity gradually
 - Use enterprise features for production deployments
 - Test multi-agent coordination with small teams first
 - Monitor performance and optimize iteratively
 
 ### Production Considerations
+
 - Enable audit trails for compliance requirements
 - Use memory systems for persistent state
 - Implement proper error handling and retry logic
 - Plan for scaling and resource management
 
 ### Integration Patterns
+
 - Leverage Core SDK for workflow orchestration
 - Use DataFlow for database operations
 - Deploy via Nexus for multi-channel access
@@ -270,11 +301,13 @@ research_agents = [
 ## 🔄 Continuous Learning
 
 ### After Completing Guides
+
 1. **[Practical Examples](../examples/)** - Working implementations
 2. **[API Reference](../reference/)** - Complete documentation
 3. **[Advanced Usage](../advanced/)** - Deep customization
 
 ### Stay Updated
+
 - Check [GitHub repository](https://github.com/terrene-foundation/kailash-py) for updates
 - Follow release notes for new features
 - Participate in community discussions

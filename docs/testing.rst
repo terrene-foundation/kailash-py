@@ -186,7 +186,8 @@ Fast, isolated component validation with 1-second timeout:
 
    # Node functionality tests
    def test_llm_agent_node_basic():
-       node = LLMAgentNode(model="gpt-4")
+       model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
+       node = LLMAgentNode(model=model)
        result = node.execute(prompt="Hello")
        assert "response" in result
 
@@ -267,10 +268,12 @@ Performance Monitoring
    @pytest.mark.performance
    def test_node_execution_time():
        """Ensure node execution stays under limits."""
+       import os
        import time
 
        start = time.time()
-       node = LLMAgentNode(model="gpt-4")
+       model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
+       node = LLMAgentNode(model=model)
        result = node.execute(prompt="Quick test")
        duration = time.time() - start
 

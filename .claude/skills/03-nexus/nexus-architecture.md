@@ -40,7 +40,7 @@ Understanding how Nexus works internally.
 ├──────────────────┴──────────────────────────────┤
 │              Kailash SDK Core                   │
 │  - WorkflowBuilder & Runtime                    │
-│  - 110+ Nodes                                   │
+│  - 140+ Nodes                                   │
 │  - Execution Engine                             │
 └─────────────────────────────────────────────────┘
 ```
@@ -52,16 +52,19 @@ Understanding how Nexus works internally.
 **Purpose**: Expose workflows via API, CLI, and MCP
 
 **Components**:
+
 - **API Channel**: FastAPI-based REST server (via enterprise gateway)
 - **CLI Channel**: Command-line interface (via enterprise gateway)
 - **MCP Channel**: Model Context Protocol server (separate initialization)
 
 **Key Features**:
+
 - Single workflow registration via `Nexus.register()`
 - Automatic endpoint generation through enterprise gateway
 - Unified parameter handling
 
 **v1.1.0 Implementation:**
+
 ```python
 # Actual v1.1.0 architecture - NO ChannelManager class
 class Nexus:
@@ -79,6 +82,7 @@ class Nexus:
 ```
 
 **What Changed from Stubs:**
+
 - ❌ **REMOVED**: `ChannelManager.initialize_channels()` (was stub returning success)
 - ❌ **REMOVED**: `ChannelManager.register_workflow_on_channels()` (was stub logging success)
 - ✅ **REALITY**: Nexus handles initialization and registration directly
@@ -88,6 +92,7 @@ class Nexus:
 **Purpose**: Unified session management across channels
 
 **Features**:
+
 - Cross-channel session persistence
 - State synchronization
 - Session lifecycle management
@@ -121,6 +126,7 @@ class SessionManager:
 **Purpose**: Production-grade features
 
 **Components**:
+
 - **Authentication**: OAuth2, JWT, API keys
 - **Authorization**: RBAC, permissions
 - **Rate Limiting**: Per-user, per-endpoint
@@ -207,6 +213,7 @@ app.start()
 ```
 
 **Implementation**:
+
 - Smart defaults for all settings
 - Auto-detection of environment
 - Graceful fallbacks
@@ -226,6 +233,7 @@ app.rate_limit = 1000
 ```
 
 **Implementation**:
+
 - Feature flags for all components
 - Lazy initialization
 - Optional dependencies
@@ -235,6 +243,7 @@ app.rate_limit = 1000
 **Goal**: Single source, multiple interfaces
 
 **Implementation**:
+
 - Abstract workflow execution layer
 - Channel-agnostic request handling
 - Unified response formatting
@@ -244,8 +253,9 @@ app.rate_limit = 1000
 **Goal**: Leverage existing Kailash SDK
 
 **Benefits**:
+
 - No SDK modification needed
-- All 110+ nodes available
+- All 140+ nodes available
 - Proven execution engine
 
 ```python
@@ -446,6 +456,7 @@ result = await runtime.execute_workflow_async(workflow, inputs)
 - **v1.0 vs v1.1 features**: Event logging (v1.0) vs real-time broadcasting (v1.1)
 
 **What's Real in v1.1.0:**
+
 - ✅ Multi-channel exposure (API, CLI, MCP)
 - ✅ Workflow registration and execution
 - ✅ Custom REST endpoints with rate limiting
@@ -453,6 +464,7 @@ result = await runtime.execute_workflow_async(workflow, inputs)
 - ✅ Event logging (retrieve with `get_events()`)
 
 **Planned for v1.1:**
+
 - 🔜 Real-time event broadcasting (WebSocket/SSE)
 - 🔜 Automatic workflow schema inference
 - 🔜 Cross-channel session synchronization

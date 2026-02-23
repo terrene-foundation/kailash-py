@@ -1590,7 +1590,7 @@ All examples demonstrate:
 
 DataFlow supports **PostgreSQL, MySQL, and SQLite** with identical functionality. All databases provide:
 
-- ✅ **9 nodes per model** - Full CRUD + bulk operations
+- ✅ **11 nodes per model** - Full CRUD + bulk operations (including Upsert and Count)
 - ✅ **Async operations** - All database operations are async-first
 - ✅ **Connection pooling** - Efficient connection management
 - ✅ **Transaction support** - Full ACID compliance
@@ -1694,9 +1694,10 @@ class User:
     email: str
     active: bool = True
 
-# Identical 9 nodes generated for each database:
+# Identical 11 nodes generated for each database:
 # UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode,
-# UserListNode, UserBulkCreateNode, UserBulkUpdateNode,
+# UserListNode, UserUpsertNode, UserCountNode,
+# UserBulkCreateNode, UserBulkUpdateNode,
 # UserBulkDeleteNode, UserBulkUpsertNode
 ```
 
@@ -1714,7 +1715,7 @@ db = DataFlow()  # Development: SQLite automatic, Production: PostgreSQL or MySQ
 # NOTE: All three databases (PostgreSQL, MySQL, SQLite) have 100% feature parity (v0.5.6+)
 # RECENT FIXES: DateTime handling, parameter types, content limits, connection order
 
-# 2. Define model - generates 9 nodes automatically
+# 2. Define model - generates 11 nodes automatically
 @db.model
 class User:
     name: str
@@ -1851,19 +1852,21 @@ class Order:
 
 ### Generated Nodes (Per Model)
 
-Every `@db.model` class automatically generates these 9 nodes:
+Every `@db.model` class automatically generates these 11 nodes:
 
-| Node Type                 | Function            | Use Case          | Performance |
-| ------------------------- | ------------------- | ----------------- | ----------- |
-| **{Model}CreateNode**     | Single insert       | User registration | <1ms        |
-| **{Model}ReadNode**       | Single select by ID | Profile lookup    | <1ms        |
-| **{Model}UpdateNode**     | Single update       | Profile edit      | <1ms        |
-| **{Model}DeleteNode**     | Single delete       | Account removal   | <1ms        |
-| **{Model}ListNode**       | Query with filters  | Search/pagination | <10ms       |
-| **{Model}BulkCreateNode** | Bulk insert         | Data import       | 1000/sec    |
-| **{Model}BulkUpdateNode** | Bulk update         | Price updates     | 5000/sec    |
-| **{Model}BulkDeleteNode** | Bulk delete         | Cleanup           | 10000/sec   |
-| **{Model}BulkUpsertNode** | Insert or update    | Sync operations   | 3000/sec    |
+| Node Type                 | Function            | Use Case           | Performance |
+| ------------------------- | ------------------- | ------------------ | ----------- |
+| **{Model}CreateNode**     | Single insert       | User registration  | <1ms        |
+| **{Model}ReadNode**       | Single select by ID | Profile lookup     | <1ms        |
+| **{Model}UpdateNode**     | Single update       | Profile edit       | <1ms        |
+| **{Model}DeleteNode**     | Single delete       | Account removal    | <1ms        |
+| **{Model}ListNode**       | Query with filters  | Search/pagination  | <10ms       |
+| **{Model}UpsertNode**     | Insert or update    | Sync single record | <1ms        |
+| **{Model}CountNode**      | Count with filters  | Analytics/totals   | <1ms        |
+| **{Model}BulkCreateNode** | Bulk insert         | Data import        | 1000/sec    |
+| **{Model}BulkUpdateNode** | Bulk update         | Price updates      | 5000/sec    |
+| **{Model}BulkDeleteNode** | Bulk delete         | Cleanup            | 10000/sec   |
+| **{Model}BulkUpsertNode** | Bulk insert/update  | Sync operations    | 3000/sec    |
 
 ### Enterprise Features Access
 
@@ -2057,7 +2060,7 @@ workflow.add_node("OrderCacheNode", "cache", {
 })
 
 # All three databases support identical operations
-# Same 9 nodes available across all databases
+# Same 11 nodes available across all databases
 ```
 
 ### Security & Compliance
