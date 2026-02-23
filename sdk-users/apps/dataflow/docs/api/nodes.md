@@ -4,18 +4,20 @@ Complete reference for all auto-generated and system nodes in DataFlow.
 
 ## Auto-Generated Nodes
 
-Every model decorated with `@db.model` automatically generates 9 nodes:
+Every model decorated with `@db.model` automatically generates 11 nodes (7 CRUD + 4 Bulk):
 
 ### 1. {Model}CreateNode
 
 Creates a single record in the database.
 
 **Parameters:**
+
 - All model fields (except auto-generated ones like `id`, `created_at`)
 - `tenant_id` (optional): For multi-tenant models
 - `return_fields` (optional): List of fields to return (default: all)
 
 **Example:**
+
 ```python
 workflow.add_node("UserCreateNode", "create_user", {
     "name": "Alice Smith",
@@ -26,6 +28,7 @@ workflow.add_node("UserCreateNode", "create_user", {
 ```
 
 **Output:**
+
 ```python
 {
     "record": {
@@ -41,12 +44,14 @@ workflow.add_node("UserCreateNode", "create_user", {
 Retrieves a single record by ID.
 
 **Parameters:**
+
 - `id` (required): Record ID to retrieve
 - `fields` (optional): List of fields to return
 - `include` (optional): List of related models to include
 - `tenant_id` (optional): For multi-tenant models
 
 **Example:**
+
 ```python
 workflow.add_node("UserReadNode", "get_user", {
     "id": 123,
@@ -56,6 +61,7 @@ workflow.add_node("UserReadNode", "get_user", {
 ```
 
 **Output:**
+
 ```python
 {
     "record": {
@@ -74,6 +80,7 @@ workflow.add_node("UserReadNode", "get_user", {
 Updates a single record.
 
 **Parameters:**
+
 - `id` (required): Record ID to update
 - All model fields to update (partial update supported)
 - `version` (optional): For optimistic locking
@@ -81,6 +88,7 @@ Updates a single record.
 - `return_fields` (optional): Fields to return after update
 
 **Example:**
+
 ```python
 workflow.add_node("UserUpdateNode", "update_user", {
     "id": 123,
@@ -91,6 +99,7 @@ workflow.add_node("UserUpdateNode", "update_user", {
 ```
 
 **Output:**
+
 ```python
 {
     "record": {
@@ -108,12 +117,14 @@ workflow.add_node("UserUpdateNode", "update_user", {
 Deletes a single record.
 
 **Parameters:**
+
 - `id` (required): Record ID to delete
 - `soft_delete` (optional): If true, sets deleted_at instead of removing
 - `tenant_id` (optional): For multi-tenant models
 - `cascade` (optional): Delete related records (default: false)
 
 **Example:**
+
 ```python
 workflow.add_node("UserDeleteNode", "delete_user", {
     "id": 123,
@@ -123,6 +134,7 @@ workflow.add_node("UserDeleteNode", "delete_user", {
 ```
 
 **Output:**
+
 ```python
 {
     "deleted": True,
@@ -136,6 +148,7 @@ workflow.add_node("UserDeleteNode", "delete_user", {
 Queries records with filters, sorting, and pagination.
 
 **Parameters:**
+
 - `filter` (optional): MongoDB-style query filter
 - `sort` (optional): List of sort specifications
 - `limit` (optional): Maximum records to return
@@ -146,6 +159,7 @@ Queries records with filters, sorting, and pagination.
 - `count_only` (optional): Return only count, not records
 
 **Filter Operators:**
+
 - `$eq`, `$ne`: Equal, not equal
 - `$gt`, `$gte`, `$lt`, `$lte`: Comparison
 - `$in`, `$nin`: In list, not in list
@@ -155,6 +169,7 @@ Queries records with filters, sorting, and pagination.
 - `$and`, `$or`, `$not`: Logical operators
 
 **Example:**
+
 ```python
 workflow.add_node("UserListNode", "search_users", {
     "filter": {
@@ -179,6 +194,7 @@ workflow.add_node("UserListNode", "search_users", {
 ```
 
 **Output:**
+
 ```python
 {
     "records": [
@@ -202,6 +218,7 @@ workflow.add_node("UserListNode", "search_users", {
 Creates multiple records efficiently.
 
 **Parameters:**
+
 - `data` (required): List of records to create
 - `batch_size` (optional): Records per batch (default: 1000)
 - `ignore_conflicts` (optional): Skip records that would cause conflicts
@@ -210,6 +227,7 @@ Creates multiple records efficiently.
 - `tenant_id` (optional): For multi-tenant models
 
 **Example:**
+
 ```python
 workflow.add_node("UserBulkCreateNode", "import_users", {
     "data": [
@@ -224,6 +242,7 @@ workflow.add_node("UserBulkCreateNode", "import_users", {
 ```
 
 **Output:**
+
 ```python
 {
     "created": 1000,
@@ -237,12 +256,14 @@ workflow.add_node("UserBulkCreateNode", "import_users", {
 Updates multiple records efficiently.
 
 **Parameters:**
+
 - `filter` (required): Records to update
 - `update` (required): Fields to update
 - `batch_size` (optional): Records per batch
 - `limit` (optional): Maximum records to update
 
 **Update Operators:**
+
 - `$set`: Set field values
 - `$inc`: Increment numeric fields
 - `$dec`: Decrement numeric fields
@@ -251,6 +272,7 @@ Updates multiple records efficiently.
 - `$remove`: Remove from array fields
 
 **Example:**
+
 ```python
 workflow.add_node("ProductBulkUpdateNode", "apply_discount", {
     "filter": {
@@ -267,6 +289,7 @@ workflow.add_node("ProductBulkUpdateNode", "apply_discount", {
 ```
 
 **Output:**
+
 ```python
 {
     "updated": 250,
@@ -279,6 +302,7 @@ workflow.add_node("ProductBulkUpdateNode", "apply_discount", {
 Deletes multiple records efficiently.
 
 **Parameters:**
+
 - `filter` (required): Records to delete
 - `soft_delete` (optional): Use soft delete
 - `batch_size` (optional): Records per batch
@@ -286,6 +310,7 @@ Deletes multiple records efficiently.
 - `confirmation_required` (optional): Require explicit confirmation
 
 **Example:**
+
 ```python
 workflow.add_node("UserBulkDeleteNode", "cleanup_inactive", {
     "filter": {
@@ -299,6 +324,7 @@ workflow.add_node("UserBulkDeleteNode", "cleanup_inactive", {
 ```
 
 **Output:**
+
 ```python
 {
     "deleted": 500,
@@ -311,6 +337,7 @@ workflow.add_node("UserBulkDeleteNode", "cleanup_inactive", {
 Insert or update multiple records.
 
 **Parameters:**
+
 - `data` (required): List of records
 - `conflict_columns` (required): Columns that determine conflicts
 - `update_columns` (optional): Columns to update on conflict
@@ -318,6 +345,7 @@ Insert or update multiple records.
 - `return_ids` (optional): Return all record IDs
 
 **Example:**
+
 ```python
 workflow.add_node("ProductBulkUpsertNode", "sync_inventory", {
     "data": [
@@ -331,6 +359,7 @@ workflow.add_node("ProductBulkUpsertNode", "sync_inventory", {
 ```
 
 **Output:**
+
 ```python
 {
     "inserted": 10,
@@ -346,6 +375,7 @@ workflow.add_node("ProductBulkUpsertNode", "sync_inventory", {
 Query audit logs for models with audit tracking enabled.
 
 **Parameters:**
+
 - `model` (required): Model name
 - `record_id` (optional): Specific record ID
 - `user_id` (optional): Filter by user
@@ -354,6 +384,7 @@ Query audit logs for models with audit tracking enabled.
 - `limit` (optional): Maximum records
 
 **Example:**
+
 ```python
 workflow.add_node("AuditLogNode", "get_audit_trail", {
     "model": "User",
@@ -372,11 +403,13 @@ workflow.add_node("AuditLogNode", "get_audit_trail", {
 Execute multiple operations in a transaction.
 
 **Parameters:**
+
 - `operations` (required): List of node configurations
 - `isolation_level` (optional): Transaction isolation level
 - `timeout` (optional): Transaction timeout in seconds
 
 **Example:**
+
 ```python
 workflow.add_node("TransactionNode", "atomic_transfer", {
     "operations": [
@@ -401,11 +434,13 @@ workflow.add_node("TransactionNode", "atomic_transfer", {
 Execute database migrations.
 
 **Parameters:**
+
 - `action` (required): "migrate", "rollback", "status"
 - `target` (optional): Target migration version
 - `dry_run` (optional): Preview without applying
 
 **Example:**
+
 ```python
 workflow.add_node("MigrationNode", "upgrade_db", {
     "action": "migrate",
@@ -421,12 +456,14 @@ workflow.add_node("MigrationNode", "upgrade_db", {
 Cache query results.
 
 **Parameters:**
+
 - `key` (required): Cache key
 - `node` (required): Node to cache results from
 - `ttl` (optional): Time to live in seconds
 - `invalidate_on` (optional): Events that invalidate cache
 
 **Example:**
+
 ```python
 workflow.add_node("CacheNode", "cached_users", {
     "key": "active_users",
@@ -444,11 +481,13 @@ workflow.add_node("CacheNode", "cached_users", {
 Execute optimized cross-table queries.
 
 **Parameters:**
+
 - `query` (required): Query specification
 - `optimize` (optional): Enable query optimization
 - `explain` (optional): Return query plan
 
 **Example:**
+
 ```python
 workflow.add_node("OptimizedQueryNode", "user_posts_comments", {
     "query": {

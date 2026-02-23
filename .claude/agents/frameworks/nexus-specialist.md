@@ -438,6 +438,10 @@ PEP 563 turns type annotations into strings, preventing FastAPI from recognizing
 
 - **`receive_message()`**: MCP transport now supports `receive_message()` for bidirectional communication in custom MCP transports
 
+## Performance & Monitoring
+
+- **SQLite CARE Audit Storage** (v0.12.2): Nexus creates `AsyncLocalRuntime()` with `enable_monitoring=True` (default), so all workflow executions automatically get CARE audit persistence to SQLite WAL-mode database. Zero in-loop I/O (~35us/node overhead) with post-execution ACID flush.
+
 ## Common Issues & Solutions
 
 | Issue                            | Solution                                                       |

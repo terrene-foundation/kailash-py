@@ -5,11 +5,13 @@ Welcome to Kailash SDK! This is your starting point for building workflow automa
 ## 📋 Getting Started in 3 Steps
 
 ### 1. Installation
+
 ```bash
 pip install kailash
 ```
 
 ### 2. Your First Workflow
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
@@ -29,6 +31,7 @@ print(results["hello"]["result"]["message"])  # "Hello, Kailash!"
 ### 3. Common Patterns
 
 #### Data Processing Pipeline
+
 ```python
 workflow = WorkflowBuilder()
 workflow.add_node("CSVReaderNode", "read", {"file_path": "data.csv"})
@@ -40,10 +43,13 @@ workflow.add_connection("process", "result", "write", "data")
 ```
 
 #### AI Analysis
+
 ```python
+import os
+
 workflow = WorkflowBuilder()
 workflow.add_node("LLMAgentNode", "analyzer", {
-    "model": "gpt-4",
+    "model": os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o"),
     "prompt": "Analyze this data: {data}"
 })
 ```
@@ -57,6 +63,7 @@ workflow.add_node("LLMAgentNode", "analyzer", {
 ## ⚠️ Common Mistakes to Avoid
 
 1. **Wrong API**: Use string-based node creation, not instances
+
    ```python
    # ❌ DON'T
    workflow.add_node("CSVReaderNode", "reader", {}))
@@ -66,6 +73,7 @@ workflow.add_node("LLMAgentNode", "analyzer", {
    ```
 
 2. **Wrong Connections**: Use 4-parameter syntax
+
    ```python
    # ❌ DON'T
    workflow.add_connection("source", "result", "target", "input")
@@ -75,6 +83,7 @@ workflow.add_node("LLMAgentNode", "analyzer", {
    ```
 
 3. **Missing Build**: Always build before execution
+
    ```python
    # ❌ DON'T
    runtime.execute(workflow.build())

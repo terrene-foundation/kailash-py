@@ -140,6 +140,7 @@ Use MCP tools with an LLM agent:
 
    # mcp_agent.py
    import asyncio
+   import os
    from kailash.core import LocalRuntime
    from kailash.nodes.ai import LLMAgentNode
 
@@ -148,10 +149,11 @@ Use MCP tools with an LLM agent:
        runtime = LocalRuntime()
 
        # Create agent with MCP integration
+       model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
        agent = LLMAgentNode(
            name="assistant",
            llm_config={
-               "model": "gpt-4",  # or "ollama/llama2"
+               "model": model,  # or "ollama/llama2"
                "temperature": 0.7
            },
            mcp_servers=["mcp://localhost:8080"],

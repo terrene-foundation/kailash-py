@@ -700,10 +700,17 @@ async def embedding_search(
 
 ```python
 # patterns/tool_chaining.py
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 from mcp.server import FastMCP
 from typing import Dict, Any, List
 
 mcp = FastMCP("Tool Chaining Example")
+
+# Read model from environment — never hardcode model strings
+llm_model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
 
 # Store intermediate results
 result_cache = {}
@@ -741,7 +748,7 @@ async def research_topic(topic: str) -> Dict[str, Any]:
 
     report = await generate_text(
         report_prompt,
-        model="gpt-4",
+        model=llm_model,
         max_tokens=1000
     )
 
@@ -775,7 +782,7 @@ async def compare_topics(topics: List[str]) -> Dict[str, Any]:
 
     comparison = await generate_text(
         comparison_prompt,
-        model="gpt-4",
+        model=llm_model,
         max_tokens=1500
     )
 
@@ -790,12 +797,19 @@ async def compare_topics(topics: List[str]) -> Dict[str, Any]:
 
 ```python
 # patterns/streaming.py
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 from mcp.server import FastMCP
 from fastapi.responses import StreamingResponse
 import asyncio
 import json
 
 mcp = FastMCP("Streaming Tools")
+
+# Read model from environment — never hardcode model strings
+llm_model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
 
 @mcp.tool()
 async def generate_story_stream(
@@ -814,7 +828,7 @@ async def generate_story_stream(
 
             response = await generate_text(
                 chapter_prompt,
-                model="gpt-4",
+                model=llm_model,
                 max_tokens=500
             )
 
@@ -2164,37 +2178,37 @@ spec:
         app: mcp-server
     spec:
       containers:
-      - name: mcp-server
-        image: mcp-server:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: ENVIRONMENT
-          value: "production"
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: mcp-secrets
-              key: database-url
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 30
-          periodSeconds: 30
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 10
-          periodSeconds: 10
+        - name: mcp-server
+          image: mcp-server:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: ENVIRONMENT
+              value: "production"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: mcp-secrets
+                  key: database-url
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
 ---
 apiVersion: v1
 kind: Service

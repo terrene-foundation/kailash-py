@@ -1,6 +1,6 @@
 # Nexus Platform Developer Guide
 
-*Advanced patterns for building production-ready multi-channel applications*
+_Advanced patterns for building production-ready multi-channel applications_
 
 ## 🎯 Overview
 
@@ -32,7 +32,7 @@ Nexus is a production-ready multi-channel orchestration platform that provides u
 ├─────────────────────────────────────────────────────────────┤
 │                   Kailash SDK Core                         │
 │  • WorkflowBuilder & Runtime                               │
-│  • Node Library (110+ nodes)                               │
+│  • Node Library (140+ nodes)                               │
 │  • Parameter resolution & validation                       │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -393,40 +393,40 @@ spec:
         app: nexus-platform
     spec:
       containers:
-      - name: nexus
-        image: kailash/nexus:latest
-        ports:
-        - containerPort: 8000
-          name: api
-        - containerPort: 8001
-          name: cli
-        - containerPort: 3001
-          name: mcp
-        - containerPort: 9090
-          name: metrics
-        env:
-        - name: NEXUS_CONFIG_FILE
-          value: "/config/nexus.yaml"
-        - name: REDIS_URL
-          value: "redis://redis-service:6379/0"
-        - name: POSTGRES_URL
-          valueFrom:
-            secretKeyRef:
-              name: nexus-secrets
-              key: postgres-url
-        volumeMounts:
-        - name: config
-          mountPath: /config
-        - name: ssl-certs
-          mountPath: /etc/ssl/certs
-          readOnly: true
+        - name: nexus
+          image: kailash/nexus:latest
+          ports:
+            - containerPort: 8000
+              name: api
+            - containerPort: 8001
+              name: cli
+            - containerPort: 3001
+              name: mcp
+            - containerPort: 9090
+              name: metrics
+          env:
+            - name: NEXUS_CONFIG_FILE
+              value: "/config/nexus.yaml"
+            - name: REDIS_URL
+              value: "redis://redis-service:6379/0"
+            - name: POSTGRES_URL
+              valueFrom:
+                secretKeyRef:
+                  name: nexus-secrets
+                  key: postgres-url
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: ssl-certs
+              mountPath: /etc/ssl/certs
+              readOnly: true
       volumes:
-      - name: config
-        configMap:
-          name: nexus-config
-      - name: ssl-certs
-        secret:
-          secretName: nexus-tls
+        - name: config
+          configMap:
+            name: nexus-config
+        - name: ssl-certs
+          secret:
+            secretName: nexus-tls
 ```
 
 ## 🧪 Testing Strategies
@@ -773,4 +773,4 @@ nexus = Nexus(
 
 ---
 
-*This guide covers advanced Nexus development patterns. For basic usage, see [README.md](README.md).*
+_This guide covers advanced Nexus development patterns. For basic usage, see [README.md](README.md)._

@@ -300,11 +300,14 @@ class Node(ABC):
 
             # Parameter resolution cache - initialize before validation
             cache_size = int(
-                os.environ.get("KAILASH_PARAM_CACHE_SIZE", self._DEFAULT_CACHE_SIZE)
+                os.environ.get(
+                    "KAILASH_PARAM_CACHE_SIZE", str(self._DEFAULT_CACHE_SIZE)
+                )
+                or str(self._DEFAULT_CACHE_SIZE)
             )
             self._cache_enabled = (
-                os.environ.get("KAILASH_DISABLE_PARAM_CACHE", "").lower() != "true"
-            )
+                os.environ.get("KAILASH_DISABLE_PARAM_CACHE", "") or ""
+            ).lower() != "true"
 
             # Use OrderedDict for LRU implementation
             self._param_cache = OrderedDict()

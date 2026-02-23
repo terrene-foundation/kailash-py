@@ -12,13 +12,13 @@ DataFlow is a database framework built on the Kailash SDK that automatically gen
 Overview
 --------
 
-DataFlow transforms Python model definitions into complete database workflows with automatic schema management, CRUD operations, and enterprise-grade features. Each model automatically generates 9 workflow nodes for comprehensive database operations.
+DataFlow transforms Python model definitions into complete database workflows with automatic schema management, CRUD operations, and enterprise-grade features. Each model automatically generates 11 workflow nodes (7 CRUD + 4 Bulk) for comprehensive database operations.
 
 Key Features
 ------------
 
 🔧 **Model-to-Node Generation**
-   Define a model with ``@db.model`` and get 9 workflow nodes automatically: Create, Read, Update, Delete, List, and bulk operations.
+   Define a model with ``@db.model`` and get 11 workflow nodes automatically: Create, Read, Update, Delete, List, Upsert, Count, and bulk operations (BulkCreate, BulkUpdate, BulkDelete, BulkUpsert).
 
 🗄️ **Multi-Database Support**
    Full PostgreSQL support with SQLite compatibility. Automatic schema migrations and connection pooling.
@@ -64,9 +64,10 @@ Quick Start
        email: str     # Required field
        active: bool = True  # Optional with default
 
-   # DataFlow automatically generates 9 workflow nodes:
+   # DataFlow automatically generates 11 workflow nodes:
    # UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode,
-   # UserListNode, UserBulkCreateNode, UserBulkUpdateNode,
+   # UserListNode, UserUpsertNode, UserCountNode,
+   # UserBulkCreateNode, UserBulkUpdateNode,
    # UserBulkDeleteNode, UserBulkUpsertNode
 
 **Using Generated Nodes in Workflows:**

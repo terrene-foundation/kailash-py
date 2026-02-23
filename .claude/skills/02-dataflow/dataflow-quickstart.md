@@ -17,9 +17,9 @@ Zero-config database framework built on Core SDK with automatic node generation 
 
 - **Install**: `pip install kailash-dataflow`
 - **Import**: `from dataflow import DataFlow`
-- **Pattern**: `DataFlow() → @db.model → 9 nodes generated automatically`
+- **Pattern**: `DataFlow() → @db.model → 11 nodes generated automatically`
 - **NOT an ORM**: Workflow-native database framework
-- **SQL Databases**: PostgreSQL, MySQL, SQLite (100% feature parity, 9 nodes per @db.model)
+- **SQL Databases**: PostgreSQL, MySQL, SQLite (100% feature parity, 11 nodes per @db.model)
 - **Document Database**: MongoDB (flexible schema, 8 specialized nodes)
 - **Vector Search**: PostgreSQL pgvector (semantic search, 3 vector nodes)
 - **Key Feature**: Automatic node generation from models or schema
@@ -34,7 +34,7 @@ from kailash.runtime import LocalRuntime
 # 1. Zero-config initialization
 db = DataFlow()  # Auto-detects: SQLite (dev) or PostgreSQL (prod via DATABASE_URL)
 
-# 2. Define model - automatically generates 9 node types
+# 2. Define model - automatically generates 11 node types
 @db.model
 class User:
     name: str
@@ -45,6 +45,7 @@ class User:
 workflow = WorkflowBuilder()
 
 # UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode, UserListNode,
+# UserUpsertNode, UserCountNode,
 # UserBulkCreateNode, UserBulkUpdateNode, UserBulkDeleteNode, UserBulkUpsertNode
 # All created automatically!
 
@@ -79,7 +80,7 @@ print(f"Created user ID: {results['create']['id']}")
 | **Multi-tenancy** | Custom code                     | Automatic isolation               |
 | **Scalability**   | Vertical scaling                | Horizontal scaling built-in       |
 
-## Generated Node Types (9 per Model)
+## Generated Node Types (11 per Model)
 
 Each `@db.model` automatically creates:
 
@@ -90,10 +91,12 @@ Each `@db.model` automatically creates:
 | **{Model}UpdateNode**     | Single update      | `{"id": 123, "name": "Jane"}`                                 |
 | **{Model}DeleteNode**     | Single delete      | `{"id": 123}` or `{"soft_delete": True}`                      |
 | **{Model}ListNode**       | Query with filters | `{"filter": {"age": {"$gt": 18}}, "limit": 10}`               |
+| **{Model}UpsertNode**     | Insert or update   | `{"data": {"email": "a@b.com"}, "match_fields": ["email"]}`   |
+| **{Model}CountNode**      | Count records      | `{"filter": {"status": "active"}}`                            |
 | **{Model}BulkCreateNode** | Bulk insert        | `{"data": [...], "batch_size": 1000}`                         |
 | **{Model}BulkUpdateNode** | Bulk update        | `{"filter": {...}, "fields": {...}}`                          |
 | **{Model}BulkDeleteNode** | Bulk delete        | `{"filter": {...}}`                                           |
-| **{Model}BulkUpsertNode** | Insert or update   | `{"data": [...], "match_fields": ["email"]}`                  |
+| **{Model}BulkUpsertNode** | Bulk insert/update | `{"data": [...], "match_fields": ["email"]}`                  |
 
 ## Database Connection Patterns
 
@@ -405,7 +408,7 @@ Use `nexus-specialist` when:
 ## Quick Tips
 
 - 💡 **Zero-config first**: Start with `DataFlow()` - no configuration needed
-- 💡 **9 nodes per model**: Remember - Create, Read, Update, Delete, List, Bulk(Create/Update/Delete/Upsert)
+- 💡 **11 nodes per model**: Remember - Create, Read, Update, Delete, List, Upsert, Count, Bulk(Create/Update/Delete/Upsert)
 - 💡 **MongoDB queries**: Use familiar syntax that works across all SQL databases (PostgreSQL/MySQL/SQLite)
 - 💡 **String IDs**: Fully supported - no forced integer conversion
 - 💡 **Existing databases**: Use `auto_migrate=False` for safety

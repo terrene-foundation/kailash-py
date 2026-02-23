@@ -124,6 +124,7 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 - **SharedMemoryPool**: Multi-agent coordination
 - **A2A Protocol**: Google Agent-to-Agent protocol for semantic capability matching
 - **CARE/EATP Trust Framework** (v1.2.1): Cryptographic trust chains, 5-posture enum with state machine, constraint dimensions, knowledge ledger with provenance, enterprise crypto (multi-sig genesis, Merkle audit, CRL), RFC 3161 timestamping
+- **SQLite CARE Audit Persistence** (v0.12.2/v1.2.2): EATP audit events from `RuntimeAuditGenerator` are now persisted atomically to SQLite WAL-mode database via `DeferredStorageBackend.flush_to_sqlite()`. Kaizen agents using `LocalRuntime(enable_monitoring=True)` (default) get automatic ACID-compliant CARE audit trails
 - **FallbackRouter Safety Hardening**: `on_fallback` callback fires before each fallback (raise `FallbackRejectedError` to block unsafe fallbacks), WARNING-level logging on every fallback, model capability validation before routing
 - **AgentTeam Deprecated**: Use `OrchestrationRuntime` instead for multi-agent coordination
 - **MCP Session Wiring**: `discover_mcp_resources()`, `read_mcp_resource()`, `discover_mcp_prompts()`, `get_mcp_prompt()` are wired and functional on agent sessions

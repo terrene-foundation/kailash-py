@@ -4,7 +4,7 @@ Get up and running with DataFlow in 5 minutes! This guide shows you how to build
 
 ## 🚀 The DataFlow "Wow Factor"
 
-**One decorator generates 9 workflow nodes automatically:**
+**One decorator generates 11 workflow nodes automatically:**
 
 ```python
 from dataflow import DataFlow
@@ -14,7 +14,7 @@ from kailash.runtime.local import LocalRuntime
 # Zero-config database setup
 db = DataFlow("postgresql://user:password@localhost/database")
 
-# ONE decorator generates 9 nodes automatically
+# ONE decorator generates 11 nodes automatically
 @db.model
 class User:
     name: str
@@ -23,7 +23,8 @@ class User:
 
 # Generated automatically:
 # - UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode
-# - UserListNode, UserBulkCreateNode, UserBulkUpdateNode,
+# - UserListNode, UserUpsertNode, UserCountNode,
+# - UserBulkCreateNode, UserBulkUpdateNode,
 # - UserBulkDeleteNode, UserBulkUpsertNode
 
 # Use in Core SDK workflows immediately
@@ -39,6 +40,7 @@ print(f"Created user: {results['create_user']}")
 ```
 
 **You'll see this interactive preview:**
+
 ```
 🔄 DataFlow Auto-Migration Preview
 
@@ -79,6 +81,7 @@ db = DataFlow()
 ```
 
 That's it! You now have a fully functional database connection with:
+
 - ✅ Automatic SQLite database creation
 - ✅ Connection pooling
 - ✅ **Revolutionary auto-migration system**
@@ -99,20 +102,24 @@ class User:
 ```
 
 This single decorator creates:
-- **9 database nodes automatically**
+
+- **11 database nodes automatically**
 - **Automatic schema migration when fields change**
 - **Visual preview of all database changes**
 
 **Generated nodes:**
+
 - `UserCreateNode` - Create a user
 - `UserReadNode` - Get user by ID
 - `UserUpdateNode` - Update a user
 - `UserDeleteNode` - Delete a user
 - `UserListNode` - Query users
+- `UserUpsertNode` - Insert or update a user
+- `UserCountNode` - Count users with filters
 - `UserBulkCreateNode` - Create multiple users
 - `UserBulkUpdateNode` - Update multiple users
 - `UserBulkDeleteNode` - Delete multiple users
-- `UserBulkUpsertNode` - Insert or update users
+- `UserBulkUpsertNode` - Bulk insert or update users
 
 ### 3. Use the Generated Nodes
 
@@ -219,6 +226,7 @@ await db.auto_migrate()
 ```
 
 **Migration preview shows:**
+
 - ✅ Safe operations (no data loss)
 - ⚠️ Risky operations (with warnings)
 - 🚨 Dangerous operations (require confirmation)
@@ -331,6 +339,7 @@ You've just built a complete database application with **automatic schema manage
 ## Common Patterns
 
 ### CRUD Operations
+
 ```python
 # Create
 workflow.add_node("UserCreateNode", "create", {"name": "Bob", "email": "bob@example.com"})
@@ -346,6 +355,7 @@ workflow.add_node("UserDeleteNode", "delete", {"record_id": 123})
 ```
 
 ### Pagination
+
 ```python
 workflow.add_node("UserListNode", "page_1", {
     "limit": 20,
@@ -355,6 +365,7 @@ workflow.add_node("UserListNode", "page_1", {
 ```
 
 ### Complex Filtering
+
 ```python
 workflow.add_node("UserListNode", "stats", {
     "filter": {"active": True},

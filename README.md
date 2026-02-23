@@ -1,4 +1,4 @@
-# Kailash Python SDK
+# Kailash SDK
 
 <p align="center">
   <a href="https://pypi.org/project/kailash/"><img src="https://img.shields.io/pypi/v/kailash.svg" alt="PyPI version"></a>
@@ -9,68 +9,68 @@
 </p>
 
 <p align="center">
-  <strong>Enterprise-Grade Workflow Orchestration Platform</strong>
+  <strong>Enterprise Workflow Engine with Cryptographic Trust</strong>
 </p>
 
 <p align="center">
-  Build production-ready applications with zero-config database operations, multi-channel platforms, AI agents, and comprehensive workflow orchestration. From rapid prototyping to enterprise deployment.
+  The core engine for building trust-verified workflows with 140+ production-ready nodes, sync and async runtimes, cyclic workflow support, and the CARE/EATP cryptographic trust framework. Three application frameworks -- <a href="https://github.com/terrene-foundation/kailash-kaizen">Kaizen</a> (AI agents), <a href="https://github.com/terrene-foundation/kailash-nexus">Nexus</a> (multi-channel platform), and <a href="https://github.com/terrene-foundation/kailash-dataflow">DataFlow</a> (database operations) -- are built on this foundation.
 </p>
 
 ---
 
-## Latest Release: v0.12.0
+## Why Kailash?
 
-**Core SDK v0.12.0** | **DataFlow v0.12.0** | **Nexus v1.4.0** | **Kaizen v1.2.0**
+- **Only workflow engine with cryptographic trust chains** -- CARE/EATP provides human-origin tracking, constraint propagation, trust verification, and RFC 3161 timestamped audit trails. No other framework has anything comparable.
+- **140+ production-ready workflow nodes** -- AI, API, code execution, data, database, file, logic, monitoring, and transform nodes out of the box.
+- **Embeddable runtime with no external dependencies** -- `LocalRuntime` runs entirely in-process. No server cluster, no external database, no message broker. Works in CLI tools, serverless functions, and embedded applications.
+- **Sync and async runtime parity** -- `LocalRuntime` and `AsyncLocalRuntime` share the same API and return identical `(results, run_id)` structures. Use sync for scripts, async for Docker/FastAPI.
+- **Foundation for three application frameworks** -- [Kaizen](https://github.com/terrene-foundation/kailash-kaizen) (AI agents with trust), [Nexus](https://github.com/terrene-foundation/kailash-nexus) (multi-channel deploy), and [DataFlow](https://github.com/terrene-foundation/kailash-dataflow) (zero-config database) are all built on this Core SDK.
 
-### What's New
+---
 
-- **Core SDK v0.12.0**: Custom node async execution pipeline, Azure cloud integration, TTL-based cache expiration, health check endpoints
-- **DataFlow v0.12.0**: Auto-wired multi-tenancy with QueryInterceptor, async transaction nodes, debug persistence with SQLite storage
-- **Nexus v1.4.0**: Improved MCP transport reliability, enhanced middleware pipeline
-- **Kaizen v1.2.0**: FallbackRouter safety (on_fallback callback, model validation), OrchestrationRuntime replaces AgentTeam, RFC 3161 timestamping, MCP session wiring
-
-## Project Architecture
-
-### Three-Layer Architecture
+## Architecture
 
 ```
-Application Frameworks (built ON Core SDK)
-  DataFlow  |  Nexus  |  Kaizen
-                |
-         Core SDK Foundation
-  115+ Nodes | Workflows | Runtime | MCP
++------------------------------------------------------------------+
+|                    Application Frameworks                         |
+|                                                                   |
+|   Kaizen v1.2.1          Nexus v1.4.1        DataFlow v0.12.1    |
+|   AI Agents              Multi-Channel        Zero-Config DB      |
+|   CARE/EATP Trust        API + CLI + MCP      @db.model           |
+|   Multi-Agent Coord.     Auth + RBAC          11 Nodes/Model      |
++------------------------------------------------------------------+
+|                    Core SDK v0.12.0                                |
+|                                                                   |
+|   140+ Nodes    |  WorkflowBuilder   |  Runtime (Sync + Async)   |
+|   MCP Server    |  Cyclic Workflows  |  CARE Trust Layer          |
+|                 |  Conditional Exec  |  Trust Verification        |
++------------------------------------------------------------------+
+|                    Enterprise Capabilities                        |
+|                                                                   |
+|   RBAC + Auth   |  Audit Trails      |  Multi-Tenancy            |
+|   Secret Mgmt   |  Resource Limits   |  Access Control            |
++------------------------------------------------------------------+
 ```
 
-### Project Structure
-
-```
-kailash_python_sdk/
-├── src/kailash/          # Core SDK - 115+ nodes, workflows, runtime
-├── apps/
-│   ├── kailash-dataflow/ # Zero-config database framework (v0.12.0)
-│   ├── kailash-nexus/    # Multi-channel platform (v1.4.0)
-│   └── kailash-kaizen/   # AI agent framework (v1.2.0)
-├── tests/                # 7,800+ core SDK tests
-├── sdk-users/            # Complete user documentation
-├── docs/                 # API reference (Sphinx)
-└── scripts/              # Build and CI scripts
-```
+---
 
 ## Quick Start
 
 ### Installation
 
 ```bash
-# Core SDK only
+# Core SDK
 pip install kailash
 
-# Application frameworks
-pip install kailash-dataflow  # Zero-config database framework
-pip install kailash-nexus     # Multi-channel platform (API + CLI + MCP)
-pip install kailash-kaizen    # AI agent framework
+# Application frameworks (each includes Core SDK)
+pip install kailash-kaizen     # AI agents with trust
+pip install kailash-nexus      # Multi-channel platform (API + CLI + MCP)
+pip install kailash-dataflow   # Zero-config database operations
 ```
 
-### Core SDK: Workflow Orchestration
+### Workflow Orchestration
+
+The Core SDK provides `WorkflowBuilder` and `LocalRuntime` for building and executing DAG-based workflows with 140+ built-in nodes.
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
@@ -86,7 +86,102 @@ results, run_id = runtime.execute(workflow.build())
 print(results["process"]["result"])  # {'message': 'Hello from Kailash!'}
 ```
 
-### DataFlow: Zero-Config Database Operations
+Async runtime for Docker/FastAPI deployments:
+
+```python
+import asyncio
+from kailash.runtime import AsyncLocalRuntime
+
+async def main():
+    runtime = AsyncLocalRuntime()
+    results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs={})
+    print(results)
+
+asyncio.run(main())
+# Or use `await` directly inside FastAPI route handlers
+```
+
+### Trust Verification (CARE/EATP)
+
+Kailash is the only workflow engine with built-in cryptographic trust verification. Trust context propagates through all workflow execution automatically.
+
+```python
+from kailash.runtime.trust import (
+    RuntimeTrustContext,
+    TrustVerificationMode,
+    runtime_trust_context,
+)
+from kailash.runtime import LocalRuntime
+
+# Create a trust context with enforcing verification
+ctx = RuntimeTrustContext(
+    trace_id="audit-trace-2024-001",
+    verification_mode=TrustVerificationMode.ENFORCING,
+    delegation_chain=["human-operator-jane", "supervisor-agent", "worker-agent"],
+    constraints={"max_tokens": 1000, "allowed_tools": ["read", "analyze"]},
+)
+
+# Trust context propagates through all workflow execution
+with runtime_trust_context(ctx):
+    runtime = LocalRuntime()
+    results, run_id = runtime.execute(workflow.build())
+
+# Constraints can only be tightened (immutable pattern)
+tighter_ctx = ctx.with_constraints({"allowed_tools": ["read"]})  # Removes "analyze"
+node_ctx = ctx.with_node("data_processor")  # Tracks execution path
+```
+
+---
+
+## Ecosystem Frameworks
+
+Three application frameworks are built on Core SDK, each in its own repository:
+
+### Kaizen: AI Agents with Cryptographic Trust
+
+Production-ready AI agents with signature-based programming, multi-agent coordination, and the CARE/EATP trust framework.
+
+```python
+import asyncio, os
+from dotenv import load_dotenv
+load_dotenv()
+
+from kaizen.api import Agent
+
+async def main():
+    model = os.environ.get("DEFAULT_LLM_MODEL", "gpt-4o")
+    agent = Agent(model=model)
+    result = await agent.run("Analyze this quarterly report for compliance risks")
+
+asyncio.run(main())
+```
+
+`pip install kailash-kaizen` | [Repository](https://github.com/terrene-foundation/kailash-kaizen) | [Documentation](https://github.com/terrene-foundation/kailash-kaizen#readme)
+
+### Nexus: Multi-Channel Platform
+
+Write a function once. Deploy it as a REST API, CLI command, and MCP tool simultaneously.
+
+```python
+from nexus import Nexus
+
+app = Nexus()
+
+@app.handler("analyze", description="Analyze a document")
+async def analyze(document: str, format: str = "summary") -> dict:
+    return {"analysis": f"Analyzed '{document}' as {format}"}
+
+app.start()
+# REST API:  POST /workflows/analyze {"document": "report.pdf"}
+# CLI:       nexus run analyze --document report.pdf
+# MCP:       AI agents can call the 'analyze' tool directly
+```
+
+`pip install kailash-nexus` | [Repository](https://github.com/terrene-foundation/kailash-nexus) | [Documentation](https://github.com/terrene-foundation/kailash-nexus#readme)
+
+### DataFlow: Zero-Config Database
+
+One decorator generates 11 database operation nodes per model. Supports PostgreSQL, MySQL, and SQLite.
 
 ```python
 from dataflow import DataFlow
@@ -99,106 +194,108 @@ class User:
     name: str
     email: str
 
-# Automatic node generation: UserCreateNode, UserReadNode, UserUpdateNode,
-# UserDeleteNode, UserListNode, UserCountNode, UserUpsertNode,
+# Automatically generated:
+# UserCreateNode, UserReadNode, UserUpdateNode, UserDeleteNode,
+# UserListNode, UserCountNode, UserUpsertNode,
 # UserBulkCreateNode, UserBulkUpdateNode, UserBulkDeleteNode, UserBulkUpsertNode
 ```
 
-### Nexus: Multi-Channel Platform
+`pip install kailash-dataflow` | [Repository](https://github.com/terrene-foundation/kailash-dataflow) | [Documentation](https://github.com/terrene-foundation/kailash-dataflow#readme)
+
+---
+
+## CARE Trust Framework
+
+The **CARE** (Context, Action, Reasoning, Evidence) framework and **EATP** (Enterprise Agent Trust Protocol) are Core SDK features that provide:
+
+- **Human origin tracking** -- trace every AI action back to the human who authorized it, across delegation chains
+- **Constraint propagation** -- constraints can only be tightened as they flow through agent delegations, never loosened
+- **Trust verification** -- three modes (disabled, permissive, enforcing) with cached verification and high-risk node awareness
+- **EATP-compliant audit trails** -- every workflow start, node execution, trust verification, and resource access is recorded with RFC 3161 timestamps
+
+Trust verification for workflows, nodes, and resources:
 
 ```python
-from nexus import Nexus
+from kailash.runtime.trust import TrustVerifier, TrustVerifierConfig
 
-app = Nexus()
-
-@app.handler("greet", description="Greeting handler")
-async def greet(name: str, greeting: str = "Hello") -> dict:
-    return {"message": f"{greeting}, {name}!"}
-
-app.start()
-# Now available as:
-# - REST API: POST /workflows/greet {"name": "World"}
-# - CLI: nexus run greet --name World
-# - MCP: AI agents can call greet tool
-```
-
-### Nexus: Enterprise Auth
-
-```python
-import os
-from nexus import Nexus
-from nexus.auth.plugin import NexusAuthPlugin
-from nexus.auth import JWTConfig
-
-auth = NexusAuthPlugin.basic_auth(
-    jwt=JWTConfig(secret=os.environ["JWT_SECRET"]),  # >= 32 chars
+verifier = TrustVerifier(
+    config=TrustVerifierConfig(
+        mode="enforcing",
+        high_risk_nodes=["BashCommand", "HttpRequest", "DatabaseQuery"],
+    ),
 )
-app = Nexus()
-app.add_plugin(auth)
-app.start()
+
+# Verify before execution -- blocks unauthorized access in enforcing mode
+result = await verifier.verify_workflow_access(
+    workflow_id="financial-report-gen",
+    agent_id="analyst-agent-42",
+    trust_context=ctx,
+)
+
+if result.allowed:
+    # Execute with full audit trail
+    pass
 ```
 
-### Kaizen: AI Agents
+---
 
-```python
-from kaizen.api import Agent
+## Competitive Positioning
 
-agent = Agent(model="gpt-4")
-result = await agent.run("Analyze this document")
-```
+Kailash occupies a unique position: it is both an embeddable workflow engine (no external services required) and a full AI agent platform with enterprise trust. No other tool combines these capabilities.
 
-### Async Runtime (Docker/FastAPI)
+| Capability                             | Kailash        | Temporal | Airflow         | LangChain  | CrewAI     | Prefect      |
+| -------------------------------------- | -------------- | -------- | --------------- | ---------- | ---------- | ------------ |
+| **Cryptographic trust (CARE/EATP)**    | Yes            | No       | No              | No         | No         | No           |
+| **AI agent framework**                 | Yes (Kaizen)   | No       | No              | Yes        | Yes        | No           |
+| **Multi-channel deploy (API+CLI+MCP)** | Yes (Nexus)    | No       | No              | No         | No         | No           |
+| **Embeddable (no server required)**    | Yes            | No       | No              | Yes        | Yes        | No           |
+| **Auto-generated DB nodes**            | Yes (DataFlow) | No       | No              | No         | No         | No           |
+| **Multi-agent coordination**           | Yes            | No       | No              | Partial    | Yes        | No           |
+| **Enterprise auth (JWT/RBAC/SSO)**     | Built-in       | No       | Limited         | No         | No         | Cloud only   |
+| **Multi-tenancy**                      | Built-in       | Limited  | Limited         | No         | No         | Cloud only   |
+| **Audit trails**                       | EATP-compliant | No       | Limited         | LangSmith  | No         | Cloud only   |
+| **DAG + cyclic workflows**             | Yes            | DAG only | DAG only        | Yes        | No         | DAG only     |
+| **140+ built-in nodes**                | Yes            | No       | 2000+ operators | AI-focused | AI-focused | Task-focused |
 
-```python
-from kailash.runtime import AsyncLocalRuntime
+> **Note:** Kailash and Temporal solve different problems. Temporal provides durable execution for long-running workflows that must survive process crashes. Kailash provides trust-aware orchestration for AI agent workflows. They are complementary, not competitive.
 
-runtime = AsyncLocalRuntime()
-results, run_id = await runtime.execute_workflow_async(workflow.build(), inputs={})
-```
+**Where each tool wins:**
+
+- **Temporal** wins at durable execution with exactly-once semantics at massive scale (Uber, Netflix, Stripe). Choose Temporal for microservice orchestration where crash recovery is paramount.
+- **Airflow** wins at batch ETL with its 2000+ community operators and managed cloud offerings (MWAA, Cloud Composer). Choose Airflow for scheduled data pipelines.
+- **LangChain** wins at rapid AI prototyping with deep integrations across every LLM provider and vector database. Choose LangChain for quick AI experiments.
+- **Kailash** wins at enterprise AI agents that require trust verification, compliance audit trails, and multi-channel deployment -- backed by a real workflow engine, not just prompt chains. Choose Kailash when your AI agents need to be auditable, trustworthy, and production-grade.
+
+---
 
 ## Key Features
 
 ### Core SDK (v0.12.0)
 
-- **115+ production nodes**: AI, API, Code, Data, Database, File, Logic, Monitoring, Transform
-- **Runtime parity**: `LocalRuntime` (sync) and `AsyncLocalRuntime` (async) with identical APIs
+- **140+ production nodes**: AI, API, code execution, data, database, file, logic, monitoring, transform
+- **Runtime parity**: `LocalRuntime` (sync) and `AsyncLocalRuntime` (async) with identical return structures
+- **CARE trust layer**: RuntimeTrustContext, TrustVerifier, RuntimeAuditGenerator
 - **Cyclic workflows**: CycleBuilder API with convergence detection
 - **MCP integration**: Built-in Model Context Protocol server support
 - **Conditional execution**: SwitchNode branching and skip patterns
+- **Embeddable**: Runs in-process with no external dependencies
+- **Performance optimized**: Cached topological sort, networkx removed from hot path, opt-in resource limits
 
-### DataFlow (v0.12.0)
+### Ecosystem Frameworks
 
-- **11 nodes per model**: Automatic CRUD, query, and bulk operation node generation
-- **Multi-database**: PostgreSQL, MySQL, SQLite with full parity
-- **Zero-config**: `auto_migrate=True` works everywhere including Docker/FastAPI
-- **ExpressDataFlow**: ~23x faster direct CRUD via `db.express`
-- **Enterprise migrations**: 8-component migration system with risk assessment
+| Framework                                                       | Version | Key Capabilities                                                                                   |
+| --------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| [Kaizen](https://github.com/terrene-foundation/kailash-kaizen)     | v1.2.1  | Signature-based AI agents, multi-agent coordination, CARE/EATP trust, FallbackRouter, MCP sessions |
+| [Nexus](https://github.com/terrene-foundation/kailash-nexus)       | v1.4.1  | Multi-channel deploy (API+CLI+MCP), handler pattern, NexusAuthPlugin, presets, middleware API      |
+| [DataFlow](https://github.com/terrene-foundation/kailash-dataflow) | v0.12.1 | 11 nodes per model, PostgreSQL/MySQL/SQLite parity, auto-wired multi-tenancy, async transactions   |
 
-### Nexus (v1.4.0)
-
-- **Multi-channel**: Single registration deploys to API + CLI + MCP simultaneously
-- **Handler support**: `@app.handler()` bypasses PythonCodeNode sandbox restrictions
-- **NexusAuthPlugin**: JWT, RBAC, SSO (GitHub/Google/Azure), rate limiting, tenant isolation, audit logging
-- **Native middleware**: `app.add_middleware()`, `app.include_router()`, `app.add_plugin()`
-- **Preset system**: none, lightweight, standard, saas, enterprise configurations
-
-### Kaizen (v1.2.0)
-
-- **Signature-based programming**: Declarative AI agent definitions
-- **Multi-agent coordination**: Supervisor-worker, router, ensemble, pipeline patterns
-- **CARE framework**: Context, Action, Reasoning, Evidence for structured AI responses
-- **EATP trust protocol**: Enterprise Agent Trust Protocol for secure multi-agent systems
+---
 
 ## Testing
-
-### Test Suite
 
 ```bash
 # Core SDK unit tests (7,800+ tests)
 pytest tests/unit/ -m 'not (slow or integration or e2e)' --timeout=1
-
-# Nexus tests (1,500+ tests)
-pytest apps/kailash-nexus/tests/ -v
 
 # Runtime parity tests
 pytest tests/parity/ -v
@@ -210,32 +307,29 @@ pytest tests/integration/ --timeout=5
 pytest tests/e2e/ --timeout=10
 ```
 
-### Testing Policy
+**Testing policy**: Tier 1 (unit) allows mocking. Tier 2 (integration) and Tier 3 (E2E) require real infrastructure -- no mocking permitted.
 
-- **Tier 1 (Unit)**: Mocking allowed, fast execution
-- **Tier 2 (Integration)**: NO MOCKING - real database, real APIs
-- **Tier 3 (E2E)**: NO MOCKING - real everything
+---
 
 ## Documentation
 
-### For Users
+| Resource                                                                     | Description                                         |
+| ---------------------------------------------------------------------------- | --------------------------------------------------- |
+| [SDK Users Guide](sdk-users/)                                                | Complete workflow development guide                 |
+| [Kaizen Guide](https://github.com/terrene-foundation/kailash-kaizen#readme)     | AI agents, signatures, multi-modal, CARE/EATP trust |
+| [Nexus Guide](https://github.com/terrene-foundation/kailash-nexus#readme)       | Multi-channel platform, auth, middleware, handlers  |
+| [DataFlow Guide](https://github.com/terrene-foundation/kailash-dataflow#readme) | Database operations, models, queries, multi-tenancy |
+| [Enterprise Patterns](sdk-users/5-enterprise/)                               | Production deployment patterns                      |
+| [API Reference](https://terrene-foundation.github.io/kailash_sdk)               | Sphinx-generated API documentation                  |
 
-- **[SDK Users Guide](sdk-users/)**: Complete workflow development guide
-- **[DataFlow Guide](sdk-users/apps/dataflow/)**: Database operations, models, queries
-- **[Nexus Guide](sdk-users/apps/nexus/)**: Multi-channel platform deployment
-- **[Kaizen Guide](sdk-users/apps/kaizen/)**: AI agent framework
-- **[Enterprise Patterns](sdk-users/5-enterprise/)**: Production deployment patterns
-
-### API Reference
-
-- **[API Documentation](https://terrene-foundation.github.io/kailash-python-sdk)**: Sphinx-generated API reference
+---
 
 ## Contributing
 
 ```bash
 # Clone and setup
 git clone https://github.com/terrene-foundation/kailash-py.git
-cd kailash-python-sdk
+cd kailash_sdk
 uv sync
 
 # Run tests
@@ -248,6 +342,8 @@ ruff check .
 ```
 
 See [Contributing Guide](CONTRIBUTING.md) for details.
+
+---
 
 ## License
 

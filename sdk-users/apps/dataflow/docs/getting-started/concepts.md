@@ -44,6 +44,7 @@ class User:
 ```
 
 **Key Features:**
+
 - Type hints define column types
 - Default values define optional fields
 - Special fields (id, created_at, updated_at) auto-added
@@ -51,19 +52,21 @@ class User:
 
 ### 2. Auto-Generated Nodes
 
-Every model automatically generates 9 workflow nodes:
+Every model automatically generates 11 workflow nodes (7 CRUD + 4 Bulk):
 
-| Node | Purpose | Example |
-|------|---------|---------|
-| `{Model}CreateNode` | Create single record | `UserCreateNode` |
-| `{Model}ReadNode` | Get by ID | `UserReadNode` |
-| `{Model}UpdateNode` | Update single record | `UserUpdateNode` |
-| `{Model}DeleteNode` | Delete single record | `UserDeleteNode` |
-| `{Model}ListNode` | Query with filters | `UserListNode` |
-| `{Model}BulkCreateNode` | Create multiple | `UserBulkCreateNode` |
-| `{Model}BulkUpdateNode` | Update multiple | `UserBulkUpdateNode` |
-| `{Model}BulkDeleteNode` | Delete multiple | `UserBulkDeleteNode` |
-| `{Model}BulkUpsertNode` | Insert or update | `UserBulkUpsertNode` |
+| Node                    | Purpose                        | Example              |
+| ----------------------- | ------------------------------ | -------------------- |
+| `{Model}CreateNode`     | Create single record           | `UserCreateNode`     |
+| `{Model}ReadNode`       | Get by ID                      | `UserReadNode`       |
+| `{Model}UpdateNode`     | Update single record           | `UserUpdateNode`     |
+| `{Model}DeleteNode`     | Delete single record           | `UserDeleteNode`     |
+| `{Model}ListNode`       | Query with filters             | `UserListNode`       |
+| `{Model}UpsertNode`     | Insert or update single record | `UserUpsertNode`     |
+| `{Model}CountNode`      | Count matching records         | `UserCountNode`      |
+| `{Model}BulkCreateNode` | Create multiple                | `UserBulkCreateNode` |
+| `{Model}BulkUpdateNode` | Update multiple                | `UserBulkUpdateNode` |
+| `{Model}BulkDeleteNode` | Delete multiple                | `UserBulkDeleteNode` |
+| `{Model}BulkUpsertNode` | Insert or update multiple      | `UserBulkUpsertNode` |
 
 ### 3. Workflow Integration
 
@@ -313,6 +316,7 @@ workflow.add_node("AuditLogNode", "history", {
 ## Best Practices
 
 ### 1. Start with Models
+
 Define your data structure first:
 
 ```python
@@ -324,11 +328,13 @@ class Customer:
 ```
 
 ### 2. Use Appropriate Nodes
+
 - Single operations: Use CRUD nodes
 - Multiple records: Use bulk nodes
 - Complex queries: Use list nodes with filters
 
 ### 3. Leverage Workflows
+
 Chain related operations:
 
 ```python
@@ -338,6 +344,7 @@ workflow.add_connection("customer", "result", "email", "input")
 ```
 
 ### 4. Progressive Enhancement
+
 Start simple, add features as needed:
 
 ```python
@@ -354,6 +361,7 @@ __dataflow__ = {
 ```
 
 ### 5. Monitor Performance
+
 Enable monitoring in production:
 
 ```python
@@ -366,18 +374,22 @@ db = DataFlow(
 ## Common Pitfalls
 
 ### 1. Over-Engineering
+
 ❌ Don't start with all features enabled
 ✅ Start simple, add as needed
 
 ### 2. Ignoring Bulk Operations
+
 ❌ Don't use loops with single operations
 ✅ Use bulk nodes for multiple records
 
 ### 3. Complex Nested Queries
+
 ❌ Don't nest too many workflow nodes
 ✅ Use query optimization or custom SQL
 
 ### 4. Forgetting Indexes
+
 ❌ Don't ignore slow queries
 ✅ Add indexes for common filters
 

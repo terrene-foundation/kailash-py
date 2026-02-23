@@ -3,118 +3,90 @@
 Enterprise Features
 ===================
 
-The Kailash SDK provides comprehensive enterprise-grade features for production deployments, including advanced security, edge computing, distributed coordination, and enterprise monitoring.
+The Kailash SDK provides comprehensive enterprise-grade features for production
+deployments, built on the CARE (Context, Action, Reasoning, Evidence) trust
+framework.
 
 .. toctree::
    :maxdepth: 2
 
-   edge_computing
    security
    compliance
    monitoring
    deployment
+   edge_computing
 
 Overview
 --------
 
-**🌐 Edge Computing Platform**
-   Complete edge computing infrastructure with intelligent coordination, state management, and distributed consensus.
-
-**🔒 Enterprise Security**
-   Multi-factor authentication, threat detection, compliance frameworks, and comprehensive audit trails.
-
-**📊 Monitoring & Analytics**
-   Real-time performance monitoring, distributed transaction tracking, and enterprise-grade observability.
-
-**🛡️ Compliance & Governance**
-   GDPR compliance, data governance, regulatory reporting, and enterprise policy enforcement.
-
-**🚀 Production Deployment**
-   Kubernetes integration, auto-scaling, load balancing, and enterprise infrastructure patterns.
-
-Key Capabilities
-----------------
-
-**Edge Computing Platform**
-   - **Distributed Coordination**: Raft-based consensus with leader election and global ordering
-   - **Edge Discovery**: Automatic edge location detection and capability mapping
-   - **State Management**: Intelligent state synchronization across edge locations
-   - **Resource Optimization**: Predictive caching, warming, and migration strategies
-
-**Enterprise Security Framework**
-   - **Access Control**: RBAC, ABAC, and hybrid authorization models
-   - **Threat Detection**: Real-time security monitoring and automated response
-   - **Compliance**: GDPR, SOC2, HIPAA compliance frameworks
-   - **Audit**: Comprehensive logging and forensic capabilities
-
-**Production Monitoring**
-   - **Transaction Monitoring**: Distributed transaction tracking and deadlock detection
-   - **Performance Analytics**: Real-time metrics and anomaly detection
-   - **Health Monitoring**: Service health checks and automated recovery
-   - **Business Metrics**: KPI tracking and enterprise reporting
-
-Quick Start
------------
-
-**Edge Computing Setup**
-
-.. code-block:: python
-
-   from kailash.workflow.builder import WorkflowBuilder
-   from kailash.runtime.local import LocalRuntime
-
-   # Configure edge infrastructure
-   workflow = WorkflowBuilder(edge_config={
-       "discovery": {
-           "locations": ["us-east-1", "eu-west-1", "ap-south-1"]
-       }
-   })
-
-   # Add edge coordination
-   workflow.add_node("EdgeCoordinationNode", "coordinator", {
-       "operation": "elect_leader",
-       "coordination_group": "cache_cluster"
-   })
-
-   # Execute with enterprise runtime
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow.build())
+**CARE Trust Foundation**
+   All enterprise features are built on the CARE trust framework, providing
+   cryptographic accountability from human authorization through agent execution.
+   See :doc:`../core/trust`.
 
 **Enterprise Security**
+   JWT authentication, RBAC, SSO providers, rate limiting, tenant isolation,
+   and audit logging through the NexusAuthPlugin. See :doc:`security`.
+
+**Compliance & Governance**
+   EATP-compliant audit trails with RFC 3161 timestamping, trust postures,
+   and constraint enforcement for SOC2, HIPAA, and GDPR. See :doc:`compliance`.
+
+**Monitoring & Analytics**
+   Real-time performance monitoring, workflow execution tracking, and
+   enterprise-grade observability. See :doc:`monitoring`.
+
+**Production Deployment**
+   Docker, Kubernetes, and cloud deployment patterns with async runtime
+   optimization. See :doc:`deployment`.
+
+**Edge Computing**
+   Distributed coordination, state management, and enterprise reliability
+   across edge locations. See :doc:`edge_computing`.
+
+CARE Trust Integration
+----------------------
+
+Every enterprise feature integrates with the CARE trust framework:
 
 .. code-block:: python
 
-   from kailash.workflow.builder import WorkflowBuilder
-   from kailash.runtime.local import LocalRuntime
+   import os
+   from dotenv import load_dotenv
+   load_dotenv()
 
-   # Configure enterprise security
-   workflow = WorkflowBuilder()
+   from kailash.runtime import LocalRuntime
+   from kailash.runtime.trust import (
+       RuntimeTrustContext,
+       TrustVerificationMode,
+       TrustVerifier,
+       TrustVerifierConfig,
+   )
 
-   # Multi-factor authentication
-   workflow.add_node("MultiFactorAuthNode", "auth", {
-       "methods": ["password", "totp", "biometric"],
-       "require_all": False,
-       "session_duration": 3600
-   })
+   # Enterprise workflows carry trust context
+   ctx = RuntimeTrustContext(
+       trace_id="enterprise-trace-001",
+       delegation_chain=["human-admin", "agent-orchestrator"],
+       verification_mode=TrustVerificationMode.ENFORCING,
+   )
 
-   # Threat detection
-   workflow.add_node("ThreatDetectionNode", "security", {
-       "enable_ml": True,
-       "detection_rules": ["brute_force", "anomaly", "compliance"]
-   })
+   verifier = TrustVerifier(
+       config=TrustVerifierConfig(mode="enforcing"),
+   )
 
-   runtime = LocalRuntime()
-   results, run_id = runtime.execute(workflow.build())
+   runtime = LocalRuntime(
+       trust_context=ctx,
+       trust_verifier=verifier,
+       trust_verification_mode="enforcing",
+   )
+
+   # All workflow operations are now trust-verified and audited
 
 Getting Started
 --------------
 
-Choose your enterprise deployment path:
-
-1. **Edge Computing**: Start with :doc:`edge_computing` for distributed coordination
-2. **Security**: Begin with :doc:`security` for enterprise security frameworks
-3. **Monitoring**: Explore :doc:`monitoring` for production observability
-4. **Compliance**: Review :doc:`compliance` for regulatory requirements
-5. **Deployment**: See :doc:`deployment` for production infrastructure
-
-All enterprise features integrate seamlessly with the core Kailash SDK and application frameworks (DataFlow, Nexus, etc.).
+1. **Trust**: Start with :doc:`../core/trust` for the CARE framework foundation
+2. **Security**: Set up :doc:`security` with NexusAuthPlugin
+3. **Compliance**: Configure :doc:`compliance` audit trails
+4. **Monitoring**: Deploy :doc:`monitoring` for observability
+5. **Deployment**: Follow :doc:`deployment` patterns for production
