@@ -40,6 +40,14 @@ The subagents are designed around the core workflow phases identified in `CLAUDE
 | **react-specialist**   | React and Next.js frontend implementation  | Workflow editors, admin dashboards, AI agent interfaces with React Flow |
 | **flutter-specialist** | Flutter cross-platform mobile/desktop apps | Mobile workflow builders, AI agent interfaces, enterprise mobile apps   |
 | **frontend-developer** | General responsive UI components           | Creating pages, converting mockups, implementing React features         |
+| **ai-ux-designer**     | AI-specific interaction design patterns    | AI chat interfaces, prompt UX, trust/transparency, human-in-the-loop    |
+
+### QA & Audit Specialists
+
+| Agent             | Purpose                                                  | When to Use                                                      |
+| ----------------- | -------------------------------------------------------- | ---------------------------------------------------------------- |
+| **value-auditor** | Value-critical demo QA from enterprise buyer perspective | Before demos, after feature additions, evaluating demo readiness |
+| **e2e-runner**    | Functional E2E testing with Playwright                   | Verifying user journeys, button clicks, form flows               |
 
 ### Infrastructure Specialists
 
@@ -51,9 +59,9 @@ The subagents are designed around the core workflow phases identified in `CLAUDE
 
 **⚠️ IMPORTANT: DataFlow + Nexus Integration**
 
-- See: `.claude/skills/03-nexus/nexus-dataflow-integration.md` for tested configurations
-- Key setting to prevent blocking: `Nexus(auto_discovery=False)`
-- DataFlow v0.11.0: `auto_migrate=True` (default) works in Docker/FastAPI via SyncDDLExecutor
+- See: `sdk-users/guides/dataflow-nexus-integration.md` for tested configurations
+- Key settings to prevent blocking: `Nexus(auto_discovery=False)` + `DataFlow(enable_model_persistence=False)`
+- Full featured config available with 10-30s startup time
 - Both specialists updated with integration warnings
 
 ### Design Principles
