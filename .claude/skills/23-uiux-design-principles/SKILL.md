@@ -10,6 +10,7 @@ Framework-agnostic design principles and patterns for building professional ente
 ## Overview
 
 This skill provides:
+
 - Top-down design methodology (layout → features → components → details)
 - Layout and information architecture patterns
 - Visual hierarchy principles (F-pattern, Z-pattern, inverted pyramid)
@@ -23,6 +24,7 @@ This skill provides:
 ## Reference Documentation
 
 ### Core Principles
+
 - **[design-principles](design-principles.md)** - Complete UI/UX design principles and guidelines
   - Top-down design methodology
   - Layout & information architecture
@@ -34,9 +36,31 @@ This skill provides:
   - Design system principles
   - Common pitfalls & solutions
 
+### Motion Design
+
+- **[motion-design](motion-design.md)** - Animation timing, easing curves, and motion patterns
+  - Timing reference (50ms-800ms+ by interaction type)
+  - Modern easing curves (CSS + Flutter)
+  - Animation categories (entrance, micro-interaction, state, loading, page)
+  - GPU-accelerated properties checklist
+  - `prefers-reduced-motion` accessibility (mandatory)
+  - Motion anti-patterns and decision framework
+
+### UX Writing & Microcopy
+
+- **[ux-writing](ux-writing.md)** - Interface text patterns for enterprise applications
+  - Button & action label patterns (verb + noun)
+  - Error message structure (what + why + fix)
+  - Empty state copy (what goes here + why empty + how to fill)
+  - Form labels, placeholders, and help text
+  - Confirmation dialog structure
+  - Toast/banner message patterns
+  - Enterprise tone guidelines
+
 ## Quick Patterns
 
 ### Top-Down Design Order (ALWAYS Follow This)
+
 ```
 LEVEL 1: FRAME/LAYOUT (Highest Priority)
   ↓ Space division, visual hierarchy, information architecture
@@ -49,38 +73,42 @@ LEVEL 4: VISUAL DETAILS (Lowest Priority)
 ```
 
 ### The 70/30 Rule
+
 - 70% of space = primary content (what user came to see/do)
 - 30% of space = secondary UI (navigation, filters, chrome)
 
 ### Action Hierarchy
-| Type | Size | Style | Position | Use |
-|------|------|-------|----------|-----|
-| Primary | 48px | Filled | Top-right | 1 per page (Save, Add) |
+
+| Type      | Size | Style    | Position     | Use                           |
+| --------- | ---- | -------- | ------------ | ----------------------------- |
+| Primary   | 48px | Filled   | Top-right    | 1 per page (Save, Add)        |
 | Secondary | 40px | Outlined | Near primary | 2-3 per page (Cancel, Export) |
-| Tertiary | 32px | Text | Contextual | Unlimited (Edit, View) |
+| Tertiary  | 32px | Text     | Contextual   | Unlimited (Edit, View)        |
 
 ### View Type Decision
-| Data Type | Recommended View |
-|-----------|------------------|
-| Visual content (faces, photos) | Grid (2-4 columns) |
-| Structured data (many fields) | Table (sortable) |
-| Mobile/narrow screens | List (single column) |
-| Mixed visual + data | Grid with Table toggle |
+
+| Data Type                      | Recommended View       |
+| ------------------------------ | ---------------------- |
+| Visual content (faces, photos) | Grid (2-4 columns)     |
+| Structured data (many fields)  | Table (sortable)       |
+| Mobile/narrow screens          | List (single column)   |
+| Mixed visual + data            | Grid with Table toggle |
 
 ## CRITICAL Gotchas
 
-| Rule | Why |
-|------|-----|
-| ❌ NEVER design bottom-up | Perfecting shadows on misplaced cards wastes effort |
-| ✅ ALWAYS start with layout | Solve fundamental usability issues first |
-| ❌ NEVER hide primary actions | Users must find main CTA without keyboard shortcuts |
-| ✅ ALWAYS have persistent primary CTA | Visible button + keyboard shortcut for power users |
-| ❌ NEVER use color as sole indicator | Accessibility requires icons + text for status |
-| ✅ ALWAYS test on all breakpoints | Mobile, tablet, desktop must all work |
+| Rule                                  | Why                                                 |
+| ------------------------------------- | --------------------------------------------------- |
+| ❌ NEVER design bottom-up             | Perfecting shadows on misplaced cards wastes effort |
+| ✅ ALWAYS start with layout           | Solve fundamental usability issues first            |
+| ❌ NEVER hide primary actions         | Users must find main CTA without keyboard shortcuts |
+| ✅ ALWAYS have persistent primary CTA | Visible button + keyboard shortcut for power users  |
+| ❌ NEVER use color as sole indicator  | Accessibility requires icons + text for status      |
+| ✅ ALWAYS test on all breakpoints     | Mobile, tablet, desktop must all work               |
 
 ## When to Use This Skill
 
 Use this skill **PROACTIVELY** when:
+
 - Starting ANY frontend feature or page design
 - Reviewing or auditing existing UI/UX
 - Making layout or spacing decisions
@@ -100,6 +128,7 @@ Use this skill **PROACTIVELY** when:
 ## Support
 
 For UI/UX design questions, invoke:
+
 - `uiux-designer` - Design analysis and recommendations
 - `frontend-developer` - Implementation guidance
 - `flutter-specialist` - Flutter/Material Design implementation
