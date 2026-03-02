@@ -60,7 +60,7 @@ The subagents are designed around the core workflow phases identified in `CLAUDE
 **⚠️ IMPORTANT: DataFlow + Nexus Integration**
 
 - See: `sdk-users/guides/dataflow-nexus-integration.md` for tested configurations
-- Key settings to prevent blocking: `Nexus(auto_discovery=False)` + `DataFlow(enable_model_persistence=False)`
+- Key settings to prevent blocking: `Nexus(auto_discovery=False)`
 - Full featured config available with 10-30s startup time
 - Both specialists updated with integration warnings
 
