@@ -5,6 +5,7 @@
 The learning system enables **continuous improvement** of this setup. It captures patterns from your sessions, extracts insights (instincts), and can evolve high-confidence patterns into new skills, commands, or agents.
 
 By the end of this guide, you will understand:
+
 - How observations are captured
 - How instincts are formed
 - How evolution creates new components
@@ -48,14 +49,14 @@ By the end of this guide, you will understand:
 
 ### What Gets Learned
 
-| Category | Examples |
-|----------|----------|
-| **Tool Usage** | Which tools are used most, in what sequences |
-| **Workflow Patterns** | Common workflow structures, node combinations |
-| **Error Fixes** | Errors encountered and their solutions |
-| **Framework Selection** | Which framework for which problem type |
-| **Node Usage** | Frequently used nodes and their configurations |
-| **Test Patterns** | Testing approaches that work |
+| Category                | Examples                                       |
+| ----------------------- | ---------------------------------------------- |
+| **Tool Usage**          | Which tools are used most, in what sequences   |
+| **Workflow Patterns**   | Common workflow structures, node combinations  |
+| **Error Fixes**         | Errors encountered and their solutions         |
+| **Framework Selection** | Which framework for which problem type         |
+| **Node Usage**          | Frequently used nodes and their configurations |
+| **Test Patterns**       | Testing approaches that work                   |
 
 ---
 
@@ -85,25 +86,25 @@ Observations are **raw data points** captured during sessions:
 
 ### Observation Types
 
-| Type | What It Captures |
-|------|------------------|
-| `tool_use` | Tool invocations and outcomes |
-| `workflow_pattern` | Workflow structures used |
-| `error_occurrence` | Errors encountered |
-| `error_fix` | How errors were resolved |
-| `framework_selection` | Framework choices made |
-| `node_usage` | Node types and configurations |
-| `connection_pattern` | How nodes are connected |
-| `test_pattern` | Testing approaches used |
-| `dataflow_model` | DataFlow model definitions |
-| `session_summary` | End-of-session summaries |
+| Type                  | What It Captures              |
+| --------------------- | ----------------------------- |
+| `tool_use`            | Tool invocations and outcomes |
+| `workflow_pattern`    | Workflow structures used      |
+| `error_occurrence`    | Errors encountered            |
+| `error_fix`           | How errors were resolved      |
+| `framework_selection` | Framework choices made        |
+| `node_usage`          | Node types and configurations |
+| `connection_pattern`  | How nodes are connected       |
+| `test_pattern`        | Testing approaches used       |
+| `dataflow_model`      | DataFlow model definitions    |
+| `session_summary`     | End-of-session summaries      |
 
 ### Observation Storage
 
-Observations are stored in `~/.claude/kailash-learning/`:
+Observations are stored **per-project** in `<project>/.claude/learning/`:
 
 ```
-~/.claude/kailash-learning/
+<project>/.claude/learning/
 ├── observations.jsonl       # Current observations (JSONL format)
 ├── observations.archive/    # Archived when > 1000 observations
 │   ├── observations_1706720400000.jsonl
@@ -112,11 +113,21 @@ Observations are stored in `~/.claude/kailash-learning/`:
 ├── instincts/
 │   ├── personal/           # Your learned instincts
 │   └── inherited/          # Instincts from templates
-└── evolved/
-    ├── skills/             # Evolved skill files
-    ├── commands/           # Evolved command files
-    └── agents/             # Evolved agent files
+├── evolved/
+│   ├── skills/             # Evolved skill files
+│   ├── commands/           # Evolved command files
+│   └── agents/             # Evolved agent files
+└── checkpoints/            # Learning state snapshots
+
+<project>/.claude/rules/
+└── learned-instincts.md    # Auto-generated, loaded by CC next session
 ```
+
+**Per-project isolation** means different projects learn different patterns. The learning directory is resolved via `scripts/hooks/lib/learning-utils.js` with this priority:
+
+1. `KAILASH_LEARNING_DIR` env var (for testing)
+2. `<cwd>/.claude/learning/` (per-project, default)
+3. `~/.claude/kailash-learning/` (legacy fallback)
 
 ### Manual Observation Logging
 
@@ -158,22 +169,22 @@ Instincts are **extracted patterns** with confidence scores:
 
 Confidence is calculated from:
 
-| Factor | Weight | Description |
-|--------|--------|-------------|
-| Frequency | 40% | How often the pattern appears |
-| Success Rate | 30% | How often it leads to success |
-| Recency | 20% | Recent observations count more |
-| Consistency | 10% | Same pattern across contexts |
+| Factor       | Weight | Description                    |
+| ------------ | ------ | ------------------------------ |
+| Frequency    | 40%    | How often the pattern appears  |
+| Success Rate | 30%    | How often it leads to success  |
+| Recency      | 20%    | Recent observations count more |
+| Consistency  | 10%    | Same pattern across contexts   |
 
 ### Instinct Categories
 
-| Category | Example Instincts |
-|----------|-------------------|
+| Category     | Example Instincts                                       |
+| ------------ | ------------------------------------------------------- |
 | **workflow** | "Linear workflows with 3-5 nodes are most maintainable" |
-| **dataflow** | "Batch size 100 for bulk operations" |
-| **testing** | "Always test error paths for DataFlow models" |
-| **security** | "Validate email format before database insert" |
-| **patterns** | "Use Transform node after API calls" |
+| **dataflow** | "Batch size 100 for bulk operations"                    |
+| **testing**  | "Always test error paths for DataFlow models"           |
+| **security** | "Validate email format before database insert"          |
+| **patterns** | "Use Transform node after API calls"                    |
 
 ### Processing Instincts
 
@@ -184,6 +195,7 @@ Use the `/evolve` command to process observations into instincts:
 ```
 
 This:
+
 1. Reads all observations
 2. Identifies patterns with statistical significance
 3. Creates or updates instincts
@@ -217,16 +229,19 @@ Evolution transforms **high-confidence instincts** into new setup components:
 
 ### Evolution Thresholds
 
-| Component Type | Confidence Threshold | Required Observations |
-|----------------|---------------------|----------------------|
-| **Skills** | 0.85 | 20+ |
-| **Commands** | 0.90 | 30+ |
-| **Agents** | 0.95 | 50+ |
+| Component Type | Min Confidence | Min Occurrences |
+| -------------- | -------------- | --------------- |
+| **Skills**     | 0.70           | 5+              |
+| **Commands**   | 0.60           | 3+              |
+| **Agents**     | 0.80           | 10+             |
+
+Auto-evolution (at session end) uses a higher bar: confidence >= 0.80 and occurrences >= 5.
 
 ### Evolved Component Structure
 
 **Evolved Skill**:
-```markdown
+
+````markdown
 ---
 name: evolved-dataflow-bulk
 description: "Learned patterns for DataFlow bulk operations"
@@ -238,14 +253,17 @@ confidence: 0.92
 # DataFlow Bulk Operation Patterns
 
 ## Learned Pattern
+
 Use batch size of 100 for optimal performance.
 
 ## Evidence
+
 - Observed 25 times
 - 92% success rate
 - Last observed: 2024-01-31
 
 ## Application
+
 ```python
 # Instead of processing all at once
 db.bulk_create(all_items)  # May timeout
@@ -254,6 +272,8 @@ db.bulk_create(all_items)  # May timeout
 for batch in chunks(items, 100):
     db.bulk_create(batch)  # Reliable
 ```
+````
+
 ```
 
 ### Manual Evolution
@@ -261,10 +281,12 @@ for batch in chunks(items, 100):
 Use `/evolve` with options:
 
 ```
-> /evolve                    # Process all instincts
-> /evolve --threshold 0.80   # Lower threshold
+
+> /evolve # Process all instincts
+> /evolve --threshold 0.80 # Lower threshold
 > /evolve --category dataflow # Only dataflow instincts
-> /evolve --dry-run          # Preview without creating
+> /evolve --dry-run # Preview without creating
+
 ```
 
 ---
@@ -276,8 +298,10 @@ Use `/evolve` with options:
 Record a pattern or insight manually:
 
 ```
+
 > /learn
 > The MCP transport for local development should use stdio
+
 ```
 
 Creates an observation that contributes to instinct formation.
@@ -287,24 +311,31 @@ Creates an observation that contributes to instinct formation.
 Process observations into instincts and evolve high-confidence patterns:
 
 ```
+
 > /evolve
+
 ```
 
 Output:
 ```
+
 Processing 150 observations...
 
 New Instincts:
+
 - dataflow_batch_size (confidence: 0.87)
 - transform_after_api (confidence: 0.91)
 
 Evolved Components:
+
 - skills/evolved/transform-patterns.md (from transform_after_api)
 
 Summary:
+
 - 150 observations processed
 - 12 instincts updated
 - 1 new component evolved
+
 ```
 
 ### `/checkpoint` - Save State
@@ -312,7 +343,9 @@ Summary:
 Save current learning state for recovery:
 
 ```
+
 > /checkpoint
+
 ```
 
 Creates a timestamped backup of:
@@ -324,8 +357,10 @@ Creates a timestamped backup of:
 ### Viewing Learning Stats
 
 ```
+
 > node scripts/learning/observation-logger.js --stats
-```
+
+````
 
 Output:
 ```json
@@ -341,7 +376,7 @@ Output:
     "test_pattern": 200
   }
 }
-```
+````
 
 ---
 
@@ -352,6 +387,7 @@ Output:
 **Purpose**: Capture and store observations
 
 **Usage**:
+
 ```bash
 # Log an observation
 echo '{"type": "workflow_pattern", "data": {...}}' | node scripts/learning/observation-logger.js
@@ -365,6 +401,7 @@ node scripts/learning/observation-logger.js --stats
 **Purpose**: Extract patterns from observations
 
 **Usage**:
+
 ```bash
 # Process observations into instincts
 node scripts/learning/instinct-processor.js
@@ -378,6 +415,7 @@ node scripts/learning/instinct-processor.js --min-confidence 0.80
 **Purpose**: Evolve instincts into components
 
 **Usage**:
+
 ```bash
 # Evolve high-confidence instincts
 node scripts/learning/instinct-evolver.js
@@ -391,6 +429,7 @@ node scripts/learning/instinct-evolver.js --dry-run
 **Purpose**: Manage learning state checkpoints
 
 **Usage**:
+
 ```bash
 # Create checkpoint
 node scripts/learning/checkpoint-manager.js --create
@@ -408,8 +447,10 @@ node scripts/learning/checkpoint-manager.js --restore checkpoint_1706720400000
 
 ### Structure
 
+Learning data is stored **per-project** (not globally):
+
 ```
-~/.claude/kailash-learning/
+<project>/.claude/learning/
 │
 ├── observations.jsonl          # Active observations (JSONL)
 │
@@ -419,7 +460,8 @@ node scripts/learning/checkpoint-manager.js --restore checkpoint_1706720400000
 ├── identity.json              # System identity
 │   {
 │     "system": "kailash-vibe-cc-setup",
-│     "version": "1.0.0",
+│     "version": "2.0.0",
+│     "per_project": true,
 │     "learning_enabled": true,
 │     "focus_areas": [...]
 │   }
@@ -430,14 +472,30 @@ node scripts/learning/checkpoint-manager.js --restore checkpoint_1706720400000
 │   └── inherited/             # Template instincts
 │       └── *.json
 │
-└── evolved/
-    ├── skills/                # Evolved skill files
-    │   └── *.md
-    ├── commands/              # Evolved command files
-    │   └── *.md
-    └── agents/                # Evolved agent files
-        └── *.md
+├── evolved/
+│   ├── skills/                # Evolved skill files
+│   │   └── *.md
+│   ├── commands/              # Evolved command files
+│   │   └── *.md
+│   └── agents/                # Evolved agent files
+│       └── *.md
+│
+└── checkpoints/               # Learning state snapshots
+    ├── checkpoint_*.json
+    ├── pre-compact-*.json     # Auto-created
+    └── latest.json
+
+<project>/.claude/rules/
+└── learned-instincts.md       # Auto-generated, loaded by CC
 ```
+
+### Path Resolution
+
+The learning directory is resolved by `scripts/hooks/lib/learning-utils.js`:
+
+1. `KAILASH_LEARNING_DIR` env var (for testing overrides)
+2. `<cwd>/.claude/learning/` (per-project, default)
+3. `~/.claude/kailash-learning/` (legacy fallback)
 
 ### Identity Configuration
 
@@ -446,9 +504,10 @@ The `identity.json` controls learning behavior:
 ```json
 {
   "system": "kailash-vibe-cc-setup",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "created_at": "2024-01-31T12:00:00.000Z",
   "learning_enabled": true,
+  "per_project": true,
   "focus_areas": [
     "workflow-patterns",
     "error-fixes",
@@ -463,37 +522,22 @@ The `identity.json` controls learning behavior:
 
 ## Part 8: Practical Learning Workflow
 
-### Daily Learning
+### Fully Automated Pipeline
 
-During your sessions, the system automatically:
-1. Logs tool usage
-2. Captures workflow patterns
-3. Records error/fix pairs
-4. Notes framework selections
+The learning system is now **fully automated**. During your sessions:
 
-### Weekly Processing
+1. **Hooks capture enriched observations** - `validate-workflow.js` logs workflow_pattern, node_usage, dataflow_model, and error_occurrence observations on every file write. `validate-bash-command.js` logs test_pattern and dangerous_command observations.
+2. **SessionEnd auto-processes** - When you end a session, `session-end.js` automatically analyzes observations (>= 10), generates instincts, and auto-evolves high-confidence patterns.
+3. **PreCompact auto-checkpoints** - Before context compression, `pre-compact.js` saves a learning state checkpoint.
+4. **Feedback loop** - Processed instincts are rendered to `.claude/rules/learned-instincts.md`, which Claude Code auto-loads on your next session.
 
-Periodically (weekly recommended):
+### Manual Commands (Still Available)
 
-```
-> /evolve
-```
+The `/learn`, `/evolve`, and `/checkpoint` commands are still available for on-demand use:
 
-This:
-1. Processes accumulated observations
-2. Updates instinct confidence scores
-3. Evolves high-confidence patterns
-4. Reports learning summary
-
-### Monthly Checkpointing
-
-Monthly (or before major changes):
-
-```
-> /checkpoint
-```
-
-This creates a recovery point.
+- `/learn` - View stats, manually trigger analysis
+- `/evolve` - View candidates, manually evolve specific instincts
+- `/checkpoint` - Save/restore/diff checkpoints
 
 ### Reviewing Learned Patterns
 
@@ -535,6 +579,7 @@ Before major refactors or updates.
 ### Don't Over-Log
 
 Don't log every trivial observation. Focus on:
+
 - Patterns that took time to discover
 - Solutions to tricky problems
 - Non-obvious best practices
@@ -559,26 +604,27 @@ Review evolved skills/commands to ensure quality.
 
 5. **Four scripts** - logger, processor, evolver, checkpoint manager
 
-6. **Learning directory** - `~/.claude/kailash-learning/`
+6. **Learning directory** - `<project>/.claude/learning/` (per-project)
 
 ### Quick Reference
 
-| Command | Purpose |
-|---------|---------|
-| `/learn` | Log a manual observation |
-| `/evolve` | Process instincts, evolve components |
-| `/checkpoint` | Save learning state |
+| Command       | Purpose                              |
+| ------------- | ------------------------------------ |
+| `/learn`      | Log a manual observation             |
+| `/evolve`     | Process instincts, evolve components |
+| `/checkpoint` | Save learning state                  |
 
-| Script | Purpose |
-|--------|---------|
+| Script                  | Purpose              |
+| ----------------------- | -------------------- |
 | `observation-logger.js` | Capture observations |
-| `instinct-processor.js` | Extract patterns |
-| `instinct-evolver.js` | Create components |
-| `checkpoint-manager.js` | Manage state |
+| `instinct-processor.js` | Extract patterns     |
+| `instinct-evolver.js`   | Create components    |
+| `checkpoint-manager.js` | Manage state         |
 
 ### The Learning Benefit
 
 Over time, the setup becomes:
+
 - **More personalized** - Learns your patterns
 - **More efficient** - Common patterns become skills
 - **More accurate** - Instincts refine recommendations

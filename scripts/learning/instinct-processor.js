@@ -11,14 +11,24 @@
  *   node instinct-processor.js --list
  */
 
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const { resolveLearningDir } = require("../hooks/lib/learning-utils");
 
-// Learning directory structure - supports env var override for testing
-const LEARNING_DIR = process.env.KAILASH_LEARNING_DIR || path.join(os.homedir(), '.claude', 'kailash-learning');
-const OBSERVATIONS_FILE = path.join(LEARNING_DIR, 'observations.jsonl');
-const INSTINCTS_DIR = path.join(LEARNING_DIR, 'instincts', 'personal');
+/**
+ * Resolve paths for a given learning directory.
+ * @param {string} [learningDir] - Override; falls back to resolveLearningDir()
+ */
+function resolvePaths(learningDir) {
+  const dir = learningDir || resolveLearningDir();
+  return {
+    learningDir: dir,
+    observationsFile: path.join(dir, "observations.jsonl"),
+    instinctsDir: path.join(dir, "instincts", "personal"),
+    archiveDir: path.join(dir, "observations.archive"),
+  };
+}
 
 /**
  * Instinct schema
@@ -34,39 +44,46 @@ function createInstinct(pattern, confidence, source) {
     usage_count: 0,
     success_count: 0,
     metadata: {
-      version: '1.0',
-      active: true
-    }
+      version: "1.0",
+      active: true,
+    },
   };
 }
 
 /**
  * Load all observations
+ * @param {string} [learningDir] - Override learning directory
  */
-function loadObservations() {
+function loadObservations(learningDir) {
+  const p = resolvePaths(learningDir);
   const observations = [];
 
-  if (fs.existsSync(OBSERVATIONS_FILE)) {
-    const content = fs.readFileSync(OBSERVATIONS_FILE, 'utf8');
-    const lines = content.trim().split('\n').filter(l => l);
-    lines.forEach(line => {
+  if (fs.existsSync(p.observationsFile)) {
+    const content = fs.readFileSync(p.observationsFile, "utf8");
+    const lines = content
+      .trim()
+      .split("\n")
+      .filter((l) => l);
+    lines.forEach((line) => {
       try {
         observations.push(JSON.parse(line));
-      } catch (e) { }
+      } catch (e) {}
     });
   }
 
   // Also load from archives
-  const archiveDir = path.join(LEARNING_DIR, 'observations.archive');
-  if (fs.existsSync(archiveDir)) {
-    const archives = fs.readdirSync(archiveDir);
-    archives.forEach(archive => {
-      const content = fs.readFileSync(path.join(archiveDir, archive), 'utf8');
-      const lines = content.trim().split('\n').filter(l => l);
-      lines.forEach(line => {
+  if (fs.existsSync(p.archiveDir)) {
+    const archives = fs.readdirSync(p.archiveDir);
+    archives.forEach((archive) => {
+      const content = fs.readFileSync(path.join(p.archiveDir, archive), "utf8");
+      const lines = content
+        .trim()
+        .split("\n")
+        .filter((l) => l);
+      lines.forEach((line) => {
         try {
           observations.push(JSON.parse(line));
-        } catch (e) { }
+        } catch (e) {}
       });
     });
   }
@@ -81,8 +98,8 @@ function analyzeWorkflowPatterns(observations) {
   const patterns = {};
 
   observations
-    .filter(o => o.type === 'workflow_pattern' || o.type === 'node_usage')
-    .forEach(obs => {
+    .filter((o) => o.type === "workflow_pattern" || o.type === "node_usage")
+    .forEach((obs) => {
       const key = JSON.stringify(obs.data);
       if (!patterns[key]) {
         patterns[key] = { data: obs.data, count: 0, contexts: [] };
@@ -92,12 +109,12 @@ function analyzeWorkflowPatterns(observations) {
     });
 
   return Object.values(patterns)
-    .filter(p => p.count >= 3) // Minimum 3 occurrences
-    .map(p => ({
-      type: 'workflow_pattern',
+    .filter((p) => p.count >= 3) // Minimum 3 occurrences
+    .map((p) => ({
+      type: "workflow_pattern",
       pattern: p.data,
       occurrences: p.count,
-      confidence: Math.min(0.9, 0.3 + (p.count * 0.1))
+      confidence: Math.min(0.9, 0.3 + p.count * 0.1),
     }));
 }
 
@@ -105,23 +122,25 @@ function analyzeWorkflowPatterns(observations) {
  * Analyze observations for error-fix pairs
  */
 function analyzeErrorFixPatterns(observations) {
-  const errors = observations.filter(o => o.type === 'error_occurrence');
-  const fixes = observations.filter(o => o.type === 'error_fix');
+  const errors = observations.filter((o) => o.type === "error_occurrence");
+  const fixes = observations.filter((o) => o.type === "error_fix");
   const pairs = [];
 
   // Match errors with subsequent fixes
-  errors.forEach(error => {
+  errors.forEach((error) => {
     const errorTime = new Date(error.timestamp).getTime();
-    const matchingFix = fixes.find(fix => {
+    const matchingFix = fixes.find((fix) => {
       const fixTime = new Date(fix.timestamp).getTime();
-      return fixTime > errorTime &&
+      return (
+        fixTime > errorTime &&
         fixTime - errorTime < 300000 && // Within 5 minutes
-        fix.context.session_id === error.context.session_id;
+        fix.context.session_id === error.context.session_id
+      );
     });
 
     if (matchingFix) {
       const key = `${error.data.error_type}:${matchingFix.data.fix_type}`;
-      const existing = pairs.find(p => p.key === key);
+      const existing = pairs.find((p) => p.key === key);
       if (existing) {
         existing.count++;
       } else {
@@ -129,19 +148,19 @@ function analyzeErrorFixPatterns(observations) {
           key,
           error: error.data,
           fix: matchingFix.data,
-          count: 1
+          count: 1,
         });
       }
     }
   });
 
   return pairs
-    .filter(p => p.count >= 2)
-    .map(p => ({
-      type: 'error_fix',
+    .filter((p) => p.count >= 2)
+    .map((p) => ({
+      type: "error_fix",
       pattern: { error: p.error, fix: p.fix },
       occurrences: p.count,
-      confidence: Math.min(0.9, 0.4 + (p.count * 0.15))
+      confidence: Math.min(0.9, 0.4 + p.count * 0.15),
     }));
 }
 
@@ -152,26 +171,26 @@ function analyzeFrameworkPatterns(observations) {
   const selections = {};
 
   observations
-    .filter(o => o.type === 'framework_selection')
-    .forEach(obs => {
+    .filter((o) => o.type === "framework_selection")
+    .forEach((obs) => {
       const key = `${obs.data.project_type}:${obs.data.framework}`;
       if (!selections[key]) {
         selections[key] = {
           project_type: obs.data.project_type,
           framework: obs.data.framework,
-          count: 0
+          count: 0,
         };
       }
       selections[key].count++;
     });
 
   return Object.values(selections)
-    .filter(s => s.count >= 2)
-    .map(s => ({
-      type: 'framework_selection',
+    .filter((s) => s.count >= 2)
+    .map((s) => ({
+      type: "framework_selection",
       pattern: { project_type: s.project_type, framework: s.framework },
       occurrences: s.count,
-      confidence: Math.min(0.9, 0.4 + (s.count * 0.1))
+      confidence: Math.min(0.9, 0.4 + s.count * 0.1),
     }));
 }
 
@@ -181,16 +200,12 @@ function analyzeFrameworkPatterns(observations) {
 function generateInstincts(patterns) {
   const instincts = [];
 
-  patterns.forEach(pattern => {
-    const instinct = createInstinct(
-      pattern.pattern,
-      pattern.confidence,
-      {
-        type: pattern.type,
-        occurrences: pattern.occurrences,
-        generated_at: new Date().toISOString()
-      }
-    );
+  patterns.forEach((pattern) => {
+    const instinct = createInstinct(pattern.pattern, pattern.confidence, {
+      type: pattern.type,
+      occurrences: pattern.occurrences,
+      generated_at: new Date().toISOString(),
+    });
     instincts.push(instinct);
   });
 
@@ -199,33 +214,38 @@ function generateInstincts(patterns) {
 
 /**
  * Save instincts to file
+ * @param {Array} instincts - Instincts to save
+ * @param {string} category - Category name
+ * @param {string} [learningDir] - Override learning directory
  */
-function saveInstincts(instincts, category) {
-  if (!fs.existsSync(INSTINCTS_DIR)) {
-    fs.mkdirSync(INSTINCTS_DIR, { recursive: true });
+function saveInstincts(instincts, category, learningDir) {
+  const p = resolvePaths(learningDir);
+  if (!fs.existsSync(p.instinctsDir)) {
+    fs.mkdirSync(p.instinctsDir, { recursive: true });
   }
 
-  const filePath = path.join(INSTINCTS_DIR, `${category}.json`);
+  const filePath = path.join(p.instinctsDir, `${category}.json`);
   let existing = [];
 
   if (fs.existsSync(filePath)) {
-    existing = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    existing = JSON.parse(fs.readFileSync(filePath, "utf8"));
   }
 
   // Merge new instincts, updating existing ones
-  instincts.forEach(newInstinct => {
-    const existingIndex = existing.findIndex(e =>
-      JSON.stringify(e.pattern) === JSON.stringify(newInstinct.pattern)
+  instincts.forEach((newInstinct) => {
+    const existingIndex = existing.findIndex(
+      (e) => JSON.stringify(e.pattern) === JSON.stringify(newInstinct.pattern),
     );
 
     if (existingIndex >= 0) {
       // Update existing instinct
       existing[existingIndex].confidence = Math.max(
         existing[existingIndex].confidence,
-        newInstinct.confidence
+        newInstinct.confidence,
       );
       existing[existingIndex].updated_at = new Date().toISOString();
-      existing[existingIndex].source.occurrences += newInstinct.source.occurrences;
+      existing[existingIndex].source.occurrences +=
+        newInstinct.source.occurrences;
     } else {
       // Add new instinct
       existing.push(newInstinct);
@@ -238,23 +258,27 @@ function saveInstincts(instincts, category) {
 
 /**
  * List all instincts
+ * @param {string} [learningDir] - Override learning directory
  */
-function listInstincts() {
+function listInstincts(learningDir) {
+  const p = resolvePaths(learningDir);
   const result = {};
 
-  if (fs.existsSync(INSTINCTS_DIR)) {
-    const files = fs.readdirSync(INSTINCTS_DIR);
-    files.forEach(file => {
-      if (file.endsWith('.json')) {
-        const category = file.replace('.json', '');
-        const content = JSON.parse(fs.readFileSync(path.join(INSTINCTS_DIR, file), 'utf8'));
+  if (fs.existsSync(p.instinctsDir)) {
+    const files = fs.readdirSync(p.instinctsDir);
+    files.forEach((file) => {
+      if (file.endsWith(".json")) {
+        const category = file.replace(".json", "");
+        const content = JSON.parse(
+          fs.readFileSync(path.join(p.instinctsDir, file), "utf8"),
+        );
         result[category] = {
           count: content.length,
-          instincts: content.map(i => ({
+          instincts: content.map((i) => ({
             id: i.id,
             confidence: i.confidence,
-            pattern_summary: JSON.stringify(i.pattern).substring(0, 50) + '...'
-          }))
+            pattern_summary: JSON.stringify(i.pattern).substring(0, 50) + "...",
+          })),
         };
       }
     });
@@ -268,11 +292,11 @@ function listInstincts() {
  */
 function main() {
   const args = process.argv.slice(2);
-  const command = args[0] || '--help';
+  const command = args[0] || "--help";
 
   switch (command) {
-    case '--analyze':
-      console.log('Analyzing observations...');
+    case "--analyze":
+      console.log("Analyzing observations...");
       const observations = loadObservations();
       console.log(`Loaded ${observations.length} observations`);
 
@@ -284,15 +308,21 @@ function main() {
       console.log(`Found ${errorFixPatterns.length} error-fix patterns`);
       console.log(`Found ${frameworkPatterns.length} framework patterns`);
 
-      console.log(JSON.stringify({
-        workflow_patterns: workflowPatterns,
-        error_fix_patterns: errorFixPatterns,
-        framework_patterns: frameworkPatterns
-      }, null, 2));
+      console.log(
+        JSON.stringify(
+          {
+            workflow_patterns: workflowPatterns,
+            error_fix_patterns: errorFixPatterns,
+            framework_patterns: frameworkPatterns,
+          },
+          null,
+          2,
+        ),
+      );
       break;
 
-    case '--generate':
-      console.log('Generating instincts...');
+    case "--generate":
+      console.log("Generating instincts...");
       const obs = loadObservations();
 
       const wp = analyzeWorkflowPatterns(obs);
@@ -301,31 +331,31 @@ function main() {
 
       if (wp.length > 0) {
         const wpInstincts = generateInstincts(wp);
-        const wpCount = saveInstincts(wpInstincts, 'workflow-patterns');
+        const wpCount = saveInstincts(wpInstincts, "workflow-patterns");
         console.log(`Saved ${wpCount} workflow pattern instincts`);
       }
 
       if (efp.length > 0) {
         const efpInstincts = generateInstincts(efp);
-        const efpCount = saveInstincts(efpInstincts, 'error-fixes');
+        const efpCount = saveInstincts(efpInstincts, "error-fixes");
         console.log(`Saved ${efpCount} error-fix instincts`);
       }
 
       if (fp.length > 0) {
         const fpInstincts = generateInstincts(fp);
-        const fpCount = saveInstincts(fpInstincts, 'framework-selection');
+        const fpCount = saveInstincts(fpInstincts, "framework-selection");
         console.log(`Saved ${fpCount} framework selection instincts`);
       }
 
-      console.log('Instinct generation complete');
+      console.log("Instinct generation complete");
       break;
 
-    case '--list':
+    case "--list":
       const instincts = listInstincts();
       console.log(JSON.stringify(instincts, null, 2));
       break;
 
-    case '--help':
+    case "--help":
     default:
       console.log(`
 Instinct Processor for Kailash Continuous Learning
@@ -352,5 +382,5 @@ module.exports = {
   generateInstincts,
   saveInstincts,
   listInstincts,
-  createInstinct
+  createInstinct,
 };

@@ -21,6 +21,11 @@ const {
   ensureEnvFile,
   buildCompactSummary,
 } = require("./lib/env-utils");
+const {
+  resolveLearningDir,
+  ensureLearningDir,
+  logObservation: logLearningObservation,
+} = require("./lib/learning-utils");
 
 let input = "";
 process.stdin.setEncoding("utf8");
@@ -46,14 +51,15 @@ function initializeSession(data) {
   const cwd = data.cwd || process.cwd();
   const homeDir = process.env.HOME || process.env.USERPROFILE;
   const sessionDir = path.join(homeDir, ".claude", "sessions");
-  const learningDir = path.join(homeDir, ".claude", "kailash-learning");
+  const learningDir = resolveLearningDir(cwd);
 
   // Ensure directories exist
-  [sessionDir, learningDir].forEach((dir) => {
+  [sessionDir].forEach((dir) => {
     try {
       fs.mkdirSync(dir, { recursive: true });
     } catch {}
   });
+  ensureLearningDir(cwd);
 
   // ── .env provision ────────────────────────────────────────────────────
   const envResult = ensureEnvFile(cwd);

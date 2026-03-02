@@ -6,13 +6,13 @@ Evolve learned instincts into actionable artifacts (skills, commands, agents).
 
 ## Quick Reference
 
-| Command | Action |
-|---------|--------|
-| `/evolve` | Show evolution candidates |
-| `/evolve skill <instinct_id>` | Evolve instinct into skill |
-| `/evolve command <instinct_id>` | Evolve instinct into command |
-| `/evolve agent <instinct_id>` | Evolve instinct into agent |
-| `/evolve auto` | Auto-evolve high-confidence instincts |
+| Command                         | Action                                |
+| ------------------------------- | ------------------------------------- |
+| `/evolve`                       | Show evolution candidates             |
+| `/evolve skill <instinct_id>`   | Evolve instinct into skill            |
+| `/evolve command <instinct_id>` | Evolve instinct into command          |
+| `/evolve agent <instinct_id>`   | Evolve instinct into agent            |
+| `/evolve auto`                  | Auto-evolve high-confidence instincts |
 
 ## Usage Examples
 
@@ -48,33 +48,45 @@ node scripts/learning/instinct-evolver.js --auto
 
 ### Confidence Thresholds
 
-| Target | Min Confidence | Min Occurrences |
-|--------|---------------|-----------------|
-| Skill | 0.7 | 5 |
-| Command | 0.6 | 3 |
-| Agent | 0.8 | 10 |
+| Target  | Min Confidence | Min Occurrences |
+| ------- | -------------- | --------------- |
+| Skill   | 0.7            | 5               |
+| Command | 0.6            | 3               |
+| Agent   | 0.8            | 10              |
 
 ### Pattern Type Mapping
 
-| Pattern Type | Best Evolution |
-|--------------|---------------|
-| workflow_pattern | Skill (quick patterns) |
-| error_fix | Command (slash command) |
-| framework_selection | Agent policy update |
-| node_usage | Skill examples |
+| Pattern Type        | Best Evolution          |
+| ------------------- | ----------------------- |
+| workflow_pattern    | Skill (quick patterns)  |
+| error_fix           | Command (slash command) |
+| framework_selection | Agent policy update     |
+| node_usage          | Skill examples          |
+
+## Auto-Evolution
+
+High-confidence instincts are **automatically evolved** at session end. No manual invocation needed for routine evolution. Use `/evolve` for:
+
+- Viewing candidates that haven't yet met auto-evolution thresholds
+- Manually evolving specific instincts with lower thresholds
+- Checking what has been auto-evolved
 
 ## Output Locations
 
+Evolved artifacts are stored per-project:
+
 ```
-~/.claude/kailash-learning/evolved/
+<project>/.claude/learning/evolved/
 ├── skills/           # Generated skill snippets
 ├── commands/         # Generated commands
-└── agents/          # Agent policy updates
+├── agents/           # Agent policy updates
+└── evolution-log.jsonl  # Evolution history
 ```
 
 ## Integration
 
 Evolved artifacts are suggestions only. Review before adding to:
+
 - `.claude/skills/` for skills
 - `.claude/commands/` for commands
 - `.claude/agents/` for agent updates

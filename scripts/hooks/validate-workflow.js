@@ -3,23 +3,26 @@
  * Hook: validate-workflow
  * Event: PostToolUse
  * Matcher: Edit|Write
- * Purpose: Enforce Kailash SDK patterns, detect hardcoded models/keys in ALL
- *          code files (Python, TypeScript, JavaScript).
+ * Purpose: Enforce Kailash Rust SDK patterns, detect hardcoded models/keys in
+ *          code files (Rust, TypeScript, JavaScript).
  *
- *   - Python files:  BLOCK (exit 2) when a hardcoded model has no matching key
- *   - JS/TS files:   WARN only (exit 0)
+ *   - Rust files:   BLOCK (exit 2) when a hardcoded model has no matching key
+ *   - JS/TS files:  WARN only (exit 0)
  *
- * Framework-agnostic — works with any Kailash project.
+ * Rust-first -- validates cargo/Rust patterns for the Kailash crate workspace.
  *
  * Exit Codes:
  *   0 = success / warn-only
- *   2 = blocking error (Python model without key)
+ *   2 = blocking error (Rust model without key)
  *   other = non-blocking error
  */
 
 const fs = require("fs");
 const path = require("path");
 const { parseEnvFile, getModelProvider } = require("./lib/env-utils");
+const {
+  logObservation: logLearningObservation,
+} = require("./lib/learning-utils");
 
 const TIMEOUT_MS = 5000;
 const timeout = setTimeout(() => {
@@ -63,19 +66,19 @@ function validateFile(data) {
 
   const ext = path.extname(filePath).toLowerCase();
 
-  const pythonExts = [".py"];
+  const rustExts = [".rs"];
   const jsExts = [".ts", ".tsx", ".js", ".jsx"];
   const configExts = [".yaml", ".yml", ".json", ".env", ".sh", ".toml"];
 
-  const isPython = pythonExts.includes(ext);
+  const isRust = rustExts.includes(ext);
   const isJs = jsExts.includes(ext);
   const isConfig = configExts.includes(ext);
 
-  if (!isPython && !isJs && !isConfig) {
+  if (!isRust && !isJs && !isConfig) {
     return {
       continue: true,
       exitCode: 0,
-      messages: ["Not a code or config file — skipped"],
+      messages: ["Not a code or config file -- skipped"],
     };
   }
 
@@ -93,29 +96,34 @@ function validateFile(data) {
   const messages = [];
   let shouldBlock = false;
 
-  // ── Kailash-specific checks (Python only) ──────────────────────────
-  if (isPython) {
-    checkKailashPatterns(content, filePath, messages);
+  // -- Kailash Rust-specific checks (.rs only) ----------------------------
+  if (isRust) {
+    checkRustPatterns(content, filePath, messages);
   }
 
-  // ── Hardcoded model detection (code files only — configs may list models intentionally)
-  if (isPython || isJs) {
-    const modelResult = checkHardcodedModels(content, filePath, env, isPython);
+  // -- Hardcoded model detection (code files only -- configs may list models intentionally)
+  if (isRust || isJs) {
+    const modelResult = checkHardcodedModels(content, filePath, env, isRust);
     messages.push(...modelResult.messages);
     if (modelResult.block) shouldBlock = true;
   }
 
-  // ── Hardcoded API key detection (all file types including configs) ─
-  checkHardcodedKeys(content, messages);
+  // -- Hardcoded API key detection (all file types including configs) -----
+  checkHardcodedKeys(content, filePath, messages);
 
-  // ── Stub/TODO/simulation detection (code files only) ──────────────
-  if (isPython || isJs) {
+  // -- Stub/TODO/simulation detection (code files only) -------------------
+  if (isRust || isJs) {
     checkStubsAndSimulations(content, filePath, messages);
   }
 
   if (messages.length === 0) {
     messages.push("All patterns validated");
   }
+
+  // --- Observation logging (Phase 2: enriched learning) ---
+  try {
+    logFileObservations(content, filePath, cwd, messages);
+  } catch {}
 
   return {
     continue: !shouldBlock,
@@ -125,89 +133,120 @@ function validateFile(data) {
 }
 
 // =====================================================================
-// Kailash SDK pattern checks (Python only)
+// Kailash SDK pattern checks (Rust only)
 // =====================================================================
 
-function checkKailashPatterns(content, filePath, messages) {
-  // Anti-pattern: workflow.execute(runtime)
-  if (/workflow\s*\.\s*execute\s*\(\s*runtime/.test(content)) {
+function checkRustPatterns(content, filePath, messages) {
+  // Anti-pattern: workflow.execute(runtime) -- wrong direction
+  if (/workflow\s*\.\s*execute\s*\(\s*(&\s*)?runtime/.test(content)) {
     messages.push(
-      "WARNING: workflow.execute(runtime) found. Use runtime.execute(workflow.build()).",
+      "WARNING: workflow.execute(runtime) found. Use runtime.execute(workflow).",
     );
   }
 
-  // Missing .build()
-  if (/runtime\s*\.\s*execute\s*\(\s*workflow\s*[^.]/.test(content)) {
-    messages.push(
-      "WARNING: Missing .build(). Use runtime.execute(workflow.build()).",
-    );
-  }
+  // Check for todo!() macro in production code (not tests)
+  // For Rust files with inline #[cfg(test)] modules, only check the
+  // production portion of the file (before #[cfg(test)]).
+  if (!isTestFile(filePath)) {
+    const lines = content.split("\n");
+    const cfgTestLine = findCfgTestLine(lines);
+    const prodContent =
+      cfgTestLine > 0 ? lines.slice(0, cfgTestLine - 1).join("\n") : content;
 
-  // Relative imports in kailash code (Python: `from .module import X`)
-  if (
-    /from\s+\./.test(content) &&
-    /kailash|dataflow|nexus|kaizen/.test(filePath.toLowerCase())
-  ) {
-    messages.push("WARNING: Relative imports detected. Use absolute imports.");
-  }
-
-  // Mocking in test files
-  if (/_test\.py$|test_.*\.py$/.test(filePath)) {
-    const mocks = [
-      [/@patch\(/, "@patch"],
-      [/MagicMock/, "MagicMock"],
-      [/unittest\.mock/, "unittest.mock"],
-      [/from\s+mock\s+import/, "mock import"],
-      [/mocker\.patch/, "mocker.patch (pytest-mock)"],
-      [/\bAsyncMock\b/, "AsyncMock"],
-      [/create_autospec/, "create_autospec"],
-    ];
-    for (const [pat, name] of mocks) {
-      if (pat.test(content)) {
-        messages.push(
-          `WARNING: ${name} detected. NO MOCKING in Tier 2-3 tests.`,
-        );
-      }
-    }
-  }
-
-  // SQL injection patterns (f-string or concatenation in SQL)
-  if (
-    /f["'](?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\s/i.test(content) ||
-    /(?:SELECT|INSERT|UPDATE|DELETE)\s.*["']\s*\+\s*\w/.test(content)
-  ) {
-    messages.push(
-      "CRITICAL: Possible SQL injection — use parameterized queries or ORM.",
-    );
-  }
-
-  // eval/exec on variables (skip test files)
-  if (!/_test\.py$|test_.*\.py$/.test(filePath)) {
-    if (/\beval\s*\(/.test(content) && !/\bast\.literal_eval\b/.test(content)) {
-      messages.push("CRITICAL: eval() detected — potential code injection.");
-    }
-    if (/\bexec\s*\(/.test(content)) {
-      messages.push("CRITICAL: exec() detected — potential code injection.");
-    }
-    if (/subprocess.*shell\s*=\s*True/.test(content)) {
+    if (/\btodo!\s*\(/.test(prodContent)) {
       messages.push(
-        "CRITICAL: subprocess with shell=True — potential command injection.",
+        "WARNING: todo!() macro found in production code. Implement fully.",
+      );
+    }
+    if (/\bunimplemented!\s*\(/.test(prodContent)) {
+      messages.push(
+        "WARNING: unimplemented!() macro found in production code. Implement fully.",
+      );
+    }
+    if (/\bpanic!\s*\(/.test(prodContent)) {
+      messages.push(
+        "WARNING: panic!() macro found. Consider returning Result<> instead.",
       );
     }
   }
 
-  // DataFlow primary key naming
-  if (
-    /@db\.model/.test(content) &&
-    /primary_key\s*=\s*True/.test(content) &&
-    !/id\s*[:=]/.test(content)
-  ) {
-    messages.push('WARNING: DataFlow primary key should be named "id".');
+  // Check for unsafe blocks -- flag for review
+  if (/\bunsafe\s*\{/.test(content)) {
+    messages.push(
+      "REVIEW: unsafe block detected. Ensure this is necessary and document the safety invariant.",
+    );
   }
 
-  // os.environ without load_dotenv
-  if (!/load_dotenv/.test(content) && /os\.environ/.test(content)) {
-    messages.push("WARNING: os.environ used without load_dotenv().");
+  // Check for raw SQL strings instead of sqlx macros
+  if (
+    /r#?"(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\s/i.test(content) ||
+    /"\s*(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\s/i.test(content)
+  ) {
+    // Only flag if not already using sqlx::query! or sqlx::query_as!
+    if (!/sqlx::query(?:_as)?!/.test(content)) {
+      messages.push(
+        "WARNING: Raw SQL string detected. Prefer sqlx::query!() or sqlx::query_as!() macros for compile-time checked queries.",
+      );
+    }
+  }
+
+  // Check for format!() in SQL context (SQL injection risk)
+  if (
+    /format!\s*\(\s*"(?:SELECT|INSERT|UPDATE|DELETE|DROP|ALTER)\s/i.test(
+      content,
+    )
+  ) {
+    messages.push(
+      "CRITICAL: format!() with SQL detected -- potential SQL injection. Use sqlx parameterized queries.",
+    );
+  }
+
+  // Mocking in test files -- check for inappropriate mocking in integration/e2e tests
+  if (isTestFile(filePath)) {
+    // Check if this looks like an integration or e2e test (tier 2-3)
+    const isIntegrationTest =
+      filePath.includes("/integration/") ||
+      filePath.includes("/e2e/") ||
+      filePath.includes("_integration") ||
+      filePath.includes("_e2e");
+
+    if (isIntegrationTest) {
+      const mockPatterns = [
+        [/\bmockall\b/, "mockall"],
+        [/\b#\[automock\]/, "#[automock]"],
+        [/\bmock!\s*\(/, "mock!()"],
+        [/MockContext/, "MockContext"],
+      ];
+      for (const [pat, name] of mockPatterns) {
+        if (pat.test(content)) {
+          messages.push(
+            `WARNING: ${name} detected in integration/e2e test. NO MOCKING in Tier 2-3 tests.`,
+          );
+        }
+      }
+    }
+  }
+
+  // Check for std::env::var without dotenv loading
+  if (
+    /std::env::var/.test(content) &&
+    !/dotenv/.test(content) &&
+    !/dotenvy/.test(content) &&
+    !isTestFile(filePath)
+  ) {
+    messages.push(
+      "WARNING: std::env::var() used without dotenv/dotenvy. Ensure .env is loaded.",
+    );
+  }
+
+  // Check for hardcoded secret patterns in Rust
+  if (
+    /let\s+\w*(secret|password|token|key)\w*\s*=\s*"[^"]{8,}"/.test(content) &&
+    !isTestFile(filePath)
+  ) {
+    messages.push(
+      "CRITICAL: Possible hardcoded secret in Rust code. Use std::env::var() or dotenvy.",
+    );
   }
 }
 
@@ -222,22 +261,30 @@ function checkKailashPatterns(content, filePath, messages) {
 const MODEL_PREFIXES =
   "gpt|claude|gemini|deepseek|mistral|mixtral|command|o[134]|chatgpt|dall-e|whisper|tts|text-embedding|embed|rerank|hume|sonar|pplx|codestral|pixtral|palm";
 const MODEL_PATTERNS = [
-  // Python/JS: model="gpt-4" or model='gpt-4' or model=`gpt-4` — hyphen+suffix optional for standalone models (o1, o3, whisper)
+  // Rust/JS: model = "gpt-4" or model: "gpt-4" -- hyphen+suffix optional for standalone models
   new RegExp(
     `model\\s*[=:]\\s*["'\`]((?:${MODEL_PREFIXES})(?:-[^"'\`]+)?)["'\`]`,
     "gi",
   ),
-  // Dict/JSON: "model": "gpt-4" or 'model': 'gpt-4'
+  // Struct/JSON: "model": "gpt-4" or 'model': 'gpt-4'
   new RegExp(
     `["'\`]model(?:_name)?["'\`]\\s*:\\s*["'\`]((?:${MODEL_PREFIXES})(?:-[^"'\`]+)?)["'\`]`,
     "gi",
   ),
 ];
 
-function checkHardcodedModels(content, filePath, env, isPython) {
+function checkHardcodedModels(content, filePath, env, isRust) {
   const messages = [];
   let block = false;
   const lines = content.split("\n");
+
+  // For Rust files: find the line where #[cfg(test)] starts.
+  // Everything after that line is test code and should only warn, never block.
+  const cfgTestLine = isRust ? findCfgTestLine(lines) : -1;
+
+  // For Rust files: build a set of lines that are inside doc comments
+  // (/// or //! blocks, including their code examples).
+  const docCommentLines = isRust ? buildDocCommentLines(lines) : new Set();
 
   for (const pattern of MODEL_PATTERNS) {
     // Reset lastIndex for global regex
@@ -249,17 +296,24 @@ function checkHardcodedModels(content, filePath, env, isPython) {
       const lineNum = content.substring(0, match.index).split("\n").length;
       const line = lines[lineNum - 1]?.trim() || "";
 
-      // Skip comments, docstrings, and block comments
+      // Skip comments (Rust // and /* */, JS //)
       if (
-        line.startsWith("#") ||
         line.startsWith("//") ||
         line.startsWith("*") ||
         line.startsWith("/*") ||
-        line.startsWith('"""') ||
-        line.startsWith("'''")
+        line.startsWith("///") ||
+        line.startsWith("//!")
       ) {
         continue;
       }
+
+      // Skip lines inside doc comment blocks (Rust only)
+      if (docCommentLines.has(lineNum)) {
+        continue;
+      }
+
+      // Skip or downgrade matches inside #[cfg(test)] regions (Rust only)
+      const inTestRegion = isRust && cfgTestLine > 0 && lineNum >= cfgTestLine;
 
       // Check if the model has a corresponding API key
       const info = getModelProvider(modelName);
@@ -267,11 +321,17 @@ function checkHardcodedModels(content, filePath, env, isPython) {
         ? info.keys.some((k) => env[k] && env[k].length > 5)
         : true; // unknown provider = don't block
 
-      if (isPython && !hasKey && info) {
+      if (inTestRegion || isTestFile(filePath)) {
+        // Test code: warn only, never block
         messages.push(
-          `BLOCKED: Hardcoded model "${modelName}" at line ${lineNum} — ` +
+          `WARNING: Hardcoded model "${modelName}" in test code at ${path.basename(filePath)}:${lineNum}. ` +
+            `Consider reading from env in integration tests.`,
+        );
+      } else if (isRust && !hasKey && info) {
+        messages.push(
+          `BLOCKED: Hardcoded model "${modelName}" at line ${lineNum} -- ` +
             `${info.keys.join(" or ")} not found in .env. ` +
-            `Use os.environ.get("OPENAI_PROD_MODEL") or equivalent.`,
+            `Use std::env::var("OPENAI_PROD_MODEL") or dotenvy equivalent.`,
         );
         block = true;
       } else {
@@ -290,7 +350,7 @@ function checkHardcodedModels(content, filePath, env, isPython) {
 // Hardcoded API key detection
 // =====================================================================
 
-function checkHardcodedKeys(content, messages) {
+function checkHardcodedKeys(content, filePath, messages) {
   // Order matters: more specific prefixes first (sk-ant- before sk-)
   // Patterns match with or without quotes to catch keys in YAML, .env, shell scripts
   const keyPatterns = [
@@ -309,12 +369,26 @@ function checkHardcodedKeys(content, messages) {
     [/["'`]?xoxb-[a-zA-Z0-9-]{20,}["'`]?/, "Slack Bot Token"],
   ];
 
+  // For Rust files: skip #[cfg(test)] regions -- test keys are not real secrets
+  const isRust = filePath && filePath.endsWith(".rs");
+  let prodContent = content;
+  if (isRust || isTestFile(filePath || "")) {
+    const lines = content.split("\n");
+    const cfgTestLine = isRust ? findCfgTestLine(lines) : -1;
+    if (isTestFile(filePath || "")) {
+      return; // Skip key detection entirely for test files
+    }
+    if (cfgTestLine > 0) {
+      prodContent = lines.slice(0, cfgTestLine - 1).join("\n");
+    }
+  }
+
   const seen = new Set();
   for (const [pattern, name] of keyPatterns) {
-    if (pattern.test(content) && !seen.has(name)) {
+    if (pattern.test(prodContent) && !seen.has(name)) {
       seen.add(name);
       messages.push(
-        `CRITICAL: Hardcoded ${name} detected! Use os.environ.get() or process.env.`,
+        `CRITICAL: Hardcoded ${name} detected! Use std::env::var() or process.env.`,
       );
     }
   }
@@ -326,20 +400,19 @@ function checkHardcodedKeys(content, messages) {
 
 /**
  * Detect stubs, TODOs, placeholders, naive fallbacks, and simulated services.
- * Warn-only (never blocks) — these are code-quality indicators.
+ * Warn-only (never blocks) -- these are code-quality indicators.
  */
 function checkStubsAndSimulations(content, filePath, messages) {
-  // Skip test files — stubs in tests are intentional fixture data
-  const basename = path.basename(filePath).toLowerCase();
-  if (
-    /^test_|_test\.|\.test\.|\.spec\.|__tests__/.test(basename) ||
-    filePath.includes("__tests__") ||
-    filePath.includes("/tests/")
-  ) {
+  // Skip test files -- stubs in tests are intentional fixture data
+  if (isTestFile(filePath)) {
     return;
   }
 
   const lines = content.split("\n");
+
+  // For Rust files: skip #[cfg(test)] regions (test code within source files)
+  const cfgTestLine = filePath.endsWith(".rs") ? findCfgTestLine(lines) : -1;
+
   const stubPatterns = [
     // Explicit markers
     [/\bTODO\b/i, "TODO marker"],
@@ -347,24 +420,19 @@ function checkStubsAndSimulations(content, filePath, messages) {
     [/\bHACK\b/i, "HACK marker"],
     [/\bSTUB\b/i, "STUB marker"],
     [/\bXXX\b/, "XXX marker"],
-    // Python stubs
-    [/\braise\s+NotImplementedError\b/, "NotImplementedError (unimplemented)"],
+    // Rust stubs
+    [/\btodo!\s*\(/, "todo!() (unimplemented)"],
+    [/\bunimplemented!\s*\(/, "unimplemented!() macro"],
     [
-      /\bpass\s*#\s*(stub|placeholder|todo|not\s*impl)/i,
-      "pass with stub comment",
-    ],
-    [
-      /\breturn\s+None\s*#\s*(stub|placeholder|todo|not\s*impl)/i,
-      "return None stub",
+      /\bpanic!\s*\(\s*"not\s+(yet\s+)?implement/i,
+      "panic with not-implemented message",
     ],
     // Simulated/mock data in production code
     [
       /\b(simulated?|fake|dummy|placeholder)\s*(data|response|result|value)/i,
       "simulated data",
     ],
-    [/\breturn\s*\{\s*\}\s*#\s*(stub|placeholder|todo)/i, "empty return stub"],
-    // Naive silent fallbacks
-    [/except\s*:\s*\n\s*pass\b/, "bare except:pass (silent fallback)"],
+    // JS-specific naive silent fallbacks
     [/catch\s*\([^)]*\)\s*\{\s*\}/, "empty catch block (silent fallback)"],
   ];
 
@@ -372,12 +440,19 @@ function checkStubsAndSimulations(content, filePath, messages) {
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim();
+
+    // Skip #[cfg(test)] regions in Rust files
+    if (cfgTestLine > 0 && i + 1 >= cfgTestLine) {
+      break; // All remaining lines are test code
+    }
+
     // Skip comments
     if (
-      trimmed.startsWith("#") ||
       trimmed.startsWith("//") ||
       trimmed.startsWith("*") ||
-      trimmed.startsWith("/*")
+      trimmed.startsWith("/*") ||
+      trimmed.startsWith("///") ||
+      trimmed.startsWith("//!")
     ) {
       continue;
     }
@@ -387,9 +462,134 @@ function checkStubsAndSimulations(content, filePath, messages) {
         found.add(label);
         messages.push(
           `WARNING: ${label} at ${path.basename(filePath)}:${i + 1}. ` +
-            `Implement fully — don't leave stubs in production code.`,
+            `Implement fully -- don't leave stubs in production code.`,
         );
       }
     }
   }
+}
+
+// =====================================================================
+// Observation logging for the learning system
+// =====================================================================
+
+/**
+ * Detect patterns in the file content and log enriched observations.
+ * Runs after validation; overhead is <5ms (fs.appendFileSync of JSONL lines).
+ */
+function logFileObservations(content, filePath, cwd, messages) {
+  const basename = path.basename(filePath);
+
+  // WorkflowBuilder / runtime.execute() → workflow_pattern
+  if (
+    /WorkflowBuilder/.test(content) ||
+    /runtime\s*\.\s*execute/.test(content)
+  ) {
+    logLearningObservation(cwd, "workflow_pattern", {
+      pattern_type: /WorkflowBuilder/.test(content)
+        ? "workflow_builder"
+        : "runtime_execute",
+      file: basename,
+    });
+  }
+
+  // add_node() calls → node_usage
+  const nodeMatches = content.match(/add_node\s*\(\s*["'](\w+)["']/g);
+  if (nodeMatches && nodeMatches.length > 0) {
+    const nodeTypes = [
+      ...new Set(
+        nodeMatches
+          .map((m) => {
+            const match = m.match(/add_node\s*\(\s*["'](\w+)["']/);
+            return match ? match[1] : null;
+          })
+          .filter(Boolean),
+      ),
+    ];
+    logLearningObservation(cwd, "node_usage", {
+      node_types: nodeTypes,
+      file: basename,
+    });
+  }
+
+  // @db.model → dataflow_model
+  const modelMatches = content.match(/@db\.model[\s\S]*?class\s+(\w+)/g);
+  if (modelMatches) {
+    for (const m of modelMatches) {
+      const nameMatch = m.match(/class\s+(\w+)/);
+      if (nameMatch) {
+        logLearningObservation(cwd, "dataflow_model", {
+          model_name: nameMatch[1],
+          file: basename,
+        });
+      }
+    }
+  }
+
+  // Stubs/TODOs detected → error_occurrence (stub_detected)
+  if (
+    messages.some((m) =>
+      /TODO marker|FIXME marker|STUB marker|todo!\(\)|unimplemented!\(\)/.test(
+        m,
+      ),
+    )
+  ) {
+    logLearningObservation(cwd, "error_occurrence", {
+      error_type: "stub_detected",
+      file: basename,
+    });
+  }
+
+  // Hardcoded model name detected → error_occurrence (hardcoded_model)
+  if (messages.some((m) => /Hardcoded model/.test(m))) {
+    logLearningObservation(cwd, "error_occurrence", {
+      error_type: "hardcoded_model",
+      file: basename,
+    });
+  }
+}
+
+// =====================================================================
+// Helpers
+// =====================================================================
+
+/**
+ * Find the 1-based line number where `#[cfg(test)]` appears in a Rust file.
+ * Returns -1 if not found. Everything after this line is considered test code.
+ */
+function findCfgTestLine(lines) {
+  for (let i = 0; i < lines.length; i++) {
+    if (/^\s*#\[cfg\(test\)\]/.test(lines[i])) {
+      return i + 1; // 1-based
+    }
+  }
+  return -1;
+}
+
+/**
+ * Build a set of 1-based line numbers that fall inside Rust doc comment blocks
+ * (lines prefixed with `///` or `//!`). This catches code examples inside docs
+ * that might contain model names as illustrative content.
+ */
+function buildDocCommentLines(lines) {
+  const docLines = new Set();
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (trimmed.startsWith("///") || trimmed.startsWith("//!")) {
+      docLines.add(i + 1); // 1-based
+    }
+  }
+  return docLines;
+}
+
+function isTestFile(filePath) {
+  const basename = path.basename(filePath).toLowerCase();
+  return (
+    /^test_|_test\.|\.test\.|\.spec\.|__tests__/.test(basename) ||
+    filePath.includes("__tests__") ||
+    filePath.includes("/tests/") ||
+    filePath.includes("/test/") ||
+    // Rust test convention: files in tests/ directory or #[cfg(test)] modules
+    (filePath.endsWith(".rs") && basename.startsWith("test_"))
+  );
 }

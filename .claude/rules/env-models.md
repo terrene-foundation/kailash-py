@@ -1,3 +1,11 @@
+---
+paths:
+  - "**/*.py"
+  - "**/*.ts"
+  - "**/*.js"
+  - ".env*"
+---
+
 # Environment Variables & Model Rules
 
 ## Scope
@@ -9,6 +17,8 @@ These rules apply to ALL operations involving API keys, LLM models, or environme
 ### 1. .env Is The Single Source of Truth
 
 ALL API keys and model names MUST be read from `.env`. NEVER hardcode them.
+
+> Also enforced by `security.md` Rule 1 (No Hardcoded Secrets).
 
 **Before ANY LLM operation**: Check `.env` for current model names and keys.
 

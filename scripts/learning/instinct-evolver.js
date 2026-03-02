@@ -12,38 +12,51 @@
  *   node instinct-evolver.js --auto
  */
 
-const fs = require('fs');
-const path = require('path');
-const os = require('os');
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const { resolveLearningDir } = require("../hooks/lib/learning-utils");
 
-// Learning directory structure - supports env var override for testing
-const LEARNING_DIR = process.env.KAILASH_LEARNING_DIR || path.join(os.homedir(), '.claude', 'kailash-learning');
-const INSTINCTS_DIR = path.join(LEARNING_DIR, 'instincts', 'personal');
-const EVOLVED_DIR = path.join(LEARNING_DIR, 'evolved');
+/**
+ * Resolve paths for a given learning directory.
+ * @param {string} [learningDir] - Override; falls back to resolveLearningDir()
+ */
+function resolvePaths(learningDir) {
+  const dir = learningDir || resolveLearningDir();
+  return {
+    learningDir: dir,
+    instinctsDir: path.join(dir, "instincts", "personal"),
+    evolvedDir: path.join(dir, "evolved"),
+  };
+}
 
 // Evolution thresholds
 const THRESHOLDS = {
   skill: { minConfidence: 0.7, minOccurrences: 5 },
   command: { minConfidence: 0.6, minOccurrences: 3 },
-  agent: { minConfidence: 0.8, minOccurrences: 10 }
+  agent: { minConfidence: 0.8, minOccurrences: 10 },
 };
 
 /**
  * Load all instincts
+ * @param {string} [learningDir] - Override learning directory
  */
-function loadInstincts() {
+function loadInstincts(learningDir) {
+  const p = resolvePaths(learningDir);
   const instincts = [];
 
-  if (!fs.existsSync(INSTINCTS_DIR)) {
+  if (!fs.existsSync(p.instinctsDir)) {
     return instincts;
   }
 
-  const files = fs.readdirSync(INSTINCTS_DIR);
-  files.forEach(file => {
-    if (file.endsWith('.json')) {
-      const content = JSON.parse(fs.readFileSync(path.join(INSTINCTS_DIR, file), 'utf8'));
-      content.forEach(i => {
-        i.category = file.replace('.json', '');
+  const files = fs.readdirSync(p.instinctsDir);
+  files.forEach((file) => {
+    if (file.endsWith(".json")) {
+      const content = JSON.parse(
+        fs.readFileSync(path.join(p.instinctsDir, file), "utf8"),
+      );
+      content.forEach((i) => {
+        i.category = file.replace(".json", "");
         instincts.push(i);
       });
     }
@@ -54,51 +67,58 @@ function loadInstincts() {
 
 /**
  * Get evolution candidates
+ * @param {string} [learningDir] - Override learning directory
  */
-function getCandidates() {
-  const instincts = loadInstincts();
+function getCandidates(learningDir) {
+  const instincts = loadInstincts(learningDir);
   const candidates = {
     skill: [],
     command: [],
-    agent: []
+    agent: [],
   };
 
-  instincts.forEach(instinct => {
+  instincts.forEach((instinct) => {
     const occurrences = instinct.source?.occurrences || 0;
 
     // Check skill threshold
-    if (instinct.confidence >= THRESHOLDS.skill.minConfidence &&
-        occurrences >= THRESHOLDS.skill.minOccurrences) {
+    if (
+      instinct.confidence >= THRESHOLDS.skill.minConfidence &&
+      occurrences >= THRESHOLDS.skill.minOccurrences
+    ) {
       candidates.skill.push({
         id: instinct.id,
         confidence: instinct.confidence,
         occurrences,
         category: instinct.category,
-        pattern_summary: JSON.stringify(instinct.pattern).substring(0, 80)
+        pattern_summary: JSON.stringify(instinct.pattern).substring(0, 80),
       });
     }
 
     // Check command threshold
-    if (instinct.confidence >= THRESHOLDS.command.minConfidence &&
-        occurrences >= THRESHOLDS.command.minOccurrences) {
+    if (
+      instinct.confidence >= THRESHOLDS.command.minConfidence &&
+      occurrences >= THRESHOLDS.command.minOccurrences
+    ) {
       candidates.command.push({
         id: instinct.id,
         confidence: instinct.confidence,
         occurrences,
         category: instinct.category,
-        pattern_summary: JSON.stringify(instinct.pattern).substring(0, 80)
+        pattern_summary: JSON.stringify(instinct.pattern).substring(0, 80),
       });
     }
 
     // Check agent threshold
-    if (instinct.confidence >= THRESHOLDS.agent.minConfidence &&
-        occurrences >= THRESHOLDS.agent.minOccurrences) {
+    if (
+      instinct.confidence >= THRESHOLDS.agent.minConfidence &&
+      occurrences >= THRESHOLDS.agent.minOccurrences
+    ) {
       candidates.agent.push({
         id: instinct.id,
         confidence: instinct.confidence,
         occurrences,
         category: instinct.category,
-        pattern_summary: JSON.stringify(instinct.pattern).substring(0, 80)
+        pattern_summary: JSON.stringify(instinct.pattern).substring(0, 80),
       });
     }
   });
@@ -108,31 +128,36 @@ function getCandidates() {
 
 /**
  * Find instinct by ID
+ * @param {string} id - Instinct ID
+ * @param {string} [learningDir] - Override learning directory
  */
-function findInstinct(id) {
-  const instincts = loadInstincts();
-  return instincts.find(i => i.id === id);
+function findInstinct(id, learningDir) {
+  const instincts = loadInstincts(learningDir);
+  return instincts.find((i) => i.id === id);
 }
 
 /**
  * Evolve instinct to skill
+ * @param {string} instinctId - Instinct ID
+ * @param {string} [learningDir] - Override learning directory
  */
-function evolveToSkill(instinctId) {
-  const instinct = findInstinct(instinctId);
+function evolveToSkill(instinctId, learningDir) {
+  const p = resolvePaths(learningDir);
+  const instinct = findInstinct(instinctId, learningDir);
   if (!instinct) {
     return { success: false, error: `Instinct ${instinctId} not found` };
   }
 
-  const skillsDir = path.join(EVOLVED_DIR, 'skills');
+  const skillsDir = path.join(p.evolvedDir, "skills");
   if (!fs.existsSync(skillsDir)) {
     fs.mkdirSync(skillsDir, { recursive: true });
   }
 
   // Generate skill content based on pattern type
-  let skillContent = '';
-  if (instinct.category === 'workflow-patterns') {
+  let skillContent = "";
+  if (instinct.category === "workflow-patterns") {
     skillContent = generateWorkflowSkill(instinct);
-  } else if (instinct.category === 'error-fixes') {
+  } else if (instinct.category === "error-fixes") {
     skillContent = generateErrorFixSkill(instinct);
   } else {
     skillContent = generateGenericSkill(instinct);
@@ -143,26 +168,29 @@ function evolveToSkill(instinctId) {
   fs.writeFileSync(filePath, skillContent);
 
   // Mark instinct as evolved
-  markEvolved(instinctId, 'skill', filePath);
+  markEvolved(instinctId, "skill", filePath, learningDir);
 
   return {
     success: true,
     file: filePath,
-    type: 'skill',
-    instinct_id: instinctId
+    type: "skill",
+    instinct_id: instinctId,
   };
 }
 
 /**
  * Evolve instinct to command
+ * @param {string} instinctId - Instinct ID
+ * @param {string} [learningDir] - Override learning directory
  */
-function evolveToCommand(instinctId) {
-  const instinct = findInstinct(instinctId);
+function evolveToCommand(instinctId, learningDir) {
+  const p = resolvePaths(learningDir);
+  const instinct = findInstinct(instinctId, learningDir);
   if (!instinct) {
     return { success: false, error: `Instinct ${instinctId} not found` };
   }
 
-  const commandsDir = path.join(EVOLVED_DIR, 'commands');
+  const commandsDir = path.join(p.evolvedDir, "commands");
   if (!fs.existsSync(commandsDir)) {
     fs.mkdirSync(commandsDir, { recursive: true });
   }
@@ -172,13 +200,13 @@ function evolveToCommand(instinctId) {
   const filePath = path.join(commandsDir, fileName);
   fs.writeFileSync(filePath, commandContent);
 
-  markEvolved(instinctId, 'command', filePath);
+  markEvolved(instinctId, "command", filePath, learningDir);
 
   return {
     success: true,
     file: filePath,
-    type: 'command',
-    instinct_id: instinctId
+    type: "command",
+    instinct_id: instinctId,
   };
 }
 
@@ -290,7 +318,7 @@ Review and integrate into appropriate skill documentation.
  * Generate command content
  */
 function generateCommand(instinct) {
-  const commandName = instinct.id.replace('instinct_', '').substring(0, 20);
+  const commandName = instinct.id.replace("instinct_", "").substring(0, 20);
   return `# /${commandName} - Learned Command
 
 ## Purpose
@@ -319,42 +347,48 @@ Review this command and:
 
 /**
  * Mark instinct as evolved
+ * @param {string} instinctId
+ * @param {string} type
+ * @param {string} outputPath
+ * @param {string} [learningDir]
  */
-function markEvolved(instinctId, type, outputPath) {
-  const evolutionLog = path.join(EVOLVED_DIR, 'evolution-log.jsonl');
+function markEvolved(instinctId, type, outputPath, learningDir) {
+  const p = resolvePaths(learningDir);
+  const evolutionLog = path.join(p.evolvedDir, "evolution-log.jsonl");
   const entry = {
     timestamp: new Date().toISOString(),
     instinct_id: instinctId,
     evolution_type: type,
-    output_path: outputPath
+    output_path: outputPath,
   };
-  fs.appendFileSync(evolutionLog, JSON.stringify(entry) + '\n');
+  fs.appendFileSync(evolutionLog, JSON.stringify(entry) + "\n");
 }
 
 /**
  * Auto-evolve high-confidence instincts
+ * @param {string} [learningDir] - Override learning directory
  */
-function autoEvolve() {
+function autoEvolve(learningDir) {
   const results = {
     evolved: [],
-    skipped: []
+    skipped: [],
   };
 
-  const instincts = loadInstincts();
+  const instincts = loadInstincts(learningDir);
 
-  instincts.forEach(instinct => {
+  instincts.forEach((instinct) => {
     const occurrences = instinct.source?.occurrences || 0;
 
     // Only auto-evolve very high confidence instincts
     if (instinct.confidence >= 0.8 && occurrences >= 5) {
       let result;
 
-      if (instinct.category === 'workflow-patterns') {
-        result = evolveToSkill(instinct.id);
-      } else if (instinct.category === 'error-fixes') {
-        result = evolveToCommand(instinct.id);
+      if (instinct.category === "workflow-patterns") {
+        result = evolveToSkill(instinct.id, learningDir);
+      } else if (instinct.category === "error-fixes") {
+        result = evolveToCommand(instinct.id, learningDir);
       } else {
-        result = evolveToSkill(instinct.id);
+        result = evolveToSkill(instinct.id, learningDir);
       }
 
       if (result.success) {
@@ -363,7 +397,10 @@ function autoEvolve() {
     } else {
       results.skipped.push({
         id: instinct.id,
-        reason: instinct.confidence < 0.8 ? 'low_confidence' : 'insufficient_occurrences'
+        reason:
+          instinct.confidence < 0.8
+            ? "low_confidence"
+            : "insufficient_occurrences",
       });
     }
   });
@@ -376,45 +413,46 @@ function autoEvolve() {
  */
 function main() {
   const args = process.argv.slice(2);
-  const command = args[0] || '--help';
+  const command = args[0] || "--help";
 
   // Ensure evolved directory exists
-  if (!fs.existsSync(EVOLVED_DIR)) {
-    fs.mkdirSync(EVOLVED_DIR, { recursive: true });
+  const p = resolvePaths();
+  if (!fs.existsSync(p.evolvedDir)) {
+    fs.mkdirSync(p.evolvedDir, { recursive: true });
   }
 
   switch (command) {
-    case '--candidates':
+    case "--candidates":
       const candidates = getCandidates();
       console.log(JSON.stringify(candidates, null, 2));
       break;
 
-    case '--evolve-skill':
+    case "--evolve-skill":
       const skillId = args[1];
       if (!skillId) {
-        console.error('Error: instinct_id required');
+        console.error("Error: instinct_id required");
         process.exit(1);
       }
       const skillResult = evolveToSkill(skillId);
       console.log(JSON.stringify(skillResult, null, 2));
       break;
 
-    case '--evolve-command':
+    case "--evolve-command":
       const cmdId = args[1];
       if (!cmdId) {
-        console.error('Error: instinct_id required');
+        console.error("Error: instinct_id required");
         process.exit(1);
       }
       const cmdResult = evolveToCommand(cmdId);
       console.log(JSON.stringify(cmdResult, null, 2));
       break;
 
-    case '--auto':
+    case "--auto":
       const autoResult = autoEvolve();
       console.log(JSON.stringify(autoResult, null, 2));
       break;
 
-    case '--help':
+    case "--help":
     default:
       console.log(`
 Instinct Evolver for Kailash Continuous Learning
@@ -439,5 +477,5 @@ module.exports = {
   getCandidates,
   evolveToSkill,
   evolveToCommand,
-  autoEvolve
+  autoEvolve,
 };
