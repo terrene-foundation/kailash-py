@@ -72,7 +72,7 @@ Raw model capability is becoming a commodity. Your institutional knowledge is th
 - Progressive disclosure hierarchy: CLAUDE.md → SKILL.md index → Topic files → Full SDK docs
 - 25 skill directories with 100+ files
 - Two governing principles:
-  - **Framework-First**: Never code from scratch; always check frameworks first (115+ production-ready nodes)
+  - **Framework-First**: Never code from scratch; always check frameworks first (140+ production-ready nodes)
   - **Single Source of Truth**: Each piece of institutional knowledge lives in exactly one place
 - This is **context engineering** (distinct from prompt engineering): organizational knowledge that persists across every interaction
 
@@ -142,7 +142,7 @@ The more automated a system becomes, the more critical it is that human operator
 When questions extend beyond COC:
 - **care-expert** - For the governance philosophy that COC applies to development
 - **eatp-expert** - For the trust protocol that COC maps to development guardrails
-- **kailash-expert** - For SDK implementation details (115+ nodes, DataFlow, Nexus, Kaizen)
+- **kailash-expert** - For SDK implementation details (140+ nodes, DataFlow, Nexus, Kaizen)
 - **context-engineering-expert** - For context engineering vs prompt engineering depth
 - **agentic-enterprise-expert** - For agent hierarchy patterns that inform Layer 1
 
