@@ -147,10 +147,11 @@ session = app.create_session()
 
 ```python
 # Use signature-based patterns
+import os
 from kaizen.api import Agent
 
 agent = Agent(
-    model="gpt-4",
+    model=os.environ["OPENAI_PROD_MODEL"],  # NEVER hardcode model names
     execution_mode="autonomous"
 )
 
