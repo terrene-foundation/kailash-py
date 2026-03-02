@@ -177,6 +177,39 @@ class MultiProviderConfig:
             }
 ```
 
+## FallbackRouter for Resilient LLM Routing
+
+`FallbackRouter` extends `LLMRouter` with automatic fallback chains for handling provider failures and rate limits.
+
+**Import**: `from kaizen.llm.routing.fallback import FallbackRouter, FallbackRejectedError`
+
+```python
+from kaizen.llm.routing.fallback import FallbackRouter, FallbackRejectedError
+
+# Basic usage with fallback chain
+router = FallbackRouter(
+    primary_model="gpt-4",
+    fallback_chain=["claude-3-opus", "gemini-pro"],
+)
+
+# Safety: on_fallback callback fires BEFORE each fallback attempt
+def check_fallback(event):
+    """Reject fallback to small models for critical tasks."""
+    if event.fallback_model in SMALL_MODELS:
+        raise FallbackRejectedError("Cannot downgrade for critical task")
+
+router = FallbackRouter(
+    primary_model="gpt-4",
+    fallback_chain=["claude-3-opus"],
+    on_fallback=check_fallback,  # Fires before each fallback
+)
+```
+
+**Safety features**:
+- `on_fallback` callback fires BEFORE each fallback (raise `FallbackRejectedError` to block)
+- WARNING-level logging on every fallback event
+- Capability validation skips incompatible models automatically
+
 ## Memory Configuration
 
 ### Enable Memory with max_turns
