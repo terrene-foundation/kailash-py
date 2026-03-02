@@ -1,20 +1,31 @@
+---
+paths:
+  - "**/*.py"
+  - "**/*.ts"
+  - "**/*.js"
+---
+
 # Kailash Pattern Rules
 
 ## Scope
+
 These rules apply to all Kailash SDK code.
 
 ## MUST Rules
 
 ### 1. Runtime Execution Pattern
+
 MUST use `runtime.execute(workflow.build())`.
 
 **Correct**:
+
 ```python
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 ```
 
 **Incorrect**:
+
 ```python
 ❌ workflow.execute(runtime)  # WRONG
 ❌ runtime.execute(workflow)  # Missing .build()
@@ -25,14 +36,17 @@ results, run_id = runtime.execute(workflow.build())
 **Violation**: Code review flag
 
 ### 2. String-Based Node IDs
+
 Node IDs MUST be string literals.
 
 **Correct**:
+
 ```python
 workflow.add_node("NodeType", "my_node_id", {...})
 ```
 
 **Incorrect**:
+
 ```python
 ❌ workflow.add_node("NodeType", node_id_var, {...})
 ❌ workflow.add_node("NodeType", f"node_{i}", {...})
@@ -42,9 +56,11 @@ workflow.add_node("NodeType", "my_node_id", {...})
 **Violation**: Potential runtime issues
 
 ### 3. Absolute Imports
+
 MUST use absolute imports for Kailash code.
 
 **Correct**:
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime import LocalRuntime
@@ -52,6 +68,7 @@ from dataflow import DataFlow
 ```
 
 **Incorrect**:
+
 ```python
 ❌ from .workflow.builder import WorkflowBuilder
 ❌ from ..runtime import LocalRuntime
@@ -61,24 +78,20 @@ from dataflow import DataFlow
 **Violation**: Code review flag
 
 ### 4. Environment Variable Loading
+
 MUST load .env before any operation.
 
-**Correct**:
-```python
-from dotenv import load_dotenv
-load_dotenv()  # First line after imports
+> See `env-models.md` for full .env rules, model-key pairings, and enforcement details.
 
-# Then use environment variables
-api_key = os.environ.get("API_KEY")
-```
-
-**Enforced by**: session-start hook warning
+**Enforced by**: session-start hook, validate-workflow hook
 **Violation**: Runtime errors
 
 ### 5. 4-Parameter Node Pattern
+
 MUST use correct parameter order for add_node.
 
 **Correct**:
+
 ```python
 workflow.add_node(
     "NodeType",      # 1. Type (string)
@@ -91,6 +104,7 @@ workflow.add_node(
 ## Framework-Specific Rules
 
 ### DataFlow
+
 ```python
 # Primary key MUST be named 'id'
 @db.model
@@ -117,6 +131,7 @@ workflow.add_node("UpdateUser", "update", {
 ```
 
 ### Nexus
+
 ```python
 # Register workflows before starting
 app = Nexus()
@@ -129,6 +144,7 @@ session = app.create_session()
 ```
 
 ### Kaizen
+
 ```python
 # Use signature-based patterns
 from kaizen.api import Agent
@@ -147,6 +163,7 @@ registry.register(agent)
 ## Async vs Sync Runtime
 
 ### Use AsyncLocalRuntime for Docker/FastAPI
+
 ```python
 from kailash.runtime import AsyncLocalRuntime
 
@@ -158,6 +175,7 @@ results, run_id = await runtime.execute_workflow_async(
 ```
 
 ### Use LocalRuntime for CLI/Scripts
+
 ```python
 from kailash.runtime import LocalRuntime
 
@@ -166,7 +184,9 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ## Exceptions
+
 Pattern exceptions require:
+
 1. Written justification
 2. Approval from pattern-expert
 3. Documentation in code comments

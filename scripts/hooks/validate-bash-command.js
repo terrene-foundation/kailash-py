@@ -16,6 +16,9 @@
 
 const fs = require("fs");
 const path = require("path");
+const {
+  logObservation: logLearningObservation,
+} = require("./lib/learning-utils");
 
 // Timeout handling for PreToolUse hooks (5 second limit)
 const TIMEOUT_MS = 5000;
@@ -85,6 +88,15 @@ function validateBashCommand(data) {
 
   for (const { pattern, message } of dangerousPatterns) {
     if (pattern.test(command)) {
+      // Log dangerous command observation
+      try {
+        logLearningObservation(cwd, "error_occurrence", {
+          error_type: "dangerous_command",
+          pattern: pattern.source,
+          blocked: message.startsWith("Blocked"),
+        });
+      } catch {}
+
       if (message.startsWith("Blocked")) {
         return { continue: false, exitCode: 2, message };
       }
@@ -99,6 +111,17 @@ function validateBashCommand(data) {
   const isPython = /\bpython\b/.test(command) || /\bpython3\b/.test(command);
 
   if (isPytest || isPython) {
+    // Log test pattern observation
+    try {
+      const testPathMatch = command.match(
+        /(?:pytest|python3?\s+-m\s+pytest)\s+([^\s]+)/,
+      );
+      logLearningObservation(cwd, "test_pattern", {
+        test_tier: isPytest ? "pytest" : "python",
+        test_path: testPathMatch ? testPathMatch[1] : null,
+      });
+    } catch {}
+
     // Check if .env exists
     let envExists = false;
     try {

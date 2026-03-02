@@ -12,6 +12,12 @@
 
 const fs = require("fs");
 const path = require("path");
+const {
+  resolveLearningDir,
+  ensureLearningDir,
+  logObservation: logLearningObservation,
+  countObservations,
+} = require("./lib/learning-utils");
 
 let input = "";
 process.stdin.setEncoding("utf8");
@@ -19,7 +25,7 @@ process.stdin.on("data", (chunk) => (input += chunk));
 process.stdin.on("end", () => {
   try {
     const data = JSON.parse(input);
-    const result = savePreCompactState(data);
+    savePreCompactState(data);
     // PreCompact hooks don't support hookSpecificOutput in schema
     console.log(JSON.stringify({ continue: true }));
     process.exit(0);
@@ -36,14 +42,15 @@ function savePreCompactState(data) {
   const cwd = data.cwd;
   const homeDir = process.env.HOME || process.env.USERPROFILE;
   const checkpointDir = path.join(homeDir, ".claude", "checkpoints");
-  const learningDir = path.join(homeDir, ".claude", "kailash-learning");
+  const learningDir = resolveLearningDir(cwd);
 
   // Ensure directories exist
-  [checkpointDir, learningDir].forEach((dir) => {
+  [checkpointDir].forEach((dir) => {
     try {
       fs.mkdirSync(dir, { recursive: true });
     } catch {}
   });
+  ensureLearningDir(cwd);
 
   const checkpoint = {
     session_id,
@@ -66,15 +73,32 @@ function savePreCompactState(data) {
     );
     fs.writeFileSync(checkpointFile, JSON.stringify(checkpoint, null, 2));
 
-    // Log observation
-    const observationsFile = path.join(learningDir, "observations.jsonl");
-    const observation = {
-      type: "pre_compact",
-      session_id,
-      timestamp: new Date().toISOString(),
-      framework: checkpoint.preservedContext.frameworkInUse,
-    };
-    fs.appendFileSync(observationsFile, JSON.stringify(observation) + "\n");
+    // Log enriched connection_pattern observation for learning
+    logLearningObservation(
+      cwd,
+      "connection_pattern",
+      {
+        framework: checkpoint.preservedContext.frameworkInUse,
+        active_workflows: checkpoint.preservedContext.activeWorkflows,
+        critical_patterns: checkpoint.preservedContext.criticalPatterns,
+        recently_modified_count:
+          checkpoint.preservedContext.recentlyModified.length,
+      },
+      {
+        session_id,
+      },
+    );
+
+    // --- Auto-checkpoint learning state (Phase 3) ---
+    try {
+      if (countObservations(learningDir) > 0) {
+        const checkpointManager = require("../learning/checkpoint-manager");
+        checkpointManager.saveCheckpoint(
+          `pre-compact-${Date.now()}`,
+          learningDir,
+        );
+      }
+    } catch {}
 
     // Clean up old checkpoints (keep last 10 per session)
     cleanupOldCheckpoints(checkpointDir, session_id, 10);

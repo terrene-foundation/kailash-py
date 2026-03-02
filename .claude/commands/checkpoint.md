@@ -6,13 +6,13 @@ Save and restore learning state checkpoints for the continuous learning system.
 
 ## Quick Reference
 
-| Command | Action |
-|---------|--------|
-| `/checkpoint` | Show current checkpoint status |
-| `/checkpoint save` | Create new checkpoint |
-| `/checkpoint list` | List all checkpoints |
-| `/checkpoint restore <id>` | Restore specific checkpoint |
-| `/checkpoint diff <id>` | Compare current state with checkpoint |
+| Command                    | Action                                |
+| -------------------------- | ------------------------------------- |
+| `/checkpoint`              | Show current checkpoint status        |
+| `/checkpoint save`         | Create new checkpoint                 |
+| `/checkpoint list`         | List all checkpoints                  |
+| `/checkpoint restore <id>` | Restore specific checkpoint           |
+| `/checkpoint diff <id>`    | Compare current state with checkpoint |
 
 ## Usage Examples
 
@@ -46,20 +46,22 @@ node scripts/learning/checkpoint-manager.js --diff checkpoint_123
 
 ## What Gets Checkpointed
 
-| Component | Included |
-|-----------|----------|
-| Observations | Last 100 entries |
-| Instincts | All personal instincts |
-| Stats | Learning metrics |
-| Identity | System configuration |
+| Component    | Included               |
+| ------------ | ---------------------- |
+| Observations | Last 100 entries       |
+| Instincts    | All personal instincts |
+| Stats        | Learning metrics       |
+| Identity     | System configuration   |
 
 ## Checkpoint Structure
 
+Checkpoints are stored per-project:
+
 ```
-~/.claude/kailash-learning/checkpoints/
+<project>/.claude/learning/checkpoints/
 ├── checkpoint_<timestamp>.json
-├── checkpoint_<timestamp>.json
-└── latest -> checkpoint_<timestamp>.json
+├── pre-compact-<timestamp>.json   # Auto-created
+└── latest.json
 ```
 
 ## Use Cases
@@ -83,12 +85,12 @@ node scripts/learning/checkpoint-manager.js --diff checkpoint_123
 /checkpoint restore --import team-baseline.json
 ```
 
-### Periodic Backup
+### Auto-Checkpointing
 
-Checkpoints are auto-created:
-- On first session of the day
-- Before instinct evolution
-- After 100 new observations
+Checkpoints are automatically created:
+
+- **Before context compaction** (PreCompact hook) — saves learning state before context is compressed
+- Manual checkpoints via `/checkpoint save` are still available for on-demand snapshots
 
 ## Related Commands
 

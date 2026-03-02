@@ -1,3 +1,10 @@
+---
+paths:
+  - "tests/e2e/**"
+  - "**/*e2e*"
+  - "**/*playwright*"
+---
+
 # E2E God-Mode Testing Rules
 
 ## Scope

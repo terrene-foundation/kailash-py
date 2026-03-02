@@ -17,6 +17,10 @@
 
 const fs = require("fs");
 const path = require("path");
+const {
+  resolveLearningDir,
+  ensureLearningDir,
+} = require("./lib/learning-utils");
 
 // Get home directory (cross-platform)
 const HOME = process.env.HOME || process.env.USERPROFILE;
@@ -24,7 +28,6 @@ const HOME = process.env.HOME || process.env.USERPROFILE;
 // Directory paths
 const CLAUDE_DIR = path.join(HOME, ".claude");
 const CHECKPOINTS_DIR = path.join(CLAUDE_DIR, "checkpoints");
-const LEARNING_DIR = path.join(CLAUDE_DIR, "kailash-learning");
 
 /**
  * Ensure directory exists
@@ -67,9 +70,10 @@ function saveCheckpoint(sessionId, cwd, pendingWork) {
 /**
  * Log stop observation for learning system
  */
-function logObservation(sessionId, reason) {
+function logObservation(sessionId, reason, cwd) {
   try {
-    ensureDir(LEARNING_DIR);
+    const learningDir = ensureLearningDir(cwd);
+    const observationsFile = path.join(learningDir, "observations.jsonl");
 
     const observation = {
       timestamp: new Date().toISOString(),
@@ -79,8 +83,7 @@ function logObservation(sessionId, reason) {
       success: true, // Stop itself is successful even if interrupted
     };
 
-    const observationsPath = path.join(LEARNING_DIR, "observations.jsonl");
-    fs.appendFileSync(observationsPath, JSON.stringify(observation) + "\n");
+    fs.appendFileSync(observationsFile, JSON.stringify(observation) + "\n");
 
     return true;
   } catch (error) {
@@ -147,7 +150,7 @@ async function main() {
 
   // Perform graceful shutdown tasks
   const checkpointPath = saveCheckpoint(sessionId, cwd, pendingWork);
-  const observationsLogged = logObservation(sessionId, reason);
+  const observationsLogged = logObservation(sessionId, reason, cwd);
   const cleaned = cleanupResources(cwd);
 
   // Output result - Stop hooks only support basic schema (no hookSpecificOutput)

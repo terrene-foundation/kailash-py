@@ -1,14 +1,25 @@
+---
+paths:
+  - "tests/**"
+  - "**/*test*"
+  - "**/*spec*"
+  - "conftest.py"
+---
+
 # Testing Rules
 
 ## Scope
+
 These rules apply to all test files and test-related code.
 
 ## MUST Rules
 
 ### 1. Test-First Development
+
 Tests MUST be written before implementation for new features.
 
 **Process**:
+
 1. Write failing test that describes expected behavior
 2. Implement minimum code to pass test
 3. Refactor while keeping tests green
@@ -18,32 +29,37 @@ Tests MUST be written before implementation for new features.
 **Violation**: Code review flag
 
 ### 2. Coverage Requirements
+
 Code changes MUST maintain or improve test coverage.
 
-| Code Type | Minimum Coverage |
-|-----------|------------------|
-| General | 80% |
-| Financial | 100% |
-| Authentication | 100% |
-| Security-critical | 100% |
+| Code Type         | Minimum Coverage |
+| ----------------- | ---------------- |
+| General           | 80%              |
+| Financial         | 100%             |
+| Authentication    | 100%             |
+| Security-critical | 100%             |
 
 **Enforced by**: CI coverage check
 **Violation**: BLOCK merge
 
 ### 3. Real Infrastructure in Tiers 2-3
+
 Integration and E2E tests MUST use real infrastructure.
 
 **Tier 1 (Unit Tests)**:
+
 - Mocking ALLOWED
 - Test isolated functions
 - Fast execution (<1s per test)
 
 **Tier 2 (Integration Tests)**:
+
 - NO MOCKING - use real database
 - Test component interactions
 - Real API calls (use test server)
 
 **Tier 3 (E2E Tests)**:
+
 - NO MOCKING - real everything
 - Test full user journeys
 - Real browser, real database
@@ -54,9 +70,11 @@ Integration and E2E tests MUST use real infrastructure.
 ## MUST NOT Rules (CRITICAL)
 
 ### 1. NO MOCKING in Tier 2-3
+
 MUST NOT use mocking in integration or E2E tests.
 
 **Detection Patterns**:
+
 ```python
 ❌ @patch('module.function')
 ❌ MagicMock()
@@ -66,6 +84,7 @@ MUST NOT use mocking in integration or E2E tests.
 ```
 
 **Why This Matters**:
+
 - Mocks hide real integration issues
 - Mocks don't catch API contract changes
 - Mocks give false confidence
@@ -75,17 +94,21 @@ MUST NOT use mocking in integration or E2E tests.
 **Consequence**: Test invalid, must rewrite
 
 ### 2. No Test Pollution
+
 Tests MUST NOT affect other tests.
 
 **Required**:
+
 - Clean setup/teardown
 - Isolated test databases
 - No shared mutable state
 
 ### 3. No Flaky Tests
+
 Tests MUST be deterministic.
 
 **Prohibited**:
+
 - Random data without seeds
 - Time-dependent assertions
 - Network calls to external services (Tier 1)
@@ -93,6 +116,7 @@ Tests MUST be deterministic.
 ## Test Organization
 
 ### Directory Structure
+
 ```
 tests/
 ├── unit/           # Tier 1: Mocking allowed
@@ -101,6 +125,7 @@ tests/
 ```
 
 ### Naming Convention
+
 ```
 test_[feature]_[scenario]_[expected_result].py
 ```
@@ -110,6 +135,7 @@ Example: `test_user_login_with_valid_credentials_succeeds.py`
 ## Kailash-Specific Testing
 
 ### DataFlow Testing
+
 ```python
 # Tier 2: Use real database
 @pytest.fixture
@@ -125,6 +151,7 @@ def test_user_creation(db):
 ```
 
 ### Workflow Testing
+
 ```python
 # Tier 2: Use real runtime
 def test_workflow_execution():
@@ -135,7 +162,9 @@ def test_workflow_execution():
 ```
 
 ## Exceptions
+
 Testing exceptions require:
+
 1. Written justification explaining why real infrastructure impossible
 2. Approval from testing-specialist
 3. Documentation in test file
