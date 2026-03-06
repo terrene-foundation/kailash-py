@@ -186,15 +186,17 @@ After hardening, verify with these tests:
 ## Related Commands
 
 - `/i-audit` - Run design audit before hardening
-- `/design responsive` - Responsive design patterns
+- `/design` - Design principles and responsive patterns
 - `/test` - Testing strategies for frontend
 
-## Related Agents
+## Agent Teams
 
-- `uiux-designer` - For design-level edge case decisions
-- `frontend-developer` - For React implementation of hardening
-- `flutter-specialist` - For Flutter implementation of hardening
-- `testing-specialist` - For creating hardening test suites
+Deploy these agents for production hardening:
+
+- **uiux-designer** — Design-level edge case decisions
+- **frontend-developer** — React implementation of hardening
+- **flutter-specialist** — Flutter implementation of hardening
+- **testing-specialist** — Creating hardening test suites
 
 ## Skill References
 

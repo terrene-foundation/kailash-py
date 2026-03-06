@@ -266,27 +266,29 @@ def test_create_user(db):
     assert result.id is not None
 ```
 
-#### `/validate` - Gold Standards Compliance
+#### `/validate` - Project Compliance Validation
 
-**What it loads**: Validation patterns and compliance checking
+**What it loads**: Universal compliance rules + Kailash-specific patterns (when detected)
 
 **When to use**:
 
-- Checking if code follows best practices
-- Understanding mandatory patterns
-- Reviewing code for compliance
-- Pre-commit validation
+- Pre-commit compliance checking
+- Security audit (secrets, injection, input validation)
+- Testing policy enforcement (NO MOCKING in Tier 2-3)
+- Stubs/TODOs/placeholder detection
 
 **Example usage**:
 
 ```
 > /validate
-> Check if my workflow follows gold standards
+> Check this project for compliance issues
 ```
 
 **What you get**:
 
-- Import validation (absolute imports only)
+- Project type auto-detection (generic vs Kailash)
+- Universal: security, no-stubs, env-models, testing policy
+- Kailash-specific (when detected): import validation, workflow patterns
 - Pattern validation (correct runtime execution)
 - Security validation (no hardcoded secrets)
 - Testing validation (NO MOCKING in Tier 2-3)
@@ -611,7 +613,7 @@ However, **explicit command loading is more reliable**:
 | `/api` | Nexus | API deployment |
 | `/ai` | Kaizen | AI agents |
 | `/test` | Testing | Writing tests |
-| `/validate` | Gold Standards | Compliance checking |
+| `/validate` | Project Compliance | Security, testing, stubs (+ Kailash when detected) |
 | `/analyze` | Phase 01 template | Research, planning, user flows |
 | `/todos` | Phase 02 template | Task breakdown (stops for approval) |
 | `/implement` | Phase 03 template | Build iteratively through todos |
@@ -725,7 +727,7 @@ Command Skill Directory
 /api ──▶ .claude/skills/03-nexus/
 /ai ──▶ .claude/skills/04-kaizen/
 /test ──▶ .claude/skills/12-testing-strategies/
-/validate ──▶ .claude/skills/17-gold-standards/
+/validate ──▶ rules/ + .claude/skills/17-gold-standards/ (when Kailash detected)
 
 ```
 
@@ -766,7 +768,7 @@ Claude will:
 
 1. **Commands are shortcuts** - They load specific skills into Claude's context
 
-2. **Nineteen commands exist** - 12 framework (`/sdk`, `/db`, `/api`, `/ai`, `/test`, `/validate`, `/design`, `/i-audit`, `/i-harden`, `/learn`, `/evolve`, `/checkpoint`) + 7 workspace (`/analyze`, `/todos`, `/implement`, `/redteam`, `/codify`, `/ws`, `/wrapup`)
+2. **Twenty commands exist** - 13 framework (`/sdk`, `/db`, `/api`, `/ai`, `/test`, `/validate`, `/design`, `/i-audit`, `/i-polish`, `/i-harden`, `/learn`, `/evolve`, `/checkpoint`) + 7 workspace (`/analyze`, `/todos`, `/implement`, `/redteam`, `/codify`, `/ws`, `/wrapup`)
 
 3. **Use commands for focus** - Load only what you need for your current task
 

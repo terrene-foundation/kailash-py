@@ -98,4 +98,4 @@ Evolved artifacts are suggestions only. Review before adding to:
 
 ## Skill Reference
 
-- See `06-continuous-learning` in skill directories for full documentation
+This command uses: `scripts/learning/instinct-processor.js`, `scripts/learning/instinct-evolver.js`

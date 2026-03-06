@@ -107,7 +107,7 @@ Raw model capability is becoming a commodity. Your institutional knowledge is th
 
 - Seven-phase workflow: Analysis → Planning → Implementation → Testing → Deployment → Release → Final
 - Quality gates at 4 points: Planning, Implementation, Pre-commit, Pre-push
-- 19 slash commands (12 framework + 7 workspace phase) for context-efficient invocation
+- 20 slash commands (13 framework + 7 workspace phase) for context-efficient invocation
 - **Evidence-based completion**: AI cannot state "I implemented the feature" without file-and-line proof
 - **Mandatory delegation**: Code review after every file change. Security review before every commit. Not suggestions - requirements.
 

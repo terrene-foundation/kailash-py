@@ -2,16 +2,25 @@
 
 ## Purpose
 
-Load the Core SDK skill for workflow patterns, node configuration, and runtime execution with the Kailash SDK.
+Load the Kailash Core SDK skill for workflow patterns, node configuration, and runtime execution.
+
+## Step 0: Verify Project Uses Kailash
+
+Before loading SDK patterns, check that this project uses Kailash:
+
+- Look for `kailash` in `requirements.txt`, `pyproject.toml`, `setup.py`, `Cargo.toml`
+- Look for `from kailash` / `import kailash` in source files
+
+If not found, inform the user: "This project doesn't appear to use Kailash SDK. These patterns may not apply. Continue anyway?"
 
 ## Quick Reference
 
-| Command | Action |
-|---------|--------|
-| `/sdk` | Load Core SDK patterns and workflow basics |
-| `/sdk workflow` | Show WorkflowBuilder patterns |
-| `/sdk runtime` | Show runtime selection guidance |
-| `/sdk nodes` | Show node configuration patterns |
+| Command         | Action                                     |
+| --------------- | ------------------------------------------ |
+| `/sdk`          | Load Core SDK patterns and workflow basics |
+| `/sdk workflow` | Show WorkflowBuilder patterns              |
+| `/sdk runtime`  | Show runtime selection guidance            |
+| `/sdk nodes`    | Show node configuration patterns           |
 
 ## What You Get
 
@@ -41,21 +50,12 @@ results, run_id = runtime.execute(workflow.build())
 3. **ALWAYS** use absolute imports (never relative)
 4. **ALWAYS** use string-based node registration
 
-## Usage Examples
+## Agent Teams
 
-```bash
-# Load Core SDK basics
-/sdk
+When working with Core SDK, deploy:
 
-# Get workflow builder patterns
-/sdk workflow
-
-# Learn about runtime selection (async vs sync)
-/sdk runtime
-
-# See node configuration patterns
-/sdk nodes
-```
+- **pattern-expert** — Workflow patterns, node configuration, cyclic patterns
+- **sdk-navigator** — Find existing patterns and documentation
 
 ## Related Commands
 
@@ -63,7 +63,7 @@ results, run_id = runtime.execute(workflow.build())
 - `/api` - Nexus multi-channel deployment
 - `/ai` - Kaizen AI agents
 - `/test` - Testing strategies
-- `/validate` - Gold standards compliance
+- `/validate` - Project compliance checks
 
 ## Skill Reference
 

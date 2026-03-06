@@ -1,99 +1,89 @@
-# /validate - Gold Standards Compliance
+# /validate - Project Compliance Validation
 
 ## Purpose
 
-Load the gold standards skill for mandatory compliance checking including imports, patterns, security, and testing policies.
+Run compliance checks against the project's applicable standards. Automatically detects project type and applies the right validation rules.
 
-## Quick Reference
+## Step 1: Detect Project Type
 
-| Command | Action |
-|---------|--------|
-| `/validate` | Load gold standards compliance checks |
-| `/validate imports` | Check absolute import compliance |
-| `/validate patterns` | Check runtime execution patterns |
-| `/validate security` | Check security best practices |
-| `/validate testing` | Check NO MOCKING compliance |
+Before validating, determine what frameworks the project uses:
 
-## What You Get
+1. **Check for Kailash SDK (Python)**: Look for `kailash` in `requirements.txt`, `pyproject.toml`, `setup.py`, `setup.cfg`, or `from kailash` / `import kailash` in Python files
+2. **Check for Kailash SDK (Rust with Python bindings)**: Look for `kailash` in `Cargo.toml` dependencies alongside Python project markers
+3. **Generic project**: If neither detected, apply universal standards only
 
-- Mandatory best practices
-- Absolute imports enforcement
-- Parameter passing patterns
-- Error handling standards
-- Security validation
-- Testing policy (NO MOCKING)
+Report what you detected before proceeding.
 
-## Validation Checklist
+## Step 2: Universal Checks (ALL projects)
 
-### Import Validation
+These always apply regardless of project type:
 
-```python
-# ✅ Correct
-from kailash.workflow.builder import WorkflowBuilder
-from kailash.runtime import LocalRuntime
+| Check          | Rule Source           | What It Validates                                                              |
+| -------------- | --------------------- | ------------------------------------------------------------------------------ |
+| Security       | `rules/security.md`   | No hardcoded secrets, parameterized queries, input validation, output encoding |
+| No Stubs       | `rules/no-stubs.md`   | No TODOs, placeholders, NotImplementedError, simulated data in production code |
+| Env Variables  | `rules/env-models.md` | API keys and model names from `.env` only, never hardcoded                     |
+| Testing Policy | `rules/testing.md`    | NO MOCKING in Tier 2-3 tests, real infrastructure required                     |
+| Git Hygiene    | `rules/git.md`        | Conventional commits, no secrets in history, atomic commits                    |
 
-# ❌ Wrong
-from .workflow.builder import WorkflowBuilder  # Relative import
+### Universal Validation Checklist
+
+- [ ] No hardcoded secrets (API keys, passwords, tokens)
+- [ ] No SQL/code injection vulnerabilities
+- [ ] All user input validated at system boundaries
+- [ ] No TODOs, stubs, or placeholder code in production files
+- [ ] API keys and model names sourced from `.env`
+- [ ] No mocking in integration/E2E tests
+- [ ] Error handling present (no silent `except: pass`)
+- [ ] No secrets in git history
+
+## Step 3: Kailash SDK Checks (ONLY when detected)
+
+If Step 1 detected Kailash SDK usage, ALSO run these checks by loading the Kailash-specific skills:
+
+- Load `.claude/skills/17-gold-standards/SKILL.md` for pattern standards
+- Load `.claude/skills/16-validation-patterns/SKILL.md` for validation tools
+
+| Check            | What It Validates                                                                   |
+| ---------------- | ----------------------------------------------------------------------------------- |
+| Absolute Imports | `from kailash.x.y import Z` — no relative imports                                   |
+| Runtime Pattern  | `runtime.execute(workflow.build())` — never skip `.build()`                         |
+| Connections      | 4-parameter format: `(source_id, source_param, target_id, target_param)`            |
+| Result Access    | `results["node_id"]["result"]` — not `.result` attribute                            |
+| Custom Nodes     | `@register_node()`, `run()` not `execute()`, attributes before `super().__init__()` |
+| DataFlow         | String ID preservation, one instance per database, deferred schema                  |
+
+## Quick Subcommands
+
+```
+/validate                → Full check (auto-detects project type)
+/validate security       → Secrets, injection, input validation (universal)
+/validate testing        → Mocking policy, test organization (universal)
+/validate stubs          → TODOs, placeholders, fake data (universal)
+/validate env            → Hardcoded API keys, model names (universal)
+/validate imports        → Absolute import compliance (Kailash only)
+/validate patterns       → Runtime execution patterns (Kailash only)
+/validate dataflow       → DataFlow result access patterns (Kailash only)
 ```
 
-### Runtime Pattern Validation
+## Agent Teams
 
-```python
-# ✅ Correct
-results, run_id = runtime.execute(workflow.build())
+Deploy these agents for validation:
 
-# ❌ Wrong
-workflow.execute(runtime)  # Anti-pattern
-runtime.execute(workflow)  # Missing .build()
-```
-
-### Testing Validation (Tier 2-3)
-
-```python
-# ❌ PROHIBITED in integration/e2e tests
-@patch('module.function')
-MagicMock()
-unittest.mock
-```
-
-### Security Validation
-
-```python
-# ❌ PROHIBITED
-api_key = "sk-..."  # Hardcoded secrets
-f"SELECT * FROM users WHERE id = {user_id}"  # SQL injection
-
-# ✅ Required
-api_key = os.environ.get("API_KEY")
-cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-```
-
-## Usage Examples
-
-```bash
-# Load gold standards compliance checks
-/validate
-
-# Check absolute import compliance
-/validate imports
-
-# Verify runtime execution patterns
-/validate patterns
-
-# Check security best practices
-/validate security
-
-# Verify NO MOCKING compliance
-/validate testing
-```
+- **security-reviewer** — Security audit (MANDATORY)
+- **gold-standards-validator** — Compliance check against project standards
+- **testing-specialist** — Verify NO MOCKING policy, test organization
 
 ## Related Commands
 
-- `/sdk` - Core SDK patterns
-- `/db` - DataFlow database operations
 - `/test` - Testing strategies
-- `/ai` - Kaizen AI agents
+- `/sdk` - Core SDK patterns (Kailash projects)
+- `/db` - DataFlow patterns (Kailash projects)
+- `/api` - Nexus patterns (Kailash projects)
+- `/ai` - Kaizen patterns (Kailash projects)
+- `/i-audit` - Frontend design quality audit
 
-## Skill Reference
+## Skill References
 
-This command loads: `.claude/skills/17-gold-standards/SKILL.md`
+- Always: Project rules (`rules/security.md`, `rules/testing.md`, `rules/no-stubs.md`, `rules/env-models.md`)
+- When Kailash detected: `.claude/skills/17-gold-standards/SKILL.md`, `.claude/skills/16-validation-patterns/SKILL.md`

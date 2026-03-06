@@ -120,7 +120,7 @@ The setup includes:
 - **28 skill directories** covering all SDK features
 - **30 specialized agents** for different task types
 - **9 automation hooks** for quality enforcement and workspace awareness
-- **19 slash commands** for quick access to knowledge and workspace phases
+- **20 slash commands** for quick access to knowledge and workspace phases
 - **9 rule files** for behavioral constraints
 - **4 learning scripts** for continuous improvement
 

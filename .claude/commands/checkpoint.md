@@ -99,4 +99,4 @@ Checkpoints are automatically created:
 
 ## Skill Reference
 
-- See `06-continuous-learning` in skill directories for full documentation
+This command uses: `scripts/learning/observation-logger.js`, `scripts/learning/instinct-processor.js`

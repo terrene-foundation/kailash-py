@@ -8,13 +8,13 @@ Load the UI/UX Design Principles skill for framework-agnostic design patterns, l
 
 ## Quick Reference
 
-| Command | Action |
-|---------|--------|
-| `/design` | Load comprehensive design principles |
-| `/design layout` | Show layout and information architecture patterns |
-| `/design hierarchy` | Show visual hierarchy principles |
-| `/design components` | Show component design guidelines |
-| `/design responsive` | Show responsive design patterns |
+| Command              | Action                                            |
+| -------------------- | ------------------------------------------------- |
+| `/design`            | Load comprehensive design principles              |
+| `/design layout`     | Show layout and information architecture patterns |
+| `/design hierarchy`  | Show visual hierarchy principles                  |
+| `/design components` | Show component design guidelines                  |
+| `/design responsive` | Show responsive design patterns                   |
 
 ## What You Get
 
@@ -31,6 +31,7 @@ Load the UI/UX Design Principles skill for framework-agnostic design patterns, l
 ## Quick Principles
 
 ### Top-Down Design Order (ALWAYS Follow)
+
 ```
 LEVEL 1: FRAME/LAYOUT (Highest Priority)
   → Space division, visual hierarchy, information architecture
@@ -46,10 +47,12 @@ LEVEL 4: VISUAL DETAILS (Lowest Priority)
 ```
 
 ### The 70/30 Rule
+
 - 70% of space = primary content (what user came to see/do)
 - 30% of space = secondary UI (navigation, filters, chrome)
 
 ### Action Hierarchy
+
 - **Primary**: 1 per page, large filled button, brand color
 - **Secondary**: 2-3 per page, medium outlined button
 - **Tertiary**: Unlimited, small text buttons, contextual
@@ -84,18 +87,19 @@ LEVEL 4: VISUAL DETAILS (Lowest Priority)
 
 ## Related Commands
 
-- `/sdk` - Core SDK workflow patterns
-- `/db` - DataFlow database operations
-- `/api` - Nexus multi-channel deployment
-- `/ai` - Kaizen AI agents
-- `/test` - Testing strategies
+- `/i-audit` - Diagnose visual quality issues (uses these principles)
+- `/i-polish` - Fix aesthetic issues (operationalizes these principles)
+- `/i-harden` - Production resilience for frontend
+- `/validate` - Project compliance checks
 
-## Related Agents
+## Agent Teams
 
-- `uiux-designer` - Design analysis and recommendations
-- `frontend-developer` - React implementation
-- `flutter-specialist` - Flutter/Material implementation
-- `react-specialist` - React 19 / Next.js patterns
+Deploy these agents when doing design work:
+
+- **uiux-designer** — Design analysis, layout critique, visual hierarchy recommendations
+- **frontend-developer** — React implementation of design patterns
+- **flutter-specialist** — Flutter/Material implementation
+- **react-specialist** — React 19 / Next.js patterns
 
 ## Skill Reference
 
