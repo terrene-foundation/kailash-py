@@ -5,6 +5,7 @@
 This guide walks you through installing Claude Code and using it with this setup for the first time. Every step includes explanations of what's happening behind the scenes.
 
 By the end of this guide, you will have:
+
 - Claude Code installed and working
 - This setup activated
 - Completed your first successful interaction
@@ -18,24 +19,25 @@ By the end of this guide, you will have:
 
 Before installing Claude Code, ensure you have:
 
-| Requirement | Minimum Version | Check Command |
-|-------------|-----------------|---------------|
-| **Node.js** | 18.0.0 | `node --version` |
-| **npm** | 8.0.0 | `npm --version` |
-| **Git** | 2.30.0 | `git --version` |
-| **Terminal** | Any modern terminal | - |
+| Requirement  | Minimum Version     | Check Command    |
+| ------------ | ------------------- | ---------------- |
+| **Node.js**  | 18.0.0              | `node --version` |
+| **npm**      | 8.0.0               | `npm --version`  |
+| **Git**      | 2.30.0              | `git --version`  |
+| **Terminal** | Any modern terminal | -                |
 
 ### Operating System Support
 
-| OS | Supported | Notes |
-|----|-----------|-------|
-| macOS | ✅ Yes | Native support |
-| Linux | ✅ Yes | Native support |
-| Windows | ✅ Yes | WSL recommended for best experience |
+| OS      | Supported | Notes                               |
+| ------- | --------- | ----------------------------------- |
+| macOS   | ✅ Yes    | Native support                      |
+| Linux   | ✅ Yes    | Native support                      |
+| Windows | ✅ Yes    | WSL recommended for best experience |
 
 ### Anthropic Account
 
 You need an Anthropic account with API access:
+
 1. Go to https://console.anthropic.com
 2. Create an account or log in
 3. Navigate to API keys
@@ -77,11 +79,13 @@ claude
 ```
 
 **What happens next**:
+
 1. Claude Code will detect this is your first run
 2. It will prompt you to authenticate
 3. Follow the prompts to connect your Anthropic account
 
 There are several authentication methods:
+
 - **Browser authentication** (recommended): Opens your browser to complete login
 - **API key**: Paste your API key directly
 - **Environment variable**: Set `ANTHROPIC_API_KEY` in your shell
@@ -116,6 +120,7 @@ ls -la .claude/
 ```
 
 **Expected output**:
+
 ```
 drwxr-xr-x  agents/
 drwxr-xr-x  commands/
@@ -136,7 +141,7 @@ claude
 **What happens when Claude Code starts**:
 
 1. **Settings Load**: Claude Code reads `.claude/settings.json`
-   - This configures the 8 hooks
+   - This configures the 9 hooks
    - Hooks will now run automatically
 
 2. **CLAUDE.md Load**: Claude reads the project's `CLAUDE.md`
@@ -174,11 +179,11 @@ The `>` prompt is where you type your requests.
 
 Before diving into development tasks, know these essential commands:
 
-| Command | What It Does |
-|---------|--------------|
-| `/help` | Show all available commands |
-| `/clear` | Clear the current context |
-| `/exit` | Exit Claude Code |
+| Command   | What It Does                |
+| --------- | --------------------------- |
+| `/help`   | Show all available commands |
+| `/clear`  | Clear the current context   |
+| `/exit`   | Exit Claude Code            |
 | `/status` | Show current session status |
 
 ### Loading Skill Context
@@ -190,11 +195,13 @@ To load specific knowledge, use skill commands:
 ```
 
 **What happens**:
+
 1. Claude loads the Core SDK skill
 2. You see confirmation of what was loaded
 3. Claude now has SDK patterns in context
 
 Try loading other skills:
+
 - `/db` - DataFlow patterns
 - `/api` - Nexus patterns
 - `/ai` - Kaizen patterns
@@ -209,6 +216,7 @@ Let's try a simple request:
 ```
 
 **What happens**:
+
 1. Claude accesses the `01-core-sdk` skill
 2. Retrieves the workflow pattern
 3. Explains it to you
@@ -243,16 +251,19 @@ When Claude uses tools, you'll see indicators:
 ```
 [Reading src/models/user.py...]
 ```
+
 This means Claude is using the Read tool.
 
 ```
 [Editing src/models/user.py...]
 ```
+
 This means Claude is using the Edit tool.
 
 ```
 [Running: npm test...]
 ```
+
 This means Claude is using the Bash tool.
 
 ### Hook Messages
@@ -288,6 +299,7 @@ Try writing incorrect code to see if hooks catch it:
 ```
 
 Claude should:
+
 1. Recognize this as an anti-pattern
 2. Warn you about the correct pattern
 3. Use `runtime.execute(workflow.build())` instead
@@ -301,6 +313,7 @@ Try a security-related request:
 ```
 
 Claude should:
+
 1. Identify the hardcoded secret
 2. Recommend using environment variables
 3. Show the correct pattern
@@ -314,6 +327,7 @@ Ask about testing:
 ```
 
 Claude should:
+
 1. Reference the NO MOCKING policy
 2. Show real database testing patterns
 3. Use SQLite in-memory for examples
@@ -327,6 +341,7 @@ Claude should:
 **Cause**: npm global binaries not in PATH
 
 **Fix**:
+
 ```bash
 # Find npm global bin path
 npm config get prefix
@@ -340,6 +355,7 @@ export PATH="$(npm config get prefix)/bin:$PATH"
 **Cause**: Invalid or expired API key
 
 **Fix**:
+
 1. Go to https://console.anthropic.com
 2. Create a new API key
 3. Run `claude` again and re-authenticate
@@ -349,6 +365,7 @@ export PATH="$(npm config get prefix)/bin:$PATH"
 **Cause**: Not in the correct directory
 
 **Fix**:
+
 ```bash
 # Navigate to the setup directory
 cd /path/to/kailash-vibe-cc-setup
@@ -362,6 +379,7 @@ ls -la .claude/
 **Cause**: Slow hook execution
 
 **Fix**:
+
 1. Check network connectivity
 2. Verify Node.js is working: `node --version`
 3. Check hook files are executable
@@ -373,6 +391,7 @@ ls -la .claude/
 ### Explore Available Commands
 
 List all commands:
+
 ```
 > /help
 ```
@@ -380,6 +399,7 @@ List all commands:
 ### Try Each Skill Command
 
 Experience what each skill provides:
+
 ```
 > /sdk
 > /db
@@ -392,6 +412,7 @@ Experience what each skill provides:
 ### Make a Real Request
 
 Try building something real:
+
 ```
 > Create a simple CRUD workflow for a Task model with title and status fields using DataFlow
 ```
@@ -416,14 +437,14 @@ Try building something real:
 
 ### Quick Reference
 
-| Action | Command |
-|--------|---------|
-| Start Claude Code | `claude` |
-| Get help | `/help` |
-| Load Core SDK skill | `/sdk` |
-| Load DataFlow skill | `/db` |
-| Exit | `/exit` |
-| Clear context | `/clear` |
+| Action              | Command  |
+| ------------------- | -------- |
+| Start Claude Code   | `claude` |
+| Get help            | `/help`  |
+| Load Core SDK skill | `/sdk`   |
+| Load DataFlow skill | `/db`    |
+| Exit                | `/exit`  |
+| Clear context       | `/clear` |
 
 ---
 

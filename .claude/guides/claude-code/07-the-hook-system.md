@@ -5,6 +5,7 @@
 Hooks are **automatic enforcement scripts** that run at specific points in Claude's tool usage. Unlike skills (knowledge) or agents (judgment), hooks provide **deterministic enforcement** that doesn't require AI decision-making.
 
 By the end of this guide, you will understand:
+
 - What hooks are and why they exist
 - Every hook event type and when it fires
 - All configured hooks and what they do
@@ -19,12 +20,12 @@ By the end of this guide, you will understand:
 
 Some quality controls shouldn't depend on AI judgment:
 
-| Control | Without Hooks | With Hooks |
-|---------|---------------|------------|
-| Block `rm -rf /` | Claude might forget | Always blocked |
-| Format code after edit | Claude might skip | Always formatted |
-| Log session data | Claude might omit | Always logged |
-| Check for secrets | Claude might miss | Always checked |
+| Control                | Without Hooks       | With Hooks       |
+| ---------------------- | ------------------- | ---------------- |
+| Block `rm -rf /`       | Claude might forget | Always blocked   |
+| Format code after edit | Claude might skip   | Always formatted |
+| Log session data       | Claude might omit   | Always logged    |
+| Check for secrets      | Claude might miss   | Always checked   |
 
 ### The Solution: Deterministic Automation
 
@@ -56,13 +57,13 @@ Hooks run **automatically** at specific events:
 
 ### Hooks vs. Other Components
 
-| Aspect | Hooks | Rules | Agents |
-|--------|-------|-------|--------|
-| **Execution** | Automatic | Claude reads | Claude delegates |
-| **Judgment** | None (deterministic) | Requires interpretation | Deep analysis |
-| **Speed** | Milliseconds | Depends on context | Seconds |
-| **Blocking** | Can block actions | Cannot block | Cannot block |
-| **Token Usage** | Zero | Minimal | Significant |
+| Aspect          | Hooks                | Rules                   | Agents           |
+| --------------- | -------------------- | ----------------------- | ---------------- |
+| **Execution**   | Automatic            | Claude reads            | Claude delegates |
+| **Judgment**    | None (deterministic) | Requires interpretation | Deep analysis    |
+| **Speed**       | Milliseconds         | Depends on context      | Seconds          |
+| **Blocking**    | Can block actions    | Cannot block            | Cannot block     |
+| **Token Usage** | Zero                 | Minimal                 | Significant      |
 
 ---
 
@@ -70,7 +71,7 @@ Hooks run **automatically** at specific events:
 
 ### When Hooks Fire
 
-Claude Code supports six hook events:
+Claude Code supports seven hook events:
 
 ```
 SESSION LIFECYCLE
@@ -82,6 +83,17 @@ SESSION LIFECYCLE
     │ Session │◄──────── Work happens ─────────►│ Session │
     │ begins  │                                 │  ends   │
     └─────────┘                                 └─────────┘
+
+PER-MESSAGE (fires every user message — PRIMARY anti-amnesia)
+─────────────────────────────────────────────────────────────
+    UserPromptSubmit
+         │
+         ▼
+    ┌──────────────┐
+    │ Inject rules │
+    │ + workspace  │
+    │ into context │
+    └──────────────┘
 
 TOOL LIFECYCLE (repeats for each tool use)
 ─────────────────────────────────────────────────────────────
@@ -106,14 +118,15 @@ CONTEXT MANAGEMENT
 
 ### Event Details
 
-| Event | When It Fires | Common Uses |
-|-------|---------------|-------------|
-| **SessionStart** | Claude Code starts | Load context, check environment |
-| **SessionEnd** | Claude Code exits normally | Save state, cleanup |
-| **PreToolUse** | Before any tool runs | Block dangerous commands, validate input |
-| **PostToolUse** | After any tool runs | Format code, validate output |
-| **PreCompact** | Before context cleanup | Save important state |
-| **Stop** | Session terminated | Emergency cleanup |
+| Event                | When It Fires              | Common Uses                                       |
+| -------------------- | -------------------------- | ------------------------------------------------- |
+| **SessionStart**     | Claude Code starts         | Load context, check environment, detect workspace |
+| **UserPromptSubmit** | Every user message         | Inject rules + workspace state into LLM context   |
+| **SessionEnd**       | Claude Code exits normally | Save state, cleanup                               |
+| **PreToolUse**       | Before any tool runs       | Block dangerous commands, validate input          |
+| **PostToolUse**      | After any tool runs        | Format code, validate output                      |
+| **PreCompact**       | Before context cleanup     | Save important state, workspace reminder          |
+| **Stop**             | Session terminated         | Emergency cleanup, workspace reminder             |
 
 ---
 
@@ -139,6 +152,10 @@ Hooks are configured in `.claude/settings.json`:
 ### Current Hook Configuration
 
 ```
+UserPromptSubmit
+└── user-prompt-rules-reminder.js
+    └── Purpose: Anti-amnesia context injection (rules + workspace state)
+
 PreToolUse
 ├── validate-bash-command.js
 │   ├── Matcher: Bash tool only
@@ -157,8 +174,11 @@ PostToolUse
     └── Purpose: Format code
 
 SessionStart
-└── session-start.js
-    └── Purpose: Initialize session context
+├── session-start.js
+│   └── Purpose: Initialize session context + workspace detection
+│
+└── detect-package-manager.js
+    └── Purpose: Detect npm/pnpm/yarn/bun (utility, called by session-start)
 
 SessionEnd
 └── session-end.js
@@ -166,12 +186,12 @@ SessionEnd
 
 PreCompact
 └── pre-compact.js
-    └── Purpose: Save state before cleanup
+    └── Purpose: Save state before cleanup + workspace reminder
 
 Stop
 └── stop.js
     ├── Timeout: 5 seconds
-    └── Purpose: Handle termination
+    └── Purpose: Handle termination + workspace reminder
 ```
 
 ---
@@ -184,6 +204,7 @@ Stop
 **Purpose**: Block dangerous commands, warn about risky operations
 
 **What it blocks (exit code 2)**:
+
 ```
 ❌ rm -rf /           → "Blocked: rm -rf / (system destruction)"
 ❌ > /dev/sda         → "Blocked: Writing to block device"
@@ -194,6 +215,7 @@ Stop
 ```
 
 **What it warns about (exit code 0 with message)**:
+
 ```
 ⚠️ curl ... | sh     → "WARNING: Piping curl to shell is dangerous"
 ⚠️ npm run dev       → "WARNING: Long-running command. Use run_in_background."
@@ -208,6 +230,7 @@ Stop
 **Purpose**: Check SDK pattern compliance
 
 **What it checks**:
+
 ```
 ✓ workflow.build() called before execute
 ✓ Absolute imports used (not relative)
@@ -217,6 +240,7 @@ Stop
 ```
 
 **Example warning**:
+
 ```
 WARNING: Using relative import '../workflow'. Use absolute import instead.
 WARNING: Detected workflow.execute(runtime). Use runtime.execute(workflow.build()).
@@ -228,11 +252,33 @@ WARNING: Detected workflow.execute(runtime). Use runtime.execute(workflow.build(
 **Purpose**: Automatically format code
 
 **What it does**:
+
 ```
 Python files  → black formatting
 JavaScript    → prettier (if configured)
 TypeScript    → prettier (if configured)
 JSON          → json formatting
+```
+
+### user-prompt-rules-reminder.js
+
+**Event**: UserPromptSubmit (every message)
+**Purpose**: Anti-amnesia context injection
+
+**What it does**:
+
+1. Injects active rules reminder into Claude's context
+2. Injects workspace summary (name, phase, todo progress)
+3. Adds contextual reminders based on recent file patterns
+4. Survives context compaction (primary anti-amnesia mechanism)
+
+**Why this is critical**: SessionStart hooks output to stderr (human-facing only). Only UserPromptSubmit, PreToolUse, and PostToolUse support `hookSpecificOutput` that reaches Claude's context. This makes the per-turn reminder the PRIMARY mechanism for maintaining workspace awareness across long sessions.
+
+**Example output injected into context**:
+
+```
+[RULES] agents, git, no-stubs, patterns, security, testing
+[WORKSPACE] my-saas-app | Phase: 03-implement | Todos: 3 active / 5 done
 ```
 
 ### session-start.js
@@ -241,10 +287,20 @@ JSON          → json formatting
 **Purpose**: Initialize session context
 
 **What it does**:
+
 1. Detects active frameworks (DataFlow, Nexus, Kaizen)
 2. Checks environment setup (.env files, dependencies)
-3. Logs session start observation
-4. Sets up session state
+3. Detects active workspace and displays status to human (stderr)
+4. Shows session notes age if `.session-notes` exists
+5. Logs session start observation
+6. Sets up session state
+
+**Workspace detection output** (stderr, human-facing):
+
+```
+[WORKSPACE] my-saas-app | Phase: 03-implement | Todos: 3 active / 5 done
+[WORKSPACE] Session notes: 2 hours ago
+```
 
 ### session-end.js
 
@@ -252,6 +308,7 @@ JSON          → json formatting
 **Purpose**: Persist session state
 
 **What it does**:
+
 1. Saves session observations
 2. Persists learning state
 3. Cleanup temporary resources
@@ -263,9 +320,18 @@ JSON          → json formatting
 **Purpose**: Save state before context cleanup
 
 **What it does**:
+
 1. Saves important observations
 2. Checkpoints learning state
 3. Preserves critical context
+4. Reminds about workspace session notes (stderr)
+
+**Workspace reminder** (when active workspace detected):
+
+```
+[WORKSPACE] Context compacting. Before losing context, write session notes
+to workspaces/my-saas-app/.session-notes (or run /wrapup).
+```
 
 ### stop.js
 
@@ -273,9 +339,18 @@ JSON          → json formatting
 **Purpose**: Handle session termination
 
 **What it does**:
+
 1. Emergency state save
 2. Resource cleanup
 3. Graceful shutdown
+4. Workspace session reminder (stderr)
+
+**Workspace reminder** (when active workspace detected):
+
+```
+[WORKSPACE] Session ending for my-saas-app. Run /wrapup next time
+before closing to save session context.
+```
 
 ---
 
@@ -312,11 +387,11 @@ Hooks output JSON to stdout:
 
 ### Exit Codes
 
-| Exit Code | Meaning | Effect |
-|-----------|---------|--------|
-| 0 | Success | Continue execution |
-| 2 | Blocking error | Stop tool execution |
-| Other | Non-blocking error | Warn and continue |
+| Exit Code | Meaning            | Effect              |
+| --------- | ------------------ | ------------------- |
+| 0         | Success            | Continue execution  |
+| 2         | Blocking error     | Stop tool execution |
+| Other     | Non-blocking error | Warn and continue   |
 
 ---
 
@@ -370,12 +445,12 @@ Claude: [Uses git commit]
 
 ### Message Types
 
-| Prefix | Meaning | Action Needed |
-|--------|---------|---------------|
-| **Blocked** | Action prevented | Request was stopped |
-| **WARNING** | Risky operation | Proceed with caution |
-| **REMINDER** | Best practice hint | Consider the suggestion |
-| **Validated** | All checks passed | No action needed |
+| Prefix        | Meaning            | Action Needed           |
+| ------------- | ------------------ | ----------------------- |
+| **Blocked**   | Action prevented   | Request was stopped     |
+| **WARNING**   | Risky operation    | Proceed with caution    |
+| **REMINDER**  | Best practice hint | Consider the suggestion |
+| **Validated** | All checks passed  | No action needed        |
 
 ### Common Messages You'll See
 
@@ -404,12 +479,12 @@ Validated
 
 Hooks must complete quickly or they'll block Claude:
 
-| Hook | Timeout | Why |
-|------|---------|-----|
-| `validate-bash-command.js` | 10s | Pre-execution must be fast |
-| `validate-workflow.js` | 15s | File analysis takes longer |
-| `auto-format.js` | 30s | Formatting large files |
-| `stop.js` | 5s | Emergency cleanup |
+| Hook                       | Timeout | Why                        |
+| -------------------------- | ------- | -------------------------- |
+| `validate-bash-command.js` | 10s     | Pre-execution must be fast |
+| `validate-workflow.js`     | 15s     | File analysis takes longer |
+| `auto-format.js`           | 30s     | Formatting large files     |
+| `stop.js`                  | 5s      | Emergency cleanup          |
 
 ### Timeout Handling
 
@@ -418,7 +493,7 @@ If a hook times out:
 ```javascript
 const TIMEOUT_MS = 5000;
 const timeout = setTimeout(() => {
-  console.error('[HOOK TIMEOUT] Hook exceeded time limit');
+  console.error("[HOOK TIMEOUT] Hook exceeded time limit");
   console.log(JSON.stringify({ continue: true }));
   process.exit(1);
 }, TIMEOUT_MS);
@@ -441,32 +516,34 @@ The session continues, but a warning is logged.
  * Purpose: What this hook does
  */
 
-const fs = require('fs');
+const fs = require("fs");
 
 // Timeout handling
 const TIMEOUT_MS = 5000;
 const timeout = setTimeout(() => {
-  console.error('[HOOK TIMEOUT] my-custom-hook exceeded limit');
+  console.error("[HOOK TIMEOUT] my-custom-hook exceeded limit");
   console.log(JSON.stringify({ continue: true }));
   process.exit(1);
 }, TIMEOUT_MS);
 
 // Read input
-let input = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', chunk => input += chunk);
-process.stdin.on('end', () => {
+let input = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => (input += chunk));
+process.stdin.on("end", () => {
   clearTimeout(timeout);
   try {
     const data = JSON.parse(input);
     const result = processHook(data);
-    console.log(JSON.stringify({
-      continue: result.continue,
-      hookSpecificOutput: {
-        hookEventName: process.env.HOOK_EVENT_NAME,
-        message: result.message
-      }
-    }));
+    console.log(
+      JSON.stringify({
+        continue: result.continue,
+        hookSpecificOutput: {
+          hookEventName: process.env.HOOK_EVENT_NAME,
+          message: result.message,
+        },
+      }),
+    );
     process.exit(result.exitCode);
   } catch (error) {
     console.error(`[HOOK ERROR] ${error.message}`);
@@ -477,7 +554,7 @@ process.stdin.on('end', () => {
 
 function processHook(data) {
   // Your hook logic here
-  return { continue: true, exitCode: 0, message: 'Validated' };
+  return { continue: true, exitCode: 0, message: "Validated" };
 }
 ```
 
@@ -512,9 +589,9 @@ Add to `.claude/settings.json`:
 
 1. **Hooks enforce rules automatically** - No AI judgment required
 
-2. **Six event types** - SessionStart, SessionEnd, PreToolUse, PostToolUse, PreCompact, Stop
+2. **Seven event types** - SessionStart, UserPromptSubmit, SessionEnd, PreToolUse, PostToolUse, PreCompact, Stop
 
-3. **Eight hooks configured** - For validation, formatting, and lifecycle management
+3. **Nine hooks configured** - For validation, formatting, workspace awareness, and lifecycle management
 
 4. **Exit codes matter** - 0 = continue, 2 = block, other = warn
 
@@ -524,15 +601,17 @@ Add to `.claude/settings.json`:
 
 ### Quick Reference
 
-| Hook | Event | Purpose |
-|------|-------|---------|
-| `validate-bash-command.js` | PreToolUse | Block dangerous commands |
-| `validate-workflow.js` | PostToolUse | Check SDK patterns |
-| `auto-format.js` | PostToolUse | Format code |
-| `session-start.js` | SessionStart | Initialize session |
-| `session-end.js` | SessionEnd | Save state |
-| `pre-compact.js` | PreCompact | Save before cleanup |
-| `stop.js` | Stop | Handle termination |
+| Hook                            | Event            | Purpose                                   |
+| ------------------------------- | ---------------- | ----------------------------------------- |
+| `user-prompt-rules-reminder.js` | UserPromptSubmit | Anti-amnesia: rules + workspace injection |
+| `validate-bash-command.js`      | PreToolUse       | Block dangerous commands                  |
+| `validate-workflow.js`          | PostToolUse      | Check SDK patterns                        |
+| `auto-format.js`                | PostToolUse      | Format code                               |
+| `session-start.js`              | SessionStart     | Initialize session + workspace detection  |
+| `detect-package-manager.js`     | SessionStart     | Detect npm/pnpm/yarn/bun                  |
+| `session-end.js`                | SessionEnd       | Save state                                |
+| `pre-compact.js`                | PreCompact       | Save before cleanup + workspace reminder  |
+| `stop.js`                       | Stop             | Handle termination + workspace reminder   |
 
 ---
 

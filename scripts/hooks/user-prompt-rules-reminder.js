@@ -20,6 +20,7 @@ const {
   buildCompactSummary,
   ensureEnvFile,
 } = require("./lib/env-utils");
+const { buildWorkspaceSummary } = require("./lib/workspace-utils");
 
 const TIMEOUT_MS = 3000;
 const timeout = setTimeout(() => {
@@ -83,6 +84,14 @@ function buildReminder(data) {
       "Follow up on failures. " +
       "No stubs/TODOs/simulated data in production code.",
   );
+
+  // Line 4: Workspace context (survives compaction — primary anti-amnesia mechanism)
+  try {
+    const wsSummary = buildWorkspaceSummary(cwd);
+    if (wsSummary) {
+      lines.push(`[WORKSPACE] ${wsSummary}`);
+    }
+  } catch {}
 
   // ── Contextual reminders based on user message content ────────────
   const llmKeywords = [

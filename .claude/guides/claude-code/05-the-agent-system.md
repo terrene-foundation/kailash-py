@@ -5,6 +5,7 @@
 While commands load knowledge, **agents provide specialized processing**. Think of agents as expert consultants that Claude can call upon for tasks requiring deep expertise that simple patterns can't address.
 
 By the end of this guide, you will understand:
+
 - What agents are and how they differ from skills
 - Every available agent and what it specializes in
 - When Claude delegates to agents automatically
@@ -18,6 +19,7 @@ By the end of this guide, you will understand:
 ### The Problem Agents Solve
 
 Some tasks require more than pattern matching. They require:
+
 - **Deep domain expertise** - Knowing not just what, but why
 - **Multi-step reasoning** - Complex analysis across multiple dimensions
 - **Judgment calls** - Decisions that can't be reduced to rules
@@ -25,13 +27,13 @@ Some tasks require more than pattern matching. They require:
 
 ### Skills vs. Agents
 
-| Aspect | Skills | Agents |
-|--------|--------|--------|
-| **Content** | Patterns, templates, quick references | Processes, analysis methods, expertise |
-| **Size** | 50-250 lines | 100-300 lines |
-| **Purpose** | Show HOW to do things | DECIDE what to do |
-| **Invocation** | Commands load them | Claude delegates to them |
-| **Processing** | None (just information) | Active analysis and reasoning |
+| Aspect         | Skills                                | Agents                                 |
+| -------------- | ------------------------------------- | -------------------------------------- |
+| **Content**    | Patterns, templates, quick references | Processes, analysis methods, expertise |
+| **Size**       | 50-250 lines                          | 100-300 lines                          |
+| **Purpose**    | Show HOW to do things                 | DECIDE what to do                      |
+| **Invocation** | Commands load them                    | Claude delegates to them               |
+| **Processing** | None (just information)               | Active analysis and reasoning          |
 
 ### How Agent Delegation Works
 
@@ -87,11 +89,13 @@ These agents help understand requirements and plan implementation.
 **Expertise**: Failure point analysis, root cause investigation, complexity assessment
 
 **When used**:
+
 - Planning complex features
 - Debugging systemic issues
 - Evaluating architectural trade-offs
 
 **What it does**:
+
 1. Conducts failure point analysis (technical + business risks)
 2. Applies 5-Why framework for root cause investigation
 3. Scores complexity (Simple/Moderate/Enterprise)
@@ -99,6 +103,7 @@ These agents help understand requirements and plan implementation.
 5. Identifies existing solutions to reuse
 
 **Example request**:
+
 ```
 > Analyze the requirements for adding multi-tenancy to our application
 ```
@@ -110,17 +115,20 @@ Claude delegates to `deep-analyst` → Returns executive summary, risk register,
 **Expertise**: Requirements breakdown, Architecture Decision Records (ADR)
 
 **When used**:
+
 - Starting complex features
 - Creating formal documentation
 - Making architectural decisions
 
 **What it does**:
+
 1. Systematically breaks down requirements
 2. Creates ADR documentation
 3. Identifies dependencies and constraints
 4. Maps requirements to implementation tasks
 
 **Example request**:
+
 ```
 > Create an ADR for our authentication system choice
 ```
@@ -130,17 +138,20 @@ Claude delegates to `deep-analyst` → Returns executive summary, risk register,
 **Expertise**: Finding patterns in SDK documentation
 
 **When used**:
+
 - Finding existing solutions before coding
 - Resolving errors during development
 - Locating specific patterns or examples
 
 **What it does**:
+
 1. Searches SDK documentation efficiently
 2. Uses pre-built file indexes
 3. Finds relevant patterns and examples
 4. Provides specific file:line references
 
 **Example request**:
+
 ```
 > Find existing patterns for handling workflow errors
 ```
@@ -150,17 +161,20 @@ Claude delegates to `deep-analyst` → Returns executive summary, risk register,
 **Expertise**: Choosing between Core SDK, DataFlow, Nexus, Kaizen
 
 **When used**:
+
 - Starting a new project
 - Deciding which framework to use
 - Understanding framework trade-offs
 
 **What it does**:
+
 1. Analyzes requirements against framework capabilities
 2. Recommends appropriate framework(s)
 3. Coordinates with framework specialists
 4. Provides migration guidance if needed
 
 **Example request**:
+
 ```
 > Should I use DataFlow or raw Core SDK for this database feature?
 ```
@@ -174,12 +188,14 @@ These agents provide deep expertise in specific frameworks.
 **Expertise**: DataFlow database framework
 
 **When used**:
+
 - Creating database models
 - Implementing CRUD operations
 - Bulk data processing
 - Multi-tenancy patterns
 
 **What it knows**:
+
 - `@db.model` decorator patterns
 - Auto-generated node usage (11 nodes per model)
 - PostgreSQL vs SQLite differences
@@ -187,6 +203,7 @@ These agents provide deep expertise in specific frameworks.
 - Critical gotchas (no manual timestamps, `id` primary key)
 
 **Example request**:
+
 ```
 > Help me implement bulk user import with DataFlow
 ```
@@ -196,12 +213,14 @@ These agents provide deep expertise in specific frameworks.
 **Expertise**: Nexus multi-channel platform
 
 **When used**:
+
 - Deploying workflows as APIs
 - Creating CLI interfaces
 - Setting up MCP servers
 - Multi-channel session management
 
 **What it knows**:
+
 - Zero-config initialization
 - Workflow registration patterns
 - API + CLI + MCP deployment
@@ -209,6 +228,7 @@ These agents provide deep expertise in specific frameworks.
 - Session management strategies
 
 **Example request**:
+
 ```
 > Deploy my user management workflow as a REST API
 ```
@@ -218,12 +238,14 @@ These agents provide deep expertise in specific frameworks.
 **Expertise**: Kaizen AI agent framework
 
 **When used**:
+
 - Building AI agents
 - Multi-agent coordination
 - Signature-based programming
 - Multi-modal processing
 
 **What it knows**:
+
 - BaseAgent architecture
 - Unified Agent API (v1.0.0)
 - Execution modes (autonomous, supervised)
@@ -231,6 +253,7 @@ These agents provide deep expertise in specific frameworks.
 - A2A protocol integration
 
 **Example request**:
+
 ```
 > Create an autonomous agent that can analyze documents
 ```
@@ -240,17 +263,20 @@ These agents provide deep expertise in specific frameworks.
 **Expertise**: Model Context Protocol implementation
 
 **When used**:
+
 - Implementing MCP servers
 - MCP client integration
 - Tool and resource exposure
 
 **What it knows**:
+
 - MCP transport patterns (stdio, SSE, HTTP)
 - Tool and resource definitions
 - Authentication patterns
 - Progress reporting
 
 **Example request**:
+
 ```
 > Expose my workflow as an MCP tool
 ```
@@ -264,11 +290,13 @@ These agents help write and validate code.
 **Expertise**: Core SDK patterns (workflows, nodes, parameters)
 
 **When used**:
+
 - Implementing workflows
 - Debugging pattern issues
 - Understanding node connections
 
 **What it knows**:
+
 - WorkflowBuilder patterns
 - Node parameter handling
 - Connection validation
@@ -276,6 +304,7 @@ These agents help write and validate code.
 - Conditional execution
 
 **Example request**:
+
 ```
 > Debug why my workflow nodes aren't connecting properly
 ```
@@ -285,17 +314,20 @@ These agents help write and validate code.
 **Expertise**: Test-Driven Development methodology
 
 **When used**:
+
 - Writing tests before code
 - Following TDD workflow
 - Ensuring test coverage
 
 **What it does**:
+
 1. Writes tests first (Red phase)
 2. Implements minimal code to pass (Green phase)
 3. Refactors for quality (Refactor phase)
 4. Ensures NO MOCKING in Tier 2-3
 
 **Example request**:
+
 ```
 > Implement user registration following TDD
 ```
@@ -305,11 +337,13 @@ These agents help write and validate code.
 **Expertise**: 3-tier testing strategy
 
 **When used**:
+
 - Understanding test requirements
 - Choosing test approaches
 - Debugging test failures
 
 **What it knows**:
+
 - Tier 1: Unit tests (mocking allowed)
 - Tier 2: Integration tests (NO MOCKING)
 - Tier 3: End-to-end tests (NO MOCKING)
@@ -317,6 +351,7 @@ These agents help write and validate code.
 - Test organization
 
 **Example request**:
+
 ```
 > What's the right approach for testing my DataFlow models?
 ```
@@ -326,17 +361,20 @@ These agents help write and validate code.
 **Expertise**: Compliance checking against standards
 
 **When used**:
+
 - Validating code quality
 - Catching violations early
 - Pre-commit checks
 
 **What it checks**:
+
 - Absolute import compliance
 - Parameter validation patterns
 - Security best practices
 - Testing policy adherence
 
 **Example request**:
+
 ```
 > Check if my code follows gold standards
 ```
@@ -350,17 +388,20 @@ These agents review and validate work.
 **Expertise**: Checkpoint reviews and progress critique
 
 **When used**:
+
 - After todo creation (review completeness)
 - After component implementation (review quality)
 - At milestones (review progress)
 
 **What it does**:
+
 1. Reviews against requirements
 2. Identifies gaps and issues
 3. Suggests improvements
 4. Validates milestone completion
 
 **Example request**:
+
 ```
 > Review my implementation before I move to the next component
 ```
@@ -370,11 +411,13 @@ These agents review and validate work.
 **Expertise**: Security review and vulnerability detection
 
 **When used**:
+
 - Before commits (mandatory)
 - Reviewing authentication code
 - Checking for secrets exposure
 
 **What it checks**:
+
 - OWASP Top 10 vulnerabilities
 - Hardcoded secrets
 - Input validation
@@ -382,6 +425,7 @@ These agents review and validate work.
 - Authentication flows
 
 **Example request**:
+
 ```
 > Security review this authentication code
 ```
@@ -391,17 +435,20 @@ These agents review and validate work.
 **Expertise**: Documentation accuracy and testing
 
 **When used**:
+
 - Validating code examples
 - Ensuring documentation accuracy
 - Testing documentation completeness
 
 **What it does**:
+
 1. Tests all code examples actually work
 2. Verifies documentation matches implementation
 3. Checks for stale references
 4. Validates links and paths
 
 **Example request**:
+
 ```
 > Verify all code examples in the README work
 ```
@@ -415,12 +462,14 @@ These agents provide deep expertise in frontend development across frameworks.
 **Expertise**: UI/UX design principles and enterprise UX patterns
 
 **When used**:
+
 - Designing new pages, features, or interfaces
 - Evaluating existing UI for usability issues
 - Making layout, spacing, or hierarchy decisions
 - Creating design specifications
 
 **What it knows**:
+
 - Top-down design methodology
 - Layout and information architecture
 - Visual hierarchy principles (F-pattern, Z-pattern)
@@ -428,6 +477,7 @@ These agents provide deep expertise in frontend development across frameworks.
 - WCAG accessibility standards
 
 **Example request**:
+
 ```
 > Analyze the contacts search page layout and identify usability issues
 ```
@@ -437,12 +487,14 @@ These agents provide deep expertise in frontend development across frameworks.
 **Expertise**: React frontend development and component architecture
 
 **When used**:
+
 - Creating responsive React components
 - Converting mockups to functional code
 - Implementing API integration with @tanstack/react-query
 - Structuring frontend projects
 
 **What it knows**:
+
 - React component architecture (elements/ pattern)
 - One API call per component pattern
 - Shadcn UI component usage
@@ -450,6 +502,7 @@ These agents provide deep expertise in frontend development across frameworks.
 - State management (Zustand, Redux, React Query)
 
 **Example request**:
+
 ```
 > Create a responsive user list component with loading states
 ```
@@ -459,12 +512,14 @@ These agents provide deep expertise in frontend development across frameworks.
 **Expertise**: React 19 and Next.js 15 patterns
 
 **When used**:
+
 - Building production-grade React/Next.js frontends
 - Implementing workflow editors with React Flow
 - Creating admin dashboards
 - AI agent interfaces
 
 **What it knows**:
+
 - React 19 features (Server Components, Actions)
 - Next.js 15 patterns (App Router, Middleware)
 - React Flow for workflow visualization
@@ -472,6 +527,7 @@ These agents provide deep expertise in frontend development across frameworks.
 - TypeScript best practices
 
 **Example request**:
+
 ```
 > Create a workflow editor using React Flow with Nexus integration
 ```
@@ -481,12 +537,14 @@ These agents provide deep expertise in frontend development across frameworks.
 **Expertise**: Flutter cross-platform development
 
 **When used**:
+
 - Building mobile apps for Kailash workflows
 - Creating Flutter UI for Nexus/DataFlow/Kaizen
 - Setting up Riverpod state management
 - Building cross-platform (iOS/Android/Web/Desktop) apps
 
 **What it knows**:
+
 - Flutter design system patterns
 - Riverpod state management
 - Responsive design across phone/tablet/desktop
@@ -494,6 +552,7 @@ These agents provide deep expertise in frontend development across frameworks.
 - Material Design 3 theming
 
 **Example request**:
+
 ```
 > Create a Flutter mobile app for the user management workflow
 ```
@@ -505,11 +564,13 @@ These agents provide deep expertise in frontend development across frameworks.
 **Expertise**: Docker and Kubernetes deployment
 
 **When used**:
+
 - Setting up local development
 - Configuring production deployment
 - Environment management
 
 **What it knows**:
+
 - Docker Compose patterns
 - Kubernetes configurations
 - Environment variables and secrets
@@ -517,6 +578,7 @@ These agents provide deep expertise in frontend development across frameworks.
 - Horizontal scaling
 
 **Example request**:
+
 ```
 > Set up Kubernetes deployment for my application
 ```
@@ -526,17 +588,20 @@ These agents provide deep expertise in frontend development across frameworks.
 **Expertise**: Git workflows and releases
 
 **When used**:
+
 - Pre-commit validation
 - Creating pull requests
 - Version management
 
 **What it does**:
+
 1. Runs code quality tools (black, isort, ruff)
 2. Creates feature branches
 3. Manages PR workflows
 4. Handles version releases
 
 **Example request**:
+
 ```
 > Prepare this code for a PR
 ```
@@ -548,17 +613,20 @@ These agents provide deep expertise in frontend development across frameworks.
 **Expertise**: Task management and tracking
 
 **When used**:
+
 - Creating task breakdowns
 - Tracking progress
 - Managing project todos
 
 **What it does**:
+
 1. Creates detailed task lists
 2. Tracks completion status
 3. Identifies dependencies
 4. Maintains todo hierarchy
 
 **Example request**:
+
 ```
 > Create a task breakdown for implementing user auth
 ```
@@ -568,17 +636,20 @@ These agents provide deep expertise in frontend development across frameworks.
 **Expertise**: GitHub project management
 
 **When used**:
+
 - Syncing with GitHub Projects
 - Creating issues
 - Managing sprints
 
 **What it does**:
+
 1. Creates GitHub issues from requirements
 2. Links issues to projects
 3. Tracks sprint progress
 4. Manages labels and milestones
 
 **Example request**:
+
 ```
 > Create GitHub issues for our sprint backlog
 ```
@@ -593,12 +664,12 @@ These agents provide deep expertise in frontend development across frameworks.
 deep-analyst → requirements-analyst → sdk-navigator → framework-advisor
 ```
 
-| Agent | Purpose in Phase |
-|-------|------------------|
-| `deep-analyst` | Identify risks and failure points |
+| Agent                  | Purpose in Phase                     |
+| ---------------------- | ------------------------------------ |
+| `deep-analyst`         | Identify risks and failure points    |
 | `requirements-analyst` | Break down requirements, create ADRs |
-| `sdk-navigator` | Find existing patterns to reuse |
-| `framework-advisor` | Select appropriate frameworks |
+| `sdk-navigator`        | Find existing patterns to reuse      |
+| `framework-advisor`    | Select appropriate frameworks        |
 
 ### Phase 2: Planning
 
@@ -606,11 +677,11 @@ deep-analyst → requirements-analyst → sdk-navigator → framework-advisor
 todo-manager → gh-manager → intermediate-reviewer
 ```
 
-| Agent | Purpose in Phase |
-|-------|------------------|
-| `todo-manager` | Create detailed task breakdown |
-| `gh-manager` | Sync tasks to GitHub |
-| `intermediate-reviewer` | Validate plan completeness |
+| Agent                   | Purpose in Phase               |
+| ----------------------- | ------------------------------ |
+| `todo-manager`          | Create detailed task breakdown |
+| `gh-manager`            | Sync tasks to GitHub           |
+| `intermediate-reviewer` | Validate plan completeness     |
 
 ### Phase 3: Implementation
 
@@ -618,13 +689,13 @@ todo-manager → gh-manager → intermediate-reviewer
 tdd-implementer → pattern-expert → [framework-specialist] → gold-standards-validator → intermediate-reviewer
 ```
 
-| Agent | Purpose in Phase |
-|-------|------------------|
-| `tdd-implementer` | Write tests first |
-| `pattern-expert` | Implement using SDK patterns |
-| `[framework-specialist]` | Framework-specific guidance |
-| `gold-standards-validator` | Validate compliance |
-| `intermediate-reviewer` | Review implementation |
+| Agent                      | Purpose in Phase             |
+| -------------------------- | ---------------------------- |
+| `tdd-implementer`          | Write tests first            |
+| `pattern-expert`           | Implement using SDK patterns |
+| `[framework-specialist]`   | Framework-specific guidance  |
+| `gold-standards-validator` | Validate compliance          |
+| `intermediate-reviewer`    | Review implementation        |
 
 ### Phase 4: Testing
 
@@ -632,10 +703,10 @@ tdd-implementer → pattern-expert → [framework-specialist] → gold-standards
 testing-specialist → documentation-validator
 ```
 
-| Agent | Purpose in Phase |
-|-------|------------------|
-| `testing-specialist` | Verify test coverage |
-| `documentation-validator` | Test code examples |
+| Agent                     | Purpose in Phase     |
+| ------------------------- | -------------------- |
+| `testing-specialist`      | Verify test coverage |
+| `documentation-validator` | Test code examples   |
 
 ### Phase 5: Deployment
 
@@ -643,8 +714,8 @@ testing-specialist → documentation-validator
 deployment-specialist
 ```
 
-| Agent | Purpose in Phase |
-|-------|------------------|
+| Agent                   | Purpose in Phase        |
+| ----------------------- | ----------------------- |
 | `deployment-specialist` | Docker/Kubernetes setup |
 
 ### Phase 6: Release
@@ -653,10 +724,10 @@ deployment-specialist
 git-release-specialist → security-reviewer
 ```
 
-| Agent | Purpose in Phase |
-|-------|------------------|
+| Agent                    | Purpose in Phase                   |
+| ------------------------ | ---------------------------------- |
 | `git-release-specialist` | Pre-commit validation, PR creation |
-| `security-reviewer` | Security audit before commit |
+| `security-reviewer`      | Security audit before commit       |
 
 ### Phase 7: Final
 
@@ -664,9 +735,9 @@ git-release-specialist → security-reviewer
 intermediate-reviewer
 ```
 
-| Agent | Purpose in Phase |
-|-------|------------------|
-| `intermediate-reviewer` | Final critique |
+| Agent                   | Purpose in Phase |
+| ----------------------- | ---------------- |
+| `intermediate-reviewer` | Final critique   |
 
 ---
 
@@ -676,15 +747,15 @@ intermediate-reviewer
 
 Claude automatically delegates based on task type:
 
-| Request Contains | Delegates To |
-|------------------|--------------|
-| "security review", "vulnerability" | `security-reviewer` |
-| "DataFlow", "database model" | `dataflow-specialist` |
-| "Nexus", "deploy as API" | `nexus-specialist` |
-| "Kaizen", "AI agent" | `kaizen-specialist` |
-| "test", "testing strategy" | `testing-specialist` |
-| "analyze requirements", "failure points" | `deep-analyst` |
-| "compliance", "gold standards" | `gold-standards-validator` |
+| Request Contains                         | Delegates To               |
+| ---------------------------------------- | -------------------------- |
+| "security review", "vulnerability"       | `security-reviewer`        |
+| "DataFlow", "database model"             | `dataflow-specialist`      |
+| "Nexus", "deploy as API"                 | `nexus-specialist`         |
+| "Kaizen", "AI agent"                     | `kaizen-specialist`        |
+| "test", "testing strategy"               | `testing-specialist`       |
+| "analyze requirements", "failure points" | `deep-analyst`             |
+| "compliance", "gold standards"           | `gold-standards-validator` |
 
 ### Explicit Delegation
 
@@ -752,7 +823,7 @@ Claude will invoke each agent in sequence, building on previous results.
 
 ### Specialist Agents Output
 
-```
+````
 ## Recommendation
 [Framework-specific guidance]
 
@@ -760,14 +831,17 @@ Claude will invoke each agent in sequence, building on previous results.
 ```python
 # Correct implementation
 ...
-```
+````
 
 ## Gotchas
+
 ❌ [Anti-pattern]: [Consequence]
 ✅ [Correct approach]: [Why]
 
 ## References
+
 - [Relevant documentation links]
+
 ```
 
 ---
@@ -779,17 +853,19 @@ Claude will invoke each agent in sequence, building on previous results.
 Subagents operate in separate context windows and **cannot invoke other subagents**. Coordination happens through Claude Code:
 
 ```
+
 ┌─────────────────────────────────────────────────────────────┐
-│                     CLAUDE CODE                              │
-│                   (Coordinator)                              │
-│                                                              │
-│   ┌─────────┐     ┌─────────┐     ┌─────────┐              │
-│   │ Agent 1 │ ──▶ │ Agent 2 │ ──▶ │ Agent 3 │              │
-│   └─────────┘     └─────────┘     └─────────┘              │
-│                                                              │
-│   Results from each agent inform the next delegation         │
+│ CLAUDE CODE │
+│ (Coordinator) │
+│ │
+│ ┌─────────┐ ┌─────────┐ ┌─────────┐ │
+│ │ Agent 1 │ ──▶ │ Agent 2 │ ──▶ │ Agent 3 │ │
+│ └─────────┘ └─────────┘ └─────────┘ │
+│ │
+│ Results from each agent inform the next delegation │
 └─────────────────────────────────────────────────────────────┘
-```
+
+````
 
 ### Handoff Patterns
 
@@ -801,7 +877,7 @@ Agents document which other agents should be consulted:
 - **requirements-analyst**: Hand off for formal ADR creation
 - **framework-advisor**: Consult for framework selection
 - **testing-specialist**: Hand off for test strategy
-```
+````
 
 Claude uses these hints to coordinate effectively.
 
@@ -886,7 +962,7 @@ Claude uses these hints to coordinate effectively.
 
 1. **Agents provide specialized expertise** - Not just patterns, but judgment and analysis
 
-2. **22+ agents cover all phases** - From analysis to frontend to release
+2. **30 agents cover all phases** - From analysis to frontend to release
 
 3. **Automatic delegation is smart** - Claude chooses agents based on task type
 
@@ -898,30 +974,30 @@ Claude uses these hints to coordinate effectively.
 
 ### Quick Reference
 
-| Need | Agent |
-|------|-------|
-| Risk analysis | `deep-analyst` |
-| Requirements breakdown | `requirements-analyst` |
-| Find patterns | `sdk-navigator` |
-| Choose framework | `framework-advisor` |
-| Database help | `dataflow-specialist` |
-| API deployment | `nexus-specialist` |
-| AI agents | `kaizen-specialist` |
-| MCP integration | `mcp-specialist` |
-| UI/UX design | `uiux-designer` |
-| React components | `frontend-developer` |
-| React 19/Next.js | `react-specialist` |
-| Flutter mobile | `flutter-specialist` |
-| Write tests first | `tdd-implementer` |
-| Test strategy | `testing-specialist` |
-| Code compliance | `gold-standards-validator` |
-| Security audit | `security-reviewer` |
-| Implementation review | `intermediate-reviewer` |
-| Documentation testing | `documentation-validator` |
-| Deployment setup | `deployment-specialist` |
-| Git/PR workflow | `git-release-specialist` |
-| Task management | `todo-manager` |
-| GitHub projects | `gh-manager` |
+| Need                   | Agent                      |
+| ---------------------- | -------------------------- |
+| Risk analysis          | `deep-analyst`             |
+| Requirements breakdown | `requirements-analyst`     |
+| Find patterns          | `sdk-navigator`            |
+| Choose framework       | `framework-advisor`        |
+| Database help          | `dataflow-specialist`      |
+| API deployment         | `nexus-specialist`         |
+| AI agents              | `kaizen-specialist`        |
+| MCP integration        | `mcp-specialist`           |
+| UI/UX design           | `uiux-designer`            |
+| React components       | `frontend-developer`       |
+| React 19/Next.js       | `react-specialist`         |
+| Flutter mobile         | `flutter-specialist`       |
+| Write tests first      | `tdd-implementer`          |
+| Test strategy          | `testing-specialist`       |
+| Code compliance        | `gold-standards-validator` |
+| Security audit         | `security-reviewer`        |
+| Implementation review  | `intermediate-reviewer`    |
+| Documentation testing  | `documentation-validator`  |
+| Deployment setup       | `deployment-specialist`    |
+| Git/PR workflow        | `git-release-specialist`   |
+| Task management        | `todo-manager`             |
+| GitHub projects        | `gh-manager`               |
 
 ---
 

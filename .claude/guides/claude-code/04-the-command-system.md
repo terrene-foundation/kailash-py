@@ -5,6 +5,7 @@
 Commands are **shortcuts for loading specialized knowledge** into Claude's context. Instead of Claude having all knowledge loaded at once (which would be slow and expensive), commands let you selectively load exactly what's needed for your current task.
 
 By the end of this guide, you will understand:
+
 - What commands are and why they exist
 - Every available command and what it loads
 - When to use which command
@@ -17,7 +18,7 @@ By the end of this guide, you will understand:
 
 ### The Problem Commands Solve
 
-Claude Code has a limited **context window** - the amount of information it can "hold in mind" at once. If we loaded all 22 skill directories simultaneously, Claude would:
+Claude Code has a limited **context window** - the amount of information it can "hold in mind" at once. If we loaded all 28 skill directories simultaneously, Claude would:
 
 1. Run out of context space quickly
 2. Process irrelevant information
@@ -33,7 +34,7 @@ Without Commands:
 │ Claude's Context (Always Loaded)                        │
 │ ┌──────┬──────┬──────┬──────┬──────┬──────┬──────────┐│
 │ │ SDK  │ Data │Nexus │Kaizen│Tests │Deploy│ ... all  ││
-│ │      │ Flow │      │      │      │      │ 22 skills││
+│ │      │ Flow │      │      │      │      │ 28 skills││
 │ └──────┴──────┴──────┴──────┴──────┴──────┴──────────┘│
 │ Context 80% full before you even ask a question        │
 └────────────────────────────────────────────────────────┘
@@ -86,18 +87,21 @@ These are the commands you'll use most often:
 **What it loads**: Core SDK patterns for workflows, nodes, and runtime execution
 
 **When to use**:
+
 - Building custom workflows
 - Working directly with WorkflowBuilder
 - Understanding node connections
 - Debugging runtime issues
 
 **Example usage**:
+
 ```
 > /sdk
 > Now create a workflow that fetches data from an API and transforms it
 ```
 
 **What you get**:
+
 ```python
 # Claude will use patterns like:
 from kailash.workflow.builder import WorkflowBuilder
@@ -117,18 +121,21 @@ results, run_id = runtime.execute(workflow.build())
 **What it loads**: DataFlow framework patterns for database operations
 
 **When to use**:
+
 - Creating database models
 - Implementing CRUD operations
 - Working with PostgreSQL or SQLite
 - Bulk data operations
 
 **Example usage**:
+
 ```
 > /db
 > Create a User model with email and password fields
 ```
 
 **What you get**:
+
 ```python
 # Claude will use patterns like:
 from dataflow import DataFlow
@@ -153,18 +160,21 @@ class User:
 **What it loads**: Nexus multi-channel deployment patterns
 
 **When to use**:
+
 - Deploying workflows as APIs
 - Creating CLI interfaces
 - Setting up MCP servers
 - Multi-channel applications
 
 **Example usage**:
+
 ```
 > /api
 > Deploy my user workflow as a REST API
 ```
 
 **What you get**:
+
 ```python
 # Claude will use patterns like:
 from nexus import Nexus
@@ -187,18 +197,21 @@ def create_user(name: str, email: str):
 **What it loads**: Kaizen AI agent patterns
 
 **When to use**:
+
 - Building AI agents
 - Working with LLMs
 - Multi-agent systems
 - Signature-based programming
 
 **Example usage**:
+
 ```
 > /ai
 > Create an agent that can analyze documents and answer questions
 ```
 
 **What you get**:
+
 ```python
 # Claude will use patterns like:
 from kaizen.api import Agent
@@ -219,18 +232,21 @@ result = await agent.run("Analyze this document: ...")
 **What it loads**: 3-tier testing strategy patterns
 
 **When to use**:
+
 - Writing unit tests (Tier 1)
 - Writing integration tests (Tier 2)
 - Writing end-to-end tests (Tier 3)
 - Understanding the NO MOCKING policy
 
 **Example usage**:
+
 ```
 > /test
 > Write integration tests for my User model
 ```
 
 **What you get**:
+
 ```python
 # Claude will use patterns like:
 import pytest
@@ -255,22 +271,117 @@ def test_create_user(db):
 **What it loads**: Validation patterns and compliance checking
 
 **When to use**:
+
 - Checking if code follows best practices
 - Understanding mandatory patterns
 - Reviewing code for compliance
 - Pre-commit validation
 
 **Example usage**:
+
 ```
 > /validate
 > Check if my workflow follows gold standards
 ```
 
 **What you get**:
+
 - Import validation (absolute imports only)
 - Pattern validation (correct runtime execution)
 - Security validation (no hardcoded secrets)
 - Testing validation (NO MOCKING in Tier 2-3)
+
+### Workspace Phase Commands
+
+These commands replace the manual copy-paste workflow for the 5-phase workspace process.
+
+#### `/analyze` - Phase 01: Analysis
+
+**What it does**: Loads the analysis instruction template for the current workspace
+
+**When to use**: Starting a new project or re-entering analysis after validation gaps
+
+**Example usage**:
+
+```
+> /analyze my-saas-app
+```
+
+#### `/todos` - Phase 02: Todos
+
+**What it does**: Loads the todos instruction template, checks existing plans
+
+**When to use**: Breaking plans into actionable todos
+
+**Example usage**:
+
+```
+> /todos
+```
+
+**Note**: Stops for human approval before proceeding to implementation.
+
+#### `/implement` - Phase 03: Implementation
+
+**What it does**: Loads the implementation instruction template, shows todo progress
+
+**When to use**: Working through active todos. Repeat until all complete.
+
+**Example usage**:
+
+```
+> /implement              # Pick next active todo
+> /implement auth-setup   # Focus on specific todo
+```
+
+#### `/redteam` - Phase 04: Validation
+
+**What it does**: Loads the validation instruction template for red team testing
+
+**When to use**: After implementation, to validate with Playwright MCP (web) and Marionette MCP (Flutter)
+
+**Example usage**:
+
+```
+> /redteam
+```
+
+#### `/codify` - Phase 05: Codification
+
+**What it does**: Loads the codification instruction template for creating project agents and skills
+
+**When to use**: After validation passes, to capture project knowledge
+
+**Example usage**:
+
+```
+> /codify
+```
+
+#### `/ws` - Workspace Status Dashboard
+
+**What it does**: Shows read-only workspace status derived from the filesystem
+
+**When to use**: To check current phase, todo progress, and recent activity
+
+**Example usage**:
+
+```
+> /ws
+> /ws my-saas-app
+```
+
+#### `/wrapup` - Session Notes
+
+**What it does**: Writes `.session-notes` to the workspace with accomplishments, blockers, and next steps
+
+**When to use**: Before ending a session, to preserve context for the next session
+
+**Example usage**:
+
+```
+> /wrapup
+```
 
 ### Learning Commands
 
@@ -279,11 +390,13 @@ def test_create_user(db):
 **What it loads**: Observation logging system
 
 **When to use**:
+
 - Recording a useful pattern you discovered
 - Noting a mistake to avoid
 - Capturing domain-specific knowledge
 
 **Example usage**:
+
 ```
 > /learn
 > DataFlow models should always have descriptive field names
@@ -294,11 +407,13 @@ def test_create_user(db):
 **What it loads**: Pattern processing system
 
 **When to use**:
+
 - Processing accumulated observations
 - Generating new instincts
 - Evolving high-confidence patterns into skills
 
 **Example usage**:
+
 ```
 > /evolve
 > Process my recent observations into instincts
@@ -309,11 +424,13 @@ def test_create_user(db):
 **What it loads**: State persistence system
 
 **When to use**:
+
 - Saving current learning state
 - Before major changes
 - Creating recovery points
 
 **Example usage**:
+
 ```
 > /checkpoint
 > Save current learning state
@@ -336,24 +453,29 @@ description: "What this command does and when to use it"
 # Command Name Quick Reference
 
 ## Quick Patterns
+
 [Most common patterns for immediate use]
 
 ## When to Use
+
 [Guidance on when this command is appropriate]
 
 ## Usage Examples
+
 [Examples showing how to use the command]
 
 ## Related Skills
+
 [Links to full skill documentation]
 
 ## Common Mistakes
+
 [Gotchas and anti-patterns to avoid]
 ```
 
 ### Example: The `/db` Command File
 
-```markdown
+````markdown
 ---
 name: db
 description: "DataFlow Quick Reference - Load for database operations"
@@ -364,6 +486,7 @@ description: "DataFlow Quick Reference - Load for database operations"
 ## Quick Patterns
 
 ### Model Definition
+
 ```python
 @db.model
 class User:
@@ -371,8 +494,10 @@ class User:
     name: str
     email: str
 ```
+````
 
 ### CRUD Operations
+
 ```python
 # Create
 user = await db.User.create(name="Test", email="test@test.com")
@@ -388,15 +513,18 @@ await db.User.delete(id=1)
 ```
 
 ## When to Use
+
 - Creating database models
 - CRUD operations
 - Bulk data operations
 - Multi-tenancy requirements
 
 ## Common Mistakes
+
 ❌ Setting created_at manually (auto-managed)
 ❌ Primary key not named 'id'
 ❌ Using raw SQL instead of DataFlow nodes
+
 ```
 
 ---
@@ -408,8 +536,10 @@ await db.User.delete(id=1)
 For focused tasks, use a single command:
 
 ```
+
 > /db
 > Create a Product model with name, price, and inventory fields
+
 ```
 
 Claude loads DataFlow patterns and creates the model correctly.
@@ -419,9 +549,11 @@ Claude loads DataFlow patterns and creates the model correctly.
 For complex tasks, load multiple commands:
 
 ```
+
 > /db
 > /api
 > Create a Product model and deploy it as a REST API with CRUD endpoints
+
 ```
 
 Claude now has both DataFlow and Nexus patterns in context.
@@ -431,14 +563,18 @@ Claude now has both DataFlow and Nexus patterns in context.
 Load commands in dependency order:
 
 ```
+
 Good order (foundation first):
-> /sdk      # Core patterns
-> /db       # Database on top of SDK
-> /api      # API using database
+
+> /sdk # Core patterns
+> /db # Database on top of SDK
+> /api # API using database
 
 Problematic order:
-> /api      # Needs database context
-> /db       # Loaded after API
+
+> /api # Needs database context
+> /db # Loaded after API
+
 ```
 
 ### When Commands Load Automatically
@@ -446,7 +582,9 @@ Problematic order:
 Claude may load skills automatically based on your request:
 
 ```
+
 > Create a DataFlow model for users
+
 ```
 
 Without typing `/db`, Claude recognizes:
@@ -456,8 +594,10 @@ Without typing `/db`, Claude recognizes:
 However, **explicit command loading is more reliable**:
 
 ```
+
 > /db
 > Create a model for users
+
 ```
 
 ---
@@ -472,6 +612,13 @@ However, **explicit command loading is more reliable**:
 | `/ai` | Kaizen | AI agents |
 | `/test` | Testing | Writing tests |
 | `/validate` | Gold Standards | Compliance checking |
+| `/analyze` | Phase 01 template | Research, planning, user flows |
+| `/todos` | Phase 02 template | Task breakdown (stops for approval) |
+| `/implement` | Phase 03 template | Build iteratively through todos |
+| `/redteam` | Phase 04 template | Red team validation |
+| `/codify` | Phase 05 template | Create project agents & skills |
+| `/ws` | Workspace state | Status dashboard (read-only) |
+| `/wrapup` | Session notes | Save context before ending |
 | `/learn` | Learning system | Recording observations |
 | `/evolve` | Evolution system | Processing instincts |
 | `/checkpoint` | Checkpointing | Saving state |
@@ -490,9 +637,11 @@ However, **explicit command loading is more reliable**:
 
 **Example**:
 ```
+
 > /db
 > /test
 > Create a User model with integration tests
+
 ```
 
 ### When to Ask Directly
@@ -505,7 +654,9 @@ However, **explicit command loading is more reliable**:
 
 **Example** (after `/db` already loaded):
 ```
+
 > How do I add a unique constraint to the email field?
+
 ```
 
 ---
@@ -515,40 +666,48 @@ However, **explicit command loading is more reliable**:
 ### Workflow 1: New Feature Development
 
 ```
-1. /sdk           # Load core patterns
-2. /db            # Load database patterns
+
+1. /sdk # Load core patterns
+2. /db # Load database patterns
 3. Define models
-4. /test          # Load testing patterns
+4. /test # Load testing patterns
 5. Write tests
-6. /api           # Load deployment patterns
+6. /api # Load deployment patterns
 7. Deploy
+
 ```
 
 ### Workflow 2: Bug Investigation
 
 ```
-1. /sdk           # Load core patterns for understanding
+
+1. /sdk # Load core patterns for understanding
 2. Read error messages
-3. /test          # Load testing to write reproduction test
+3. /test # Load testing to write reproduction test
 4. Fix and verify
+
 ```
 
 ### Workflow 3: Code Review
 
 ```
-1. /validate      # Load compliance standards
+
+1. /validate # Load compliance standards
 2. Review code
-3. /test          # Verify test coverage
+3. /test # Verify test coverage
 4. Report findings
+
 ```
 
 ### Workflow 4: AI Feature Development
 
 ```
-1. /ai            # Load Kaizen patterns
+
+1. /ai # Load Kaizen patterns
 2. Design agent
-3. /test          # Test agent behavior
-4. /api           # Deploy as service
+3. /test # Test agent behavior
+4. /api # Deploy as service
+
 ```
 
 ---
@@ -558,14 +717,16 @@ However, **explicit command loading is more reliable**:
 ### Commands Are Shortcuts to Skills
 
 ```
-Command          Skill Directory
+
+Command Skill Directory
 ─────────────────────────────────────────
-/sdk      ──▶   .claude/skills/01-core-sdk/
-/db       ──▶   .claude/skills/02-dataflow/
-/api      ──▶   .claude/skills/03-nexus/
-/ai       ──▶   .claude/skills/04-kaizen/
-/test     ──▶   .claude/skills/12-testing-strategies/
-/validate ──▶   .claude/skills/17-gold-standards/
+/sdk ──▶ .claude/skills/01-core-sdk/
+/db ──▶ .claude/skills/02-dataflow/
+/api ──▶ .claude/skills/03-nexus/
+/ai ──▶ .claude/skills/04-kaizen/
+/test ──▶ .claude/skills/12-testing-strategies/
+/validate ──▶ .claude/skills/17-gold-standards/
+
 ```
 
 ### Skills Contain More Than Commands
@@ -586,8 +747,10 @@ Commands load the **quick reference** portion of skills. Full skills contain:
 Claude can access full skill content when needed:
 
 ```
+
 > /db
 > I need detailed information about multi-tenancy in DataFlow
+
 ```
 
 Claude will:
@@ -603,7 +766,7 @@ Claude will:
 
 1. **Commands are shortcuts** - They load specific skills into Claude's context
 
-2. **Nine commands exist** - `/sdk`, `/db`, `/api`, `/ai`, `/test`, `/validate`, `/learn`, `/evolve`, `/checkpoint`
+2. **Nineteen commands exist** - 12 framework (`/sdk`, `/db`, `/api`, `/ai`, `/test`, `/validate`, `/design`, `/i-audit`, `/i-harden`, `/learn`, `/evolve`, `/checkpoint`) + 7 workspace (`/analyze`, `/todos`, `/implement`, `/redteam`, `/codify`, `/ws`, `/wrapup`)
 
 3. **Use commands for focus** - Load only what you need for your current task
 
@@ -623,6 +786,13 @@ Claude will:
 | Build AI agents | `/ai` |
 | Write tests | `/test` |
 | Check compliance | `/validate` |
+| Start a new project | `/analyze` |
+| Break plans into tasks | `/todos` |
+| Build through todos | `/implement` |
+| Validate with red team | `/redteam` |
+| Capture project knowledge | `/codify` |
+| Check workspace status | `/ws` |
+| Save session context | `/wrapup` |
 
 ---
 
@@ -639,3 +809,4 @@ Commands load knowledge, but sometimes you need **specialized processing**. The 
 - **Previous**: [03 - Installation and First Run](03-installation-and-first-run.md)
 - **Next**: [05 - The Agent System](05-the-agent-system.md)
 - **Home**: [README.md](README.md)
+```

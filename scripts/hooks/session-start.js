@@ -26,6 +26,12 @@ const {
   ensureLearningDir,
   logObservation: logLearningObservation,
 } = require("./lib/learning-utils");
+const {
+  detectActiveWorkspace,
+  derivePhase,
+  getTodoProgress,
+  getSessionNotes,
+} = require("./lib/workspace-utils");
 
 let input = "";
 process.stdin.setEncoding("utf8");
@@ -112,6 +118,23 @@ function initializeSession(data) {
       /* loaded */
     } else if (fs.existsSync(lastSessionFile)) {
       /* loaded */
+    }
+  } catch {}
+
+  // ── Output workspace status (human-facing, stderr only) ──────────────
+  try {
+    const ws = detectActiveWorkspace(cwd);
+    if (ws) {
+      const phase = derivePhase(ws.path, cwd);
+      const todos = getTodoProgress(ws.path);
+      const notes = getSessionNotes(ws.path);
+      console.error(
+        `[WORKSPACE] ${ws.name} | Phase: ${phase} | Todos: ${todos.active} active / ${todos.completed} done`,
+      );
+      if (notes) {
+        const staleTag = notes.stale ? " (stale)" : "";
+        console.error(`[WORKSPACE] Session notes${staleTag}: ${notes.age}`);
+      }
     }
   } catch {}
 
