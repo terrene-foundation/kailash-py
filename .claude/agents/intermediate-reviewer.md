@@ -2,7 +2,7 @@
 name: intermediate-reviewer
 description: Review specialist for progress critiques. Use after todo-manager tasks or tdd-implementer work.
 tools: Read, Grep, Glob, Task
-model: sonnet
+model: opus
 ---
 
 # Intermediate Review Specialist

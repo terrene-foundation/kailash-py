@@ -5,6 +5,7 @@
 This guide shows **practical workflows** for common development tasks. Each workflow demonstrates how the setup's components work together to help you build software efficiently.
 
 By the end of this guide, you will know how to:
+
 - Start a new feature from scratch
 - Debug and fix bugs
 - Write and run tests
@@ -77,7 +78,7 @@ Starting with task 1...
 
 For each task, Claude:
 
-```
+````
 [Task 1: Create User DataFlow model]
 
 > /db
@@ -96,17 +97,19 @@ class User:
     password_hash: str
     verified: bool = False
     verification_token: str | None = None
-```
+````
 
 [validate-workflow hook: Verified - primary key is 'id']
 [auto-format hook: Formatted]
 
 Task 1 complete. Moving to task 2...
+
 ```
 
 ### Step 5: Testing Phase
 
 ```
+
 [Task 7: Write integration tests]
 
 > /test
@@ -137,11 +140,13 @@ def test_user_registration(db):
 ```
 
 [validate-workflow hook: Verified - no mocking detected]
+
 ```
 
 ### Step 6: Review Phase
 
 ```
+
 [Delegating to intermediate-reviewer...]
 
 Code Review Summary:
@@ -151,11 +156,13 @@ Code Review Summary:
 ✅ Tests use real infrastructure
 
 Recommendation: Address rate limiting, then proceed.
+
 ```
 
 ### Step 7: Commit Phase
 
 ```
+
 > Commit this
 
 [Delegating to security-reviewer...]
@@ -177,6 +184,7 @@ git commit -m "feat(auth): Add user registration with email verification
 - Include integration tests
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
+
 ```
 
 ---
@@ -186,12 +194,15 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 ### The Debug Flow
 
 ```
+
 1. REPRODUCE → 2. INVESTIGATE → 3. FIX → 4. TEST → 5. VERIFY
+
 ```
 
 ### Step 1: Reproduce the Issue
 
 ```
+
 > Users are getting "NoneType has no attribute 'email'" when registering
 
 Claude: Let me reproduce this issue. First, I'll check the registration code.
@@ -199,11 +210,13 @@ Claude: Let me reproduce this issue. First, I'll check the registration code.
 [Reading src/workflows/registration.py...]
 
 Found potential issue at line 45. Let me trace it...
+
 ```
 
 ### Step 2: Investigate with Agents
 
 ```
+
 [Delegating to sdk-navigator for similar issues...]
 
 Found in common-mistakes.md:
@@ -213,13 +226,16 @@ aren't properly connected"
 [Delegating to pattern-expert for connection validation...]
 
 Issue identified:
+
 - Line 42: user = create_result.get("user")
 - Problem: DataFlow CREATE returns {"result": user}, not {"user": user}
+
 ```
 
 ### Step 3: Apply the Fix
 
 ```
+
 [Applying fix...]
 
 ```python
@@ -232,11 +248,13 @@ user = create_result.get("result")
 
 [validate-workflow hook: Verified]
 [auto-format hook: Formatted]
+
 ```
 
 ### Step 4: Write Regression Test
 
 ```
+
 [Writing regression test...]
 
 ```python
@@ -248,16 +266,19 @@ def test_registration_returns_user_object(db):
     assert result is not None
     assert result.email == "test@test.com"
 ```
+
 ```
 
 ### Step 5: Verify
 
 ```
+
 [Running tests...]
 
 tests/integration/test_registration.py::test_registration_returns_user_object PASSED
 
 Bug fixed and regression test added.
+
 ```
 
 ---
@@ -267,6 +288,7 @@ Bug fixed and regression test added.
 ### Test-First Workflow
 
 ```
+
 > I want to add a feature for password reset. Let's do TDD.
 
 [Delegating to tdd-implementer...]
@@ -299,24 +321,27 @@ FAILED: request_password_reset not defined
 FAILED: reset_password not defined
 
 TDD Phase 2 (Green): Implementing minimum code to pass...
+
 ```
 
 ### Test Categories
 
 ```
+
 > /test
 
 Test organization:
 
 tests/
-├── unit/              # Tier 1 - Mocking allowed
-│   └── test_utils.py
-├── integration/       # Tier 2 - NO MOCKING
-│   └── test_user.py
-└── e2e/              # Tier 3 - Full system
-    └── test_registration_flow.py
+├── unit/ # Tier 1 - Mocking allowed
+│ └── test_utils.py
+├── integration/ # Tier 2 - NO MOCKING
+│ └── test_user.py
+└── e2e/ # Tier 3 - Full system
+└── test_registration_flow.py
 
 Which type of test do you want to write?
+
 ```
 
 ---
@@ -326,6 +351,7 @@ Which type of test do you want to write?
 ### Self-Review Before Commit
 
 ```
+
 > Review my changes before I commit
 
 [Delegating to intermediate-reviewer...]
@@ -346,18 +372,22 @@ tests/integration/test_auth.py:
 ⚠️ Missing test for invalid token case
 
 Summary:
+
 - 2 files perfect
 - 3 files have minor suggestions
 - No blocking issues
 
 Suggestions:
+
 1. Add rate limiting to auth workflow
 2. Add test for invalid token scenario
+
 ```
 
 ### Security Review
 
 ```
+
 > Run security review
 
 [Delegating to security-reviewer...]
@@ -380,6 +410,7 @@ HIGH: 0
 MEDIUM: 2
 
 Ready to commit with noted warnings.
+
 ```
 
 ---
@@ -389,6 +420,7 @@ Ready to commit with noted warnings.
 ### Local Development
 
 ```
+
 > Set up local development environment
 
 [Delegating to deployment-specialist...]
@@ -397,7 +429,7 @@ Creating Docker Compose configuration...
 
 ```yaml
 # docker-compose.yml
-version: '3.8'
+version: "3.8"
 
 services:
   app:
@@ -418,25 +450,30 @@ services:
 ```
 
 To start:
+
 ```bash
 docker compose up
 ```
+
 ```
 
 ### Production Deployment
 
 ```
+
 > Prepare for production deployment
 
 [Delegating to deployment-specialist...]
 
 Production checklist:
+
 1. ✅ Environment variables configured
 2. ⚠️ Need production DATABASE_URL
 3. ⚠️ Need email service credentials
 4. ✅ Kubernetes manifests ready
 
 Creating production configs...
+
 ```
 
 ---
@@ -446,17 +483,20 @@ Creating production configs...
 ### Quick Fix
 
 ```
+
 > Fix the typo in UserModel, it should be "verified" not "verifed"
 
 [Fixing typo...]
 [auto-format hook: No changes needed]
 
 Fixed. Commit this change?
+
 ```
 
 ### Quick Question
 
 ```
+
 > How do I add a unique constraint to the email field in DataFlow?
 
 > /db
@@ -469,25 +509,30 @@ class User:
     id: int
     email: str = Field(unique=True)  # Unique constraint
 ```
+
 ```
 
 ### Quick Pattern Lookup
 
 ```
+
 > Show me the correct workflow execution pattern
 
 > /sdk
 
 Correct pattern:
+
 ```python
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 ```
 
 Never use:
+
 ```python
 workflow.execute(runtime)  # WRONG
 ```
+
 ```
 
 ---
@@ -497,18 +542,33 @@ workflow.execute(runtime)  # WRONG
 ### Morning Startup
 
 ```
+
 > claude
 
 # Claude Code starts
+
 [session-start hook: Session initialized]
 [Detecting frameworks: DataFlow, Nexus active]
+[WORKSPACE] my-saas-app | Phase: 03-implement | Todos: 3 active / 5 done
+[WORKSPACE] Session notes: 14 hours ago
 
 Ready. What would you like to work on?
+
+> /ws
+
+# Shows full workspace status dashboard — phase, todo progress, recent files
+
 ```
 
 ### End of Day
 
 ```
+
+> /wrapup
+
+[Writing session notes to workspaces/my-saas-app/.session-notes...]
+Saved: accomplishments, blockers, next steps.
+
 > /checkpoint
 
 [Saving learning state...]
@@ -518,20 +578,24 @@ Checkpoint created: checkpoint_1706806800000
 
 [session-end hook: State persisted]
 Session ended.
+
 ```
 
 ### Weekly Learning
 
 ```
+
 > /evolve
 
 Processing 150 observations from this week...
 
 Updated instincts:
+
 - dataflow_batch_size (confidence: 0.89)
 - error_handling_pattern (confidence: 0.85)
 
 No new components evolved (thresholds not met).
+
 ```
 
 ---
@@ -570,6 +634,18 @@ No new components evolved (thresholds not met).
 | Security | security-reviewer before commit |
 | Commit | After all reviews pass |
 
+### Workspace Project (Full Lifecycle)
+
+| Step | Command | Output |
+|------|---------|--------|
+| Start project | `/analyze my-saas-app` | `01-analysis/`, `02-plans/`, `03-user-flows/` |
+| Break into tasks | `/todos` | `todos/active/` (stops for human approval) |
+| Build | `/implement` (repeat) | `src/`, `apps/`, move todos to `completed/` |
+| Validate | `/redteam` | `04-validate/` (feeds gaps back to `/implement`) |
+| Capture knowledge | `/codify` | `.claude/agents/project/`, `.claude/skills/project/` |
+| Check status | `/ws` | Dashboard with phase, todos, recent activity |
+| End session | `/wrapup` | `.session-notes` in workspace root |
+
 ---
 
 ## Part 9: Key Takeaways
@@ -591,18 +667,26 @@ No new components evolved (thresholds not met).
 ### Daily Habits
 
 ```
+
 Morning:
+
 - Start Claude Code in project directory
-- Context loads automatically
+- Session hook auto-detects workspace and shows status
+- Run /ws for full dashboard if resuming a project
 
 During Work:
+
 - Describe tasks clearly
 - Use commands for context (/sdk, /db, /api, /ai)
+- Use /implement to work through workspace todos
 - Let Claude handle delegation
 
 End of Day:
-- Run /checkpoint if valuable work
+
+- Run /wrapup to save session notes (accomplishments, blockers, next steps)
+- Run /checkpoint if valuable learning work
 - Exit cleanly
+
 ```
 
 ---
@@ -620,3 +704,4 @@ For power users wanting more control, the next guide covers advanced usage.
 - **Previous**: [09 - The Learning System](09-the-learning-system.md)
 - **Next**: [11 - Advanced Usage](11-advanced-usage.md)
 - **Home**: [README.md](README.md)
+```

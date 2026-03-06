@@ -2,7 +2,7 @@
 name: sdk-navigator
 description: SDK navigation for documentation discovery. Use when searching for patterns or examples.
 tools: Read, Grep, Glob, WebFetch, WebSearch
-model: sonnet
+model: opus
 ---
 
 # SDK Navigation Specialist

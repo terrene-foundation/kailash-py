@@ -35,6 +35,7 @@ Claude Code is a general-purpose AI assistant. This setup transforms it into a *
 > "A specialized tool used correctly will outperform a general tool used generally."
 
 This means:
+
 - Every skill is focused on a specific domain
 - Every agent has a defined responsibility
 - Every hook enforces specific standards
@@ -45,6 +46,7 @@ This means:
 ### Philosophy 2: Quality is Non-Negotiable
 
 The setup enforces quality at multiple levels:
+
 - **Hooks** block dangerous operations before they happen
 - **Rules** define mandatory behaviors Claude must follow
 - **Agents** provide specialized review and validation
@@ -60,6 +62,7 @@ A core tenet of the Kailash development philosophy:
 > "Integration and E2E tests use real databases, real APIs, real infrastructure. Mocking hides real-world issues."
 
 This is encoded in:
+
 - The `testing.md` rule file
 - The `validate-workflow.js` hook
 - The `12-testing-strategies` skill
@@ -70,6 +73,7 @@ This is encoded in:
 ### Philosophy 4: Continuous Learning
 
 The setup learns from usage:
+
 - Observations are logged during sessions
 - Patterns are extracted into instincts
 - High-confidence instincts evolve into skills
@@ -137,22 +141,22 @@ Think of Claude Code as a **highly capable junior developer** with access to a *
                      │
          ┌───────────▼─────────────┐
          │        Skills           │  ← Domain expertise
-         │    (23 directories)     │
+         │    (28 directories)     │
          └───────────┬─────────────┘
                      │
          ┌───────────▼─────────────┐
          │        Rules            │  ← Behavioral constraints
-         │     (5 files)           │
+         │     (9 files)           │
          └───────────┬─────────────┘
                      │
          ┌───────────▼─────────────┐
          │        Hooks            │  ← Runtime enforcement
-         │     (8 scripts)         │
+         │     (9 scripts)         │
          └───────────┬─────────────┘
                      │
          ┌───────────▼─────────────┐
          │       Agents            │  ← Specialized delegation
-         │     (22+ agents)         │
+         │     (30 agents)         │
          └─────────────────────────┘
 ```
 
@@ -164,41 +168,47 @@ Think of Claude Code as a **highly capable junior developer** with access to a *
 
 ```
 .claude/
-├── agents/              # 22+ specialized sub-agents
+├── agents/              # 30 specialized sub-agents
 │   ├── deep-analyst.md
 │   ├── dataflow-specialist.md
 │   ├── testing-specialist.md
-│   └── ... (11 more)
+│   └── ... (27 more)
 │
-├── commands/            # 10 slash commands
+├── commands/            # 19 slash commands
 │   ├── sdk.md          # /sdk - Core SDK quick reference
 │   ├── db.md           # /db - DataFlow quick reference
 │   ├── api.md          # /api - Nexus quick reference
-│   └── ... (6 more)
+│   ├── analyze.md      # /analyze - Phase 01 workspace
+│   ├── ws.md           # /ws - Workspace status dashboard
+│   └── ... (10 more)
 │
 ├── guides/              # This documentation
 │   ├── README.md       # Navigation hub
 │   ├── CLAUDE.md       # This file
 │   └── 01-*.md         # Sequential guides
 │
-├── rules/               # 5 mandatory rule files
+├── rules/               # 9 mandatory rule files
 │   ├── agents.md       # Agent orchestration rules
+│   ├── e2e-god-mode.md # E2E testing requirements
+│   ├── env-models.md   # API keys & model names
 │   ├── git.md          # Git workflow rules
+│   ├── learned-instincts.md # Auto-generated instincts
+│   ├── no-stubs.md     # No stubs/TODOs/placeholders
 │   ├── patterns.md     # Kailash pattern rules
 │   ├── security.md     # Security rules
-│   └── testing.md      # Testing rules
+│   └── testing.md      # Testing policies (NO MOCKING)
 │
-├── skills/              # 23 knowledge directories
+├── skills/              # 28 knowledge directories
 │   ├── 01-core-sdk/    # Core SDK patterns
 │   ├── 02-dataflow/    # DataFlow framework
 │   ├── 03-nexus/       # Nexus multi-channel
 │   ├── 04-kaizen/      # Kaizen AI agents
-│   └── ... (18 more)
+│   └── ... (24 more)
 │
 └── settings.json        # Hook configuration
 
 scripts/
-├── hooks/               # 8 automation scripts
+├── hooks/               # 9 automation scripts
 │   ├── validate-bash-command.js
 │   ├── validate-workflow.js
 │   ├── session-start.js
@@ -220,13 +230,13 @@ scripts/
 
 ### Component Purposes
 
-| Component | Purpose | When It's Used |
-|-----------|---------|----------------|
-| **Skills** | Provide domain knowledge | When Claude needs to understand how to do something |
-| **Agents** | Provide specialized processing | When a task requires deep expertise |
-| **Hooks** | Enforce constraints | Before/after Claude takes actions |
-| **Rules** | Define mandatory behaviors | Always (Claude reads these) |
-| **Commands** | Quick access to skills | When user types `/command` |
+| Component    | Purpose                        | When It's Used                                      |
+| ------------ | ------------------------------ | --------------------------------------------------- |
+| **Skills**   | Provide domain knowledge       | When Claude needs to understand how to do something |
+| **Agents**   | Provide specialized processing | When a task requires deep expertise                 |
+| **Hooks**    | Enforce constraints            | Before/after Claude takes actions                   |
+| **Rules**    | Define mandatory behaviors     | Always (Claude reads these)                         |
+| **Commands** | Quick access to skills         | When user types `/command`                          |
 
 ---
 
@@ -289,28 +299,28 @@ User: "Run rm -rf /"
 
 ### When to Use Each Component
 
-| You Want To... | Use This |
-|----------------|----------|
-| Quickly reference a pattern | `/sdk`, `/db`, `/api`, `/ai`, `/test` commands |
+| You Want To...                          | Use This                                              |
+| --------------------------------------- | ----------------------------------------------------- |
+| Quickly reference a pattern             | `/sdk`, `/db`, `/api`, `/ai`, `/test` commands        |
 | Have Claude implement something complex | Just ask - Claude will delegate to appropriate agents |
-| Enforce a new rule | Add to `.claude/rules/` |
-| Add new knowledge | Add to `.claude/skills/` |
-| Automate quality checks | Add to `scripts/hooks/` |
+| Enforce a new rule                      | Add to `.claude/rules/`                               |
+| Add new knowledge                       | Add to `.claude/skills/`                              |
+| Automate quality checks                 | Add to `scripts/hooks/`                               |
 
 ### Agent Selection Guide
 
 Claude automatically selects agents based on task type. For reference:
 
-| Task Type | Primary Agent | Secondary Agents |
-|-----------|---------------|------------------|
-| Database operations | `dataflow-specialist` | `testing-specialist` |
-| API deployment | `nexus-specialist` | `deployment-specialist` |
-| AI/ML features | `kaizen-specialist` | `pattern-expert` |
-| Complex planning | `deep-analyst` | `requirements-analyst` |
-| Code review | `intermediate-reviewer` | `gold-standards-validator` |
-| Security audit | `security-reviewer` | - |
-| Test writing | `tdd-implementer` | `testing-specialist` |
-| Pattern implementation | `pattern-expert` | `sdk-navigator` |
+| Task Type              | Primary Agent           | Secondary Agents           |
+| ---------------------- | ----------------------- | -------------------------- |
+| Database operations    | `dataflow-specialist`   | `testing-specialist`       |
+| API deployment         | `nexus-specialist`      | `deployment-specialist`    |
+| AI/ML features         | `kaizen-specialist`     | `pattern-expert`           |
+| Complex planning       | `deep-analyst`          | `requirements-analyst`     |
+| Code review            | `intermediate-reviewer` | `gold-standards-validator` |
+| Security audit         | `security-reviewer`     | -                          |
+| Test writing           | `tdd-implementer`       | `testing-specialist`       |
+| Pattern implementation | `pattern-expert`        | `sdk-navigator`            |
 
 ### Instructing Claude Effectively
 
@@ -323,6 +333,7 @@ and write integration tests."
 ```
 
 Why this works:
+
 - Specifies frameworks (DataFlow, Nexus)
 - Specifies requirements (error handling, tests)
 - Clear deliverable (user registration workflow)
@@ -334,6 +345,7 @@ Why this works:
 ```
 
 Why this is poor:
+
 - Ambiguous scope
 - No framework guidance
 - No quality requirements
@@ -500,32 +512,46 @@ You don't need to specify which agent to use. Just describe the task:
 
 ### Essential Commands
 
-| Command | Purpose | When to Use |
-|---------|---------|-------------|
-| `/sdk` | Core SDK patterns | Working with workflows, nodes, runtime |
-| `/db` | DataFlow patterns | Database operations, models, CRUD |
-| `/api` | Nexus patterns | API deployment, multi-channel |
-| `/ai` | Kaizen patterns | AI agents, signatures |
-| `/test` | Testing patterns | Writing tests, 3-tier strategy |
-| `/validate` | Gold standards | Checking compliance |
+#### Framework Commands
+
+| Command     | Purpose           | When to Use                            |
+| ----------- | ----------------- | -------------------------------------- |
+| `/sdk`      | Core SDK patterns | Working with workflows, nodes, runtime |
+| `/db`       | DataFlow patterns | Database operations, models, CRUD      |
+| `/api`      | Nexus patterns    | API deployment, multi-channel          |
+| `/ai`       | Kaizen patterns   | AI agents, signatures                  |
+| `/test`     | Testing patterns  | Writing tests, 3-tier strategy         |
+| `/validate` | Gold standards    | Checking compliance                    |
+
+#### Workspace Phase Commands
+
+| Command      | Purpose                   | When to Use                                 |
+| ------------ | ------------------------- | ------------------------------------------- |
+| `/analyze`   | Phase 01: Research & plan | Starting a new project                      |
+| `/todos`     | Phase 02: Task breakdown  | Breaking plans into actionable todos        |
+| `/implement` | Phase 03: Build           | Working through active todos                |
+| `/redteam`   | Phase 04: Validate        | Red team testing with Playwright/Marionette |
+| `/codify`    | Phase 05: Capture         | Creating project agents and skills          |
+| `/ws`        | Status dashboard          | Checking workspace phase and progress       |
+| `/wrapup`    | Session notes             | Saving context before ending a session      |
 
 ### Critical Rules
 
-| Rule | Enforcement | Consequence |
-|------|-------------|-------------|
-| NO MOCKING in Tier 2-3 | `validate-workflow.js` hook | Test marked invalid |
-| Security review before commit | `agents.md` rule | Commit blocked |
-| Absolute imports only | `validate-workflow.js` hook | Warning issued |
-| Use `.build()` before execute | `validate-workflow.js` hook | Warning issued |
+| Rule                          | Enforcement                 | Consequence         |
+| ----------------------------- | --------------------------- | ------------------- |
+| NO MOCKING in Tier 2-3        | `validate-workflow.js` hook | Test marked invalid |
+| Security review before commit | `agents.md` rule            | Commit blocked      |
+| Absolute imports only         | `validate-workflow.js` hook | Warning issued      |
+| Use `.build()` before execute | `validate-workflow.js` hook | Warning issued      |
 
 ### Framework Selection
 
-| Need | Framework | Command |
-|------|-----------|---------|
-| Custom workflows | Core SDK | `/sdk` |
-| Database CRUD | DataFlow | `/db` |
-| Multi-channel API | Nexus | `/api` |
-| AI agents | Kaizen | `/ai` |
+| Need              | Framework | Command |
+| ----------------- | --------- | ------- |
+| Custom workflows  | Core SDK  | `/sdk`  |
+| Database CRUD     | DataFlow  | `/db`   |
+| Multi-channel API | Nexus     | `/api`  |
+| AI agents         | Kaizen    | `/ai`   |
 
 ---
 
@@ -540,6 +566,7 @@ This setup transforms Claude Code from a general assistant into a specialized Ka
 5. **Learning** - Continuous improvement from usage
 
 The key to effective use is:
+
 - Trust the system to enforce quality
 - Be specific in your instructions
 - Let Claude delegate to specialists

@@ -14,13 +14,16 @@ This skill provides the reference for the COC (Cognitive Orchestration for Codeg
 ## Authoritative Sources
 
 ### PRIMARY: White Paper
+
 - `docs/02-standards/publications/COC-Core-Thesis.md` - Definitive thesis by Dr. Jack Hong
 
 ### PRIMARY: Anchor Documents
+
 - `docs/00-anchor/00-first-principles.md` - Core mission and principles
 - `docs/00-anchor/01-core-entities.md` - What Foundation provides (including Kailash)
 
 ### SECONDARY: Technical Documentation
+
 - `docs/03-technology/kailash/04-vibe-coding.md` - Vibe coding methodology
 - `docs/presentations/sg-claude-code-community-vibe-coding-session.md` - Vibe coding presentation
 
@@ -32,10 +35,10 @@ COC is a new term introduced in the thesis paper. It names an architecture that 
 
 ## The Problem: Vibe Coding's Three Fault Lines
 
-| Fault Line | Problem | Root Cause |
-|---|---|---|
-| **Amnesia** | AI forgets your instructions as context fills up | Context window limits |
-| **Convention Drift** | AI follows internet conventions instead of yours | Training data overrides |
+| Fault Line             | Problem                                            | Root Cause                  |
+| ---------------------- | -------------------------------------------------- | --------------------------- |
+| **Amnesia**            | AI forgets your instructions as context fills up   | Context window limits       |
+| **Convention Drift**   | AI follows internet conventions instead of yours   | Training data overrides     |
 | **Security Blindness** | AI takes the shortest path (never the secure path) | Optimization for directness |
 
 **The root cause is not model capability. It is the absence of institutional knowledge surrounding the model.**
@@ -70,13 +73,15 @@ COC Reality:  Better Context → Better Output → Competitive Advantage
 ```
 
 ### Layer 1: Intent - The Role
+
 - **Solves**: Generalist AI producing generalist output
 - **Principle**: Route tasks to specialized expert agents
-- **Implementation**: 29 agent definitions, 7 development phases
+- **Implementation**: 30 agent definitions, 7 development phases
 - **Key specialists**: deep-analyst, security-reviewer, framework specialists
 - **What it encodes**: Your organizational structure
 
 ### Layer 2: Context - The Library
+
 - **Solves**: AI defaulting to internet conventions
 - **Principle**: Replace stale training data with your living institutional handbook
 - **Implementation**: Progressive disclosure (CLAUDE.md → SKILL.md → Topic files → Full docs)
@@ -85,21 +90,24 @@ COC Reality:  Better Context → Better Output → Competitive Advantage
 - **What it encodes**: Your institutional knowledge
 
 ### Layer 3: Guardrails - The Supervisor
+
 - **Solves**: Probabilistic compliance ("most of the time" is not enough)
 - **Principle**: Deterministic enforcement, not probabilistic compliance
-- **Implementation**: 8 rule files (soft) + 8 hook scripts (hard)
+- **Implementation**: 9 rule files (soft) + 9 hook scripts (hard)
 - **Key mechanism**: Anti-amnesia hook (`user-prompt-rules-reminder.js`) - fires every message, survives context compression
 - **Defense in depth**: Critical rules have 5-8 independent enforcement layers
 - **What it encodes**: Your risk tolerance
 
 ### Layer 4: Instructions - The Operating Procedures
+
 - **Solves**: No procedural discipline (AI writes code before confirming approach)
 - **Principle**: Structured methodology with approval gates
-- **Implementation**: 7-phase workflow, 4 quality gates, 12 slash commands
+- **Implementation**: 7-phase workflow, 4 quality gates, 19 slash commands (12 framework + 7 workspace phase)
 - **Key features**: Evidence-based completion (file-and-line proof), mandatory delegation (security review before every commit)
 - **What it encodes**: Your process maturity
 
 ### Layer 5: Learning - The Performance Review
+
 - **Solves**: Stateless sessions (every session starts from zero)
 - **Principle**: Observe, capture, evolve. Knowledge compounds.
 - **Implementation**: Observation-Instinct-Evolution pipeline
@@ -110,18 +118,19 @@ COC Reality:  Better Context → Better Output → Competitive Advantage
 
 ## CARE → COC Mapping
 
-| CARE / EATP Concept | COC Equivalent |
-|---|---|
-| Trust Plane | Rules + CLAUDE.md |
-| Execution Plane | Agents + Skills |
-| Genesis Record | `session-start.js` |
-| Trust Lineage Chain | Mandatory review gates |
-| Audit Anchors | Hook enforcement |
-| Operating Envelope | 8 rule files + 8 hook scripts |
+| CARE / EATP Concept | COC Equivalent                |
+| ------------------- | ----------------------------- |
+| Trust Plane         | Rules + CLAUDE.md             |
+| Execution Plane     | Agents + Skills               |
+| Genesis Record      | `session-start.js`            |
+| Trust Lineage Chain | Mandatory review gates        |
+| Audit Anchors       | Hook enforcement              |
+| Operating Envelope  | 9 rule files + 9 hook scripts |
 
 ## The Human-on-the-Loop Developer
 
 The developer's unique contribution is not writing code but defining and maintaining the institutional context:
+
 - **Layer 1**: Articulate domain structure
 - **Layer 2**: Document institutional knowledge
 - **Layer 3**: Identify non-negotiable rules
@@ -147,13 +156,14 @@ COC = Cognitive Orchestration for Codegen
   1 Insight: Institutional knowledge > Model capability
 
 The Kailash COC Implementation:
-  29 agents, 25 skills, 8 rules, 8 hooks, 12 commands
+  30 agents, 28 skills, 9 rules, 9 hooks, 19 commands
   Reference: github.com/terrene-foundation/kailash-vibe-cc-setup
 ```
 
 ## For Detailed Information
 
 Read these source documents:
+
 - `docs/02-standards/publications/COC-Core-Thesis.md` - The thesis paper
 - `docs/03-technology/kailash/04-vibe-coding.md` - Vibe coding methodology
 - `docs/presentations/sg-claude-code-community-vibe-coding-session.md` - Presentation

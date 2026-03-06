@@ -2,7 +2,7 @@
 name: gold-standards-validator
 description: Gold standards validator for SDK patterns. Use to validate compliance and catch violations.
 tools: Read, Glob, Grep, LS
-model: sonnet
+model: opus
 ---
 
 # Gold Standards Compliance Validator
