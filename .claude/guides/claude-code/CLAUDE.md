@@ -174,7 +174,7 @@ Think of Claude Code as a **highly capable junior developer** with access to a *
 │   ├── testing-specialist.md
 │   └── ... (27 more)
 │
-├── commands/            # 19 slash commands
+├── commands/            # 20 slash commands
 │   ├── sdk.md          # /sdk - Core SDK quick reference
 │   ├── db.md           # /db - DataFlow quick reference
 │   ├── api.md          # /api - Nexus quick reference
@@ -407,7 +407,7 @@ Say: "Deploy a Nexus API with the user workflow"
 /api           # Load Nexus patterns
 /ai            # Load Kaizen patterns
 /test          # Load testing patterns
-/validate      # Load gold standards
+/validate      # Project compliance checks (auto-detects project type)
 ```
 
 ### Trust the Agent System
@@ -514,14 +514,14 @@ You don't need to specify which agent to use. Just describe the task:
 
 #### Framework Commands
 
-| Command     | Purpose           | When to Use                            |
-| ----------- | ----------------- | -------------------------------------- |
-| `/sdk`      | Core SDK patterns | Working with workflows, nodes, runtime |
-| `/db`       | DataFlow patterns | Database operations, models, CRUD      |
-| `/api`      | Nexus patterns    | API deployment, multi-channel          |
-| `/ai`       | Kaizen patterns   | AI agents, signatures                  |
-| `/test`     | Testing patterns  | Writing tests, 3-tier strategy         |
-| `/validate` | Gold standards    | Checking compliance                    |
+| Command     | Purpose            | When to Use                                                 |
+| ----------- | ------------------ | ----------------------------------------------------------- |
+| `/sdk`      | Core SDK patterns  | Working with workflows, nodes, runtime                      |
+| `/db`       | DataFlow patterns  | Database operations, models, CRUD                           |
+| `/api`      | Nexus patterns     | API deployment, multi-channel                               |
+| `/ai`       | Kaizen patterns    | AI agents, signatures                                       |
+| `/test`     | Testing patterns   | Writing tests, 3-tier strategy                              |
+| `/validate` | Project compliance | Security, testing, stubs (+ Kailash patterns when detected) |
 
 #### Workspace Phase Commands
 

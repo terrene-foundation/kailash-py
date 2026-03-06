@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Interact with the Kailash Continuous Learning System to view, analyze, and evolve learned patterns.
+Interact with the Continuous Learning System to view, analyze, and evolve learned patterns.
 
 ## Quick Reference
 
@@ -49,15 +49,15 @@ node scripts/learning/instinct-processor.js --generate
 
 ## Learning Focus Areas
 
-The system learns Kailash-specific patterns:
+The system learns project-specific patterns:
 
-| Area                    | What It Learns                             |
-| ----------------------- | ------------------------------------------ |
-| **Workflow Patterns**   | Common node sequences, connection patterns |
-| **Error-Fix Pairs**     | Which errors occur and how they're fixed   |
-| **DataFlow Patterns**   | Model definition patterns, query patterns  |
-| **Framework Selection** | Project type → framework mapping           |
-| **Testing Patterns**    | Test structure preferences                 |
+| Area                   | What It Learns                                  |
+| ---------------------- | ----------------------------------------------- |
+| **Code Patterns**      | Common sequences, idioms, architectural choices |
+| **Error-Fix Pairs**    | Which errors occur and how they're fixed        |
+| **Framework Patterns** | Framework-specific usage patterns               |
+| **Tool Selection**     | Project type → tool/framework mapping           |
+| **Testing Patterns**   | Test structure preferences                      |
 
 ## File Locations
 
@@ -85,4 +85,4 @@ Learning data is stored **per-project** (not globally):
 
 ## Skill Reference
 
-- See `06-continuous-learning` in skill directories for full documentation
+This command uses: `scripts/learning/observation-logger.js`, `scripts/learning/instinct-processor.js`

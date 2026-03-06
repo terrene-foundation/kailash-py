@@ -103,7 +103,7 @@ For each:
 - **What**: The specific problem
 - **Why**: Impact on user experience
 - **Fix**: Concrete fix with code direction
-- **Command**: Which /i-* command addresses this (e.g., `/i-polish`, `/i-bolder`)
+- **Command**: Which command addresses this (e.g., `/i-harden`, `/design`)
 
 ## Minor Observations
 - ...
@@ -133,16 +133,18 @@ When auditing AI-facing interfaces, also evaluate:
 
 ## Related Commands
 
-- `/i-polish` - Fix specific polish issues found by this audit
+- `/i-polish` - Fix aesthetic issues identified by this audit (dimensions 1-7)
 - `/i-harden` - Address edge cases and production resilience
-- `/i-audit` output feeds directly into other `/i-*` commands
 - `/design` - Load comprehensive design principles
+- `/validate` - Project compliance checks
 
-## Related Agents
+## Agent Teams
 
-- `uiux-designer` - For deep design analysis and recommendations
-- `ai-ux-designer` - For AI-specific interaction pattern evaluation
-- `value-auditor` - For enterprise demo value assessment (via Playwright)
+Deploy these agents for design audits:
+
+- **uiux-designer** — Deep design analysis and recommendations
+- **ai-ux-designer** — AI-specific interaction pattern evaluation
+- **value-auditor** — Enterprise demo value assessment (via Playwright)
 
 ## Skill References
 

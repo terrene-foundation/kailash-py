@@ -102,7 +102,7 @@ COC Reality:  Better Context → Better Output → Competitive Advantage
 
 - **Solves**: No procedural discipline (AI writes code before confirming approach)
 - **Principle**: Structured methodology with approval gates
-- **Implementation**: 7-phase workflow, 4 quality gates, 19 slash commands (12 framework + 7 workspace phase)
+- **Implementation**: 7-phase workflow, 4 quality gates, 20 slash commands (13 framework + 7 workspace phase)
 - **Key features**: Evidence-based completion (file-and-line proof), mandatory delegation (security review before every commit)
 - **What it encodes**: Your process maturity
 
@@ -156,7 +156,7 @@ COC = Cognitive Orchestration for Codegen
   1 Insight: Institutional knowledge > Model capability
 
 The Kailash COC Implementation:
-  30 agents, 28 skills, 9 rules, 9 hooks, 19 commands
+  30 agents, 28 skills, 9 rules, 9 hooks, 20 commands
   Reference: github.com/terrene-foundation/kailash-vibe-cc-setup
 ```
 

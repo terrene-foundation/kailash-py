@@ -304,21 +304,21 @@ When you need deep knowledge, agents provide it:
 
 Commands load relevant skills instantly:
 
-| Command      | Loads             | Use Case                   |
-| ------------ | ----------------- | -------------------------- |
-| `/sdk`       | Core SDK patterns | Workflow, nodes, runtime   |
-| `/db`        | DataFlow patterns | Database operations        |
-| `/api`       | Nexus patterns    | API deployment             |
-| `/ai`        | Kaizen patterns   | AI agents                  |
-| `/test`      | Testing patterns  | Writing tests              |
-| `/validate`  | Gold standards    | Checking compliance        |
-| `/analyze`   | Phase 01 template | Research and planning      |
-| `/todos`     | Phase 02 template | Task breakdown             |
-| `/implement` | Phase 03 template | Build iteratively          |
-| `/redteam`   | Phase 04 template | Validation testing         |
-| `/codify`    | Phase 05 template | Project knowledge capture  |
-| `/ws`        | Workspace state   | Status dashboard           |
-| `/wrapup`    | Session notes     | Save context before ending |
+| Command      | Loads              | Use Case                   |
+| ------------ | ------------------ | -------------------------- |
+| `/sdk`       | Core SDK patterns  | Workflow, nodes, runtime   |
+| `/db`        | DataFlow patterns  | Database operations        |
+| `/api`       | Nexus patterns     | API deployment             |
+| `/ai`        | Kaizen patterns    | AI agents                  |
+| `/test`      | Testing patterns   | Writing tests              |
+| `/validate`  | Project compliance | Security, testing, stubs   |
+| `/analyze`   | Phase 01 template  | Research and planning      |
+| `/todos`     | Phase 02 template  | Task breakdown             |
+| `/implement` | Phase 03 template  | Build iteratively          |
+| `/redteam`   | Phase 04 template  | Validation testing         |
+| `/codify`    | Phase 05 template  | Project knowledge capture  |
+| `/ws`        | Workspace state    | Status dashboard           |
+| `/wrapup`    | Session notes      | Save context before ending |
 
 ### Continuous Learning
 
