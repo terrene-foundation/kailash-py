@@ -17,6 +17,7 @@ from unittest.mock import patch
 
 import psutil
 import pytest
+
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import MergeNode, SwitchNode
 from kailash.runtime.local import LocalRuntime
