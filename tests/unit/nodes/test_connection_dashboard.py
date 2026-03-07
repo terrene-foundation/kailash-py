@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 from aiohttp import web
+
 from kailash.nodes.monitoring.connection_dashboard import (
     Alert,
     AlertRule,

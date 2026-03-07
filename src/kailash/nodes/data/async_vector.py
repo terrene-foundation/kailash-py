@@ -28,6 +28,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
+
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.nodes.data.async_connection import PoolConfig, get_connection_manager

@@ -8,6 +8,7 @@ from unittest.mock import Mock, patch
 
 import networkx as nx
 import pytest
+
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import MergeNode, SwitchNode
 from kailash.planning.dynamic_execution_planner import DynamicExecutionPlanner

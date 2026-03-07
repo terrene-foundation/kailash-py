@@ -14,6 +14,7 @@ import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from kailash.gateway.resource_resolver import ResourceReference, ResourceResolver
 from kailash.resources.registry import ResourceRegistry
 

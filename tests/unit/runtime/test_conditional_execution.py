@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import networkx as nx
 import pytest
+
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import MergeNode, SwitchNode
 from kailash.runtime.local import LocalRuntime

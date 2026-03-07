@@ -21,6 +21,7 @@ from typing import Dict, Set
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode as AsyncSQL
 
 

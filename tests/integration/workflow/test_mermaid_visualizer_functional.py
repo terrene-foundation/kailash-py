@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, Mock
 
 import networkx as nx
 import pytest
+
 from kailash.workflow.graph import Workflow
 
 

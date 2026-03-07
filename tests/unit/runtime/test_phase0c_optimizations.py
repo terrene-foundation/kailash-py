@@ -13,7 +13,6 @@ import inspect
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
-
 # --- P0C-001/002: Replace nx.topological_sort in local.py ---
 
 

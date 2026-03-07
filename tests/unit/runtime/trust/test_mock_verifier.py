@@ -7,6 +7,7 @@ These are Tier 1 unit tests - fast, isolated, no external dependencies.
 from __future__ import annotations
 
 import pytest
+
 from kailash.runtime.trust.context import RuntimeTrustContext
 from kailash.runtime.trust.verifier import (
     MockTrustVerifier,
