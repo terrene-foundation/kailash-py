@@ -39,9 +39,7 @@ class ImportIssue:
     severity: str  # "critical", "warning", "info"
     message: str
     suggestion: str
-    gold_standard_ref: str = (
-        ".claude/skills/17-gold-standards/gold-absolute-imports.md"
-    )
+    gold_standard_ref: str = ".claude/skills/17-gold-standards/gold-absolute-imports.md"
 
 
 class ImportPathValidator:
