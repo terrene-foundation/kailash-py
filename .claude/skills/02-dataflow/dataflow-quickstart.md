@@ -389,21 +389,12 @@ Use `nexus-specialist` when:
 
 ### Primary Sources
 
-- **DataFlow README**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md)
-- **DataFlow CLAUDE**: [`sdk-users/apps/dataflow/CLAUDE.md`](../../../../sdk-users/apps/dataflow/CLAUDE.md)
-- **Quick Start Guide**: [`sdk-users/apps/dataflow/docs/getting-started/quickstart.md`](../../../../sdk-users/apps/dataflow/docs/getting-started/quickstart.md)
 
 ### Related Documentation
 
-- **User Guide**: [`sdk-users/apps/dataflow/docs/USER_GUIDE.md`](../../../../sdk-users/apps/dataflow/docs/USER_GUIDE.md)
-- **Query Patterns**: [`sdk-users/apps/dataflow/docs/development/query-patterns.md`](../../../../sdk-users/apps/dataflow/docs/development/query-patterns.md)
-- **Model Definition**: [`sdk-users/apps/dataflow/docs/development/models.md`](../../../../sdk-users/apps/dataflow/docs/development/models.md)
-- **Bulk Operations**: [`sdk-users/apps/dataflow/docs/development/bulk-operations.md`](../../../../sdk-users/apps/dataflow/docs/development/bulk-operations.md)
 
 ### Examples
 
-- **Basic CRUD**: [`sdk-users/apps/dataflow/examples/01_basic_crud.py`](../../../../sdk-users/apps/dataflow/examples/01_basic_crud.py)
-- **Advanced Features**: [`sdk-users/apps/dataflow/examples/02_advanced_features.py`](../../../../sdk-users/apps/dataflow/examples/02_advanced_features.py)
 
 ## Quick Tips
 

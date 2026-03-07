@@ -259,15 +259,10 @@ Use `sdk-navigator` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **Connection Patterns**: [`sdk-users/2-core-concepts/cheatsheet/005-connection-patterns.md`](../../../sdk-users/2-core-concepts/cheatsheet/005-connection-patterns.md)
-- **Workflow Creation**: [`sdk-users/3-development/02-workflows-creation.md`](../../../sdk-users/3-development/02-workflows-creation.md)
 
 ### Related Documentation
-- **Common Patterns**: [`sdk-users/2-core-concepts/cheatsheet/012-common-workflow-patterns.md`](../../../sdk-users/2-core-concepts/cheatsheet/012-common-workflow-patterns.md)
-- **Advanced Features**: [`sdk-users/3-development/03-advanced-features.md`](../../../sdk-users/3-development/03-advanced-features.md)
 
 ### Gold Standards
-- **Parameter Passing**: [`sdk-users/7-gold-standards/parameter_passing_comprehensive.md`](../../../sdk-users/7-gold-standards/parameter_passing_comprehensive.md)
 
 ## Quick Tips
 

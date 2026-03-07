@@ -103,9 +103,7 @@ class TestParameterDeclarationValidator:
         assert "declares no parameters but workflow provides" in issue.message
         assert "['input_data', 'count']" in issue.message
         assert "SDK only injects explicitly declared parameters" in issue.suggestion
-        assert (
-            "enterprise-parameter-passing-gold-standard.md" in issue.documentation_link
-        )
+        assert "gold-parameter-passing.md" in issue.documentation_link
 
     def test_empty_parameters_no_workflow_config(self):
         """Test that empty parameters with no workflow config is fine."""

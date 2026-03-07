@@ -31,45 +31,22 @@ You are a navigation specialist for the Kailash SDK documentation ecosystem. You
 
 ## Primary Navigation Index
 
-### Quick Start (`sdk-users/1-quickstart/`)
+All documentation lives in `.claude/skills/` organized by topic:
 
-- `README.md` - Main quickstart guide
-- `mcp-quickstart.md` - MCP integration
-
-### Core Concepts (`sdk-users/2-core-concepts/`)
-
-- **nodes/** - Node selection and patterns (node-selection-guide.md)
-- **workflows/** - Implementation patterns (by-pattern/, by-industry/)
-- **cheatsheet/** - 50+ ready-to-use patterns
-- **validation/** - Error resolution (common-mistakes.md)
-
-### Development (`sdk-users/3-development/`)
-
-- `01-fundamentals-core-concepts.md` - SDK fundamentals
-- `02-workflows-creation.md` - Workflow building
-- **testing/** - 3-tier testing with NO MOCKING policy
-
-### Enterprise (`sdk-users/5-enterprise/`)
-
-- Security, resilience, compliance, monitoring patterns
-
-### Gold Standards (`sdk-users/7-gold-standards/`)
-
-- Absolute imports, custom nodes, parameter validation, testing
-
-### App Frameworks (`sdk-users/apps/`)
-
-- **dataflow/** - Zero-config database (CLAUDE.md)
-- **nexus/** - Multi-channel platform (CLAUDE.md)
-
-## Framework Quick Access
-
-| Framework | Primary Doc                         | Quick Start       |
-| --------- | ----------------------------------- | ----------------- |
-| Core SDK  | `sdk-users/CLAUDE.md`               | `/sdk`            |
-| DataFlow  | `sdk-users/apps/dataflow/CLAUDE.md` | `/db`             |
-| Nexus     | `sdk-users/apps/nexus/CLAUDE.md`    | `/api`            |
-| MCP       | `src/kailash/mcp_server/`           | `/05-kailash-mcp` |
+| Category              | Skills Directory                                              | Quick Command               |
+| --------------------- | ------------------------------------------------------------- | --------------------------- |
+| Core SDK              | `.claude/skills/01-core-sdk/`                                 | `/sdk` or `/01-core-sdk`    |
+| DataFlow              | `.claude/skills/02-dataflow/`                                 | `/db` or `/02-dataflow`     |
+| Nexus                 | `.claude/skills/03-nexus/`                                    | `/api` or `/03-nexus`       |
+| Kaizen                | `.claude/skills/04-kaizen/`                                   | `/ai` or `/04-kaizen`       |
+| MCP                   | `.claude/skills/05-kailash-mcp/`                              | `/05-kailash-mcp`           |
+| Cheatsheets           | `.claude/skills/06-cheatsheets/`                              | `/06-cheatsheets`           |
+| Development Guides    | `.claude/skills/07-development-guides/`                       | `/07-development-guides`    |
+| Nodes Reference       | `.claude/skills/08-nodes-reference/`                          | `/08-nodes-reference`       |
+| Workflow Patterns     | `.claude/skills/09-workflow-patterns/`                        | `/09-workflow-patterns`     |
+| Error Troubleshooting | `.claude/skills/15-error-troubleshooting/`                    | `/15-error-troubleshooting` |
+| Gold Standards        | `.claude/skills/17-gold-standards/`                           | `/17-gold-standards`        |
+| Enterprise Features   | `.claude/skills/07-development-guides/enterprise-features.md` | —                           |
 
 ## Search Strategy
 
@@ -95,13 +72,13 @@ You are a navigation specialist for the Kailash SDK documentation ecosystem. You
 
 ## Quick Pattern Locations
 
-| Pattern           | Primary Location                                          |
-| ----------------- | --------------------------------------------------------- |
-| Workflow creation | `sdk-users/3-development/02-workflows-creation.md`        |
-| Node selection    | `sdk-users/2-core-concepts/nodes/node-selection-guide.md` |
-| Error handling    | `sdk-users/2-core-concepts/validation/common-mistakes.md` |
-| Testing           | `sdk-users/3-development/testing/`                        |
-| Gold standards    | `sdk-users/7-gold-standards/`                             |
+| Pattern           | Primary Location                                   |
+| ----------------- | -------------------------------------------------- |
+| Workflow creation | `.claude/skills/01-core-sdk/SKILL.md`              |
+| Node selection    | `.claude/skills/08-nodes-reference/SKILL.md`       |
+| Error handling    | `.claude/skills/15-error-troubleshooting/SKILL.md` |
+| Testing           | `.claude/skills/12-testing-strategies/SKILL.md`    |
+| Gold standards    | `.claude/skills/17-gold-standards/SKILL.md`        |
 
 ## Documentation Priority
 
@@ -116,6 +93,7 @@ When navigating, prioritize in this order:
 
 When this guidance is insufficient, consult:
 
-- `sdk-users/` - Complete SDK documentation root
-- `sdk-users/2-core-concepts/` - Core patterns and concepts
-- `sdk-users/apps/` - Framework-specific documentation
+- `.claude/skills/` - Complete skills directory organized by topic
+- `.claude/skills/06-cheatsheets/` - Quick reference patterns
+- `.claude/skills/07-development-guides/` - Advanced development guides
+- `.claude/skills/08-nodes-reference/` - Complete node catalog

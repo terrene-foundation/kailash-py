@@ -29,7 +29,6 @@ from kailash.runtime.local import LocalRuntime
 workflow = WorkflowBuilder()
 
 # See source documentation for specific node types and parameters
-# Reference: sdk-users/2-core-concepts/cheatsheet/decide-node-for-task.md
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
@@ -61,8 +60,6 @@ Use specialized subagents when:
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/2-core-concepts/cheatsheet/041-choosing-the-right-node.md`](../../../sdk-users/2-core-concepts/cheatsheet/041-choosing-the-right-node.md)
-- [`sdk-users/2-core-concepts/nodes/comprehensive-node-catalog.md`](../../../sdk-users/2-core-concepts/nodes/comprehensive-node-catalog.md)
 
 ## Quick Tips
 

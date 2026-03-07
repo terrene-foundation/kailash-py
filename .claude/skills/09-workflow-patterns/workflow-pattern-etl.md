@@ -320,7 +320,5 @@ workflow.add_connection("load_metrics", "result", "ack_messages", "message_ids")
 
 ## Documentation
 
-- **ETL Patterns**: [`sdk-users/7-advanced-topics/workflows/etl-patterns.md`](../../../../sdk-users/7-advanced-topics/workflows/etl-patterns.md)
-- **DataFlow Guide**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md)
 
 <!-- Trigger Keywords: ETL, data pipeline, extract transform load, data migration, data integration, batch processing -->

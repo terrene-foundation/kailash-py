@@ -129,9 +129,6 @@ def db():
 ## Documentation References
 
 ### Primary Sources
-- **TDD Quick Start**: [`sdk-users/apps/dataflow/docs/tdd/quick-start.md`](../../../../sdk-users/apps/dataflow/docs/tdd/quick-start.md)
-- **Best Practices**: [`sdk-users/apps/dataflow/docs/tdd/best-practices.md`](../../../../sdk-users/apps/dataflow/docs/tdd/best-practices.md)
-- **Performance Guide**: [`sdk-users/apps/dataflow/docs/tdd/performance-guide.md`](../../../../sdk-users/apps/dataflow/docs/tdd/performance-guide.md)
 
 ### Related Documentation
 - **DataFlow Specialist**: [`.claude/skills/dataflow-specialist.md`](../../dataflow-specialist.md#L893-L940)

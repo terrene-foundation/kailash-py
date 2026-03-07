@@ -57,6 +57,5 @@ workflow.add_node("DatabaseExecuteNode", "log_slow_query", {
 
 ## Documentation
 
-- **Monitoring Guide**: [`sdk-users/apps/dataflow/11-monitoring.md`](../../../../sdk-users/apps/dataflow/11-monitoring.md)
 
 <!-- Trigger Keywords: dataflow monitoring, dataflow metrics, dataflow performance, query performance -->

@@ -569,7 +569,6 @@ pip install --upgrade kailash-dataflow>=0.8.0
 - **[dataflow-error-enhancer](dataflow-error-enhancer.md)** - Actionable error messages with DF-XXX codes
 - **[dataflow-validation](dataflow-validation.md)** - Build-time validation modes
 - **[dataflow-debugging](dataflow-debugging.md)** - Interactive debugging with CLI tools
-- **[inspector.md](../../../sdk-users/apps/dataflow/guides/inspector.md)** - Comprehensive Inspector guide
 
 ## When to Use This Skill
 

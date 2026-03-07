@@ -110,6 +110,5 @@ workflow.add_node("ExcelReaderNode", "excel_reader", {
 
 ## Documentation
 
-- **Data Nodes**: [`sdk-users/2-core-concepts/nodes/03-data-nodes.md`](../../../../sdk-users/2-core-concepts/nodes/03-data-nodes.md)
 
 <!-- Trigger Keywords: CSV node, JSON node, Excel, data nodes, file reader, data I/O, CSVReaderNode, JSONReaderNode -->

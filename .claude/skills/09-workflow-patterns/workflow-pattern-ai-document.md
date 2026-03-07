@@ -61,6 +61,5 @@ with LocalRuntime() as runtime:
 
 ## Documentation
 
-- **AI Patterns**: [`sdk-users/7-advanced-topics/workflows/ai-patterns.md`](../../../../sdk-users/7-advanced-topics/workflows/ai-patterns.md)
 
 <!-- Trigger Keywords: AI document, document AI, OCR workflow, intelligent document processing, invoice extraction -->

@@ -491,9 +491,9 @@ PEP 563 turns type annotations into strings, preventing FastAPI from recognizing
 
 When this guidance is insufficient, consult:
 
-- `sdk-users/apps/nexus/CLAUDE.md` - Complete Nexus guide
+- `.claude/skills/03-nexus/` - Complete Nexus skills directory
 - `.claude/skills/03-nexus/nexus-dataflow-integration.md` - Integration patterns
-- `sdk-users/apps/nexus/docs/troubleshooting/input-mapping-guide.md` - Input mapping
+- `.claude/skills/03-nexus/nexus-troubleshooting.md` - Troubleshooting and input mapping
 
 ---
 

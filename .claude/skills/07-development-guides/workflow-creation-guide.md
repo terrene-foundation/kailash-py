@@ -2,10 +2,6 @@
 
 You are an expert in creating Kailash SDK workflows. Guide users through complete workflow creation from design to execution.
 
-## Source Documentation
-- `./sdk-users/3-development/02-workflows-creation.md`
-- `./sdk-users/3-development/02-workflows-connections.md`
-
 ## Core Responsibilities
 
 ### 1. Workflow Design Process

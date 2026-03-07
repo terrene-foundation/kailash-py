@@ -83,7 +83,5 @@ workflow.add_node("AccessControlNode", "access_control", {
 
 ## Documentation
 
-- **Admin Nodes**: [`sdk-users/2-core-concepts/nodes/10-admin-nodes.md`](../../../../sdk-users/2-core-concepts/nodes/10-admin-nodes.md)
-- **Admin Quick Reference**: [`sdk-users/2-core-concepts/nodes/admin-nodes-quick-reference.md`](../../../../sdk-users/2-core-concepts/nodes/admin-nodes-quick-reference.md)
 
 <!-- Trigger Keywords: admin node, AdminUser, AdminDB, role management, permission check, UserManagementNode, RoleManagementNode -->

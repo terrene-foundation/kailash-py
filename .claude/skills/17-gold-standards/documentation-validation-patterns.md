@@ -129,7 +129,6 @@ workflow.add_node("LLMAgentNode", "agent", {"max_tokens": 1000})
 ## Documentation Directories
 
 ```
-sdk-users/
 ├── 1-overview/          - Architecture and decision guides
 ├── 2-core-concepts/     - Core patterns, nodes, workflows
 ├── 3-development/       - Implementation guides
@@ -142,7 +141,6 @@ sdk-users/
 
 ## Update Guidelines
 
-1. **Hierarchical Documentation**: Root CLAUDE.md → `sdk-users/` → specific guides
 2. **Content Guidelines**: Include only absolute essentials, be directive and actionable
 3. **Validation Requirements**: Test all instructions with real infrastructure
 4. **Cross-reference validation**: Ensure examples work with actual SDK

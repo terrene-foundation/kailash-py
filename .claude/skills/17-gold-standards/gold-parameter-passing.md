@@ -230,8 +230,6 @@ except ValueError as e:  # Missing required parameters
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/7-gold-standards/parameter_passing_comprehensive.md`](../../../sdk-users/7-gold-standards/parameter_passing_comprehensive.md)
-- [`sdk-users/3-development/parameter-passing-guide.md`](../../../sdk-users/3-development/parameter-passing-guide.md)
 
 ### Internal Implementation
 - `src/kailash/runtime/local.py:1621-1640` - Parameter scoping implementation

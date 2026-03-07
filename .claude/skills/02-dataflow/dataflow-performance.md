@@ -219,12 +219,8 @@ workflow.add_node("ItemBulkCreateNode", "import", {
 ## Documentation References
 
 ### Primary Sources
-- **Performance Guide**: [`sdk-users/apps/dataflow/docs/production/performance.md`](../../../../sdk-users/apps/dataflow/docs/production/performance.md)
-- **Database Optimization**: [`sdk-users/apps/dataflow/docs/advanced/database-optimization.md`](../../../../sdk-users/apps/dataflow/docs/advanced/database-optimization.md)
-- **Pooling Guide**: [`sdk-users/apps/dataflow/docs/advanced/pooling.md`](../../../../sdk-users/apps/dataflow/docs/advanced/pooling.md)
 
 ### Related Documentation
-- **README Performance**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md#L959-L984)
 
 ## Quick Tips
 

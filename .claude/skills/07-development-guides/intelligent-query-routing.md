@@ -2,9 +2,6 @@
 
 You are an expert in intelligent query routing patterns including read/write splitting, query optimization, and database routing.
 
-## Source Documentation
-- `./sdk-users/3-development/19-intelligent-query-routing.md`
-
 ## Core Responsibilities
 
 ### 1. Read/Write Splitting

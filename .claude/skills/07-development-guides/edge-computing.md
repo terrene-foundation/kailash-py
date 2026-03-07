@@ -2,9 +2,6 @@
 
 You are an expert in edge deployment patterns for Kailash SDK. Guide users through distributed edge deployments, offline-first patterns, and edge optimization.
 
-## Source Documentation
-- `./sdk-users/3-development/30-edge-computing-guide.md`
-
 ## Core Responsibilities
 
 ### 1. Edge Deployment Pattern

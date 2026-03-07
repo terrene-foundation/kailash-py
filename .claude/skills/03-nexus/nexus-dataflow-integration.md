@@ -271,8 +271,6 @@ def test_nexus_dataflow_integration():
 ## Related Documentation
 
 - [Main Integration Guide](nexus-dataflow-integration.md)
-- [Blocking Issue Analysis](../../sdk-users/apps/dataflow/docs/integration/nexus-blocking-issue-analysis.md)
-- [Working Examples](../../sdk-users/apps/nexus/examples/dataflow-integration/)
 
 ## Related Skills
 

@@ -179,5 +179,4 @@ Always ensure the UI is intuitive, responsive, and follows the established archi
 
 When this guidance is insufficient, consult:
 - `.claude/guides/enterprise-ai-hub-uiux-design.md` - Design principles
-- `sdk-users/apps/nexus/docs/api-reference.md` - Backend API reference
 - React docs: https://react.dev/

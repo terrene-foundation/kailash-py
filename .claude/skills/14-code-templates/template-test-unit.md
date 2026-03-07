@@ -211,7 +211,5 @@ Use `tdd-implementer` when:
 
 ### Primary Sources
 - **Testing Specialist**: [`.claude/agents/testing-specialist.md` (lines 146-176)](../../../../.claude/agents/testing-specialist.md#L146-L176)
-- **Test Organization**: [`sdk-users/3-development/testing/test-organization-policy.md`](../../../../sdk-users/3-development/testing/test-organization-policy.md)
-- **Production Testing**: [`sdk-users/3-development/12-testing-production-quality.md`](../../../../sdk-users/3-development/12-testing-production-quality.md)
 
 <!-- Trigger Keywords: unit test template, Tier 1 test, create unit test, test structure, unit test example, unit test boilerplate, pytest unit test, fast test template -->

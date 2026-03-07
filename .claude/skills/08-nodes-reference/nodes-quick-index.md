@@ -202,9 +202,6 @@ Use `pattern-expert` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **Node Index**: [`sdk-users/2-core-concepts/nodes/node-index.md`](../../../../sdk-users/2-core-concepts/nodes/node-index.md)
-- **Node Selection Guide**: [`sdk-users/2-core-concepts/nodes/node-selection-guide.md`](../../../../sdk-users/2-core-concepts/nodes/node-selection-guide.md)
-- **Comprehensive Catalog**: [`sdk-users/2-core-concepts/nodes/comprehensive-node-catalog.md`](../../../../sdk-users/2-core-concepts/nodes/comprehensive-node-catalog.md)
 
 ## Quick Tips
 

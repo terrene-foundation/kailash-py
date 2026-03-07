@@ -170,9 +170,6 @@ Use `pattern-expert` when:
 ## Documentation References
 
 ### Primary Sources
-- **Custom Node Creation**: [`sdk-users/2-core-concepts/cheatsheet/011-custom-node-creation.md`](../../../../sdk-users/2-core-concepts/cheatsheet/011-custom-node-creation.md)
-- **Gold Standard**: [`sdk-users/7-gold-standards/custom-node-development-guide.md`](../../../../sdk-users/7-gold-standards/custom-node-development-guide.md)
-- **Custom Development**: [`sdk-users/3-development/05-custom-development.md`](../../../../sdk-users/3-development/05-custom-development.md)
 
 ## Quick Tips
 

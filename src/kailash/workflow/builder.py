@@ -100,7 +100,7 @@ class WorkflowBuilder:
                 f"String references only work for @register_node() decorated SDK nodes.\n"
                 f"Custom nodes MUST use class references as shown above.\n"
                 f"\n"
-                f"📚 Guide: sdk-users/7-gold-standards/GOLD-STANDARD-custom-node-development-guide.md"
+                f"📚 Guide: .claude/skills/14-code-templates/template-custom-node.md"
             )
 
     def validate_parameter_declarations(
@@ -1015,7 +1015,7 @@ class WorkflowBuilder:
             raise WorkflowValidationError(
                 "Cannot build workflow due to parameter declaration errors:\n"
                 + "\n".join(f"  - {msg}" for msg in error_messages)
-                + "\n\nSee: sdk-users/7-gold-standards/enterprise-parameter-passing-gold-standard.md"
+                + "\n\nSee: .claude/skills/17-gold-standards/gold-parameter-passing.md"
             )
 
         # Add nodes to workflow

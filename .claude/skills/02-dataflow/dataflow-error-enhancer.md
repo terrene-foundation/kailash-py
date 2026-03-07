@@ -143,8 +143,6 @@ KeyError: 'data'
   workflow.add_connection("prepare_data", "result", "create_user", "data")
 
 📖 Documentation:
-  - CreateNode Guide: sdk-users/apps/dataflow/guides/create-vs-update.md
-  - Top 10 Errors: sdk-users/apps/dataflow/troubleshooting/top-10-errors.md
 ```
 
 ## Common Errors and Solutions
@@ -259,7 +257,6 @@ workflow.add_node("UserCreateNode", "create", {
 })
 ```
 
-**See:** `sdk-users/apps/dataflow/guides/create-vs-update.md` (comprehensive guide)
 
 ---
 
@@ -276,7 +273,6 @@ In async contexts (FastAPI, pytest-asyncio, etc.), you MUST use the async method
   - close() → close_async()
   - _ensure_migration_tables() → _ensure_migration_tables_async()
 
-See: sdk-users/apps/dataflow/troubleshooting/common-errors.md#DF-501
 ```
 
 **Cause:** Called a sync method (`create_tables()`, `close()`) from within an async function or event loop.
@@ -328,7 +324,6 @@ async def db():
 
 **Detection:** DataFlow detects async context via `asyncio.get_running_loop()`. If a running loop exists, sync methods raise `RuntimeError` with DF-501.
 
-**See:** `sdk-users/apps/dataflow/troubleshooting/common-errors.md#DF-501`
 
 ---
 
@@ -451,10 +446,6 @@ workflow.add_node("UserCreateNode", "create_user", {
 
 ### 3. Check Documentation Links
 ErrorEnhancer provides direct links to guides:
-- **CreateNode vs UpdateNode**: `sdk-users/apps/dataflow/guides/create-vs-update.md`
-- **Top 10 Errors**: `sdk-users/apps/dataflow/troubleshooting/top-10-errors.md`
-- **Inspector Guide**: `sdk-users/apps/dataflow/guides/inspector.md`
-- **Error Handling**: `sdk-users/apps/dataflow/guides/error-handling.md`
 
 ### 4. Combine with Inspector
 Use Inspector for **proactive validation** before errors occur:
@@ -489,9 +480,7 @@ ErrorEnhancer has **negligible performance impact**:
 
 ## Related Resources
 
-- **[top-10-errors](../../../sdk-users/apps/dataflow/troubleshooting/top-10-errors.md)** - Quick fix guide for 90% of issues
 - **[dataflow-inspector](dataflow-inspector.md)** - Proactive workflow validation
-- **[create-vs-update](../../../sdk-users/apps/dataflow/guides/create-vs-update.md)** - CreateNode vs UpdateNode patterns
 - **[dataflow-validation](dataflow-validation.md)** - Build-time validation modes
 
 ## When to Use This Skill

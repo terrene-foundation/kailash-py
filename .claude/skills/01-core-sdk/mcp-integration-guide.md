@@ -29,7 +29,6 @@ from kailash.runtime.local import LocalRuntime
 workflow = WorkflowBuilder()
 
 # See source documentation for specific node types and parameters
-# Reference: sdk-users/2-core-concepts/cheatsheet/mcp-integration-guide.md
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
@@ -61,8 +60,6 @@ Use specialized subagents when:
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/2-core-concepts/cheatsheet/025-mcp-integration.md`](../../../sdk-users/2-core-concepts/cheatsheet/025-mcp-integration.md)
-- [`sdk-users/3-development/17-mcp-development-guide.md`](../../../sdk-users/3-development/17-mcp-development-guide.md)
 
 ## Quick Tips
 

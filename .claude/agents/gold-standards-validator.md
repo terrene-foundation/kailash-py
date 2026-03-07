@@ -164,5 +164,5 @@ For each violation:
 When this guidance is insufficient, consult:
 
 - `rules/` directory — Universal rule definitions
-- `sdk-users/7-gold-standards/` — Kailash-specific gold standards (when applicable)
-- `sdk-users/2-core-concepts/validation/` — Kailash validation patterns (when applicable)
+- `.claude/skills/17-gold-standards/` — Kailash-specific gold standards (when applicable)
+- `.claude/skills/16-validation-patterns/` — Kailash validation patterns (when applicable)

@@ -191,14 +191,9 @@ db_prod = DataFlow(
 
 ### Primary Sources
 
-- **NOT NULL Handler**: [`sdk-users/apps/dataflow/docs/development/not-null-column-addition.md`](../../../../sdk-users/apps/dataflow/docs/development/not-null-column-addition.md)
-- **Column Removal**: [`sdk-users/apps/dataflow/docs/development/column-removal-system.md`](../../../../sdk-users/apps/dataflow/docs/development/column-removal-system.md)
-- **Auto Migration**: [`sdk-users/apps/dataflow/docs/workflows/auto-migration.md`](../../../../sdk-users/apps/dataflow/docs/workflows/auto-migration.md)
 
 ### Related Documentation
 
-- **DataFlow CLAUDE**: [`sdk-users/apps/dataflow/CLAUDE.md`](../../../../sdk-users/apps/dataflow/CLAUDE.md#L316-L360)
-- **Migration Orchestration**: [`sdk-users/apps/dataflow/docs/workflows/migration-orchestration-engine.md`](../../../../sdk-users/apps/dataflow/docs/workflows/migration-orchestration-engine.md)
 
 ## Quick Tips
 
