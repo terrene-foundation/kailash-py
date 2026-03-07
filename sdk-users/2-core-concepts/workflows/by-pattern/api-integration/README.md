@@ -508,4 +508,4 @@ def handle_api_versioning(api_version="v1"):
 - Review `scripts/rest_api_workflow.py` for implementation details
 - Configure API integration for your specific external services
 - Implement authentication and security for your API endpoints
-- See training examples in `# contrib (removed)/training/workflow-examples/api-integration-training/`
+- See the Kailash SDK repository for training examples

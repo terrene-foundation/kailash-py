@@ -5,6 +5,7 @@ Large-scale data migration and transformation using DataFlow's high-performance 
 ## Overview
 
 This example demonstrates enterprise-grade data migration:
+
 - **Large-scale data processing** (millions of records)
 - **ETL pipelines** with validation and transformation
 - **Database-to-database migration** with schema mapping
@@ -277,21 +278,24 @@ class DataMigrationEngine:
         """Get total record count from source table."""
         workflow = WorkflowBuilder()
 
-        # Build count query
-        where_clause = ""
+        # Build count query with parameterized values
+        conditions = []
+        params = []
         if filters:
-            conditions = []
             for key, value in filters.items():
-                if isinstance(value, str):
-                    conditions.append(f"{key} = '{value}'")
-                else:
-                    conditions.append(f"{key} = {value}")
-            if conditions:
-                where_clause = "WHERE " + " AND ".join(conditions)
+                # Validate column names against an allowlist in production
+                conditions.append(f"{key} = %s")
+                params.append(value)
 
+        where_clause = ""
+        if conditions:
+            where_clause = "WHERE " + " AND ".join(conditions)
+
+        # Note: source_table should be validated against known tables
         workflow.add_node("SQLQueryNode", "count_records", {
             "connection": self.source_connection,
-            "query": f"SELECT COUNT(*) as total FROM {source_table} {where_clause}"
+            "query": f"SELECT COUNT(*) as total FROM {source_table} {where_clause}",
+            "parameters": params
         })
 
         results, run_id = self.runtime.execute(workflow.build())
@@ -429,13 +433,16 @@ class DataMigrationEngine:
         """Extract batch of data from source table."""
         workflow = WorkflowBuilder()
 
+        # Note: source_table should be validated against known tables.
+        # Use parameterized queries for start_id/end_id to prevent SQL injection.
         workflow.add_node("SQLQueryNode", "extract_data", {
             "connection": self.source_connection,
             "query": f"""
                 SELECT * FROM {source_table}
-                WHERE id BETWEEN {start_id} AND {end_id}
+                WHERE id BETWEEN %s AND %s
                 ORDER BY id
-            """
+            """,
+            "parameters": [start_id, end_id]
         })
 
         results, run_id = self.runtime.execute(workflow.build())
@@ -1454,22 +1461,26 @@ LOG_LEVEL=INFO
 ## Usage
 
 1. **Install dependencies:**
+
    ```bash
    pip install -r requirements.txt
    ```
 
 2. **Set up environment:**
+
    ```bash
    cp migration.env .env
    # Edit .env with your database connections
    ```
 
 3. **Run migration:**
+
    ```bash
    python migration_app.py
    ```
 
 4. **Monitor progress:**
+
    ```bash
    python -c "
    from models import db, MigrationJob

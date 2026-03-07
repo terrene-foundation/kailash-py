@@ -403,4 +403,4 @@ health_aggregator = PythonCodeNode.from_function(
 - Review `scripts/health_check_monitor.py` for implementation details
 - Configure monitoring for your specific infrastructure
 - Set up alerting integration with your notification systems
-- See training examples in `# contrib (removed)/training/workflow-examples/monitoring-training/`
+- See the Kailash SDK repository for training examples

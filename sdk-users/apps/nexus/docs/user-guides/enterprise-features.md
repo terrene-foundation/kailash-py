@@ -643,6 +643,7 @@ print(f"📊 Metrics Summary: {len(metrics_summary)} metrics tracked")
 from nexus import Nexus
 import hashlib
 import hmac
+import json
 import secrets
 
 app = Nexus()
@@ -938,7 +939,7 @@ policy_check = security.check_security_policy("password_policy", {
 gdpr_audit = security.run_compliance_audit("GDPR")
 dashboard = security.get_security_dashboard()
 
-print(f"🔐 Encryption test: {test_data == eval(decrypted)}")
+print(f"🔐 Encryption test: {test_data == json.loads(decrypted)}")
 print(f"🛡️  Policy compliance: {policy_check['compliant']}")
 print(f"📋 GDPR compliance: {gdpr_audit['compliance_score']:.1f}%")
 print(f"📊 Security dashboard: {dashboard['recent_events']} recent events")

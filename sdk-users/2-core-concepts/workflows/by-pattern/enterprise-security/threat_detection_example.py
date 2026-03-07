@@ -121,25 +121,21 @@ async def create_realistic_security_events() -> List[Dict[str, Any]]:
     return all_events
 
 
-async def setup_ollama():
-    """Setup Ollama container for AI analysis."""
-    print("🐳 Setting up Ollama for AI threat analysis...")
+def _setup_ollama_container():
+    """Setup Ollama Docker container and pull model."""
+    import subprocess
+    import time
 
-    setup_code = """
-import subprocess
-import time
-
-def setup():
     try:
         # Check if container exists
-        result = subprocess.execute(
+        result = subprocess.run(
             ["docker", "ps", "-a", "--filter", "name=ollama", "--format", "{{.Names}}"],
             capture_output=True, text=True, timeout=30
         )
 
         if "ollama" not in result.stdout:
             print("Starting new Ollama container...")
-            subprocess.execute([
+            subprocess.run([
                 "docker", "run", "-d",
                 "--name", "ollama",
                 "-p", "11434:11434",
@@ -149,12 +145,12 @@ def setup():
             time.sleep(15)
         else:
             print("Starting existing container...")
-            subprocess.execute(["docker", "start", "ollama"], check=True, timeout=30)
+            subprocess.run(["docker", "start", "ollama"], check=True, timeout=30)
             time.sleep(5)
 
         # Pull model
         print("Pulling llama3.2:3b model...")
-        subprocess.execute([
+        subprocess.run([
             "docker", "exec", "ollama",
             "ollama", "pull", "llama3.2:3b"
         ], check=True, timeout=300)
@@ -162,11 +158,15 @@ def setup():
         return {"result": "Ollama ready"}
     except Exception as e:
         return {"result": f"Setup failed: {e}"}
-    """
+
+
+async def setup_ollama():
+    """Setup Ollama container for AI analysis."""
+    print("🐳 Setting up Ollama for AI threat analysis...")
 
     setup_node = PythonCodeNode.from_function(
         name="ollama_setup",
-        func=lambda: exec(setup_code) or {"result": "Setup completed"},
+        func=_setup_ollama_container,
     )
 
     result = await setup_node.execute_async()
@@ -289,4 +289,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.execute(main())
+    asyncio.run(main())

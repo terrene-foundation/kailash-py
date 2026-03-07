@@ -256,7 +256,7 @@ With parameter propagation fixed, we can now proceed to:
 
 ### References
 
-- `src/kailash/workflow/cyclic_runner.py` - The executor that needs fixing
+- `kailash/workflow/cyclic_runner.py` - The executor that needs fixing
 - `guide/mistakes/058-*.md` - Config vs runtime parameters
 - `guide/mistakes/060-*.md` - Cycle state access patterns
 - `tests/test_workflow/test_cyclic_workflows.py` - Existing tests (need more)

@@ -412,7 +412,7 @@ results, run_id = runtime.execute(workflow.build())
 # Unit tests
 python -m pytest tests/unit/ -v
 
-# Integration tests (real database, no mocking)
+# Integration tests (real database, real infrastructure preferred)
 python -m pytest tests/integration/ -v
 
 # E2E tests

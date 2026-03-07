@@ -6,13 +6,6 @@ A streamlined credit risk assessment that works with the available
 customer value data to demonstrate financial risk analysis patterns.
 """
 
-import sys
-from pathlib import Path
-
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent.parent.parent.parent
-sys.path.insert(0, str(project_root))
-
 from kailash.nodes.code import PythonCodeNode
 from kailash.nodes.data import CSVReaderNode, JSONWriterNode
 from kailash.runtime.local import LocalRuntime

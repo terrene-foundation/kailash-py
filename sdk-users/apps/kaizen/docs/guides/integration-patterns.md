@@ -458,4 +458,4 @@ See working examples in the repository:
 
 ---
 
-**Need help?** Check **[Examples](../../../../apps/kailash-kaizen/examples/)** for working code.
+**Need help?** Check the kaizen package examples for working code.

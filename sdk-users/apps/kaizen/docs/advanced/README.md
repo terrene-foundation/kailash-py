@@ -7,6 +7,7 @@ This section covers advanced Kaizen usage patterns including custom node develop
 ## 🏗️ Advanced Topics
 
 ### [Custom Nodes](custom-nodes.md)
+
 **Build custom agent nodes for specialized functionality**
 
 Learn to create custom Kaizen nodes that integrate seamlessly with the Core SDK workflow system:
@@ -23,6 +24,7 @@ Learn to create custom Kaizen nodes that integrate seamlessly with the Core SDK 
 **Time Investment:** 45-60 minutes
 
 ### [Performance Tuning](performance-tuning.md)
+
 **Optimize Kaizen for production scale and performance**
 
 Comprehensive guide to optimizing Kaizen deployments for production performance:
@@ -40,6 +42,7 @@ Comprehensive guide to optimizing Kaizen deployments for production performance:
 **Time Investment:** 40-50 minutes
 
 ### [Enterprise Deployment](enterprise-deployment.md)
+
 **Production deployment with security, compliance, and scale**
 
 Complete guide to deploying Kaizen in enterprise environments:
@@ -59,16 +62,19 @@ Complete guide to deploying Kaizen in enterprise environments:
 ## 🎯 Learning Path
 
 ### For Platform Engineers
+
 1. **[Performance Tuning](performance-tuning.md)** - Optimize for production workloads
 2. **[Enterprise Deployment](enterprise-deployment.md)** - Scalable, secure deployments
 3. **[Custom Nodes](custom-nodes.md)** - Platform-specific extensions
 
 ### For AI Engineers
+
 1. **[Custom Nodes](custom-nodes.md)** - Specialized AI functionality
 2. **[Performance Tuning](performance-tuning.md)** - Model optimization and efficiency
 3. **[Enterprise Deployment](enterprise-deployment.md)** - Production AI systems
 
 ### for DevOps Engineers
+
 1. **[Enterprise Deployment](enterprise-deployment.md)** - Infrastructure and operations
 2. **[Performance Tuning](performance-tuning.md)** - Monitoring and optimization
 3. **[Custom Nodes](custom-nodes.md)** - Custom infrastructure components
@@ -76,6 +82,7 @@ Complete guide to deploying Kaizen in enterprise environments:
 ## 🚀 Advanced Patterns Preview
 
 ### Custom Node Development
+
 ```python
 from kaizen.core.base import AINodeBase
 from kailash.workflow.builder import WorkflowBuilder
@@ -102,6 +109,7 @@ workflow.add_node_instance(custom_node.to_workflow_node())
 ```
 
 ### Performance Optimization
+
 ```python
 # Production configuration for performance
 performance_config = kaizen.KaizenConfig(
@@ -127,6 +135,7 @@ framework = kaizen.Kaizen(
 ```
 
 ### Enterprise Deployment
+
 ```python
 # Enterprise deployment configuration
 enterprise_config = kaizen.KaizenConfig(
@@ -163,6 +172,7 @@ deployment = kaizen.EnterpriseDeployment(
 ## 🔧 Advanced Integration Patterns
 
 ### Multi-Framework Integration
+
 ```python
 # Integrate Kaizen with entire Kailash ecosystem
 from kailash.workflow.builder import WorkflowBuilder
@@ -198,6 +208,7 @@ nexus.deploy_workflow(
 ```
 
 ### Custom Memory Systems
+
 ```python
 # Custom enterprise memory implementation
 class CustomEnterpriseMemory(kaizen.memory.BaseMemorySystem):
@@ -222,6 +233,7 @@ framework.register_memory_system("custom", custom_memory)
 ```
 
 ### Advanced MCP Integration
+
 ```python
 # Custom MCP server for enterprise integration
 class KaizenMCPServer(kaizen.mcp.BaseMCPServer):
@@ -250,29 +262,32 @@ mcp_server.start(port=8080, ssl=True)
 
 ## 📊 Advanced Topics Complexity
 
-| Topic | Complexity | Prerequisites | Time | Audience |
-|-------|------------|---------------|------|----------|
-| Custom Nodes | ⭐⭐⭐⭐ | Core SDK knowledge | 45-60 min | AI Engineers |
-| Performance Tuning | ⭐⭐⭐ | Production experience | 40-50 min | Platform Engineers |
-| Enterprise Deployment | ⭐⭐⭐⭐⭐ | Enterprise architecture | 60-90 min | DevOps/Architects |
+| Topic                 | Complexity | Prerequisites           | Time      | Audience           |
+| --------------------- | ---------- | ----------------------- | --------- | ------------------ |
+| Custom Nodes          | ⭐⭐⭐⭐   | Core SDK knowledge      | 45-60 min | AI Engineers       |
+| Performance Tuning    | ⭐⭐⭐     | Production experience   | 40-50 min | Platform Engineers |
+| Enterprise Deployment | ⭐⭐⭐⭐⭐ | Enterprise architecture | 60-90 min | DevOps/Architects  |
 
 ## 🛠️ Development Prerequisites
 
 ### Technical Requirements
 
 **For Custom Nodes:**
+
 - Deep understanding of Kaizen architecture
 - Core SDK node development experience
 - Python advanced programming concepts
 - Testing and validation frameworks
 
 **For Performance Tuning:**
+
 - Production deployment experience
 - Performance monitoring and profiling
 - Understanding of distributed systems
 - Database and caching technologies
 
 **For Enterprise Deployment:**
+
 - Enterprise architecture experience
 - Kubernetes and container orchestration
 - Security and compliance requirements
@@ -281,6 +296,7 @@ mcp_server.start(port=8080, ssl=True)
 ### Environment Setup
 
 **Development Environment:**
+
 ```bash
 # Install development dependencies
 pip install kailash[kaizen,dev,testing]
@@ -293,9 +309,10 @@ pip install prometheus-client kubernetes
 ```
 
 **Testing Environment:**
+
 ```bash
 # Set up test infrastructure
-./tests/utils/test-env up
+docker compose up -d
 
 # Configure enterprise features
 export KAIZEN_ENTERPRISE_MODE=true
@@ -305,18 +322,21 @@ export KAIZEN_SECURITY_LEVEL=high
 ## 🎯 Real-World Applications
 
 ### Custom Node Examples
+
 - **Specialized AI Models** - Custom nodes for domain-specific models
 - **External API Integration** - Nodes for enterprise API connections
 - **Data Processing** - Custom data transformation and validation nodes
 - **Security Scanning** - Nodes for security analysis and compliance checking
 
 ### Performance Optimization Examples
+
 - **High-Throughput Processing** - Optimized for thousands of requests per second
 - **Large-Scale Analytics** - Processing terabytes of data efficiently
 - **Real-Time Systems** - Sub-second response time requirements
 - **Resource-Constrained Environments** - Optimized for limited resources
 
 ### Enterprise Deployment Examples
+
 - **Financial Services** - Compliance, security, and audit requirements
 - **Healthcare** - HIPAA compliance and data protection
 - **Government** - Security clearance and regulatory compliance
@@ -325,18 +345,21 @@ export KAIZEN_SECURITY_LEVEL=high
 ## 🚨 Advanced Best Practices
 
 ### Security Considerations
+
 - **Zero Trust Architecture** - Assume no trust, verify everything
 - **Encryption Everywhere** - Data at rest and in transit
 - **Audit Everything** - Comprehensive audit trails
 - **Least Privilege** - Minimal necessary permissions
 
 ### Performance Guidelines
+
 - **Monitor Everything** - Comprehensive observability
 - **Optimize Early** - Performance considerations from design
 - **Scale Horizontally** - Design for distributed deployment
 - **Cache Intelligently** - Strategic caching for performance
 
 ### Operational Excellence
+
 - **Automate Operations** - Infrastructure as code
 - **Plan for Failure** - Resilient design and disaster recovery
 - **Continuous Improvement** - Regular performance and security reviews
@@ -345,17 +368,20 @@ export KAIZEN_SECURITY_LEVEL=high
 ## 📚 Additional Resources
 
 ### Advanced Documentation
+
 - **[Kailash Core SDK Advanced](../../2-core-concepts/advanced/)** - Core SDK deep dive
 - **[DataFlow Advanced](../dataflow/advanced/)** - Database optimization
 - **[Nexus Advanced](../nexus/advanced/)** - Platform deployment
 
 ### External Resources
+
 - **Performance Engineering** - General performance optimization techniques
 - **Enterprise Architecture** - Patterns for large-scale systems
 - **Security Best Practices** - Enterprise security frameworks
 - **Kubernetes Documentation** - Container orchestration
 
 ### Community Resources
+
 - **GitHub Advanced Examples** - Community-contributed advanced patterns
 - **Performance Benchmarks** - Real-world performance data
 - **Architecture Discussions** - Design pattern discussions
@@ -364,6 +390,7 @@ export KAIZEN_SECURITY_LEVEL=high
 ---
 
 **Ready for advanced Kaizen usage?** Choose your focus:
+
 - **[Custom Nodes](custom-nodes.md)** for specialized functionality
 - **[Performance Tuning](performance-tuning.md)** for production optimization
 - **[Enterprise Deployment](enterprise-deployment.md)** for large-scale deployment

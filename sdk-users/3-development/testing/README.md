@@ -77,11 +77,11 @@ pytest --cov=kailash --cov-report=html tests/unit/ tests/integration/
 1. **No test files in `tests/` root** ✅ - Clean 3-tier structure
 2. **Mirror source structure** ✅ - Easy navigation validated
 3. **Use proper markers** ✅ - Tier-based execution working
-4. **NO SKIPPED TESTS** ✅ - Zero tolerance policy enforced (1,950+ tests executable)
+4. **Avoid skipped tests** ✅ - All tests should be executable (1,950+ tests)
 
 ### Infrastructure Validation ✅
 - **Docker Stack**: All 6 services healthy and locked to dedicated ports
-- **Real Service Testing**: NO MOCKING in integration/E2E tiers
+- **Real Service Testing**: real infrastructure preferred in integration/E2E tiers
 - **MCP Integration**: Namespace collision fix deployed and tested
 - **Performance**: Optimized for CI/CD speed + reliability balance
 

@@ -157,5 +157,5 @@ cycle.build()
 ## 🔗 Related Documentation
 
 - [Cyclic Workflow Patterns](by-pattern/control-flow/cyclic-workflows.md)
-- [Architecture Decision Record](../../../# contrib (removed)/architecture/adr/0070-true-cyclic-edges-implementation.md)
+- Architecture Decision Record (ADR-0070)
 - [CycleBuilder API Reference](../../cheatsheet/021-cyclebuilder-api.md)

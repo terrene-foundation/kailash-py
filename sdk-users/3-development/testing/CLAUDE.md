@@ -29,18 +29,18 @@ pytest tests/e2e/ -m "requires_docker"
 
 ### Key Rules
 1. **NO scattered test files** - Everything must be in unit/, integration/, or e2e/
-2. **Mirror source structure** - `src/kailash/nodes/ai/` → `tests/unit/nodes/ai/`
+2. **Mirror source structure** - `kailash/nodes/ai/` → `tests/unit/nodes/ai/`
 3. **Use proper markers** - `@pytest.mark.integration`, `@pytest.mark.requires_docker`
 4. **Keep tests fast** - Unit tests < 1s, Integration < 30s
-5. **NO MOCKING in Tier 2/3** - Integration and E2E tests MUST use REAL Docker services
-   - ❌ NEVER mock databases in integration/
-   - ❌ NEVER use patch/Mock in e2e/
+5. **Real infrastructure preferred in Tier 2/3** - Integration and E2E tests should use real Docker services
+   - ❌ Avoid mocking databases in integration/
+   - ❌ Avoid patch/Mock in e2e/
    - ✅ Use real PostgreSQL, Redis, Ollama via tests/utils/docker_config.py
 
 ### When Writing Tests
 - **Unit tests**: Test one component, mock all dependencies (ONLY place mocking is allowed)
-- **Integration tests**: Test component interactions with REAL Docker services (NO MOCKING)
-- **E2E tests**: Test complete scenarios with REAL Docker services (NO MOCKING)
+- **Integration tests**: Test component interactions with REAL Docker services (real infrastructure preferred)
+- **E2E tests**: Test complete scenarios with REAL Docker services (real infrastructure preferred)
 
 ### Common Mistakes to Avoid
 - ❌ Creating `tests/test_*` directories

@@ -8,18 +8,21 @@
 ## 🚨 CRITICAL PROBLEM STATEMENT
 
 **Observed Issue**: We keep repeating parameter errors in test cases:
+
 - Using `result["valid"]` when node outputs `result["success"]`
 - Missing required parameters like `requestor_id`
 - Wrong parameter types or structures
 - Incorrect output path assertions
 
 **Root Cause**: Writing test cases without systematically checking:
+
 1. Node parameter contracts
 2. Node output structures
 3. Parameter passing gold standards
 4. Connection parameter requirements
 
 **Impact**:
+
 - Wasted development time fixing preventable errors
 - Inconsistent test patterns across codebase
 - Reduced confidence in test reliability
@@ -36,9 +39,10 @@
 
 ## 🔍 Pre-Test Research Checklist
 
-**MANDATORY: Complete this checklist BEFORE writing any test case**
+**Recommended: Complete this checklist before writing test cases**
 
 ### ✅ Step 1: Contract Research
+
 ```bash
 # 1. Check the Custom Node Contract Reference
 grep -A 10 "NodeName" src/tpc/tpc_user_management/nodes/CUSTOM_NODE_CONTRACT_REFERENCE.md
@@ -51,6 +55,7 @@ find . -name "*.py" -exec grep -l "NodeNameContract" {} \;
 ```
 
 ### ✅ Step 2: Output Structure Research
+
 ```bash
 # 1. Find the node implementation
 find . -name "*node_name*.py" -path "*/nodes/*"
@@ -63,6 +68,7 @@ grep -r "NodeName" tests/ --include="*.py" -A 5 -B 5
 ```
 
 ### ✅ Step 3: Parameter Passing Research
+
 ```bash
 # 1. Review parameter passing gold standard
 cat docs/sdk-improvement-active/GOLD_STANDARD_PARAMETER_PASSING_COMPREHENSIVE.md
@@ -72,6 +78,7 @@ grep -A 10 "get_connection_contract" src/path/to/node.py
 ```
 
 ### ✅ Step 4: Existing Test Pattern Research
+
 ```bash
 # 1. Find similar working tests
 find tests/ -name "*.py" -exec grep -l "similar_node_or_workflow" {} \;
@@ -85,6 +92,7 @@ find tests/ -name "*.py" -exec grep -l "similar_node_or_workflow" {} \;
 ### Phase 1: Research and Planning
 
 **1.1 Identify All Nodes in Test Workflow**
+
 ```python
 # Document each node you'll test:
 nodes_to_test = [
@@ -104,6 +112,7 @@ nodes_to_test = [
 ```
 
 **1.2 Research Each Node Contract**
+
 ```python
 # For EACH node, document:
 node_requirements = {
@@ -123,6 +132,7 @@ node_requirements = {
 ```
 
 **1.3 Plan Parameter Passing Strategy**
+
 ```python
 # Choose method based on gold standard:
 parameter_strategy = {
@@ -135,6 +145,7 @@ parameter_strategy = {
 ### Phase 2: Contract-Driven Implementation
 
 **2.1 Create Test Parameters from Contracts**
+
 ```python
 # SYSTEMATIC: Build parameters from contract research
 def create_test_parameters():
@@ -144,7 +155,7 @@ def create_test_parameters():
     prep_params = {
         "credentials": {  # Required dict from contract
             "username": "admin_test",
-            "password": "REDACTED#$"
+            "password": "SecureP@ss123!"
         },
         "tenant_id": "tpc_user_management",  # Required string from contract
         "operation": "authentication"  # Optional string from contract
@@ -152,7 +163,7 @@ def create_test_parameters():
 
     # From PasswordValidatorContract research:
     validator_params = {
-        "hardcoded_password": "REDACTED#$",  # Required string from contract
+        "hardcoded_password": "SecureP@ss123!",  # Required string from contract
         "validation_rules": {  # Optional dict from contract
             "min_length": 8,
             "require_special": True
@@ -164,6 +175,7 @@ def create_test_parameters():
 ```
 
 **2.2 Build Workflow with Researched Parameters**
+
 ```python
 def build_test_workflow():
     """Build workflow using contract-researched parameters."""
@@ -190,6 +202,7 @@ def build_test_workflow():
 ```
 
 **2.3 Create Assertions from Output Structure Research**
+
 ```python
 def validate_results(results):
     """Validate results using researched output structures."""
@@ -262,7 +275,7 @@ class TestContractFirstAuthentication:
         prep_config = {
             "credentials": {
                 "username": admin_user["username"],  # From fixture research
-                "password": "REDACTED#$"  # From migration ADR research
+                "password": "SecureP@ss123!"  # From migration ADR research
             },
             "tenant_id": "tpc_user_management",  # Required string from contract
             "operation": "authentication"  # Optional string for context
@@ -283,7 +296,7 @@ class TestContractFirstAuthentication:
 
         # Based on PasswordValidatorContract research
         validator_config = {
-            "hardcoded_password": "REDACTED#$",  # Required string from contract
+            "hardcoded_password": "SecureP@ss123!",  # Required string from contract
             "validation_rules": {  # Optional dict from contract
                 "min_length": 8,
                 "require_special": True,
@@ -677,6 +690,7 @@ def test_error_scenario_contract_first(self):
 **Print this checklist and check off each item BEFORE writing test code:**
 
 ### 📚 Research Phase
+
 - [ ] ✅ **Contract Reference**: Checked CUSTOM_NODE_CONTRACT_REFERENCE.md for all nodes
 - [ ] ✅ **Parameter Contracts**: Read actual contract classes in contracts/parameter_contracts.py
 - [ ] ✅ **Node Implementation**: Checked run() method return structure in node files
@@ -685,6 +699,7 @@ def test_error_scenario_contract_first(self):
 - [ ] ✅ **Existing Tests**: Found and studied similar working test patterns
 
 ### 🏗️ Planning Phase
+
 - [ ] ✅ **Required Parameters**: Listed all required parameters with types
 - [ ] ✅ **Optional Parameters**: Listed all optional parameters with defaults
 - [ ] ✅ **Output Structure**: Documented expected output structure with field names
@@ -692,12 +707,14 @@ def test_error_scenario_contract_first(self):
 - [ ] ✅ **Error Prevention**: Checked common error patterns for these nodes
 
 ### 💻 Implementation Phase
+
 - [ ] ✅ **Parameter Construction**: Built parameters from contract research
 - [ ] ✅ **Method Implementation**: Used selected parameter passing method correctly
 - [ ] ✅ **Connection Setup**: Used exact connection paths from research
 - [ ] ✅ **Assertion Planning**: Planned assertions using researched output structure
 
 ### ✨ Validation Phase
+
 - [ ] ✅ **Contract Compliance**: All assertions use researched field names
 - [ ] ✅ **Type Validation**: All type checks match contract specifications
 - [ ] ✅ **Error Handling**: Error scenarios test actual contract validation
@@ -708,6 +725,7 @@ def test_error_scenario_contract_first(self):
 ## 🎯 Success Metrics
 
 **Test Creation is successful when:**
+
 1. ✅ **Zero parameter errors** - All parameters are correct on first attempt
 2. ✅ **Zero assertion errors** - All output field references are correct
 3. ✅ **Zero type errors** - All parameter types match contracts
@@ -715,6 +733,7 @@ def test_error_scenario_contract_first(self):
 5. ✅ **Consistent patterns** - Test follows established codebase patterns
 
 **Quality Indicators:**
+
 - Test passes on first run without parameter adjustments
 - Assertions use exact field names from node implementation
 - All required parameters provided, optional parameters handled properly

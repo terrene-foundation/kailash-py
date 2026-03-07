@@ -164,7 +164,6 @@ manager.download_model('llama3.2')
 Run the integration test to verify your setup:
 
 ```bash
-cd apps/kailash-kaizen
 python test_ollama_integration.py
 ```
 

@@ -32,7 +32,7 @@ tests/
 - **Markers**: `@pytest.mark.integration`
 - **Purpose**: Test component interactions with REAL infrastructure
 - **CI/CD**: Run on every PR
-- **CRITICAL**: NO MOCKING ALLOWED - Use real Docker services via tests/utils/docker_config.py
+- **CRITICAL**: real infrastructure preferred ALLOWED - Use real Docker services via tests/utils/docker_config.py
 
 ### Tier 3: E2E Tests (`tests/e2e/`)
 - **Execution time**: Any duration
@@ -40,7 +40,7 @@ tests/
 - **Markers**: `@pytest.mark.e2e`, `@pytest.mark.slow`, `@pytest.mark.requires_*`
 - **Purpose**: Test complete business scenarios with REAL infrastructure
 - **CI/CD**: Run nightly or on release
-- **CRITICAL**: NO MOCKING ALLOWED - Use real Docker services via tests/utils/docker_config.py
+- **CRITICAL**: real infrastructure preferred ALLOWED - Use real Docker services via tests/utils/docker_config.py
 
 ## File Organization Rules
 
@@ -52,8 +52,8 @@ tests/
 ### 2. Mirror Source Structure
 Tests should mirror the source code structure:
 ```
-src/kailash/nodes/ai/llm_agent.py → tests/unit/nodes/ai/test_llm_agent.py
-src/kailash/runtime/local.py      → tests/unit/runtime/test_local.py
+kailash/nodes/ai/llm_agent.py → tests/unit/nodes/ai/test_llm_agent.py
+kailash/runtime/local.py      → tests/unit/runtime/test_local.py
 ```
 
 ### 3. Comprehensive Tests
@@ -64,24 +64,24 @@ If a test covers multiple components or real-world scenarios:
 
 ## Critical Testing Rules
 
-### NO MOCKING IN INTEGRATION AND E2E TESTS
+### Real Infrastructure Preferred in Integration and E2E Tests
 
-**This is a MANDATORY rule for Tier 2 (Integration) and Tier 3 (E2E) tests:**
+**Real infrastructure is strongly recommended for Tier 2 (Integration) and Tier 3 (E2E) tests:**
 
-1. **Integration Tests (`tests/integration/`)** - MUST use REAL Docker services
+1. **Integration Tests (`tests/integration/`)** - Real Docker services recommended
    - ✅ Use real PostgreSQL via `tests/utils/docker_config.py`
    - ✅ Use real Redis via `tests/utils/docker_config.py`
    - ✅ Use real Ollama for LLM testing
-   - ❌ NEVER mock database connections
-   - ❌ NEVER use `unittest.mock` or `patch` for infrastructure
-   - ❌ NEVER use fake/in-memory databases
+   - ❌ Avoid mocking database connections
+   - ❌ Avoid `unittest.mock` or `patch` for infrastructure
+   - ❌ Avoid fake/in-memory databases
 
-2. **E2E Tests (`tests/e2e/`)** - MUST use REAL Docker services
-   - Same rules as integration tests
+2. **E2E Tests (`tests/e2e/`)** - Real Docker services recommended
+   - Same guidelines as integration tests
    - Test complete workflows with real data
 
 3. **Only Unit Tests (`tests/unit/`)** may use mocks
-   - This is the ONLY place where mocking is allowed
+   - This is the primary place where mocking is appropriate
    - Mock external dependencies to test in isolation
 
 **Example of CORRECT Integration Test:**
@@ -106,19 +106,19 @@ class TestAdminIntegration:
 from unittest.mock import patch
 
 class TestAdminIntegration:
-    @patch("database.connect")  # ❌ NO MOCKING!
+    @patch("database.connect")  # ❌ real infrastructure preferred!
     def test_user_creation(self, mock_db):
         ...
 ```
 
-## Prohibited Patterns
+## Discouraged Patterns
 
-### 1. NO SKIPPED TESTS - ZERO TOLERANCE POLICY
-**Skipped tests are zombie tests that will never run again. They are strictly forbidden.**
+### 1. Avoid Skipped Tests
+**Skipped tests tend to become zombie tests that never run again. Avoid them where possible.**
 
-- ❌ NEVER use `pytest.skip()` or `@pytest.mark.skip`
-- ❌ NEVER use `@pytest.mark.skipif` conditionally
-- ❌ NEVER create tests that check for availability and skip
+- ❌ Avoid `pytest.skip()` or `@pytest.mark.skip`
+- ❌ Avoid `@pytest.mark.skipif` conditionally
+- ❌ Avoid tests that check for availability and skip
 
 **Instead:**
 - ✅ If a test requires external dependencies (DB, API), put it in `integration/` or `e2e/`
@@ -126,20 +126,20 @@ class TestAdminIntegration:
 - ✅ If a feature is removed, remove its tests
 - ✅ If a test fails intermittently, fix it or remove it
 
-**Examples of FORBIDDEN patterns:**
+**Examples of discouraged patterns:**
 ```python
 # ❌ NEVER DO THIS
 def test_mysql_feature(self):
     if not mysql_available:
-        pytest.skip("MySQL not available")  # FORBIDDEN!
+        pytest.skip("MySQL not available")  # Discouraged!
 
 # ❌ NEVER DO THIS
-@pytest.mark.skipif(not has_gpu, reason="GPU not available")  # FORBIDDEN!
+@pytest.mark.skipif(not has_gpu, reason="GPU not available")  # Discouraged!
 def test_gpu_processing():
     pass
 
 # ❌ NEVER DO THIS
-@pytest.mark.skip(reason="Not implemented yet")  # FORBIDDEN!
+@pytest.mark.skip(reason="Not implemented yet")  # Discouraged!
 def test_future_feature():
     pass
 ```

@@ -189,25 +189,29 @@ async def create_tenant_session(tenant_id: str, user_id: str):
 
     # Validate user has access to the tenant using workflow
     validation_workflow = WorkflowBuilder()
+    # Pass user/tenant IDs as workflow parameters (never interpolate into code strings)
+    validation_workflow.add_node("ParameterNode", "access_params", {
+        "user_id": user_id, "tenant_id": tenant_id
+    })
     validation_workflow.add_node("PythonCodeNode", "validate_tenant_access", {
-        "code": f"""
-# Validate tenant access (mock implementation)
-user_id = '{user_id}'
-target_tenant_id = '{tenant_id}'
+        "code": """
+# Validate tenant access
+params = get_input_data("access_params")
+user_id = params['user_id']
+target_tenant_id = params['tenant_id']
 
 # In real implementation, this would query the database
-# For now, we'll do a simple validation
 is_valid = True  # Would check user-tenant mapping in DB
 
 if not is_valid:
-    raise PermissionError(f"User {{user_id}} denied access to tenant {{target_tenant_id}}")
+    raise PermissionError(f"User {user_id} denied access to tenant {target_tenant_id}")
 
-result = {{
+result = {
     'user_id': user_id,
     'tenant_id': target_tenant_id,
     'access_granted': is_valid,
     'isolation_enforced': True
-}}
+}
 """
     })
 

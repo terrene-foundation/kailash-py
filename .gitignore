@@ -104,6 +104,7 @@ examples/output/
 .env.production.local
 .claude/settings.local.json
 docs/build_output.txt
+output.txt
 
 # Prevent root-level data files (already covered above)
 test-release/

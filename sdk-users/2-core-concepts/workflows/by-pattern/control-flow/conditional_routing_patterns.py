@@ -29,20 +29,9 @@ Key Features:
 import json
 import logging
 import random
-import sys
 import time
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any, Dict, List
-
-# Add project root to path for imports
-project_root = Path(__file__).parent.parent.parent.parent.parent
-sys.path.insert(0, str(project_root / "src"))
-sys.path.insert(0, str(project_root))
-
-# Add examples directory to path for utils import
-examples_dir = project_root / "examples"
-sys.path.insert(0, str(examples_dir))
 
 from kailash.nodes.base import Node, NodeParameter
 from kailash.nodes.code.python import PythonCodeNode

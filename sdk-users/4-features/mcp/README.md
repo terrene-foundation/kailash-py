@@ -23,7 +23,8 @@ def search_data(query: str) -> dict:
 @server.tool(cache_key="calculate", cache_ttl=300)
 def calculate(expression: str) -> dict:
     """Calculate mathematical expression."""
-    result = eval(expression)  # Note: Use safe evaluation in production
+    import ast
+    result = ast.literal_eval(expression)  # Safe: only evaluates literals
     return {"expression": expression, "result": result}
 
 # Add resources
@@ -212,6 +213,7 @@ server = MCPServer("oauth-server", auth_provider=resource_server)
 ## 🌐 Transport Options
 
 ### STDIO (Default)
+
 ```python
 # Server runs on STDIO by default
 server = MCPServer("stdio-server")
@@ -226,6 +228,7 @@ client_config = {
 ```
 
 ### HTTP Transport
+
 ```python
 # Server with HTTP
 server = MCPServer("http-server", enable_http_transport=True)
@@ -239,6 +242,7 @@ client_config = {
 ```
 
 ### Server-Sent Events (SSE)
+
 ```python
 # Server with SSE
 server = MCPServer("sse-server", enable_sse_transport=True)
@@ -251,6 +255,7 @@ client_config = {
 ```
 
 ### WebSocket Transport
+
 ```python
 # Basic WebSocket client
 client_config = {
@@ -295,6 +300,7 @@ ws_server = WebSocketServerTransport(
 ## 🌐 WebSocket Transport Features
 
 ### Connection Pooling
+
 Kailash MCP client includes enterprise-grade WebSocket connection pooling:
 
 ```python
@@ -323,6 +329,7 @@ async with client:
 ```
 
 ### Error Handling & Resilience
+
 WebSocket transport includes comprehensive error handling:
 
 ```python
@@ -343,6 +350,7 @@ except ConnectionError as e:
 ```
 
 ### Performance Monitoring
+
 Built-in metrics for WebSocket connections:
 
 ```python
@@ -361,6 +369,7 @@ async with client:
 ```
 
 ### Security Considerations
+
 WebSocket transport security limitations and best practices:
 
 ```python
@@ -429,6 +438,7 @@ result = await mesh.call_with_failover(
 ## 🔒 Security Features
 
 ### API Key Authentication
+
 ```python
 from kailash.mcp_server.auth import APIKeyAuth
 
@@ -439,6 +449,7 @@ auth = APIKeyAuth({
 ```
 
 ### JWT Authentication
+
 ```python
 from kailash.mcp_server.auth import JWTAuth
 
@@ -457,6 +468,7 @@ token = auth.create_token({
 ```
 
 ### Rate Limiting
+
 ```python
 server = MCPServer(
     "rate-limited-server",
@@ -471,6 +483,7 @@ server = MCPServer(
 ## 📈 Monitoring & Metrics
 
 ### Built-in Metrics
+
 ```python
 server = MCPServer("monitored-server", enable_metrics=True)
 
@@ -482,6 +495,7 @@ print(f"Error rate: {metrics['error_rate']}")
 ```
 
 ### Custom Metrics
+
 ```python
 @server.tool()
 def monitored_tool(data: str) -> dict:
@@ -501,6 +515,7 @@ def monitored_tool(data: str) -> dict:
 ## 🛠️ Error Handling
 
 ### Structured Errors
+
 ```python
 from kailash.mcp_server.errors import MCPError, MCPErrorCode
 
@@ -526,6 +541,7 @@ def safe_tool(data: str) -> dict:
 ```
 
 ### Circuit Breaker
+
 ```python
 server = MCPServer(
     "resilient-server",
@@ -546,13 +562,15 @@ def external_api_tool(query: str) -> dict:
 ## 🧪 Testing
 
 ### ✅ Test Results (2025-07-04)
+
 **Comprehensive testing completed:** 407 tests across all MCP components with **100% pass rate**
 
 - **Unit Tests**: 391 tests covering auth, server, client, errors, cache, config, metrics, formatters
-- **Integration Tests**: 14 tests with real Docker services (NO MOCKING)
+- **Integration Tests**: 14 tests with real Docker services (real infrastructure preferred)
 - **E2E Tests**: 2 end-to-end scenarios validating tool execution workflows
 
 ### Unit Testing Examples
+
 ```python
 import pytest
 from kailash.mcp_server import MCPServer
@@ -581,6 +599,7 @@ def test_auth_configuration():
 ```
 
 ### Integration Testing with Real Services
+
 ```python
 import pytest
 from kailash.mcp_server import MCPClient, MCPServer
@@ -627,6 +646,7 @@ async def test_error_handling():
 ```
 
 ### E2E Testing
+
 ```python
 @pytest.mark.e2e
 @pytest.mark.requires_docker
@@ -652,6 +672,7 @@ async def test_llm_mcp_tool_execution():
 ```
 
 ### Running MCP Tests
+
 ```bash
 # Run all MCP unit tests (2 seconds)
 pytest tests/unit/mcp_server/ -v
@@ -670,7 +691,8 @@ pytest tests/e2e/test_mcp_tool_execution_scenarios.py -v
 ```
 
 ### Testing Best Practices
-1. **NO MOCKING in Integration/E2E** - Use real Docker services
+
+1. **real infrastructure preferred in Integration/E2E** - Use real Docker services
 2. **Fast Unit Tests** - All tests complete in <1 second
 3. **Comprehensive Coverage** - Test all public APIs
 4. **Real Implementation** - Tests match actual usage patterns
@@ -681,6 +703,7 @@ For detailed testing guide, see [MCP Testing Best Practices](../testing/MCP_TEST
 ## 📚 API Reference
 
 For complete API documentation, see:
+
 - **[MCP Server API](mcp-server-api.md)** - Complete server implementation
 - **[MCP Client API](mcp-client-api.md)** - Client configuration and usage
 - **[Authentication](authentication.md)** - Auth providers and security
@@ -698,6 +721,7 @@ For complete API documentation, see:
 ## 🎯 Best Practices
 
 ### Production Deployment
+
 1. **Use authentication** - Always enable auth for production servers
 2. **Enable metrics** - Monitor performance and usage
 3. **Implement rate limiting** - Protect against abuse
@@ -707,6 +731,7 @@ For complete API documentation, see:
 7. **Monitor health** - Use health checks and circuit breakers
 
 ### Performance Optimization
+
 1. **Cache frequently used data** - Use built-in caching
 2. **Batch operations** - Combine multiple requests
 3. **Use async/await** - Leverage async capabilities
@@ -714,6 +739,7 @@ For complete API documentation, see:
 5. **Load balancing** - Distribute load across servers
 
 ### Security Guidelines
+
 1. **Validate all inputs** - Use schema validation
 2. **Implement proper authentication** - Use JWT or API keys
 3. **Use HTTPS in production** - Encrypt all communications
@@ -726,6 +752,7 @@ For complete API documentation, see:
 ### Common Issues
 
 **Server won't start:**
+
 ```bash
 # Check if port is available
 lsof -i :8080
@@ -735,6 +762,7 @@ python -m my_server --log-level DEBUG
 ```
 
 **Client can't connect:**
+
 ```bash
 # Test server connectivity
 curl http://localhost:8080/health
@@ -744,6 +772,7 @@ python -c "from kailash.mcp_server import MCPClient; print(MCPClient(config).val
 ```
 
 **WebSocket connection issues:**
+
 ```python
 # Test WebSocket connectivity
 import asyncio
@@ -762,6 +791,7 @@ asyncio.run(test_websocket())
 ```
 
 **Connection pool debugging:**
+
 ```python
 # Debug connection pool state
 client = MCPClient(enable_metrics=True)
@@ -773,6 +803,7 @@ await client._clear_connection_pools()
 ```
 
 **Authentication failures:**
+
 ```python
 # Debug auth headers
 print(client.auth_provider.get_headers())
@@ -789,6 +820,7 @@ For more troubleshooting, see **[Troubleshooting Guide](troubleshooting.md)**.
 ---
 
 **Next Steps:**
+
 - Try the [MCP Tutorial](tutorial.md) for hands-on learning
 - Explore [Example Applications](../patterns/mcp-examples/)
 - Check out [Production Patterns](../production-patterns/mcp-deployment.md)

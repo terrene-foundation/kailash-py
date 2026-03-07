@@ -7,7 +7,7 @@ Skills are the **knowledge base** of this setup. They contain patterns, template
 By the end of this guide, you will understand:
 
 - What skills are and how they're organized
-- All 22 skill directories and their purposes
+- All 28 skill directories and their purposes
 - How skills relate to commands and agents
 - How to access skill content effectively
 - The structure of skill files
@@ -77,32 +77,38 @@ Skills provide **organized, accessible domain expertise**:
 
 ## Part 2: Skill Directory Overview
 
-### All 22 Skill Directories
+### All 28 Skill Directories
 
-| Directory                   | Name          | Domain                    |
-| --------------------------- | ------------- | ------------------------- |
-| `01-core-sdk`               | Core SDK      | Workflows, nodes, runtime |
-| `02-dataflow`               | DataFlow      | Database operations       |
-| `03-nexus`                  | Nexus         | Multi-channel platform    |
-| `04-kaizen`                 | Kaizen        | AI agents                 |
-| `05-kailash-mcp`            | MCP           | Model Context Protocol    |
-| `06-cheatsheets`            | Cheatsheets   | Quick reference           |
-| `07-development-guides`     | Dev Guides    | Advanced features         |
-| `08-nodes-reference`        | Nodes         | 110+ node documentation   |
-| `09-workflow-patterns`      | Workflows     | Industry patterns         |
-| `10-deployment-git`         | Deployment    | Docker, K8s, Git          |
-| `11-frontend-integration`   | Frontend      | React, Flutter            |
-| `12-testing-strategies`     | Testing       | 3-tier strategy           |
-| `13-architecture-decisions` | Architecture  | Framework selection       |
-| `14-code-templates`         | Templates     | Starter code              |
-| `15-error-troubleshooting`  | Errors        | Debugging guides          |
-| `16-validation-patterns`    | Validation    | Input validation          |
-| `17-gold-standards`         | Standards     | Mandatory practices       |
-| `18-security-patterns`      | Security      | OWASP, secrets            |
-| `19-flutter-patterns`       | Flutter       | Mobile patterns           |
-| `20-interactive-widgets`    | Widgets       | Dynamic UI                |
-| `21-enterprise-ai-ux`       | Enterprise UX | Professional AI apps      |
-| `22-conversation-ux`        | Conversation  | Chat interfaces           |
+| Directory                    | Name          | Domain                    |
+| ---------------------------- | ------------- | ------------------------- |
+| `01-core-sdk`                | Core SDK      | Workflows, nodes, runtime |
+| `02-dataflow`                | DataFlow      | Database operations       |
+| `03-nexus`                   | Nexus         | Multi-channel platform    |
+| `04-kaizen`                  | Kaizen        | AI agents                 |
+| `05-kailash-mcp`             | MCP           | Model Context Protocol    |
+| `06-cheatsheets`             | Cheatsheets   | Quick reference           |
+| `07-development-guides`      | Dev Guides    | Advanced features         |
+| `08-nodes-reference`         | Nodes         | 110+ node documentation   |
+| `09-workflow-patterns`       | Workflows     | Industry patterns         |
+| `10-deployment-git`          | Deployment    | Docker, K8s, Git          |
+| `11-frontend-integration`    | Frontend      | React, Flutter            |
+| `12-testing-strategies`      | Testing       | 3-tier strategy           |
+| `13-architecture-decisions`  | Architecture  | Framework selection       |
+| `14-code-templates`          | Templates     | Starter code              |
+| `15-error-troubleshooting`   | Errors        | Debugging guides          |
+| `16-validation-patterns`     | Validation    | Input validation          |
+| `17-gold-standards`          | Standards     | Mandatory practices       |
+| `18-security-patterns`       | Security      | OWASP, secrets            |
+| `19-flutter-patterns`        | Flutter       | Mobile patterns           |
+| `20-interactive-widgets`     | Widgets       | Dynamic UI                |
+| `21-enterprise-ai-ux`        | Enterprise UX | Professional AI apps      |
+| `22-conversation-ux`         | Conversation  | Chat interfaces           |
+| `23-uiux-design-principles`  | UI/UX Design  | Design principles         |
+| `24-value-audit`             | Value Audit   | Enterprise demo QA        |
+| `25-ai-interaction-patterns` | AI Patterns   | AI UX (Shape of AI)       |
+| `26-eatp-reference`          | EATP          | Trust protocol reference  |
+| `27-care-reference`          | CARE          | Governance framework ref  |
+| `28-coc-reference`           | COC           | Five-layer architecture   |
 
 ---
 
@@ -563,7 +569,7 @@ For complex workflows or debugging, invoke:
 
 ### Summary
 
-1. **Skills are organized knowledge** - 22 directories covering all domains
+1. **Skills are organized knowledge** - 28 directories covering all domains
 
 2. **Each skill has an entry point** - `SKILL.md` with quick patterns
 

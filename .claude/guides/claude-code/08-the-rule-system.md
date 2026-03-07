@@ -5,8 +5,9 @@
 Rules are **mandatory behavioral constraints** that Claude must follow. Unlike skills (which provide knowledge) or hooks (which enforce automatically), rules are instructions that Claude reads and internalizes, applying them through judgment.
 
 By the end of this guide, you will understand:
+
 - What rules are and how they differ from hooks
-- All 5 rule files and their contents
+- All 9 rule files and their contents
 - How rules structure MUST/MUST NOT requirements
 - How rules are enforced
 - When exceptions apply
@@ -18,6 +19,7 @@ By the end of this guide, you will understand:
 ### The Problem Rules Solve
 
 Some requirements need context-sensitive application:
+
 - "Always run security review before commits" - but what counts as a commit?
 - "Never use mocking in Tier 2 tests" - but what if there's a valid exception?
 - "Consult framework specialists" - but which one for which task?
@@ -53,38 +55,44 @@ Rules are Markdown files that Claude reads and follows:
 
 ### Rules vs. Hooks
 
-| Aspect | Rules | Hooks |
-|--------|-------|-------|
-| **Format** | Markdown instructions | JavaScript scripts |
-| **Execution** | Claude reads and applies | Automatic at events |
-| **Judgment** | Context-sensitive | Deterministic |
-| **Flexibility** | Can handle exceptions | Binary (pass/fail) |
-| **Blocking** | Through Claude's refusal | Exit code 2 |
+| Aspect          | Rules                    | Hooks               |
+| --------------- | ------------------------ | ------------------- |
+| **Format**      | Markdown instructions    | JavaScript scripts  |
+| **Execution**   | Claude reads and applies | Automatic at events |
+| **Judgment**    | Context-sensitive        | Deterministic       |
+| **Flexibility** | Can handle exceptions    | Binary (pass/fail)  |
+| **Blocking**    | Through Claude's refusal | Exit code 2         |
 
 ---
 
 ## Part 2: Rule File Overview
 
-### All 5 Rule Files
+### All 9 Rule Files
 
-| File | Domain | Key Rules |
-|------|--------|-----------|
-| `agents.md` | Agent orchestration | Mandatory delegations, review requirements |
-| `testing.md` | Testing policies | NO MOCKING, test-first, coverage |
-| `security.md` | Security requirements | OWASP, secrets, input validation |
-| `patterns.md` | SDK patterns | Correct API usage, imports |
-| `git.md` | Git workflow | Branch strategy, commit rules |
+| File                   | Domain                | Key Rules                                  |
+| ---------------------- | --------------------- | ------------------------------------------ |
+| `agents.md`            | Agent orchestration   | Mandatory delegations, review requirements |
+| `e2e-god-mode.md`      | E2E testing           | Implement everything, no placeholders      |
+| `env-models.md`        | API keys & models     | .env is single source of truth             |
+| `git.md`               | Git workflow          | Branch strategy, commit rules              |
+| `learned-instincts.md` | Auto-generated        | Workflow patterns from usage               |
+| `no-stubs.md`          | No stubs/TODOs        | No placeholders in production code         |
+| `patterns.md`          | SDK patterns          | Correct API usage, imports                 |
+| `security.md`          | Security requirements | OWASP, secrets, input validation           |
+| `testing.md`           | Testing policies      | NO MOCKING, test-first, coverage           |
 
 ---
 
 ## Part 3: agents.md - Agent Orchestration Rules
 
 ### Purpose
+
 Defines when and how specialized agents MUST be used.
 
 ### MUST Rules
 
 #### Rule 1: Code Review After ANY Change
+
 ```
 After completing ANY file modification (Edit, Write), you MUST:
 1. Delegate to intermediate-reviewer for code review
@@ -95,6 +103,7 @@ Exception: User explicitly says "skip review"
 ```
 
 #### Rule 2: Security Review Before ANY Commit
+
 ```
 Before executing ANY git commit command, you MUST:
 1. Delegate to security-reviewer for security audit
@@ -105,6 +114,7 @@ Exception: NONE - security review is always required
 ```
 
 #### Rule 3: Framework Specialist for Framework Work
+
 ```
 When working with Kailash frameworks, you MUST consult:
 - dataflow-specialist: For any database or DataFlow work
@@ -114,6 +124,7 @@ When working with Kailash frameworks, you MUST consult:
 ```
 
 #### Rule 4: Analysis Chain for Complex Features
+
 ```
 For features requiring design decisions:
 1. deep-analyst → Identify failure points
@@ -123,6 +134,7 @@ For features requiring design decisions:
 ```
 
 ### MUST NOT Rules
+
 - Skip code review without explicit user approval
 - Commit without security review
 - Use raw SQL when DataFlow patterns exist
@@ -133,11 +145,13 @@ For features requiring design decisions:
 ## Part 4: testing.md - Testing Rules
 
 ### Purpose
+
 Defines testing requirements, especially the NO MOCKING policy.
 
 ### MUST Rules
 
 #### Rule 1: Test-First Development
+
 ```
 Tests MUST be written before implementation for new features.
 
@@ -148,6 +162,7 @@ Process:
 ```
 
 #### Rule 2: Coverage Requirements
+
 ```
 Code changes MUST maintain or improve test coverage.
 
@@ -160,6 +175,7 @@ Code changes MUST maintain or improve test coverage.
 ```
 
 #### Rule 3: Real Infrastructure in Tiers 2-3
+
 ```
 Tier 1 (Unit Tests):
 - Mocking ALLOWED
@@ -180,6 +196,7 @@ Tier 3 (E2E Tests):
 ### MUST NOT Rules (CRITICAL)
 
 #### NO MOCKING in Tier 2-3
+
 ```
 MUST NOT use mocking in integration or E2E tests.
 
@@ -202,11 +219,13 @@ Why This Matters:
 ## Part 5: security.md - Security Rules
 
 ### Purpose
+
 Defines security requirements and OWASP compliance.
 
 ### MUST Rules
 
 #### Input Validation
+
 ```
 All user input MUST be validated:
 - Type checking
@@ -216,6 +235,7 @@ All user input MUST be validated:
 ```
 
 #### Secret Management
+
 ```
 Secrets MUST be managed securely:
 - NEVER hardcode secrets
@@ -225,6 +245,7 @@ Secrets MUST be managed securely:
 ```
 
 #### Authentication
+
 ```
 Authentication MUST follow secure patterns:
 - Use established libraries
@@ -248,11 +269,13 @@ Authentication MUST follow secure patterns:
 ## Part 6: patterns.md - SDK Pattern Rules
 
 ### Purpose
+
 Defines correct Kailash SDK usage patterns.
 
 ### MUST Rules
 
 #### Correct Execution Pattern
+
 ```python
 # MUST use this pattern
 runtime.execute(workflow.build())
@@ -262,6 +285,7 @@ workflow.execute(runtime)  # WRONG
 ```
 
 #### Absolute Imports
+
 ```python
 # MUST use absolute imports
 from kailash.workflow.builder import WorkflowBuilder
@@ -271,6 +295,7 @@ from ..workflow import builder  # WRONG
 ```
 
 #### Node Definition
+
 ```python
 # MUST use string-based API
 workflow.add_node("NodeName", "id", {})
@@ -294,11 +319,13 @@ workflow.add_node(NodeClass(), "id", {})  # WRONG
 ## Part 7: git.md - Git Workflow Rules
 
 ### Purpose
+
 Defines Git workflow and branch management rules.
 
 ### MUST Rules
 
 #### Branch Strategy
+
 ```
 - main: Production-ready code
 - develop: Integration branch
@@ -308,6 +335,7 @@ Defines Git workflow and branch management rules.
 ```
 
 #### Commit Messages
+
 ```
 Format: <type>(<scope>): <description>
 
@@ -321,6 +349,7 @@ Types:
 ```
 
 #### Pre-Commit Requirements
+
 ```
 Before every commit:
 1. All tests pass
@@ -375,11 +404,11 @@ Before every commit:
 
 ### Enforcement Levels
 
-| Level | Mechanism | Example |
-|-------|-----------|---------|
-| **Hard** | Hook blocks action | `rm -rf /` blocked |
-| **Soft** | Claude refuses | Commit without review refused |
-| **Advisory** | Claude warns | "Consider using framework specialist" |
+| Level        | Mechanism          | Example                               |
+| ------------ | ------------------ | ------------------------------------- |
+| **Hard**     | Hook blocks action | `rm -rf /` blocked                    |
+| **Soft**     | Claude refuses     | Commit without review refused         |
+| **Advisory** | Claude warns       | "Consider using framework specialist" |
 
 ### Exception Handling
 
@@ -387,6 +416,7 @@ Rules may have documented exceptions:
 
 ```markdown
 ### Rule 1: Code Review After ANY Change
+
 ...
 **Exception**: User explicitly says "skip review"
 ```
@@ -408,11 +438,13 @@ Claude: [Applies exception, makes change without review]
 # [Domain] Rules
 
 ## Scope
+
 These rules apply to [context description].
 
 ## MUST Rules
 
 ### Rule 1: [Rule Name]
+
 [Description of what must be done]
 
 **Process**: [Steps if applicable]
@@ -421,11 +453,13 @@ These rules apply to [context description].
 **Exception**: [If any]
 
 ### Rule 2: [Rule Name]
+
 ...
 
 ## MUST NOT Rules (CRITICAL)
 
 ### 1. [Prohibition Name]
+
 MUST NOT [prohibited action].
 
 **Detection Patterns**:
@@ -440,12 +474,16 @@ MUST NOT [prohibited action].
 
 ### Correct: [Scenario]
 ```
+
 ✅ [Correct approach]
+
 ```
 
 ### Incorrect: [Scenario]
 ```
+
 ❌ [Incorrect approach]
+
 ```
 
 ## Exceptions
@@ -460,7 +498,7 @@ MUST NOT [prohibited action].
 
 1. **Rules are mandatory instructions** - Claude reads and follows them
 
-2. **5 rule files cover all domains** - agents, testing, security, patterns, git
+2. **9 rule files cover all domains** - agents, e2e, env-models, git, instincts, no-stubs, patterns, security, testing
 
 3. **MUST rules define requirements** - What Claude must do
 
@@ -472,17 +510,18 @@ MUST NOT [prohibited action].
 
 ### Quick Reference
 
-| Domain | Key Rules |
-|--------|-----------|
-| **Agents** | Review after changes, security review before commit |
-| **Testing** | NO MOCKING in Tier 2-3, test-first |
-| **Security** | Validate input, manage secrets, OWASP |
-| **Patterns** | runtime.execute(), absolute imports |
-| **Git** | Branch strategy, pre-commit checks |
+| Domain       | Key Rules                                           |
+| ------------ | --------------------------------------------------- |
+| **Agents**   | Review after changes, security review before commit |
+| **Testing**  | NO MOCKING in Tier 2-3, test-first                  |
+| **Security** | Validate input, manage secrets, OWASP               |
+| **Patterns** | runtime.execute(), absolute imports                 |
+| **Git**      | Branch strategy, pre-commit checks                  |
 
 ### Rule Priority
 
 When rules conflict, priority order:
+
 1. Security rules (highest)
 2. Testing rules
 3. Pattern rules

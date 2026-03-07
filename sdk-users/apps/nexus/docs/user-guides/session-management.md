@@ -681,7 +681,8 @@ class SecureSessionManager:
         if data_hash != encrypted_info["data_hash"]:
             raise ValueError("Session data integrity check failed")
 
-        return eval(decoded_data)  # Use JSON in production
+        import json
+        return json.loads(decoded_data)
 
     def cleanup_expired_sessions(self):
         """Clean up expired sessions"""

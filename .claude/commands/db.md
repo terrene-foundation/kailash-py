@@ -4,14 +4,23 @@
 
 Load the DataFlow skill for zero-config database operations with automatic model-to-node generation.
 
+## Step 0: Verify Project Uses Kailash DataFlow
+
+Before loading DataFlow patterns, check that this project uses Kailash DataFlow:
+
+- Look for `kailash-dataflow` or `dataflow` in `requirements.txt`, `pyproject.toml`
+- Look for `from dataflow` / `import dataflow` in source files
+
+If not found, inform the user: "This project doesn't appear to use Kailash DataFlow. These patterns may not apply. Continue anyway?"
+
 ## Quick Reference
 
-| Command | Action |
-|---------|--------|
-| `/db` | Load DataFlow patterns and database basics |
-| `/db model` | Show @db.model decorator patterns |
-| `/db crud` | Show CRUD operation patterns |
-| `/db bulk` | Show bulk operation patterns |
+| Command     | Action                                     |
+| ----------- | ------------------------------------------ |
+| `/db`       | Load DataFlow patterns and database basics |
+| `/db model` | Show @db.model decorator patterns          |
+| `/db crud`  | Show CRUD operation patterns               |
+| `/db bulk`  | Show bulk operation patterns               |
 
 ## What You Get
 
@@ -39,29 +48,20 @@ class User:
 
 ## Critical Gotchas
 
-| Rule | Why |
-|------|-----|
-| Primary key MUST be named `id` | DataFlow convention requirement |
-| NEVER manually set `created_at`/`updated_at` | Auto-managed fields |
-| CreateNode uses FLAT params | Not nested under `data` |
-| UpdateNode uses `filter` + `fields` | Different from CreateNode pattern |
-| DataFlow is NOT an ORM | It generates workflow nodes |
+| Rule                                         | Why                               |
+| -------------------------------------------- | --------------------------------- |
+| Primary key MUST be named `id`               | DataFlow convention requirement   |
+| NEVER manually set `created_at`/`updated_at` | Auto-managed fields               |
+| CreateNode uses FLAT params                  | Not nested under `data`           |
+| UpdateNode uses `filter` + `fields`          | Different from CreateNode pattern |
+| DataFlow is NOT an ORM                       | It generates workflow nodes       |
 
-## Usage Examples
+## Agent Teams
 
-```bash
-# Load DataFlow basics
-/db
+When working with DataFlow, deploy:
 
-# Get @db.model decorator patterns
-/db model
-
-# See CRUD operation patterns
-/db crud
-
-# Learn bulk operation patterns
-/db bulk
-```
+- **dataflow-specialist** — Database operations, auto-generated nodes, bulk operations
+- **testing-specialist** — Real database test fixtures (NO MOCKING)
 
 ## Related Commands
 
@@ -69,7 +69,7 @@ class User:
 - `/api` - Nexus multi-channel deployment
 - `/ai` - Kaizen AI agents
 - `/test` - Testing strategies
-- `/validate` - Gold standards compliance
+- `/validate` - Project compliance checks
 
 ## Skill Reference
 

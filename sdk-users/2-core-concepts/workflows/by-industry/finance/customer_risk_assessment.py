@@ -18,12 +18,8 @@ Enterprise Features: Security, Audit, Multi-tenancy
 
 import asyncio
 import logging
-import sys
 from datetime import datetime
-from pathlib import Path
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
 from kailash.access_control import UserContext
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.readers import CSVReaderNode

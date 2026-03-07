@@ -4,14 +4,25 @@
 
 Load the testing strategies skill for 3-tier testing with NO MOCKING policy enforcement in Tier 2-3.
 
+## Step 0: Detect Project Testing Stack
+
+Before loading test patterns, check what the project uses:
+
+- Look at `requirements.txt`, `pyproject.toml`, `setup.py` for `pytest`, `unittest`
+- Look at `package.json` for `jest`, `vitest`, `mocha`, `playwright`
+- Look at `pubspec.yaml` for `flutter_test`, `integration_test`
+- Look for existing test directories (`tests/`, `test/`, `__tests__/`, `spec/`)
+
+Adapt examples to the project's testing framework. The 3-tier strategy and NO MOCKING policy apply universally regardless of framework.
+
 ## Quick Reference
 
-| Command | Action |
-|---------|--------|
-| `/test` | Load testing patterns and tier strategy |
-| `/test tier1` | Show unit test patterns (mocking allowed) |
+| Command       | Action                                      |
+| ------------- | ------------------------------------------- |
+| `/test`       | Load testing patterns and tier strategy     |
+| `/test tier1` | Show unit test patterns (mocking allowed)   |
 | `/test tier2` | Show integration test patterns (NO MOCKING) |
-| `/test tier3` | Show E2E test patterns (NO MOCKING) |
+| `/test tier3` | Show E2E test patterns (NO MOCKING)         |
 
 ## What You Get
 
@@ -19,20 +30,36 @@ Load the testing strategies skill for 3-tier testing with NO MOCKING policy enfo
 - NO MOCKING enforcement (Tier 2-3)
 - Real infrastructure patterns
 - Coverage requirements
-- Kailash-specific test patterns
 
 ## 3-Tier Strategy
 
-| Tier | Type | Mocking | Focus |
-|------|------|---------|-------|
-| Tier 1 | Unit Tests | ALLOWED | Isolated functions |
+| Tier   | Type        | Mocking        | Focus                  |
+| ------ | ----------- | -------------- | ---------------------- |
+| Tier 1 | Unit Tests  | ALLOWED        | Isolated functions     |
 | Tier 2 | Integration | **PROHIBITED** | Component interactions |
-| Tier 3 | E2E | **PROHIBITED** | Full user journeys |
+| Tier 3 | E2E         | **PROHIBITED** | Full user journeys     |
 
 ## Quick Pattern
 
 ```python
-# Tier 2: Real database
+# Tier 2: Real database (example with pytest)
+@pytest.fixture
+def db():
+    """Use real infrastructure, not mocks."""
+    conn = sqlite3.connect(":memory:")
+    yield conn
+    conn.close()
+
+def test_user_creation(db):
+    # NO MOCKING - real database operations
+    db.execute("INSERT INTO users (name) VALUES (?)", ("test",))
+    result = db.execute("SELECT * FROM users WHERE name = ?", ("test",)).fetchone()
+    assert result is not None
+```
+
+### If Project Uses Kailash DataFlow
+
+```python
 @pytest.fixture
 def db():
     db = DataFlow("sqlite:///:memory:")
@@ -40,7 +67,6 @@ def db():
     db.close()
 
 def test_user_creation(db):
-    # NO MOCKING - real database operations
     result = db.execute(CreateUser(name="test"))
     assert result.id is not None
 ```
@@ -48,36 +74,36 @@ def test_user_creation(db):
 ## Critical Rule - NO MOCKING in Tier 2-3
 
 ```python
-# ❌ PROHIBITED in integration/e2e tests
+# PROHIBITED in integration/e2e tests (any framework)
 @patch('module.function')
 MagicMock()
 unittest.mock
 from mock import Mock
 mocker.patch()
+jest.mock()
+jest.spyOn()
+vi.mock()
 ```
 
-## Usage Examples
+## Agent Teams
 
-```bash
-# Load testing strategy basics
-/test
+When writing tests, deploy these agents as a team:
 
-# Get Tier 1 (unit) test patterns
-/test tier1
+- **testing-specialist** — 3-tier strategy, test architecture, coverage requirements
+- **tdd-implementer** — Test-first methodology, red-green-refactor cycle
+- **intermediate-reviewer** — Review test quality after writing
 
-# See Tier 2 (integration) patterns - NO MOCKING
-/test tier2
+For E2E tests, additionally deploy:
 
-# Learn Tier 3 (E2E) patterns - NO MOCKING
-/test tier3
-```
+- **e2e-runner** — Playwright/Marionette test generation
+- **value-auditor** — Validate from user/buyer perspective, not just technical assertions
 
 ## Related Commands
 
-- `/sdk` - Core SDK patterns
-- `/db` - DataFlow database operations
-- `/api` - Nexus multi-channel deployment
-- `/validate` - Gold standards compliance
+- `/validate` - Project compliance checks
+- `/sdk` - Core SDK patterns (Kailash projects)
+- `/db` - DataFlow database operations (Kailash projects)
+- `/api` - Nexus multi-channel deployment (Kailash projects)
 
 ## Skill Reference
 

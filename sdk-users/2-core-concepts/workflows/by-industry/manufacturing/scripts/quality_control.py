@@ -18,11 +18,6 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# Add the src directory to the path
-sys.path.insert(
-    0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../src"))
-)
-
 from typing import Any
 
 from kailash.nodes import PythonCodeNode
@@ -32,12 +27,6 @@ from kailash.nodes.logic import SwitchNode
 from kailash.nodes.transform import DataTransformer
 from kailash.workflow import Workflow
 
-# Define data path utilities inline
-project_root = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../../../../../")
-)
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
 
 
 def get_input_data_path(relative_path):
