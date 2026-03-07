@@ -6,6 +6,7 @@ Tests for enhanced MCP server functionality without mocking external packages.
 from unittest.mock import Mock, patch
 
 import pytest
+
 from kailash.mcp_server.server import MCPServer
 
 

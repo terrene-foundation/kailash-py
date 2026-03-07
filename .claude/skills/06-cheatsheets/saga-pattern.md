@@ -85,7 +85,6 @@ Use specialized subagents when:
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/2-core-concepts/cheatsheet/`](../../../sdk-users/2-core-concepts/cheatsheet/)
 
 ## Quick Tips
 

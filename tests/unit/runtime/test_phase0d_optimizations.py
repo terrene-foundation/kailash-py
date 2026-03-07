@@ -14,7 +14,6 @@ from kailash.tracking.metrics_collector import MetricsCollector, MetricsContext
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
-
 # --- P0D-001: MetricsCollector Thread Elimination ---
 
 
@@ -416,8 +415,8 @@ class TestP0D007DeferredStorage:
 
     def test_deferred_storage_save_task_is_memory_only(self):
         """DeferredStorageBackend.save_task should not touch filesystem."""
-        from kailash.tracking.storage.deferred import DeferredStorageBackend
         from kailash.tracking.models import TaskRun
+        from kailash.tracking.storage.deferred import DeferredStorageBackend
 
         storage = DeferredStorageBackend()
         task = TaskRun(run_id="test", node_id="node_a", node_type="PythonCodeNode")
@@ -430,8 +429,8 @@ class TestP0D007DeferredStorage:
 
     def test_deferred_storage_flush_is_noop(self):
         """DeferredStorageBackend.flush() should be a no-op (data stays in memory)."""
-        from kailash.tracking.storage.deferred import DeferredStorageBackend
         from kailash.tracking.models import TaskRun
+        from kailash.tracking.storage.deferred import DeferredStorageBackend
 
         storage = DeferredStorageBackend()
         task = TaskRun(run_id="test", node_id="node_a", node_type="PythonCodeNode")
@@ -513,8 +512,8 @@ class TestP0D007DeferredStorage:
         happens once after execution completes (flush_to_filesystem).
         This test verifies the in-memory path has negligible overhead.
         """
-        from kailash.tracking.storage.deferred import DeferredStorageBackend
         from kailash.tracking.models import TaskRun
+        from kailash.tracking.storage.deferred import DeferredStorageBackend
 
         storage = DeferredStorageBackend()
 

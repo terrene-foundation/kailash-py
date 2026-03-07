@@ -39,7 +39,7 @@ Examples:
   %(prog)s src/myapp --fix    # Show import fixes (dry run)
   %(prog)s --file module.py   # Validate single file
 
-For more info, see: sdk-users/7-gold-standards/absolute-imports-gold-standard.md
+For more info, see: .claude/skills/17-gold-standards/gold-absolute-imports.md
         """,
     )
 

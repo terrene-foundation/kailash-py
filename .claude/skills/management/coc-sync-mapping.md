@@ -94,7 +94,6 @@ Files with hardcoded absolute paths that must become relative.
 
 | File/Directory                  | Pattern                                                  | Replace With      |
 | ------------------------------- | -------------------------------------------------------- | ----------------- |
-| `skills/07-development-guides/` | `./sdk-users/` | `sdk-users/`      |
 | Any file                        | `./`           | (remove entirely) |
 
 ### Category 4: Rule Softening
@@ -167,7 +166,6 @@ TenantContextSwitch
 from kailash.workflow.builder import WorkflowBuilder   # User-facing import
 from kailash.runtime import LocalRuntime                # User-facing import
 from dataflow import DataFlow                           # User-facing import
-sdk-users/                                              # Exists in both repos
 .claude/skills/                                         # Relative references
 .claude/agents/                                         # Relative references
 pip install kailash                                     # User-facing

@@ -86,7 +86,5 @@ app.run()  # API + CLI + MCP!
 
 ## Documentation
 
-- **Nexus Guide**: [`sdk-users/apps/nexus/README.md`](../../../../sdk-users/apps/nexus/README.md)
-- **FastAPI Comparison**: [`sdk-users/apps/nexus/10-comparison.md`](../../../../sdk-users/apps/nexus/10-comparison.md)
 
 <!-- Trigger Keywords: nexus vs fastapi, why nexus, nexus benefits, nexus vs flask, nexus alternatives -->

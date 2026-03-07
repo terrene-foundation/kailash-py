@@ -342,8 +342,6 @@ Use `mcp-specialist` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **MCP Integration**: [`sdk-users/1-getting-started/mcp-integration.md`](../../../../sdk-users/1-getting-started/mcp-integration.md)
-- **IterativeLLMAgentNode**: [`sdk-users/2-core-concepts/nodes/02-ai-nodes.md`](../../../../sdk-users/2-core-concepts/nodes/02-ai-nodes.md)
 
 ## Quick Tips
 

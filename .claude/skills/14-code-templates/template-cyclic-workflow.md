@@ -197,9 +197,7 @@ Use `pattern-expert` when:
 ## Documentation References
 
 ### Primary Sources
-- **Cyclic Workflows Basics**: [`sdk-users/2-core-concepts/cheatsheet/019-cyclic-workflows-basics.md`](../../../../sdk-users/2-core-concepts/cheatsheet/019-cyclic-workflows-basics.md)
 - **Pattern Expert**: [`.claude/agents/pattern-expert.md` (lines 103-158)](../../../../.claude/agents/pattern-expert.md#L103-L158)
-- **Cyclic Guide**: [`sdk-users/3-development/31-cyclic-workflows-guide.md`](../../../../sdk-users/3-development/31-cyclic-workflows-guide.md)
 
 ## Quick Tips
 

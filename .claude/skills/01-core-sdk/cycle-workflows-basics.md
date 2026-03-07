@@ -39,7 +39,6 @@ from kailash.runtime.local import LocalRuntime
 workflow = WorkflowBuilder()
 
 # See source documentation for specific node types and parameters
-# Reference: sdk-users/2-core-concepts/cheatsheet/cycle-workflows-basics.md
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
@@ -71,8 +70,6 @@ Use specialized subagents when:
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/2-core-concepts/cheatsheet/019-cyclic-workflows-basics.md`](../../../sdk-users/2-core-concepts/cheatsheet/019-cyclic-workflows-basics.md)
-- [`sdk-users/3-development/31-cyclic-workflows-guide.md`](../../../sdk-users/3-development/31-cyclic-workflows-guide.md)
 
 ## Quick Tips
 

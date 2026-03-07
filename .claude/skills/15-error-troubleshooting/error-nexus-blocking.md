@@ -129,8 +129,6 @@ Use `nexus-specialist` subagent when:
 
 ### Related Documentation
 
-- **Blocking Analysis**: [`sdk-users/apps/dataflow/docs/integration/nexus-blocking-issue-analysis.md`](../../../../sdk-users/apps/dataflow/docs/integration/nexus-blocking-issue-analysis.md)
-- **Working Examples**: [`sdk-users/apps/nexus/examples/dataflow-integration/`](../../../../sdk-users/apps/nexus/examples/dataflow-integration/)
 
 ## Quick Tips
 

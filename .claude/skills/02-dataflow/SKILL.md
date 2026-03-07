@@ -109,8 +109,6 @@ Each `@db.model` class generates:
 
 ### Troubleshooting
 
-- **[create-vs-update guide](../../../sdk-users/apps/dataflow/guides/create-vs-update.md)** - CreateNode vs UpdateNode
-- **[top-10-errors](../../../sdk-users/apps/dataflow/troubleshooting/top-10-errors.md)** - Quick fix for 90% of issues
 - **[dataflow-gotchas](dataflow-gotchas.md)** - Common pitfalls
 
 ## Database Support Matrix

@@ -177,11 +177,8 @@ Use `pattern-expert` when:
 ## Documentation References
 
 ### Primary Sources
-- **Parameter Guide**: [`sdk-users/3-development/parameter-passing-guide.md`](../../../sdk-users/3-development/parameter-passing-guide.md)
-- **Gold Standard**: [`sdk-users/7-gold-standards/parameter_passing_comprehensive.md`](../../../sdk-users/7-gold-standards/parameter_passing_comprehensive.md)
 
 ### Related Documentation
-- **Common Mistakes**: [`sdk-users/2-core-concepts/validation/common-mistakes.md`](../../../sdk-users/2-core-concepts/validation/common-mistakes.md)
 
 ## Quick Tips
 

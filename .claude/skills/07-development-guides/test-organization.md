@@ -2,9 +2,6 @@
 
 Test organization and the NO MOCKING policy for Kailash SDK testing.
 
-## Source Documentation
-- [`sdk-users/3-development/testing/test-organization-policy.md`](../../../sdk-users/3-development/testing/test-organization-policy.md)
-
 ## NO MOCKING Policy (CRITICAL)
 
 ### Why NO MOCKING?

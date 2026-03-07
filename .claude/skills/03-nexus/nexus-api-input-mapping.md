@@ -370,8 +370,6 @@ workflow.add_connection(
 
 ## Related Documentation
 
-- [Nexus API Reference](../../sdk-users/apps/nexus/docs/reference/api-reference.md)
-- [Multi-Channel Usage](../../sdk-users/apps/nexus/docs/user-guides/multi-channel-usage.md)
 - [PythonCodeNode Best Practices](../../2-core-concepts/cheatsheet/031-pythoncode-best-practices.md)
 
 ## Related Skills

@@ -84,6 +84,5 @@ workflow.add_node("TextSplitterNode", "splitter", {
 
 ## Documentation
 
-- **Transform Nodes**: [`sdk-users/2-core-concepts/nodes/06-transform-nodes.md`](../../../../sdk-users/2-core-concepts/nodes/06-transform-nodes.md)
 
 <!-- Trigger Keywords: transform node, DataTransformer, data transform, filter data, map node, FilterNode, AggregationNode -->

@@ -9,6 +9,7 @@ from decimal import Decimal
 
 import asyncpg
 import pytest
+
 from kailash.nodes.data.async_sql import (
     AsyncSQLDatabaseNode,
     DatabaseConfig,
@@ -18,7 +19,6 @@ from kailash.nodes.data.async_sql import (
     QueryValidator,
     SQLiteAdapter,
 )
-
 from tests.integration.docker_test_base import DockerIntegrationTestBase
 
 

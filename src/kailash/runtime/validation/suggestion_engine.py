@@ -69,7 +69,7 @@ class ValidationSuggestionEngine:
             ErrorCategory.TYPE_MISMATCH: {
                 "message": "The parameter type doesn't match what the node expects. Check the data types being passed through the connection.",
                 "code_template": '# Check the output type from source node\n# Expected: {expected_type}\n# Got: {actual_type}\nworkflow.add_connection("{source}", "{source_port}", "{target}", "{target_port}")',
-                "doc_link": "sdk-users/2-core-concepts/validation/common-mistakes.md#type-mismatch",
+                "doc_link": ".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
                 "alternatives": [
                     "Add a data transformation node between source and target",
                     "Check if you're connecting to the correct output port",
@@ -79,7 +79,7 @@ class ValidationSuggestionEngine:
             ErrorCategory.MISSING_PARAMETER: {
                 "message": "A required parameter is missing. Make sure all required parameters are provided via connections or node configuration.",
                 "code_template": '# Add the missing parameter connection:\nworkflow.add_connection("{source}", "{source_port}", "{target}", "{missing_param}")\n\n# Or provide it directly in node configuration:\nworkflow.add_node("{node_type}", "{target}", {{"{missing_param}": "value"}})',
-                "doc_link": "sdk-users/2-core-concepts/validation/common-mistakes.md#missing-parameters",
+                "doc_link": ".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
                 "alternatives": [
                     "Provide the parameter directly in node configuration",
                     "Create a PythonCodeNode to generate the required parameter",
@@ -89,7 +89,7 @@ class ValidationSuggestionEngine:
             ErrorCategory.CONSTRAINT_VIOLATION: {
                 "message": "The parameter value violates validation constraints. Check the parameter requirements for this node type.",
                 "code_template": '# Ensure parameter meets requirements:\n# {constraint_details}\nworkflow.add_connection("{source}", "{source_port}", "{target}", "{target_port}")\n\n# Or add validation in source node:\nworkflow.add_node("PythonCodeNode", "validator", {{"code": "result = max(0, input_value)"}})',
-                "doc_link": "sdk-users/6-reference/nodes/node-selection-guide.md#parameter-validation",
+                "doc_link": ".claude/skills/08-nodes-reference/nodes-quick-index.md",
                 "alternatives": [
                     "Add data validation/transformation before the target node",
                     "Check the node documentation for parameter requirements",
@@ -99,7 +99,7 @@ class ValidationSuggestionEngine:
             ErrorCategory.SECURITY_VIOLATION: {
                 "message": "Potential security issue detected in parameter value. This could indicate SQL injection, script injection, or other security vulnerabilities.",
                 "code_template": '# Use parameterized/sanitized approach:\n# For SQL operations:\nworkflow.add_node("SQLDatabaseNode", "safe_query", {{\n    "query": "SELECT * FROM table WHERE id = $1",\n    "params": ["user_input"]\n}})\n\n# For user input, add validation:\nworkflow.add_node("PythonCodeNode", "sanitizer", {{"code": "result = sanitize_input(user_data)"}})',
-                "doc_link": "sdk-users/5-enterprise/security-patterns.md#input-validation",
+                "doc_link": ".claude/skills/18-security-patterns/SKILL.md",
                 "alternatives": [
                     "Use parameterized queries instead of string concatenation",
                     "Add input sanitization/validation nodes",
@@ -110,7 +110,7 @@ class ValidationSuggestionEngine:
             ErrorCategory.UNKNOWN: {
                 "message": "An unexpected validation error occurred. Check the error details and node documentation.",
                 "code_template": '# General troubleshooting:\n# 1. Check node documentation for parameter requirements\n# 2. Verify data types and formats\n# 3. Test with simpler data first\nworkflow.add_connection("{source}", "{source_port}", "{target}", "{target_port}")',
-                "doc_link": "sdk-users/3-development/guides/troubleshooting.md",
+                "doc_link": ".claude/skills/15-error-troubleshooting/SKILL.md",
                 "alternatives": [
                     "Check the node documentation for specific requirements",
                     "Test with simplified data to isolate the issue",

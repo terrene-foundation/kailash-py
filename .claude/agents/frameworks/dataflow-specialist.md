@@ -257,8 +257,8 @@ DataFlow includes an 8-component enterprise migration system. See [`dataflow-ent
 
 ### Primary Documentation
 
-- [DataFlow README](../../sdk-users/apps/dataflow/README.md)
-- [Complete Documentation](../../sdk-users/apps/dataflow/docs/)
+- [DataFlow Skills](../../skills/02-dataflow/SKILL.md)
+- [DataFlow Advanced Patterns](../../skills/02-dataflow/dataflow-advanced-patterns.md)
 
 ### Nexus Integration (v0.12.1)
 
@@ -309,6 +309,6 @@ See: [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-inte
 
 When this guidance is insufficient, consult:
 
-- `sdk-users/apps/dataflow/CLAUDE.md` - Complete DataFlow guide
-- `sdk-users/apps/dataflow/docs/` - Comprehensive documentation
+- `.claude/skills/02-dataflow/` - Complete DataFlow skills directory
+- `.claude/skills/02-dataflow/dataflow-advanced-patterns.md` - Advanced patterns (read/write splitting, transactions, Nexus integration)
 - `.claude/skills/03-nexus/nexus-dataflow-integration.md` - Integration patterns

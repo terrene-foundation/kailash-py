@@ -117,8 +117,6 @@ Use `pattern-expert` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **Common Mistakes**: [`sdk-users/2-core-concepts/validation/common-mistakes.md` (lines 134-167)](../../../../sdk-users/2-core-concepts/validation/common-mistakes.md#L134-L167)
-- **Runtime Guide**: [`sdk-users/2-core-concepts/cheatsheet/006-execution-options.md`](../../../../sdk-users/2-core-concepts/cheatsheet/006-execution-options.md)
 - **CLAUDE.md**: [`CLAUDE.md` (lines 106-137)](../../../../CLAUDE.md#L106-L137)
 
 ## Quick Tips

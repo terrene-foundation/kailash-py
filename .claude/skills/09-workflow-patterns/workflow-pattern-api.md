@@ -338,7 +338,5 @@ api.run(port=8000)  # POST /execute receives webhooks
 
 ## Documentation
 
-- **API Integration**: [`sdk-users/7-advanced-topics/workflows/api-integration.md`](../../../../sdk-users/7-advanced-topics/workflows/api-integration.md)
-- **Nexus Guide**: [`sdk-users/apps/nexus/README.md`](../../../../sdk-users/apps/nexus/README.md)
 
 <!-- Trigger Keywords: API workflow, REST integration, API orchestration, webhook, API automation, GraphQL -->

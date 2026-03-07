@@ -29,7 +29,6 @@ from kailash.runtime.local import LocalRuntime
 workflow = WorkflowBuilder()
 
 # See source documentation for specific node types and parameters
-# Reference: sdk-users/2-core-concepts/cheatsheet/decide-database-postgresql-sqlite.md
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
@@ -61,7 +60,6 @@ Use specialized subagents when:
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/apps/dataflow/docs/reference/dialects.md`](../../../sdk-users/apps/dataflow/docs/reference/dialects.md)
 
 ## Quick Tips
 

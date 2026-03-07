@@ -324,13 +324,8 @@ Use `pattern-expert` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **Common Patterns**: [`sdk-users/2-core-concepts/cheatsheet/004-common-node-patterns.md`](../../../sdk-users/2-core-concepts/cheatsheet/004-common-node-patterns.md)
-- **Node Catalog**: [`sdk-users/2-core-concepts/nodes/comprehensive-node-catalog.md`](../../../sdk-users/2-core-concepts/nodes/comprehensive-node-catalog.md)
 
 ### Related Documentation
-- **Workflow Patterns**: [`sdk-users/2-core-concepts/cheatsheet/012-common-workflow-patterns.md`](../../../sdk-users/2-core-concepts/cheatsheet/012-common-workflow-patterns.md)
-- **PythonCode Best Practices**: [`sdk-users/2-core-concepts/cheatsheet/031-pythoncode-best-practices.md`](../../../sdk-users/2-core-concepts/cheatsheet/031-pythoncode-best-practices.md)
-- **Example Workflows**: [`sdk-users/2-core-concepts/workflows/`](../../../sdk-users/2-core-concepts/workflows/)
 
 ## Quick Tips
 

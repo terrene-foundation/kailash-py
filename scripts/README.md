@@ -226,9 +226,6 @@ gh auth login
 
 ## 📚 Related Documentation
 
-- [SDK Development Guide](../sdk-users/3-development/)
-- [Testing Guide](../sdk-users/1-essentials/)
-- [Troubleshooting](../sdk-users/3-development/07-troubleshooting.md)
 - [Contributing Guidelines](../CONTRIBUTING.md)
 
 ---

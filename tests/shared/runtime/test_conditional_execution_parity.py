@@ -9,6 +9,7 @@ This test file addresses the 93% feature gap discovered between LocalRuntime
 """
 
 import pytest
+
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.logic.operations import MergeNode, SwitchNode
 from kailash.workflow.builder import WorkflowBuilder

@@ -3,10 +3,10 @@
 from unittest.mock import Mock
 
 import pytest
+
 from kailash.nodes.base import Node, NodeParameter, NodeRegistry
 from kailash.sdk_exceptions import NodeValidationError, WorkflowValidationError
 from kailash.workflow.builder import WorkflowBuilder
-
 from tests.conftest import MockNode
 
 
@@ -218,7 +218,7 @@ class TestEnhancedWarningSystem:
         )
         assert "Custom nodes MUST use class references" in warning_message
         assert (
-            "sdk-users/7-gold-standards/GOLD-STANDARD-custom-node-development-guide.md"
+            ".claude/skills/14-code-templates/template-custom-node.md"
             in warning_message
         )
 

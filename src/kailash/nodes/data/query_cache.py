@@ -19,8 +19,9 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
 import redis
-from kailash.sdk_exceptions import NodeExecutionError
 from redis.exceptions import RedisError
+
+from kailash.sdk_exceptions import NodeExecutionError
 
 logger = logging.getLogger(__name__)
 

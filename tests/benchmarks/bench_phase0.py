@@ -4,11 +4,11 @@ Run: python -m pytest tests/benchmarks/bench_phase0.py -v --benchmark-only
 Or:  python tests/benchmarks/bench_phase0.py  (standalone)
 """
 
-import time
 import statistics
+import time
 
-from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
+from kailash.workflow.builder import WorkflowBuilder
 
 
 def build_linear_workflow(n_nodes: int) -> WorkflowBuilder:

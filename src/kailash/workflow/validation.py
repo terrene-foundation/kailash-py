@@ -188,7 +188,7 @@ class ParameterDeclarationValidator:
                     code="PAR000",
                     message=f"Node {node_instance.__class__.__name__} get_parameters() failed: {e}",
                     suggestion="Fix get_parameters() method implementation",
-                    documentation_link="sdk-users/7-gold-standards/enterprise-parameter-passing-gold-standard.md",
+                    documentation_link=".claude/skills/17-gold-standards/gold-parameter-passing.md",
                 )
             )
             return issues
@@ -204,7 +204,7 @@ class ParameterDeclarationValidator:
                     code="PAR001",
                     message=f"Node {node_instance.__class__.__name__} declares no parameters but workflow provides {workflow_param_names}",
                     suggestion="Add parameters to get_parameters() method - SDK only injects explicitly declared parameters",
-                    documentation_link="sdk-users/7-gold-standards/enterprise-parameter-passing-gold-standard.md#parameter-declaration-security",
+                    documentation_link=".claude/skills/17-gold-standards/gold-parameter-passing.md",
                 )
             )
 
@@ -348,7 +348,7 @@ class CycleLinter:
                                 message=f"Cycle {cycle_id} lacks convergence condition and max_iterations",
                                 cycle_id=cycle_id,
                                 suggestion="Add convergence_check parameter or set max_iterations",
-                                documentation_link="guide/reference/cheatsheet/019-cyclic-workflows-basics.md",
+                                documentation_link=".claude/skills/01-core-sdk/cycle-workflows-basics.md",
                             )
                         )
 
@@ -361,7 +361,7 @@ class CycleLinter:
                                 message=f"Cycle {cycle_id} relies only on max_iterations without convergence check",
                                 cycle_id=cycle_id,
                                 suggestion="Consider adding convergence_check for early termination",
-                                documentation_link="guide/reference/cheatsheet/019-cyclic-workflows-basics.md",
+                                documentation_link=".claude/skills/01-core-sdk/cycle-workflows-basics.md",
                             )
                         )
 
@@ -385,7 +385,7 @@ class CycleLinter:
                                 message=f"Cycle {cycle_id} has very high or no max_iterations limit",
                                 cycle_id=cycle_id,
                                 suggestion="Set reasonable max_iterations (e.g., 100-1000) as safety limit",
-                                documentation_link="guide/mistakes/066-infinite-cycles.md",
+                                documentation_link=".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
                             )
                         )
 
@@ -400,7 +400,7 @@ class CycleLinter:
                                     message=f"Convergence condition '{convergence}' may be unreachable",
                                     cycle_id=cycle_id,
                                     suggestion="Verify convergence condition is achievable",
-                                    documentation_link="guide/mistakes/066-infinite-cycles.md",
+                                    documentation_link=".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
                                 )
                             )
 
@@ -421,7 +421,7 @@ class CycleLinter:
                                 message=f"Cycle {cycle_id} has no timeout limit",
                                 cycle_id=cycle_id,
                                 suggestion="Consider adding timeout parameter for safety",
-                                documentation_link="guide/reference/cheatsheet/019-cyclic-workflows-basics.md",
+                                documentation_link=".claude/skills/01-core-sdk/cycle-workflows-basics.md",
                             )
                         )
 
@@ -435,7 +435,7 @@ class CycleLinter:
                                 message=f"Cycle {cycle_id} has no memory limit",
                                 cycle_id=cycle_id,
                                 suggestion="Consider adding memory_limit parameter for safety",
-                                documentation_link="guide/reference/cheatsheet/019-cyclic-workflows-basics.md",
+                                documentation_link=".claude/skills/01-core-sdk/cycle-workflows-basics.md",
                             )
                         )
 
@@ -465,7 +465,7 @@ class CycleLinter:
                             node_id=node_id,
                             cycle_id=cycle_id,
                             suggestion="Consider if cycle is necessary or if logic can be internal to node",
-                            documentation_link="guide/reference/pattern-library/06-performance-patterns.md",
+                            documentation_link=".claude/skills/06-cheatsheets/performance-optimization.md",
                         )
                     )
 
@@ -479,7 +479,7 @@ class CycleLinter:
                             message=f"Large cycle {cycle_id} with {len(cycle_nodes)} nodes may be hard to debug",
                             cycle_id=cycle_id,
                             suggestion="Consider breaking into smaller cycles or using nested workflows",
-                            documentation_link="guide/reference/pattern-library/04-complex-patterns.md",
+                            documentation_link=".claude/skills/06-cheatsheets/workflow-patterns-library.md",
                         )
                     )
 
@@ -495,7 +495,7 @@ class CycleLinter:
                                 node_id=node_id,
                                 cycle_id=cycle_id,
                                 suggestion="Consider caching, optimization, or moving outside cycle",
-                                documentation_link="guide/reference/pattern-library/06-performance-patterns.md",
+                                documentation_link=".claude/skills/06-cheatsheets/performance-optimization.md",
                             )
                         )
 
@@ -526,7 +526,7 @@ class CycleLinter:
                                     message=f"Identity mapping '{source_param}' -> '{target_param}' in cycle {cycle_id}",
                                     cycle_id=cycle_id,
                                     suggestion="Use 'result.field' -> 'field' pattern for cycle parameter propagation",
-                                    documentation_link="guide/mistakes/063-cyclic-parameter-propagation-multi-fix.md",
+                                    documentation_link=".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
                                 )
                             )
 
@@ -545,7 +545,7 @@ class CycleLinter:
                                         message=f"Generic parameter mapping '{source_param}' -> '{target_param}' in cycle {cycle_id}",
                                         cycle_id=cycle_id,
                                         suggestion="Consider using more specific parameter names for clarity",
-                                        documentation_link="guide/mistakes/063-cyclic-parameter-propagation-multi-fix.md",
+                                        documentation_link=".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
                                     )
                                 )
 
@@ -569,7 +569,7 @@ class CycleLinter:
                                         message=f"Temporary parameter mapping '{source_param}' -> '{target_param}' in cycle {cycle_id}",
                                         cycle_id=cycle_id,
                                         suggestion="Consider using permanent parameter names for production workflows",
-                                        documentation_link="guide/mistakes/063-cyclic-parameter-propagation-multi-fix.md",
+                                        documentation_link=".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
                                     )
                                 )
 
@@ -583,7 +583,7 @@ class CycleLinter:
                                 message=f"Cycle {cycle_id} has no parameter mapping",
                                 cycle_id=cycle_id,
                                 suggestion="Consider if parameters need to propagate between iterations",
-                                documentation_link="guide/reference/cheatsheet/019-cyclic-workflows-basics.md",
+                                documentation_link=".claude/skills/01-core-sdk/cycle-workflows-basics.md",
                             )
                         )
 
@@ -617,7 +617,7 @@ class CycleLinter:
                                 node_id=node_id,
                                 cycle_id=cycle_id,
                                 suggestion="Use context.get('cycle', {}) instead of direct access",
-                                documentation_link="guide/reference/cheatsheet/022-cycle-debugging-troubleshooting.md",
+                                documentation_link=".claude/skills/06-cheatsheets/cycle-debugging.md",
                             )
                         )
 
@@ -633,7 +633,7 @@ class CycleLinter:
                                 node_id=node_id,
                                 cycle_id=cycle_id,
                                 suggestion="Use try/except pattern for cycle parameter access",
-                                documentation_link="guide/mistakes/064-pythoncodenode-none-input-validation-error.md",
+                                documentation_link=".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
                             )
                         )
 
@@ -657,7 +657,7 @@ class CycleLinter:
                                     message=f"Invalid convergence condition syntax: '{convergence}'",
                                     cycle_id=cycle_id,
                                     suggestion="Ensure condition is valid Python expression",
-                                    documentation_link="guide/reference/cheatsheet/019-cyclic-workflows-basics.md",
+                                    documentation_link=".claude/skills/01-core-sdk/cycle-workflows-basics.md",
                                 )
                             )
 
@@ -671,7 +671,7 @@ class CycleLinter:
                                     message=f"Potential issue in convergence condition: '{convergence}'",
                                     cycle_id=cycle_id,
                                     suggestion="Verify field names and comparison operators",
-                                    documentation_link="guide/mistakes/066-infinite-cycles.md",
+                                    documentation_link=".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
                                 )
                             )
 
@@ -699,7 +699,7 @@ class CycleLinter:
                                 node_id=node_id,
                                 cycle_id=cycle_id,
                                 suggestion="Ensure proper cleanup of resources in cyclic execution",
-                                documentation_link="guide/mistakes/016-memory-leaks-in-long-running-processes.md",
+                                documentation_link=".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
                             )
                         )
 
@@ -715,7 +715,7 @@ class CycleLinter:
                                 node_id=node_id,
                                 cycle_id=cycle_id,
                                 suggestion="Use context managers (with statements) for file operations",
-                                documentation_link="guide/mistakes/022-resource-cleanup-issues.md",
+                                documentation_link=".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
                             )
                         )
 

@@ -160,7 +160,7 @@ assignees: ''
 ```
 
 ### Implementation Notes
-- [ ] Update `sdk-users/` documentation
+- [ ] Update skills documentation
 - [ ] Create example in `examples/`
 - [ ] Add to workflow library if applicable
 EOF

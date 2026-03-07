@@ -186,17 +186,11 @@ Use `sdk-navigator` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **Cheatsheet**: [`sdk-users/2-core-concepts/cheatsheet/003-quick-workflow-creation.md`](../../../sdk-users/2-core-concepts/cheatsheet/003-quick-workflow-creation.md)
 - **Essential Pattern**: [`CLAUDE.md` (lines 106-137)](../../../CLAUDE.md#L106-L137)
-- **Workflow Examples**: [`sdk-users/2-core-concepts/workflows/`](../../../sdk-users/2-core-concepts/workflows/)
 
 ### Related Documentation
-- **Advanced Features**: [`sdk-users/3-development/02-workflows-creation.md`](../../../sdk-users/3-development/02-workflows-creation.md)
-- **Common Patterns**: [`sdk-users/2-core-concepts/cheatsheet/012-common-workflow-patterns.md`](../../../sdk-users/2-core-concepts/cheatsheet/012-common-workflow-patterns.md)
-- **Workflow Design Process**: [`sdk-users/2-core-concepts/cheatsheet/033-workflow-design-process.md`](../../../sdk-users/2-core-concepts/cheatsheet/033-workflow-design-process.md)
 
 ### Gold Standards
-- **Parameter Passing**: [`sdk-users/7-gold-standards/parameter_passing_comprehensive.md`](../../../sdk-users/7-gold-standards/parameter_passing_comprehensive.md)
 
 ## Examples
 
@@ -321,7 +315,6 @@ results, run_id = runtime.execute(workflow.build())
 - 💡 **Unique node IDs**: Each node needs a unique ID within the workflow (or use auto-ID)
 - 💡 **4-parameter connections**: Source (node + output) → Target (node + input)
 - 💡 **Nested output access**: Use dot notation: `"result.data"` for nested fields
-- 💡 **Check examples**: Browse `sdk-users/2-core-concepts/workflows/by-pattern/` for domain-specific examples
 
 ## Version Notes
 

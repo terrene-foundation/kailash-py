@@ -3,6 +3,7 @@
 from unittest.mock import Mock, patch
 
 import pytest
+
 from kailash.access_control import (
     AccessControlManager,
     NodePermission,

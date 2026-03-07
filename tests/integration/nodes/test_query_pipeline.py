@@ -4,6 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
+
 from kailash.nodes.data.query_pipeline import (
     PipelineBatch,
     PipelinedQuery,

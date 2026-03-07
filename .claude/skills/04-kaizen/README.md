@@ -130,27 +130,11 @@ Production patterns, enterprise features, tool calling, observability, memory sy
 
 ## Critical References
 
-### Comprehensive Documentation (sdk-users/)
 
-**Core Guides** (`sdk-users/apps/kaizen/docs/guides/`):
-- **[BaseAgent Architecture](../../../sdk-users/apps/kaizen/docs/guides/baseagent-architecture.md)** - Complete unified agent system (~600 lines)
-- **[Multi-Agent Coordination](../../../sdk-users/apps/kaizen/docs/guides/multi-agent-coordination.md)** - Google A2A protocol, 5 patterns (~600 lines)
-- **[Signature Programming](../../../sdk-users/apps/kaizen/docs/guides/signature-programming.md)** - Complete signature system
-- **[Control Protocol Tutorial](../../../sdk-users/apps/kaizen/docs/guides/control-protocol-tutorial.md)** - Bidirectional communication (13KB)
-- **[Integration Patterns](../../../sdk-users/apps/kaizen/docs/guides/integration-patterns.md)** - DataFlow, Nexus, MCP
 
-**Reference Docs** (`sdk-users/apps/kaizen/docs/reference/`):
-- **[API Reference](../../../sdk-users/apps/kaizen/docs/reference/api-reference.md)** - Complete API (351 lines)
-- **[Control Protocol API](../../../sdk-users/apps/kaizen/docs/reference/control-protocol-api.md)** - Full protocol reference (497 lines)
-- **[Memory Patterns Guide](../../../sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md)** - Memory usage (1,193 lines)
-- **[Strategy Selection Guide](../../../sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md)** - Strategy choice (1,296 lines)
-- **[Configuration Guide](../../../sdk-users/apps/kaizen/docs/reference/configuration.md)** - All config options
-- **[Troubleshooting](../../../sdk-users/apps/kaizen/docs/reference/troubleshooting.md)** - Common issues
 
 ### Quick References
 - **Specialist Agent**: `.claude/agents/frameworks/kaizen-specialist.md` (comprehensive reference table)
-- **README**: `sdk-users/apps/kaizen/README.md`
-- **CLAUDE.md**: `sdk-users/apps/kaizen/CLAUDE.md` (quick start)
 - **Examples**: `apps/kailash-kaizen/examples/` (35+ working examples)
 
 ### Key Content Sources

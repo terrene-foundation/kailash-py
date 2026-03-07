@@ -85,9 +85,6 @@ async with TenantContextSwitch(db, tenant_id="tenant_abc"):
 ## Documentation References
 
 ### Primary Sources
-- **README**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md#L841-L860)
-- **Multi-Tenant Guide**: [`sdk-users/apps/dataflow/docs/advanced/multi-tenant.md`](../../../../sdk-users/apps/dataflow/docs/advanced/multi-tenant.md)
-- **Enterprise Multi-Tenant**: [`sdk-users/apps/dataflow/docs/enterprise/multi-tenant.md`](../../../../sdk-users/apps/dataflow/docs/enterprise/multi-tenant.md)
 
 ### Specialist Reference
 - **DataFlow Specialist**: [`.claude/skills/dataflow-specialist.md`](../../dataflow-specialist.md#L296-L303)

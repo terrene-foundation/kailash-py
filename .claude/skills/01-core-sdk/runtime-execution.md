@@ -244,7 +244,6 @@ See `STATE_OWNERSHIP_CONVENTION.md` for mixin development guidelines.
 
 ### Primary Sources
 
-- [`sdk-users/2-core-concepts/cheatsheet/006-execution-options.md`](../../../sdk-users/2-core-concepts/cheatsheet/006-execution-options.md)
 - [`CLAUDE.md#L111-177`](../../../CLAUDE.md)
 
 ### Advanced References

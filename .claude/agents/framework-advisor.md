@@ -79,7 +79,7 @@ For detailed implementation after framework selection, users should manually inv
 - **Node Library**: 140+ production-ready nodes
 - **Critical Pattern**: `runtime.execute(workflow.build(), parameters)`
 
-### DataFlow Framework (`sdk-users/apps/dataflow/`)
+### DataFlow Framework
 
 **Use when:**
 
@@ -92,7 +92,7 @@ For detailed implementation after framework selection, users should manually inv
 
 **For detailed implementation**: Users should run `dataflow-specialist` agent
 
-### Nexus Platform (`sdk-users/apps/nexus/`)
+### Nexus Platform
 
 **Use when:**
 
@@ -235,21 +235,18 @@ Ask yourself:
 
 ### DataFlow Implementation
 
-- **Quick Start**: `sdk-users/apps/dataflow/`
-- **Enterprise Features**: `sdk-users/apps/dataflow/docs/enterprise/`
-- **Examples**: `sdk-users/apps/dataflow/examples/`
+- **Skills**: `.claude/skills/02-dataflow/`
+- **Advanced Patterns**: `.claude/skills/02-dataflow/dataflow-advanced-patterns.md`
 
 ### Nexus Implementation
 
-- **Quick Start**: `sdk-users/apps/nexus/`
-- **Multi-Channel**: `sdk-users/5-enterprise/nexus-patterns.md`
-- **Production**: `sdk-users/apps/nexus/docs/production/`
+- **Skills**: `.claude/skills/03-nexus/`
+- **Integration**: `.claude/skills/03-nexus/nexus-dataflow-integration.md`
 
 ### MCP Integration
 
-- **Core Patterns**: `sdk-users/2-core-concepts/cheatsheet/025-mcp-integration.md`
-- **Server Implementation**: `src/kailash/mcp_server/`
-- **Agent Coordination**: `sdk-users/2-core-concepts/cheatsheet/023-a2a-agent-coordination.md`
+- **Skills**: `.claude/skills/05-kailash-mcp/`
+- **Agent Coordination**: `.claude/skills/06-cheatsheets/a2a-coordination.md`
 
 ## Behavioral Guidelines
 
@@ -300,7 +297,7 @@ Framework-Advisor Response:
 
 When this guidance is insufficient, consult:
 
-- `sdk-users/CLAUDE.md` - Root documentation with framework overview
-- `sdk-users/apps/dataflow/CLAUDE.md` - DataFlow complete guide
-- `sdk-users/apps/nexus/CLAUDE.md` - Nexus complete guide
-- `sdk-users/apps/kaizen/CLAUDE.md` - Kaizen complete guide
+- `.claude/skills/01-core-sdk/` - Core SDK patterns
+- `.claude/skills/02-dataflow/` - DataFlow complete guide
+- `.claude/skills/03-nexus/` - Nexus complete guide
+- `.claude/skills/04-kaizen/` - Kaizen complete guide

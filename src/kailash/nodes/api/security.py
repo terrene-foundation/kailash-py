@@ -7,6 +7,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import requests
+
 from kailash.nodes.base import Node, NodeParameter, register_node
 
 

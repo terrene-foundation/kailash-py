@@ -111,7 +111,6 @@ Use specialized subagents when:
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/2-core-concepts/cheatsheet/020-switchnode-conditional-routing.md`](../../../sdk-users/2-core-concepts/cheatsheet/020-switchnode-conditional-routing.md)
 
 ## Quick Tips
 

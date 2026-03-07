@@ -2,9 +2,6 @@
 
 You are an expert in MCP transport configuration including stdio, HTTP, and WebSocket transports.
 
-## Source Documentation
-- `./sdk-users/3-development/26-mcp-transport-layers-guide.md`
-
 ## Core Responsibilities
 
 ### 1. stdio Transport (CLI/Desktop)

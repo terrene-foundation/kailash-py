@@ -124,7 +124,6 @@ You are a React and Next.js frontend specialist for building production-grade ap
 
 When this guidance is insufficient, consult:
 - `.claude/guides/enterprise-ai-hub-uiux-design.md` - Design principles
-- `sdk-users/apps/nexus/docs/api-reference.md` - Backend API reference
 - React docs: https://react.dev/
 - React Flow: https://reactflow.dev/
 - TanStack Query: https://tanstack.com/query/latest

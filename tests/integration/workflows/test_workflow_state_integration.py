@@ -8,10 +8,11 @@ ensuring that workflows correctly handle state throughout execution.
 from typing import Any
 
 import pytest
+from pydantic import BaseModel
+
 from kailash.nodes.base import Node, NodeParameter, register_node
 from kailash.workflow.graph import Workflow
 from kailash.workflow.state import WorkflowStateWrapper
-from pydantic import BaseModel
 
 
 # Test state model
