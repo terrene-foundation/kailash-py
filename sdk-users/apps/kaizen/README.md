@@ -524,7 +524,7 @@ nexus.start()
 
 ## Testing
 
-3-tier testing strategy with no mocking in Tiers 2-3:
+3-tier testing strategy with real infrastructure preferred in Tiers 2-3:
 
 ```bash
 # Tier 1: Unit tests (fast, mocked LLM)

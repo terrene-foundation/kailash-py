@@ -3,22 +3,66 @@ name: redteam
 description: "Load phase 04 (validate) for the current workspace. Red team testing."
 ---
 
-Load the validation phase for a workspace project.
+## Workspace Resolution
 
-1. Determine the workspace:
-   - If `$ARGUMENTS` specifies a project name, use `workspaces/$ARGUMENTS/`
-   - Otherwise, use the most recently modified directory under `workspaces/` (excluding `instructions/`)
-   - If no workspace exists, ask the user to create one first
+1. If `$ARGUMENTS` specifies a project name, use `workspaces/$ARGUMENTS/`
+2. Otherwise, use the most recently modified directory under `workspaces/` (excluding `instructions/`)
+3. If no workspace exists, ask the user to create one first
+4. Read all files in `workspaces/<project>/briefs/` for user context (this is the user's input surface)
 
-2. Read `workspaces/<project>/instructions/04-validate.md` and follow those instructions.
+## Phase Check
 
-3. Check workspace state:
-   - Verify `todos/active/` is empty (all implemented) or note remaining items
-   - Read `workspaces/<project>/03-user-flows/` for validation criteria
+- Verify `todos/active/` is empty (all implemented) or note remaining items
+- Read `workspaces/<project>/03-user-flows/` for validation criteria
+- Validation results go into `workspaces/<project>/04-validate/`
+- If gaps are found, document them and feed back to implementation (use `/implement` to fix)
 
-4. Validation results go into `workspaces/<project>/04-validate/`.
+## Workflow
 
-5. If gaps are found, document them and feed back to implementation (use `/implement` to fix).
+### 1. End-to-end validation
+
+Review implementation with red team agents using playwright mcp (web) and marionette mcp (flutter).
+
+- Test all workflows end-to-end:
+  - Using backend API endpoints only
+  - Using frontend API endpoints only
+  - Using browser via Playwright MCP only
+
+### 2. User flow validation
+
+Ensure red team agents peruse `workspaces/<project>/03-user-flows/` and fully understand the detailed storyboard for each user.
+
+- Include tests written from user workflow perspectives
+  - Workflows must be extremely detailed
+  - Every step should include: what is seen, what is clicked, what is expected, how to proceed, does it show value
+  - Every transition between steps must be analyzed and evaluated
+- Focus on intent, vision, and user requirements — never naive technical assertions
+- Every action and expectation from user must be evaluated against implementation
+
+### 3. Iterate until convergence
+
+Continuously engage red team agents:
+
+- Identify root causes of gaps
+- Implement the most optimal and elegant fix
+- Test and ensure no regressions
+- Keep iterating until red team agents find no more gaps/issues/improvements
+
+### 4. Report results
+
+Report all detailed steps and results taken in validation and testing tasks.
+
+### 5. Parity check (if required)
+
+If parity with an existing system is required:
+
+- Do not compare codebases using logic
+- Test run the old system via all required workflows and write down the output
+  - Run multiple times to determine if outputs are deterministic (labels, numbers) or natural language based
+- For all natural language based output:
+  - DO NOT test via simple assertions using keywords and regex
+  - Use LLM to evaluate the output and output confidence level + rationale
+  - The LLM keys are in `.env`, use gpt-5.2-nano
 
 ## Agent Teams
 

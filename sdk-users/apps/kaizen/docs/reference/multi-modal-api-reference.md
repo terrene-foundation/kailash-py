@@ -376,8 +376,8 @@ def test_transcription_agent():
 - **[README.md](../../README.md)** - Complete Kaizen guide
 - **[Quickstart](../getting-started/quickstart.md)** - Getting started tutorial
 - **[Troubleshooting](troubleshooting.md)** - Common issues and solutions
-- **[Examples](../../../../apps/kailash-kaizen/examples/8-multi-modal/)** - Working multi-modal examples
+- **Multi-Modal Examples** (`examples/8-multi-modal/`) - Working multi-modal examples
 
 ---
 
-**Need help?** Check [Troubleshooting](troubleshooting.md) or review [Working Examples](../../../../apps/kailash-kaizen/examples/8-multi-modal/).
+**Need help?** Check [Troubleshooting](troubleshooting.md) or review the multi-modal examples in the kaizen package (`examples/8-multi-modal/`).

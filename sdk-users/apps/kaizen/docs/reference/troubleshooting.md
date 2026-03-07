@@ -1266,7 +1266,7 @@ result = agent.ask("Test")
 1. **[Multi-Modal API Reference](multi-modal-api-reference.md)** - Vision/audio specifics
 2. **[Quickstart Guide](../getting-started/quickstart.md)** - Basic setup
 3. **[README](../../README.md)** - Complete guide
-4. **[Examples](../../../../apps/kailash-kaizen/examples/)** - Working code
+4. **Examples** - See kaizen package documentation for working code
 
 ### Report Issues
 
@@ -1282,4 +1282,4 @@ If problem persists:
 
 ---
 
-**Still stuck?** Check **[Examples](../../../../apps/kailash-kaizen/examples/)** for working code or review **[API Reference](api-reference.md)**.
+**Still stuck?** Check the kaizen package examples for working code or review **[API Reference](api-reference.md)**.

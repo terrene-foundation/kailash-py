@@ -17,7 +17,7 @@ const CLAUDE_DIR = path.join(os.homedir(), '.claude');
 const LEARNING_DIR = path.join(os.homedir(), '.claude', 'kailash-learning');
 
 function main() {
-  console.log('\n=== Kailash Vibe CC Setup - Post Install ===\n');
+  console.log('\n=== Kailash COC Claude (Python) - Post Install ===\n');
 
   // 1. Verify .claude directory
   if (!fs.existsSync(CLAUDE_DIR)) {
@@ -47,7 +47,7 @@ function main() {
   const identityPath = path.join(LEARNING_DIR, 'identity.json');
   if (!fs.existsSync(identityPath)) {
     const identity = {
-      system: 'kailash-vibe-cc-setup',
+      system: 'kailash-coc-claude-py',
       version: '1.0.0',
       installed_at: new Date().toISOString(),
       learning_enabled: true,

@@ -978,7 +978,7 @@ async def test_compliance_scenarios():
 
 if __name__ == "__main__":
     # Run compliance testing
-    result = asyncio.execute(test_compliance_scenarios())
+    result = asyncio.run(test_compliance_scenarios())
 
     # Save results
     import json

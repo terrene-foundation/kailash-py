@@ -25,18 +25,18 @@
 
 Kaizen provides **9 execution strategies** for different use cases:
 
-| Strategy | Purpose | Use Case | Async |
-|----------|---------|----------|-------|
-| **SingleShotStrategy** | One-pass execution | Simple Q&A, classification | No |
-| **AsyncSingleShotStrategy** | Async one-pass | Default for all agents | Yes |
-| **MultiCycleStrategy** | Iterative execution | Self-improvement, refinement | Yes |
-| **TestDrivenConvergence** | Test-based stopping | Test-driven development | Yes |
-| **SatisfactionConvergence** | Confidence-based stopping | Quality assurance | Yes |
-| **HybridConvergence** | Composite stopping | Complex conditions | Yes |
-| **StreamingStrategy** | Token streaming | Real-time chat, interactive | Yes |
-| **ParallelBatchStrategy** | Concurrent batch | Bulk processing, data pipelines | Yes |
-| **FallbackStrategy** | Sequential fallback | Resilience, degraded service | Yes |
-| **HumanInLoopStrategy** | Human approval | Critical decisions, compliance | Yes |
+| Strategy                    | Purpose                   | Use Case                        | Async |
+| --------------------------- | ------------------------- | ------------------------------- | ----- |
+| **SingleShotStrategy**      | One-pass execution        | Simple Q&A, classification      | No    |
+| **AsyncSingleShotStrategy** | Async one-pass            | Default for all agents          | Yes   |
+| **MultiCycleStrategy**      | Iterative execution       | Self-improvement, refinement    | Yes   |
+| **TestDrivenConvergence**   | Test-based stopping       | Test-driven development         | Yes   |
+| **SatisfactionConvergence** | Confidence-based stopping | Quality assurance               | Yes   |
+| **HybridConvergence**       | Composite stopping        | Complex conditions              | Yes   |
+| **StreamingStrategy**       | Token streaming           | Real-time chat, interactive     | Yes   |
+| **ParallelBatchStrategy**   | Concurrent batch          | Bulk processing, data pipelines | Yes   |
+| **FallbackStrategy**        | Sequential fallback       | Resilience, degraded service    | Yes   |
+| **HumanInLoopStrategy**     | Human approval            | Critical decisions, compliance  | Yes   |
 
 ### Key Concepts
 
@@ -55,6 +55,7 @@ Kaizen provides **9 execution strategies** for different use cases:
 **Purpose**: Synchronous one-pass execution (legacy, not recommended).
 
 **Architecture**:
+
 ```
 ┌─────────────────────────────────────┐
 │    SingleShotStrategy               │
@@ -68,10 +69,12 @@ Kaizen provides **9 execution strategies** for different use cases:
 ```
 
 **Use Cases**:
+
 - ❌ **Not recommended** (use AsyncSingleShotStrategy instead)
 - Legacy compatibility only
 
 **Configuration**:
+
 ```python
 from kaizen.strategies.single_shot import SingleShotStrategy
 
@@ -80,6 +83,7 @@ agent = MyAgent(config, strategy=strategy)
 ```
 
 **Performance**:
+
 - **Latency**: Same as AsyncSingleShotStrategy
 - **Throughput**: Lower (synchronous blocking)
 - **Concurrency**: None (blocks thread)
@@ -91,6 +95,7 @@ agent = MyAgent(config, strategy=strategy)
 **Purpose**: Asynchronous one-pass execution.
 
 **Architecture**:
+
 ```
 ┌─────────────────────────────────────┐
 │   AsyncSingleShotStrategy           │
@@ -104,6 +109,7 @@ agent = MyAgent(config, strategy=strategy)
 ```
 
 **Use Cases**:
+
 - ✅ Default strategy for all agents
 - ✅ Simple Q&A
 - ✅ Classification
@@ -113,17 +119,20 @@ agent = MyAgent(config, strategy=strategy)
 - ❌ Real-time streaming (use StreamingStrategy)
 
 **Configuration**:
+
 ```python
 # No configuration needed - used by default
 agent = MyAgent(config)  # Uses AsyncSingleShotStrategy automatically
 ```
 
 **Performance**:
+
 - **Latency**: 100-500ms (depends on LLM)
 - **Throughput**: 10-100 requests/sec (depends on concurrency)
 - **Concurrency**: Full async support
 
 **Example**:
+
 ```python
 from kaizen.core.base_agent import BaseAgent
 
@@ -144,6 +153,7 @@ class QAAgent(BaseAgent):
 **Purpose**: Iterative execution with convergence strategies.
 
 **Architecture**:
+
 ```
 ┌─────────────────────────────────────┐
 │      MultiCycleStrategy             │
@@ -163,6 +173,7 @@ class QAAgent(BaseAgent):
 ```
 
 **Use Cases**:
+
 - ✅ Self-improvement agents
 - ✅ Code generation with testing
 - ✅ Quality refinement
@@ -171,6 +182,7 @@ class QAAgent(BaseAgent):
 - ❌ Real-time streaming (use StreamingStrategy)
 
 **Configuration**:
+
 ```python
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
 from kaizen.strategies.convergence import TestDrivenConvergence
@@ -186,11 +198,13 @@ agent = MyAgent(config, strategy=strategy)
 ```
 
 **Performance**:
+
 - **Latency**: 1-10 seconds (depends on cycles)
 - **Throughput**: 1-10 requests/sec
 - **Concurrency**: Full async support
 
 **Example**:
+
 ```python
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
 from kaizen.strategies.convergence import SatisfactionConvergence
@@ -219,6 +233,7 @@ class CodeGeneratorAgent(BaseAgent):
 **Purpose**: Stop when tests pass (for MultiCycleStrategy).
 
 **Architecture**:
+
 ```
 ┌─────────────────────────────────────┐
 │   TestDrivenConvergence             │
@@ -233,22 +248,25 @@ class CodeGeneratorAgent(BaseAgent):
 ```
 
 **Use Cases**:
+
 - ✅ Test-driven development
 - ✅ Code generation with validation
 - ✅ Contract-based refinement
 - ❌ Subjective quality (use SatisfactionConvergence)
 
 **Configuration**:
+
 ```python
 from kaizen.strategies.convergence import TestDrivenConvergence
 
 def my_test_suite(code: str) -> bool:
-    """Return True if code passes tests."""
+    """Validate generated code using AST analysis (never exec untrusted code)."""
     try:
-        exec(code)
-        # Run tests...
-        return True
-    except:
+        import ast
+        tree = ast.parse(code)
+        # Validate the AST structure instead of executing
+        return len(tree.body) > 0
+    except SyntaxError:
         return False
 
 convergence = TestDrivenConvergence(
@@ -258,6 +276,7 @@ convergence = TestDrivenConvergence(
 ```
 
 **Example**:
+
 ```python
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
 from kaizen.strategies.convergence import TestDrivenConvergence
@@ -281,6 +300,7 @@ result = agent.generate("Write a function to sort a list")
 **Purpose**: Stop when confidence threshold met (for MultiCycleStrategy).
 
 **Architecture**:
+
 ```
 ┌─────────────────────────────────────┐
 │   SatisfactionConvergence           │
@@ -296,12 +316,14 @@ result = agent.generate("Write a function to sort a list")
 ```
 
 **Use Cases**:
+
 - ✅ Quality assurance
 - ✅ Confidence-based stopping
 - ✅ Self-assessment agents
 - ❌ Objective validation (use TestDrivenConvergence)
 
 **Configuration**:
+
 ```python
 from kaizen.strategies.convergence import SatisfactionConvergence
 
@@ -313,6 +335,7 @@ convergence = SatisfactionConvergence(
 ```
 
 **Example**:
+
 ```python
 convergence = SatisfactionConvergence(confidence_threshold=0.9, min_cycles=2)
 strategy = MultiCycleStrategy(convergence_strategy=convergence, max_cycles=10)
@@ -329,6 +352,7 @@ result = agent.write("Write an essay about AI")
 **Purpose**: Compose multiple convergence strategies (for MultiCycleStrategy).
 
 **Architecture**:
+
 ```
 ┌─────────────────────────────────────┐
 │     HybridConvergence               │
@@ -344,12 +368,14 @@ result = agent.write("Write an essay about AI")
 ```
 
 **Use Cases**:
+
 - ✅ Complex stopping conditions (tests AND confidence)
 - ✅ Multi-criteria validation
 - ✅ Composite quality checks
 - ❌ Simple stopping (use TestDrivenConvergence or SatisfactionConvergence)
 
 **Configuration**:
+
 ```python
 from kaizen.strategies.convergence import (
     HybridConvergence,
@@ -367,6 +393,7 @@ convergence = HybridConvergence(
 ```
 
 **Example**:
+
 ```python
 # Stop when BOTH tests pass AND confidence >= 0.9
 convergence = HybridConvergence(
@@ -388,6 +415,7 @@ agent = CodeGenAgent(config, strategy=strategy)
 **Purpose**: Real-time token streaming for interactive use cases.
 
 **Architecture**:
+
 ```
 ┌─────────────────────────────────────┐
 │      StreamingStrategy              │
@@ -407,6 +435,7 @@ agent = CodeGenAgent(config, strategy=strategy)
 ```
 
 **Use Cases**:
+
 - ✅ Real-time chat
 - ✅ Interactive assistants
 - ✅ Live translation
@@ -415,6 +444,7 @@ agent = CodeGenAgent(config, strategy=strategy)
 - ❌ Offline processing (use AsyncSingleShotStrategy)
 
 **Configuration**:
+
 ```python
 from kaizen.strategies.streaming import StreamingStrategy
 
@@ -426,12 +456,14 @@ agent = ChatAgent(config, strategy=strategy)
 ```
 
 **Performance**:
+
 - **Latency to First Token**: 50-200ms
 - **Token Throughput**: 10-50 tokens/sec
 - **Total Latency**: Same as AsyncSingleShotStrategy
 - **Concurrency**: Full async support
 
 **Example**:
+
 ```python
 from kaizen.strategies.streaming import StreamingStrategy
 
@@ -460,6 +492,7 @@ async for chunk in agent.stream_chat("What is Python?"):
 **Purpose**: Concurrent batch processing with semaphore limiting.
 
 **Architecture**:
+
 ```
 ┌─────────────────────────────────────┐
 │    ParallelBatchStrategy            │
@@ -476,6 +509,7 @@ async for chunk in agent.stream_chat("What is Python?"):
 ```
 
 **Use Cases**:
+
 - ✅ Bulk document processing
 - ✅ Data pipelines
 - ✅ Batch classification
@@ -484,6 +518,7 @@ async for chunk in agent.stream_chat("What is Python?"):
 - ❌ Sequential processing (use AsyncSingleShotStrategy)
 
 **Configuration**:
+
 ```python
 from kaizen.strategies.parallel_batch import ParallelBatchStrategy
 
@@ -492,12 +527,14 @@ agent = BatchProcessorAgent(config, strategy=strategy)
 ```
 
 **Performance**:
+
 - **Latency**: Same as AsyncSingleShotStrategy (per item)
-- **Throughput**: max_concurrent * (1 / latency_per_item)
+- **Throughput**: max_concurrent \* (1 / latency_per_item)
 - **Example**: max_concurrent=10, latency=500ms → 20 items/sec
 - **Concurrency**: Controlled by semaphore
 
 **Example**:
+
 ```python
 from kaizen.strategies.parallel_batch import ParallelBatchStrategy
 
@@ -525,6 +562,7 @@ results = await agent.process_batch(["doc1", "doc2", ..., "doc100"])
 **Purpose**: Sequential fallback for resilience and degraded service.
 
 **Architecture**:
+
 ```
 ┌─────────────────────────────────────┐
 │      FallbackStrategy               │
@@ -542,6 +580,7 @@ results = await agent.process_batch(["doc1", "doc2", ..., "doc100"])
 ```
 
 **Use Cases**:
+
 - ✅ Multi-model fallback (GPT-4 → GPT-3.5 → local)
 - ✅ Degraded service
 - ✅ Cost optimization (try expensive, fallback to cheap)
@@ -549,6 +588,7 @@ results = await agent.process_batch(["doc1", "doc2", ..., "doc100"])
 - ❌ Parallel redundancy (use ParallelBatchStrategy with voting)
 
 **Configuration**:
+
 ```python
 from kaizen.strategies.fallback import FallbackStrategy
 from kaizen.strategies.async_single_shot import AsyncSingleShotStrategy
@@ -566,12 +606,14 @@ agent = ResilientAgent(config, strategy=strategy)
 ```
 
 **Performance**:
+
 - **Latency**: Sum of failed attempts + successful attempt
 - **Best Case**: Same as AsyncSingleShotStrategy (first succeeds)
-- **Worst Case**: N * AsyncSingleShotStrategy (all fail)
+- **Worst Case**: N \* AsyncSingleShotStrategy (all fail)
 - **Success Rate**: Higher than single strategy
 
 **Example**:
+
 ```python
 from kaizen.strategies.fallback import FallbackStrategy
 
@@ -613,6 +655,7 @@ print(f"Model used: {result['model_used']}")
 **Purpose**: Human approval checkpoints for critical decisions.
 
 **Architecture**:
+
 ```
 ┌─────────────────────────────────────┐
 │    HumanInLoopStrategy              │
@@ -629,6 +672,7 @@ print(f"Model used: {result['model_used']}")
 ```
 
 **Use Cases**:
+
 - ✅ Financial transactions
 - ✅ Content moderation
 - ✅ Critical decisions
@@ -638,6 +682,7 @@ print(f"Model used: {result['model_used']}")
 - ❌ Fully automated systems
 
 **Configuration**:
+
 ```python
 from kaizen.strategies.human_in_loop import HumanInLoopStrategy
 
@@ -656,11 +701,13 @@ agent = ApprovalAgent(config, strategy=strategy)
 ```
 
 **Performance**:
+
 - **Latency**: AsyncSingleShotStrategy + human response time
 - **Throughput**: Depends on human response time (1-60 seconds)
 - **Concurrency**: Limited by human approval
 
 **Example**:
+
 ```python
 from kaizen.strategies.human_in_loop import HumanInLoopStrategy
 
@@ -720,19 +767,19 @@ Start: What is your use case?
 
 ### Selection Matrix
 
-| Use Case | Best Strategy | Alternative |
-|----------|---------------|-------------|
-| **Simple Q&A** | AsyncSingleShotStrategy | - |
-| **Classification** | AsyncSingleShotStrategy | ParallelBatchStrategy |
-| **Translation** | AsyncSingleShotStrategy | StreamingStrategy |
-| **Real-time chat** | StreamingStrategy | AsyncSingleShotStrategy |
-| **Code generation** | TestDrivenConvergence + MultiCycle | SatisfactionConvergence |
-| **Bulk processing** | ParallelBatchStrategy | AsyncSingleShotStrategy |
-| **Multi-model fallback** | FallbackStrategy | - |
-| **Critical decisions** | HumanInLoopStrategy | - |
-| **Quality refinement** | SatisfactionConvergence + MultiCycle | - |
-| **Test-driven dev** | TestDrivenConvergence + MultiCycle | - |
-| **Composite validation** | HybridConvergence + MultiCycle | - |
+| Use Case                 | Best Strategy                        | Alternative             |
+| ------------------------ | ------------------------------------ | ----------------------- |
+| **Simple Q&A**           | AsyncSingleShotStrategy              | -                       |
+| **Classification**       | AsyncSingleShotStrategy              | ParallelBatchStrategy   |
+| **Translation**          | AsyncSingleShotStrategy              | StreamingStrategy       |
+| **Real-time chat**       | StreamingStrategy                    | AsyncSingleShotStrategy |
+| **Code generation**      | TestDrivenConvergence + MultiCycle   | SatisfactionConvergence |
+| **Bulk processing**      | ParallelBatchStrategy                | AsyncSingleShotStrategy |
+| **Multi-model fallback** | FallbackStrategy                     | -                       |
+| **Critical decisions**   | HumanInLoopStrategy                  | -                       |
+| **Quality refinement**   | SatisfactionConvergence + MultiCycle | -                       |
+| **Test-driven dev**      | TestDrivenConvergence + MultiCycle   | -                       |
+| **Composite validation** | HybridConvergence + MultiCycle       | -                       |
 
 ### Performance vs. Complexity
 
@@ -759,14 +806,14 @@ Complexity
 
 ### Throughput Comparison (Requests/Second)
 
-| Strategy | Throughput | Notes |
-|----------|------------|-------|
-| AsyncSingleShotStrategy | 10-100 | Depends on concurrency |
-| StreamingStrategy | 10-100 | Same as Async (final result) |
-| ParallelBatchStrategy | 100-1000 | max_concurrent * base_rate |
-| FallbackStrategy | 5-50 | Slower (multiple attempts) |
-| MultiCycleStrategy | 1-10 | Multiple cycles |
-| HumanInLoopStrategy | 0.01-1 | Limited by human |
+| Strategy                | Throughput | Notes                        |
+| ----------------------- | ---------- | ---------------------------- |
+| AsyncSingleShotStrategy | 10-100     | Depends on concurrency       |
+| StreamingStrategy       | 10-100     | Same as Async (final result) |
+| ParallelBatchStrategy   | 100-1000   | max_concurrent \* base_rate  |
+| FallbackStrategy        | 5-50       | Slower (multiple attempts)   |
+| MultiCycleStrategy      | 1-10       | Multiple cycles              |
+| HumanInLoopStrategy     | 0.01-1     | Limited by human             |
 
 ---
 
@@ -868,36 +915,36 @@ strategy = HumanInLoopStrategy(
 
 ### Latency Comparison (Milliseconds)
 
-| Strategy | Min | Avg | Max | Notes |
-|----------|-----|-----|-----|-------|
-| AsyncSingleShotStrategy | 100 | 300 | 500 | Depends on LLM |
-| StreamingStrategy | 50 | 300 | 500 | First token faster |
-| ParallelBatchStrategy | 100 | 300 | 500 | Per item (parallel) |
-| FallbackStrategy | 100 | 600 | 1500 | Multiple attempts |
-| MultiCycleStrategy | 500 | 2000 | 5000 | Multiple cycles |
-| HumanInLoopStrategy | 1000 | 30000 | 60000 | Human response time |
+| Strategy                | Min  | Avg   | Max   | Notes               |
+| ----------------------- | ---- | ----- | ----- | ------------------- |
+| AsyncSingleShotStrategy | 100  | 300   | 500   | Depends on LLM      |
+| StreamingStrategy       | 50   | 300   | 500   | First token faster  |
+| ParallelBatchStrategy   | 100  | 300   | 500   | Per item (parallel) |
+| FallbackStrategy        | 100  | 600   | 1500  | Multiple attempts   |
+| MultiCycleStrategy      | 500  | 2000  | 5000  | Multiple cycles     |
+| HumanInLoopStrategy     | 1000 | 30000 | 60000 | Human response time |
 
 ### Memory Usage
 
-| Strategy | Memory | Notes |
-|----------|--------|-------|
-| AsyncSingleShotStrategy | O(1) | Single request |
-| StreamingStrategy | O(N) | N = response length |
-| ParallelBatchStrategy | O(M) | M = max_concurrent |
-| FallbackStrategy | O(1) | Single active request |
-| MultiCycleStrategy | O(C) | C = max_cycles |
-| HumanInLoopStrategy | O(1) | Single request |
+| Strategy                | Memory | Notes                 |
+| ----------------------- | ------ | --------------------- |
+| AsyncSingleShotStrategy | O(1)   | Single request        |
+| StreamingStrategy       | O(N)   | N = response length   |
+| ParallelBatchStrategy   | O(M)   | M = max_concurrent    |
+| FallbackStrategy        | O(1)   | Single active request |
+| MultiCycleStrategy      | O(C)   | C = max_cycles        |
+| HumanInLoopStrategy     | O(1)   | Single request        |
 
 ### CPU Usage
 
-| Strategy | CPU | Notes |
-|----------|-----|-------|
-| AsyncSingleShotStrategy | Low | I/O bound |
-| StreamingStrategy | Low | I/O bound |
-| ParallelBatchStrategy | Medium | Multiple concurrent |
-| FallbackStrategy | Low | Sequential |
-| MultiCycleStrategy | Medium | Multiple cycles |
-| HumanInLoopStrategy | Low | Waiting |
+| Strategy                | CPU    | Notes               |
+| ----------------------- | ------ | ------------------- |
+| AsyncSingleShotStrategy | Low    | I/O bound           |
+| StreamingStrategy       | Low    | I/O bound           |
+| ParallelBatchStrategy   | Medium | Multiple concurrent |
+| FallbackStrategy        | Low    | Sequential          |
+| MultiCycleStrategy      | Medium | Multiple cycles     |
+| HumanInLoopStrategy     | Low    | Waiting             |
 
 ---
 
@@ -982,11 +1029,13 @@ agent = MyAgent(config, strategy=fallback)
 ### 1. Use AsyncSingleShotStrategy by Default
 
 ✅ **DO**: Let BaseAgent use default strategy
+
 ```python
 agent = MyAgent(config)  # Uses AsyncSingleShotStrategy
 ```
 
 ❌ **DON'T**: Explicitly set AsyncSingleShotStrategy unless needed
+
 ```python
 # Unnecessary
 agent = MyAgent(config, strategy=AsyncSingleShotStrategy())
@@ -995,12 +1044,14 @@ agent = MyAgent(config, strategy=AsyncSingleShotStrategy())
 ### 2. Choose Specialized Strategies for Specific Use Cases
 
 ✅ **DO**: Use StreamingStrategy for chat
+
 ```python
 strategy = StreamingStrategy(chunk_size=1)
 agent = ChatAgent(config, strategy=strategy)
 ```
 
 ✅ **DO**: Use ParallelBatchStrategy for bulk processing
+
 ```python
 strategy = ParallelBatchStrategy(max_concurrent=10)
 agent = BatchAgent(config, strategy=strategy)
@@ -1009,12 +1060,14 @@ agent = BatchAgent(config, strategy=strategy)
 ### 3. Limit max_concurrent for Resource Management
 
 ✅ **DO**: Set reasonable max_concurrent
+
 ```python
 # Good: Won't exhaust resources
 strategy = ParallelBatchStrategy(max_concurrent=10)
 ```
 
 ❌ **DON'T**: Use unlimited concurrency
+
 ```python
 # Bad: May exhaust memory/connections
 strategy = ParallelBatchStrategy(max_concurrent=1000)
@@ -1023,12 +1076,14 @@ strategy = ParallelBatchStrategy(max_concurrent=1000)
 ### 4. Use Convergence Strategies with MultiCycle
 
 ✅ **DO**: Always provide convergence strategy
+
 ```python
 convergence = SatisfactionConvergence(confidence_threshold=0.9)
 strategy = MultiCycleStrategy(convergence_strategy=convergence, max_cycles=10)
 ```
 
 ❌ **DON'T**: Use MultiCycleStrategy without convergence
+
 ```python
 # Bad: No stopping condition except max_cycles
 strategy = MultiCycleStrategy(max_cycles=10)
@@ -1037,6 +1092,7 @@ strategy = MultiCycleStrategy(max_cycles=10)
 ### 5. Handle Fallback Errors Gracefully
 
 ✅ **DO**: Check error summary when fallback fails
+
 ```python
 try:
     result = agent.run(inputs)
@@ -1048,6 +1104,7 @@ except Exception as e:
 ### 6. Test Strategies in Isolation
 
 ✅ **DO**: Test each strategy separately
+
 ```python
 def test_streaming_strategy():
     strategy = StreamingStrategy(chunk_size=1)
@@ -1063,6 +1120,7 @@ def test_streaming_strategy():
 ### 7. Monitor Performance
 
 ✅ **DO**: Track latency and throughput
+
 ```python
 import time
 
@@ -1080,6 +1138,7 @@ logger.info(f"Latency: {latency:.2f}s, Strategy: {agent.strategy.__class__.__nam
 ### From AsyncSingleShotStrategy to StreamingStrategy
 
 **Before**:
+
 ```python
 class ChatAgent(BaseAgent):
     def __init__(self, config):
@@ -1091,6 +1150,7 @@ class ChatAgent(BaseAgent):
 ```
 
 **After**:
+
 ```python
 from kaizen.strategies.streaming import StreamingStrategy
 
@@ -1105,6 +1165,7 @@ class ChatAgent(BaseAgent):
 ```
 
 **Changes**:
+
 1. Import `StreamingStrategy`
 2. Add `strategy=StreamingStrategy(chunk_size=1)` to `super().__init__()`
 3. Add `async` method using `self.strategy.stream()`
@@ -1113,6 +1174,7 @@ class ChatAgent(BaseAgent):
 ### From AsyncSingleShotStrategy to ParallelBatchStrategy
 
 **Before**:
+
 ```python
 class ProcessorAgent(BaseAgent):
     def process(self, item: str) -> Dict:
@@ -1123,6 +1185,7 @@ results = [agent.process(item) for item in items]
 ```
 
 **After**:
+
 ```python
 from kaizen.strategies.parallel_batch import ParallelBatchStrategy
 
@@ -1140,6 +1203,7 @@ results = await agent.process_batch(items)
 ```
 
 **Changes**:
+
 1. Import `ParallelBatchStrategy`
 2. Add `strategy=ParallelBatchStrategy(max_concurrent=10)`
 3. Add `async` batch method using `self.strategy.execute_batch()`
@@ -1148,6 +1212,7 @@ results = await agent.process_batch(items)
 ### Adding MultiCycleStrategy to Existing Agent
 
 **Before**:
+
 ```python
 class CodeGenAgent(BaseAgent):
     def generate(self, spec: str) -> str:
@@ -1156,6 +1221,7 @@ class CodeGenAgent(BaseAgent):
 ```
 
 **After**:
+
 ```python
 from kaizen.strategies.multi_cycle import MultiCycleStrategy
 from kaizen.strategies.convergence import TestDrivenConvergence
@@ -1172,6 +1238,7 @@ class CodeGenAgent(BaseAgent):
 ```
 
 **Changes**:
+
 1. Import `MultiCycleStrategy` and convergence strategy
 2. Create convergence strategy in `__init__()`
 3. Add `strategy=MultiCycleStrategy(...)` to `super().__init__()`
@@ -1182,6 +1249,7 @@ class CodeGenAgent(BaseAgent):
 ## Examples
 
 See detailed examples in:
+
 - [Example: streaming-chat](../examples/1-single-agent/streaming-chat/)
 - [Example: batch-processing](../examples/1-single-agent/batch-processing/)
 - [Example: resilient-fallback](../examples/1-single-agent/resilient-fallback/)
@@ -1196,7 +1264,9 @@ See detailed examples in:
 **Symptom**: Agent returns immediately without execution
 
 **Solution**:
+
 1. Check strategy is set:
+
    ```python
    assert agent.strategy is not None
    ```
@@ -1211,7 +1281,9 @@ See detailed examples in:
 **Symptom**: `stream()` returns empty
 
 **Solution**:
+
 1. Use `stream()` not `execute()`:
+
    ```python
    # Correct
    async for chunk in strategy.stream(agent, inputs):
@@ -1231,7 +1303,9 @@ See detailed examples in:
 **Symptom**: Items processed sequentially
 
 **Solution**:
+
 1. Use `execute_batch()` not `execute()`:
+
    ```python
    # Correct
    results = await strategy.execute_batch(agent, batch_inputs)
@@ -1250,7 +1324,9 @@ See detailed examples in:
 **Symptom**: Fails on first error
 
 **Solution**:
+
 1. Check strategies list has multiple strategies:
+
    ```python
    assert len(strategy.strategies) > 1
    ```
@@ -1269,7 +1345,9 @@ See detailed examples in:
 **Symptom**: Never converges early
 
 **Solution**:
+
 1. Check convergence strategy:
+
    ```python
    # Test convergence logic
    should_stop = convergence.should_stop(cycle=1, result=test_result)

@@ -502,7 +502,7 @@ Avoid common errors by following these rules:
 - **API Reference**: [../../api-reference.md](../../api-reference.md)
 
 ### Error Catalog
-- **Complete Error Definitions**: `apps/kailash-dataflow/src/dataflow/core/error_catalog.yaml`
+- **Complete Error Definitions**: `dataflow/core/error_catalog.yaml` (included in the `kailash-dataflow` package)
 - **60+ error patterns** with causes and solutions
 - **All error codes** from DF-101 to DF-910
 

@@ -8,12 +8,8 @@ with real-world scenarios and performance testing.
 """
 
 import asyncio
-import os
 import sys
 from unittest.mock import AsyncMock, MagicMock
-
-# Add the DataFlow app to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 from dataflow.testing.production_deployment_tester import (
     ProductionDeploymentTester,

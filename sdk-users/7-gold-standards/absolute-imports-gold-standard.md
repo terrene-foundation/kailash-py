@@ -78,7 +78,7 @@ from src.tpc.tpc_user_management.core.parameter_governance import ParameterGover
 
 ## ✅ GOLD STANDARD SOLUTION
 
-### **🎯 Absolute Import Pattern (MANDATORY)**
+### **🎯 Absolute Import Pattern (Required)**
 
 ```python
 # 🚨 ALWAYS USE: Absolute imports from repo root

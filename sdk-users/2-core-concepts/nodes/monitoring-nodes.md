@@ -12,13 +12,13 @@ Enterprise-grade transaction monitoring, deadlock detection, race condition anal
 
 ## 🎯 Quick Node Selection
 
-| Need | Use This Node | Key Features |
-|------|---------------|--------------|
-| **Transaction Metrics** | `TransactionMetricsNode` | Timing, success rates, latency percentiles |
-| **Real-time Monitoring** | `TransactionMonitorNode` | Live tracing, alerting, distributed tracing |
-| **Deadlock Detection** | `DeadlockDetectorNode` | Wait-for graphs, victim selection, prevention |
-| **Race Conditions** | `RaceConditionDetectorNode` | Concurrent access analysis, confidence scoring |
-| **Performance Anomalies** | `PerformanceAnomalyNode` | Statistical baselines, ML detection, alerting |
+| Need                      | Use This Node               | Key Features                                   |
+| ------------------------- | --------------------------- | ---------------------------------------------- |
+| **Transaction Metrics**   | `TransactionMetricsNode`    | Timing, success rates, latency percentiles     |
+| **Real-time Monitoring**  | `TransactionMonitorNode`    | Live tracing, alerting, distributed tracing    |
+| **Deadlock Detection**    | `DeadlockDetectorNode`      | Wait-for graphs, victim selection, prevention  |
+| **Race Conditions**       | `RaceConditionDetectorNode` | Concurrent access analysis, confidence scoring |
+| **Performance Anomalies** | `PerformanceAnomalyNode`    | Statistical baselines, ML detection, alerting  |
 
 ## TransactionMetricsNode
 
@@ -590,7 +590,7 @@ def test_monitoring_integration():
     """Test monitoring with real infrastructure."""
 
     # Requires Docker test environment
-    # ./tests/utils/test-env up
+    # docker compose up -d
 
     metrics = TransactionMetricsNode()
     monitor = TransactionMonitorNode()
@@ -694,14 +694,17 @@ PRODUCTION_CONFIG = {
 ### Common Issues
 
 **TransactionMetricsNode**:
+
 - Use `end_transaction`, not `complete_transaction`
 - Use `status="success"/"failed"`, not `success=True/False`
 
 **DeadlockDetectorNode**:
+
 - Use `start_monitoring`, not `initialize`
 - `register_wait` requires `waiting_for_transaction_id`
 
 **RaceConditionDetectorNode**:
+
 - Use `register_access`/`end_access`, not `report_operation`/`complete_operation`
 - Use lowercase access types: `"read_write"`, not `"READ_WRITE"`
 

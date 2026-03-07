@@ -17,20 +17,10 @@ Business Value:
 """
 
 import sys
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
-
-# Add the parent directory to the path to import kailash
-project_root = Path(__file__).parent.parent.parent.parent
-sys.path.insert(0, str(project_root / "src"))
-sys.path.insert(0, str(project_root))
-
-# Add examples directory to path for utils import
-examples_dir = project_root / "examples"
-sys.path.insert(0, str(examples_dir))
 
 from kailash.nodes.base import NodeParameter
 from kailash.nodes.code.python import PythonCodeNode

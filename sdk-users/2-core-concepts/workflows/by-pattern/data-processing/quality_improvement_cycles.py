@@ -6,12 +6,6 @@ Demonstrates production-ready cycle patterns without external dependencies
 that might conflict with PythonCodeNode security restrictions.
 """
 
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "src"))
-
-# Import templates to add convenience methods to Workflow class
 from kailash import Workflow
 from kailash.nodes.code import PythonCodeNode
 from kailash.runtime.local import LocalRuntime

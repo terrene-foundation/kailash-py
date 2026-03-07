@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * CI Validation Runner for Kailash Vibe CC Setup
+ * CI Validation Runner for Kailash COC Claude (Python)
  *
  * Runs all validation scripts and reports aggregate results.
  *
@@ -90,7 +90,7 @@ async function main() {
 
   if (!jsonOutput) {
     console.log('╔══════════════════════════════════════════════╗');
-    console.log('║     Kailash Vibe CC Setup - CI Validation    ║');
+    console.log('║     Kailash COC Claude (Python) - CI Validation    ║');
     console.log('╚══════════════════════════════════════════════╝\n');
   }
 

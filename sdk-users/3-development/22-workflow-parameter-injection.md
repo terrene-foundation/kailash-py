@@ -1,6 +1,6 @@
 # Workflow Parameter Injection Guide
 
-*Advanced parameter injection patterns for dynamic workflows*
+_Advanced parameter injection patterns for dynamic workflows_
 
 ## Overview
 
@@ -290,17 +290,23 @@ class ConfigurableWorkflowBuilder:
     def build(self) -> Workflow:
         """Build workflow with injected configuration."""
 
-        # Add processor with config
+        # Add processor with config - use ParameterNode to avoid code injection
+        self.workflow.add_node("ParameterNode", "injected_config", {
+            "batch_size": self.config.batch_size,
+            "retry_attempts": self.config.retry_attempts,
+            "timeout": self.config.timeout_seconds,
+            "mode": self.config.processing_mode,
+            "features": self.config.feature_flags,
+        })
         self.workflow.add_node("PythonCodeNode", "processor", {
-            "code": f"""
-# Injected configuration
-batch_size = {self.config.batch_size}
-retry_attempts = {self.config.retry_attempts}
-timeout = {self.config.timeout_seconds}
-mode = "{self.config.processing_mode}"
-
-# Feature flags
-features = {self.config.feature_flags}
+            "code": """
+# Retrieve injected configuration safely via ParameterNode
+cfg = get_input_data("injected_config")
+batch_size = cfg["batch_size"]
+retry_attempts = cfg["retry_attempts"]
+timeout = cfg["timeout"]
+mode = cfg["mode"]
+features = cfg["features"]
 
 # Process with configuration
 if features.get("parallel_processing", False):
@@ -412,11 +418,14 @@ class FeatureFlagWorkflow:
                 "strict_mode": self.flags.get("strict_validation", False)
             })
 
-        # Main processor
+        # Main processor - use ParameterNode to avoid code injection
+        workflow.add_node("ParameterNode", "flag_params", {
+            "flags": self.flags
+        })
         workflow.add_node("PythonCodeNode", "processor", {
-            "code": f"""
-# Feature flags injected
-flags = {self.flags}
+            "code": """
+# Feature flags retrieved safely via ParameterNode
+flags = get_input_data("flag_params")["flags"]
 
 # Conditional logic based on flags
 if flags.get("experimental_algorithm", False):
@@ -669,10 +678,12 @@ class DocumentedWorkflow:
 ## Related Guides
 
 **Prerequisites:**
+
 - [Parameter Passing Guide](11-parameter-passing-guide.md) - Basic parameters
 - [Workflows](02-workflows.md) - Workflow fundamentals
 
 **Advanced Topics:**
+
 - [Testing Guide](12-testing-production-quality.md) - Testing patterns
 - [Production](04-production.md) - Production configuration
 

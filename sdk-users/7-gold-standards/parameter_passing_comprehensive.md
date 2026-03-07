@@ -91,7 +91,7 @@ runtime.execute(workflow.build(), parameters=parameters)
 
 ### Parameter Scoping Rules
 
-**Implementation** (src/kailash/runtime/local.py:1621-1640):
+**Implementation** (kailash/runtime/local.py:1621-1640):
 
 1. **Parameters filtered by node ID**: Only relevant params passed to each node
 2. **Node-specific params unwrapped**: Contents extracted from nested dict

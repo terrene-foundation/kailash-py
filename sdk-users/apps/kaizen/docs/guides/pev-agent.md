@@ -9,6 +9,7 @@ The PEV Agent implements an **iterative improvement loop** (Plan → Execute →
 ## When to Use
 
 Use PEV Agent when:
+
 - **Quality-critical outputs** that benefit from iterative refinement (code generation, document writing, data transformation)
 - **Verification-driven workflows** where output quality can be measured and improved
 - **Iterative improvement needed** to reach target quality level
@@ -16,6 +17,7 @@ Use PEV Agent when:
 - **Feedback-based optimization** where verification feedback guides improvements
 
 **Ideal for**:
+
 - Code generation with testing
 - Document writing with quality checks
 - Data transformation with validation
@@ -25,6 +27,7 @@ Use PEV Agent when:
 ## When NOT to Use
 
 Avoid PEV Agent when:
+
 - **Single execution sufficient** (use Planning or SimpleQA instead)
 - **No clear verification criteria** (verification requires measurable quality metrics)
 - **Real-time constraints** where iteration time isn't acceptable (use single-shot patterns instead)
@@ -126,6 +129,7 @@ if "error" in result:
 ```
 
 **Output Example**:
+
 ```
 ================================================================================
 INITIAL PLAN
@@ -190,6 +194,7 @@ Error Recovery: Enabled
 ## Configuration Options
 
 ### Core LLM Configuration
+
 ```python
 config = PEVAgentConfig(
     # LLM Provider Settings
@@ -201,6 +206,7 @@ config = PEVAgentConfig(
 ```
 
 ### PEV-Specific Configuration
+
 ```python
 config = PEVAgentConfig(
     # Iteration Control
@@ -223,11 +229,13 @@ config = PEVAgentConfig(
 ```
 
 **Verification Strictness Levels**:
+
 - `strict`: Pass only if no issues detected (0 issues required)
 - `medium`: Pass with up to 1 minor issue (1 issue allowed)
 - `lenient`: Pass if execution didn't fail (any issues allowed)
 
 ### Environment Variable Support
+
 ```bash
 # .env file configuration (auto-loaded)
 KAIZEN_LLM_PROVIDER=openai
@@ -244,6 +252,7 @@ agent = PEVAgent()  # Zero-config usage
 ## Common Pitfalls & Gotchas
 
 ### 1. Infinite Refinement Loops
+
 **Problem**: Verification never passes, agent iterates until max_iterations exhausted.
 
 **Solution**: Set appropriate `max_iterations` and use lenient verification for non-critical tasks.
@@ -260,6 +269,7 @@ config = PEVAgentConfig(
 ```
 
 ### 2. Verification Criteria Too Strict
+
 **Problem**: Using "strict" verification for subjective quality tasks causes failures.
 
 **Solution**: Match strictness to task verifiability.
@@ -276,6 +286,7 @@ config = PEVAgentConfig(verification_strictness="strict")  # Syntax errors are o
 ```
 
 ### 3. Disabling Error Recovery Prematurely
+
 **Problem**: Single execution error causes entire workflow to fail.
 
 **Solution**: Enable error recovery for production workflows.
@@ -292,6 +303,7 @@ config = PEVAgentConfig(
 ```
 
 ### 4. Not Checking Verification Status
+
 **Problem**: Using final_result without checking if verification passed.
 
 **Solution**: Always check verification status before using result.
@@ -313,6 +325,7 @@ else:
 ```
 
 ### 5. Ignoring Refinement History
+
 **Problem**: Not reviewing refinement history to understand improvement process.
 
 **Solution**: Log and analyze refinements for debugging and optimization.
@@ -334,6 +347,7 @@ if len(result["refinements"]) >= config.max_iterations - 1:
 ```
 
 ### 6. Task Without Clear Verification Criteria
+
 **Problem**: Task is too vague for meaningful verification.
 
 **Solution**: Provide explicit quality criteria in task description.
@@ -357,50 +371,57 @@ result = agent.run(task=task)
 ## Comparison with Similar Patterns
 
 ### PEV vs Planning
-| Aspect | PEV Agent | Planning Agent |
-|--------|-----------|----------------|
-| **Verification** | Post-execution verification | Pre-execution validation |
-| **Iteration** | Multiple refine cycles | Single execution cycle (with optional replanning) |
-| **Quality Focus** | Output quality | Plan quality |
-| **Use Case** | Iterative improvement | Structured execution |
-| **Cycles** | Multiple (until verified) | Single (or replan) |
-| **Overhead** | Higher (multiple cycles) | Lower (single execution) |
+
+| Aspect            | PEV Agent                   | Planning Agent                                    |
+| ----------------- | --------------------------- | ------------------------------------------------- |
+| **Verification**  | Post-execution verification | Pre-execution validation                          |
+| **Iteration**     | Multiple refine cycles      | Single execution cycle (with optional replanning) |
+| **Quality Focus** | Output quality              | Plan quality                                      |
+| **Use Case**      | Iterative improvement       | Structured execution                              |
+| **Cycles**        | Multiple (until verified)   | Single (or replan)                                |
+| **Overhead**      | Higher (multiple cycles)    | Lower (single execution)                          |
 
 **When to Switch**:
+
 - **PEV → Planning**: Single execution sufficient, no refinement needed
 - **Planning → PEV**: Need iterative quality improvement
 
 ### PEV vs ReAct
-| Aspect | PEV Agent | ReAct Agent |
-|--------|-----------|-------------|
-| **Verification** | Explicit verification step | Observation-based |
-| **Adaptation** | Refinement based on feedback | Real-time based on observations |
-| **Cycles** | Fixed verification cycles | Variable action-observation cycles |
-| **Quality Focus** | Output verification | Task completion |
-| **Best For** | Quality-driven refinement | Dynamic problem-solving |
-| **Transparency** | Verification results | Reasoning traces |
+
+| Aspect            | PEV Agent                    | ReAct Agent                        |
+| ----------------- | ---------------------------- | ---------------------------------- |
+| **Verification**  | Explicit verification step   | Observation-based                  |
+| **Adaptation**    | Refinement based on feedback | Real-time based on observations    |
+| **Cycles**        | Fixed verification cycles    | Variable action-observation cycles |
+| **Quality Focus** | Output verification          | Task completion                    |
+| **Best For**      | Quality-driven refinement    | Dynamic problem-solving            |
+| **Transparency**  | Verification results         | Reasoning traces                   |
 
 **When to Switch**:
+
 - **PEV → ReAct**: Need real-time adaptation, not post-execution verification
 - **ReAct → PEV**: Have clear verification criteria, need quality refinement
 
 ### PEV vs Tree-of-Thoughts (ToT)
-| Aspect | PEV Agent | ToT Agent |
-|--------|-----------|-----------|
-| **Exploration** | Single path, iteratively refined | Multiple parallel paths |
-| **Selection** | Iterative improvement | Best path selection |
-| **Cycles** | Sequential refinement cycles | Parallel path generation |
-| **Quality** | Verification-driven | Evaluation-driven |
-| **Best For** | Incremental improvement | Alternative exploration |
-| **Overhead** | Moderate (5 iterations typical) | Higher (N paths generated) |
+
+| Aspect          | PEV Agent                        | ToT Agent                  |
+| --------------- | -------------------------------- | -------------------------- |
+| **Exploration** | Single path, iteratively refined | Multiple parallel paths    |
+| **Selection**   | Iterative improvement            | Best path selection        |
+| **Cycles**      | Sequential refinement cycles     | Parallel path generation   |
+| **Quality**     | Verification-driven              | Evaluation-driven          |
+| **Best For**    | Incremental improvement          | Alternative exploration    |
+| **Overhead**    | Moderate (5 iterations typical)  | Higher (N paths generated) |
 
 **When to Switch**:
+
 - **PEV → ToT**: Need multiple alternatives, not iterative refinement
 - **ToT → PEV**: Single path sufficient, need quality refinement
 
 ## Best Practices
 
 ### 1. Set Iteration Limits Based on Task Complexity
+
 ```python
 # Simple tasks - low iteration limit
 simple_config = PEVAgentConfig(max_iterations=3)
@@ -413,6 +434,7 @@ complex_config = PEVAgentConfig(max_iterations=10)
 ```
 
 ### 2. Use Strictness Levels Appropriately
+
 ```python
 # Strict for objective criteria (syntax, compliance)
 strict_config = PEVAgentConfig(
@@ -434,6 +456,7 @@ lenient_config = PEVAgentConfig(
 ```
 
 ### 3. Enable Error Recovery for Production
+
 ```python
 # Production configuration
 production_config = PEVAgentConfig(
@@ -450,6 +473,7 @@ dev_config = PEVAgentConfig(
 ```
 
 ### 4. Provide Explicit Quality Criteria
+
 ```python
 # Explicit criteria in task description
 task = """
@@ -466,6 +490,7 @@ result = agent.run(task=task)
 ```
 
 ### 5. Monitor Refinement Patterns
+
 ```python
 import logging
 
@@ -484,6 +509,7 @@ if not result["verification"]["passed"]:
 ```
 
 ### 6. Combine Verification with Automated Testing
+
 ```python
 # Generate code with PEV
 task = "Generate function to parse CSV with error handling"
@@ -493,12 +519,15 @@ if result["verification"]["passed"]:
     # Extract generated code
     code = result["final_result"]
 
-    # Run automated tests
-    import pytest
-    exec(code)  # Execute generated code
-    pytest.main(["-v", "tests/generated/"])  # Run tests on generated code
+    # IMPORTANT: Never exec() LLM-generated code directly.
+    # Write to file for human review, or use a sandboxed environment.
+    from pathlib import Path
+    Path("generated_code.py").write_text(code)
+    print("Generated code written to generated_code.py for review")
 
-    # If tests pass, use code in production
+    # Run tests on the generated file
+    import pytest
+    pytest.main(["-v", "tests/generated/"])
 ```
 
 ## Performance Characteristics
@@ -513,6 +542,7 @@ if result["verification"]["passed"]:
 - **Concurrent Refinement**: Not parallelized (sequential by design)
 
 **Optimization Tips**:
+
 - Use lower max_iterations (3-5) for faster results
 - Use "lenient" verification for non-critical tasks
 - Cache verified results for repeated tasks
@@ -521,6 +551,7 @@ if result["verification"]["passed"]:
 ## Integration Examples
 
 ### With Core SDK for Workflow Validation
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime import LocalRuntime
@@ -543,6 +574,7 @@ if result["verification"]["passed"]:
 ```
 
 ### With DataFlow for Schema Generation
+
 ```python
 from dataflow import DataFlow
 from kaizen.agents.specialized.pev import PEVAgent
@@ -561,6 +593,7 @@ if result["verification"]["passed"]:
 ```
 
 ### With Nexus for API Specification
+
 ```python
 from nexus import Nexus
 from kaizen.agents.specialized.pev import PEVAgent

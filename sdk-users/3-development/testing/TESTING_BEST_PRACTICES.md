@@ -21,7 +21,7 @@ def test_redis_operations():
     redis_client.ping()  # Fails fast with clear error
 ```
 
-### 2. No Mocking in Integration/E2E Tests
+### 2. Real Infrastructure Preferred in Integration/E2E Tests
 ```python
 # ❌ NEVER DO THIS IN INTEGRATION TESTS
 from unittest.mock import patch
@@ -41,7 +41,7 @@ def test_api_integration():
 ```
 tests/
 ├── unit/           # Fast, isolated, mocking allowed, LocalRuntime
-├── integration/    # Real Docker services, NO MOCKING, LocalRuntime/AsyncLocalRuntime
+├── integration/    # Real Docker services, real infrastructure preferred, LocalRuntime/AsyncLocalRuntime
 └── e2e/           # Full scenarios, real infrastructure, AsyncLocalRuntime
 ```
 
@@ -71,7 +71,7 @@ import pytest
 class TestWithRealServices:
     @pytest.mark.requires_docker
     def test_postgres_operations(self):
-        """Test with real PostgreSQL - NO MOCKING."""
+        """Test with real PostgreSQL - real infrastructure preferred."""
         conn_string = get_postgres_connection_string()
 
         workflow = WorkflowBuilder()
@@ -89,7 +89,7 @@ class TestWithRealServices:
 
     @pytest.mark.requires_docker
     def test_redis_caching(self):
-        """Test with real Redis - NO MOCKING."""
+        """Test with real Redis - real infrastructure preferred."""
         redis_url = get_redis_url()
         redis_client = redis.from_url(redis_url)
 
@@ -98,7 +98,7 @@ class TestWithRealServices:
 
     @pytest.mark.requires_docker
     def test_api_integration(self):
-        """Test with real mock-api Docker service - NO MOCKING."""
+        """Test with real mock-api Docker service - real infrastructure preferred."""
         workflow = WorkflowBuilder()
         workflow.add_node("HTTPRequestNode", "api", {
             "url": f"{MOCK_API_CONFIG['base_url']}/v1/users",

@@ -16,7 +16,7 @@ const CLAUDE_DIR = path.join(os.homedir(), '.claude');
 const MIN_NODE_VERSION = 18;
 
 function main() {
-  console.log('\n=== Kailash Vibe CC Setup - Pre Install ===\n');
+  console.log('\n=== Kailash COC Claude (Python) - Pre Install ===\n');
 
   const checks = [];
 

@@ -5,12 +5,6 @@ DataFlow Integration Demo
 Demonstrates QueryBuilder and QueryCache integration with DataFlow engine.
 """
 
-import sys
-from pathlib import Path
-
-# Add SDK src to path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "src"))
-
 from kailash.nodes.data.query_builder import create_query_builder
 from kailash.nodes.data.query_cache import CacheInvalidationStrategy, QueryCache
 
@@ -84,8 +78,8 @@ def demo_query_cache_integration():
         print(f"Default TTL: {cache.default_ttl}s")
         print(f"Redis Host: {cache.redis_host}:{cache.redis_port}")
 
-        # Test cache operations
-        query = f"SELECT * FROM users WHERE strategy = '{strategy_name}'"
+        # Test cache operations (query used as cache key, not executed directly)
+        query = "SELECT * FROM users WHERE strategy = %s"
         parameters = [strategy_name]
         result = {"users": [{"id": 1, "name": f"User_{strategy_name}"}]}
 

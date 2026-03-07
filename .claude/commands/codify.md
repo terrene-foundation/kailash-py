@@ -1,22 +1,56 @@
 ---
 name: codify
-description: "Load phase 05 (codify) for the current workspace. Create project agents and skills."
+description: "Load phase 05 (codify) for the current workspace. Update existing agents and skills with new knowledge."
 ---
 
-Load the codification phase for a workspace project.
+## Workspace Resolution
 
-1. Determine the workspace:
-   - If `$ARGUMENTS` specifies a project name, use `workspaces/$ARGUMENTS/`
-   - Otherwise, use the most recently modified directory under `workspaces/` (excluding `instructions/`)
-   - If no workspace exists, ask the user to create one first
+1. If `$ARGUMENTS` specifies a project name, use `workspaces/$ARGUMENTS/`
+2. Otherwise, use the most recently modified directory under `workspaces/` (excluding `instructions/`)
+3. If no workspace exists, ask the user to create one first
+4. Read all files in `workspaces/<project>/briefs/` for user context (this is the user's input surface)
 
-2. Read `workspaces/<project>/instructions/05-create-agent-skills.md` and follow those instructions.
+## Phase Check
 
-3. Check workspace state:
-   - Read `workspaces/<project>/04-validate/` to confirm validation passed
-   - Read `docs/` and `docs/00-authority/` for knowledge base
+- Read `workspaces/<project>/04-validate/` to confirm validation passed
+- Read `docs/` and `docs/00-authority/` for knowledge base
+- Output: update existing agents and skills in their canonical locations (e.g., `agents/frameworks/`, `skills/01-core-sdk/`, `skills/02-dataflow/`, etc.)
 
-4. Output goes to `.claude/agents/project/` and `.claude/skills/project/`.
+## Workflow
+
+### 1. Deep knowledge extraction
+
+Using as many subagents as required, peruse `docs/`, especially `docs/00-authority/`.
+
+- Ultrathink and read beyond the docs into the intent of this project/product
+- Understand the roles and use of agents, skills, docs:
+  - **Agents** — What to do, how to think about this, what can it work with, following procedural directives
+  - **Skills** — Distilled knowledge that agents can achieve 100% situational awareness with
+  - **`docs/`** — Full knowledge base
+
+### 2. Update existing agents
+
+Improve agents in their canonical locations (e.g., `agents/frameworks/`, `agents/standards/`, etc.).
+
+- Reference `.claude/agents/_subagent-guide.md` for agent format
+- Identify which existing agent(s) should absorb the new knowledge
+- Add new skills references, update capabilities, refine instructions
+- If no existing agent covers the domain, create a new agent in the appropriate canonical directory (e.g., `agents/frameworks/`, `agents/standards/`, `agents/management/`)
+
+### 3. Update existing skills
+
+Improve skills in their canonical locations (e.g., `skills/01-core-sdk/`, `skills/02-dataflow/`, etc.).
+
+- Reference `.claude/guides/claude-code/06-the-skill-system.md` for skill format
+- Identify which existing skill directory should absorb the new knowledge
+- Add new skill files to the appropriate numbered directory
+- Update the directory's `SKILL.md` entry point to reference new files
+- Skills must be as detailed as possible so agents can deliver most of their work just by using them
+- Should REFERENCE instead of repeating the knowledge base in `docs/`
+
+### 4. Red team the agents and skills
+
+Validate that generated agents and skills are correct, complete, and secure.
 
 ## Agent Teams
 
@@ -39,4 +73,6 @@ Deploy these agents as a team for codification:
 - **testing-specialist** — Verify any code examples in skills are testable
 - **security-reviewer** — Audit generated agents/skills for prompt injection vectors, insecure patterns, or secrets exposure (codified artifacts persist across all future sessions)
 
-Reference `.claude/agents/_subagent-guide.md` for agent format and `.claude/guides/claude-code/06-the-skill-system.md` for skill format.
+**COC template sync (after codification completes):**
+
+- **coc-sync** — Transform and sync all agents, skills, rules, and commands to the COC template repository (`kailash-coc-claude-py`), stripping builder-specific content. Only runs if the repo exists at `~/repos/kailash/kailash-coc-claude-py/`. See `.claude/skills/management/coc-sync-mapping.md` for transform rules.

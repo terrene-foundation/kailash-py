@@ -1020,7 +1020,7 @@ async def test_complete_user_lifecycle():
 
 if __name__ == "__main__":
     # Run the complete lifecycle test
-    result = asyncio.execute(test_complete_user_lifecycle())
+    result = asyncio.run(test_complete_user_lifecycle())
 
     # Save detailed results
     import json
