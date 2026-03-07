@@ -101,14 +101,14 @@ There are several authentication methods:
 If you have this setup as a repository:
 
 ```bash
-git clone [repository-url] kailash-vibe-cc-setup
-cd kailash-vibe-cc-setup
+git clone [repository-url] kailash-coc-claude-py
+cd kailash-coc-claude-py
 ```
 
 Or if you're already in the directory:
 
 ```bash
-cd /path/to/kailash-vibe-cc-setup
+cd /path/to/kailash-coc-claude-py
 ```
 
 ### Step 2: Verify the Setup Structure
@@ -167,7 +167,7 @@ When Claude Code starts, you'll see:
 ╭─────────────────────────────────────────────────╮
 │ ✻ Claude Code                                   │
 │                                                 │
-│   Working in: /path/to/kailash-vibe-cc-setup    │
+│   Working in: /path/to/kailash-coc-claude-py    │
 ╰─────────────────────────────────────────────────╯
 
 >
@@ -368,7 +368,7 @@ export PATH="$(npm config get prefix)/bin:$PATH"
 
 ```bash
 # Navigate to the setup directory
-cd /path/to/kailash-vibe-cc-setup
+cd /path/to/kailash-coc-claude-py
 
 # Verify .claude exists
 ls -la .claude/

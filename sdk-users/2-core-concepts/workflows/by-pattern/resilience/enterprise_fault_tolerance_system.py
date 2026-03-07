@@ -43,17 +43,7 @@ import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-
-# Add project root to path for imports
-project_root = Path(__file__).parent.parent.parent.parent.parent
-sys.path.insert(0, str(project_root / "src"))
-sys.path.insert(0, str(project_root))
-
-# Add examples directory to path for utils import
-examples_dir = project_root / "examples"
-sys.path.insert(0, str(examples_dir))
 
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.nodes.data.writers import JSONWriterNode

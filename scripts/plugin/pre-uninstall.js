@@ -16,7 +16,7 @@ const LEARNING_DIR = path.join(os.homedir(), '.claude', 'kailash-learning');
 const EXPORT_DIR = path.join(os.homedir(), 'kailash-learning-export');
 
 function main() {
-  console.log('\n=== Kailash Vibe CC Setup - Pre Uninstall ===\n');
+  console.log('\n=== Kailash COC Claude (Python) - Pre Uninstall ===\n');
 
   // Check if learning data exists
   if (!fs.existsSync(LEARNING_DIR)) {
@@ -83,7 +83,7 @@ function main() {
   // Create export manifest
   const manifest = {
     exported_at: new Date().toISOString(),
-    source: 'kailash-vibe-cc-setup',
+    source: 'kailash-coc-claude-py',
     version: '1.0.0',
     contains: {
       observations: fs.existsSync(path.join(EXPORT_DIR, 'observations.jsonl')),

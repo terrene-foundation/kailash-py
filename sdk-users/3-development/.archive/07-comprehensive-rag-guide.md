@@ -1163,4 +1163,4 @@ For more examples, see the comprehensive example at:
 `examples/feature_examples/rag/comprehensive_rag_enhanced_example.py`
 
 For architecture decisions and trade-offs, refer to:
-`# contrib (removed)/architecture/adr/`
+the SDK architecture decisions documentation

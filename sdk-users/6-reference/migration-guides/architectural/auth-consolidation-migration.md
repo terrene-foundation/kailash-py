@@ -4,7 +4,7 @@
 
 The JWT authentication implementation in Kailash SDK has been consolidated to resolve circular import issues and improve the architecture. The `KailashJWTAuthManager` has been merged into `JWTAuthManager` with support for both HS256 (default) and RSA algorithms.
 
-> **For SDK Users**: This guide focuses on how to update your code to use the new consolidated authentication. For internal architecture details, see the [contributor guide](../../# contrib (removed)/architecture/migration-guides/auth-consolidation-migration.md).
+> **For SDK Users**: This guide focuses on how to update your code to use the new consolidated authentication. For internal architecture details, see the SDK contributor documentation.
 
 ## Key Changes
 
@@ -52,7 +52,7 @@ gateway = create_gateway(auth_manager=auth)
 
 **New structure:**
 ```
-src/kailash/middleware/auth/
+kailash/middleware/auth/
 ├── __init__.py          # Main exports
 ├── jwt_auth.py          # Consolidated JWTAuthManager
 ├── models.py            # Data models (no circular deps)

@@ -184,6 +184,37 @@ runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
 ```
 
+## SQLite Connection Management
+
+### MUST
+
+- Acquire connections through `AsyncSQLitePool` (`acquire_read` / `acquire_write` / `acquire`)
+- Use URI shared-cache mode for `:memory:` databases (`file:memdb_NAME?mode=memory&cache=shared`)
+- Use `async with` for all transaction objects — no bare instantiation
+- Apply default PRAGMAs on every new connection (WAL, busy_timeout, synchronous, cache_size, foreign_keys)
+- Set `max_read_connections` when creating pool configs (bounded concurrency)
+
+### MUST NOT
+
+- Use bare `aiosqlite.connect()` in adapter or framework code — go through the pool
+- Use `sqlite3.connect(":memory:")` or `aiosqlite.connect(":memory:")` directly — use URI shared-cache
+- Create unbounded connection pools (always set `max_read_connections`)
+- Skip WAL pragma for file-based databases
+
+## Async Resource Cleanup
+
+### MUST
+
+- All async resource classes (transactions, connections, pools) implement `__del__` with `ResourceWarning`
+- Use `def __del__(self, _warnings=warnings)` signature (survives interpreter shutdown)
+- Set class-level defaults for `__del__` safety (`_committed = False`, `_rolled_back = False`, `connection = None`)
+- Capture `_source_traceback` at creation in debug mode for leak diagnostics
+
+### MUST NOT
+
+- Use `asyncio` in `__del__` — async cleanup in finalizers is unreliable
+- Swallow resource leaks silently — always warn via `ResourceWarning`
+
 ## Exceptions
 
 Pattern exceptions require:

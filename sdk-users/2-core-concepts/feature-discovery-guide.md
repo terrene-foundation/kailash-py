@@ -10,8 +10,8 @@ _Before building anything, discover what already exists in the Kailash SDK ecosy
 
 ```bash
 # Search existing database capabilities
-grep -r "class.*DatabaseNode" src/kailash/nodes/data/
-grep -r "async def execute" src/kailash/nodes/data/
+grep -r "class.*DatabaseNode" kailash/nodes/data/
+grep -r "async def execute" kailash/nodes/data/
 ```
 
 **What You'll Find:**
@@ -24,8 +24,8 @@ grep -r "async def execute" src/kailash/nodes/data/
 
 ```bash
 # Search existing AI capabilities
-ls src/kailash/nodes/ai/
-grep -r "LLMNode" src/kailash/nodes/
+ls kailash/nodes/ai/
+grep -r "LLMNode" kailash/nodes/
 ```
 
 **What You'll Find:**
@@ -39,8 +39,8 @@ grep -r "LLMNode" src/kailash/nodes/
 
 ```bash
 # Search security implementations
-ls src/kailash/nodes/security/
-grep -r "SecureGovernedNode" src/kailash/
+ls kailash/nodes/security/
+grep -r "SecureGovernedNode" kailash/
 ```
 
 **What You'll Find:**
@@ -54,8 +54,8 @@ grep -r "SecureGovernedNode" src/kailash/
 
 ```bash
 # Search resilience patterns
-ls src/kailash/core/resilience/
-grep -r "CircuitBreaker" src/kailash/
+ls kailash/core/resilience/
+grep -r "CircuitBreaker" kailash/
 ```
 
 **What You'll Find:**
@@ -162,11 +162,11 @@ Enterprise App
 
 ### **3. Framework Solutions**
 
-**Location**: `apps/`
+**Installed via pip:**
 
-- `kailash-dataflow/` - Database operations framework
-- `kailash-nexus/` - Multi-channel platform
-- `kailash-mcp/` - Enterprise MCP framework
+- `kailash-dataflow` - Database operations framework (`pip install kailash-dataflow`)
+- `kailash-nexus` - Multi-channel platform (`pip install kailash-nexus`)
+- `kailash-mcp` - Enterprise MCP framework
 
 ### **4. Common Mistakes**
 
@@ -182,7 +182,7 @@ Enterprise App
 
 ```python
 # Search command
-find src/kailash/nodes -name "*.py" | xargs grep -l "YourFeature"
+find kailash/nodes -name "*.py" | xargs grep -l "YourFeature"
 
 # Or use the node index
 # Check: sdk-users/2-core-concepts/nodes/node-index.md
@@ -192,13 +192,13 @@ find src/kailash/nodes -name "*.py" | xargs grep -l "YourFeature"
 
 ```python
 # Database operations?
-# Check: apps/kailash-dataflow/
+# Package: kailash-dataflow (pip install kailash-dataflow)
 
 # Multi-channel platform?
-# Check: apps/kailash-nexus/
+# Package: kailash-nexus (pip install kailash-nexus)
 
 # Enterprise MCP?
-# Check: apps/kailash-mcp/
+# Package: kailash-mcp
 ```
 
 ### **Step 3: Review Implementation Patterns**
@@ -230,33 +230,33 @@ find src/kailash/nodes -name "*.py" | xargs grep -l "YourFeature"
 ### **Find Database Features**
 
 ```bash
-grep -r "connection.*pool" src/kailash/nodes/data/
-grep -r "transaction.*mode" src/kailash/nodes/data/
-grep -r "retry.*config" src/kailash/nodes/data/
+grep -r "connection.*pool" kailash/nodes/data/
+grep -r "transaction.*mode" kailash/nodes/data/
+grep -r "retry.*config" kailash/nodes/data/
 ```
 
 ### **Find AI Features**
 
 ```bash
-ls src/kailash/nodes/ai/
-grep -r "mcp.*tool" src/kailash/nodes/
-grep -r "embedding" src/kailash/nodes/
+ls kailash/nodes/ai/
+grep -r "mcp.*tool" kailash/nodes/
+grep -r "embedding" kailash/nodes/
 ```
 
 ### **Find Security Features**
 
 ```bash
-ls src/kailash/nodes/security/
-grep -r "validation" src/kailash/nodes/
-grep -r "SecureGoverned" src/kailash/
+ls kailash/nodes/security/
+grep -r "validation" kailash/nodes/
+grep -r "SecureGoverned" kailash/
 ```
 
 ### **Find Enterprise Features**
 
 ```bash
-grep -r "multi.*tenant" src/kailash/
-grep -r "circuit.*breaker" src/kailash/core/
-grep -r "health.*monitor" src/kailash/core/
+grep -r "multi.*tenant" kailash/
+grep -r "circuit.*breaker" kailash/core/
+grep -r "health.*monitor" kailash/core/
 ```
 
 ## 🎯 Success Metrics

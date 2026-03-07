@@ -14,7 +14,7 @@ Display the current workspace status. Do not modify any files.
      - Has `todos/active/` files -> Todos created
      - Has `todos/completed/` files -> Implementation in progress
      - Has `04-validate/` files -> Validation done
-     - Has `.claude/agents/project/` or `.claude/skills/project/` files -> Codification done
+     - Agents/skills were updated in phase 05 -> Codification done (check workspace `.session-notes` or `04-validate/`)
    - Count files in `todos/active/` vs `todos/completed/`
    - List the 5 most recently modified files in the workspace
    - If `.session-notes` exists, show its contents and age

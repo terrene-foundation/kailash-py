@@ -642,7 +642,7 @@ No new components evolved (thresholds not met).
 | Break into tasks | `/todos` | `todos/active/` (stops for human approval) |
 | Build | `/implement` (repeat) | `src/`, `apps/`, move todos to `completed/` |
 | Validate | `/redteam` | `04-validate/` (feeds gaps back to `/implement`) |
-| Capture knowledge | `/codify` | `.claude/agents/project/`, `.claude/skills/project/` |
+| Capture knowledge | `/codify` | Updates existing agents and skills in `.claude/` |
 | Check status | `/ws` | Dashboard with phase, todos, recent activity |
 | End session | `/wrapup` | `.session-notes` in workspace root |
 

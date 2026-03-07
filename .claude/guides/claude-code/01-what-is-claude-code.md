@@ -434,7 +434,7 @@ Best practice: Use `.env` files and keep secrets out of your code.
 
 ## What's Next?
 
-Now that you understand what Claude Code is, the next guide explains how this specific setup (Kailash Vibe CC Setup) enhances Claude Code with specialized knowledge and automation.
+Now that you understand what Claude Code is, the next guide explains how this specific setup (Kailash COC Claude (Python)) enhances Claude Code with specialized knowledge and automation.
 
 **Next: [02 - Understanding This Setup](02-understanding-this-setup.md)**
 

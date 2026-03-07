@@ -13,11 +13,7 @@ Features:
 - Implementation planning
 """
 
-import os
 import sys
-
-# Add the DataFlow app to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../src"))
 
 from dataflow.optimization import SQLDialect, SQLQueryOptimizer, WorkflowAnalyzer
 from dataflow.optimization.index_recommendation_engine import (

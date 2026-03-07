@@ -1,14 +1,16 @@
 # Workflow Creation Patterns
 
-*Modern workflow building with WorkflowBuilder*
+_Modern workflow building with WorkflowBuilder_
 
 ## 🎯 Prerequisites
+
 - Completed [Fundamentals Overview](01-fundamentals-overview.md)
 - Understanding of nodes and connections
 
 ## 🏗️ Basic Workflow Structure
 
 ### Simple Workflow
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime import LocalRuntime
@@ -46,6 +48,7 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Progressive Workflow Building
+
 ```python
 def build_data_pipeline():
     """Build a complete data processing pipeline"""
@@ -132,6 +135,7 @@ results, run_id = runtime.execute(pipeline.build())
 ## 🔧 Workflow Factory Pattern
 
 ### Reusable Workflow Templates
+
 ```python
 class WorkflowFactory:
     """Factory for creating common workflow patterns"""
@@ -169,15 +173,24 @@ class WorkflowFactory:
         """Create data validation workflow"""
         workflow = WorkflowBuilder()
 
-        # Data source
+        # Data source - use ParameterNode to avoid code injection
+        workflow.add_node("ParameterNode", "source_params", {
+            "data_source": data_source
+        })
         workflow.add_node("PythonCodeNode", "data_source", {
-            "code": f"result = {data_source}"
+            "code": """
+params = get_input_data("source_params")
+result = params["data_source"]
+"""
         })
 
-        # Validator
+        # Validator - use ParameterNode for validation rules
+        workflow.add_node("ParameterNode", "rule_params", {
+            "validation_rules": validation_rules
+        })
         workflow.add_node("PythonCodeNode", "validator", {
-            "code": f'''
-rules = {validation_rules}
+            "code": """
+rules = get_input_data("rule_params")["validation_rules"]
 validated_items = []
 failed_items = []
 
@@ -193,12 +206,12 @@ for item in input_data:
     else:
         failed_items.append(item)
 
-result = {{
+result = {
     'valid': validated_items,
     'failed': failed_items,
     'validation_rate': len(validated_items) / len(input_data) if input_data else 0
-}}
-'''
+}
+"""
         })
 
         workflow.add_connection("data_source", "result", "validator", "input_data")
@@ -208,7 +221,7 @@ result = {{
 etl_workflow = WorkflowFactory.create_etl_workflow(
     "input.csv",
     "output.json",
-    "result = [{{**item, 'processed': True}} for item in input_data]"
+    "result = [{**item, 'processed': True} for item in input_data]"
 )
 
 validation_workflow = WorkflowFactory.create_validation_workflow(
@@ -220,16 +233,24 @@ validation_workflow = WorkflowFactory.create_validation_workflow(
 ## ✅ Modern Patterns
 
 ### Dynamic Node Addition
+
 ```python
 def create_multi_source_workflow(data_sources):
     """Create workflow with dynamic number of data sources"""
     workflow = WorkflowBuilder()
 
-    # Add data sources dynamically
+    # Add data sources dynamically - use ParameterNode to avoid code injection
     for i, source_config in enumerate(data_sources):
         node_name = f"source_{i}"
+        param_name = f"source_params_{i}"
+        workflow.add_node("ParameterNode", param_name, {
+            "data": source_config["data"]
+        })
         workflow.add_node("PythonCodeNode", node_name, {
-            "code": f"result = {source_config['data']}"
+            "code": f"""
+params = get_input_data("source_params_{i}")
+result = params["data"]
+"""
         })
 
     # Add combiner
@@ -261,6 +282,7 @@ multi_workflow = create_multi_source_workflow(sources)
 ```
 
 ## 🔗 Next Steps
+
 - [Workflow Connections](02-workflows-connections.md) - Advanced data flow
 - [PythonCodeNode Patterns](02-workflows-python-code.md) - Custom processing
 - [Workflow Execution](02-workflows-execution.md) - Runtime patterns

@@ -459,7 +459,7 @@ Learning data is stored **per-project** (not globally):
 │
 ├── identity.json              # System identity
 │   {
-│     "system": "kailash-vibe-cc-setup",
+│     "system": "kailash-coc-claude-py",
 │     "version": "2.0.0",
 │     "per_project": true,
 │     "learning_enabled": true,
@@ -503,7 +503,7 @@ The `identity.json` controls learning behavior:
 
 ```json
 {
-  "system": "kailash-vibe-cc-setup",
+  "system": "kailash-coc-claude-py",
   "version": "2.0.0",
   "created_at": "2024-01-31T12:00:00.000Z",
   "learning_enabled": true,

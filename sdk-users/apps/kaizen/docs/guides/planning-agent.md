@@ -9,6 +9,7 @@ The Planning Agent implements a **three-phase workflow** (Plan → Validate → 
 ## When to Use
 
 Use Planning Agent when:
+
 - **Complex multi-step tasks** that benefit from upfront planning (research reports, project workflows, data processing pipelines)
 - **Critical operations** where validation before execution is essential
 - **Structured deliverables** with clear steps and dependencies
@@ -16,6 +17,7 @@ Use Planning Agent when:
 - **Audit requirements** where you need a validated plan before execution
 
 **Ideal for**:
+
 - Research and report generation
 - Data processing workflows
 - Project planning and execution
@@ -25,6 +27,7 @@ Use Planning Agent when:
 ## When NOT to Use
 
 Avoid Planning Agent when:
+
 - **Dynamic environments** where plans quickly become outdated (use ReAct instead)
 - **Exploration tasks** where the path forward isn't clear upfront (use Tree-of-Thoughts instead)
 - **Simple single-step tasks** where planning overhead isn't justified (use SimpleQA instead)
@@ -116,6 +119,7 @@ if "error" in result:
 ```
 
 **Output Example**:
+
 ```
 ================================================================================
 PHASE 1: PLAN
@@ -159,6 +163,7 @@ Comprehensive analysis of AI ethics covering privacy, bias, and transparency.
 ## Configuration Options
 
 ### Core LLM Configuration
+
 ```python
 config = PlanningConfig(
     # LLM Provider Settings
@@ -170,6 +175,7 @@ config = PlanningConfig(
 ```
 
 ### Planning-Specific Configuration
+
 ```python
 config = PlanningConfig(
     # Plan Control
@@ -192,11 +198,13 @@ config = PlanningConfig(
 ```
 
 **Validation Modes**:
+
 - `strict`: Fails immediately on any validation issue
 - `warn`: Logs warnings but continues execution
 - `off`: Skips validation entirely
 
 ### Environment Variable Support
+
 ```bash
 # .env file configuration (auto-loaded)
 KAIZEN_LLM_PROVIDER=openai
@@ -213,6 +221,7 @@ agent = PlanningAgent()  # Zero-config usage
 ## Common Pitfalls & Gotchas
 
 ### 1. Over-Planning Complex Tasks
+
 **Problem**: Planning agent generates 50+ steps for a simple task, making it unmanageable.
 
 **Solution**: Set `max_plan_steps` appropriately for task complexity.
@@ -227,6 +236,7 @@ config = PlanningConfig(max_plan_steps=15)  # Complex workflows
 ```
 
 ### 2. Validation Mode Mismatch
+
 **Problem**: Using `strict` validation for dynamic tasks causes excessive replanning failures.
 
 **Solution**: Choose validation mode based on task predictability.
@@ -243,6 +253,7 @@ config = PlanningConfig(validation_mode="strict")  # Compliance-critical
 ```
 
 ### 3. Circular Dependencies Not Caught
+
 **Problem**: Plan has step 3 depending on step 5, creating logical impossibility.
 
 **Solution**: Enable strict validation and review validation results.
@@ -264,6 +275,7 @@ if result["validation_result"]["status"] == "invalid":
 ```
 
 ### 4. Forgetting Context for Planning
+
 **Problem**: Agent creates generic plan without task-specific details.
 
 **Solution**: Always provide rich context for better planning.
@@ -284,6 +296,7 @@ result = agent.run(task=task, context=context)
 ```
 
 ### 5. Not Handling Replanning Failures
+
 **Problem**: Validation fails, replanning fails, but code doesn't handle it.
 
 **Solution**: Check for errors and handle replanning scenarios.
@@ -309,51 +322,58 @@ else:
 ## Comparison with Similar Patterns
 
 ### Planning vs ReAct
-| Aspect | Planning Agent | ReAct Agent |
-|--------|---------------|-------------|
-| **Planning Phase** | Complete plan upfront | No explicit planning phase |
-| **Execution Style** | Sequential step execution | Interleaved reasoning + action |
-| **Adaptation** | Replanning on failure | Real-time adaptation |
-| **Validation** | Pre-execution validation | Post-action observation |
-| **Best For** | Structured, predictable tasks | Dynamic, exploratory tasks |
-| **Overhead** | Higher (planning + validation) | Lower (direct execution) |
-| **Audit Trail** | Complete plan + validation | Reasoning traces |
+
+| Aspect              | Planning Agent                 | ReAct Agent                    |
+| ------------------- | ------------------------------ | ------------------------------ |
+| **Planning Phase**  | Complete plan upfront          | No explicit planning phase     |
+| **Execution Style** | Sequential step execution      | Interleaved reasoning + action |
+| **Adaptation**      | Replanning on failure          | Real-time adaptation           |
+| **Validation**      | Pre-execution validation       | Post-action observation        |
+| **Best For**        | Structured, predictable tasks  | Dynamic, exploratory tasks     |
+| **Overhead**        | Higher (planning + validation) | Lower (direct execution)       |
+| **Audit Trail**     | Complete plan + validation     | Reasoning traces               |
 
 **When to Switch**:
+
 - **Planning → ReAct**: Task becomes unpredictable or requires real-time adaptation
 - **ReAct → Planning**: Task benefits from upfront structure and validation
 
 ### Planning vs PEV
-| Aspect | Planning Agent | PEV Agent |
-|--------|---------------|-----------|
-| **Verification** | Pre-execution validation | Post-execution verification |
-| **Iteration** | Replanning on validation failure | Iterative refinement loop |
-| **Cycles** | Single plan-execute cycle | Multiple refine cycles |
-| **Quality Focus** | Plan quality | Output quality |
-| **Best For** | Critical pre-validation | Iterative improvement |
-| **Failure Mode** | Replanning or abort | Refine until verified |
+
+| Aspect            | Planning Agent                   | PEV Agent                   |
+| ----------------- | -------------------------------- | --------------------------- |
+| **Verification**  | Pre-execution validation         | Post-execution verification |
+| **Iteration**     | Replanning on validation failure | Iterative refinement loop   |
+| **Cycles**        | Single plan-execute cycle        | Multiple refine cycles      |
+| **Quality Focus** | Plan quality                     | Output quality              |
+| **Best For**      | Critical pre-validation          | Iterative improvement       |
+| **Failure Mode**  | Replanning or abort              | Refine until verified       |
 
 **When to Switch**:
+
 - **Planning → PEV**: Need iterative improvement with quality verification
 - **PEV → Planning**: Single execution cycle sufficient, no refinement needed
 
 ### Planning vs Chain-of-Thought (CoT)
-| Aspect | Planning Agent | CoT Agent |
-|--------|---------------|-----------|
-| **Structure** | Explicit plan steps | Step-by-step reasoning |
-| **Phases** | Three distinct phases | Single reasoning chain |
-| **Validation** | Plan validation before execution | No explicit validation |
-| **Output** | Plan + validation + execution | Final reasoning result |
-| **Best For** | Multi-step workflows | Complex reasoning tasks |
-| **Transparency** | Complete plan visibility | Reasoning transparency |
+
+| Aspect           | Planning Agent                   | CoT Agent               |
+| ---------------- | -------------------------------- | ----------------------- |
+| **Structure**    | Explicit plan steps              | Step-by-step reasoning  |
+| **Phases**       | Three distinct phases            | Single reasoning chain  |
+| **Validation**   | Plan validation before execution | No explicit validation  |
+| **Output**       | Plan + validation + execution    | Final reasoning result  |
+| **Best For**     | Multi-step workflows             | Complex reasoning tasks |
+| **Transparency** | Complete plan visibility         | Reasoning transparency  |
 
 **When to Switch**:
+
 - **Planning → CoT**: Task is reasoning-heavy, not workflow-based
 - **CoT → Planning**: Need explicit plan structure and validation
 
 ## Best Practices
 
 ### 1. Set Appropriate Plan Step Limits
+
 ```python
 # Match max_plan_steps to task complexity
 simple_config = PlanningConfig(max_plan_steps=3)    # Simple tasks
@@ -362,6 +382,7 @@ complex_config = PlanningConfig(max_plan_steps=15)  # Complex workflows
 ```
 
 ### 2. Use Strict Validation for Critical Workflows
+
 ```python
 # Critical workflows (compliance, finance)
 critical_config = PlanningConfig(
@@ -377,6 +398,7 @@ flexible_config = PlanningConfig(
 ```
 
 ### 3. Provide Rich Context for Better Planning
+
 ```python
 # Detailed context improves plan quality
 context = {
@@ -389,6 +411,7 @@ result = agent.run(task=task, context=context)
 ```
 
 ### 4. Log and Review Validation Results
+
 ```python
 import logging
 
@@ -405,6 +428,7 @@ if validation["status"] == "warnings":
 ```
 
 ### 5. Handle Replanning Gracefully
+
 ```python
 # Attempt planning with replanning enabled
 config = PlanningConfig(
@@ -423,6 +447,7 @@ if "error" in result:
 ```
 
 ### 6. Combine with Other Patterns for Complex Workflows
+
 ```python
 # Use Planning Agent within multi-agent coordination
 from kaizen.orchestration.patterns import SupervisorWorkerPattern
@@ -452,6 +477,7 @@ result = pattern.execute_task("Plan and execute data migration")
 - **Concurrent Planning**: Supports parallel planning for independent tasks
 
 **Optimization Tips**:
+
 - Use lower temperature (0.1-0.3) for faster, more consistent planning
 - Limit `max_plan_steps` to reduce planning time
 - Cache plans for repeated tasks
@@ -460,6 +486,7 @@ result = pattern.execute_task("Plan and execute data migration")
 ## Integration Examples
 
 ### With Core SDK Workflows
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime import LocalRuntime
@@ -473,9 +500,18 @@ result = agent.run(task="Process customer data")
 
 # Convert plan to Core SDK workflow
 workflow = WorkflowBuilder()
-for step in result["plan"]:
-    workflow.add_node("PythonCodeNode", f"step_{step['step']}", {
-        "code": f"# {step['action']}\nprint('{step['description']}')"
+for i, step in enumerate(result["plan"]):
+    param_id = f"step_params_{i}"
+    step_id = f"step_{i}"
+    workflow.add_node("ParameterNode", param_id, {
+        "action": step["action"],
+        "description": step["description"]
+    })
+    workflow.add_node("PythonCodeNode", step_id, {
+        "code": f"""
+params = get_input_data("step_params_{i}")
+print(params["description"])
+"""
     })
 
 # Execute via Core SDK
@@ -484,6 +520,7 @@ runtime.execute(workflow.build())
 ```
 
 ### With DataFlow for Database Operations
+
 ```python
 from dataflow import DataFlow
 from kaizen.agents.specialized.planning import PlanningAgent
@@ -506,6 +543,7 @@ for step in result["plan"]:
 ```
 
 ### With Nexus for Multi-Channel Deployment
+
 ```python
 from nexus import Nexus
 from kaizen.agents.specialized.planning import PlanningAgent

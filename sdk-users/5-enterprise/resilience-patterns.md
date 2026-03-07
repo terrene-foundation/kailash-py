@@ -442,8 +442,8 @@ else:
 
 ## See Also
 
-- [Circuit Breaker Implementation](../../src/kailash/core/resilience/circuit_breaker.py)
-- [Bulkhead Implementation](../../src/kailash/core/resilience/bulkhead.py)
-- [Health Monitor Implementation](../../src/kailash/core/resilience/health_monitor.py)
+- [Circuit Breaker Implementation](../../kailash/core/resilience/circuit_breaker.py)
+- [Bulkhead Implementation](../../kailash/core/resilience/bulkhead.py)
+- [Health Monitor Implementation](../../kailash/core/resilience/health_monitor.py)
 - [Testing Guide](../developer/12-testing-production-quality.md)
 - [Production Patterns](production-patterns.md)

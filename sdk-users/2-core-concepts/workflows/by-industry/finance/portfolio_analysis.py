@@ -423,5 +423,5 @@ async def demo_with_access_control():
 
 if __name__ == "__main__":
     # Run demonstrations
-    asyncio.execute(demo_with_mocked_data())
-    asyncio.execute(demo_with_access_control())
+    asyncio.run(demo_with_mocked_data())
+    asyncio.run(demo_with_access_control())

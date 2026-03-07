@@ -534,6 +534,8 @@ result = {"result": notification}
                 session_id = await self.agent_ui.create_session("api_user")
 
                 # Create dynamic user listing workflow
+                # Pass search/page/limit as workflow inputs (not interpolated into code)
+                # to prevent code injection through the search parameter
                 list_workflow = {
                     "name": "list_users_dynamic",
                     "nodes": [
@@ -547,33 +549,37 @@ result = {"result": notification}
                             "type": "PythonCodeNode",
                             "config": {
                                 "name": "filter_processor",
-                                "code": f"""
-# Apply pagination and search
+                                "code": """
+# Apply pagination and search using workflow parameters
 users = user_list.get("users", [])
 total = len(users)
+params = get_input_data("filter_params")
+search = params.get("search")
+page = params.get("page", 1)
+page_limit = params.get("limit", 50)
 
 # Apply search filter
-if "{search}" and "{search}" != "None":
-    search_term = "{search}".lower()
+if search:
+    search_term = search.lower()
     users = [u for u in users if
              search_term in u.get("email", "").lower() or
              search_term in u.get("first_name", "").lower() or
              search_term in u.get("last_name", "").lower()]
 
 # Apply pagination
-start = ({page} - 1) * {limit}
-end = start + {limit}
+start = (page - 1) * page_limit
+end = start + page_limit
 paginated_users = users[start:end]
 
-result = {{
-    "result": {{
+result = {
+    "result": {
         "users": paginated_users,
         "total": total,
-        "page": {page},
-        "limit": {limit},
+        "page": page,
+        "limit": page_limit,
         "has_next": end < len(users)
-    }}
-}}
+    }
+}
 """,
                             },
                         },
@@ -593,7 +599,10 @@ result = {{
                 )
 
                 execution_id = await self.agent_ui.execute_workflow(
-                    session_id, workflow_id, inputs={"action": "list_users"}
+                    session_id, workflow_id, inputs={
+                        "action": "list_users",
+                        "filter_params": {"search": search, "page": page, "limit": limit},
+                    }
                 )
 
                 result = await self.agent_ui.wait_for_execution(
@@ -1120,5 +1129,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    exit_code = asyncio.execute(main())
+    exit_code = asyncio.run(main())
     exit(exit_code)

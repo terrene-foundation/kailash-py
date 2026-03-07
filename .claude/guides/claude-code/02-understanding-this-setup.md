@@ -2,7 +2,7 @@
 
 ## Introduction
 
-In the previous guide, you learned what Claude Code is. This guide explains how **this specific setup** (Kailash Vibe CC Setup) enhances Claude Code with specialized knowledge, automation, and quality enforcement.
+In the previous guide, you learned what Claude Code is. This guide explains how **this specific setup** (Kailash COC Claude (Python)) enhances Claude Code with specialized knowledge, automation, and quality enforcement.
 
 By the end of this guide, you will understand:
 

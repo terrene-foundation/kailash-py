@@ -1,4 +1,4 @@
-# Kailash Vibe CC Setup
+# Kailash COC Claude (Python)
 
 This repository is the **COC (Cognitive Orchestration for Codegen) setup** for Claude Code — providing agents, skills, rules, and hooks for Kailash SDK development. All projects using this setup inherit these capabilities through the `.claude/` directory.
 

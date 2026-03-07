@@ -636,10 +636,10 @@ async def check_analysis_results():
 
 if __name__ == "__main__":
     # Run all demonstrations
-    asyncio.execute(demonstrate_real_workflow())
-    asyncio.execute(demonstrate_concurrent_analysis())
-    asyncio.execute(demonstrate_abac_integration())
-    asyncio.execute(check_analysis_results())
+    asyncio.run(demonstrate_real_workflow())
+    asyncio.run(demonstrate_concurrent_analysis())
+    asyncio.run(demonstrate_abac_integration())
+    asyncio.run(check_analysis_results())
 
     print("\n\n=== Real Workflow Demo Complete ===")
     print("This demonstrates the TPC migration pattern with:")

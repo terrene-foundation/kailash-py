@@ -45,9 +45,9 @@ This document establishes the definitive operating procedures for human-AI colla
 
 Claude has no memory between sessions. Therefore:
 
-- **All knowledge must be externalized** into docs/\* artifacts
+- **All knowledge must be externalized** into workspace artifacts
 - Each phase produces documents that feed the next phase
-- Fresh sessions load context from docs/04-codegen-instructions/
+- `/wrapup` saves session notes; next session resumes automatically
 - Memory lives in documents, not sessions
 
 #### Principle 2: Hard Gates, Not Suggestions
@@ -59,27 +59,26 @@ Approval gates are BLOCKING:
 - Silence is NOT approval - Claude waits indefinitely
 - This is a commitment device for both parties
 
-#### Principle 3: Phase Separation Via Files
+#### Principle 3: Phase Separation Via Slash Commands
 
-The phase structure is enforced via **file separation**:
+The phase structure is enforced via **self-contained slash commands**:
 
-```
-workspaces/instructions/
-├── 01-analyze.md               # PHASE 1: Analysis and research
-├── 02-todos.md                 # PHASE 2: Plans and todos
-├── 03-implement.md             # PHASE 3: Implementation loop
-├── 04-validate.md              # PHASE 4: Validation
-└── 05-create-agent-skills.md   # PHASE 5: Codify project knowledge
-```
+| Phase | Command      | Output                                        |
+| ----- | ------------ | --------------------------------------------- |
+| 01    | `/analyze`   | `01-analysis/`, `02-plans/`, `03-user-flows/` |
+| 02    | `/todos`     | `todos/active/`                               |
+| 03    | `/implement` | `src/`, `apps/`, `docs/`                      |
+| 04    | `/redteam`   | `04-validate/`                                |
+| 05    | `/codify`    | Updates existing agents and skills            |
 
-You cannot paste Phase 2 until Phase 1 artifacts exist. This is intentional.
+Each command is self-contained -- it includes workspace detection, workflow steps, and agent teams.
 
 #### Principle 4: Self-Sustaining Goal
 
 The end state is a project where:
 
-- **Agents** in `.claude/agents/project/` understand what to do
-- **Skills** in `.claude/skills/project/` know how to do it
+- **Agents** in `.claude/agents/` understand what to do (updated by `/codify`)
+- **Skills** in `.claude/skills/` know how to do it (updated by `/codify`)
 - **Docs** in `docs/00-developers/` provide full context
 - **Future sessions** can work WITHOUT these instruction templates
 
@@ -346,7 +345,7 @@ After completing all phases, the project should have agents/skills that work **W
 ### Validation Test
 
 1. Start a fresh Claude session
-2. Ask: "Using only the agents in `.claude/agents/project/` and skills in `.claude/skills/project/`, implement [new feature X]"
+2. Ask: "Using the agents in `.claude/agents/` and skills in `.claude/skills/`, implement [new feature X]"
 3. Claude should be able to:
    - Understand what to do (agents)
    - Know how to do it (skills)
@@ -431,4 +430,4 @@ This is **autonomous maintainability** - where the project maintains itself.
 
 - **[01-what-is-claude-code.md](01-what-is-claude-code.md)** - Next: Understanding Claude Code
 - **[README.md](README.md)** - Guide index
-- **[workspaces/instructions/](../../../workspaces/instructions/)** - Phase instruction templates
+- **[commands/](../../commands/)** - Phase slash commands (`/analyze`, `/todos`, `/implement`, `/redteam`, `/codify`)

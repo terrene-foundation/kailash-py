@@ -2,7 +2,7 @@
 
 ## Purpose of This Document
 
-This document serves as the **authoritative entry point** for understanding the Kailash Vibe CC Setup framework. It is designed for:
+This document serves as the **authoritative entry point** for understanding the Kailash COC Claude (Python) framework. It is designed for:
 
 1. **Claude Code itself** - To understand the full context of how this setup works
 2. **Developers** - To understand how to instruct and orchestrate Claude effectively

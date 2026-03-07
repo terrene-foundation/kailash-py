@@ -1,6 +1,7 @@
 # Developer Guide - Quick Reference
 
 ## 🚨 Critical Rules
+
 1. **Node names**: ALL end with "Node" (`CSVReaderNode` ✓, `CSVReader` ✗)
 2. **Parameter types**: ONLY `str`, `int`, `float`, `bool`, `list`, `dict`, `Any`
 3. **Never use generics**: No `List[T]`, `Dict[K,V]`, `Optional[T]`, `Union[A,B]`
@@ -20,24 +21,27 @@
 11. **SharePoint Auth**: Use SharePointGraphReaderEnhanced for multi-auth
 
 ## 📋 Quick Node Selection
-| Task | Use | Don't Use |
-|------|-----|-----------|
-| Read CSV | `CSVReaderNode` | `PythonCodeNode` with manual CSV |
-| Find files | `DirectoryReaderNode` | `PythonCodeNode` with `os.listdir` |
-| Run Python | `PythonCodeNode(name="x")` | Missing `name` parameter |
-| HTTP calls | `HTTPRequestNode` | `HTTPClientNode` (deprecated) |
-| Send alerts | `DiscordAlertNode` | Manual webhook requests |
-| Transform data | `DataTransformer` | Complex PythonCodeNode |
-| Async operations | `AsyncLocalRuntime` + `AsyncWorkflowBuilder` | Manual async handling |
-| Enterprise features | `LocalRuntime` with enterprise params | Custom implementations |
+
+| Task                | Use                                          | Don't Use                          |
+| ------------------- | -------------------------------------------- | ---------------------------------- |
+| Read CSV            | `CSVReaderNode`                              | `PythonCodeNode` with manual CSV   |
+| Find files          | `DirectoryReaderNode`                        | `PythonCodeNode` with `os.listdir` |
+| Run Python          | `PythonCodeNode(name="x")`                   | Missing `name` parameter           |
+| HTTP calls          | `HTTPRequestNode`                            | `HTTPClientNode` (deprecated)      |
+| Send alerts         | `DiscordAlertNode`                           | Manual webhook requests            |
+| Transform data      | `DataTransformer`                            | Complex PythonCodeNode             |
+| Async operations    | `AsyncLocalRuntime` + `AsyncWorkflowBuilder` | Manual async handling              |
+| Enterprise features | `LocalRuntime` with enterprise params        | Custom implementations             |
 
 ## 🧪 Tests vs Examples
-| Purpose | Location | Content | Audience |
-|---------|----------|---------|----------|
-| **Validate SDK** | `tests/` | Assertions, edge cases, mocks | Contributors, CI/CD |
-| **Learn SDK** | `examples/` | Working solutions, tutorials | Users, documentation |
+
+| Purpose          | Location    | Content                       | Audience             |
+| ---------------- | ----------- | ----------------------------- | -------------------- |
+| **Validate SDK** | `tests/`    | Assertions, edge cases, mocks | Contributors, CI/CD  |
+| **Learn SDK**    | `examples/` | Working solutions, tutorials  | Users, documentation |
 
 ## 📁 Guide Structure
+
 - **[01-fundamentals.md](01-fundamentals.md)** - ⭐ START HERE: Core SDK concepts and patterns
 - **[02-workflows.md](02-workflows.md)** - ⭐ Workflow creation, connections, and execution
 - **[03-advanced-features.md](03-advanced-features.md)** - Enterprise patterns and async operations
@@ -49,6 +53,7 @@
 ## ⚡ Quick Fix Templates
 
 ### WorkflowBuilder (Current API)
+
 ```python
 # ✅ CORRECT: String-based node creation
 from kailash.workflow.builder import WorkflowBuilder
@@ -78,6 +83,7 @@ workflow.add_connection("csv_reader", "data", "data_processor", "input_data")
 ```
 
 ### ⚠️ IMPORTANT: Connection Syntax Difference
+
 ```python
 # WorkflowBuilder uses add_connection() with 4 parameters:
 workflow = WorkflowBuilder()
@@ -101,6 +107,7 @@ workflow.add_connection("node1", "output", "node2", "input")
 ```
 
 ### Unified Runtime (Enterprise Features)
+
 ```python
 # ✅ CORRECT: Unified runtime with enterprise capabilities
 from kailash.runtime.local import LocalRuntime
@@ -137,6 +144,7 @@ results, run_id = runtime.execute(workflow.build(), parameters=parameters)
 ```
 
 ### Middleware Integration
+
 ```python
 # ✅ CORRECT: Middleware imports and usage
 from kailash.api.middleware import (
@@ -159,6 +167,7 @@ agent_ui = gateway.agent_ui
 ```
 
 ### Basic Custom Node
+
 ```python
 from typing import Any, Dict
 from kailash.nodes.base import Node, NodeParameter
@@ -182,9 +191,10 @@ class YourNode(Node):
 ### PythonCodeNode (Best Practices)
 
 **⚠️ MOST COMMON MISTAKE: Not using from_function for complex code**
-*"This mistake keeps occurring every new run" - Session 064*
+_"This mistake keeps occurring every new run" - Session 064_
 
-**🚀 MANDATORY: Use `.from_function()` for code > 3 lines**
+**🚀 Recommended: Use `.from_function()` for code > 3 lines**
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -218,6 +228,7 @@ processor = PythonCodeNode.from_function(
 ```
 
 **String code only for: dynamic generation, user input, templates, one-liners**
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -244,6 +255,7 @@ workflow.add_node("PythonCodeNode", "filter", {"code": code})
 ```
 
 **⚠️ Remember: Input variables EXCLUDED from outputs**
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -267,6 +279,7 @@ workflow.add_connection("source", "output_data", "processor", "processed_data")
 ```
 
 ### Resilient Workflow (NEW)
+
 ```python
 from kailash.workflow import Workflow, RetryStrategy
 
@@ -288,6 +301,7 @@ workflow.configure_circuit_breaker("api_call", failure_threshold=5)
 ```
 
 ### Credential Management (NEW)
+
 ```python
 from kailash.nodes.security import CredentialManagerNode
 
@@ -303,6 +317,7 @@ workflow.add_node("CredentialManagerNode", "cred_manager", {
 ```
 
 ### SharePoint Multi-Auth (NEW)
+
 ```python
 from kailash.nodes.data import SharePointGraphReaderEnhanced
 
@@ -333,6 +348,7 @@ results, run_id = await runtime.execute_async(workflow.build(), parameters={
 ```
 
 ### DirectoryReaderNode (Best Practice)
+
 ```python
 from kailash.nodes.data import DirectoryReaderNode
 
@@ -348,6 +364,7 @@ workflow.add_node("DirectoryReaderNode", "discoverer", {
 ```
 
 ### MCP Gateway Integration
+
 ```python
 # Create gateway with MCP support
 from kailash.api.middleware import create_gateway
@@ -390,6 +407,7 @@ await gateway.agent_ui.register_workflow(
 ```
 
 ### Centralized Data Access
+
 ```python
 # SDK Setup for example
 from kailash.workflow.builder import WorkflowBuilder
@@ -420,6 +438,7 @@ workflow.add_node("CSVReaderNode", "reader", {"file_path": str(customer_file)})
 ```
 
 ## 🔴 Common Mistakes
+
 1. **Forgetting node suffix**: `CSVReader` → `CSVReaderNode`
 2. **Using generic types**: `List[str]` → `list`
 3. **Mapping to same variable**: `{"result": "result"}` → `{"result": "input_data"}`
@@ -430,10 +449,10 @@ workflow.add_node("CSVReaderNode", "reader", {"file_path": str(customer_file)})
 
 ## 🎯 **Find What You Need**
 
-| **I want to...** | **Go to...** |
-|-------------------|--------------|
-| Learn the basics | **[Fundamentals](01-fundamentals.md)** |
-| Build workflows | **[Workflows](02-workflows.md)** |
-| Find the right node | **[Node Catalog](../nodes/comprehensive-node-catalog.md)** |
-| Use enterprise features | **[Advanced Features](03-advanced-features.md)** |
-| Fix errors | **[Troubleshooting](05-troubleshooting.md)** |
+| **I want to...**        | **Go to...**                                               |
+| ----------------------- | ---------------------------------------------------------- |
+| Learn the basics        | **[Fundamentals](01-fundamentals.md)**                     |
+| Build workflows         | **[Workflows](02-workflows.md)**                           |
+| Find the right node     | **[Node Catalog](../nodes/comprehensive-node-catalog.md)** |
+| Use enterprise features | **[Advanced Features](03-advanced-features.md)**           |
+| Fix errors              | **[Troubleshooting](05-troubleshooting.md)**               |

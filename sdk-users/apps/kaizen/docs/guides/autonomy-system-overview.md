@@ -709,7 +709,7 @@ The Kaizen Autonomy System provides enterprise-grade infrastructure for long-run
 - ✅ Claude Code: `while(tool_calls_exist)` pattern
 - ✅ Codex: Container-based PR generation
 - ✅ Objective convergence detection (ADR-013)
-- ✅ Real infrastructure testing (NO MOCKING)
+- ✅ Real infrastructure testing (real infrastructure preferred)
 
 ---
 

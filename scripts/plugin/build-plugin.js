@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Plugin Builder for Kailash Vibe CC Setup
+ * Plugin Builder for Kailash COC Claude (Python)
  *
  * Packages the setup as a distributable .claude-plugin for easy installation.
  *
@@ -16,7 +16,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 // Plugin configuration
-const PLUGIN_NAME = 'kailash-vibe-cc-setup';
+const PLUGIN_NAME = 'kailash-coc-claude-py';
 const PLUGIN_VERSION = process.env.PLUGIN_VERSION || '1.0.0';
 
 // Directories to include in plugin
@@ -76,7 +76,7 @@ function createManifest() {
     ],
     repository: {
       type: 'git',
-      url: 'https://github.com/kailash/kailash-vibe-cc-setup'
+      url: 'https://github.com/terrene-foundation/kailash-coc-claude-py'
     },
     components: {
       agents: 25,
@@ -300,7 +300,7 @@ function main() {
   // Check for --help
   if (args.includes('--help')) {
     console.log(`
-Plugin Builder for Kailash Vibe CC Setup
+Plugin Builder for Kailash COC Claude (Python)
 
 Usage:
   node build-plugin.js [options]
