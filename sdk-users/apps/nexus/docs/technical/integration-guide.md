@@ -100,12 +100,16 @@ class EnterpriseHTTPClient:
         })
 
         # Add transformation node if specified
+        # IMPORTANT: Never interpolate user-controlled strings into code.
+        # Use predefined transform functions instead of f-string injection.
         if transform_func:
             workflow.add_node("PythonCodeNode", "transform_response", {
-                "code": f"""
+                "code": """
 def transform_api_response(data):
-    response = data.get('api_request', {{}})
-    {transform_func}
+    response = data.get('api_request', {})
+    transform_name = data.get('transform_params', {}).get('func_name', 'default')
+    # Apply predefined transforms (safe — no code injection)
+    transformed_data = apply_registered_transform(transform_name, response)
     return transformed_data
 """,
                 "function_name": "transform_api_response"
@@ -488,23 +492,38 @@ class EnterpriseDatabaseManager:
 
         workflow = WorkflowBuilder()
 
+        # Pass db_name safely via ParameterNode (never interpolate into code strings)
+        workflow.add_node("ParameterNode", "db_params", {
+            "db_name": db_name
+        })
+
         # Add database connection node
         workflow.add_node("PythonCodeNode", "db_connection", {
-            "code": f"""
+            "code": """
 def establish_db_connection(data):
+    # Retrieve db_name from workflow parameters
+    db_name = data.get('db_params', {}).get('db_name', 'unknown')
     # Simulate database connection
-    connection_info = {{
-        'database': '{db_name}',
+    connection_info = {
+        'database': db_name,
         'connected': True,
         'connection_id': __import__('secrets').token_hex(8),
         'timestamp': __import__('time').time()
-    }}
+    }
     return connection_info
 """,
             "function_name": "establish_db_connection"
         })
 
         # Add query execution nodes for each operation
+        # Pass operations safely via ParameterNode instead of interpolating into code
+        workflow.add_node("ParameterNode", "operations_params", {
+            "operations": [
+                {"type": op["type"], "query": op.get("query", "")}
+                for op in operations
+            ]
+        })
+
         for i, operation in enumerate(operations):
             node_name = f"query_{i+1}"
 
@@ -512,11 +531,13 @@ def establish_db_connection(data):
                 "code": f"""
 def execute_query_{i+1}(data):
     connection = data.get('db_connection', {{}})
+    ops = data.get('operations_params', {{}}).get('operations', [])
+    op = ops[{i}] if len(ops) > {i} else {{'type': 'unknown', 'query': ''}}
 
     # Simulate query execution
     query_result = {{
-        'operation': '{operation['type']}',
-        'query': '''{operation.get('query', '')}''',
+        'operation': op['type'],
+        'query': op['query'],
         'affected_rows': __import__('random').randint(0, 100),
         'execution_time': __import__('random').uniform(0.1, 2.0),
         'success': True
@@ -1023,20 +1044,26 @@ class EnterpriseMessageQueue:
 
         workflow = WorkflowBuilder()
 
+        # Pass queue_name and schema safely via ParameterNode
+        workflow.add_node("ParameterNode", "publisher_params", {
+            "queue_name": queue_name,
+            "message_schema": message_schema or {}
+        })
+
         # Add message validation node
         workflow.add_node("PythonCodeNode", "validate_message", {
-            "code": f"""
+            "code": """
 def validate_message(data):
-    message = data.get('message', {{}})
+    message = data.get('message', {})
 
     # Validate against schema if provided
-    schema = {message_schema or {{}}}
+    schema = data.get('publisher_params', {}).get('message_schema', {})
 
-    validation_result = {{
+    validation_result = {
         'valid': True,
         'message': message,
         'validated_at': __import__('time').time()
-    }}
+    }
 
     # Basic validation
     if not message:
@@ -1076,24 +1103,26 @@ def enrich_message(data):
             "function_name": "enrich_message"
         })
 
-        # Add publisher node
+        # Add publisher node — queue_name retrieved from publisher_params ParameterNode
         workflow.add_node("PythonCodeNode", "publish_message", {
-            "code": f"""
+            "code": """
 def publish_to_queue(data):
-    enriched = data.get('enrich_message', {{}})
+    enriched = data.get('enrich_message', {})
 
     if not enriched or enriched.get('error'):
         return enriched
 
+    queue_name = data.get('publisher_params', {}).get('queue_name', 'unknown')
+
     # Simulate message publishing
-    publish_result = {{
-        'queue': '{queue_name}',
+    publish_result = {
+        'queue': queue_name,
         'message_id': enriched['metadata']['message_id'],
         'published': True,
         'timestamp': __import__('time').time(),
         'partition': __import__('random').randint(0, 3),  # For Kafka-like systems
         'delivery_tag': __import__('secrets').token_hex(8)
-    }}
+    }
 
     return publish_result
 """,
@@ -1118,45 +1147,54 @@ def publish_to_queue(data):
 
         workflow = WorkflowBuilder()
 
+        # Pass queue_name safely via ParameterNode; processor_func uses a
+        # predefined lookup instead of injecting arbitrary code strings.
+        workflow.add_node("ParameterNode", "consumer_params", {
+            "queue_name": queue_name,
+            "processor_name": processor_func   # Name of a registered processor
+        })
+
         # Add consumer node
         workflow.add_node("PythonCodeNode", "consume_message", {
-            "code": f"""
+            "code": """
 def consume_from_queue(data):
+    queue_name = data.get('consumer_params', {}).get('queue_name', 'unknown')
     # Simulate message consumption
-    consumed_message = {{
-        'queue': '{queue_name}',
-        'message': {{
-            'payload': {{'test': 'data'}},
-            'metadata': {{
+    consumed_message = {
+        'queue': queue_name,
+        'message': {
+            'payload': {'test': 'data'},
+            'metadata': {
                 'message_id': __import__('secrets').token_hex(16),
                 'timestamp': __import__('time').time()
-            }}
-        }},
+            }
+        },
         'delivery_tag': __import__('secrets').token_hex(8),
         'redelivered': False
-    }}
+    }
 
     return consumed_message
 """,
             "function_name": "consume_from_queue"
         })
 
-        # Add message processor node
+        # Add message processor node — uses registered processor lookup (safe)
         workflow.add_node("PythonCodeNode", "process_message", {
-            "code": f"""
+            "code": """
 def process_consumed_message(data):
-    consumed = data.get('consume_message', {{}})
-    message = consumed.get('message', {{}})
+    consumed = data.get('consume_message', {})
+    message = consumed.get('message', {})
 
-    # Apply custom processing function
-    {processor_func}
+    # Apply registered processing function (safe — no code injection)
+    processor_name = data.get('consumer_params', {}).get('processor_name', 'default')
+    processed_data = apply_registered_processor(processor_name, message)
 
-    process_result = {{
-        'message_id': message.get('metadata', {{}}).get('message_id'),
+    process_result = {
+        'message_id': message.get('metadata', {}).get('message_id'),
         'processed': True,
         'result': processed_data,
         'processing_time': __import__('random').uniform(0.1, 1.0)
-    }}
+    }
 
     return process_result
 """,
@@ -1535,21 +1573,27 @@ class EnterpriseWebhookManager:
 
         workflow = WorkflowBuilder()
 
+        # Pass trigger_event safely via ParameterNode
+        workflow.add_node("ParameterNode", "webhook_params", {
+            "trigger_event": trigger_event
+        })
+
         # Add webhook receiver node
         workflow.add_node("PythonCodeNode", "webhook_receiver", {
-            "code": f"""
+            "code": """
 def receive_webhook(data):
+    trigger_event = data.get('webhook_params', {}).get('trigger_event', 'unknown')
     # Extract webhook payload
-    webhook_data = {{
-        'event_type': '{trigger_event}',
-        'payload': data.get('payload', {{}}),
-        'headers': data.get('headers', {{}}),
+    webhook_data = {
+        'event_type': trigger_event,
+        'payload': data.get('payload', {}),
+        'headers': data.get('headers', {}),
         'timestamp': __import__('time').time(),
         'webhook_id': __import__('secrets').token_hex(16)
-    }}
+    }
 
     # Validate webhook signature if present
-    signature = data.get('headers', {{}}).get('X-Webhook-Signature')
+    signature = data.get('headers', {}).get('X-Webhook-Signature')
     if signature:
         webhook_data['signature_valid'] = True  # Simulate validation
 

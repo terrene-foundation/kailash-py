@@ -49,13 +49,14 @@ with LocalRuntime() as runtime:
 ## Generated Nodes (11 per model)
 
 Each `@db.model` class generates:
+
 1. `{Model}_Create` - Create single record
 2. `{Model}_Read` - Read by ID
 3. `{Model}_Update` - Update record
 4. `{Model}_Delete` - Delete record
 5. `{Model}_List` - List with filters
 6. `{Model}_Upsert` - Insert or update (atomic)
-7. `{Model}_Count` - Efficient COUNT(*) queries
+7. `{Model}_Count` - Efficient COUNT(\*) queries
 8. `{Model}_BulkCreate` - Bulk insert
 9. `{Model}_BulkUpdate` - Bulk update
 10. `{Model}_BulkDelete` - Bulk delete
@@ -75,12 +76,14 @@ Each `@db.model` class generates:
 ## Reference Documentation
 
 ### Getting Started
+
 - **[dataflow-quickstart](dataflow-quickstart.md)** - Quick start guide
 - **[dataflow-installation](dataflow-installation.md)** - Installation and setup
 - **[dataflow-models](dataflow-models.md)** - Defining models with @db.model
 - **[dataflow-connection-config](dataflow-connection-config.md)** - Database connection
 
 ### Core Operations
+
 - **[dataflow-crud-operations](dataflow-crud-operations.md)** - Create, Read, Update, Delete
 - **[dataflow-queries](dataflow-queries.md)** - Query patterns and filtering
 - **[dataflow-bulk-operations](dataflow-bulk-operations.md)** - Batch operations
@@ -88,13 +91,16 @@ Each `@db.model` class generates:
 - **[dataflow-connection-isolation](dataflow-connection-isolation.md)** - ⚠️ CRITICAL: ACID guarantees
 
 ### Advanced Features
+
 - **[dataflow-multi-instance](dataflow-multi-instance.md)** - Multiple database instances
 - **[dataflow-multi-tenancy](dataflow-multi-tenancy.md)** - Multi-tenant architectures
 - **[dataflow-existing-database](dataflow-existing-database.md)** - Working with existing databases
 - **[dataflow-migrations-quick](dataflow-migrations-quick.md)** - Database migrations
 - **[dataflow-custom-nodes](dataflow-custom-nodes.md)** - Custom database nodes
+- **[dataflow-sqlite-concurrency](dataflow-sqlite-concurrency.md)** - SQLite connection pooling, WAL mode, read/write splitting, memory DB URI patterns
 
 ### Developer Experience Tools
+
 - **[dataflow-strict-mode](dataflow-strict-mode.md)** - Build-time validation (4-layer, OFF/WARN/STRICT)
 - **[dataflow-debug-agent](dataflow-debug-agent.md)** - Intelligent error analysis (5-stage pipeline)
 - **ErrorEnhancer** - Automatic error enhancement (40+ DF-XXX codes)
@@ -102,25 +108,27 @@ Each `@db.model` class generates:
 - **CLI Tools** - dataflow-validate, dataflow-analyze, dataflow-debug (5 commands)
 
 ### Troubleshooting
+
 - **[create-vs-update guide](../../../sdk-users/apps/dataflow/guides/create-vs-update.md)** - CreateNode vs UpdateNode
 - **[top-10-errors](../../../sdk-users/apps/dataflow/troubleshooting/top-10-errors.md)** - Quick fix for 90% of issues
 - **[dataflow-gotchas](dataflow-gotchas.md)** - Common pitfalls
 
 ## Database Support Matrix
 
-| Database | Type | Nodes/Model | Driver |
-|----------|------|-------------|--------|
-| PostgreSQL | SQL | 11 | asyncpg |
-| MySQL | SQL | 11 | aiomysql |
-| SQLite | SQL | 11 | aiosqlite |
-| MongoDB | Document | 8 | Motor |
-| pgvector | Vector | 3 | pgvector |
+| Database   | Type     | Nodes/Model | Driver    |
+| ---------- | -------- | ----------- | --------- |
+| PostgreSQL | SQL      | 11          | asyncpg   |
+| MySQL      | SQL      | 11          | aiomysql  |
+| SQLite     | SQL      | 11          | aiosqlite |
+| MongoDB    | Document | 8           | Motor     |
+| pgvector   | Vector   | 3           | pgvector  |
 
 **Not an ORM**: DataFlow generates workflow nodes, not ORM models. Uses string-based result access and integrates with Kailash's workflow execution model.
 
 ## Integration Patterns
 
 ### With Nexus (Multi-Channel)
+
 ```python
 from dataflow import DataFlow
 from nexus import Nexus
@@ -137,6 +145,7 @@ nexus.run()  # Instant multi-channel platform
 ```
 
 ### With Core SDK (Custom Workflows)
+
 ```python
 from dataflow import DataFlow
 from kailash.workflow.builder import WorkflowBuilder
@@ -150,6 +159,7 @@ workflow.add_node("User_Create", "user1", {...})
 ## When to Use This Skill
 
 Use DataFlow when you need to:
+
 - Perform database operations in workflows
 - Generate CRUD APIs automatically (with Nexus)
 - Implement multi-tenant systems
@@ -167,6 +177,7 @@ Use DataFlow when you need to:
 ## Support
 
 For DataFlow-specific questions, invoke:
+
 - `dataflow-specialist` - DataFlow implementation and patterns
 - `testing-specialist` - DataFlow testing strategies (NO MOCKING policy)
 - `framework-advisor` - Choose between Core SDK and DataFlow

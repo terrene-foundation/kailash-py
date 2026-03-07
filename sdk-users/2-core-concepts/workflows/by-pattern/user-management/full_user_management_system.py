@@ -989,11 +989,12 @@ async def login(login_data: LoginRequest):
     """Login endpoint."""
     workflow = Workflow("login")
 
-    # Get user by username
+    # Get user by username (parameterized to prevent SQL injection)
     get_user = SQLDatabaseNode(
         name="get_user",
         database_config=DB_CONFIG,
-        query=f"SELECT * FROM users WHERE username = '{login_data.username}' AND is_active = TRUE",
+        query="SELECT * FROM users WHERE username = %s AND is_active = TRUE",
+        parameters=[login_data.username],
         operation_type="query",
     )
 
@@ -1009,22 +1010,24 @@ async def login(login_data: LoginRequest):
     # In production, verify password hash properly
     # For demo, we'll accept any password
 
-    # Update last login
+    # Update last login (parameterized to prevent SQL injection)
     update_login = SQLDatabaseNode(
         name="update_login",
         database_config=DB_CONFIG,
-        query=f"UPDATE users SET last_login = NOW() WHERE user_id = '{user['user_id']}'",
+        query="UPDATE users SET last_login = NOW() WHERE user_id = %s",
+        parameters=[user['user_id']],
         operation_type="execute",
     )
 
-    # Log login
+    # Log login (parameterized to prevent SQL injection)
     log_login = SQLDatabaseNode(
         name="log_login",
         database_config=DB_CONFIG,
-        query=f"""
+        query="""
         INSERT INTO login_history (user_id, ip_address, login_method, success)
-        VALUES ('{user['user_id']}', '127.0.0.1', 'password', TRUE)
+        VALUES (%s, '127.0.0.1', 'password', TRUE)
         """,
+        parameters=[user['user_id']],
         operation_type="execute",
     )
 
@@ -1066,31 +1069,33 @@ async def list_users(
     """List users with advanced filtering."""
     workflow = Workflow("list_users")
 
-    # Build query
+    # Build query with parameterized values to prevent SQL injection
     conditions = ["tenant_id = 'default'"]
+    params = []
 
     if search:
         conditions.append(
-            f"""
-        (email ILIKE '%{search}%' OR
-         username ILIKE '%{search}%' OR
-         first_name ILIKE '%{search}%' OR
-         last_name ILIKE '%{search}%')
-        """
+            "(email ILIKE %s OR username ILIKE %s OR "
+            "first_name ILIKE %s OR last_name ILIKE %s)"
         )
+        search_pattern = f"%{search}%"
+        params.extend([search_pattern] * 4)
 
     if is_active is not None:
-        conditions.append(f"is_active = {is_active}")
+        conditions.append("is_active = %s")
+        params.append(is_active)
 
     if is_staff is not None:
-        conditions.append(f"is_staff = {is_staff}")
+        conditions.append("is_staff = %s")
+        params.append(is_staff)
 
     if department:
-        conditions.append(f"department = '{department}'")
+        conditions.append("department = %s")
+        params.append(department)
 
     where_clause = " AND ".join(conditions)
 
-    # Get users
+    # order_by and order_dir are validated via Query pattern regex above
     query = f"""
     SELECT
         user_id, username, email, first_name, last_name,
@@ -1100,11 +1105,15 @@ async def list_users(
     FROM users
     WHERE {where_clause}
     ORDER BY {order_by} {order_dir.upper()}
-    LIMIT {per_page} OFFSET {(page - 1) * per_page}
+    LIMIT %s OFFSET %s
     """
 
     get_users = SQLDatabaseNode(
-        name="get_users", database_config=DB_CONFIG, query=query, operation_type="query"
+        name="get_users",
+        database_config=DB_CONFIG,
+        query=query,
+        parameters=params + [per_page, (page - 1) * per_page],
+        operation_type="query",
     )
 
     # Get count
@@ -1113,6 +1122,7 @@ async def list_users(
         name="get_count",
         database_config=DB_CONFIG,
         query=count_query,
+        parameters=params,
         operation_type="query",
     )
 
@@ -1147,17 +1157,15 @@ async def create_user(
     password_hash = hashlib.sha256(user_data.password.encode()).hexdigest()
 
     # Create user
-    create_query = f"""
+    create_query = """
     INSERT INTO users (
         user_id, username, email, password, first_name, last_name,
         is_staff, is_superuser, is_active, department, phone,
         timezone, language, theme
     ) VALUES (
-        '{user_id}', '{user_data.username}', '{user_data.email}',
-        '{password_hash}', '{user_data.first_name}', '{user_data.last_name}',
-        {user_data.is_staff}, {user_data.is_superuser}, {user_data.is_active},
-        '{user_data.department or ''}', '{user_data.phone or ''}',
-        '{user_data.timezone}', '{user_data.language}', '{user_data.theme}'
+        %s, %s, %s, %s, %s, %s,
+        %s, %s, %s, %s, %s,
+        %s, %s, %s
     ) RETURNING *
     """
 
@@ -1165,6 +1173,13 @@ async def create_user(
         name="create_user",
         database_config=DB_CONFIG,
         query=create_query,
+        parameters=[
+            user_id, user_data.username, user_data.email,
+            password_hash, user_data.first_name, user_data.last_name,
+            user_data.is_staff, user_data.is_superuser, user_data.is_active,
+            user_data.department or '', user_data.phone or '',
+            user_data.timezone, user_data.language, user_data.theme,
+        ],
         operation_type="query",
     )
 
@@ -1172,15 +1187,15 @@ async def create_user(
     log_creation = SQLDatabaseNode(
         name="log_creation",
         database_config=DB_CONFIG,
-        query=f"""
+        query="""
         INSERT INTO admin_log (
             user_id, content_type, object_id, object_repr,
             action_flag, change_message
         ) VALUES (
-            '{current_user['user_id']}', 'user', '{user_id}',
-            '{user_data.username}', 1, 'Created user'
+            %s, 'user', %s, %s, 1, 'Created user'
         )
         """,
+        parameters=[current_user['user_id'], user_id, user_data.username],
         operation_type="execute",
     )
 
@@ -1211,23 +1226,23 @@ async def update_user(
 
     workflow = Workflow("update_user")
 
-    # Build update query
-    update_fields = []
+    # Build update query with parameterized values
+    set_clauses = []
+    params = []
     for field, value in updates.dict(exclude_none=True).items():
-        if isinstance(value, str):
-            update_fields.append(f"{field} = '{value}'")
-        else:
-            update_fields.append(f"{field} = {value}")
+        set_clauses.append(f"{field} = %s")
+        params.append(value)
 
-    if not update_fields:
+    if not set_clauses:
         return {"message": "No updates provided"}
 
-    update_fields.append("updated_at = NOW()")
+    set_clauses.append("updated_at = NOW()")
+    params.append(user_id)
 
     update_query = f"""
     UPDATE users
-    SET {', '.join(update_fields)}
-    WHERE user_id = '{user_id}'
+    SET {', '.join(set_clauses)}
+    WHERE user_id = %s
     RETURNING *
     """
 
@@ -1235,6 +1250,7 @@ async def update_user(
         name="update_user",
         database_config=DB_CONFIG,
         query=update_query,
+        parameters=params,
         operation_type="query",
     )
 
@@ -1242,15 +1258,15 @@ async def update_user(
     log_update = SQLDatabaseNode(
         name="log_update",
         database_config=DB_CONFIG,
-        query=f"""
+        query="""
         INSERT INTO admin_log (
             user_id, content_type, object_id, object_repr,
             action_flag, change_message
         ) VALUES (
-            '{current_user['user_id']}', 'user', '{user_id}',
-            'User', 2, 'Updated user'
+            %s, 'user', %s, 'User', 2, 'Updated user'
         )
         """,
+        parameters=[current_user['user_id'], user_id],
         operation_type="execute",
     )
 
@@ -1280,36 +1296,38 @@ async def delete_user(
     workflow = Workflow("delete_user")
 
     if permanent:
-        # Hard delete
-        delete_query = f"DELETE FROM users WHERE user_id = '{user_id}'"
+        # Hard delete (parameterized to prevent SQL injection)
+        delete_query = "DELETE FROM users WHERE user_id = %s"
     else:
-        # Soft delete
-        delete_query = f"""
+        # Soft delete (parameterized to prevent SQL injection)
+        delete_query = """
         UPDATE users
         SET is_active = FALSE, deleted_at = NOW()
-        WHERE user_id = '{user_id}'
+        WHERE user_id = %s
         """
 
     delete_user = SQLDatabaseNode(
         name="delete_user",
         database_config=DB_CONFIG,
         query=delete_query,
+        parameters=[user_id],
         operation_type="execute",
     )
 
     # Log deletion
+    delete_message = 'Permanently deleted user' if permanent else 'Soft deleted user'
     log_deletion = SQLDatabaseNode(
         name="log_deletion",
         database_config=DB_CONFIG,
-        query=f"""
+        query="""
         INSERT INTO admin_log (
             user_id, content_type, object_id, object_repr,
             action_flag, change_message
         ) VALUES (
-            '{current_user['user_id']}', 'user', '{user_id}',
-            'User', 3, '{'Permanently deleted' if permanent else 'Soft deleted'} user'
+            %s, 'user', %s, 'User', 3, %s
         )
         """,
+        parameters=[current_user['user_id'], user_id, delete_message],
         operation_type="execute",
     )
 
@@ -1349,29 +1367,31 @@ async def bulk_action(
     if action_data.action not in actions:
         raise HTTPException(status_code=400, detail="Invalid action")
 
-    user_ids_str = "', '".join(action_data.user_ids)
-    query = f"{actions[action_data.action]} ('{user_ids_str}')"
+    placeholders = ', '.join(['%s'] * len(action_data.user_ids))
+    query = f"{actions[action_data.action]} ({placeholders})"
 
     bulk_update = SQLDatabaseNode(
         name="bulk_update",
         database_config=DB_CONFIG,
         query=query,
+        parameters=list(action_data.user_ids),
         operation_type="execute",
     )
 
     # Log bulk action
+    bulk_message = f"Bulk {action_data.action} on {len(action_data.user_ids)} users"
     log_bulk = SQLDatabaseNode(
         name="log_bulk",
         database_config=DB_CONFIG,
-        query=f"""
+        query="""
         INSERT INTO admin_log (
             user_id, content_type, object_id, object_repr,
             action_flag, change_message
         ) VALUES (
-            '{current_user['user_id']}', 'user', 'bulk',
-            'Multiple users', 2, 'Bulk {action_data.action} on {len(action_data.user_ids)} users'
+            %s, 'user', 'bulk', 'Multiple users', 2, %s
         )
         """,
+        parameters=[current_user['user_id'], bulk_message],
         operation_type="execute",
     )
 
@@ -1443,18 +1463,24 @@ async def get_activity(
     """Get user activity and admin logs."""
     workflow = Workflow("get_activity")
 
-    # Build query
+    # Build query with parameterized filters
     conditions = []
+    params = []
     if filters.user_id:
-        conditions.append(f"user_id = '{filters.user_id}'")
+        conditions.append("user_id = %s")
+        params.append(filters.user_id)
     if filters.action:
-        conditions.append(f"change_message LIKE '%{filters.action}%'")
+        conditions.append("change_message LIKE %s")
+        params.append(f"%{filters.action}%")
     if filters.start_date:
-        conditions.append(f"action_time >= '{filters.start_date}'")
+        conditions.append("action_time >= %s")
+        params.append(filters.start_date)
     if filters.end_date:
-        conditions.append(f"action_time <= '{filters.end_date}'")
+        conditions.append("action_time <= %s")
+        params.append(filters.end_date)
 
     where_clause = " AND ".join(conditions) if conditions else "1=1"
+    params.append(filters.limit)
 
     activity_query = f"""
     SELECT
@@ -1464,13 +1490,14 @@ async def get_activity(
     LEFT JOIN users u ON al.user_id = u.user_id
     WHERE {where_clause}
     ORDER BY action_time DESC
-    LIMIT {filters.limit}
+    LIMIT %s
     """
 
     get_activity = SQLDatabaseNode(
         name="get_activity",
         database_config=DB_CONFIG,
         query=activity_query,
+        parameters=params,
         operation_type="query",
     )
 
@@ -1511,7 +1538,7 @@ def cli():
 def setup():
     """Set up the database."""
     console.print("[bold green]Setting up database...[/bold green]")
-    asyncio.execute(setup_database())
+    asyncio.run(setup_database())
     console.print("[bold green]✓ Database setup complete![/bold green]")
 
 
@@ -1532,15 +1559,15 @@ def createuser(username, email, password, superuser):
         create_user = SQLDatabaseNode(
             name="create_user",
             database_config=DB_CONFIG,
-            query=f"""
+            query="""
             INSERT INTO users (
                 user_id, username, email, password,
                 first_name, last_name, is_superuser, is_staff
             ) VALUES (
-                '{user_id}', '{username}', '{email}', '{password_hash}',
-                '{username}', 'User', {superuser}, {superuser}
+                %s, %s, %s, %s, %s, 'User', %s, %s
             )
             """,
+            parameters=[user_id, username, email, password_hash, username, superuser, superuser],
             operation_type="execute",
         )
 
@@ -1551,7 +1578,7 @@ def createuser(username, email, password, superuser):
             f"[bold green]✓ User {username} created successfully![/bold green]"
         )
 
-    asyncio.execute(_create())
+    asyncio.run(_create())
 
 
 @cli.command()
@@ -1564,10 +1591,13 @@ def listusers(search, active_only):
         workflow = Workflow("list_users")
 
         conditions = []
+        params = []
         if search:
             conditions.append(
-                f"(username ILIKE '%{search}%' OR email ILIKE '%{search}%')"
+                "(username ILIKE %s OR email ILIKE %s)"
             )
+            search_pattern = f"%{search}%"
+            params.extend([search_pattern, search_pattern])
         if active_only:
             conditions.append("is_active = TRUE")
 
@@ -1582,6 +1612,7 @@ def listusers(search, active_only):
             FROM users {where_clause}
             ORDER BY username
             """,
+            parameters=params,
             operation_type="query",
         )
 
@@ -1619,7 +1650,7 @@ def listusers(search, active_only):
         console.print(table)
         console.print(f"\n[bold]Total: {len(users)} users[/bold]")
 
-    asyncio.execute(_list())
+    asyncio.run(_list())
 
 
 @cli.command()
@@ -1633,26 +1664,34 @@ def modifyuser(username, activate, make_staff, make_superuser):
     async def _modify():
         workflow = Workflow("modify_user")
 
-        updates = []
+        set_clauses = []
+        params = []
         if activate is not None:
-            updates.append(f"is_active = {activate}")
+            set_clauses.append("is_active = %s")
+            params.append(activate)
         if make_staff is not None:
-            updates.append(f"is_staff = {make_staff}")
+            set_clauses.append("is_staff = %s")
+            params.append(make_staff)
         if make_superuser is not None:
-            updates.append(f"is_superuser = {make_superuser}")
+            set_clauses.append("is_superuser = %s")
+            params.append(make_superuser)
 
-        if not updates:
+        if not set_clauses:
             console.print("[red]No modifications specified![/red]")
             return
+
+        set_clauses.append("updated_at = NOW()")
+        params.append(username)
 
         update_user = SQLDatabaseNode(
             name="update_user",
             database_config=DB_CONFIG,
             query=f"""
             UPDATE users
-            SET {', '.join(updates)}, updated_at = NOW()
-            WHERE username = '{username}'
+            SET {', '.join(set_clauses)}
+            WHERE username = %s
             """,
+            parameters=params,
             operation_type="execute",
         )
 
@@ -1663,7 +1702,7 @@ def modifyuser(username, activate, make_staff, make_superuser):
             f"[bold green]✓ User {username} modified successfully![/bold green]"
         )
 
-    asyncio.execute(_modify())
+    asyncio.run(_modify())
 
 
 @cli.command()
@@ -1679,7 +1718,8 @@ def deleteuser(username):
         delete_user = SQLDatabaseNode(
             name="delete_user",
             database_config=DB_CONFIG,
-            query=f"DELETE FROM users WHERE username = '{username}'",
+            query="DELETE FROM users WHERE username = %s",
+            parameters=[username],
             operation_type="execute",
         )
 
@@ -1690,7 +1730,7 @@ def deleteuser(username):
             f"[bold green]✓ User {username} deleted successfully![/bold green]"
         )
 
-    asyncio.execute(_delete())
+    asyncio.run(_delete())
 
 
 @cli.command()
@@ -1739,7 +1779,7 @@ def stats():
         console.print(f"Active (7d): [yellow]{stats['active_7d']}[/yellow]")
         console.print(f"Active (24h): [green]{stats['active_1d']}[/green]")
 
-    asyncio.execute(_stats())
+    asyncio.run(_stats())
 
 
 @cli.command()

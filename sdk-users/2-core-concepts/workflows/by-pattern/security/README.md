@@ -466,4 +466,4 @@ auto_remediation = SwitchNode(
 - Review `scripts/security_audit_workflow.py` for implementation details
 - Configure security scanning for your specific infrastructure
 - Integrate with existing security and compliance tools
-- See training examples in `# contrib (removed)/training/workflow-examples/security-training/`
+- See the Kailash SDK repository for training examples

@@ -1870,7 +1870,7 @@ class LegacyModel:
 ### Getting Help
 
 **Documentation Links**:
-- Strict Mode Design: `/apps/kailash-dataflow/docs/architecture/strict-mode-design.md`
+- Strict Mode Design: See `dataflow` package architecture documentation
 - Validation Reference: `/sdk-users/apps/dataflow/guides/validation.md`
 - Error Handling: `/sdk-users/apps/dataflow/guides/error-handling.md`
 

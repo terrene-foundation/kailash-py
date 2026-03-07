@@ -41,6 +41,7 @@ Zero-config database framework specialist for Kailash DataFlow implementation (v
 - "Schema cache?" -> [`dataflow-schema-cache`](../../skills/02-dataflow/dataflow-schema-cache.md)
 - "Enterprise migrations?" -> [`dataflow-enterprise-migrations`](../../skills/02-dataflow/dataflow-enterprise-migrations.md)
 - "Troubleshooting?" -> [`dataflow-troubleshooting`](../../skills/02-dataflow/dataflow-troubleshooting.md)
+- "SQLite concurrency? Pool? WAL?" -> [`dataflow-sqlite-concurrency`](../../skills/02-dataflow/dataflow-sqlite-concurrency.md)
 
 ### Integration
 
@@ -294,6 +295,7 @@ See: [`dataflow-nexus-integration`](../../skills/02-dataflow/dataflow-nexus-inte
 | Strict Mode              | [`dataflow-strict-mode`](../../skills/02-dataflow/dataflow-strict-mode.md)                     |
 | Express API              | [`dataflow-express`](../../skills/02-dataflow/dataflow-express.md)                             |
 | TDD Mode                 | [`dataflow-tdd-mode`](../../skills/02-dataflow/dataflow-tdd-mode.md)                           |
+| SQLite Concurrency       | [`dataflow-sqlite-concurrency`](../../skills/02-dataflow/dataflow-sqlite-concurrency.md)       |
 
 ## Related Agents
 

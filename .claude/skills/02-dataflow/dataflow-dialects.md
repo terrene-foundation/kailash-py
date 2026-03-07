@@ -92,7 +92,7 @@ db = DataFlow("sqlite:///app.db", enable_wal=True)
 
 | Feature                | PostgreSQL      | MySQL                 | SQLite                       |
 | ---------------------- | --------------- | --------------------- | ---------------------------- |
-| **Driver**             | asyncpg         | aiomysql              | aiosqlite + custom pooling   |
+| **Driver**             | asyncpg         | aiomysql              | aiosqlite + AsyncSQLitePool  |
 | **Concurrency**        | Multi-writer    | Multi-writer (InnoDB) | Single-writer (WAL improves) |
 | **Multi-Instance**     | ✅ Safe         | ✅ Safe               | ⚠️ Not for concurrent writes |
 | **Setup**              | Requires server | Requires server       | Zero config                  |

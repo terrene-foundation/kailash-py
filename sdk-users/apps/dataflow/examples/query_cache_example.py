@@ -216,21 +216,31 @@ def workflow_cache_integration():
     builder.where("age", "$gte", 21)
     sql, params = builder.build_select(["id", "name", "email"])
 
-    # Add cached database node
+    # Add cached database node - use ParameterNode to avoid code injection
+    workflow.add_node(
+        "ParameterNode",
+        "query_params",
+        {
+            "sql": sql,
+            "params": params,
+        },
+    )
+
     workflow.add_node(
         "PythonCodeNode",
         "cached_query",
         {
-            "code": f"""
+            "code": """
 def execute(input_data):
-    # Use DataFlow cached query
+    # Use DataFlow cached query with safe parameter passing
+    query_config = get_input_data("query_params")
     result = db.execute_cached_query(
-        "{sql}",
-        {params},
+        query_config["sql"],
+        query_config["params"],
         tenant_id=input_data.get("tenant_id"),
         ttl=300
     )
-    return {{"result": result or "Cache miss - would execute query"}}
+    return {"result": result or "Cache miss - would execute query"}
 """
         },
     )

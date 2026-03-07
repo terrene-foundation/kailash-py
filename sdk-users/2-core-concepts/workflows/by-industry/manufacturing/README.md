@@ -129,7 +129,7 @@ All workflows use real manufacturing data located in `/data/inputs/manufacturing
 ## Training Data
 
 Corresponding training examples are available in:
-`/# contrib (removed)/training/workflow-examples/manufacturing-training/`
+See the Kailash SDK repository for training examples.
 
 These provide wrong→correct pattern examples for LLM training, covering:
 - Common mistakes in manufacturing workflow development
@@ -187,4 +187,4 @@ api.run(host="0.0.0.0", port=8000)
 For questions or issues with manufacturing workflows:
 - Check the troubleshooting guide: `sdk-users/developer/07-troubleshooting.md`
 - Review common mistakes: `shared/mistakes/`
-- Consult training examples: `# contrib (removed)/training/workflow-examples/manufacturing-training/`
+- See the Kailash SDK repository for training examples

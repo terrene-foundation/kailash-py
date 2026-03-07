@@ -83,4 +83,4 @@ Working code examples:
 
 ## 🏗️ For SDK Contributors
 
-If you're contributing to the SDK itself (not building with it), see [../# contrib (removed)/](../# contrib (removed)/).
+If you're interested in contributing to the SDK itself, see the [Kailash SDK repository](https://github.com/terrene-foundation/kailash-py).

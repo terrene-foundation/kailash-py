@@ -166,7 +166,7 @@ class MyCustomNode(Node):
 
 For enterprise environments requiring 0 warnings, the solution is now standardized:
 
-**MANDATORY Standard Pattern:**
+**Standard Pattern:**
 ```python
 from kailash.nodes.base import register_node
 
@@ -1796,7 +1796,7 @@ class TestNodeRegistration:
 
 ### **Standard Registration Pattern for ALL Custom Nodes**
 
-**MANDATORY Pattern (Updated 2025-07-22):**
+**Required Pattern (Updated 2025-07-22):**
 ```python
 # nodes/user_processor.py
 from kailash.nodes.base import register_node, Node
@@ -1842,7 +1842,7 @@ workflow.add_node("TestNode", "test_node", {})  # No warning
 
 **Standard Pattern for ALL Custom Nodes:**
 ```python
-# ✅ MANDATORY Pattern
+# ✅ Required Pattern
 from kailash.nodes.base import register_node
 
 @register_node()
@@ -1876,7 +1876,7 @@ class LegacyCustomNode(Node):
 from kailash.nodes.base import register_node, Node
 from typing import Dict, Any
 
-@register_node()  # MANDATORY
+@register_node()  # Required
 class TPCCustomNode(Node):
     """Standard custom node implementation."""
 

@@ -217,7 +217,7 @@ if __name__ == "__main__":
 
     # Run async example
     print("\n\nRunning resilient workflow example...")
-    # asyncio.execute(main())  # Uncomment to run with real services
+    # asyncio.run(main())  # Uncomment to run with real services
 
     print("\n✅ Resilience features can be added to any workflow!")
     print("   No need for a separate ResilientWorkflow class")

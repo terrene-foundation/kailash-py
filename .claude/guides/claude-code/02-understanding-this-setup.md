@@ -2,7 +2,7 @@
 
 ## Introduction
 
-In the previous guide, you learned what Claude Code is. This guide explains how **this specific setup** (Kailash Vibe CC Setup) enhances Claude Code with specialized knowledge, automation, and quality enforcement.
+In the previous guide, you learned what Claude Code is. This guide explains how **this specific setup** (Kailash COC Claude (Python)) enhances Claude Code with specialized knowledge, automation, and quality enforcement.
 
 By the end of this guide, you will understand:
 
@@ -93,7 +93,8 @@ Claude: [Uses DataFlow patterns from skills]
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                        COMMANDS                              │
-│          /sdk  /db  /api  /ai  /test  /validate             │
+│    /sdk /db /api /ai /test /validate /analyze /todos        │
+│    /implement /redteam /codify /ws /wrapup                  │
 │                                                              │
 │  Purpose: Quick access to specialized knowledge              │
 │  Effect: Loads relevant skills into Claude's context         │
@@ -102,14 +103,15 @@ Claude: [Uses DataFlow patterns from skills]
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                          SKILLS                              │
-│         22 directories of domain expertise                   │
+│         28 directories of domain expertise                   │
 │                                                              │
 │  01-core-sdk    02-dataflow     03-nexus       04-kaizen    │
 │  05-kailash-mcp 06-cheatsheets  07-dev-guides  08-nodes     │
 │  09-workflows   10-deployment   11-frontend    12-testing   │
 │  13-decisions   14-templates    15-errors      16-validation │
 │  17-standards   18-security     19-flutter     20-widgets   │
-│  21-enterprise  22-conversation                              │
+│  21-enterprise  22-conversation 23-uiux-design 24-value-audit│
+│  25-ai-patterns 26-eatp-ref    27-care-ref    28-coc-ref    │
 │                                                              │
 │  Purpose: Provide task-critical knowledge                    │
 │  Effect: Claude knows HOW to do things correctly             │
@@ -118,7 +120,7 @@ Claude: [Uses DataFlow patterns from skills]
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                          AGENTS                              │
-│             14 specialized sub-processes                     │
+│             30 specialized sub-processes                    │
 │                                                              │
 │  dataflow-specialist   nexus-specialist   kaizen-specialist │
 │  pattern-expert        testing-specialist  security-reviewer │
@@ -133,16 +135,17 @@ Claude: [Uses DataFlow patterns from skills]
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                          HOOKS                               │
-│           8 automation scripts that run automatically        │
+│           9 automation scripts that run automatically        │
 │                                                              │
+│  user-prompt-rules-reminder.js → Anti-amnesia (rules+workspace) │
 │  validate-bash-command.js  →  Block dangerous commands       │
 │  validate-workflow.js      →  Enforce SDK patterns           │
 │  auto-format.js            →  Format code after edits        │
-│  session-start.js          →  Initialize session context     │
+│  session-start.js          →  Initialize session + workspace │
 │  session-end.js            →  Persist session state          │
-│  pre-compact.js            →  Save state before cleanup      │
-│  stop.js                   →  Handle session termination     │
-│  detect-package-manager.js →  Detect npm/pnpm/yarn/bun       │
+│  pre-compact.js            →  Save state + workspace reminder│
+│  stop.js                   →  Handle termination + reminder  │
+│  detect-package-manager.js →  Detect npm/pnpm/yarn/bun      │
 │                                                              │
 │  Purpose: Enforce quality without requiring Claude's judgment │
 │  Effect: Bad patterns are caught automatically               │
@@ -151,13 +154,17 @@ Claude: [Uses DataFlow patterns from skills]
                              ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                          RULES                               │
-│            5 files of mandatory constraints                  │
+│            9 files of mandatory constraints                  │
 │                                                              │
-│  agents.md    → Agent orchestration rules                    │
-│  git.md       → Git workflow requirements                    │
-│  patterns.md  → Kailash pattern enforcement                  │
-│  security.md  → Security requirements                        │
-│  testing.md   → Testing policies (NO MOCKING)                │
+│  agents.md           → Agent orchestration rules              │
+│  e2e-god-mode.md     → E2E testing requirements              │
+│  env-models.md       → API keys & model names                │
+│  git.md              → Git workflow requirements              │
+│  learned-instincts.md → Auto-generated instincts             │
+│  no-stubs.md         → No stubs/TODOs/placeholders           │
+│  patterns.md         → Kailash pattern enforcement            │
+│  security.md         → Security requirements                  │
+│  testing.md          → Testing policies (NO MOCKING)          │
 │                                                              │
 │  Purpose: Define what Claude MUST and MUST NOT do            │
 │  Effect: Consistent behavior regardless of request phrasing  │
@@ -297,14 +304,21 @@ When you need deep knowledge, agents provide it:
 
 Commands load relevant skills instantly:
 
-| Command     | Loads             | Use Case                 |
-| ----------- | ----------------- | ------------------------ |
-| `/sdk`      | Core SDK patterns | Workflow, nodes, runtime |
-| `/db`       | DataFlow patterns | Database operations      |
-| `/api`      | Nexus patterns    | API deployment           |
-| `/ai`       | Kaizen patterns   | AI agents                |
-| `/test`     | Testing patterns  | Writing tests            |
-| `/validate` | Gold standards    | Checking compliance      |
+| Command      | Loads              | Use Case                   |
+| ------------ | ------------------ | -------------------------- |
+| `/sdk`       | Core SDK patterns  | Workflow, nodes, runtime   |
+| `/db`        | DataFlow patterns  | Database operations        |
+| `/api`       | Nexus patterns     | API deployment             |
+| `/ai`        | Kaizen patterns    | AI agents                  |
+| `/test`      | Testing patterns   | Writing tests              |
+| `/validate`  | Project compliance | Security, testing, stubs   |
+| `/analyze`   | Phase 01 template  | Research and planning      |
+| `/todos`     | Phase 02 template  | Task breakdown             |
+| `/implement` | Phase 03 template  | Build iteratively          |
+| `/redteam`   | Phase 04 template  | Validation testing         |
+| `/codify`    | Phase 05 template  | Project knowledge capture  |
+| `/ws`        | Workspace state    | Status dashboard           |
+| `/wrapup`    | Session notes      | Save context before ending |
 
 ### Continuous Learning
 
@@ -373,13 +387,13 @@ When you make a request:
 
 ### Quick Reference
 
-| Component | Count | Purpose                |
-| --------- | ----- | ---------------------- |
-| Commands  | 9     | Quick access to skills |
-| Skills    | 22    | Domain knowledge       |
-| Agents    | 14    | Specialized processing |
-| Hooks     | 8     | Automatic enforcement  |
-| Rules     | 5     | Behavioral constraints |
+| Component | Count | Purpose                         |
+| --------- | ----- | ------------------------------- |
+| Commands  | 19    | Quick access + workspace phases |
+| Skills    | 28    | Domain knowledge                |
+| Agents    | 30    | Specialized processing          |
+| Hooks     | 9     | Automatic enforcement           |
+| Rules     | 9     | Behavioral constraints          |
 
 ---
 

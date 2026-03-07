@@ -904,7 +904,7 @@ async def test_security_operations_scenarios():
 
 if __name__ == "__main__":
     # Run SOC testing
-    result = asyncio.execute(test_security_operations_scenarios())
+    result = asyncio.run(test_security_operations_scenarios())
 
     # Save results
     with open("security_operations_test_results.json", "w") as f:

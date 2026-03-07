@@ -13,17 +13,11 @@ multiple signal sources, risk management, and real-time alerts.
 """
 
 import json
-import sys
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pandas as pd
-
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent.parent.parent.parent
-sys.path.insert(0, str(project_root))
 
 from kailash.nodes.ai import LLMAgentNode
 from kailash.nodes.code import PythonCodeNode

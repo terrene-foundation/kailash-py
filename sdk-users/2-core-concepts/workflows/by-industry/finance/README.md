@@ -304,8 +304,7 @@ These workflows can be integrated into larger systems via:
 
 ## Training Resources
 
-See the corresponding training patterns in:
-`# contrib (removed)/training/workflow-examples/finance-training/`
+See the Kailash SDK repository for training examples.
 
 These include:
 - Common mistakes and correct patterns

@@ -304,11 +304,11 @@ from kaizen import SimpleQAAgent  # This doesn't work
 
 Explore 35+ working examples:
 ```bash
-# Clone repository
+# Clone the examples repository
 git clone https://github.com/terrene-foundation/kailash-py
 
 # Navigate to examples
-cd kailash_python_sdk/apps/kailash-kaizen/examples
+cd kailash_python_sdk/examples
 
 # Try simple Q&A
 python 1-single-agent/simple-qa/workflow.py
@@ -362,8 +362,8 @@ print(result["sentiment"])  # "positive"
 - **[README.md](../../README.md)** - Complete Kaizen guide
 - **[Multi-Modal API](../reference/multi-modal-api-reference.md)** - Vision and audio
 - **[Troubleshooting](../reference/troubleshooting.md)** - Error solutions
-- **[Examples](../../../../apps/kailash-kaizen/examples/)** - Working code
+- **Examples** - See kaizen package documentation for working code
 
 ---
 
-**Ready to build?** Check out the **[Complete Examples](../../../../apps/kailash-kaizen/examples/)** or read the **[Full Documentation](../../README.md)**.
+**Ready to build?** Check out the kaizen package examples or read the **[Full Documentation](../../README.md)**.

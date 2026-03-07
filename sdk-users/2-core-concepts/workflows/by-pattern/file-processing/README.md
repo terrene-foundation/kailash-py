@@ -288,4 +288,4 @@ enhancer = PythonCodeNode.from_function(
 **Next Steps**:
 - Review `scripts/document_processor.py` for implementation details
 - Adapt the pattern for your specific file types and processing needs
-- See training examples in `# contrib (removed)/training/workflow-examples/file-processing-training/`
+- See the Kailash SDK repository for training examples

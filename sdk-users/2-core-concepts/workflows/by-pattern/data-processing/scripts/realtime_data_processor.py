@@ -249,7 +249,7 @@ def main():
     )
 
     # Run async processing
-    asyncio.execute(run_realtime_processor())
+    asyncio.run(run_realtime_processor())
 
 
 if __name__ == "__main__":

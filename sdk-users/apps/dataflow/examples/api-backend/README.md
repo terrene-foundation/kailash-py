@@ -397,32 +397,38 @@ class AuthManager:
         })
 
         # Hash password and create user
+        # Pass user data as workflow parameters instead of interpolating into code strings
+        # to prevent code injection through user-controlled values (e.g., password field)
         workflow.add_node("PythonCodeNode", "process_registration", {
-            "code": f"""
+            "code": """
 existing_users = get_input_data("check_existing")["data"]
 
 if existing_users:
-    result = {{"error": "Email or username already exists"}}
+    result = {"error": "Email or username already exists"}
 else:
     # Hash password
     import bcrypt
-    password = "{user_data['password']}"
+    password = get_input_data("registration_params")["password"]
     salt = bcrypt.gensalt()
     password_hash = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
-    # Prepare user data
-    user_data = {{
-        "email": "{user_data['email']}",
-        "username": "{user_data['username']}",
+    # Prepare user data from workflow parameters
+    params = get_input_data("registration_params")
+    user_data = {
+        "email": params["email"],
+        "username": params["username"],
         "password_hash": password_hash,
-        "first_name": "{user_data['first_name']}",
-        "last_name": "{user_data['last_name']}",
-        "role": "{user_data.get('role', 'user')}"
-    }}
+        "first_name": params["first_name"],
+        "last_name": params["last_name"],
+        "role": params.get("role", "user")
+    }
 
-    result = {{"user_data": user_data, "proceed": True}}
+    result = {"user_data": user_data, "proceed": True}
 """
         })
+
+        # Pass user data as a parameter node (safe — not interpolated into code)
+        workflow.add_node("ParameterNode", "registration_params", user_data)
 
         # Create user if validation passes
         workflow.add_node("UserCreateNode", "create_user", {
@@ -436,6 +442,7 @@ else:
 
         # Connect workflow
         workflow.add_connection("check_existing", "result", "process_registration", "input")
+        workflow.add_connection("registration_params", "result", "process_registration", "registration_params")
         workflow.add_connection("source", "result", "target", "input")  # Fixed complex pattern
 
         results, run_id = self.runtime.execute(workflow.build())
@@ -467,22 +474,23 @@ else:
             "limit": 1
         })
 
-        # Verify password
+        # Verify password — pass as workflow parameter to prevent code injection
+        workflow.add_node("ParameterNode", "login_params", {"password": password})
         workflow.add_node("PythonCodeNode", "verify_password", {
-            "code": f"""
+            "code": """
 users = get_input_data("get_user")["data"]
 
 if not users:
-    result = {{"error": "Invalid credentials"}}
+    result = {"error": "Invalid credentials"}
 else:
     user = users[0]
     import bcrypt
-    password = "{password}"
+    password = get_input_data("login_params")["password"]
 
     if bcrypt.checkpw(password.encode('utf-8'), user["password_hash"].encode('utf-8')):
-        result = {{"user": user, "authenticated": True}}
+        result = {"user": user, "authenticated": True}
     else:
-        result = {{"error": "Invalid credentials"}}
+        result = {"error": "Invalid credentials"}
 """
         })
 
@@ -494,6 +502,7 @@ else:
 
         # Connect workflow
         workflow.add_connection("get_user", "result", "verify_password", "input")
+        workflow.add_connection("login_params", "result", "verify_password", "login_params")
         workflow.add_connection("verify_password", "update_login", "user.id", "user_id")
 
         results, run_id = self.runtime.execute(workflow.build())
@@ -952,42 +961,47 @@ async def create_order(
     """Create new order."""
     workflow = WorkflowBuilder()
 
+    # Pass order items as a parameter to prevent code injection
+    workflow.add_node("ParameterNode", "order_params", {
+        "items": [item.dict() for item in order_data.items]
+    })
+
     # Calculate order totals
     workflow.add_node("PythonCodeNode", "calculate_totals", {
-        "code": f"""
-items = {order_data.items}
+        "code": """
+items = get_input_data("order_params")["items"]
 subtotal = 0.0
 order_items = []
 
 # Get product details and calculate totals
 for item in items:
     product_workflow = WorkflowBuilder()
-    product_workflow.add_node("ProductReadNode", "get_product", {{
+    product_workflow.add_node("ProductReadNode", "get_product", {
         "id": item["product_id"]
-    }})
+    })
     product_results, _ = runtime.execute(product_workflow.build())
     product = product_results["get_product"]["data"]
 
     if not product:
-        raise Exception(f"Product {{item['product_id']}} not found")
+        raise Exception(f"Product {item['product_id']} not found")
 
     if product["stock_quantity"] < item["quantity"]:
-        raise Exception(f"Insufficient stock for product {{product['name']}}")
+        raise Exception(f"Insufficient stock for product {product['name']}")
 
     item_total = product["price"] * item["quantity"]
     subtotal += item_total
 
-    order_items.append({{
+    order_items.append({
         "product_id": item["product_id"],
         "quantity": item["quantity"],
         "unit_price": product["price"],
         "total_price": item_total,
-        "product_snapshot": {{
+        "product_snapshot": {
             "name": product["name"],
             "sku": product["sku"],
             "price": product["price"]
-        }}
-    }})
+        }
+    })
 
 # Calculate tax and shipping (simplified)
 tax_rate = 0.08  # 8% tax
@@ -998,16 +1012,16 @@ total = subtotal + tax_amount + shipping_amount
 
 # Generate order number
 import uuid
-order_number = f"ORD-{{str(uuid.uuid4())[:8].upper()}}"
+order_number = f"ORD-{str(uuid.uuid4())[:8].upper()}"
 
-result = {{
+result = {
     "order_number": order_number,
     "subtotal": subtotal,
     "tax_amount": tax_amount,
     "shipping_amount": shipping_amount,
     "total": total,
     "order_items": order_items
-}}
+}
 """
     })
 
@@ -1097,22 +1111,25 @@ async def get_sales_analytics(
     """Get sales analytics (admin only)."""
     workflow = WorkflowBuilder()
 
+    workflow.add_node("ParameterNode", "analytics_params", {"days": days})
     workflow.add_node("PythonCodeNode", "calculate_analytics", {
-        "code": f"""
+        "code": """
 from datetime import datetime, timedelta
 
+params = get_input_data("analytics_params")
+days = params["days"]
 end_date = datetime.now()
-start_date = end_date - timedelta(days={days})
+start_date = end_date - timedelta(days=days)
 
 # Get orders in date range
 orders_workflow = WorkflowBuilder()
-orders_workflow.add_node("OrderListNode", "get_orders", {{
-    "filter": {{
-        "created_at": {{"$gte": start_date.isoformat()}},
-        "status": {{"$ne": "cancelled"}}
-    }},
+orders_workflow.add_node("OrderListNode", "get_orders", {
+    "filter": {
+        "created_at": {"$gte": start_date.isoformat()},
+        "status": {"$ne": "cancelled"}
+    },
     "include": ["items"]
-}})
+})
 orders_results, _ = runtime.execute(orders_workflow.build())
 orders = orders_results["get_orders"]["data"]
 
@@ -1122,36 +1139,36 @@ total_orders = len(orders)
 avg_order_value = total_revenue / total_orders if total_orders > 0 else 0
 
 # Product sales
-product_sales = {{}}
+product_sales = {}
 for order in orders:
     for item in order.get("items", []):
         product_id = item["product_id"]
         if product_id not in product_sales:
-            product_sales[product_id] = {{"quantity": 0, "revenue": 0}}
+            product_sales[product_id] = {"quantity": 0, "revenue": 0}
         product_sales[product_id]["quantity"] += item["quantity"]
         product_sales[product_id]["revenue"] += item["total_price"]
 
 # Daily sales
-daily_sales = {{}}
+daily_sales = {}
 for order in orders:
     date = order["created_at"][:10]  # YYYY-MM-DD
     if date not in daily_sales:
-        daily_sales[date] = {{"orders": 0, "revenue": 0}}
+        daily_sales[date] = {"orders": 0, "revenue": 0}
     daily_sales[date]["orders"] += 1
     daily_sales[date]["revenue"] += order["total"]
 
-result = {{
-    "period_days": {days},
+result = {
+    "period_days": days,
     "total_revenue": total_revenue,
     "total_orders": total_orders,
     "average_order_value": avg_order_value,
     "daily_sales": daily_sales,
     "top_products": sorted(
-        [{{"product_id": k, **v}} for k, v in product_sales.items()],
+        [{"product_id": k, **v} for k, v in product_sales.items()],
         key=lambda x: x["revenue"],
         reverse=True
     )[:10]
-}}
+}
 """
     })
 

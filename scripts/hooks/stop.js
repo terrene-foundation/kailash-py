@@ -21,6 +21,7 @@ const {
   resolveLearningDir,
   ensureLearningDir,
 } = require("./lib/learning-utils");
+const { detectActiveWorkspace } = require("./lib/workspace-utils");
 
 // Get home directory (cross-platform)
 const HOME = process.env.HOME || process.env.USERPROFILE;
@@ -147,6 +148,16 @@ async function main() {
   const cwd = data.cwd || process.cwd();
   const pendingWork = data.pending_work || null;
   const reason = data.reason || "signal";
+
+  // ── Workspace: remind about /wrapup ──────────────────────────────────
+  try {
+    const ws = detectActiveWorkspace(cwd);
+    if (ws) {
+      console.error(
+        `[WORKSPACE] Session ending for ${ws.name}. Run /wrapup next time before closing to save session context.`,
+      );
+    }
+  } catch {}
 
   // Perform graceful shutdown tasks
   const checkpointPath = saveCheckpoint(sessionId, cwd, pendingWork);

@@ -463,11 +463,11 @@ if __name__ == "__main__":
             create_simple_middleware_server()
         elif sys.argv[1] == "test":
             # Test components
-            asyncio.execute(test_middleware_components())
+            asyncio.run(test_middleware_components())
     else:
         # Run comprehensive demo
         demo = MiddlewareDemo()
-        asyncio.execute(demo.run_comprehensive_demo())
+        asyncio.run(demo.run_comprehensive_demo())
 
 
 """

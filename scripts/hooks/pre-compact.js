@@ -18,6 +18,7 @@ const {
   logObservation: logLearningObservation,
   countObservations,
 } = require("./lib/learning-utils");
+const { detectActiveWorkspace } = require("./lib/workspace-utils");
 
 let input = "";
 process.stdin.setEncoding("utf8");
@@ -96,6 +97,16 @@ function savePreCompactState(data) {
         checkpointManager.saveCheckpoint(
           `pre-compact-${Date.now()}`,
           learningDir,
+        );
+      }
+    } catch {}
+
+    // ── Workspace: remind to save session notes before compaction ──────
+    try {
+      const ws = detectActiveWorkspace(cwd);
+      if (ws) {
+        console.error(
+          `[WORKSPACE] Context compacting. Before losing context, write session notes to workspaces/${ws.name}/.session-notes (or run /wrapup).`,
         );
       }
     } catch {}

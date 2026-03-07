@@ -79,7 +79,7 @@ config = AgentConfig(
 
 ### Developer Documentation
 
-Full v1.0 docs in `apps/kailash-kaizen/src/kaizen/docs/developers/`:
+Full v1.0 docs in `kaizen/docs/developers/` (included with `pip install kailash-kaizen`):
 
 - Performance optimization guide
 - Specialist system guide
@@ -632,7 +632,7 @@ result = agent.run(question="test")
 
 - -0.06% overhead (essentially zero, tested with 100 real OpenAI API calls)
 - 0.57ms p95 audit latency (<10ms target, 17.5x margin)
-- 281 tests passing - Validated with real infrastructure (NO MOCKING in Tiers 2-3 tests)
+- 281 tests passing - Validated with real infrastructure (real infrastructure preferred in Tiers 2-3 tests)
 
 **Start Observability Stack:**
 
@@ -1045,7 +1045,7 @@ batch_results = agent.extract_batch(
 
 **Production Validated:**
 
-- 281 tests passing - Real infrastructure testing (NO MOCKING)
+- 281 tests passing - Real infrastructure testing (real infrastructure preferred)
 - Ollama: $0.00 cost for unlimited processing
 - OpenAI: Budget-controlled, accurate
 - Landing AI: Mission-critical accuracy (95%+)
@@ -1118,18 +1118,18 @@ class MyAgent(BaseAgent):
 - **[Memory Patterns Guide](docs/reference/memory-patterns-guide.md)** - Memory usage patterns
 - **[Strategy Selection Guide](docs/reference/strategy-selection-guide.md)** - When to use which strategy
 - **[Configuration Guide](docs/reference/configuration.md)** - Environment configuration
-- **[Performance Benchmarks](../../../apps/kailash-kaizen/docs/benchmarks/BENCHMARK_GUIDE.md)** - Measure performance across 7 key areas with statistical rigor (p50/p95/p99 percentiles)
+- **Performance Benchmarks** - Measure performance across 7 key areas with statistical rigor (p50/p95/p99 percentiles) (see kaizen documentation)
 - **[Troubleshooting](docs/reference/troubleshooting.md)** - Common issues
 
 ### Examples
 
-- **[Autonomy Example Gallery](../../../apps/kailash-kaizen/examples/autonomy/EXAMPLE_GALLERY.md)** - 15 production-ready autonomy examples with learning paths (Tool Calling, Planning, Meta-Controller, Memory, Checkpoints, Interrupts, Full Integration)
-- **[Single-Agent Patterns](../../../apps/kailash-kaizen/examples/1-single-agent/)** - 10 basic patterns
-- **[Multi-Agent Patterns](../../../apps/kailash-kaizen/examples/2-multi-agent/)** - 6 coordination patterns
-- **[Enterprise Workflows](../../../apps/kailash-kaizen/examples/3-enterprise-workflows/)** - 5 production patterns
-- **[Advanced RAG](../../../apps/kailash-kaizen/examples/4-advanced-rag/)** - 5 RAG techniques
-- **[MCP Integration](../../../apps/kailash-kaizen/examples/5-mcp-integration/)** - 5 MCP patterns
-- **[Multi-Modal](../../../apps/kailash-kaizen/examples/8-multi-modal/)** - Vision/audio examples
+- **Autonomy Example Gallery** (`examples/autonomy/EXAMPLE_GALLERY.md`) - 15 production-ready autonomy examples with learning paths (Tool Calling, Planning, Meta-Controller, Memory, Checkpoints, Interrupts, Full Integration)
+- **Single-Agent Patterns** (`examples/1-single-agent/`) - 10 basic patterns
+- **Multi-Agent Patterns** (`examples/2-multi-agent/`) - 6 coordination patterns
+- **Enterprise Workflows** (`examples/3-enterprise-workflows/`) - 5 production patterns
+- **Advanced RAG** (`examples/4-advanced-rag/`) - 5 RAG techniques
+- **MCP Integration** (`examples/5-mcp-integration/`) - 5 MCP patterns
+- **Multi-Modal** (`examples/8-multi-modal/`) - Vision/audio examples
 
 ## 🔧 Common Patterns
 
@@ -1757,7 +1757,7 @@ result = ensemble.run(
    - Vision: Ollama (llava, bakllava) + OpenAI GPT-4V
    - Audio: Whisper transcription
    - Unified orchestration with MultiModalAgent
-   - Real infrastructure testing (NO MOCKING)
+   - Real infrastructure testing (real infrastructure preferred)
 
 4. **Multi-Agent Coordination** (`src/kaizen/orchestration/`)
    - Google A2A protocol integration (100% compliant)
@@ -1793,7 +1793,7 @@ result = ensemble.run(
 2. **Tier 2 (Integration)**: Real Ollama inference (local, free)
 3. **Tier 3 (E2E)**: Real OpenAI inference (paid API, budget-controlled)
 
-**CRITICAL**: NO MOCKING in Tiers 2-3 (real infrastructure only)
+**CRITICAL**: real infrastructure preferred in Tiers 2-3 (real infrastructure only)
 
 ### Test Execution
 
@@ -1823,7 +1823,7 @@ pytest tests/e2e/autonomy/ -v
 - ✅ **Real LLM inference** using Ollama llama3.2:1b (FREE, no API costs)
 - ✅ **Real database** operations with DataFlow (SQLite/PostgreSQL)
 - ✅ **Real tools** execution (file system, HTTP, bash commands)
-- ✅ **Complete workflows** end-to-end with NO MOCKING
+- ✅ **Complete workflows** end-to-end with real infrastructure preferred
 
 **Prerequisites:**
 
@@ -1899,7 +1899,7 @@ async def test_autonomous_workflow():
 
 1. **Always use Ollama** for E2E tests (FREE, no API costs)
 2. **Always mark with @pytest.mark.e2e** for test discovery
-3. **Always use real infrastructure** (NO MOCKING)
+3. **Always use real infrastructure** (real infrastructure preferred)
 4. **Always clean up** resources in teardown
 
 **Available E2E Test Suites:**
@@ -2006,8 +2006,8 @@ nexus.register("qa_agent", agent_workflow.build())
 
 ## 🔗 Related Documentation
 
-- **[Main Kaizen Docs](../../../apps/kailash-kaizen/CLAUDE.md)** - Complete framework documentation
-- **[Kaizen Examples](../../../apps/kailash-kaizen/examples/)** - 35+ working implementations
+- **Kaizen Package Documentation** - Complete framework documentation (included with `pip install kailash-kaizen`)
+- **Kaizen Examples** - 35+ working implementations (see examples in the kaizen package)
 - **[Core SDK](../../2-core-concepts/)** - Foundation patterns
 - **[DataFlow](../dataflow/)** - Database framework integration
 - **[Nexus](../nexus/)** - Multi-channel platform integration
@@ -2015,4 +2015,4 @@ nexus.register("qa_agent", agent_workflow.build())
 ---
 
 **For SDK details**: See [Kailash SDK Documentation](../../../CLAUDE.md)
-**For examples**: See [Kaizen Examples](../../../apps/kailash-kaizen/examples/)
+**For examples**: See Kaizen examples in the package documentation

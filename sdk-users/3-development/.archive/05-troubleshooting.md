@@ -1113,7 +1113,7 @@ Based on complete test suite analysis:
 3. **Infrastructure Requirements**: Real Docker services (PostgreSQL, Redis, Ollama)
 
 **Testing Best Practices Validated**:
-- ✅ NO MOCKING in integration/e2e tests - use real Docker services
+- ✅ real infrastructure preferred in integration/e2e tests - use real Docker services
 - ✅ Use tests/utils/docker_config.py for service configuration
 - ✅ Test with realistic data volumes and concurrent operations
 - ✅ Include performance validation in e2e tests

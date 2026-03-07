@@ -77,7 +77,7 @@ def test_shared_state_problem():
 ```
 
 ### 3. Real Infrastructure
-**Principle**: No mocking in integration tests
+**Principle**: Real infrastructure preferred in integration tests
 
 ```python
 # ✅ GOOD: Real database operations
@@ -534,7 +534,7 @@ async def example_basic_tdd_test(tdd_test_context):
 
 - [ ] Tests use TDD fixtures (`tdd_test_context`, `tdd_dataflow`, etc.)
 - [ ] Performance targets met (<100ms per test)
-- [ ] No mocking in integration tests
+- [ ] Real infrastructure preferred in integration tests
 - [ ] Proper fixture selection for test complexity
 - [ ] Tests are parallel-safe when appropriate
 - [ ] Error handling includes graceful degradation

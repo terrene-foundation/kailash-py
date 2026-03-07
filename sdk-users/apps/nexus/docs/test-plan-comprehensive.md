@@ -32,12 +32,12 @@ This test plan ensures the Nexus platform delivers on its revolutionary promise 
 
 ### Tier 2: Integration Tests (Real Services, Docker)
 
-**Policy**: **NO MOCKING** - must use real Docker services
-**Setup**: Always run `./tests/utils/test-env up && ./tests/utils/test-env status`
+**Policy**: **real infrastructure preferred** - must use real Docker services
+**Setup**: Always set up test infrastructure first (e.g., `docker compose up -d`)
 
 ### Tier 3: E2E Tests (Complete User Flows)
 
-**Policy**: **NO MOCKING** - complete scenarios with real infrastructure
+**Policy**: **real infrastructure preferred** - complete scenarios with real infrastructure
 **Focus**: End-to-end user workflows from install to production deployment
 
 ## 🔧 Tier 1: Unit Test Plan
@@ -244,10 +244,9 @@ class TestMultiChannelIntegration:
     @pytest.fixture(autouse=True)
     def setup_infrastructure(self):
         """Setup real Docker infrastructure"""
-        subprocess.run(["./tests/utils/test-env", "up"], check=True)
-        subprocess.run(["./tests/utils/test-env", "status"], check=True)
+        subprocess.run(["docker", "compose", "up", "-d"], check=True)
         yield
-        subprocess.run(["./tests/utils/test-env", "down"], check=True)
+        subprocess.run(["docker", "compose", "down"], check=True)
 
     async def test_unified_workflow_execution(self):
         """Validates single workflow accessible via all channels"""
@@ -755,7 +754,7 @@ class TestCompetitiveDifferentiation:
 
 #### Infrastructure
 
-- **Docker Environment**: `./tests/utils/test-env up` must succeed
+- **Docker Environment**: `docker compose up -d` must succeed
 - **Real Services**: PostgreSQL, Redis, monitoring stack
 - **Network Isolation**: Each test gets clean environment
 - **Resource Cleanup**: Automatic cleanup after each test

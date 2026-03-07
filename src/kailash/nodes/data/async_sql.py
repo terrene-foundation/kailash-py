@@ -31,8 +31,11 @@ import logging
 import os
 import random
 import re
+import sys
 import threading
 import time
+import traceback
+import warnings
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -51,14 +54,20 @@ logger = logging.getLogger(__name__)
 # Import optimistic locking for version control
 try:
     from kailash.nodes.data.optimistic_locking import (
-        ConflictResolution,
-        LockStatus,
+        ConflictResolution,  # type: ignore[assignment]
+        LockStatus,  # type: ignore[assignment]
         OptimisticLockingNode,
     )
 
     OPTIMISTIC_LOCKING_AVAILABLE = True
 except ImportError:
     OPTIMISTIC_LOCKING_AVAILABLE = False
+
+try:
+    from kailash.core.pool.sqlite_pool import AsyncSQLitePool, SQLitePoolConfig
+except ImportError:
+    AsyncSQLitePool = None  # type: ignore[assignment,misc]
+    SQLitePoolConfig = None  # type: ignore[assignment,misc]
 
     # Define minimal enums if not available
     class ConflictResolution:
@@ -220,7 +229,7 @@ class RetryConfig:
     jitter: bool = True
 
     # Retryable error patterns (database-specific)
-    retryable_errors: list[str] = None
+    retryable_errors: Optional[list[str]] = None
 
     def __post_init__(self):
         """Initialize default retryable errors."""
@@ -259,7 +268,9 @@ class RetryConfig:
     def should_retry(self, error: Exception) -> bool:
         """Check if an error is retryable."""
         error_str = str(error).lower()
-        return any(pattern.lower() in error_str for pattern in self.retryable_errors)
+        return any(
+            pattern.lower() in error_str for pattern in (self.retryable_errors or [])
+        )
 
     def get_delay(self, attempt: int) -> float:
         """Calculate delay for a retry attempt."""
@@ -290,6 +301,10 @@ class DatabaseConfig:
     max_pool_size: int = 20
     pool_timeout: float = 30.0
     command_timeout: float = 60.0
+    enable_analytics: bool = True
+    enable_adaptive_sizing: bool = True
+    health_check_interval: int = 30
+    min_pool_size: int = 5
 
     def __post_init__(self):
         """Validate configuration."""
@@ -604,13 +619,13 @@ class EnterpriseConnectionPool:
         """Get connection from the underlying pool (adapter-specific)."""
         if hasattr(self._pool, "acquire"):
             # asyncpg style pool
-            return self._pool.acquire()
+            return self._pool.acquire()  # type: ignore[union-attr]
         elif hasattr(self._pool, "get_connection"):
             # aiomysql style pool
-            return self._pool.get_connection()
+            return self._pool.get_connection()  # type: ignore[union-attr]
         else:
             # Direct adapter access for SQLite
-            return self._adapter._get_connection()
+            return self._adapter._get_connection()  # type: ignore[union-attr]
 
     async def execute_query(
         self, query: str, params: Optional[Union[tuple, dict]] = None, **kwargs
@@ -619,6 +634,7 @@ class EnterpriseConnectionPool:
         start_time = time.time()
 
         try:
+            assert self._adapter is not None
             result = await self._adapter.execute(query, params, **kwargs)
 
             # Record performance metrics
@@ -702,11 +718,11 @@ class EnterpriseConnectionPool:
         """Get current active connection count."""
         try:
             if hasattr(self._pool, "__len__"):
-                return len(self._pool)
+                return len(self._pool)  # type: ignore[arg-type]
             elif hasattr(self._pool, "size"):
-                return self._pool.size
+                return self._pool.size  # type: ignore[union-attr]
             elif hasattr(self._pool, "_size"):
-                return self._pool._size
+                return self._pool._size  # type: ignore[union-attr]
             else:
                 return 0
         except:
@@ -904,6 +920,9 @@ class DatabaseAdapter(ABC):
     def __init__(self, config: DatabaseConfig):
         self.config = config
         self._pool = None
+        self._connected: bool = False
+        self._runtime_coordinated: bool = False
+        self._runtime_pool: Any = None
 
     def _convert_row(self, row: dict) -> dict:
         """Convert database-specific types to JSON-serializable types."""
@@ -964,13 +983,17 @@ class DatabaseAdapter(ABC):
         fetch_mode: FetchMode = FetchMode.ALL,
         fetch_size: Optional[int] = None,
         transaction: Optional[Any] = None,
+        parameter_types: Optional[dict[str, str]] = None,
     ) -> Any:
         """Execute query and return results, optionally within a transaction."""
         pass
 
     @abstractmethod
     async def execute_many(
-        self, query: str, params_list: list[Union[tuple, dict]]
+        self,
+        query: str,
+        params_list: list[Union[tuple, dict]],
+        transaction: Optional[Any] = None,
     ) -> None:
         """Execute query multiple times with different parameters."""
         pass
@@ -1011,12 +1034,19 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 f"{self.config.host}:{self.config.port or 5432}/{self.config.database}"
             )
 
+        async def _init_connection(conn):
+            """Set session-level parameters on each new connection."""
+            await conn.execute("SET idle_in_transaction_session_timeout = '30s'")
+            await conn.execute("SET statement_timeout = '60s'")
+
         self._pool = await asyncpg.create_pool(
             dsn,
             min_size=1,
             max_size=self.config.max_pool_size,
             timeout=self.config.pool_timeout,
             command_timeout=self.config.command_timeout,
+            max_inactive_connection_lifetime=300.0,
+            init=_init_connection,
         )
 
     async def disconnect(self) -> None:
@@ -1091,7 +1121,7 @@ class PostgreSQLAdapter(DatabaseAdapter):
                 else:
                     query = query.replace(f":{key}", f"${position}")
 
-            params = query_params
+            params = tuple(query_params)
 
             # Apply parameter type casts if provided
             if parameter_types:
@@ -1115,9 +1145,9 @@ class PostgreSQLAdapter(DatabaseAdapter):
 
         # Ensure params is a list/tuple for asyncpg
         if params is None:
-            params = []
+            params = tuple()
         elif not isinstance(params, (list, tuple)):
-            params = [params]
+            params = (params,)
 
         # Execute query on appropriate connection
         if transaction:
@@ -1316,9 +1346,12 @@ class MySQLAdapter(DatabaseAdapter):
             user=user,
             password=password,
             db=database,
-            minsize=1,
+            minsize=min(5, self.config.max_pool_size),
             maxsize=self.config.max_pool_size,
             pool_recycle=3600,
+            charset="utf8mb4",
+            autocommit=False,
+            connect_timeout=10,
         )
 
     async def disconnect(self) -> None:
@@ -1460,17 +1493,32 @@ class MySQLAdapter(DatabaseAdapter):
 class SQLiteAdapter(DatabaseAdapter):
     """SQLite adapter using aiosqlite."""
 
-    # Class-level shared connections for memory databases to solve isolation issues
-    _shared_memory_connections = {}
-    _connection_locks = {}
+    # URI shared-cache mode replaces the old _shared_memory_connections dict.
+    # Each :memory: DB is translated to file:memdb_NAME?mode=memory&cache=shared
+    # so multiple connections see the SAME in-memory database.
 
-    def __init__(self, config: DatabaseConfig):
+    # Essential PRAGMAs applied to every connection (mirrors Rust SDK's after_connect hook)
+    _DEFAULT_PRAGMAS = {
+        "journal_mode": "WAL",
+        "busy_timeout": "5000",
+        "synchronous": "NORMAL",
+        "cache_size": "-65536",  # 64MB (negative = KiB)
+        "foreign_keys": "ON",
+    }
+
+    def __init__(self, config: DatabaseConfig, memory_db_name: Optional[str] = None):
         """Initialize SQLite adapter."""
         super().__init__(config)
         # Initialize SQLite-specific attributes
         self._db_path = config.connection_string or config.database or ":memory:"
-        self._is_memory_db = self._db_path == ":memory:"
+        self._is_memory_db = (
+            self._db_path == ":memory:" or "mode=memory" in self._db_path
+        )
+        self._connect_kwargs: dict[str, Any] = {}
         self._connection = None
+        self._memory_db_name = memory_db_name
+        # Connection pool (initialized in connect())
+        self._pool: Any = None
         # Transaction nesting support (for SQLite nested transaction bug fix)
         self._transaction_depth = 0
         self._savepoint_counter = 0
@@ -1516,8 +1564,13 @@ class SQLiteAdapter(DatabaseAdapter):
                 # Relative path: sqlite://path/to/file.db -> path/to/file.db
                 self._db_path = conn_str[9:]  # Remove "sqlite://"
             elif conn_str.startswith("file:"):
-                # File URI: file:path/to/file.db -> path/to/file.db
-                self._db_path = conn_str[5:]  # Remove "file:"
+                if "?" in conn_str:
+                    # URI with parameters — preserve full string (e.g. file:db?mode=memory&cache=shared)
+                    self._db_path = conn_str
+                    self._connect_kwargs["uri"] = True
+                else:
+                    # Simple file: prefix — strip it
+                    self._db_path = conn_str[5:]
             else:
                 # Assume the connection string IS the path
                 self._db_path = conn_str
@@ -1526,38 +1579,56 @@ class SQLiteAdapter(DatabaseAdapter):
                 "SQLite requires either 'database' path or 'connection_string'"
             )
 
-        # Set up connection sharing for memory databases to prevent isolation
-        self._is_memory_db = self._db_path == ":memory:"
-        if self._is_memory_db:
-            import asyncio
+        # Detect memory databases and translate to URI shared-cache mode.
+        # Each aiosqlite.connect(":memory:") creates a SEPARATE database.
+        # URI shared-cache mode lets multiple connections see the SAME in-memory DB.
+        self._is_memory_db = (
+            self._db_path == ":memory:" or "mode=memory" in self._db_path
+        )
+        if self._db_path == ":memory:":
+            name = self._memory_db_name or f"kailash_{id(self)}"
+            self._db_path = f"file:{name}?mode=memory&cache=shared"
+            self._connect_kwargs["uri"] = True
 
-            # All :memory: databases should share the same connection to avoid isolation
-            self._memory_key = "global_memory_db"
-            if self._memory_key not in self._connection_locks:
-                self._connection_locks[self._memory_key] = asyncio.Lock()
+        # Note: The Core SDK SQLiteAdapter intentionally does NOT create
+        # an AsyncSQLitePool here.  When used inside ProductionSQLiteAdapter
+        # + EnterpriseConnectionPool, each internal adapter would create its
+        # own pool, leading to dozens of persistent connections targeting the
+        # same file and "database is locked" errors.  Instead, connections
+        # are created on-demand in execute() and closed after each query.
+        # The DataFlow SQLiteAdapter (apps/kailash-dataflow) is the correct
+        # place for pool-based connection management.
+
+    async def _configure_connection(self, conn):
+        """Apply essential PRAGMAs to a new connection.
+
+        Mirrors the Rust SDK's after_connect hook — every connection gets WAL,
+        busy_timeout, synchronous=NORMAL, cache_size, and foreign_keys before
+        any user query runs.
+        """
+        for pragma, value in self._DEFAULT_PRAGMAS.items():
+            if self._is_memory_db and pragma == "journal_mode":
+                continue  # WAL not supported for shared-cache memory DBs
+            await conn.execute(f"PRAGMA {pragma} = {value}")
 
     async def _get_connection(self):
-        """Get a database connection, using shared connection for memory databases."""
-        if self._is_memory_db:
-            # Use shared connection for memory databases to prevent isolation
-            async with self._connection_locks[self._memory_key]:
-                if self._memory_key not in self._shared_memory_connections:
-                    # Create the shared memory connection
-                    conn = await self._aiosqlite.connect(self._db_path)
-                    conn.row_factory = self._aiosqlite.Row
-                    self._shared_memory_connections[self._memory_key] = conn
-                return self._shared_memory_connections[self._memory_key]
-        else:
-            # For file databases, create new connections as before
-            conn = await self._aiosqlite.connect(self._db_path)
-            conn.row_factory = self._aiosqlite.Row
-            return conn
+        """Get a database connection.
+
+        For memory databases, uses URI shared-cache mode so all connections
+        see the same in-memory database. For file databases, uses the pool
+        for connection reuse and bounded thread count.
+        """
+        assert self._aiosqlite is not None
+        conn = await self._aiosqlite.connect(self._db_path, **self._connect_kwargs)
+        conn.row_factory = self._aiosqlite.Row
+        await self._configure_connection(conn)
+        return conn
 
     async def disconnect(self) -> None:
-        """Close connection."""
-        # For memory databases, we keep the shared connection alive
-        # For file databases, connections are managed per-operation
-        pass
+        """Close pool and connections."""
+        if self._pool is not None:
+            await self._pool.close()
+            self._pool = None
 
     async def execute(
         self,
@@ -1569,6 +1640,7 @@ class SQLiteAdapter(DatabaseAdapter):
         parameter_types: Optional[dict[str, str]] = None,
     ) -> Any:
         """Execute query and return results."""
+        assert self._aiosqlite is not None
         if transaction:
             # Handle both old API (just connection) and new API (tuple)
             # begin_transaction() returns (db, savepoint_name, depth) tuple
@@ -1612,94 +1684,68 @@ class SQLiteAdapter(DatabaseAdapter):
 
             return result
         else:
-            # Create new connection for non-transactional queries
-            if self._is_memory_db:
-                # Use shared connection for memory databases
+            # Use pool for connection management (handles both memory and file DBs)
+            if self._pool is not None:
+                async with self._pool.acquire(query) as db:
+                    return await self._execute_on_connection(
+                        db, query, params, fetch_mode, fetch_size
+                    )
+            elif self._is_memory_db:
+                # Fallback: shared connection for memory databases (no pool)
                 db = await self._get_connection()
-                cursor = await db.execute(query, params or [])
-
-                # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
-                query_type = query.strip().upper().split()[0] if query.strip() else ""
-
-                if query_type in ("DELETE", "UPDATE", "INSERT"):
-                    # Capture rowcount for DML operations
-                    rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
-                    await db.commit()
-                    # Use list format to match PostgreSQL/MySQL adapters
-                    return [{"rows_affected": rowcount}]
-
-                if fetch_mode == FetchMode.ONE:
-                    row = await cursor.fetchone()
-                    result = self._convert_row(dict(row)) if row else None
-                elif fetch_mode == FetchMode.ALL:
-                    rows = await cursor.fetchall()
-                    result = [self._convert_row(dict(row)) for row in rows]
-                elif fetch_mode == FetchMode.MANY:
-                    if not fetch_size:
-                        raise ValueError("fetch_size required for MANY mode")
-                    rows = await cursor.fetchmany(fetch_size)
-                    result = [self._convert_row(dict(row)) for row in rows]
-                else:
-                    result = []
-
-                # Check if this was an INSERT and capture lastrowid for SQLite
-                if query_type == "INSERT" and (not result or result == []):
-                    # For INSERT without RETURNING, capture lastrowid
-                    lastrowid = (
-                        cursor.lastrowid if hasattr(cursor, "lastrowid") else None
-                    )
-                    if lastrowid is not None:
-                        result = {"lastrowid": lastrowid}
-
-                # Commit for memory databases (needed for INSERT/UPDATE/DELETE)
-                await db.commit()
-                return result
+                return await self._execute_on_connection(
+                    db, query, params, fetch_mode, fetch_size
+                )
             else:
-                # Use context manager for file databases
-                async with self._aiosqlite.connect(self._db_path) as db:
+                # Fallback: inline connection for file databases (no pool)
+                async with self._aiosqlite.connect(
+                    self._db_path, **self._connect_kwargs
+                ) as db:
                     db.row_factory = self._aiosqlite.Row
-                    cursor = await db.execute(query, params or [])
-
-                    # Detect DML operations (DELETE/UPDATE/INSERT) to capture rowcount
-                    query_type = (
-                        query.strip().upper().split()[0] if query.strip() else ""
+                    await self._configure_connection(db)
+                    return await self._execute_on_connection(
+                        db, query, params, fetch_mode, fetch_size
                     )
 
-                    if query_type in ("DELETE", "UPDATE", "INSERT"):
-                        # Capture rowcount for DML operations
-                        rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
-                        await db.commit()
-                        # Use list format to match PostgreSQL/MySQL adapters
-                        return [{"rows_affected": rowcount}]
+    async def _execute_on_connection(
+        self,
+        db: Any,
+        query: str,
+        params: Optional[Union[tuple, dict]],
+        fetch_mode: "FetchMode",
+        fetch_size: Optional[int],
+    ) -> Any:
+        """Execute a query on an existing connection and return results."""
+        cursor = await db.execute(query, params or [])
+        query_type = query.strip().upper().split()[0] if query.strip() else ""
 
-                    if fetch_mode == FetchMode.ONE:
-                        row = await cursor.fetchone()
-                        await db.commit()
-                        return self._convert_row(dict(row)) if row else None
-                    elif fetch_mode == FetchMode.ALL:
-                        rows = await cursor.fetchall()
-                        await db.commit()
-                        return [self._convert_row(dict(row)) for row in rows]
-                    elif fetch_mode == FetchMode.MANY:
-                        if not fetch_size:
-                            raise ValueError("fetch_size required for MANY mode")
-                        rows = await cursor.fetchmany(fetch_size)
-                        result = [self._convert_row(dict(row)) for row in rows]
-                    else:
-                        result = []
+        if query_type in ("DELETE", "UPDATE", "INSERT"):
+            rowcount = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+            await db.commit()
+            return [{"rows_affected": rowcount}]
 
-                    # Check if this was an INSERT and capture lastrowid for SQLite
-                    if query_type == "INSERT" and (not result or result == []):
-                        # For INSERT without RETURNING, capture lastrowid
-                        lastrowid = (
-                            cursor.lastrowid if hasattr(cursor, "lastrowid") else None
-                        )
-                        if lastrowid is not None:
-                            await db.commit()  # Commit before returning
-                            return {"lastrowid": lastrowid}
+        if fetch_mode == FetchMode.ONE:
+            row = await cursor.fetchone()
+            result = self._convert_row(dict(row)) if row else None
+        elif fetch_mode == FetchMode.ALL:
+            rows = await cursor.fetchall()
+            result = [self._convert_row(dict(row)) for row in rows]
+        elif fetch_mode == FetchMode.MANY:
+            if not fetch_size:
+                raise ValueError("fetch_size required for MANY mode")
+            rows = await cursor.fetchmany(fetch_size)
+            result = [self._convert_row(dict(row)) for row in rows]
+        else:
+            result = []
 
-                    await db.commit()
-                    return result
+        if query_type == "INSERT" and (not result or result == []):
+            lastrowid = cursor.lastrowid if hasattr(cursor, "lastrowid") else None
+            if lastrowid is not None:
+                await db.commit()
+                return {"lastrowid": lastrowid}
+
+        await db.commit()
+        return result
 
     async def execute_many(
         self,
@@ -1708,6 +1754,7 @@ class SQLiteAdapter(DatabaseAdapter):
         transaction: Optional[Any] = None,
     ) -> None:
         """Execute query multiple times with different parameters."""
+        assert self._aiosqlite is not None
         if transaction:
             # Handle both old API (just connection) and new API (tuple)
             # begin_transaction() returns (db, savepoint_name, depth) tuple
@@ -1718,15 +1765,19 @@ class SQLiteAdapter(DatabaseAdapter):
             await db.executemany(query, params_list)
             # Don't commit here - let transaction handling do it
         else:
-            # Create new connection for non-transactional queries
-            if self._is_memory_db:
-                # Use shared connection for memory databases
+            if self._pool is not None:
+                async with self._pool.acquire_write() as db:
+                    await db.executemany(query, params_list)
+                    await db.commit()
+            elif self._is_memory_db:
                 db = await self._get_connection()
                 await db.executemany(query, params_list)
                 await db.commit()
             else:
-                # Use context manager for file databases
-                async with self._aiosqlite.connect(self._db_path) as db:
+                async with self._aiosqlite.connect(
+                    self._db_path, **self._connect_kwargs
+                ) as db:
+                    await self._configure_connection(db)
                     await db.executemany(query, params_list)
                     await db.commit()
 
@@ -1744,18 +1795,22 @@ class SQLiteAdapter(DatabaseAdapter):
         Returns:
             tuple: (connection, savepoint_name or None, transaction_depth)
         """
+        assert self._aiosqlite is not None
         if self._is_memory_db:
             # Use shared connection for memory databases
             db = await self._get_connection()
         else:
             # Create new connection for file databases
-            db = await self._aiosqlite.connect(self._db_path)
+            db = await self._aiosqlite.connect(self._db_path, **self._connect_kwargs)
             db.row_factory = self._aiosqlite.Row
+            await self._configure_connection(db)
 
         # Check current transaction depth
         if self._transaction_depth == 0:
-            # First transaction - use BEGIN
-            await db.execute("BEGIN")
+            # First transaction - use BEGIN IMMEDIATE to acquire write lock
+            # immediately, preventing "database is locked" under concurrency.
+            # Mirrors the Rust SDK's begin_immediate() API.
+            await db.execute("BEGIN IMMEDIATE")
             self._transaction_depth += 1
             return (db, None, self._transaction_depth)
         else:
@@ -1859,13 +1914,15 @@ class DatabaseConfigManager:
 
         if not os.path.exists(self.config_path):
             # No config file, return empty config
-            self._config = {}
-            return self._config
+            config: dict[str, Any] = {}
+            self._config = config
+            return config
 
         try:
             with open(self.config_path, "r") as f:
-                self._config = yaml.safe_load(f) or {}
-                return self._config
+                loaded: dict[str, Any] = yaml.safe_load(f) or {}
+                self._config = loaded
+                return loaded
         except yaml.YAMLError as e:
             raise NodeValidationError(f"Invalid YAML in configuration file: {e}")
         except Exception as e:
@@ -2015,9 +2072,20 @@ class ProductionPostgreSQLAdapter(PostgreSQLAdapter):
             self._pool = self._enterprise_pool._pool
 
     async def execute(
-        self, query: str, params: Optional[Union[tuple, dict]] = None, **kwargs
+        self,
+        query: str,
+        params: Optional[Union[tuple, dict]] = None,
+        fetch_mode: FetchMode = FetchMode.ALL,
+        fetch_size: Optional[int] = None,
+        transaction: Optional[Any] = None,
+        parameter_types: Optional[dict[str, str]] = None,
+        **kwargs,
     ) -> Any:
         """Execute with enterprise monitoring."""
+        if transaction is not None:
+            return await super().execute(
+                query, params, fetch_mode, fetch_size, transaction, parameter_types
+            )
         if self._enterprise_pool:
             return await self._enterprise_pool.execute_query(query, params, **kwargs)
         else:
@@ -2086,9 +2154,20 @@ class ProductionMySQLAdapter(MySQLAdapter):
             self._pool = self._enterprise_pool._pool
 
     async def execute(
-        self, query: str, params: Optional[Union[tuple, dict]] = None, **kwargs
+        self,
+        query: str,
+        params: Optional[Union[tuple, dict]] = None,
+        fetch_mode: FetchMode = FetchMode.ALL,
+        fetch_size: Optional[int] = None,
+        transaction: Optional[Any] = None,
+        parameter_types: Optional[dict[str, str]] = None,
+        **kwargs,
     ) -> Any:
         """Execute with enterprise monitoring."""
+        if transaction is not None:
+            return await super().execute(
+                query, params, fetch_mode, fetch_size, transaction, parameter_types
+            )
         if self._enterprise_pool:
             return await self._enterprise_pool.execute_query(query, params, **kwargs)
         else:
@@ -2136,7 +2215,9 @@ class ProductionSQLiteAdapter(SQLiteAdapter):
         super().__init__(config)
         # Initialize SQLite-specific attributes
         self._db_path = config.connection_string or config.database or ":memory:"
-        self._is_memory_db = self._db_path == ":memory:"
+        self._is_memory_db = (
+            self._db_path == ":memory:" or "mode=memory" in self._db_path
+        )
         self._connection = None
         self._aiosqlite = None
 
@@ -2167,13 +2248,28 @@ class ProductionSQLiteAdapter(SQLiteAdapter):
             )
             await self._enterprise_pool.initialize()
 
-        # Also initialize base connection for compatibility
+        # Initialize base adapter for path parsing and compatibility.
         await super().connect()
 
     async def execute(
-        self, query: str, params: Optional[Union[tuple, dict]] = None, **kwargs
+        self,
+        query: str,
+        params: Optional[Union[tuple, dict]] = None,
+        fetch_mode: FetchMode = FetchMode.ALL,
+        fetch_size: Optional[int] = None,
+        transaction: Optional[Any] = None,
+        parameter_types: Optional[dict[str, str]] = None,
+        **kwargs,
     ) -> Any:
         """Execute with enterprise monitoring."""
+        if transaction is not None:
+            # When a transaction is provided, use the base class path which
+            # executes on the transaction's connection. Routing through the
+            # enterprise pool would create a DIFFERENT connection, causing
+            # "database is locked" because the transaction holds BEGIN IMMEDIATE.
+            return await super().execute(
+                query, params, fetch_mode, fetch_size, transaction, parameter_types
+            )
         if self._enterprise_pool:
             return await self._enterprise_pool.execute_query(query, params, **kwargs)
         else:
@@ -2296,7 +2392,7 @@ class DatabasePoolCoordinator:
         """Register pool with runtime pool manager."""
         try:
             if hasattr(self.runtime_pool_manager, "register_pool"):
-                await self.runtime_pool_manager.register_pool(
+                await self.runtime_pool_manager.register_pool(  # type: ignore[union-attr]
                     pool_id,
                     {
                         "type": "enterprise_database_pool",
@@ -2541,6 +2637,11 @@ class AsyncSQLDatabaseNode(AsyncNode):
         ...     await node.rollback()
         ...     raise
     """
+
+    # Class-level defaults (safety net if __init__ fails partway or __del__ runs early)
+    _connected = False
+    _adapter: Optional["DatabaseAdapter"] = None
+    _source_traceback = None
 
     # Class-level pool storage for sharing across instances
     _shared_pools: dict[str, tuple[DatabaseAdapter, int]] = {}
@@ -3007,7 +3108,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                             # Generate pool configuration
                             pool_config = {
                                 "database_url": self.config.get("connection_string")
-                                or self._build_connection_string(),
+                                or self._build_connection_string(),  # type: ignore[attr-defined]
                                 "pool_size": self.config.get("pool_size", 10),
                                 "max_pool_size": self.config.get("max_pool_size", 20),
                                 "database_type": self.config.get("database_type"),
@@ -3113,7 +3214,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
         # Mark adapter as runtime-coordinated for proper cleanup
         if hasattr(adapter, "_set_runtime_coordinated"):
-            adapter._set_runtime_coordinated(True)
+            adapter._set_runtime_coordinated(True)  # type: ignore[attr-defined]
         else:
             # Add runtime coordination flag
             adapter._runtime_coordinated = True
@@ -3159,6 +3260,12 @@ class AsyncSQLDatabaseNode(AsyncNode):
         self._version_field = config.get("version_field", "version")
         self._conflict_resolution = config.get("conflict_resolution", "fail_fast")
         self._version_retry_attempts = config.get("version_retry_attempts", 3)
+
+        # Source traceback for leak diagnostics
+        if sys.flags.dev_mode or __debug__:
+            self._source_traceback = traceback.extract_stack()
+        else:
+            self._source_traceback = None
 
         super().__init__(**config)
 
@@ -3250,7 +3357,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
             ),
             NodeParameter(
                 name="params",
-                type=Any,
+                type=object,
                 required=False,
                 description="Query parameters as dict or tuple",
             ),
@@ -3290,7 +3397,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
             ),
             NodeParameter(
                 name="user_context",
-                type=Any,
+                type=object,
                 required=False,
                 description="User context for access control",
             ),
@@ -3367,7 +3474,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
             ),
             NodeParameter(
                 name="retry_config",
-                type=Any,
+                type=object,
                 required=False,
                 description="Retry configuration dict or RetryConfig object",
             ),
@@ -3647,7 +3754,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                         # Create new shared pool
                         self._adapter = await self._create_adapter()
                         self._shared_pools[self._pool_key] = (self._adapter, 1)
-                        AsyncSQLDatabaseNode._total_pools_created += 1  # ADR-017
+                        AsyncSQLDatabaseNode._total_pools_created += 1  # type: ignore[attr-defined]  # ADR-017
                         logger.debug(
                             f"Created new class-level shared pool for {self.id}"
                         )
@@ -3962,7 +4069,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
             affected_rows = await self._execute_many_with_retry(
                 adapter=adapter,
                 query=query,
-                params_list=params_list,
+                params_list=params_list,  # type: ignore[arg-type]
             )
 
             return {
@@ -4159,7 +4266,10 @@ class AsyncSQLDatabaseNode(AsyncNode):
         )
 
     async def _execute_many_with_retry(
-        self, adapter: DatabaseAdapter, query: str, params_list: list[dict[str, Any]]
+        self,
+        adapter: DatabaseAdapter,
+        query: str,
+        params_list: list[Union[tuple, dict]],
     ) -> int:
         """Execute batch operation with retry logic.
 
@@ -4232,7 +4342,10 @@ class AsyncSQLDatabaseNode(AsyncNode):
         )
 
     async def _execute_many_with_transaction(
-        self, adapter: DatabaseAdapter, query: str, params_list: list[dict[str, Any]]
+        self,
+        adapter: DatabaseAdapter,
+        query: str,
+        params_list: list[Union[tuple, dict]],
     ) -> int:
         """Execute batch operation with automatic transaction management.
 
@@ -4352,7 +4465,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                         pool_info["pool_size"] = pool.size()
                     if hasattr(pool, "_holders"):
                         pool_info["active_connections"] = len(
-                            [h for h in pool._holders if h._in_use]
+                            [h for h in pool._holders if h._in_use]  # type: ignore[union-attr]
                         )
                     elif hasattr(pool, "size") and hasattr(pool, "freesize"):
                         pool_info["active_connections"] = pool.size - pool.freesize
@@ -4360,7 +4473,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 metrics["pools"].append(pool_info)
 
             # Clean up stale pools from closed event loops
-            cleaned_pools = cls._cleanup_closed_loop_pools()
+            cleaned_pools = await cls._cleanup_closed_loop_pools()
             if cleaned_pools > 0:
                 metrics["cleaned_stale_pools"] = cleaned_pools
 
@@ -4417,7 +4530,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 # Attempt graceful close
                 try:
                     if hasattr(adapter, "close"):
-                        await adapter.close()
+                        await adapter.close()  # type: ignore[attr-defined]
                 except Exception as close_error:
                     logger.debug(
                         f"AsyncSQLDatabaseNode: Could not close adapter for "
@@ -4472,7 +4585,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
                 if graceful and hasattr(adapter, "close"):
                     try:
-                        await adapter.close()
+                        await adapter.close()  # type: ignore[attr-defined]
                         logger.debug(
                             f"AsyncSQLDatabaseNode: Gracefully closed pool {pool_key}"
                         )
@@ -4519,7 +4632,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 info["pool_size"] = pool.size()
             if hasattr(pool, "_holders"):
                 info["active_connections"] = len(
-                    [h for h in pool._holders if h._in_use]
+                    [h for h in pool._holders if h._in_use]  # type: ignore[union-attr]
                 )
             elif hasattr(pool, "size") and hasattr(pool, "freesize"):
                 info["active_connections"] = pool.size - pool.freesize
@@ -4787,7 +4900,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
         return f"UPDATE {table_name} SET {', '.join(set_parts)} WHERE {where_clause}"
 
     def _convert_to_named_parameters(
-        self, query: str, parameters: list
+        self, query: str, parameters: Union[list, tuple]
     ) -> tuple[str, dict]:
         """Convert positional parameters to named parameters for various SQL dialects.
 
@@ -4983,9 +5096,9 @@ class AsyncSQLDatabaseNode(AsyncNode):
             Dictionary with detailed analytics, or None if not available
         """
         try:
-            adapter = await self._get_or_create_adapter()
+            adapter = await self._get_adapter()
             if hasattr(adapter, "get_analytics_summary"):
-                return adapter.get_analytics_summary()
+                return adapter.get_analytics_summary()  # type: ignore[attr-defined]
         except Exception as e:
             logger.warning(f"Failed to get pool analytics: {e}")
 
@@ -4998,12 +5111,12 @@ class AsyncSQLDatabaseNode(AsyncNode):
             HealthCheckResult with health status, or None if not available
         """
         try:
-            adapter = await self._get_or_create_adapter()
+            adapter = await self._get_adapter()
             if hasattr(adapter, "health_check"):
-                return await adapter.health_check()
+                return await adapter.health_check()  # type: ignore[attr-defined]
             else:
                 # Fallback basic health check
-                await self._execute_query_with_retry(adapter, "SELECT 1")
+                await adapter.execute("SELECT 1")
                 return HealthCheckResult(is_healthy=True, latency_ms=0)
         except Exception as e:
             logger.warning(f"Health check failed: {e}")
@@ -5019,7 +5132,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
         """
         try:
             if self._adapter and hasattr(self._adapter, "_enterprise_pool"):
-                enterprise_pool = self._adapter._enterprise_pool
+                enterprise_pool = self._adapter._enterprise_pool  # type: ignore[attr-defined]
                 if enterprise_pool and hasattr(enterprise_pool, "_circuit_breaker"):
                     return enterprise_pool._circuit_breaker.get_state()
         except Exception as e:
@@ -5078,7 +5191,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
             # Get metrics
             metrics = await self.get_pool_metrics()
-            result["metrics"] = metrics.to_dict() if metrics else None
+            result["metrics"] = metrics if metrics else None
 
             # Get circuit breaker state
             result["circuit_breaker"] = self.get_circuit_breaker_state()
@@ -5214,31 +5327,30 @@ class AsyncSQLDatabaseNode(AsyncNode):
             self._connected = False
             self._adapter = None
 
-    def __del__(self):
-        """Ensure connections are closed safely."""
-        if self._adapter and self._connected:
-            # Try to schedule cleanup, but be resilient to event loop issues
-            try:
-                import asyncio
+    def __del__(self, _warnings=warnings):
+        """Warn and attempt sync cleanup if node is GC'd while still connected."""
+        if not self._connected or self._adapter is None:
+            return
 
-                # Check if there's a running event loop that's not closed
-                try:
-                    loop = asyncio.get_running_loop()
-                    if loop and not loop.is_closed():
-                        # Create cleanup task only if loop is healthy
-                        try:
-                            loop.create_task(self.cleanup())
-                        except RuntimeError as e:
-                            # Loop might be closing, ignore gracefully
-                            logger.debug(f"Could not schedule cleanup task: {e}")
-                    else:
-                        logger.debug("Event loop is closed, skipping async cleanup")
-                except RuntimeError:
-                    # No running event loop - this is normal during shutdown
-                    logger.debug(
-                        "No running event loop for cleanup, connections will be cleaned by GC"
-                    )
-            except Exception as e:
-                # Complete fallback - any unexpected error should not crash __del__
-                logger.debug(f"Error during connection cleanup: {e}")
-                pass
+        tb = ""
+        if self._source_traceback:
+            try:
+                tb = "\n" + "".join(traceback.format_list(self._source_traceback))
+            except Exception:
+                tb = ""
+        _warnings.warn(
+            f"AsyncSQLDatabaseNode GC'd while still connected. Created at:{tb}",
+            ResourceWarning,
+            stacklevel=1,
+        )
+
+        # Best-effort sync close for SQLite (the only adapter with sync access)
+        try:
+            adapter = self._adapter
+            conn = getattr(adapter, "_connection", None)
+            if conn is not None:
+                raw = getattr(conn, "_conn", None)
+                if raw is not None:
+                    raw.close()
+        except Exception:
+            pass

@@ -6,7 +6,7 @@ This document summarizes the fixes made to edge computing documentation to ensur
 
 ### 1. Node Registration
 - Fixed imports in edge nodes to use correct paths: `from kailash.nodes.base import Node as AsyncNode, NodeParameter, register_node`
-- Updated `src/kailash/nodes/edge/__init__.py` to export all new edge nodes
+- Updated `kailash/nodes/edge/__init__.py` to export all new edge nodes
 
 ### 2. Node Names
 - Changed `EdgeStateMachineNode` → `EdgeStateMachine` (correct registered name)

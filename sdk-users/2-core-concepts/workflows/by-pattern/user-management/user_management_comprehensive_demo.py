@@ -251,12 +251,50 @@ class UserManagementSystem:
         """List users with pagination, filtering, and sorting."""
         workflow = Workflow("list_users")
 
-        # Build query with filters
-        build_query_node = PythonCodeNode.from_function(
-            name="build_query",
-            func=lambda params: {
-                "result": {
-                    "query": f"""
+        # Build query with filters (parameterized to prevent SQL injection)
+        def _build_list_query(params):
+            # Validate order_by against whitelist of allowed sort clauses
+            allowed_order_columns = {
+                "date_joined DESC",
+                "date_joined ASC",
+                "last_login DESC",
+                "last_login ASC",
+                "email ASC",
+                "email DESC",
+                "username ASC",
+                "username DESC",
+                "first_name ASC",
+                "first_name DESC",
+                "last_name ASC",
+                "last_name DESC",
+            }
+            order_clause = (
+                params["order_by"]
+                if params["order_by"] in allowed_order_columns
+                else "date_joined DESC"
+            )
+
+            conditions = "WHERE tenant_id = %s"
+            query_params = [params["tenant_id"]]
+            flt = params.get("filters", {})
+
+            if flt.get("active_only"):
+                conditions += " AND is_active = true"
+            if flt.get("department"):
+                conditions += " AND department = %s"
+                query_params.append(flt["department"])
+            if flt.get("search"):
+                conditions += (
+                    " AND (email ILIKE %s OR username ILIKE %s"
+                    " OR first_name ILIKE %s OR last_name ILIKE %s)"
+                )
+                search_pattern = f"%{flt['search']}%"
+                query_params.extend([search_pattern] * 4)
+
+            per_page_val = int(params["per_page"])
+            offset_val = (int(params["page"]) - 1) * per_page_val
+
+            query = f"""
                     SELECT
                         user_id, email, username, first_name, last_name,
                         is_active, is_staff, is_superuser, date_joined,
@@ -269,23 +307,30 @@ class UserManagementSystem:
                             ELSE 'offline'
                         END as status
                     FROM users
-                    WHERE tenant_id = '{params["tenant_id"]}'
-                    {' AND is_active = true' if params.get("filters", {}).get("active_only") else ''}
-                    {' AND department = ' + repr(params["filters"]["department"]) if params.get("filters", {}).get("department") else ''}
-                    {' AND (email ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ' OR username ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ' OR first_name ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ' OR last_name ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ')' if params.get("filters", {}).get("search") else ''}
-                    ORDER BY {params["order_by"]}
-                    LIMIT {params["per_page"]} OFFSET {(params["page"] - 1) * params["per_page"]}
-                    """,
-                    "count_query": f"""
+                    {conditions}
+                    ORDER BY {order_clause}
+                    LIMIT %s OFFSET %s
+                    """
+            list_params = query_params + [per_page_val, offset_val]
+
+            count_query = f"""
                     SELECT COUNT(*) as total
                     FROM users
-                    WHERE tenant_id = '{params["tenant_id"]}'
-                    {' AND is_active = true' if params.get("filters", {}).get("active_only") else ''}
-                    {' AND department = ' + repr(params["filters"]["department"]) if params.get("filters", {}).get("department") else ''}
-                    {' AND (email ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ' OR username ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ' OR first_name ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ' OR last_name ILIKE ' + repr(f'%{params["filters"]["search"]}%') + ')' if params.get("filters", {}).get("search") else ''}
-                    """,
+                    {conditions}
+                    """
+
+            return {
+                "result": {
+                    "query": query,
+                    "query_params": list_params,
+                    "count_query": count_query,
+                    "count_params": list(query_params),
                 }
-            },
+            }
+
+        build_query_node = PythonCodeNode.from_function(
+            name="build_query",
+            func=_build_list_query,
         )
 
         # Get users
@@ -322,8 +367,16 @@ class UserManagementSystem:
         workflow.add_nodes(
             [build_query_node, get_users_node, get_count_node, format_node]
         )
-        workflow.connect("build_query", "get_users", {"result.query": "query"})
-        workflow.connect("build_query", "get_count", {"result.count_query": "query"})
+        workflow.connect(
+            "build_query",
+            "get_users",
+            {"result.query": "query", "result.query_params": "parameters"},
+        )
+        workflow.connect(
+            "build_query",
+            "get_count",
+            {"result.count_query": "query", "result.count_params": "parameters"},
+        )
         workflow.connect("get_users", "format_results", {"result": "users"})
         workflow.connect("get_count", "format_results", {"result": "count"})
 
@@ -433,11 +486,12 @@ class UserManagementSystem:
                 database_config=DB_CONFIG,
             )
 
-        # Revoke all sessions
+        # Revoke all sessions (parameterized to prevent SQL injection)
         revoke_sessions_node = SQLDatabaseNode(
             name="revoke_sessions",
             database_config=DB_CONFIG,
-            query=f"UPDATE user_sessions SET is_active = false WHERE user_id = '{user_id}'",
+            query="UPDATE user_sessions SET is_active = false WHERE user_id = %s",
+            parameters=[user_id],
             operation_type="execute",
         )
 
@@ -584,13 +638,14 @@ class UserManagementSystem:
             check_history_node = SQLDatabaseNode(
                 name="check_history",
                 database_config=DB_CONFIG,
-                query=f"""
+                query="""
                 SELECT password_hash
                 FROM password_history
-                WHERE user_id = '{user_id}'
+                WHERE user_id = %s
                 ORDER BY changed_at DESC
                 LIMIT 5
                 """,
+                parameters=[user_id],
                 operation_type="query",
             )
 
@@ -609,13 +664,15 @@ class UserManagementSystem:
             )
 
             # Add to password history
+            new_password_hash = hashlib.sha256(new_password.encode()).hexdigest()
             history_node = SQLDatabaseNode(
                 name="add_to_history",
                 database_config=DB_CONFIG,
-                query=f"""
+                query="""
                 INSERT INTO password_history (user_id, password_hash, changed_by)
-                VALUES ('{user_id}', '{hashlib.sha256(new_password.encode()).hexdigest()}', '{user_id}')
+                VALUES (%s, %s, %s)
                 """,
+                parameters=[user_id, new_password_hash, user_id],
                 operation_type="execute",
             )
 
@@ -765,7 +822,15 @@ class UserManagementSystem:
         """Export users to CSV or JSON format."""
         workflow = Workflow("export_users")
 
-        # Get all users with filters
+        # Get all users with filters (parameterized to prevent SQL injection)
+        export_conditions = "WHERE tenant_id = %s"
+        export_params = [self.tenant_id]
+        if filters and filters.get("active_only"):
+            export_conditions += " AND is_active = true"
+        if filters and filters.get("department"):
+            export_conditions += " AND department = %s"
+            export_params.append(filters["department"])
+
         get_users_node = SQLDatabaseNode(
             name="get_export_data",
             database_config=DB_CONFIG,
@@ -776,11 +841,10 @@ class UserManagementSystem:
                 last_login, department, job_title, phone,
                 email_verified, created_by
             FROM users
-            WHERE tenant_id = '{self.tenant_id}'
-            {' AND is_active = true' if filters and filters.get("active_only") else ''}
-            {' AND department = ' + repr(filters["department"]) if filters and filters.get("department") else ''}
+            {export_conditions}
             ORDER BY date_joined DESC
             """,
+            parameters=export_params,
             operation_type="query",
         )
 
@@ -834,7 +898,13 @@ class UserManagementSystem:
         time_map = {"1h": "1 hour", "24h": "24 hours", "7d": "7 days", "30d": "30 days"}
         interval = time_map.get(time_range, "24 hours")
 
-        # Get user activity
+        # Get user activity (parameterized to prevent SQL injection)
+        activity_conditions = "WHERE u.tenant_id = %s"
+        activity_params = [self.tenant_id]
+        if user_id:
+            activity_conditions += " AND u.user_id = %s"
+            activity_params.append(user_id)
+
         activity_query = f"""
         SELECT
             u.user_id, u.email, u.username,
@@ -844,9 +914,8 @@ class UserManagementSystem:
             COALESCE(SUM(EXTRACT(EPOCH FROM (s.last_activity - s.created_at))), 0) as total_duration_seconds
         FROM users u
         LEFT JOIN user_sessions s ON u.user_id = s.user_id
-            AND s.created_at > NOW() - INTERVAL '{interval}'
-        WHERE u.tenant_id = '{self.tenant_id}'
-        {f" AND u.user_id = '{user_id}'" if user_id else ""}
+            AND s.created_at > NOW() - INTERVAL %s
+        {activity_conditions}
         GROUP BY u.user_id, u.email, u.username
         ORDER BY session_count DESC
         LIMIT 100
@@ -856,10 +925,17 @@ class UserManagementSystem:
             name="get_activity",
             database_config=DB_CONFIG,
             query=activity_query,
+            parameters=[interval] + activity_params,
             operation_type="query",
         )
 
-        # Get audit events
+        # Get audit events (parameterized to prevent SQL injection)
+        audit_conditions = "WHERE tenant_id = %s AND timestamp > NOW() - INTERVAL %s"
+        audit_params = [self.tenant_id, interval]
+        if user_id:
+            audit_conditions += " AND user_id = %s"
+            audit_params.append(user_id)
+
         audit_query = f"""
         SELECT
             user_id,
@@ -868,9 +944,7 @@ class UserManagementSystem:
             COUNT(*) as event_count,
             MAX(timestamp) as last_event
         FROM audit_logs
-        WHERE tenant_id = '{self.tenant_id}'
-            AND timestamp > NOW() - INTERVAL '{interval}'
-            {f" AND user_id = '{user_id}'" if user_id else ""}
+        {audit_conditions}
         GROUP BY user_id, event_type, action
         ORDER BY event_count DESC
         """
@@ -879,6 +953,7 @@ class UserManagementSystem:
             name="get_audit_events",
             database_config=DB_CONFIG,
             query=audit_query,
+            parameters=audit_params,
             operation_type="query",
         )
 
@@ -1119,4 +1194,4 @@ async def run_comprehensive_demo():
 
 if __name__ == "__main__":
     # Run the comprehensive demo
-    asyncio.execute(run_comprehensive_demo())
+    asyncio.run(run_comprehensive_demo())
