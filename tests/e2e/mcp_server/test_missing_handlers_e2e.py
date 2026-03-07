@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import pytest
 import websockets
+
 from kailash.mcp_server.auth import AuthManager
 from kailash.mcp_server.protocol import get_protocol_manager
 from kailash.mcp_server.server import MCPServer

@@ -9,6 +9,7 @@ import logging
 from typing import Any, Dict, List, Optional, Set
 
 import networkx as nx
+
 from kailash.nodes.logic.operations import MergeNode, SwitchNode
 from kailash.workflow.graph import Workflow
 
