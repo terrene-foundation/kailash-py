@@ -192,8 +192,6 @@ Use `tdd-implementer` when:
 
 ### Primary Sources
 - **Testing Specialist**: [`.claude/agents/testing-specialist.md` (lines 178-209)](../../../../.claude/agents/testing-specialist.md#L178-L209)
-- **Test Organization**: [`sdk-users/3-development/testing/test-organization-policy.md`](../../../../sdk-users/3-development/testing/test-organization-policy.md)
-- **NO MOCKING**: [`sdk-users/7-gold-standards/mock-directives-for-testing.md`](../../../../sdk-users/7-gold-standards/mock-directives-for-testing.md)
 
 ## Quick Tips
 

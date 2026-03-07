@@ -460,8 +460,6 @@ answer = await self.ask_user_question(
 
 - **[kaizen-tool-calling.md](kaizen-tool-calling.md)** - Autonomous tool execution
 - **[kaizen-baseagent-quick.md](kaizen-baseagent-quick.md)** - BaseAgent fundamentals
-- **[Control Protocol API Reference](../../../sdk-users/apps/kaizen/docs/reference/control-protocol-api.md)** - Complete API (497 lines)
-- **[Control Protocol Tutorial](../../../sdk-users/apps/kaizen/docs/guides/control-protocol-tutorial.md)** - Step-by-step guide (13KB)
 
 ---
 

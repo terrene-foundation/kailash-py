@@ -120,7 +120,6 @@ When this guidance is insufficient, consult:
 - `.claude/skills/19-flutter-patterns/creating-design-system.md` - Creating design systems
 - `.claude/skills/19-flutter-patterns/flutter-testing-patterns.md` - Testing strategies
 - `.claude/skills/23-uiux-design-principles/SKILL.md` - UI/UX design principles (CRITICAL)
-- `sdk-users/apps/nexus/docs/api-reference.md` - Backend API reference
 - Flutter docs: https://docs.flutter.dev/
 - Riverpod docs: https://riverpod.dev/
 - Go Router docs: https://pub.dev/packages/go_router

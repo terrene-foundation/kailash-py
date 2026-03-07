@@ -161,13 +161,9 @@ Use `dataflow-specialist` when:
 
 ### Primary Sources
 
-- **README Connection Section**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md#L1033-L1086)
-- **DataFlow CLAUDE**: [`sdk-users/apps/dataflow/CLAUDE.md`](../../../../sdk-users/apps/dataflow/CLAUDE.md#L1033-L1085)
 
 ### Related Documentation
 
-- **Pooling Guide**: [`sdk-users/apps/dataflow/docs/advanced/pooling.md`](../../../../sdk-users/apps/dataflow/docs/advanced/pooling.md)
-- **Deployment**: [`sdk-users/apps/dataflow/docs/production/deployment.md`](../../../../sdk-users/apps/dataflow/docs/production/deployment.md)
 
 ## Examples
 

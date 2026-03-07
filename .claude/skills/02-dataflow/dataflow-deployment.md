@@ -160,7 +160,5 @@ db = DataFlow(
 
 ## Documentation
 
-- **Quickstart**: [`sdk-users/apps/dataflow/docs/getting-started/quickstart.md`](../../../../sdk-users/apps/dataflow/docs/getting-started/quickstart.md)
-- **Docker Guide**: [`sdk-users/apps/dataflow/docs/production/deployment.md`](../../../../sdk-users/apps/dataflow/docs/production/deployment.md)
 
 <!-- Trigger Keywords: deploy dataflow, dataflow production, dataflow docker, dataflow kubernetes, dataflow fastapi -->

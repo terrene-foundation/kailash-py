@@ -19,6 +19,7 @@ from typing import Any
 from unittest.mock import Mock, patch
 
 import pytest
+
 from kailash.nodes.base import Node, NodeParameter, NodeRegistry
 from kailash.sdk_exceptions import ConnectionError, WorkflowValidationError
 from kailash.workflow.builder import WorkflowBuilder

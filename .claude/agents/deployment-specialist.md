@@ -129,7 +129,6 @@ You are a production deployment specialist for containerized applications using 
 ## Full Documentation
 
 When this guidance is insufficient, consult:
-- `sdk-users/5-enterprise/production-patterns.md` - Production patterns
 - `.claude/skills/10-deployment-git/` - Deployment quick references
 - Docker docs: https://docs.docker.com/
 - Kubernetes docs: https://kubernetes.io/docs/

@@ -287,7 +287,7 @@ def sdk_infrastructure():
         pytest.skip("SDK development infrastructure is not running")
 
     # Load environment variables
-    env_file = Path(__file__).parent.parent / "sdk-users" / ".env.sdk-dev"
+    env_file = Path(__file__).parent.parent / ".env.sdk-dev"
     if env_file.exists():
         from dotenv import load_dotenv
 

@@ -72,7 +72,6 @@ You are a test-first development specialist focused on the write-test-then-code 
    - Fix any policy violations immediately
 
 5. **TDD Implementation For DataFlow**:
-   - Please check dataflow-specialist or `sdk-users/apps/dataflow/docs/tdd`
 
 ## Implementation Process
 
@@ -220,6 +219,3 @@ Provide detailed implementation progress:
 ## Full Documentation
 
 When this guidance is insufficient, consult:
-- `sdk-users/3-development/testing/` - Testing strategy and organization
-- `sdk-users/7-gold-standards/test_creation_guide.md` - Test creation standards
-- `sdk-users/apps/dataflow/docs/tdd/` - DataFlow TDD patterns

@@ -9,6 +9,7 @@ Tests the basic contract functionality including:
 """
 
 import pytest
+
 from kailash.workflow.contracts import (
     ConnectionContract,
     ContractRegistry,

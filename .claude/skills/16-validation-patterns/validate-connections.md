@@ -38,6 +38,5 @@ built = workflow.build()  # Raises error if invalid
 
 ## Documentation
 
-- **Workflow Validation**: [`sdk-users/2-core-concepts/workflows/02-building-workflows.md#validation`](../../../../sdk-users/2-core-concepts/workflows/02-building-workflows.md)
 
 <!-- Trigger Keywords: validate workflow, check connections, workflow validation, connection errors -->

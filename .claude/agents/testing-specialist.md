@@ -131,8 +131,6 @@ pytest --cov=src/kailash --cov-report=term-missing
 ## Full Documentation
 
 When this guidance is insufficient, consult:
-- `sdk-users/3-development/testing/` - Complete testing documentation
-- `sdk-users/7-gold-standards/mock-directives-for-testing.md` - Mocking policy
 - `tests/utils/` - Docker infrastructure setup
 
 ---

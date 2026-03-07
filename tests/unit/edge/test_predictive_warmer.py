@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
 import pytest
+
 from kailash.edge.prediction.predictive_warmer import (
     PredictionStrategy,
     PredictiveWarmer,

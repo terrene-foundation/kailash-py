@@ -20,11 +20,10 @@ import pytest
 
 dataflow = pytest.importorskip("dataflow", reason="kailash-dataflow not installed")
 
-from dataflow.adapters.sqlite import SQLiteTransaction
-from dataflow.adapters.postgresql import PostgreSQLTransaction
 from dataflow.adapters.mysql import MySQLTransaction
+from dataflow.adapters.postgresql import PostgreSQLTransaction
+from dataflow.adapters.sqlite import SQLiteTransaction
 from dataflow.adapters.sqlite_enterprise import SQLiteEnterpriseTransaction
-
 
 # --- Helpers ---
 

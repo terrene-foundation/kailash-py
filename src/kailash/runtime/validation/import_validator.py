@@ -4,7 +4,7 @@ Import path validator for production deployment compatibility.
 This module detects relative imports that fail in production environments
 and provides guidance for absolute import patterns.
 
-Based on Gold Standard: sdk-users/7-gold-standards/absolute-imports-gold-standard.md
+Based on Gold Standard: .claude/skills/17-gold-standards/gold-absolute-imports.md
 """
 
 import ast
@@ -39,9 +39,7 @@ class ImportIssue:
     severity: str  # "critical", "warning", "info"
     message: str
     suggestion: str
-    gold_standard_ref: str = (
-        "sdk-users/7-gold-standards/absolute-imports-gold-standard.md"
-    )
+    gold_standard_ref: str = ".claude/skills/17-gold-standards/gold-absolute-imports.md"
 
 
 class ImportPathValidator:

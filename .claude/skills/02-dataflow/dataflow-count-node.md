@@ -391,7 +391,6 @@ workflow.add_node("OrderCountNode", "count", {
 
 ## Related Resources
 
-- **[count-node.md](../../../sdk-users/apps/dataflow/guides/count-node.md)** - Comprehensive CountNode guide
 - **[dataflow-queries](dataflow-queries.md)** - Query patterns and filtering
 - **[dataflow-performance](dataflow-performance.md)** - Performance optimization
 - **[dataflow-crud-operations](dataflow-crud-operations.md)** - CRUD operation patterns

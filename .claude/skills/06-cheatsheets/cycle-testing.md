@@ -281,7 +281,6 @@ Use specialized subagents when:
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/2-core-concepts/cheatsheet/027-cycle-aware-testing-patterns.md`](../../../sdk-users/2-core-concepts/cheatsheet/027-cycle-aware-testing-patterns.md)
 
 ## Quick Tips
 

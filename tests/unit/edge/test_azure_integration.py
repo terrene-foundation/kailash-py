@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from kailash.edge.resource.cloud_integration import (
     AZURE_AVAILABLE,
     AzureIntegration,

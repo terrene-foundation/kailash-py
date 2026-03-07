@@ -267,7 +267,7 @@ class TestEnhancedErrorFormatter:
         suggestion = ValidationSuggestion(
             message="Type mismatch detected",
             code_example="workflow.add_connection('api_client', 'response.data', 'processor', 'input_data')",
-            documentation_link="sdk-users/2-core-concepts/validation/common-mistakes.md#type-mismatch",
+            documentation_link=".claude/skills/06-cheatsheets/common-mistakes-catalog.md",
         )
 
         error_msg = formatter.format_enhanced_error(
@@ -301,7 +301,7 @@ class TestEnhancedErrorFormatter:
         suggestion = ValidationSuggestion(
             message="SQL injection detected",
             code_example="Use parameterized queries",
-            documentation_link="sdk-users/5-enterprise/security-patterns.md#sql-injection",
+            documentation_link=".claude/skills/18-security-patterns/SKILL.md",
         )
 
         error_msg = formatter.format_enhanced_error(
@@ -364,7 +364,7 @@ workflow.add_connection("reader", "data", "processor", "input")"""
         suggestion = ValidationSuggestion(
             message="Connection setup required",
             code_example=multiline_example,
-            documentation_link="sdk-users/2-core-concepts/patterns/connection-patterns.md",
+            documentation_link=".claude/skills/01-core-sdk/connection-patterns.md",
         )
 
         error_msg = formatter.format_enhanced_error(
@@ -418,7 +418,7 @@ class TestEnhancedErrorFormatterAdditional:
         suggestion = ValidationSuggestion(
             message="Use parameterized queries to prevent SQL injection",
             code_example="db.execute('SELECT * FROM users WHERE id = ?', [user_id])",
-            documentation_link="sdk-users/5-enterprise/security-patterns.md#sql-injection",
+            documentation_link=".claude/skills/18-security-patterns/SKILL.md",
         )
 
         error_msg = formatter.format_security_error(

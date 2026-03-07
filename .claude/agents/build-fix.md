@@ -106,5 +106,4 @@ Escalate to a different agent if:
 
 ## Full Documentation
 When this guidance is insufficient, consult:
-- `sdk-users/7-gold-standards/error-handling.md`
 - `.claude/skills/15-error-troubleshooting/`

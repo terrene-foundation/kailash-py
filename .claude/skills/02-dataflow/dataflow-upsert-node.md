@@ -374,7 +374,6 @@ workflow.add_node("OrderItemUpsertNode", "upsert", {
 
 ## Related Resources
 
-- **[upsert-node.md](../../../sdk-users/apps/dataflow/guides/upsert-node.md)** - Comprehensive UpsertNode guide
 - **[dataflow-crud-operations](dataflow-crud-operations.md)** - CRUD operation patterns
 - **[dataflow-bulk-operations](dataflow-bulk-operations.md)** - BulkUpsertNode patterns
 

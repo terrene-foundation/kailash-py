@@ -133,6 +133,5 @@ workflow.add_node("OptimisticLockingNode", "lock", {
 
 ## Documentation
 
-- **Data Nodes**: [`sdk-users/2-core-concepts/nodes/03-data-nodes.md`](../../../../sdk-users/2-core-concepts/nodes/03-data-nodes.md)
 
 <!-- Trigger Keywords: database node, SQL node, AsyncSQL, connection pool, query routing, AsyncSQLDatabaseNode, WorkflowConnectionPool, QueryRouterNode -->

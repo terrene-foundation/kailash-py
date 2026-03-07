@@ -308,7 +308,6 @@ Use specialized subagents when:
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/2-core-concepts/cheatsheet/022-cycle-debugging-troubleshooting.md`](../../../sdk-users/2-core-concepts/cheatsheet/022-cycle-debugging-troubleshooting.md)
 
 ## Quick Tips
 

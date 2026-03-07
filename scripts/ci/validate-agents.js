@@ -10,13 +10,13 @@
  * - Has Full Documentation section
  */
 
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
-const AGENTS_DIR = path.join(process.cwd(), '.claude', 'agents');
+const AGENTS_DIR = path.join(process.cwd(), ".claude", "agents");
 
-const REQUIRED_FRONTMATTER = ['name', 'description'];
-const RECOMMENDED_FRONTMATTER = ['tools', 'model'];
+const REQUIRED_FRONTMATTER = ["name", "description"];
+const RECOMMENDED_FRONTMATTER = ["tools", "model"];
 const MIN_LINES = 100;
 const MAX_LINES = 300;
 const MAX_DESCRIPTION_LENGTH = 120;
@@ -29,10 +29,10 @@ function parseFrontmatter(content) {
   if (!match) return null;
 
   const frontmatter = {};
-  const lines = match[1].split('\n');
+  const lines = match[1].split("\n");
 
-  lines.forEach(line => {
-    const colonIndex = line.indexOf(':');
+  lines.forEach((line) => {
+    const colonIndex = line.indexOf(":");
     if (colonIndex > 0) {
       const key = line.substring(0, colonIndex).trim();
       const value = line.substring(colonIndex + 1).trim();
@@ -52,8 +52,8 @@ function validateAgent(filePath) {
   const fileName = path.basename(filePath);
 
   try {
-    const content = fs.readFileSync(filePath, 'utf8');
-    const lines = content.split('\n');
+    const content = fs.readFileSync(filePath, "utf8");
+    const lines = content.split("\n");
     const lineCount = lines.length;
 
     // Check line count
@@ -67,46 +67,62 @@ function validateAgent(filePath) {
     // Parse and validate frontmatter
     const frontmatter = parseFrontmatter(content);
     if (!frontmatter) {
-      errors.push('Missing frontmatter (---...---)');
+      errors.push("Missing frontmatter (---...---)");
     } else {
       // Check required fields
-      REQUIRED_FRONTMATTER.forEach(field => {
+      REQUIRED_FRONTMATTER.forEach((field) => {
         if (!frontmatter[field]) {
           errors.push(`Missing required frontmatter: ${field}`);
         }
       });
 
       // Check recommended fields
-      RECOMMENDED_FRONTMATTER.forEach(field => {
+      RECOMMENDED_FRONTMATTER.forEach((field) => {
         if (!frontmatter[field]) {
           warnings.push(`Missing recommended frontmatter: ${field}`);
         }
       });
 
       // Check description length
-      if (frontmatter.description && frontmatter.description.length > MAX_DESCRIPTION_LENGTH) {
-        warnings.push(`Description exceeds ${MAX_DESCRIPTION_LENGTH} chars (${frontmatter.description.length})`);
+      if (
+        frontmatter.description &&
+        frontmatter.description.length > MAX_DESCRIPTION_LENGTH
+      ) {
+        warnings.push(
+          `Description exceeds ${MAX_DESCRIPTION_LENGTH} chars (${frontmatter.description.length})`,
+        );
       }
 
       // Check for "Use when" trigger
-      if (frontmatter.description && !frontmatter.description.toLowerCase().includes('use')) {
-        warnings.push('Description should contain usage trigger (e.g., "Use when...")');
+      if (
+        frontmatter.description &&
+        !frontmatter.description.toLowerCase().includes("use")
+      ) {
+        warnings.push(
+          'Description should contain usage trigger (e.g., "Use when...")',
+        );
       }
     }
 
     // Check for Related Agents section
-    if (!content.includes('## Related') && !content.includes('## Hand')) {
-      warnings.push('Missing Related Agents or Handoff section');
+    if (!content.includes("## Related") && !content.includes("## Hand")) {
+      warnings.push("Missing Related Agents or Handoff section");
     }
 
     // Check for Full Documentation section
-    if (!content.includes('## Full Documentation') && !content.includes('## SDK Reference')) {
-      warnings.push('Missing Full Documentation section');
+    if (
+      !content.includes("## Full Documentation") &&
+      !content.includes("## SDK Reference")
+    ) {
+      warnings.push("Missing Full Documentation section");
     }
 
     // Check for SDK reference
-    if (!content.includes('sdk-users/')) {
-      warnings.push('No SDK documentation reference found');
+    if (
+      !content.includes(".claude/skills/") &&
+      !content.includes("Full Documentation")
+    ) {
+      warnings.push("No SDK documentation reference found");
     }
 
     return {
@@ -114,14 +130,14 @@ function validateAgent(filePath) {
       lineCount,
       errors,
       warnings,
-      valid: errors.length === 0
+      valid: errors.length === 0,
     };
   } catch (error) {
     return {
       file: fileName,
       errors: [`Read error: ${error.message}`],
       warnings: [],
-      valid: false
+      valid: false,
     };
   }
 }
@@ -134,7 +150,7 @@ function validateAllAgents() {
     total: 0,
     valid: 0,
     invalid: 0,
-    agents: []
+    agents: [],
   };
 
   if (!fs.existsSync(AGENTS_DIR)) {
@@ -142,10 +158,14 @@ function validateAllAgents() {
   }
 
   // Exclude files starting with underscore (documentation)
-  const files = fs.readdirSync(AGENTS_DIR).filter(f => f.endsWith('.md') && !f.startsWith('_'));
+  const files = fs
+    .readdirSync(AGENTS_DIR)
+    .filter(
+      (f) => f.endsWith(".md") && !f.startsWith("_") && f !== "README.md",
+    );
   results.total = files.length;
 
-  files.forEach(file => {
+  files.forEach((file) => {
     const result = validateAgent(path.join(AGENTS_DIR, file));
     results.agents.push(result);
 
@@ -163,7 +183,7 @@ function validateAllAgents() {
  * Main execution
  */
 function main() {
-  console.log('Validating agents...\n');
+  console.log("Validating agents...\n");
 
   const results = validateAllAgents();
 
@@ -173,15 +193,15 @@ function main() {
   }
 
   // Output results
-  results.agents.forEach(agent => {
-    const status = agent.valid ? '✓' : '✗';
+  results.agents.forEach((agent) => {
+    const status = agent.valid ? "✓" : "✗";
     console.log(`${status} ${agent.file} (${agent.lineCount} lines)`);
 
-    agent.errors.forEach(err => {
+    agent.errors.forEach((err) => {
       console.log(`    ERROR: ${err}`);
     });
 
-    agent.warnings.forEach(warn => {
+    agent.warnings.forEach((warn) => {
       console.log(`    WARN: ${warn}`);
     });
   });

@@ -2,9 +2,6 @@
 
 Testing strategies for Kailash SDK including 3-tier testing, runtime testing patterns, and quality assurance.
 
-## Source Documentation
-- [`sdk-users/3-development/testing/TESTING_BEST_PRACTICES.md`](../../../sdk-users/3-development/testing/TESTING_BEST_PRACTICES.md)
-
 ## 3-Tier Testing Strategy
 
 ### Tier 1: Unit Tests

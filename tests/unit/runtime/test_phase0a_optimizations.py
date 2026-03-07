@@ -10,9 +10,9 @@ Validates that all P0A performance optimizations are in place and functional:
 from unittest.mock import patch
 
 import pytest
+
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
-
 
 # --- P0A-001: Module-level imports ---
 
@@ -32,10 +32,9 @@ class TestP0A001ModuleLevelImports:
     def test_resource_error_classes_are_module_level(self):
         """Resource manager error classes should be module-level imports."""
         import kailash.runtime.local as local_module
-
         from kailash.runtime.resource_manager import (
-            CPULimitExceededError,
             ConnectionLimitExceededError,
+            CPULimitExceededError,
             MemoryLimitExceededError,
         )
 

@@ -4,6 +4,7 @@ Tests BaseRuntime.__init__() configuration validation and attribute initializati
 """
 
 import pytest
+
 from kailash.runtime.base import BaseRuntime
 from kailash.sdk_exceptions import RuntimeExecutionError
 from kailash.workflow import Workflow

@@ -53,6 +53,13 @@ from kailash.runtime.mixins import (
 )
 from kailash.runtime.parameter_injector import WorkflowParameterInjector
 from kailash.runtime.performance_monitor import ExecutionMetrics, PerformanceMonitor
+
+# Resource management error classes (moved from in-loop lazy imports for P0A-001)
+from kailash.runtime.resource_manager import (
+    ConnectionLimitExceededError,
+    CPULimitExceededError,
+    MemoryLimitExceededError,
+)
 from kailash.runtime.secret_provider import EnvironmentSecretProvider, SecretProvider
 from kailash.runtime.validation.connection_context import ConnectionContext
 from kailash.runtime.validation.enhanced_error_formatter import EnhancedErrorFormatter
@@ -74,13 +81,6 @@ from kailash.utils.data_validation import DataTypeValidator
 from kailash.workflow import Workflow
 from kailash.workflow.contracts import ConnectionContract, ContractValidator
 from kailash.workflow.cyclic_runner import CyclicWorkflowExecutor
-
-# Resource management error classes (moved from in-loop lazy imports for P0A-001)
-from kailash.runtime.resource_manager import (
-    CPULimitExceededError,
-    ConnectionLimitExceededError,
-    MemoryLimitExceededError,
-)
 
 logger = logging.getLogger(__name__)
 

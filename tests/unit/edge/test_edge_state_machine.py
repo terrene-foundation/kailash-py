@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 import pytest_asyncio
+
 from kailash.edge.location import (
     ComplianceZone,
     EdgeCapabilities,

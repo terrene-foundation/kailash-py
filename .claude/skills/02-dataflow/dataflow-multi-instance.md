@@ -92,8 +92,6 @@ class Model1:
 
 ### Primary Sources
 
-- **README Multi-Instance**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md#L87-L116)
-- **DataFlow CLAUDE**: [`sdk-users/apps/dataflow/CLAUDE.md`](../../../../sdk-users/apps/dataflow/CLAUDE.md#L86-L116)
 
 ### Specialist Reference
 

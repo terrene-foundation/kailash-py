@@ -32,7 +32,6 @@ from kailash.runtime.local import (
 from kailash.tracking.metrics_collector import MetricsCollector
 from kailash.workflow.builder import WorkflowBuilder
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

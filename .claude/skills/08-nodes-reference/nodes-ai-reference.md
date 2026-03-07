@@ -102,6 +102,5 @@ workflow.add_node("SelfOrganizingAgentNode", "agent", {
 
 ## Documentation
 
-- **AI Nodes**: [`sdk-users/2-core-concepts/nodes/02-ai-nodes.md`](../../../../sdk-users/2-core-concepts/nodes/02-ai-nodes.md)
 
 <!-- Trigger Keywords: LLM node, AI nodes, OpenAI, Anthropic, embeddings, iterative agent, LLMAgentNode, IterativeLLMAgentNode -->

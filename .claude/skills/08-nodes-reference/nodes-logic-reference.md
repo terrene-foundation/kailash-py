@@ -114,6 +114,5 @@ workflow.add_node("WhileNode", "while_loop", {
 
 ## Documentation
 
-- **Logic Nodes**: [`sdk-users/2-core-concepts/nodes/05-logic-nodes.md`](../../../../sdk-users/2-core-concepts/nodes/05-logic-nodes.md)
 
 <!-- Trigger Keywords: Switch node, Merge node, conditional, routing, logic nodes, SwitchNode, MergeNode, ConditionalRouterNode -->

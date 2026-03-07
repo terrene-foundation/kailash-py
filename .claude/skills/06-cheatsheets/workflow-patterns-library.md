@@ -29,7 +29,6 @@ from kailash.runtime.local import LocalRuntime
 workflow = WorkflowBuilder()
 
 # See source documentation for specific node types and parameters
-# Reference: sdk-users/2-core-concepts/cheatsheet/workflow-patterns-library.md
 
 runtime = LocalRuntime()
 results, run_id = runtime.execute(workflow.build())
@@ -61,8 +60,6 @@ Use specialized subagents when:
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/2-core-concepts/cheatsheet/012-common-workflow-patterns.md`](../../../sdk-users/2-core-concepts/cheatsheet/012-common-workflow-patterns.md)
-- [`sdk-users/2-core-concepts/workflows/by-pattern/`](../../../sdk-users/2-core-concepts/workflows/by-pattern/)
 
 ## Quick Tips
 

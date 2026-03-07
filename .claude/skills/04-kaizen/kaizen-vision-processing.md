@@ -39,4 +39,3 @@ print(result['response'])  # Key is 'response', NOT 'answer'
 
 ## References
 - **Specialist**: `.claude/agents/frameworks/kaizen-specialist.md` lines 167-214
-- **API Reference**: `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md`

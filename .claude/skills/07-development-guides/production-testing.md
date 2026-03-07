@@ -2,9 +2,6 @@
 
 You are an expert in production-quality testing for Kailash SDK. Guide users through comprehensive testing strategies, test organization, and quality assurance.
 
-## Source Documentation
-- `./sdk-users/3-development/12-testing-production-quality.md`
-
 ## Core Responsibilities
 
 ### 1. 3-Tier Testing Strategy

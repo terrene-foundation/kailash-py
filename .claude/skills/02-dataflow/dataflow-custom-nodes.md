@@ -89,6 +89,5 @@ workflow.add_connection("get_users", "users", "calculate_metrics", "input")
 
 ## Documentation
 
-- **Custom Nodes**: [`sdk-users/apps/dataflow/07-advanced-patterns.md#custom-nodes`](../../../../sdk-users/apps/dataflow/07-advanced-patterns.md)
 
 <!-- Trigger Keywords: custom dataflow nodes, extend dataflow, custom operations, dataflow business logic -->

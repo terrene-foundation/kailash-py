@@ -266,14 +266,10 @@ Use `pattern-expert` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **Gold Standard - Parameter Passing**: [`sdk-users/7-gold-standards/parameter_passing_comprehensive.md`](../../../../sdk-users/7-gold-standards/parameter_passing_comprehensive.md)
-- **Common Mistakes**: [`sdk-users/2-core-concepts/validation/common-mistakes.md`](../../../../sdk-users/2-core-concepts/validation/common-mistakes.md)
-- **Critical Rules**: [`sdk-users/2-core-concepts/validation/critical-rules.md`](../../../../sdk-users/2-core-concepts/validation/critical-rules.md)
 
 ### Related Documentation
 - **Pattern Expert**: [`.claude/agents/pattern-expert.md`](../../../../.claude/agents/pattern-expert.md)
 - **Essential Pattern**: [`CLAUDE.md` (lines 139-145)](../../../../CLAUDE.md#L139-L145)
-- **Validation Guide**: [`sdk-users/2-core-concepts/validation/validation-guide.md`](../../../../sdk-users/2-core-concepts/validation/validation-guide.md)
 
 ## Quick Tips
 

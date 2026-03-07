@@ -356,7 +356,6 @@ first_user = (await db.express.list("User", limit=1))[0] if await db.express.cou
 
 ## Related Documentation
 
-- **User Guide**: `sdk-users/apps/dataflow/guides/express-dataflow.md`
 - **CRUD Operations**: `dataflow-crud-operations.md`
 - **Bulk Operations**: `dataflow-bulk-operations.md`
 - **Performance Guide**: `dataflow-performance.md`

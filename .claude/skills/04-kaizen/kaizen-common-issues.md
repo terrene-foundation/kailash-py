@@ -30,7 +30,6 @@ data = self.extract_list(result, "actual_key_name", default=[])
 
 ## Multi-Modal API Errors
 
-**See**: `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` - Common Pitfalls section
 
 ## Provider Compatibility for Structured Outputs (v0.8.2)
 
@@ -234,7 +233,6 @@ field = self.extract_list(result, "field", default=[])
 
 ## Reference
 
-- Multi-modal API: `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md`
 - Structured outputs: `kaizen-structured-outputs.md` skill
 - Testing patterns: `kaizen-testing-patterns.md` skill
 - UX helpers: `kaizen-ux-helpers.md` skill

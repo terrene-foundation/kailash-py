@@ -52,6 +52,5 @@ workflow.add_connection("anonymize_logs", "result", "delete_external", "trigger"
 
 ## Documentation
 
-- **GDPR Guide**: [`sdk-users/apps/dataflow/08-gdpr-compliance.md`](../../../../sdk-users/apps/dataflow/08-gdpr-compliance.md)
 
 <!-- Trigger Keywords: GDPR dataflow, data compliance, right to be forgotten, data privacy -->

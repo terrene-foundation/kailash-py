@@ -115,9 +115,6 @@ Use `pattern-expert` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **Common Mistakes**: [`sdk-users/2-core-concepts/validation/common-mistakes.md` (lines 104-133)](../../../../sdk-users/2-core-concepts/validation/common-mistakes.md#L104-L133)
-- **Cyclic Workflows**: [`sdk-users/2-core-concepts/cheatsheet/019-cyclic-workflows-basics.md`](../../../../sdk-users/2-core-concepts/cheatsheet/019-cyclic-workflows-basics.md)
-- **Cycle Debugging**: [`sdk-users/2-core-concepts/cheatsheet/022-cycle-debugging-troubleshooting.md`](../../../../sdk-users/2-core-concepts/cheatsheet/022-cycle-debugging-troubleshooting.md)
 
 ## Quick Tips
 

@@ -8,6 +8,7 @@ Tests basic cyclic workflow functionality including:
 """
 
 import pytest
+
 from kailash import Workflow
 from kailash.nodes.code.python import PythonCodeNode
 from kailash.runtime.local import LocalRuntime

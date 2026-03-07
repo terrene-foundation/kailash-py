@@ -9,6 +9,7 @@ Tests the edge cases and uncovered lines:
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from kailash.nodes.base import Node, NodeParameter
 from kailash.runtime.parameter_injection import (
     ConfigurableAsyncSQLNode,

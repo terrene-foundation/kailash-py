@@ -59,7 +59,7 @@ The subagents are designed around the core workflow phases identified in `CLAUDE
 
 **⚠️ IMPORTANT: DataFlow + Nexus Integration**
 
-- See: `sdk-users/guides/dataflow-nexus-integration.md` for tested configurations
+- See: `.claude/skills/03-nexus/nexus-dataflow-integration.md` for tested configurations
 - Key settings to prevent blocking: `Nexus(auto_discovery=False)`
 - Full featured config available with 10-30s startup time
 - Both specialists updated with integration warnings
@@ -208,13 +208,13 @@ Since subagents cannot invoke other subagents, coordination happens at the main 
 
 - **Root CLAUDE.md**: 18-step enterprise workflow, core patterns
 - **feature-implementation.md**: 4-phase detailed implementation process
-- **sdk-users/CLAUDE.md**: Essential SDK patterns navigation
+- **Root CLAUDE.md**: Essential SDK patterns navigation
 
 ### Framework Documentation
 
-- **sdk-users/apps/dataflow/**: Zero-config database patterns and guides
-- **sdk-users/apps/nexus/**: Multi-channel platform patterns and guides
-- **sdk-users/apps/kaizen/**: Signature-based AI framework patterns and guides
+- **.claude/skills/02-dataflow/**: Zero-config database patterns and guides
+- **.claude/skills/03-nexus/**: Multi-channel platform patterns and guides
+- **.claude/skills/04-kaizen/**: Signature-based AI framework patterns and guides
 - **src/kailash/mcp_server/**: Production MCP server implementation
 
 ### Frontend & Mobile Documentation
@@ -229,8 +229,8 @@ Since subagents cannot invoke other subagents, coordination happens at the main 
 
 ### Gold Standards
 
-- **sdk-users/7-gold-standards/**: All compliance standards
-- **sdk-users/2-core-concepts/validation/common-mistakes.md**: Error solutions
+- **.claude/skills/17-gold-standards/**: All compliance standards
+- **.claude/skills/06-cheatsheets/common-mistakes-catalog.md**: Error solutions
 
 This focused architecture maintains the essential workflow while dramatically reducing token usage through targeted, navigation-based agents that guide users to the right documentation at the right time.
 

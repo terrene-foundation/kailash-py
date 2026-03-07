@@ -673,7 +673,6 @@ async def test_strict_mode_parameter_validation(db):
 ## Documentation References
 
 ### Comprehensive Guides
-- **Strict Mode Guide**: `sdk-users/apps/dataflow/guides/strict-mode.md` (comprehensive validation guide)
 - **Architecture Decision**: `docs/architecture/ADR-003-STRICT-MODE.md` (design rationale)
 - **Validation Guide**: `docs/guides/strict-mode-validation.md` (implementation details)
 

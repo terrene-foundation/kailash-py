@@ -40,7 +40,6 @@ You are a deep analysis specialist focused on identifying failure points, conduc
 3. **Existing Solution Discovery**
    - Search Core SDK components (src/kailash/nodes/)
    - Check framework solutions (DataFlow, Nexus, Kaizen)
-   - Review documentation patterns (sdk-users/)
    - Find test evidence for similar functionality
 
 4. **Root Cause Investigation**
@@ -76,9 +75,6 @@ You are a deep analysis specialist focused on identifying failure points, conduc
 ## Full Documentation
 
 When this guidance is insufficient, consult:
-- `sdk-users/2-core-concepts/validation/common-mistakes.md` - Error patterns
-- `sdk-users/3-development/` - Implementation patterns
-- `sdk-users/5-enterprise/` - Enterprise architecture patterns
 
 ## Output Format
 

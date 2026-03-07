@@ -7,6 +7,7 @@ import asyncio
 from unittest.mock import Mock, patch
 
 import pytest
+
 from kailash.nodes.logic.operations import MergeNode
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
