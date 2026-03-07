@@ -238,7 +238,7 @@ class TestImportPathValidator:
         assert "IMPORT VALIDATION REPORT" in report
         assert "CRITICAL ISSUES" in report
         assert "WARNINGS" in report
-        assert "sdk-users/7-gold-standards/absolute-imports-gold-standard.md" in report
+        assert ".claude/skills/17-gold-standards/gold-absolute-imports.md" in report
 
     def test_generate_report_no_issues(self):
         """Test report generation when no issues found."""

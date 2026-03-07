@@ -126,14 +126,9 @@ Complete set of 21 Nexus skills covering all aspects from quickstart to advanced
 - Cross-channel sessions
 - Unified parameter handling
 
-## Source Documentation
-
 All skills created from verified sources:
 
-- sdk-users/apps/nexus/README.md
-- sdk-users/apps/nexus/docs/\* (getting-started, user-guides, technical, reference, advanced)
 - .claude/agents/frameworks/nexus-specialist.md
-- sdk-users/apps/nexus/CLAUDE.md
 
 ## Skill Dependencies
 

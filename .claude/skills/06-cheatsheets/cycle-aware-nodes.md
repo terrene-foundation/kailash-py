@@ -278,7 +278,6 @@ Use specialized subagents when:
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/2-core-concepts/cheatsheet/021-cycle-aware-nodes.md`](../../../sdk-users/2-core-concepts/cheatsheet/021-cycle-aware-nodes.md)
 
 ## Quick Tips
 

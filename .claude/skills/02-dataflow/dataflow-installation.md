@@ -67,6 +67,5 @@ print(db.list_models())
 
 ## Documentation
 
-- **Installation Guide**: [`sdk-users/apps/dataflow/01-installation.md`](../../../../sdk-users/apps/dataflow/01-installation.md)
 
 <!-- Trigger Keywords: install dataflow, dataflow setup, dataflow requirements, dataflow installation -->

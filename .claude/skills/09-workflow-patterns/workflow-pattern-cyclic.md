@@ -267,7 +267,5 @@ workflow.add_connection("increment", "result", "generate", "iteration")  # Loop!
 
 ## Documentation
 
-- **Workflow Patterns**: [`sdk-users/2-core-concepts/workflows/05-workflow-patterns.md`](../../../../sdk-users/2-core-concepts/workflows/05-workflow-patterns.md)
-- **Advanced Patterns**: [`sdk-users/7-advanced-topics/workflows/advanced-workflow-patterns.md`](../../../../sdk-users/7-advanced-topics/workflows/advanced-workflow-patterns.md)
 
 <!-- Trigger Keywords: loop workflow, cyclic, iterate, repeat until, workflow cycles, retry logic, batch processing -->

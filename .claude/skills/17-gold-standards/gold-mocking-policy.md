@@ -289,8 +289,6 @@ def test_workflow():
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/7-gold-standards/mock-directives-for-testing.md`](../../../sdk-users/7-gold-standards/mock-directives-for-testing.md)
-- [`sdk-users/3-development/testing/test-organization-policy.md`](../../../sdk-users/3-development/testing/test-organization-policy.md)
 
 ## Related Patterns
 

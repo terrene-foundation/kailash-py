@@ -34,12 +34,6 @@ Plus existing patterns:
 ## References
 
 **Comprehensive Guides**:
-- `sdk-users/apps/kaizen/docs/guides/pipeline-patterns.md` - All 9 pipeline patterns (667 lines)
-- `sdk-users/apps/kaizen/docs/guides/single-agent-patterns.md` - All 6 single-agent patterns (400 lines)
-- `sdk-users/apps/kaizen/docs/guides/planning-agent.md` - Planning Agent detailed guide
-- `sdk-users/apps/kaizen/docs/guides/pev-agent.md` - PEV Agent detailed guide
-- `sdk-users/apps/kaizen/docs/guides/tree-of-thoughts-agent.md` - ToT Agent detailed guide
-- `sdk-users/apps/kaizen/docs/guides/multi-agent-coordination.md` - Integration guide
 
 **Examples**:
 - `examples/2-multi-agent/` - Multi-agent coordination examples

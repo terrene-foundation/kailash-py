@@ -115,5 +115,4 @@ Provide findings as:
 
 ## Full Documentation
 When this guidance is insufficient, consult:
-- `sdk-users/7-gold-standards/security.md`
 - OWASP Top 10: https://owasp.org/www-project-top-ten/

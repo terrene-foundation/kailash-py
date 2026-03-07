@@ -202,8 +202,6 @@ def test_workflow_with_both_runtimes(runtime_class):
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/3-development/testing/TESTING_BEST_PRACTICES.md`](../../../sdk-users/3-development/testing/TESTING_BEST_PRACTICES.md)
-- [`sdk-users/3-development/testing/test-organization-policy.md`](../../../sdk-users/3-development/testing/test-organization-policy.md)
 
 ## Related Patterns
 

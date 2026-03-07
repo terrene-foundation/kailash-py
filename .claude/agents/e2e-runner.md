@@ -130,4 +130,3 @@ npx playwright test --debug
 ## Full Documentation
 When this guidance is insufficient, consult:
 - Playwright docs: https://playwright.dev/
-- `sdk-users/3-development/testing/e2e.md`

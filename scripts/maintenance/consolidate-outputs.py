@@ -27,7 +27,6 @@ def main():
         "examples/cycle_analysis_output",
         "examples/feature-tests/workflows/cyclic/cycle_analysis_output",
         "examples/feature-tests/runtime/visualization/outputs",
-        "sdk-users/templates/workflow/outputs",
         "data/inputs/outputs",  # This shouldn't exist but it does
     ]
 

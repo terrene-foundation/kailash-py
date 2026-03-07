@@ -61,6 +61,5 @@ def test_production_workflow():
 
 ## Documentation
 
-- **Testing Strategy**: [`sdk-users/apps/dataflow/09-testing.md#strategy`](../../../../sdk-users/apps/dataflow/09-testing.md)
 
 <!-- Trigger Keywords: dataflow test practices, dataflow testing strategy, test dataflow workflows -->

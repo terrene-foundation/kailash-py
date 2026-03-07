@@ -298,9 +298,6 @@ Use framework specialists when you've chosen:
 ### Detailed Guides
 
 - **Framework Advisor**: [`.claude/agents/framework-advisor.md`](../../../../.claude/agents/framework-advisor.md)
-- **DataFlow Guide**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md)
-- **Nexus Guide**: [`sdk-users/apps/nexus/README.md`](../../../../sdk-users/apps/nexus/README.md)
-- **Kaizen Guide**: [`sdk-users/apps/kaizen/README.md`](../../../../sdk-users/apps/kaizen/README.md)
 
 ## Quick Tips
 

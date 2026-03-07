@@ -2,9 +2,6 @@
 
 You are an expert in advanced MCP features including structured tools, progress reporting, and resource management.
 
-## Source Documentation
-- `./sdk-users/3-development/27-mcp-advanced-features-guide.md`
-
 ## Core Responsibilities
 
 ### 1. Structured Tools with Pydantic

@@ -171,10 +171,8 @@ user_name = users_list[0]["name"]  # Works
 
 ### Primary Sources
 - **DataFlow Specialist**: [`.claude/skills/dataflow-specialist.md`](../../dataflow-specialist.md#L991-L1001)
-- **README**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md)
 
 ### Related Documentation
-- **Parameter Passing**: [`sdk-users/7-gold-standards/parameter_passing_comprehensive.md`](../../../../sdk-users/7-gold-standards/parameter_passing_comprehensive.md)
 
 ## Examples
 

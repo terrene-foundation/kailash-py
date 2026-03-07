@@ -163,7 +163,6 @@ workflow.add_connection("reader", "data", "transformer", "input_data")
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/7-gold-standards/parameter_passing_comprehensive.md`](../../../sdk-users/7-gold-standards/parameter_passing_comprehensive.md)
 
 ### Internal Implementation
 - `src/kailash/runtime/mixins/validation.py` - ValidationMixin (523 lines)

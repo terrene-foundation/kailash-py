@@ -112,7 +112,6 @@ from kailash.runtime import LocalRuntime
 from dataflow import DataFlow
 
 # User-facing paths
-sdk-users/
 .claude/skills/
 .claude/agents/
 
@@ -215,6 +214,5 @@ All contamination counts should be **0**.
 3. **Rule softening is easy to forget** — the builder's strict policies don't apply to users
 4. **Downstream stale language** — softening rules alone is not enough; files that ECHO rule language (guides, skills) must also be updated. Grep for `NO MOCKING`, `MUST delegate`, `Non-negotiable` across the entire `.claude/` directory after softening
 5. **Internal class names slip through** — they appear in version history notes and feature lists
-6. **`sdk-users/` syncs separately** — it's at repo root, not inside `.claude/`
-7. **Never sync this agent or the mapping skill** — they are sync infrastructure
-8. **`git.md` must match `agents.md`** — if agents.md is softened, git.md's security review reference must also be softened to avoid contradictions
+6. **Never sync this agent or the mapping skill** — they are sync infrastructure
+7. **`git.md` must match `agents.md`** — if agents.md is softened, git.md's security review reference must also be softened to avoid contradictions

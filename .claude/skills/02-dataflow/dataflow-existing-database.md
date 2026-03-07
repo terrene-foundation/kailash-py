@@ -188,13 +188,9 @@ Use `dataflow-specialist` when:
 
 ### Primary Sources
 
-- **README Dynamic Models**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md#L249-L536)
-- **DataFlow CLAUDE**: [`sdk-users/apps/dataflow/CLAUDE.md`](../../../../sdk-users/apps/dataflow/CLAUDE.md#L182-L196)
 
 ### Related Documentation
 
-- **Multi-Database**: [`sdk-users/apps/dataflow/docs/features/multi-database.md`](../../../../sdk-users/apps/dataflow/docs/features/multi-database.md)
-- **Schema Management**: [`sdk-users/apps/dataflow/docs/workflows/schema-management.md`](../../../../sdk-users/apps/dataflow/docs/workflows/schema-management.md)
 
 ## Examples
 

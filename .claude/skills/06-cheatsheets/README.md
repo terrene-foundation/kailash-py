@@ -170,6 +170,5 @@ When adding new skills:
 5. Update this README
 
 ## Related Documentation
-- **Source**: `/sdk-users/2-core-concepts/cheatsheet/`
 - **Skills Directory**: `.claude/skills/3-patterns/cheatsheets/`
 - **Taxonomy**: See skills taxonomy document for complete skill hierarchy

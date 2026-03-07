@@ -240,7 +240,6 @@ The same workflow code works on all databases!
 
 ## Documentation
 
-- **Database Support**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md#database-connection)
 - **Connection Config**: [dataflow-connection-config.md](dataflow-connection-config.md)
 
 <!-- Trigger Keywords: dataflow postgres, dataflow mysql, dataflow sqlite, database dialects, dataflow databases, database selection -->

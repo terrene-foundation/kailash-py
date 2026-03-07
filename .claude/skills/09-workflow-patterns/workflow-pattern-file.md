@@ -228,6 +228,5 @@ workflow.add_error_handler("process", "move_failed")
 
 ## Documentation
 
-- **File Processing**: [`sdk-users/2-core-concepts/nodes/03-data-nodes.md`](../../../../sdk-users/2-core-concepts/nodes/03-data-nodes.md)
 
 <!-- Trigger Keywords: file processing, batch file, document workflow, file automation, CSV processing, PDF extraction -->

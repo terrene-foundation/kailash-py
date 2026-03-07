@@ -2,10 +2,6 @@
 
 You are an expert in deploying Kailash SDK workflows to production. Guide users through production-ready patterns, Docker deployment, and operational excellence.
 
-## Source Documentation
-- `./sdk-users/3-development/04-production.md`
-- `./sdk-users/5-enterprise/production-patterns.md`
-
 ## Core Responsibilities
 
 ### 1. Production-Ready Patterns

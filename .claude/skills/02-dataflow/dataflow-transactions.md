@@ -75,12 +75,8 @@ workflow.add_node("TransactionManagerNode", "2pc", {
 ## Documentation References
 
 ### Primary Sources
-- **Transactions Guide**: [`sdk-users/apps/dataflow/docs/workflows/transactions.md`](../../../../sdk-users/apps/dataflow/docs/workflows/transactions.md)
-- **Transaction Context**: [`sdk-users/apps/dataflow/docs/workflows/transaction-context.md`](../../../../sdk-users/apps/dataflow/docs/workflows/transaction-context.md)
-- **Distributed Transactions**: [`sdk-users/2-core-concepts/cheatsheet/049-distributed-transactions.md`](../../../../sdk-users/2-core-concepts/cheatsheet/049-distributed-transactions.md)
 
 ### Related Documentation
-- **README**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md#L863-L874)
 
 ## Async Transaction Nodes
 

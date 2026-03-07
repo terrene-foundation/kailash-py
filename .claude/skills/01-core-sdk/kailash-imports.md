@@ -235,15 +235,10 @@ Use `pattern-expert` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **Basic Imports**: [`sdk-users/2-core-concepts/cheatsheet/002-basic-imports.md`](../../../sdk-users/2-core-concepts/cheatsheet/002-basic-imports.md)
-- **Fundamentals**: [`sdk-users/3-development/01-fundamentals-core-concepts.md`](../../../sdk-users/3-development/01-fundamentals-core-concepts.md)
 
 ### Related Documentation
-- **Node Catalog**: [`sdk-users/2-core-concepts/nodes/comprehensive-node-catalog.md`](../../../sdk-users/2-core-concepts/nodes/comprehensive-node-catalog.md)
-- **Custom Nodes**: [`sdk-users/2-core-concepts/cheatsheet/011-custom-node-creation.md`](../../../sdk-users/2-core-concepts/cheatsheet/011-custom-node-creation.md)
 
 ### Gold Standards
-- **Absolute Imports**: [`sdk-users/7-gold-standards/absolute-imports-gold-standard.md`](../../../sdk-users/7-gold-standards/absolute-imports-gold-standard.md)
 
 ## Quick Tips
 

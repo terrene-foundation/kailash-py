@@ -349,9 +349,6 @@ app.api.max_concurrent_requests = 50
 
 ### 1. Check Documentation
 
-- [Nexus README](../../sdk-users/apps/nexus/README.md)
-- [User Guides](../../sdk-users/apps/nexus/docs/user-guides/)
-- [Technical Docs](../../sdk-users/apps/nexus/docs/technical/)
 
 ### 2. Enable Verbose Logging
 

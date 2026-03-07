@@ -66,6 +66,5 @@ workflow.add_connection("check_auth", "output_false", "audit_failure", "trigger"
 
 ## Documentation
 
-- **Security**: [`sdk-users/7-advanced-topics/security/security-patterns.md`](../../../../sdk-users/7-advanced-topics/security/security-patterns.md)
 
 <!-- Trigger Keywords: security workflow, authentication, encryption workflow, audit trail, user auth -->

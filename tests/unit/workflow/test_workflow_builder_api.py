@@ -218,7 +218,7 @@ class TestEnhancedWarningSystem:
         )
         assert "Custom nodes MUST use class references" in warning_message
         assert (
-            "sdk-users/7-gold-standards/GOLD-STANDARD-custom-node-development-guide.md"
+            ".claude/skills/14-code-templates/template-custom-node.md"
             in warning_message
         )
 

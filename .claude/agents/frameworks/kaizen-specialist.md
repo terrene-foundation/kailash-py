@@ -81,25 +81,23 @@ Expert in Kaizen AI framework - signature-based programming, BaseAgent architect
 
 ### Primary References
 
-- **[CLAUDE.md](../../../sdk-users/apps/kaizen/CLAUDE.md)** - Quick reference
-- **[README.md](../../../sdk-users/apps/kaizen/README.md)** - Complete guide
+- **[Kaizen Skills](../../skills/04-kaizen/SKILL.md)** - Quick reference
+- **[Agent Patterns](../../skills/04-kaizen/kaizen-agent-patterns.md)** - Agent architecture patterns
+- **[Advanced Patterns](../../skills/04-kaizen/kaizen-advanced-patterns.md)** - Control protocol, meta-controller, journeys
 - **[Example Gallery](../../../apps/kailash-kaizen/examples/autonomy/EXAMPLE_GALLERY.md)** - 15 autonomy examples
-- **[API Reference](../../../sdk-users/apps/kaizen/docs/reference/api-reference.md)** - Complete API docs
 
 ### By Use Case
 
-| Need                     | Documentation                                                       |
-| ------------------------ | ------------------------------------------------------------------- |
-| Getting started          | `sdk-users/apps/kaizen/docs/getting-started/quickstart.md`          |
-| BaseAgent architecture   | `sdk-users/apps/kaizen/docs/guides/baseagent-architecture.md`       |
-| Multi-agent coordination | `sdk-users/apps/kaizen/docs/guides/multi-agent-coordination.md`     |
-| Control Protocol         | `sdk-users/apps/kaizen/docs/guides/control-protocol-tutorial.md`    |
-| Autonomy infrastructure  | `sdk-users/apps/kaizen/docs/guides/autonomy-system-overview.md`     |
-| Planning agents          | `sdk-users/apps/kaizen/docs/guides/planning-agents-guide.md`        |
-| Multi-modal APIs         | `sdk-users/apps/kaizen/docs/reference/multi-modal-api-reference.md` |
-| Memory patterns          | `sdk-users/apps/kaizen/docs/reference/memory-patterns-guide.md`     |
-| Strategy selection       | `sdk-users/apps/kaizen/docs/reference/strategy-selection-guide.md`  |
-| Troubleshooting          | `sdk-users/apps/kaizen/docs/reference/troubleshooting.md`           |
+| Need                     | Documentation                                          |
+| ------------------------ | ------------------------------------------------------ |
+| Getting started          | `.claude/skills/04-kaizen/SKILL.md`                    |
+| BaseAgent architecture   | `.claude/skills/04-kaizen/kaizen-agent-patterns.md`    |
+| Multi-agent coordination | `.claude/skills/04-kaizen/kaizen-agent-patterns.md`    |
+| Control Protocol         | `.claude/skills/04-kaizen/kaizen-control-protocol.md`  |
+| Advanced patterns        | `.claude/skills/04-kaizen/kaizen-advanced-patterns.md` |
+| Memory patterns          | `.claude/skills/04-kaizen/kaizen-persistent-memory.md` |
+| Vision processing        | `.claude/skills/04-kaizen/kaizen-vision-processing.md` |
+| Common issues            | `.claude/skills/04-kaizen/kaizen-common-issues.md`     |
 
 ## Core Architecture
 
@@ -319,6 +317,6 @@ See the [Kaizen Skills](../../skills/04-kaizen/) (43 skills) for:
 
 When this guidance is insufficient, consult:
 
-- `sdk-users/apps/kaizen/CLAUDE.md` - Complete Kaizen guide
-- `sdk-users/apps/kaizen/docs/` - Comprehensive documentation
+- `.claude/skills/04-kaizen/` - Complete Kaizen skills directory
+- `.claude/skills/04-kaizen/kaizen-advanced-patterns.md` - Advanced patterns
 - `apps/kailash-kaizen/examples/` - Working examples

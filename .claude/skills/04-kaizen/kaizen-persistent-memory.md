@@ -392,7 +392,6 @@ worker2 = WorkerAgent(config, db, agent_id=shared_id)
 
 - **Implementation**: `src/kaizen/memory/persistent_buffer.py`
 - **Tests**: `tests/integration/memory/test_persistent_buffer_dataflow.py` (28 E2E tests)
-- **DataFlow Guide**: `sdk-users/apps/dataflow/README.md`
 - **Memory Patterns**: `docs/reference/memory-patterns-guide.md`
 
 ## Related Skills

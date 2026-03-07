@@ -31,13 +31,13 @@ class NodeValidator:
         r"return\s+(?!.*\{.*result.*\})": ValidationSuggestion(
             message="PythonCodeNode must return data wrapped in {'result': ...}",
             code_example='return {"result": your_data}  # Not: return your_data',
-            doc_link="sdk-users/3-development/guides/troubleshooting.md#pythoncodenode-output",
+            doc_link=".claude/skills/15-error-troubleshooting/SKILL.md",
         ),
         # File path mistakes
         r"^(?!/).*\.(csv|json|txt)$": ValidationSuggestion(
             message="File paths should be absolute, not relative",
             code_example='file_path="/data/inputs/file.csv"  # Not: file_path="file.csv"',
-            doc_link="sdk-users/3-development/quick-reference.md#file-paths",
+            doc_link=".claude/skills/06-cheatsheets/kailash-quick-tips.md",
         ),
         # Node naming mistakes
         r"Node$": ValidationSuggestion(
@@ -51,13 +51,13 @@ class NodeValidator:
         r"f['\"].*SELECT.*\{": ValidationSuggestion(
             message="Avoid f-strings in SQL queries - use parameterized queries",
             code_example='query="SELECT * FROM users WHERE id = %s", params=[user_id]',
-            doc_link="sdk-users/5-enterprise/security-patterns.md#sql-best-practices",
+            doc_link=".claude/skills/18-security-patterns/SKILL.md",
         ),
         # Missing required fields
         r"TypeError.*missing.*required": ValidationSuggestion(
             message="Required parameter missing",
             code_example="Check node documentation for required parameters",
-            doc_link="sdk-users/6-reference/nodes/comprehensive-node-catalog.md",
+            doc_link=".claude/skills/08-nodes-reference/nodes-quick-index.md",
         ),
     }
 
@@ -143,7 +143,7 @@ class NodeValidator:
                             ValidationSuggestion(
                                 message=f"Parameter '{param_name}' expects {expected_type.__name__}, got {type(value).__name__}",
                                 code_example=f"{param_name}={cls._get_type_example(expected_type)}",
-                                doc_link=f"sdk-users/6-reference/nodes/{node.__class__.__name__.lower()}.md",
+                                doc_link=f".claude/skills/08-nodes-reference/nodes-quick-index.md",
                             )
                         )
         except Exception:
@@ -272,9 +272,9 @@ PythonCodeNode.from_function("processor", process)
             [
                 "",
                 "🔗 Resources:",
-                "   - Node Catalog: sdk-users/6-reference/nodes/comprehensive-node-catalog.md",
-                "   - Quick Reference: sdk-users/3-development/quick-reference.md",
-                "   - Troubleshooting: sdk-users/3-development/guides/troubleshooting.md",
+                "   - Node Catalog: .claude/skills/08-nodes-reference/nodes-quick-index.md",
+                "   - Quick Reference: .claude/skills/06-cheatsheets/kailash-quick-tips.md",
+                "   - Troubleshooting: .claude/skills/15-error-troubleshooting/SKILL.md",
             ]
         )
 

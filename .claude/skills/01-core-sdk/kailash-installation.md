@@ -181,13 +181,8 @@ Use `deployment-specialist` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **Installation Guide**: [`sdk-users/2-core-concepts/cheatsheet/001-installation.md`](../../../sdk-users/2-core-concepts/cheatsheet/001-installation.md)
-- **Quick Start**: [`sdk-users/1-quickstart/quickstart.md`](../../../sdk-users/1-quickstart/quickstart.md)
 
 ### Related Documentation
-- **Docker Setup**: [`sdk-users/4-deployment/docker/README.md`](../../../sdk-users/4-deployment/docker/README.md)
-- **Environment Configuration**: [`sdk-users/2-core-concepts/cheatsheet/016-environment-variables.md`](../../../sdk-users/2-core-concepts/cheatsheet/016-environment-variables.md)
-- **Production Deployment**: [`sdk-users/3-development/04-production.md`](../../../sdk-users/3-development/04-production.md)
 
 ## Troubleshooting
 

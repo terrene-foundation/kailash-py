@@ -81,7 +81,5 @@ workflow.add_node("MCPToolNode", "mcp_tool", {
 
 ## Documentation
 
-- **Code Nodes**: [`sdk-users/2-core-concepts/nodes/07-code-nodes.md`](../../../../sdk-users/2-core-concepts/nodes/07-code-nodes.md)
-- **PythonCode Patterns**: [`sdk-users/2-core-concepts/nodes/11-pythoncode-node-patterns.md`](../../../../sdk-users/2-core-concepts/nodes/11-pythoncode-node-patterns.md)
 
 <!-- Trigger Keywords: PythonCode, code node, Shell node, execute code, script execution, PythonCodeNode -->

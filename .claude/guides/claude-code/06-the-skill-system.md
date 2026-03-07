@@ -514,7 +514,7 @@ Skills follow a progressive detail model:
        └───────────┬────────────┘
                    │
        ┌───────────▼────────────┐
-       │   sdk-users/ docs      │  ← Full documentation (unlimited)
+       │   Deep dive skills      │  ← Full documentation (unlimited)
        └────────────────────────┘
 ```
 
@@ -530,7 +530,7 @@ Complex request: "Create user model with multi-tenancy"
 └── Loads SKILL.md + multi-tenancy.md
 
 Deep dive: "Explain DataFlow internals"
-└── Loads SKILL.md + supporting files + sdk-users docs
+└── Loads SKILL.md + all supporting skill files
 ```
 
 ---

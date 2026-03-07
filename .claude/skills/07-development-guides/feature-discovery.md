@@ -2,9 +2,6 @@
 
 You are an expert in Kailash SDK feature discovery. Guide users through discovering and understanding SDK capabilities.
 
-## Source Documentation
-
-- `./sdk-users/2-core-concepts/feature-discovery-guide.md`
 
 ## Core Responsibilities
 
@@ -80,7 +77,6 @@ results, run_id = runtime.execute(workflow.build())
 ### 5. Documentation Navigation
 
 ```
-sdk-users/
 ├── 1-getting-started/        # Quick start guides
 ├── 2-core-concepts/          # Nodes, workflows, patterns
 ├── 3-development/            # Development guides

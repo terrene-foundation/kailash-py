@@ -143,9 +143,9 @@ setup_sdk_environment() {
     cd "$PROJECT_ROOT/docker"
 
     # Create .env file if it doesn't exist
-    if [ ! -f "$PROJECT_ROOT/sdk-users/.env.sdk-dev" ]; then
+    if [ ! -f "$PROJECT_ROOT/.env.sdk-dev" ]; then
         echo "Creating environment configuration..."
-        cat > "$PROJECT_ROOT/sdk-users/.env.sdk-dev" << EOF
+        cat > "$PROJECT_ROOT/.env.sdk-dev" << EOF
 # SDK Development Environment Configuration
 SDK_DEV_MODE=true
 
@@ -267,7 +267,7 @@ main() {
                 ;;
             3)
                 echo -e "${YELLOW}Alternative Setup Without Docker${NC}"
-                echo "See: $PROJECT_ROOT/sdk-users/INFRASTRUCTURE_NO_DOCKER.md"
+                echo "See project documentation for non-Docker setup instructions"
                 ;;
             4)
                 if check_docker; then

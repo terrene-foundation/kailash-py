@@ -579,14 +579,8 @@ Use `dataflow-specialist` subagent when:
 ## Documentation References
 
 ### Primary Sources
-- **README**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md#L304-L381)
-- **DataFlow CLAUDE**: [`sdk-users/apps/dataflow/CLAUDE.md`](../../../../sdk-users/apps/dataflow/CLAUDE.md#L83-L234)
-- **Node API**: [`sdk-users/apps/dataflow/docs/api/nodes.md`](../../../../sdk-users/apps/dataflow/docs/api/nodes.md)
 
 ### Related Documentation
-- **Query Patterns**: [`sdk-users/apps/dataflow/docs/development/query-patterns.md`](../../../../sdk-users/apps/dataflow/docs/development/query-patterns.md)
-- **CRUD Guide**: [`sdk-users/apps/dataflow/docs/development/crud.md`](../../../../sdk-users/apps/dataflow/docs/development/crud.md)
-- **Workflow Nodes**: [`sdk-users/apps/dataflow/docs/workflows/nodes.md`](../../../../sdk-users/apps/dataflow/docs/workflows/nodes.md)
 
 ### Specialist Reference
 - **DataFlow Specialist**: [`.claude/skills/dataflow-specialist.md`](../../dataflow-specialist.md#L211-L224)

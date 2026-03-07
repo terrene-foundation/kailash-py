@@ -146,10 +146,6 @@ add_connection("from_node", "from_output", "to_node", "to_input")
 ## Full Documentation
 
 When this guidance is insufficient, consult:
-- `sdk-users/2-core-concepts/workflows/` - All workflow patterns
-- `sdk-users/2-core-concepts/nodes/` - Node reference and selection
-- `sdk-users/3-development/` - Advanced implementation patterns
-- `sdk-users/CLAUDE.md` - Essential SDK patterns
 
 ---
 

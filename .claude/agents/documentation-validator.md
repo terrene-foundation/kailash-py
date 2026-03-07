@@ -38,14 +38,17 @@ You are a documentation validation specialist focused on ensuring all code examp
    - Each example becomes a test function with assertions
 
 3. **Setup Infrastructure** (for integration tests)
+
    ```bash
    cd tests/utils && ./test-env up && ./test-env status
    ```
 
 4. **Execute & Validate**
+
    ```bash
    pytest /tmp/test_docs_feature.py -v
    ```
+
    - Verify all tests pass
    - Check for deprecation warnings
    - Validate output matches documentation
@@ -58,12 +61,12 @@ You are a documentation validation specialist focused on ensuring all code examp
 
 ## Common Issues to Check
 
-| Issue | Detection | Fix |
-|-------|-----------|-----|
-| Outdated API | `addNode` instead of `add_node` | Update to current snake_case |
-| Wrong parameters | Parameter name changed | Check SDK source for current names |
-| Missing setup | No mention of Docker | Add prerequisites section |
-| Deprecated patterns | Old import paths | Update to absolute imports |
+| Issue               | Detection                       | Fix                                |
+| ------------------- | ------------------------------- | ---------------------------------- |
+| Outdated API        | `addNode` instead of `add_node` | Update to current snake_case       |
+| Wrong parameters    | Parameter name changed          | Check SDK source for current names |
+| Missing setup       | No mention of Docker            | Add prerequisites section          |
+| Deprecated patterns | Old import paths                | Update to absolute imports         |
 
 ## Skill References
 
@@ -81,9 +84,10 @@ You are a documentation validation specialist focused on ensuring all code examp
 ## Full Documentation
 
 When this guidance is insufficient, consult:
-- `sdk-users/` - Complete SDK documentation structure
-- `sdk-users/7-gold-standards/` - Documentation standards
-- `sdk-users/3-development/` - Implementation guides
+
+- `.claude/skills/` - Complete skills directory organized by topic
+- `.claude/skills/17-gold-standards/` - Documentation and code standards
+- `.claude/skills/07-development-guides/` - Implementation guides
 
 ## Validation Checklist
 
@@ -99,16 +103,17 @@ For each documentation file, verify:
 
 ## Common Documentation Errors
 
-| Error | Location Pattern | Fix |
-|-------|-----------------|-----|
-| Outdated import | `from kailash import` | Use full path imports |
-| Missing .build() | `runtime.execute(workflow)` | Add `.build()` call |
-| Wrong param count | 2-param connections | Use 4-param pattern |
-| Deprecated pattern | `workflow.execute()` | Use `runtime.execute()` |
+| Error              | Location Pattern            | Fix                     |
+| ------------------ | --------------------------- | ----------------------- |
+| Outdated import    | `from kailash import`       | Use full path imports   |
+| Missing .build()   | `runtime.execute(workflow)` | Add `.build()` call     |
+| Wrong param count  | 2-param connections         | Use 4-param pattern     |
+| Deprecated pattern | `workflow.execute()`        | Use `runtime.execute()` |
 
 ---
 
 **Use this agent when:**
+
 - Validating entire documentation sets
 - Creating tests for code examples
 - Ensuring docs match actual implementation

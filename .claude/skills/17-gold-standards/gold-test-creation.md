@@ -286,8 +286,6 @@ def test_db():
 ## Documentation References
 
 ### Primary Sources
-- [`sdk-users/7-gold-standards/test_creation_guide.md`](../../../sdk-users/7-gold-standards/test_creation_guide.md)
-- [`sdk-users/3-development/testing/TESTING_BEST_PRACTICES.md`](../../../sdk-users/3-development/testing/TESTING_BEST_PRACTICES.md)
 
 ## Related Patterns
 

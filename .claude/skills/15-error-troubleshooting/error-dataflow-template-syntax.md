@@ -171,11 +171,8 @@ Use `dataflow-specialist` subagent when:
 
 ### Primary Sources
 - **DataFlow Specialist**: [`.claude/agents/frameworks/dataflow-specialist.md` (lines 30-33)](../../../../.claude/agents/frameworks/dataflow-specialist.md#L30-L33)
-- **Template Syntax**: [`sdk-users/apps/dataflow/CLAUDE.md` (search for "template")](../../../../sdk-users/apps/dataflow/CLAUDE.md)
 
 ### Related Documentation
-- **DataFlow README**: [`sdk-users/apps/dataflow/README.md`](../../../../sdk-users/apps/dataflow/README.md)
-- **Connection Guide**: [`sdk-users/2-core-concepts/cheatsheet/005-connection-patterns.md`](../../../../sdk-users/2-core-concepts/cheatsheet/005-connection-patterns.md)
 
 ## Quick Tips
 
