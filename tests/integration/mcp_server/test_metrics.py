@@ -12,6 +12,7 @@ from collections import deque
 from unittest.mock import patch
 
 import pytest
+
 from kailash.mcp_server.utils.metrics import (
     MetricsCollector,
     get_metrics,

@@ -1,6 +1,7 @@
 """Tests for intelligent merge strategies for conditional execution."""
 
 import pytest
+
 from kailash.nodes.logic.intelligent_merge import IntelligentMergeNode
 
 

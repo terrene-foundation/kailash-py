@@ -12,7 +12,6 @@ from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.workflow.graph import Workflow
 
-
 # --- P0B-001: Remove VP#1 (DataTypeValidator.validate_node_input) ---
 
 

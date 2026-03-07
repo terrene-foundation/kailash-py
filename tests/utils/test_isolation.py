@@ -9,6 +9,7 @@ from typing import Any, Dict, Set
 from unittest.mock import patch
 
 import pytest
+
 from kailash.nodes.base import NodeRegistry
 
 

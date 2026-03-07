@@ -1,6 +1,7 @@
 """Simple test for PythonCodeNode functionality."""
 
 import pytest
+
 from kailash.nodes.code import (
     ClassWrapper,
     CodeExecutor,

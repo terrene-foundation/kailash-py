@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Set, Type
 from unittest.mock import AsyncMock, MagicMock, Mock, call, patch
 
 import pytest
+
 from kailash.utils.migrations.models import Migration, MigrationHistory, MigrationPlan
 from kailash.utils.migrations.runner import MigrationRunner
 

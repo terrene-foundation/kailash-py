@@ -14,6 +14,7 @@ BUG SCENARIO:
 import asyncio
 
 import pytest
+
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 

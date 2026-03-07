@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+
 from kailash.runtime.trust.context import RuntimeTrustContext, TrustVerificationMode
 
 

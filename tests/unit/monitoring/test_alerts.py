@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
+
 from kailash.monitoring.alerts import (
     Alert,
     AlertManager,

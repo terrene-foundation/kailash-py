@@ -6,6 +6,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
+
 from kailash.nodes.data.sql import SQLDatabaseNode
 from kailash.sdk_exceptions import NodeExecutionError
 

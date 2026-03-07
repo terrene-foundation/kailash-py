@@ -4,6 +4,7 @@ import re
 from typing import Any, Optional
 
 import numpy as np
+
 from kailash.nodes.base import Node, NodeParameter, register_node
 
 

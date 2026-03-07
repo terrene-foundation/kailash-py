@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+
 from kailash.edge.consistency import (
     BoundedStalenessManager,
     CausalConsistencyManager,

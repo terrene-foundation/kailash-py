@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+
 from kailash.core.resilience.bulkhead import (
     BulkheadManager,
     BulkheadRejectionError,

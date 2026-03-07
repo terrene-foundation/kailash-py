@@ -13,6 +13,7 @@ from pathlib import Path
 import aiohttp
 import pytest
 import redis.asyncio as redis
+
 from kailash.mcp_server import MCPClient, MCPServer
 from kailash.mcp_server.auth import APIKeyAuth
 from kailash.mcp_server.discovery import FileBasedDiscovery, ServerInfo, ServiceRegistry
@@ -22,7 +23,6 @@ from kailash.mcp_server.transports import (
     StreamableHTTPTransport,
     WebSocketTransport,
 )
-
 from tests.utils.docker_config import (
     REDIS_CONFIG,
     ensure_docker_services,
