@@ -129,13 +129,8 @@ tests/utils/test-env
 ```
 TypeAwareFieldProcessor    # Internal field processor — users never use this
 DataFlowWorkflowBinder     # Internal workflow binding — users never use this
-```
-
-**Internal class names to PRESERVE** (user-facing or explanatory):
-
-```
-SyncDDLExecutor            # Appears in code comments explaining why auto_migrate=True works
-TenantContextSwitch        # Public API: from dataflow.tenancy import TenantContextSwitch
+SyncDDLExecutor            # Internal DDL executor — users only see auto_migrate=True
+TenantContextSwitch        # Internal tenancy — users use with_tenant() context manager
 ```
 
 **Patterns to PRESERVE** (never strip these):
@@ -184,6 +179,31 @@ The root `CLAUDE.md` requires the most transformation:
 - Section 4 "Mandatory Reviews" → Rewrite as "Recommended Reviews" (code review recommended, security review recommended)
 - Strip any references to builder-internal infrastructure
 - Keep: Critical Execution Rules, Kailash Platform table, Agents listing, Skills Navigation, Rules Index, Workspace Commands
+
+## Step 4b: Fixing COC-Only Files
+
+COC-only files (files that exist in the COC template but not in BUILD) may contain errors. To fix them:
+
+1. **Identify the error** — What API/pattern is wrong?
+2. **Verify against Python SDK source** — Read the actual implementation in this BUILD repo
+3. **Fix the specific error** — Use Edit tool, not Write. Change only what's wrong.
+4. **Preserve the file** — Do NOT delete or replace COC-only files. Fix them in place.
+5. **Never bulk-replace without source verification** — Read the actual source code for every API, constructor, and return value you're changing. Blind `sed` replacements cause regressions (e.g., double-prefixing node names).
+
+### Source verification checklist
+
+Before changing any API reference in a COC file:
+
+```bash
+# Check actual class/method exists
+grep "class TypeName\|def method_name" src/kailash/**/*.py apps/kailash-*/src/**/*.py
+# Check constructor signature
+grep "def __init__" src/kailash/path/to/module.py
+# Check return type/structure
+grep "return " src/kailash/path/to/method.py
+```
+
+If the API doesn't exist in source, it's fabricated — remove the reference entirely.
 
 ## Step 5: Validate
 
@@ -251,3 +271,8 @@ All contamination counts should be **0**.
 5. **Internal class names slip through** — they appear in version history notes and feature lists
 6. **Never sync this agent or the mapping skill** — they are sync infrastructure
 7. **`git.md` must match `agents.md`** — if agents.md is softened, git.md's security review reference must also be softened to avoid contradictions
+8. **Never delete COC-only files** — they're legitimate template content, not stale
+9. **Verify before fixing** — Always check Python SDK source before correcting a COC file. Blind sed/find-replace causes regressions (double-prefixed names, wrong substitutions)
+10. **No nested `.claude/` directories** — `learning/` should only exist at `.claude/learning/`, never inside skill subdirectories
+11. **This agent NEVER touches rs COC** — the rs COC has its own BUILD repo and coc-sync agent
+12. **Line-by-line accuracy matters** — After bulk contamination sweeps, do deep API accuracy checks: verify constructors, return structures, and method signatures against actual source code
