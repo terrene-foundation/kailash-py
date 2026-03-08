@@ -1,6 +1,6 @@
 ---
 name: deployment-git
-description: "Deployment and Git workflow guides for Kailash applications including Docker deployment, Kubernetes orchestration, and Git workflows. Use when asking about 'deployment', 'Docker deployment', 'Kubernetes deployment', 'containerization', 'K8s', 'Git workflow', 'Git branching', 'CI/CD', 'production deployment', 'Docker compose', or 'container orchestration'."
+description: "Deployment and Git workflow guides for Kailash applications including Docker deployment, Kubernetes orchestration, and Git workflows. Use when asking about 'deployment', 'Docker deployment', 'Kubernetes deployment', 'containerization', 'K8s', 'Git workflow', 'Git branching', 'CI/CD', 'production deployment', 'Docker compose', 'container orchestration', 'package release', 'PyPI publish', or 'cloud deployment'."
 ---
 
 # Deployment & Git Workflows
@@ -10,6 +10,7 @@ Comprehensive guides for deploying Kailash applications with Docker and Kubernet
 ## Overview
 
 Production deployment patterns for:
+
 - Docker containerization
 - Kubernetes orchestration
 - Git workflows and branching strategies
@@ -18,7 +19,28 @@ Production deployment patterns for:
 
 ## Reference Documentation
 
+### Deployment Lifecycle
+
+- **[deployment-onboarding](deployment-onboarding.md)** - Deployment onboarding process
+  - Codebase analysis
+  - Structured questions for human architect
+  - Research current best practices
+  - Create deployment-config.md
+
+- **[deployment-packages](deployment-packages.md)** - Package release workflow
+  - PyPI and GitHub release process
+  - Version bumping and changelog
+  - CI-triggered releases
+  - Rollback procedures
+
+- **[deployment-cloud](deployment-cloud.md)** - Cloud deployment principles
+  - CLI SSO authentication (AWS, Azure, GCP)
+  - Managed vs self-hosted decisions
+  - Right-sizing and cost optimization
+  - SSL, monitoring, security baseline
+
 ### Docker Deployment
+
 - **[deployment-docker-quick](deployment-docker-quick.md)** - Docker deployment quick start
   - Dockerfile setup for Kailash apps
   - Docker Compose configurations
@@ -29,6 +51,7 @@ Production deployment patterns for:
   - Production optimizations
 
 ### Kubernetes Deployment
+
 - **[deployment-kubernetes-quick](deployment-kubernetes-quick.md)** - Kubernetes deployment guide
   - Deployment manifests
   - Service configuration
@@ -39,6 +62,7 @@ Production deployment patterns for:
   - Ingress setup
 
 ### Git Workflow
+
 - **[git-workflow-quick](git-workflow-quick.md)** - Git workflow best practices
   - Branching strategies
   - Commit conventions
@@ -48,6 +72,7 @@ Production deployment patterns for:
   - Hotfix procedures
 
 ### GitHub Management
+
 - **[github-management-patterns](github-management-patterns.md)** - GitHub project and issue management
   - Issue templates (User Story, Bug, Technical Task)
   - Story points and estimation
@@ -55,6 +80,7 @@ Production deployment patterns for:
   - Label system
 
 ### Project Management
+
 - **[project-management](project-management.md)** - Project management architecture
   - Dual-tracking system overview
   - GitHub Issues vs Local Todos
@@ -72,6 +98,7 @@ Production deployment patterns for:
 ## Docker Patterns
 
 ### Basic Dockerfile
+
 ```dockerfile
 FROM python:3.11-slim
 
@@ -96,8 +123,9 @@ CMD ["python", "-m", "app.main"]
 ```
 
 ### Docker Compose
+
 ```yaml
-version: '3.8'
+version: "3.8"
 services:
   nexus:
     build: .
@@ -123,6 +151,7 @@ volumes:
 ## Kubernetes Patterns
 
 ### Deployment Manifest
+
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -139,24 +168,25 @@ spec:
         app: kailash
     spec:
       containers:
-      - name: app
-        image: my-kailash-app:latest
-        ports:
-        - containerPort: 8000
-        env:
-        - name: RUNTIME_TYPE
-          value: "async"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 8000
-          initialDelaySeconds: 10
-          periodSeconds: 30
+        - name: app
+          image: my-kailash-app:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: RUNTIME_TYPE
+              value: "async"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
 ```
 
 ## Git Workflow Patterns
 
 ### Branch Strategy
+
 ```
 main (production)
   ↓
@@ -168,6 +198,7 @@ release/* (release prep)
 ```
 
 ### Commit Conventions
+
 ```
 feat: Add user authentication workflow
 fix: Resolve async runtime threading issue
@@ -179,48 +210,55 @@ chore: Bump version to 0.9.25
 ## Critical Rules
 
 ### Docker
-- ✅ Use AsyncLocalRuntime for Docker/FastAPI
-- ✅ Implement health checks
-- ✅ Use multi-stage builds for smaller images
-- ✅ Set proper resource limits
-- ✅ Use secrets for sensitive data
-- ❌ NEVER use LocalRuntime in Docker (causes hangs)
-- ❌ NEVER commit secrets to images
-- ❌ NEVER run as root user
+
+- Use AsyncLocalRuntime for Docker/FastAPI
+- Implement health checks
+- Use multi-stage builds for smaller images
+- Set proper resource limits
+- Use secrets for sensitive data
+- NEVER use LocalRuntime in Docker (causes hangs)
+- NEVER commit secrets to images
+- NEVER run as root user
 
 ### Kubernetes
-- ✅ Define resource requests and limits
-- ✅ Use ConfigMaps for configuration
-- ✅ Implement readiness and liveness probes
-- ✅ Use Horizontal Pod Autoscaling
-- ✅ Set up proper monitoring
-- ❌ NEVER store secrets in plain text
-- ❌ NEVER skip health checks
-- ❌ NEVER use latest tag in production
+
+- Define resource requests and limits
+- Use ConfigMaps for configuration
+- Implement readiness and liveness probes
+- Use Horizontal Pod Autoscaling
+- Set up proper monitoring
+- NEVER store secrets in plain text
+- NEVER skip health checks
+- NEVER use latest tag in production
 
 ### Git
-- ✅ Use feature branches for development
-- ✅ Write descriptive commit messages
-- ✅ Squash commits before merging
-- ✅ Use pull requests for code review
-- ✅ Tag releases semantically
-- ❌ NEVER commit directly to main
-- ❌ NEVER force push to shared branches
-- ❌ NEVER commit sensitive data
+
+- Use feature branches for development
+- Write descriptive commit messages
+- Squash commits before merging
+- Use pull requests for code review
+- Tag releases semantically
+- NEVER commit directly to main
+- NEVER force push to shared branches
+- NEVER commit sensitive data
 
 ## Runtime Selection
 
-| Environment | Runtime | Reason |
-|-------------|---------|--------|
-| **Docker** | AsyncLocalRuntime | No threading, async-first |
-| **K8s** | AsyncLocalRuntime | Container-optimized |
-| **FastAPI** | AsyncLocalRuntime | Native async support |
-| **CLI** | LocalRuntime | Synchronous execution |
-| **Scripts** | LocalRuntime | Simple sync context |
+| Environment | Runtime           | Reason                    |
+| ----------- | ----------------- | ------------------------- |
+| **Docker**  | AsyncLocalRuntime | No threading, async-first |
+| **K8s**     | AsyncLocalRuntime | Container-optimized       |
+| **FastAPI** | AsyncLocalRuntime | Native async support      |
+| **CLI**     | LocalRuntime      | Synchronous execution     |
+| **Scripts** | LocalRuntime      | Simple sync context       |
 
 ## When to Use This Skill
 
 Use this skill when you need to:
+
+- Run deployment onboarding for a new project
+- Release packages to PyPI or GitHub
+- Deploy solutions to AWS, Azure, or GCP
 - Deploy Kailash apps with Docker
 - Set up Kubernetes deployments
 - Configure CI/CD pipelines
@@ -232,6 +270,7 @@ Use this skill when you need to:
 ## Environment Management
 
 ### Development
+
 ```bash
 # Local development
 python -m app.main
@@ -241,6 +280,7 @@ docker-compose up
 ```
 
 ### Production
+
 ```bash
 # Docker production
 docker build -t app:prod .
@@ -253,14 +293,15 @@ kubectl scale deployment kailash-app --replicas=5
 
 ## Related Skills
 
-- **[03-nexus](../../03-nexus/SKILL.md)** - Application deployment
-- **[02-dataflow](../../02-dataflow/SKILL.md)** - Database in containers
-- **[01-core-sdk](../../01-core-sdk/SKILL.md)** - Runtime selection
-- **[17-gold-standards](../../17-gold-standards/SKILL.md)** - Deployment best practices
+- **[03-nexus](../03-nexus/SKILL.md)** - Application deployment
+- **[02-dataflow](../02-dataflow/SKILL.md)** - Database in containers
+- **[01-core-sdk](../01-core-sdk/SKILL.md)** - Runtime selection
+- **[17-gold-standards](../17-gold-standards/SKILL.md)** - Deployment best practices
 
 ## Support
 
 For deployment help, invoke:
-- `deployment-specialist` - Docker and Kubernetes expertise
-- `git-release-specialist` - Git workflows and releases
+
+- `deployment-specialist` - Deployment onboarding, package/cloud releases, Docker/K8s
+- `git-release-specialist` - Git workflows, releases, version management
 - `nexus-specialist` - Application configuration

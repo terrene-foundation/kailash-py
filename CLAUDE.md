@@ -44,6 +44,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 | `/implement` | 03    | Load implementation phase; repeat until todos done |
 | `/redteam`   | 04    | Load validation phase; red team with MCP tools     |
 | `/codify`    | 05    | Load codification phase; create agents & skills    |
+| `/deploy`    | —     | Deployment onboarding or execution (standalone)    |
 | `/ws`        | —     | Read-only workspace status dashboard               |
 | `/wrapup`    | —     | Write session notes before ending                  |
 
@@ -56,6 +57,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 | Concern                               | Rule File                    | Scope                                               |
 | ------------------------------------- | ---------------------------- | --------------------------------------------------- |
 | Agent orchestration & review mandates | `rules/agents.md`            | Global                                              |
+| Deployment operations & cloud auth    | `rules/deployment.md`        | `deploy/**`, `Dockerfile*`, `docker-compose*`, `k8s/**`, `.github/workflows/**` |
 | E2E god-mode testing                  | `rules/e2e-god-mode.md`      | `tests/e2e/**`, `**/*e2e*`, `**/*playwright*`       |
 | API keys & model names                | `rules/env-models.md`        | `**/*.py`, `**/*.ts`, `**/*.js`, `.env*`            |
 | Git commits, branches, PRs            | `rules/git.md`               | Global                                              |
@@ -110,7 +112,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 ### Release & Operations (`agents/management/`)
 
 - **git-release-specialist** — Git workflows, CI, releases
-- **deployment-specialist** — Docker/Kubernetes deployment
+- **deployment-specialist** — Deployment onboarding, package/cloud releases, Docker/K8s
 - **todo-manager** — Project task tracking
 - **gh-manager** — GitHub issue/project management
 
