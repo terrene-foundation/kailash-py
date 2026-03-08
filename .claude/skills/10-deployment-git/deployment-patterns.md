@@ -13,8 +13,6 @@ description: "Docker and Kubernetes deployment patterns for containerized applic
 ## Docker Compose Service Architecture
 
 ```yaml
-version: '3.8'
-
 services:
   # Backend API Service
   backend:
@@ -27,6 +25,7 @@ services:
     container_name: ${PROJECT_NAME}_backend
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
+      - RUNTIME_TYPE=async
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
@@ -69,7 +68,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_HOST_AUTH_METHOD: scram-sha-256
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:-5432}:5432"  # Remove in production — only needed for local dev access
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init-scripts:/docker-entrypoint-initdb.d/
@@ -189,7 +188,7 @@ FRONTEND_PORT=3000
 # ==============================================================================
 # 1. NEVER commit .env files to version control
 # 2. Generate secrets with: openssl rand -hex 32
-# 3. Use secrets management tools (Vault, AWS Secrets Manager)
+# 3. Use a secrets manager (e.g., HashiCorp Vault) in production
 # 4. Rotate secrets regularly
 ```
 
@@ -246,6 +245,8 @@ spec:
             secretKeyRef:
               name: app-secrets
               key: jwt-secret
+        - name: RUNTIME_TYPE
+          value: "async"
         envFrom:
         - configMapRef:
             name: app-config
@@ -386,7 +387,8 @@ metadata:
   name: app-secrets
 type: Opaque
 data:
-  # Base64-encoded values
+  # EXAMPLES ONLY — replace with real base64-encoded secrets before deploying.
+  # Prefer: kubectl create secret generic app-secrets --from-literal=database-url="..." --from-literal=jwt-secret="..."
   database-url: cG9zdGdyZXNxbDovL3VzZXI6cGFzc0Bwb3N0Z3Jlczo1NDMyL2RiCg==
   jwt-secret: Y2hhbmdlX3RoaXNfdG9fc2VjdXJlX2tleQo=
 ```
@@ -428,7 +430,7 @@ kubectl create namespace production
 
 # 2. Create secrets
 kubectl create secret generic app-secrets \
-  --from-literal=database-url="postgresql://user:pass@postgres:5432/db" \
+  --from-literal=database-url="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}" \
   --from-literal=jwt-secret="$(openssl rand -hex 32)" \
   --namespace=production
 
@@ -486,10 +488,10 @@ async def readiness_check():
         await db.execute("SELECT 1")
         await redis.ping()
         return {"status": "ready"}
-    except Exception as e:
+    except Exception:
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            content={"status": "not ready", "error": str(e)}
+            content={"status": "not ready"}
         )
 ```
 
