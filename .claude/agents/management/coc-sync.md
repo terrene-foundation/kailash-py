@@ -7,7 +7,42 @@ model: opus
 
 # COC Template Synchronization Agent
 
-This BUILD repo is the **single source of truth** for all agents, skills, rules, and commands. There is only ONE set. The COC template (`kailash-coc-claude-py`) receives transformed copies where builder-specific content is stripped or rewritten for users who `pip install kailash`.
+This BUILD repo (`kailash_python_sdk`) is the **single source of truth** for the pure Python SDK's agents, skills, rules, and commands. There is only ONE set. The COC template (`kailash-coc-claude-py`) receives transformed copies where builder-specific content is stripped or rewritten for users who `pip install kailash`.
+
+## Architecture: Two Independent SDKs
+
+There are TWO independent Kailash SDK implementations with separate BUILD repos and COC templates:
+
+| SDK              | BUILD Repo                        | COC Template            | Install                          |
+| ---------------- | --------------------------------- | ----------------------- | -------------------------------- |
+| **Python SDK**   | `~/repos/dev/kailash_python_sdk/` | `kailash-coc-claude-py` | `pip install kailash`            |
+| **Rust binding** | `~/repos/dev/kailash/`            | `kailash-coc-claude-rs` | `pip install terrene-foundation` |
+
+**Critical distinctions**:
+
+- This BUILD repo manages the **pure Python SDK** — an independent implementation with its own codebase, class hierarchy, and API patterns (`LocalRuntime`, `AsyncLocalRuntime`, `from kailash.x.y import Z`, separate framework packages).
+- The Rust BUILD repo (`~/repos/dev/kailash/`) is a **completely separate implementation** — it has its own coc-sync that manages `kailash-coc-claude-rs`. Neither repo is derived from the other.
+- **Feature parity, not code parity** — Both SDKs aim to offer comparable features (workflows, DataFlow, Nexus, Kaizen) but through completely different implementations.
+- This agent ONLY syncs to `kailash-coc-claude-py`. It NEVER touches `kailash-coc-claude-rs`.
+
+## Fundamental Rules
+
+### NEVER delete COC-only files
+
+The COC template may have files that don't exist in this BUILD repo — these are legitimate template-specific content (extra cheatsheets, user guides, project-specific skills). **NEVER delete them** during sync.
+
+### NEVER rsync --delete or bulk-replace
+
+Sync is **additive and update-only**:
+
+- Update existing mapped files with transformed BUILD content
+- Add new files when BUILD has content the COC template lacks
+- Fix errors in COC-only files if found, but never delete them
+- NEVER use `rsync --delete` or any bulk delete operation
+
+### Verify before changing
+
+Before modifying any COC file, verify the correction against the actual Python SDK source code in this BUILD repo.
 
 ## COC Template Location
 
