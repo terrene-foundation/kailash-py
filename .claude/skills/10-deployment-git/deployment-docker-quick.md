@@ -24,8 +24,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application
 COPY . .
 
+# Create non-root user
+RUN useradd -r appuser
+USER appuser
+
 # Expose API port
 EXPOSE 8000
+
+# Kailash runtime configuration
+ENV RUNTIME_TYPE=async
+
+# Health check using python (curl not available on slim images)
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
 # Run with async runtime (Docker-optimized)
 CMD ["python", "app.py"]
@@ -35,13 +46,14 @@ CMD ["python", "app.py"]
 
 ```python
 # app.py
+import os
 from kailash.api.workflow_api import WorkflowAPI
 from kailash.workflow.builder import WorkflowBuilder
 
 workflow = WorkflowBuilder()
 workflow.add_node("LLMNode", "chat", {
     "provider": "openai",
-    "model": "gpt-4",
+    "model": os.environ.get("LLM_MODEL", "gpt-4"),
     "prompt": "{{input.message}}"
 })
 
@@ -68,8 +80,6 @@ curl http://localhost:8000/health
 ## Docker Compose
 
 ```yaml
-version: '3.8'
-
 services:
   app:
     build: .
@@ -77,7 +87,8 @@ services:
       - "8000:8000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DATABASE_URL=postgresql://user:pass@db:5432/mydb
+      - DATABASE_URL=postgresql://user:${DB_PASSWORD}@db:5432/mydb
+      - RUNTIME_TYPE=async
     depends_on:
       - db
 
@@ -85,7 +96,7 @@ services:
     image: postgres:15
     environment:
       - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=pass
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=mydb
     volumes:
       - postgres_data:/var/lib/postgresql/data

@@ -45,6 +45,8 @@ spec:
             configMapKeyRef:
               name: kailash-config
               key: database-url
+        - name: RUNTIME_TYPE
+          value: "async"
         resources:
           requests:
             memory: "256Mi"
@@ -69,6 +71,8 @@ spec:
 ### Service
 ```yaml
 # service.yaml
+# Note: LoadBalancer type requires a cloud provider (AWS, GCP, Azure).
+# For local/on-prem, use NodePort or ClusterIP with an Ingress controller.
 apiVersion: v1
 kind: Service
 metadata:
@@ -94,8 +98,15 @@ data:
 ```
 
 ### Secret
+
+> **Recommended**: Use `kubectl create secret generic` instead of manually base64-encoding values:
+> ```bash
+> kubectl create secret generic kailash-secrets \
+>   --from-literal=openai-api-key="sk-your-key-here"
+> ```
+
 ```yaml
-# secret.yaml
+# secret.yaml — if you must use a manifest, values must be base64-encoded
 apiVersion: v1
 kind: Secret
 metadata:
