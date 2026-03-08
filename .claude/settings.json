@@ -28,6 +28,11 @@
           },
           {
             "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/validate-deployment.js\"",
+            "timeout": 10
+          },
+          {
+            "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/scripts/hooks/auto-format.js\"",
             "timeout": 30
           }
