@@ -1,116 +1,148 @@
-# Deployment Rules
+# SDK Release Rules
 
 ## Scope
 
-These rules apply to all deployment operations and deployment-related files.
+These rules apply to all SDK release operations and release-related files (`deploy/**`, `.github/workflows/**`, `pyproject.toml`, `CHANGELOG.md`).
 
 ## MUST Rules
 
-### 1. CLI SSO Authentication Only
+### 1. Full Test Suite Before Release
 
-All cloud provider access MUST use CLI SSO authentication. No long-lived credentials.
-
-**Correct**:
+All releases MUST pass the full test suite across all supported Python versions before publishing.
 
 ```bash
-aws sso login --profile my-profile
-az login
-gcloud auth login
+# Run full test matrix
+pytest
+# Or via tox/nox if configured
+tox
 ```
 
-**Incorrect**:
+**Enforced by**: deployment-specialist agent, CI pipeline
+**Violation**: BLOCK release
 
+### 2. TestPyPI Validation Before Production PyPI
+
+Major and minor releases MUST be validated on TestPyPI before publishing to production PyPI.
+
+```bash
+# Upload to TestPyPI
+twine upload --repository testpypi dist/*.whl
+
+# Verify install
+python -m venv /tmp/verify --clear
+/tmp/verify/bin/pip install --index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ kailash==X.Y.Z
+/tmp/verify/bin/python -c "import kailash; print(kailash.__version__)"
 ```
-❌ AWS_ACCESS_KEY_ID=AKIA...
-❌ AZURE_CLIENT_SECRET=...
-❌ GOOGLE_APPLICATION_CREDENTIALS pointing to committed JSON
+
+**Exception**: Patch releases (bug fixes only) may skip TestPyPI with explicit human approval.
+
+### 3. Version Consistency Across All Packages
+
+All packages in the SDK MUST have consistent, compatible versions before release.
+
+**Check**:
+- `pyproject.toml` version field in each package
+- `__version__` in `__init__.py` files
+- Cross-package dependency version pins
+
+### 4. CHANGELOG.md Updated for Every Release
+
+Every release MUST have a corresponding entry in `CHANGELOG.md` with:
+- Version number and date
+- Added, Changed, Fixed, Removed sections as applicable
+- Breaking changes clearly marked
+
+### 5. Security Review Before Publishing
+
+Security review by **security-reviewer** is MANDATORY before any PyPI publish.
+
+**Check for**:
+- No hardcoded secrets in package source
+- No sensitive data in wheel contents
+- Dependencies are pinned and audited
+- No known vulnerabilities in dependencies
+
+**Enforced by**: agents.md Rule 2, validate-deployment.js hook
+**Violation**: BLOCK release
+
+### 6. Wheel-Only Publishing for Proprietary Code
+
+Proprietary packages MUST publish wheels only — never sdist (source distribution).
+
+```bash
+# Correct: wheels only
+twine upload dist/*.whl
+
+# Incorrect for proprietary code
+❌ twine upload dist/*        # includes .tar.gz sdist
+❌ twine upload dist/*.tar.gz  # sdist exposes source
 ```
 
-**Enforced by**: validate-deployment.js hook, security-reviewer agent
-**Violation**: BLOCK deployment
+### 7. Release Config Documented
 
-### 2. SSL Required for Production
+Every SDK that publishes releases MUST have `deploy/deployment-config.md` at the project root. Run `/deploy` to create it via the onboarding process.
 
-All production endpoints MUST use HTTPS/TLS.
+### 8. Research Before Executing
 
-**Applies to**:
-
-- API endpoints
-- Web applications
-- Webhook URLs
-- Database connections (where supported)
-
-### 3. Monitoring Before Go-Live
-
-Production deployments MUST have monitoring configured before receiving traffic.
-
-**Minimum requirements**:
-
-- Health check endpoint responding
-- Error alerting configured
-- Basic metrics collection (CPU, memory, request rate)
-
-### 4. Secrets via Provider's Secrets Manager
-
-Production secrets MUST use the cloud provider's secrets management service, not environment variables on the host or committed files.
-
-**Examples**:
-
-- AWS: Secrets Manager or Parameter Store
-- Azure: Key Vault
-- GCP: Secret Manager
-
-### 5. Deployment Config Documented
-
-Every project that deploys MUST have `deploy/deployment-config.md` at the project root. Run `/deploy` to create it via the onboarding process.
-
-### 6. Research Before Executing
-
-Cloud provider CLIs and services change frequently. MUST verify current syntax via web search or `--help` before running deployment commands. Do NOT rely on memorized commands that may be outdated.
+PyPI tooling and CI patterns change frequently. MUST verify current syntax via web search or `--help` before running release commands. Do NOT rely on memorized commands that may be outdated.
 
 ## MUST NOT Rules
 
-### 1. No Long-Lived Cloud Credentials
+### 1. No Publishing Without CI Green
 
-MUST NOT store AWS access keys, Azure client secrets, or GCP service account JSON in:
+MUST NOT publish to PyPI when CI is failing. All checks must pass first.
 
-- `.env` files
-- Source code
-- CI configuration (use CI's native secrets)
-- Docker images
+### 2. No Skipping TestPyPI for Major/Minor Releases
 
-### 2. No Deployment Without Tests
+MUST NOT skip TestPyPI validation for major (X.0.0) or minor (X.Y.0) releases. These carry higher risk of breaking changes.
 
-MUST NOT deploy to production without a passing test suite.
+### 3. No PyPI Tokens in Source
 
-### 3. No Unattended Destructive Operations
+MUST NOT commit PyPI tokens or credentials to source control.
 
-MUST NOT execute destructive cloud operations (delete resources, terminate instances, drop databases) without explicit human approval.
+**Correct**:
+- `~/.pypirc` (local, gitignored)
+- CI secrets (GitHub Actions secrets)
+- Trusted publisher (OIDC — no tokens needed)
 
-### 4. No Hardcoded Infrastructure
+**Incorrect**:
+```
+❌ TWINE_PASSWORD=pypi-... in .env
+❌ TWINE_PASSWORD=pypi-... in CI config files
+❌ ~/.pypirc committed to repo
+```
 
-MUST NOT hardcode IP addresses, instance IDs, or resource ARNs in application code. Use service discovery, DNS, or configuration.
+**Enforced by**: validate-deployment.js hook, security-reviewer agent
+**Violation**: BLOCK commit
 
-## Production Checklist
+### 4. No Publishing Without Version Bump
 
-Before any production deployment:
+MUST NOT publish a release without bumping the version number. PyPI does not allow overwriting existing versions.
 
-- [ ] All tests pass
+### 5. No Uncommitted Changes During Release
+
+MUST NOT publish from a dirty working tree. All changes must be committed and pushed before building release artifacts.
+
+## Release Checklist
+
+Before any SDK release:
+
+- [ ] All tests pass (full matrix: Python versions x OS)
 - [ ] Security review completed
-- [ ] SSL/TLS configured
-- [ ] Monitoring and alerting configured
-- [ ] Secrets in provider's secrets manager
-- [ ] Deployment runbook up to date in `deploy/deployment-config.md`
-- [ ] Database migrations reviewed for destructive operations (DROP, ALTER DROP COLUMN)
-- [ ] Rollback procedure documented and tested
-- [ ] Right-sizing verified (check reserved instances / savings plans first)
-- [ ] DNS configured
-- [ ] Human approval obtained
+- [ ] CHANGELOG.md updated with release entry
+- [ ] Version bumped consistently across all packages
+- [ ] Linting and formatting checks pass
+- [ ] TestPyPI validation passed (required for major/minor)
+- [ ] Production PyPI publish successful
+- [ ] Clean venv install verification passed
+- [ ] GitHub Release created with release notes
+- [ ] Documentation deployed and verified
+- [ ] Release logged in `deploy/deployments/`
 
 ## Exceptions
 
-Deployment rule exceptions require:
+Release rule exceptions require:
 
 1. Explicit human approval
 2. Documentation in deployment-config.md
-3. Time-limited (must be remediated)
+3. Justification (e.g., critical hotfix skipping TestPyPI)

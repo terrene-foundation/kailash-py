@@ -1,65 +1,63 @@
 ---
 name: deployment-git
-description: "Deployment and Git workflow guides for Kailash applications including Docker deployment, Kubernetes orchestration, and Git workflows. Use when asking about 'deployment', 'Docker deployment', 'Kubernetes deployment', 'containerization', 'K8s', 'Git workflow', 'Git branching', 'CI/CD', 'production deployment', 'Docker compose', 'container orchestration', 'package release', 'PyPI publish', or 'cloud deployment'."
+description: "SDK release and Git workflow guides for the Kailash Python SDK including PyPI publishing, CI/CD pipelines, documentation deployment, and Git workflows. Use when asking about 'deployment', 'release', 'PyPI publish', 'CI/CD', 'GitHub Actions', 'documentation deployment', 'TestPyPI', 'wheel building', 'version bump', 'changelog', 'Git workflow', 'Git branching', 'package release', or 'multi-package coordination'."
 ---
 
-# Deployment & Git Workflows
+# SDK Release & Git Workflows
 
-Comprehensive guides for deploying Kailash applications with Docker and Kubernetes, plus Git workflow best practices.
+Comprehensive guides for releasing the Kailash Python SDK to PyPI, managing CI/CD pipelines, deploying documentation, and Git workflow best practices.
 
 ## Overview
 
-Production deployment patterns for:
+SDK release and development infrastructure patterns for:
 
-- Docker containerization
-- Kubernetes orchestration
+- PyPI package publishing (TestPyPI + production)
+- CI/CD pipelines (GitHub Actions)
+- Multi-platform wheel building
+- Documentation deployment
 - Git workflows and branching strategies
-- CI/CD integration
-- Environment management
+- Multi-package version coordination
 
 ## Reference Documentation
 
 ### Deployment Lifecycle
 
-- **[deployment-onboarding](deployment-onboarding.md)** - Deployment onboarding process
-  - Codebase analysis
+- **[deployment-onboarding](deployment-onboarding.md)** - SDK release onboarding process
+  - Codebase analysis (packages, build system, CI, docs)
   - Structured questions for human architect
-  - Research current best practices
+  - Research current PyPI/CI best practices
   - Create deployment-config.md
 
 - **[deployment-packages](deployment-packages.md)** - Package release workflow
   - PyPI and GitHub release process
+  - Multi-package coordination and publish order
   - Version bumping and changelog
   - CI-triggered releases
+  - TestPyPI validation
   - Rollback procedures
 
-- **[deployment-cloud](deployment-cloud.md)** - Cloud deployment principles
-  - CLI SSO authentication (AWS, Azure, GCP)
-  - Managed vs self-hosted decisions
-  - Right-sizing and cost optimization
-  - SSL, monitoring, security baseline
+- **[deployment-ci](deployment-ci.md)** - CI/CD infrastructure
+  - GitHub Actions workflows for Python packages
+  - Multi-platform wheel building
+  - Test matrix (Python versions x OS)
+  - Tag-triggered publishing pipeline
+  - Documentation deployment (ReadTheDocs, GitHub Pages)
+  - Self-hosted runner management
 
-### Docker Deployment
+### Docker
 
-- **[deployment-docker-quick](deployment-docker-quick.md)** - Docker deployment quick start
+- **[deployment-docker-quick](deployment-docker-quick.md)** - Docker deployment patterns
   - Dockerfile setup for Kailash apps
   - Docker Compose configurations
   - Multi-stage builds
-  - Environment variables
-  - Volume management
   - Health checks
-  - Production optimizations
 
-### Kubernetes Deployment
+### Kubernetes
 
-- **[deployment-kubernetes-quick](deployment-kubernetes-quick.md)** - Kubernetes deployment guide
+- **[deployment-kubernetes-quick](deployment-kubernetes-quick.md)** - Kubernetes deployment patterns
   - Deployment manifests
   - Service configuration
-  - ConfigMaps and Secrets
-  - Persistent volumes
-  - Health probes
   - Scaling strategies
-  - Ingress setup
 
 ### Git Workflow
 
@@ -95,92 +93,28 @@ Production deployment patterns for:
   - Periodic sync checklists
   - Agent coordination (todo-manager ↔ gh-manager)
 
-## Docker Patterns
+## SDK Release Patterns
 
-### Basic Dockerfile
+### Release Flow
 
-```dockerfile
-FROM python:3.11-slim
-
-WORKDIR /app
-
-# Install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy application
-COPY . .
-
-# Use AsyncLocalRuntime for Docker
-ENV RUNTIME_TYPE=async
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s \
-  CMD curl -f http://localhost:8000/health || exit 1
-
-# Run with Nexus
-CMD ["python", "-m", "app.main"]
+```
+Version bump + CHANGELOG → Build wheels → TestPyPI → Verify → PyPI → GitHub Release → Deploy Docs
 ```
 
-### Docker Compose
+### CI-Triggered Release (Preferred)
 
-```yaml
-version: "3.8"
-services:
-  nexus:
-    build: .
-    ports:
-      - "8000:8000"
-    environment:
-      - DATABASE_URL=postgresql://user:pass@db:5432/mydb
-      - RUNTIME_TYPE=async
-    depends_on:
-      - db
-
-  db:
-    image: postgres:15
-    environment:
-      - POSTGRES_PASSWORD=pass
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-volumes:
-  postgres_data:
+```
+git tag v1.2.3 → push tag → CI builds wheels → CI tests → CI publishes TestPyPI → CI publishes PyPI → CI creates GitHub Release
 ```
 
-## Kubernetes Patterns
+### Multi-Package Release Order
 
-### Deployment Manifest
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: kailash-app
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: kailash
-  template:
-    metadata:
-      labels:
-        app: kailash
-    spec:
-      containers:
-        - name: app
-          image: my-kailash-app:latest
-          ports:
-            - containerPort: 8000
-          env:
-            - name: RUNTIME_TYPE
-              value: "async"
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8000
-            initialDelaySeconds: 10
-            periodSeconds: 30
+```
+kailash (core)
+  ↓
+kailash-dataflow (depends on core)
+kailash-nexus (depends on core)
+kailash-kaizen (depends on core)
 ```
 
 ## Git Workflow Patterns
@@ -209,27 +143,16 @@ chore: Bump version to 0.9.25
 
 ## Critical Rules
 
-### Docker
+### SDK Release
 
-- Use AsyncLocalRuntime for Docker/FastAPI
-- Implement health checks
-- Use multi-stage builds for smaller images
-- Set proper resource limits
-- Use secrets for sensitive data
-- NEVER use LocalRuntime in Docker (causes hangs)
-- NEVER commit secrets to images
-- NEVER run as root user
-
-### Kubernetes
-
-- Define resource requests and limits
-- Use ConfigMaps for configuration
-- Implement readiness and liveness probes
-- Use Horizontal Pod Autoscaling
-- Set up proper monitoring
-- NEVER store secrets in plain text
-- NEVER skip health checks
-- NEVER use latest tag in production
+- Run full test suite before any release
+- TestPyPI validation required for major/minor releases
+- Wheel-only publishing for proprietary code
+- Version consistency across all sub-packages
+- Publish in dependency order (core first)
+- Security review before every publish
+- NEVER commit PyPI tokens to source
+- NEVER publish with failing CI
 
 ### Git
 
@@ -242,66 +165,30 @@ chore: Bump version to 0.9.25
 - NEVER force push to shared branches
 - NEVER commit sensitive data
 
-## Runtime Selection
-
-| Environment | Runtime           | Reason                    |
-| ----------- | ----------------- | ------------------------- |
-| **Docker**  | AsyncLocalRuntime | No threading, async-first |
-| **K8s**     | AsyncLocalRuntime | Container-optimized       |
-| **FastAPI** | AsyncLocalRuntime | Native async support      |
-| **CLI**     | LocalRuntime      | Synchronous execution     |
-| **Scripts** | LocalRuntime      | Simple sync context       |
-
 ## When to Use This Skill
 
 Use this skill when you need to:
 
-- Run deployment onboarding for a new project
+- Run SDK release onboarding for a new project
 - Release packages to PyPI or GitHub
-- Deploy solutions to AWS, Azure, or GCP
-- Deploy Kailash apps with Docker
-- Set up Kubernetes deployments
-- Configure CI/CD pipelines
+- Set up or debug CI/CD pipelines
+- Configure GitHub Actions workflows
+- Build multi-platform wheels
+- Deploy documentation
+- Coordinate multi-package releases
 - Establish Git workflows
-- Containerize workflows
-- Scale applications in production
-- Manage environments and secrets
-
-## Environment Management
-
-### Development
-
-```bash
-# Local development
-python -m app.main
-
-# Docker development
-docker-compose up
-```
-
-### Production
-
-```bash
-# Docker production
-docker build -t app:prod .
-docker run -d -p 8000:8000 app:prod
-
-# Kubernetes production
-kubectl apply -f k8s/
-kubectl scale deployment kailash-app --replicas=5
-```
+- Manage test matrices
 
 ## Related Skills
 
-- **[03-nexus](../03-nexus/SKILL.md)** - Application deployment
-- **[02-dataflow](../02-dataflow/SKILL.md)** - Database in containers
+- **[03-nexus](../03-nexus/SKILL.md)** - Application deployment (end-user)
+- **[02-dataflow](../02-dataflow/SKILL.md)** - Database operations
 - **[01-core-sdk](../01-core-sdk/SKILL.md)** - Runtime selection
-- **[17-gold-standards](../17-gold-standards/SKILL.md)** - Deployment best practices
+- **[17-gold-standards](../17-gold-standards/SKILL.md)** - Release best practices
 
 ## Support
 
-For deployment help, invoke:
+For SDK release help, invoke:
 
-- `deployment-specialist` - Deployment onboarding, package/cloud releases, Docker/K8s
+- `deployment-specialist` - Release onboarding, PyPI publishing, CI management
 - `git-release-specialist` - Git workflows, releases, version management
-- `nexus-specialist` - Application configuration
