@@ -7,7 +7,14 @@ description: "Transformation rules for syncing BUILD repo artifacts to COC templ
 
 ## Core Principle
 
-This BUILD repo has ONE set of agents, skills, rules, and commands. Everything syncs to the COC template with transforms applied. There is no separate "user" set — just transformed copies of what's here.
+This BUILD repo (`kailash_python_sdk`) has ONE set of agents, skills, rules, and commands. Everything syncs to the COC template (`kailash-coc-claude-py`) with transforms applied. There is no separate "user" set — just transformed copies of what's here.
+
+## Architecture Rules
+
+1. **This is the pure Python SDK BUILD repo** — independent from the Rust SDK BUILD repo (`~/repos/dev/kailash/`). Each has its own coc-sync that manages its own COC template.
+2. **NEVER delete COC-only files** — The COC template may have files not in this BUILD repo. These are legitimate template content.
+3. **NEVER rsync --delete** — Sync is additive and update-only. Files in COC but not in BUILD are COC-only content, not stale.
+4. **Fix in place** — COC-only files with content errors should be fixed using Edit, not deleted and recreated.
 
 ## Exclusions (never sync)
 
@@ -92,9 +99,9 @@ Files that reference internal source code paths. Remove lines/paragraphs contain
 
 Files with hardcoded absolute paths that must become relative.
 
-| File/Directory                  | Pattern                                                  | Replace With      |
-| ------------------------------- | -------------------------------------------------------- | ----------------- |
-| Any file                        | `./`           | (remove entirely) |
+| File/Directory | Pattern                                        | Replace With      |
+| -------------- | ---------------------------------------------- | ----------------- |
+| Any file       | `./` | (remove entirely) |
 
 ### Category 4: Rule Softening
 
