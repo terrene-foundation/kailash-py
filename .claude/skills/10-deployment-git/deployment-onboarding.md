@@ -1,6 +1,6 @@
-# Deployment Onboarding Process
+# SDK Release Onboarding Process
 
-Interactive process for creating a project's `deploy/deployment-config.md`. The deployment-specialist agent drives this process with the human architect.
+Interactive process for creating a project's `deploy/deployment-config.md`. The deployment-specialist agent drives this process with the human architect. Focused on SDK release infrastructure (PyPI publishing, CI, docs), not cloud deployment.
 
 ## When to Run
 
@@ -8,135 +8,153 @@ Run when `/deploy` is invoked and `deploy/deployment-config.md` does not exist a
 
 ## Step 1: Codebase Analysis
 
-Analyze the project to understand what needs deploying. Check:
+Analyze the project to understand what needs to be released. Check:
 
-- **Project type**: Package (library)? Web app? API service? CLI tool? Multi-service?
-- **Build system**: `pyproject.toml` (setuptools/hatch/poetry), `setup.py`, `setup.cfg`
-- **Existing deployment artifacts**: Dockerfile, docker-compose.yml, k8s manifests, terraform files, CI workflows
-- **Dependencies**: Database (PostgreSQL, MySQL, SQLite, MongoDB), cache (Redis, Memcached), queue (RabbitMQ, SQS), external APIs
-- **Entry points**: ASGI/WSGI app, CLI script, scheduled jobs
-- **Docs**: sphinx `conf.py`, mkdocs.yml, or docs/ directory
+- **Packages**: Main package (`kailash`) and sub-packages (`kailash-dataflow`, `kailash-nexus`, `kailash-kaizen`)
+- **Build system**: `pyproject.toml` (setuptools/hatch/maturin), `setup.py`, `setup.cfg`
+- **Existing CI**: `.github/workflows/` — what's already automated?
+- **Documentation**: sphinx `conf.py`, mkdocs.yml, docs/ directory — what doc system is in use?
+- **Test infrastructure**: pytest config, tox.ini, nox, test matrix setup
+- **Version management**: where is version defined? single source or duplicated?
+- **Existing release artifacts**: `dist/`, `MANIFEST.in`, `.pypirc` template, `CHANGELOG.md`
 
 ## Step 2: Structured Questions for the Human
 
-### Release Track
+### PyPI Publishing
 
-- Package release (GitHub + PyPI/npm), cloud deployment, or both?
+- Package name(s) on PyPI?
+- TestPyPI validation required before production PyPI?
+- Wheel-only publishing (proprietary) or sdist included (open source)?
+- API token setup: `~/.pypirc` file or CI secrets (e.g., GitHub Actions secrets)?
+- Trusted publisher (OIDC) or token-based authentication?
 
-### Package Release (if applicable)
+### Multi-Package Versioning
 
-- Target registry? (PyPI, npm, GitHub Packages)
-- Package name?
-- Docs tool? (sphinx, mkdocs, none)
-- CI system? (GitHub Actions, GitLab CI)
+- Lockstep versioning (all packages share same version) or independent?
+- If independent: what's the compatibility matrix?
+- Cross-package dependency pinning strategy (exact, compatible release, range)?
 
-### Cloud Deployment (if applicable)
+### Documentation
 
-- Provider? (AWS, Azure, GCP)
-- Region?
-- SSO profile name for CLI auth?
-- Compute: containers (ECS, Cloud Run, AKS), VMs, serverless?
-- Database: managed service or self-hosted?
-- Do you have reserved instances or savings plans to use?
-- Domain name? DNS provider?
-- SSL: provider-managed (ACM, Azure, GCP) or external?
-- Monitoring: provider-native or third-party?
-- Alerting targets? (email, Slack, PagerDuty)
-- Security: WAF needed? Vulnerability scanning tool?
-- Secrets management: which service?
-- Budget constraints?
+- Documentation tool: sphinx, mkdocs, or other?
+- Hosting: ReadTheDocs, GitHub Pages, or other?
+- Auto-deploy on merge to main, or manual trigger?
+- API reference auto-generated from docstrings?
+
+### CI System
+
+- CI platform: GitHub Actions, GitLab CI, or other?
+- Test matrix: which Python versions? which operating systems?
+- Self-hosted runners needed (e.g., for Rust compilation)?
+- Tag-triggered publishing or manual release?
+
+### Release Process
+
+- Changelog format: Keep a Changelog, conventional-changelog, or custom?
+- Release cadence: on-demand, scheduled, or continuous?
+- Release branch strategy: tag from main, release branches, or other?
 
 ## Step 3: Research
 
 The agent MUST research current approaches rather than prescribe from stale knowledge:
 
-- Web search for current best practices with the chosen provider
-- CLI `--help` for current command syntax
-- Check provider documentation for service availability in chosen region
-- Look up current pricing for selected services
+- Web search for current PyPI publishing best practices (trusted publishers, OIDC, etc.)
+- Current `build`, `twine`, `maturin` tool versions and syntax
+- Current GitHub Actions patterns for Python package CI/CD
+- Current ReadTheDocs or GitHub Pages setup patterns
+- CLI `--help` for current tool syntax
 
 ## Step 4: Create deploy/ Directory
 
 ```
 deploy/
-  deployment-config.md    # Decisions + rationale + runbook + rollback
-  deployments/            # Deployment logs (created per deployment)
+  deployment-config.md    # Decisions + rationale + release runbook + rollback
+  deployments/            # Release logs (created per release)
 ```
 
 ## Step 5: Human Review
 
-Present the completed `deployment-config.md` to the human for review before any deployment.
+Present the completed `deployment-config.md` to the human for review before any publishing.
 
 ## deployment-config.md Template
 
 The onboarding process creates this file. Structure adapts to the project:
 
 ```markdown
-# Deployment Configuration
+# SDK Release Configuration
 
-## Project
+## Packages
 
-- **Name**: [project name]
-- **Type**: [package | web-app | api-service | cli-tool | multi-service]
-- **Build**: [build system]
+| Package | PyPI Name | Version Source | Build Backend |
+| ------- | --------- | -------------- | ------------- |
+| [name]  | [pypi-name] | [path to version] | [backend] |
 
-## Release Track: Package (if applicable)
+## Versioning Strategy
 
-- **Registry**: [PyPI | npm | GitHub Packages]
-- **Package name**: [name]
-- **Docs**: [sphinx | mkdocs | none]
-- **CI**: [system]
+- **Strategy**: [lockstep | independent]
+- **Cross-package dependencies**: [pinning strategy]
 
-### Package Release Runbook
+## PyPI Publishing
 
-1. [step-by-step release procedure]
+- **Authentication**: [~/.pypirc | CI secrets | trusted publisher (OIDC)]
+- **TestPyPI**: [required for major/minor | always | never]
+- **Artifact type**: [wheel-only | wheel + sdist]
 
-## Release Track: Cloud (if applicable)
+## CI/CD
 
-- **Provider**: [AWS | Azure | GCP]
-- **Region**: [region]
-- **Auth**: `[sso login command]`
+- **Platform**: [GitHub Actions | GitLab CI]
+- **Test matrix**: [Python versions] x [OS list]
+- **Release trigger**: [tag-triggered | manual | on-merge]
+- **Self-hosted runners**: [yes/no — reason]
 
-### Infrastructure
+## Documentation
 
-| Service   | Type                  | Sizing | Notes                      |
-| --------- | --------------------- | ------ | -------------------------- |
-| [service] | [managed/self-hosted] | [size] | [reserved instances, etc.] |
+- **Tool**: [sphinx | mkdocs]
+- **Hosting**: [ReadTheDocs | GitHub Pages]
+- **Deploy trigger**: [on-merge | on-release | manual]
 
-### Networking
+## Release Runbook
 
-- **Domain**: [domain]
-- **DNS**: [provider]
-- **SSL**: [provider]
-- **CDN**: [provider or none]
+### Pre-release
 
-### Monitoring
+1. Run full test suite: `[test command]`
+2. Run linting: `[lint command]`
+3. Update CHANGELOG.md
+4. Bump version in [location(s)]
+5. Ensure version consistency across packages
 
-- **Metrics**: [tool]
-- **Logging**: [tool]
-- **Alerting**: [targets]
+### Build and Validate
 
-### Security
+1. Build: `python -m build`
+2. Upload to TestPyPI: `twine upload --repository testpypi dist/*.whl`
+3. Verify: `pip install --index-url https://test.pypi.org/simple/ [package]==X.Y.Z`
 
-- **Secrets**: [secrets manager]
-- **WAF**: [yes/no]
-- **Scanning**: [tool]
+### Publish
 
-### Cloud Deployment Runbook
+1. Upload to PyPI: `twine upload dist/*.whl`
+2. Verify: `pip install [package]==X.Y.Z`
+3. Create GitHub Release: `gh release create vX.Y.Z --generate-notes`
 
-1. [step-by-step deployment procedure]
+### Post-release
 
-### Rollback Procedure
+1. Deploy documentation
+2. Log release in `deploy/deployments/YYYY-MM-DD-vX.Y.Z.md`
 
-1. [step-by-step rollback]
+## Rollback Procedure
 
-## Production Checklist
+1. Yank version on PyPI (Project Settings > Yank Version)
+2. Publish corrective release with bumped patch number
+3. Delete GitHub Release and tag if needed
 
-- [ ] Tests pass
-- [ ] Security review
-- [ ] SSL configured
-- [ ] Monitoring active
-- [ ] Secrets in secrets manager
-- [ ] DNS configured
-- [ ] Right-sizing verified
+## Release Checklist
+
+- [ ] All tests pass (full matrix)
+- [ ] Security review completed
+- [ ] CHANGELOG.md updated
+- [ ] Version consistency verified across packages
+- [ ] TestPyPI validation passed
+- [ ] Production PyPI publish successful
+- [ ] Clean venv install verified
+- [ ] GitHub Release created
+- [ ] Documentation deployed
 ```
