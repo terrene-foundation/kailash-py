@@ -31,7 +31,7 @@ permissions: {} # Default deny — each job declares its own
 jobs:
   determine-package:
     name: Determine package from tag
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions: {}
     outputs:
       package: ${{ steps.parse.outputs.package }}
@@ -83,7 +83,7 @@ jobs:
   build:
     name: Build ${{ needs.determine-package.outputs.package }}
     needs: [determine-package]
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions:
       contents: read
     steps:
@@ -112,7 +112,7 @@ jobs:
     needs: [determine-package, build]
     if: >-
       github.event_name == 'workflow_dispatch' && inputs.publish_to == 'testpypi'
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment:
       name: testpypi
       url: https://test.pypi.org/p/${{ needs.determine-package.outputs.package }}
@@ -137,7 +137,7 @@ jobs:
     if: >-
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
       (github.event_name == 'workflow_dispatch' && inputs.publish_to == 'pypi')
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     environment:
       name: pypi
       url: https://pypi.org/p/${{ needs.determine-package.outputs.package }}
@@ -157,7 +157,7 @@ jobs:
     name: Create GitHub Release
     needs: [determine-package, publish-pypi]
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     permissions:
       contents: write
     steps:
