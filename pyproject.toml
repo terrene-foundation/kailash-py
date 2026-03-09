@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "0.12.4"
+version = "0.12.5"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -86,18 +86,18 @@ docs = [
     "sphinxcontrib-mermaid>=1.0.0",
 ]
 dataflow = [
-    "kailash-dataflow>=0.12.3",
+    "kailash-dataflow>=0.12.4",
 ]
 nexus = [
     "kailash-nexus>=1.4.2",
 ]
 kaizen = [
-    "kailash-kaizen>=1.2.4",
+    "kailash-kaizen>=1.2.5",
 ]
 all = [
-    "kailash-dataflow>=0.12.3",
+    "kailash-dataflow>=0.12.4",
     "kailash-nexus>=1.4.2",
-    "kailash-kaizen>=1.2.4",
+    "kailash-kaizen>=1.2.5",
 ]
 
 [project.urls]
