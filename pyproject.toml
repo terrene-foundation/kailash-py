@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kailash"
-version = "0.12.4"
+version = "0.12.5"
 description = "Python SDK for the Kailash container-node architecture"
 authors = [
     {name = "Terrene Foundation", email = "info@terrene.foundation"}
@@ -22,99 +22,83 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
-    "networkx>=2.7",
-    "pydantic>=1.9",
-    "matplotlib>=3.5",
-    "pyyaml>=6.0",
-    "click>=8.0",
-    "pytest>=8.3.5",
-    "mcp[cli]>=1.23.0,<2.0",  # CVE-2025-66416 fix: DNS rebinding protection
-    "pandas>=2.2.3",
-    "numpy>=2.2.5",
-    "scipy>=1.15.3",
-    "scikit-learn>=1.6.1",
-    "requests>=2.32.3",
-    "pytest-cov>=6.1.1",
-    "isort>=6.0.1",
+    "aiofiles>=24.1.0",
     "aiohttp>=3.12.4",
     "aiohttp-cors>=0.7.0",
-    "ruff>=0.11.12",
-    "msal>=1.32.3",
-    "sphinx>=8.2.3",
-    "sphinx-rtd-theme>=3.0.2",
-    "sphinx-copybutton>=0.5.2",
-    "sphinxcontrib-mermaid>=1.0.0",
-    "sphinx-autobuild>=2024.10.3",
-    "autodoc>=0.5.0",
-    "myst-parser>=4.0.1",
-    "black>=25.1.0",
-    "psutil>=7.0.0",
-    "fastapi>=0.115.12",
-    "uvicorn[standard]>=0.31.0",
-    "pytest-asyncio>=1.0.0",
-    "pre-commit>=4.2.0",
-    "twine>=6.1.0",
-    "ollama>=0.5.1",
-    "sqlalchemy>=2.0.0",
-    "pymysql>=1.1.0",
-    "aiosqlite>=0.19.0",
-    "websockets>=12.0",
-    "httpx>=0.25.0",
-    "python-jose[cryptography]>=3.5.0",  # Use cryptography backend to mitigate ecdsa CVE-2024-23342
-    "pytest-xdist>=3.6.0",
-    "pytest-timeout>=2.3.0",
-    "pytest-split>=0.9.0",
-    "asyncpg>=0.30.0",
     "aiomysql>=0.2.0",
-    "twilio>=9.6.3",
-    "qrcode>=8.2",
-    "aiofiles>=24.1.0",
+    "aiosqlite>=0.19.0",
+    "asyncpg>=0.30.0",
     "bcrypt>=4.3.0",
-    "plotly>=6.2.0",
-    "redis>=6.2.0",
-    "faker>=37.4.0",
-    "structlog>=25.4.0",
-    "authlib>=1.6.0",
-    "slowapi>=0.1.9",
-    "limits>=5.4.0",
-    "prometheus-client>=0.22.1",
-    "opentelemetry-api>=1.34.1",
-    "opentelemetry-sdk>=1.34.1",
-    "passlib>=1.7.4",
-    "pyotp>=2.9.0",
-    "opentelemetry-instrumentation-fastapi>=0.55b1",
-    "seaborn>=0.13.2",
-    "sqlparse>=0.5.3",
+    "click>=8.0",
+    "fastapi>=0.115.12",
+    "httpx>=0.25.0",
     "jsonschema>=4.24.0",
-    "openai>=1.97.1",
-    "pymongo>=4.15.2",
-    "psycopg>=3.2.10",
+    "matplotlib>=3.5",
+    "mcp[cli]>=1.23.0,<2.0",
+    "msal>=1.32.3",
+    "networkx>=2.7",
+    "numpy>=2.2.5",
+    "pandas>=2.2.3",
+    "plotly>=6.2.0",
+    "prometheus-client>=0.22.1",
+    "psutil>=7.0.0",
+    "pydantic>=1.9",
+    "PyJWT>=2.8.0",
+    "pyotp>=2.9.0",
+    "pyyaml>=6.0",
+    "qrcode>=8.2",
+    "redis>=6.2.0",
+    "requests>=2.32.3",
+    "scipy>=1.15.3",
+    "scikit-learn>=1.6.1",
+    "sqlalchemy>=2.0.0",
+    "twilio>=9.6.3",
+    "uvicorn[standard]>=0.31.0",
+    "websockets>=12.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
-    "pytest-cov>=3.0",
-    "black>=22.0",
-    "isort>=5.10",
+    "black>=25.1.0",
+    "build>=1.2.2.post1",
+    "detect-secrets>=1.5.0",
+    "faker>=37.4.0",
+    "isort>=6.0.1",
     "mypy>=0.9",
+    "pre-commit>=4.2.0",
+    "pytest>=8.3.5",
+    "pytest-asyncio>=1.0.0",
+    "pytest-cov>=6.1.1",
+    "pytest-split>=0.9.0",
+    "pytest-timeout>=2.3.0",
+    "pytest-xdist>=3.6.0",
+    "ruff>=0.11.12",
+    "twine>=6.1.0",
 ]
-# NOTE: Framework dependencies temporarily commented until PyPI packages support Python 3.11
-# Uncomment after releasing kailash-dataflow, kailash-nexus, kailash-kaizen with 3.11 support
-# dataflow = [
-#     "kailash-dataflow",
-# ]
-# nexus = [
-#     "kailash-nexus",
-# ]
-# kaizen = [
-#     "kailash-kaizen",
-# ]
-# all = [
-#     "kailash-dataflow",
-#     "kailash-nexus",
-#     "kailash-kaizen",
-# ]
+docs = [
+    "autodoc>=0.5.0",
+    "doc8>=1.1.2",
+    "myst-parser>=4.0.1",
+    "sphinx>=8.2.3",
+    "sphinx-autobuild>=2024.10.3",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-rtd-theme>=3.0.2",
+    "sphinxcontrib-mermaid>=1.0.0",
+]
+dataflow = [
+    "kailash-dataflow>=0.12.3",
+]
+nexus = [
+    "kailash-nexus>=1.4.2",
+]
+kaizen = [
+    "kailash-kaizen>=1.2.4",
+]
+all = [
+    "kailash-dataflow>=0.12.3",
+    "kailash-nexus>=1.4.2",
+    "kailash-kaizen>=1.2.4",
+]
 
 [project.urls]
 "Homepage" = "https://github.com/terrene-foundation/kailash-py"
@@ -123,14 +107,6 @@ dev = [
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-
-[dependency-groups]
-dev = [
-    "build>=1.2.2.post1",
-    "detect-secrets>=1.5.0",
-    "doc8>=1.1.2",
-    "pre-commit>=4.2.0",
-]
 
 [project.scripts]
 kailash = "kailash.cli:main"
