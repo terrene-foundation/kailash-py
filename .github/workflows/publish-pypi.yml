@@ -80,85 +80,42 @@ jobs:
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           fi
 
-  build:
-    name: Build ${{ needs.determine-package.outputs.package }}
+  build-and-publish:
+    name: Build and publish ${{ needs.determine-package.outputs.package }}
     needs: [determine-package]
     runs-on: self-hosted
     permissions:
-      contents: read
+      contents: write
+    environment:
+      name: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish_to == 'testpypi') && 'testpypi' || 'pypi' }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build tools
-        run: python3 -m pip install --user build
+      - name: Install build and publish tools
+        run: python3 -m pip install --user build twine
 
       - name: Build wheel and sdist
         run: python3 -m build
         working-directory: ${{ needs.determine-package.outputs.package_dir }}
 
-      - name: Store distribution packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-${{ needs.determine-package.outputs.package }}
-          path: ${{ needs.determine-package.outputs.package_dir }}/dist/
-
-  publish-testpypi:
-    name: Publish to TestPyPI
-    needs: [determine-package, build]
-    if: >-
-      github.event_name == 'workflow_dispatch' && inputs.publish_to == 'testpypi'
-    runs-on: self-hosted
-    environment:
-      name: testpypi
-      url: https://test.pypi.org/p/${{ needs.determine-package.outputs.package }}
-    permissions:
-      id-token: write
-    steps:
-      - name: Download distribution packages
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-${{ needs.determine-package.outputs.package }}
-          path: dist/
-
       - name: Publish to TestPyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          repository-url: https://test.pypi.org/legacy/
-          skip-existing: true
-
-  publish-pypi:
-    name: Publish to PyPI
-    needs: [determine-package, build]
-    if: >-
-      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
-      (github.event_name == 'workflow_dispatch' && inputs.publish_to == 'pypi')
-    runs-on: self-hosted
-    environment:
-      name: pypi
-      url: https://pypi.org/p/${{ needs.determine-package.outputs.package }}
-    permissions:
-      id-token: write
-    steps:
-      - name: Download distribution packages
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-${{ needs.determine-package.outputs.package }}
-          path: dist/
+        if: github.event_name == 'workflow_dispatch' && inputs.publish_to == 'testpypi'
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TESTPYPI_API_TOKEN }}
+        run: python3 -m twine upload --repository-url https://test.pypi.org/legacy/ --skip-existing ${{ needs.determine-package.outputs.package_dir }}/dist/*
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-
-  create-release:
-    name: Create GitHub Release
-    needs: [determine-package, publish-pypi]
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
-    runs-on: self-hosted
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
+        if: >-
+          (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+          (github.event_name == 'workflow_dispatch' && inputs.publish_to == 'pypi')
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: python3 -m twine upload ${{ needs.determine-package.outputs.package_dir }}/dist/*
 
       - name: Create GitHub Release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
