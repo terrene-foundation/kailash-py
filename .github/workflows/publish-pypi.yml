@@ -89,16 +89,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Install build tools
-        run: python -m pip install build
+        run: python3 -m pip install --user build
 
       - name: Build wheel and sdist
-        run: python -m build
+        run: python3 -m build
         working-directory: ${{ needs.determine-package.outputs.package_dir }}
 
       - name: Store distribution packages
