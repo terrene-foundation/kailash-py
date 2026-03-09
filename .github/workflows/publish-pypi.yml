@@ -1,0 +1,174 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "v*" # Core SDK: v0.12.5
+      - "dataflow-v*" # DataFlow: dataflow-v0.12.4
+      - "kaizen-v*" # Kaizen: kaizen-v1.2.5
+      - "nexus-v*" # Nexus: nexus-v1.4.3
+  workflow_dispatch:
+    inputs:
+      package:
+        description: "Package to publish"
+        required: true
+        type: choice
+        options:
+          - kailash
+          - kailash-dataflow
+          - kailash-kaizen
+          - kailash-nexus
+      publish_to:
+        description: "Target registry"
+        required: true
+        type: choice
+        options:
+          - testpypi
+          - pypi
+
+permissions: {} # Default deny — each job declares its own
+
+jobs:
+  determine-package:
+    name: Determine package from tag
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      package: ${{ steps.parse.outputs.package }}
+      package_dir: ${{ steps.parse.outputs.package_dir }}
+      version: ${{ steps.parse.outputs.version }}
+    steps:
+      - id: parse
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            PACKAGE="${{ inputs.package }}"
+            case "$PACKAGE" in
+              kailash)           echo "package_dir=." >> $GITHUB_OUTPUT ;;
+              kailash-dataflow)  echo "package_dir=apps/kailash-dataflow" >> $GITHUB_OUTPUT ;;
+              kailash-kaizen)    echo "package_dir=apps/kailash-kaizen" >> $GITHUB_OUTPUT ;;
+              kailash-nexus)     echo "package_dir=apps/kailash-nexus" >> $GITHUB_OUTPUT ;;
+            esac
+            echo "package=$PACKAGE" >> $GITHUB_OUTPUT
+            echo "version=manual" >> $GITHUB_OUTPUT
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            if [[ "$TAG" =~ ^dataflow-v(.+)$ ]]; then
+              echo "package=kailash-dataflow" >> $GITHUB_OUTPUT
+              echo "package_dir=apps/kailash-dataflow" >> $GITHUB_OUTPUT
+              VERSION="${BASH_REMATCH[1]}"
+            elif [[ "$TAG" =~ ^kaizen-v(.+)$ ]]; then
+              echo "package=kailash-kaizen" >> $GITHUB_OUTPUT
+              echo "package_dir=apps/kailash-kaizen" >> $GITHUB_OUTPUT
+              VERSION="${BASH_REMATCH[1]}"
+            elif [[ "$TAG" =~ ^nexus-v(.+)$ ]]; then
+              echo "package=kailash-nexus" >> $GITHUB_OUTPUT
+              echo "package_dir=apps/kailash-nexus" >> $GITHUB_OUTPUT
+              VERSION="${BASH_REMATCH[1]}"
+            elif [[ "$TAG" =~ ^v(.+)$ ]]; then
+              echo "package=kailash" >> $GITHUB_OUTPUT
+              echo "package_dir=." >> $GITHUB_OUTPUT
+              VERSION="${BASH_REMATCH[1]}"
+            else
+              echo "::error::Unrecognized tag format: $TAG"
+              exit 1
+            fi
+            # Validate version format to prevent output injection
+            if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-zA-Z0-9._-]*)?$ ]]; then
+              echo "::error::Invalid version format: $VERSION"
+              exit 1
+            fi
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
+  build:
+    name: Build ${{ needs.determine-package.outputs.package }}
+    needs: [determine-package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: python -m pip install build
+
+      - name: Build wheel and sdist
+        run: python -m build
+        working-directory: ${{ needs.determine-package.outputs.package_dir }}
+
+      - name: Store distribution packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ needs.determine-package.outputs.package }}
+          path: ${{ needs.determine-package.outputs.package_dir }}/dist/
+
+  publish-testpypi:
+    name: Publish to TestPyPI
+    needs: [determine-package, build]
+    if: >-
+      github.event_name == 'workflow_dispatch' && inputs.publish_to == 'testpypi'
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/${{ needs.determine-package.outputs.package }}
+    permissions:
+      id-token: write
+    steps:
+      - name: Download distribution packages
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ needs.determine-package.outputs.package }}
+          path: dist/
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [determine-package, build]
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish_to == 'pypi')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/${{ needs.determine-package.outputs.package }}
+    permissions:
+      id-token: write
+    steps:
+      - name: Download distribution packages
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-${{ needs.determine-package.outputs.package }}
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  create-release:
+    name: Create GitHub Release
+    needs: [determine-package, publish-pypi]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: ${{ github.ref_name }}
+          RELEASE_TITLE: "${{ needs.determine-package.outputs.package }} ${{ needs.determine-package.outputs.version }}"
+        run: |
+          gh release create "$TAG_NAME" \
+            --title "$RELEASE_TITLE" \
+            --generate-notes
