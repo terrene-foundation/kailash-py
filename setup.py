@@ -99,18 +99,18 @@ setup(
             "pygraphviz>=1.9",
         ],
         "dataflow": [
-            "kailash-dataflow>=0.12.4",
+            "kailash-dataflow>=0.12.3",
         ],
         "nexus": [
             "kailash-nexus>=1.4.2",
         ],
         "kaizen": [
-            "kailash-kaizen>=1.2.5",
+            "kailash-kaizen>=1.2.4",
         ],
         "all": [
-            "kailash-dataflow>=0.12.4",
+            "kailash-dataflow>=0.12.3",
             "kailash-nexus>=1.4.2",
-            "kailash-kaizen>=1.2.5",
+            "kailash-kaizen>=1.2.4",
         ],
     },
     # Entry points for CLI
