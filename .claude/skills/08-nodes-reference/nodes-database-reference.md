@@ -29,6 +29,7 @@ from kailash.nodes.data import (
 ## Production Database Node
 
 ### AsyncSQLDatabaseNode ⭐ (Recommended)
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 
@@ -37,10 +38,10 @@ workflow = WorkflowBuilder()
 # Production-grade async SQL with transactions
 workflow.add_node("AsyncSQLDatabaseNode", "db", {
     "database_type": "postgresql",
-    "host": "localhost",
-    "database": "myapp",
-    "user": "dbuser",
-    "password": "dbpass",
+    "host": "${DB_HOST}",
+    "database": "${DB_NAME}",
+    "user": "${DB_USER}",
+    "password": "${DB_PASSWORD}",
     "transaction_mode": "auto"  # auto, manual, or none
 })
 
@@ -52,9 +53,44 @@ workflow.add_node("AsyncSQLDatabaseNode", "query", {
 })
 ```
 
+### External Pool Injection
+
+```python
+import asyncpg
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+
+# For multi-worker deployments (Gunicorn + FastAPI)
+# Create ONE pool, share across all AsyncSQLDatabaseNode instances
+pool = await asyncpg.create_pool(dsn, min_size=5, max_size=20)
+
+node = AsyncSQLDatabaseNode(
+    name="db_query",
+    database_type="postgresql",
+    query="SELECT * FROM users",
+    external_pool=pool,  # SDK borrows, does NOT close
+)
+
+result = await node.execute_async()
+await node.cleanup()  # Pool stays alive
+await pool.close()    # Caller closes at shutdown
+```
+
+**Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `external_pool` | `asyncpg.Pool` / `aiomysql.Pool` / `aiosqlite.Connection` | Pre-created pool to inject. Constructor-only, not serializable. |
+
+**Constraints:**
+
+- Pool type must match `database_type` (validated at init)
+- `share_pool` is forced to `False` when `external_pool` is set
+- `to_dict()` raises `NodeExecutionError` (pools can't be serialized)
+- Retry fails fast on dead pool errors (SDK can't reconnect)
+
 ## Connection Pooling
 
 ### WorkflowConnectionPool ⭐
+
 ```python
 from kailash.nodes.data import WorkflowConnectionPool
 
@@ -79,6 +115,7 @@ workflow.add_node("WorkflowConnectionPool", "pool_init", {
 ## Query Routing
 
 ### QueryRouterNode ⭐
+
 ```python
 from kailash.nodes.data import QueryRouterNode
 
@@ -95,9 +132,10 @@ workflow.add_node("QueryRouterNode", "router", {
 ## Simple SQL Node
 
 ### SQLDatabaseNode
+
 ```python
 workflow.add_node("SQLDatabaseNode", "simple_query", {
-    "connection_string": "postgresql://user:pass@localhost/db",
+    "connection_string": "${DATABASE_URL}",
     "query": "SELECT * FROM users WHERE id = :user_id",
     "parameters": {"user_id": 123},
     "operation": "fetch_one"
@@ -107,6 +145,7 @@ workflow.add_node("SQLDatabaseNode", "simple_query", {
 ## Concurrency Control
 
 ### OptimisticLockingNode ⭐
+
 ```python
 from kailash.nodes.data import OptimisticLockingNode
 
@@ -132,6 +171,5 @@ workflow.add_node("OptimisticLockingNode", "lock", {
 - **Node Index**: [`nodes-quick-index`](nodes-quick-index.md)
 
 ## Documentation
-
 
 <!-- Trigger Keywords: database node, SQL node, AsyncSQL, connection pool, query routing, AsyncSQLDatabaseNode, WorkflowConnectionPool, QueryRouterNode -->

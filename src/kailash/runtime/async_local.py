@@ -1134,6 +1134,7 @@ class AsyncLocalRuntime(LocalRuntime):
     ) -> None:
         """Execute a single async node."""
         start_time = time.time()
+        node_instance = None
 
         async with self.execution_semaphore:
             try:
@@ -1202,6 +1203,14 @@ class AsyncLocalRuntime(LocalRuntime):
                 raise WorkflowExecutionError(
                     f"Node '{node_id}' execution failed: {e}"
                 ) from e
+            finally:
+                if node_instance and hasattr(node_instance, "cleanup"):
+                    try:
+                        await node_instance.cleanup()
+                    except Exception as cleanup_error:
+                        logger.warning(
+                            f"Error during node '{node_id}' cleanup: {cleanup_error}"
+                        )
 
     async def _execute_sync_node_async(
         self,
@@ -1443,6 +1452,22 @@ class AsyncLocalRuntime(LocalRuntime):
                 logger.debug("Resource registry cleaned up")
             except Exception as e:
                 logger.warning(f"Error cleaning up resource registry: {e}")
+
+        # Dispose connection pools
+        try:
+            from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+
+            await asyncio.wait_for(
+                AsyncSQLDatabaseNode.clear_shared_pools(graceful=True), timeout=5.0
+            )
+        except Exception as e:
+            logger.warning(f"Error disposing AsyncSQL pools during cleanup: {e}")
+        try:
+            from kailash.nodes.data.sql import SQLDatabaseNode
+
+            SQLDatabaseNode.cleanup_pools()
+        except Exception as e:
+            logger.warning(f"Error disposing SQL pools during cleanup: {e}")
 
         # Clean up semaphore reference
         if hasattr(self, "_semaphore"):

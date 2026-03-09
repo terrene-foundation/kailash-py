@@ -1039,6 +1039,34 @@ class LocalRuntime(
                                 f"(runtime {self._runtime_id})"
                             )
 
+                    # Dispose connection pools before closing the loop
+                    if not loop.is_closed():
+                        try:
+                            from kailash.nodes.data.async_sql import (
+                                AsyncSQLDatabaseNode,
+                            )
+
+                            loop.run_until_complete(
+                                asyncio.wait_for(
+                                    AsyncSQLDatabaseNode.clear_shared_pools(
+                                        graceful=True
+                                    ),
+                                    timeout=5.0,
+                                )
+                            )
+                        except Exception as e:
+                            logger.warning(
+                                f"Error disposing AsyncSQL pools during shutdown: {e}"
+                            )
+                        try:
+                            from kailash.nodes.data.sql import SQLDatabaseNode
+
+                            SQLDatabaseNode.cleanup_pools()
+                        except Exception as e:
+                            logger.warning(
+                                f"Error disposing SQL pools during shutdown: {e}"
+                            )
+
                     # Close the loop
                     loop.close()
 
@@ -1284,6 +1312,24 @@ class LocalRuntime(
             except Exception as e:
                 exception_container.append(e)
             finally:
+                if loop and not loop.is_closed():
+                    try:
+                        from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+
+                        loop.run_until_complete(
+                            asyncio.wait_for(
+                                AsyncSQLDatabaseNode.clear_shared_pools(graceful=True),
+                                timeout=5.0,
+                            )
+                        )
+                    except Exception:
+                        pass
+                    try:
+                        from kailash.nodes.data.sql import SQLDatabaseNode
+
+                        SQLDatabaseNode.cleanup_pools()
+                    except Exception:
+                        pass
                 if loop:
                     loop.close()
 

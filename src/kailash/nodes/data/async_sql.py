@@ -36,6 +36,7 @@ import threading
 import time
 import traceback
 import warnings
+import weakref
 from abc import ABC, abstractmethod
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -2577,6 +2578,13 @@ class AsyncSQLDatabaseNode(AsyncNode):
         timeout: Query timeout in seconds
         transaction_mode: Transaction handling mode ('auto', 'manual', 'none')
         share_pool: Whether to share connection pool across instances (default: True)
+        external_pool: Pre-created connection pool to inject (constructor-only,
+            not serializable). When provided, the SDK borrows this pool instead of
+            creating its own. The pool must match database_type (asyncpg.Pool for
+            postgresql, aiomysql.Pool for mysql, aiosqlite.Connection for sqlite).
+            The SDK will NOT close this pool — the caller retains ownership.
+            Useful for multi-worker deployments (Gunicorn + FastAPI) where a single
+            shared pool prevents connection exhaustion.
 
     Per-Pool Locking Architecture:
         The node implements per-pool locking to eliminate lock contention bottlenecks
@@ -2806,10 +2814,18 @@ class AsyncSQLDatabaseNode(AsyncNode):
             if not hasattr(cls, "_pool_lock_loop_id"):
                 cls._pool_lock_loop_id = id(loop)
             elif cls._pool_lock_loop_id != id(loop):
-                # Different event loop, clear everything
+                # Different event loop — best-effort dispose before clearing
+                for pool_key, (adapter, _ref_count) in list(cls._shared_pools.items()):
+                    try:
+                        if hasattr(adapter, "disconnect"):
+                            # Cannot await in sync context; force-close underlying pool
+                            if hasattr(adapter, "_pool") and adapter._pool is not None:
+                                adapter._pool.close()
+                    except Exception:
+                        pass
+                cls._shared_pools.clear()
                 cls._pool_lock = asyncio.Lock()
                 cls._pool_lock_loop_id = id(loop)
-                cls._shared_pools.clear()
 
         return cls._pool_lock
 
@@ -3055,6 +3071,112 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
             return metrics
 
+    @staticmethod
+    def _validate_pool_type(pool: object, db_type: DatabaseType) -> None:
+        """Validate that the external pool type matches the declared database_type.
+
+        Uses optional imports — if the driver library isn't installed,
+        validation is skipped (the adapter will fail at query time anyway).
+        """
+        if db_type == DatabaseType.POSTGRESQL:
+            try:
+                import asyncpg
+
+                if not isinstance(pool, asyncpg.Pool):
+                    raise NodeValidationError(
+                        f"database_type is 'postgresql' but external_pool is "
+                        f"{type(pool).__name__}, expected asyncpg.Pool"
+                    )
+            except ImportError:
+                pass
+        elif db_type == DatabaseType.MYSQL:
+            try:
+                import aiomysql
+
+                if not isinstance(pool, aiomysql.Pool):
+                    raise NodeValidationError(
+                        f"database_type is 'mysql' but external_pool is "
+                        f"{type(pool).__name__}, expected aiomysql.Pool"
+                    )
+            except ImportError:
+                pass
+        elif db_type == DatabaseType.SQLITE:
+            try:
+                import aiosqlite
+
+                if not isinstance(pool, aiosqlite.Connection):
+                    raise NodeValidationError(
+                        f"database_type is 'sqlite' but external_pool is "
+                        f"{type(pool).__name__}, expected aiosqlite.Connection"
+                    )
+            except ImportError:
+                pass
+
+    def _wrap_external_pool(self, external_pool) -> DatabaseAdapter:
+        """Wrap an externally provided connection pool in a DatabaseAdapter.
+
+        The adapter borrows the pool reference but does NOT own it.
+        disconnect() is a no-op because the caller manages pool lifecycle.
+
+        Args:
+            external_pool: An asyncpg.Pool, aiomysql.Pool, or aiosqlite connection.
+
+        Returns:
+            DatabaseAdapter configured to use the external pool.
+        """
+        db_type = DatabaseType(self.config["database_type"].lower())
+        # Use existing connection info, or a placeholder for DatabaseConfig validation
+        # (the pool is already connected — these are only needed for adapter metadata)
+        connection_string = self.config.get("connection_string")
+        host = self.config.get("host")
+        database = self.config.get("database")
+        if not connection_string and not (host and database):
+            # Provide a placeholder — the adapter won't use it since we inject the pool
+            if db_type == DatabaseType.SQLITE:
+                database = ":memory:"
+            else:
+                connection_string = "external-pool://injected"
+
+        db_config = DatabaseConfig(
+            type=db_type,
+            host=host,
+            port=self.config.get("port"),
+            database=database,
+            user=self.config.get("user"),
+            password=self.config.get("password"),
+            connection_string=connection_string,
+            pool_size=0,
+            max_pool_size=0,
+        )
+
+        self._validate_pool_type(external_pool, db_type)
+
+        if db_type == DatabaseType.POSTGRESQL:
+            adapter = PostgreSQLAdapter(db_config)
+        elif db_type == DatabaseType.MYSQL:
+            adapter = MySQLAdapter(db_config)
+        elif db_type == DatabaseType.SQLITE:
+            adapter = SQLiteAdapter(db_config)
+        else:
+            raise NodeExecutionError(f"Unsupported database type: {db_type}")
+
+        # Inject external pool — adapter borrows, does not own
+        adapter._pool = external_pool
+        adapter._connected = True
+
+        # Override disconnect to prevent closing the external pool.
+        # Use a weak reference to avoid a reference cycle (adapter -> disconnect -> adapter).
+        adapter_ref = weakref.ref(adapter)
+
+        async def _noop_disconnect():
+            a = adapter_ref()
+            if a is not None:
+                a._connected = False
+
+        adapter.disconnect = _noop_disconnect  # type: ignore[method-assign]
+
+        return adapter
+
     async def _create_adapter_with_runtime_pool(self, shared_pool) -> DatabaseAdapter:
         """Create an adapter that uses a runtime-managed connection pool."""
         # Create a simple wrapper adapter that uses the shared pool
@@ -3238,8 +3360,13 @@ class AsyncSQLDatabaseNode(AsyncNode):
         self._transaction_connection = None
         self._transaction_mode = config.get("transaction_mode", "auto")
 
+        # External pool injection — user provides their own pool, SDK borrows it
+        self._external_pool = config.pop("external_pool", None)
+
         # Pool sharing configuration
         self._share_pool = config.get("share_pool", True)
+        if self._external_pool is not None:
+            self._share_pool = False  # Never track injected pools in _shared_pools
         self._pool_key = None
 
         # Security configuration
@@ -3281,6 +3408,10 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
         # Update pool sharing configuration
         self._share_pool = self.config.get("share_pool", True)
+        if self._external_pool is not None:
+            self._share_pool = (
+                False  # External pools are never shared via _shared_pools
+            )
 
         # Update security configuration
         self._validate_queries = self.config.get("validate_queries", True)
@@ -3307,6 +3438,21 @@ class AsyncSQLDatabaseNode(AsyncNode):
         self._version_field = self.config.get("version_field", "version")
         self._conflict_resolution = self.config.get("conflict_resolution", "fail_fast")
         self._version_retry_attempts = self.config.get("version_retry_attempts", 3)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize node to dictionary.
+
+        Raises NodeExecutionError if external_pool is set, since live pool
+        handles cannot be serialized and the deserialized node would silently
+        lose its pool injection.
+        """
+        if self._external_pool is not None:
+            raise NodeExecutionError(
+                f"Node '{self.id}' uses an external connection pool which cannot "
+                f"be serialized. External pool nodes are runtime-only — remove "
+                f"external_pool or provide connection_string for serializable config."
+            )
+        return super().to_dict()
 
     def get_parameters(self) -> dict[str, NodeParameter]:
         """Define the parameters this node accepts."""
@@ -3618,27 +3764,28 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 "Must be one of: postgresql, mysql, sqlite"
             )
 
-        # Validate connection parameters
-        connection_string = self.config.get("connection_string")
-        if connection_string:
-            # Validate connection string for security
-            if self._validate_queries:
-                try:
-                    QueryValidator.validate_connection_string(connection_string)
-                except NodeValidationError:
-                    raise NodeValidationError(
-                        "Connection string failed security validation. "
-                        "Set validate_queries=False to bypass (not recommended)."
-                    )
-        else:
-            if db_type != "sqlite":
-                if not self.config.get("host") or not self.config.get("database"):
-                    raise NodeValidationError(
-                        f"{db_type} requires host and database or connection_string"
-                    )
+        # Validate connection parameters (skip when external pool is injected)
+        if self._external_pool is None:
+            connection_string = self.config.get("connection_string")
+            if connection_string:
+                # Validate connection string for security
+                if self._validate_queries:
+                    try:
+                        QueryValidator.validate_connection_string(connection_string)
+                    except NodeValidationError:
+                        raise NodeValidationError(
+                            "Connection string failed security validation. "
+                            "Set validate_queries=False to bypass (not recommended)."
+                        )
             else:
-                if not self.config.get("database"):
-                    raise NodeValidationError("SQLite requires database path")
+                if db_type != "sqlite":
+                    if not self.config.get("host") or not self.config.get("database"):
+                        raise NodeValidationError(
+                            f"{db_type} requires host and database or connection_string"
+                        )
+                else:
+                    if not self.config.get("database"):
+                        raise NodeValidationError("SQLite requires database path")
 
         # Validate fetch mode
         fetch_mode = self.config.get("fetch_mode", "all").lower()
@@ -3709,6 +3856,14 @@ class AsyncSQLDatabaseNode(AsyncNode):
     async def _get_adapter(self) -> DatabaseAdapter:
         """Get or create database adapter with optional pool sharing."""
         if not self._adapter:
+            # PRIORITY 0: Use externally provided pool (bypasses all internal pool management)
+            if self._external_pool is not None:
+                self._adapter = self._wrap_external_pool(self._external_pool)
+                self._connected = True
+                self._pool_key = None
+                logger.info(f"Using externally provided connection pool for {self.id}")
+                return self._adapter
+
             if self._share_pool:
                 # PRIORITY 1: Try to get adapter from runtime connection pool manager
                 runtime_adapter = await self._get_runtime_pool_adapter()
@@ -4217,6 +4372,28 @@ class AsyncSQLDatabaseNode(AsyncNode):
                 # Parameter type determination is now handled during dict-to-positional conversion
                 # No special retry logic needed for parameter $11
 
+                # For external pools, fail fast on pool/connection errors.
+                # The SDK cannot reconnect to a pool it does not own.
+                if self._external_pool is not None:
+                    err_msg = str(e).lower()
+                    pool_dead = getattr(self._external_pool, "_closed", False)
+                    if pool_dead or any(
+                        p in err_msg
+                        for p in (
+                            "pool is closed",
+                            "pool has been terminated",
+                            "pool is being closed",
+                            "connection",
+                            "closed database",
+                        )
+                    ):
+                        raise NodeExecutionError(
+                            f"External connection pool is closed or unavailable. "
+                            f"The SDK does not manage external pool lifecycle — "
+                            f"ensure the pool is alive before executing queries. "
+                            f"Original error: {e}"
+                        ) from e
+
                 # Check if error is retryable
                 if not self._retry_config.should_retry(e):
                     raise
@@ -4251,12 +4428,16 @@ class AsyncSQLDatabaseNode(AsyncNode):
                                 self._pool_key, timeout=5.0
                             ):
                                 if self._pool_key in self._shared_pools:
-                                    _, ref_count = self._shared_pools[self._pool_key]
-                                    if ref_count <= 1:
-                                        del self._shared_pools[self._pool_key]
-                                    else:
-                                        # This shouldn't happen with a closed pool
-                                        del self._shared_pools[self._pool_key]
+                                    adapter, _ref_count = self._shared_pools[
+                                        self._pool_key
+                                    ]
+                                    try:
+                                        await asyncio.wait_for(
+                                            adapter.disconnect(), timeout=2.0
+                                        )
+                                    except Exception:
+                                        pass
+                                    del self._shared_pools[self._pool_key]
 
                         self._adapter = None
                         self._connected = False
@@ -4303,6 +4484,28 @@ class AsyncSQLDatabaseNode(AsyncNode):
             except Exception as e:
                 last_error = e
 
+                # For external pools, fail fast on pool/connection errors.
+                # The SDK cannot reconnect to a pool it does not own.
+                if self._external_pool is not None:
+                    err_msg = str(e).lower()
+                    pool_dead = getattr(self._external_pool, "_closed", False)
+                    if pool_dead or any(
+                        p in err_msg
+                        for p in (
+                            "pool is closed",
+                            "pool has been terminated",
+                            "pool is being closed",
+                            "connection",
+                            "closed database",
+                        )
+                    ):
+                        raise NodeExecutionError(
+                            f"External connection pool is closed or unavailable. "
+                            f"The SDK does not manage external pool lifecycle — "
+                            f"ensure the pool is alive before executing queries. "
+                            f"Original error: {e}"
+                        ) from e
+
                 # Check if error is retryable
                 if not self._retry_config.should_retry(e):
                     raise
@@ -4327,12 +4530,16 @@ class AsyncSQLDatabaseNode(AsyncNode):
                                 self._pool_key, timeout=5.0
                             ):
                                 if self._pool_key in self._shared_pools:
-                                    _, ref_count = self._shared_pools[self._pool_key]
-                                    if ref_count <= 1:
-                                        del self._shared_pools[self._pool_key]
-                                    else:
-                                        # This shouldn't happen with a closed pool
-                                        del self._shared_pools[self._pool_key]
+                                    adapter, _ref_count = self._shared_pools[
+                                        self._pool_key
+                                    ]
+                                    try:
+                                        await asyncio.wait_for(
+                                            adapter.disconnect(), timeout=2.0
+                                        )
+                                    except Exception:
+                                        pass
+                                    del self._shared_pools[self._pool_key]
 
                         self._adapter = None
                         self._connected = False
@@ -4508,7 +4715,7 @@ class AsyncSQLDatabaseNode(AsyncNode):
             return 0
 
         # Phase 1: Identify stale pools
-        for pool_key, (adapter, creation_time) in list(cls._shared_pools.items()):
+        for pool_key, (adapter, ref_count) in list(cls._shared_pools.items()):
             loop_id_str = pool_key.split("|")[0]
 
             try:
@@ -4530,15 +4737,20 @@ class AsyncSQLDatabaseNode(AsyncNode):
         # Phase 2: Cleanup stale pools
         for pool_key in pools_to_remove:
             try:
-                adapter, creation_time = cls._shared_pools.pop(pool_key)
+                adapter, _ref_count = cls._shared_pools.pop(pool_key)
 
-                # Attempt graceful close
+                # Attempt graceful disconnect
                 try:
-                    if hasattr(adapter, "close"):
-                        await adapter.close()  # type: ignore[attr-defined]
+                    if hasattr(adapter, "disconnect"):
+                        await asyncio.wait_for(adapter.disconnect(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        f"AsyncSQLDatabaseNode: Timeout disconnecting stale pool "
+                        f"{pool_key}"
+                    )
                 except Exception as close_error:
                     logger.debug(
-                        f"AsyncSQLDatabaseNode: Could not close adapter for "
+                        f"AsyncSQLDatabaseNode: Could not disconnect adapter for "
                         f"{pool_key}: {close_error}"
                     )
 
@@ -4586,17 +4798,22 @@ class AsyncSQLDatabaseNode(AsyncNode):
 
         for pool_key in pool_keys:
             try:
-                adapter, creation_time = cls._shared_pools.pop(pool_key)
+                adapter, _ref_count = cls._shared_pools.pop(pool_key)
 
-                if graceful and hasattr(adapter, "close"):
+                if graceful and hasattr(adapter, "disconnect"):
                     try:
-                        await adapter.close()  # type: ignore[attr-defined]
+                        await asyncio.wait_for(adapter.disconnect(), timeout=2.0)
                         logger.debug(
-                            f"AsyncSQLDatabaseNode: Gracefully closed pool {pool_key}"
+                            f"AsyncSQLDatabaseNode: Gracefully disconnected pool {pool_key}"
                         )
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            f"AsyncSQLDatabaseNode: Timeout disconnecting pool {pool_key}"
+                        )
+                        clear_failures += 1
                     except Exception as close_error:
                         logger.warning(
-                            f"AsyncSQLDatabaseNode: Error closing pool {pool_key}: "
+                            f"AsyncSQLDatabaseNode: Error disconnecting pool {pool_key}: "
                             f"{close_error}"
                         )
 
@@ -5350,6 +5567,9 @@ class AsyncSQLDatabaseNode(AsyncNode):
         )
 
         # Best-effort sync close for SQLite (the only adapter with sync access)
+        # Skip for external pools — the caller owns the connection.
+        if getattr(self, "_external_pool", None) is not None:
+            return
         try:
             adapter = self._adapter
             conn = getattr(adapter, "_connection", None)
