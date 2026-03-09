@@ -10,6 +10,7 @@ Comprehensive troubleshooting guides for common Kailash SDK errors and issues.
 ## Overview
 
 Common error patterns and solutions for:
+
 - Nexus blocking and timeout issues
 - Connection parameter errors
 - Runtime execution problems
@@ -23,6 +24,7 @@ Common error patterns and solutions for:
 ### Critical Errors
 
 #### Nexus Blocking (MOST COMMON)
+
 - **[error-nexus-blocking](error-nexus-blocking.md)** - Nexus hangs or blocks
   - **Symptom**: Nexus API hangs forever, no response
   - **Cause**: Using LocalRuntime in Docker/FastAPI
@@ -30,6 +32,7 @@ Common error patterns and solutions for:
   - **Prevention**: Always use async runtime in containers
 
 #### Missing .build() Call
+
 - **[error-missing-build](error-missing-build.md)** - Forgot to call .build()
   - **Symptom**: `TypeError: execute() expects Workflow, got WorkflowBuilder`
   - **Cause**: `runtime.execute(workflow)` instead of `runtime.execute(workflow.build())`
@@ -38,7 +41,16 @@ Common error patterns and solutions for:
 
 ### Connection & Parameter Errors
 
+#### Connection Pool Exhaustion
+
+- **[error-connection-exhaustion](error-connection-exhaustion.md)** - Database connection exhaustion
+  - **Symptom**: "too many connections", database OOM
+  - **Cause**: Each worker creates its own pool in multi-worker deployments
+  - **Solution**: Use `external_pool` parameter to inject shared pool
+  - **Prevention**: Set max_pool_size = DB max / worker count
+
 #### Connection Parameter Errors
+
 - **[error-connection-params](error-connection-params.md)** - Invalid connections
   - **Symptom**: Node doesn't receive expected data
   - **Cause**: Wrong 4-parameter connection format
@@ -46,6 +58,7 @@ Common error patterns and solutions for:
   - **Common mistake**: Wrong parameter names
 
 #### Parameter Validation Errors
+
 - **[error-parameter-validation](error-parameter-validation.md)** - Invalid node parameters
   - **Symptom**: `ValidationError: Missing required parameter`
   - **Cause**: Missing or incorrect node parameters
@@ -55,6 +68,7 @@ Common error patterns and solutions for:
 ### Runtime Errors
 
 #### Runtime Execution Errors
+
 - **[error-runtime-execution](error-runtime-execution.md)** - Runtime failures
   - **Symptom**: Workflow fails during execution
   - **Cause**: Various runtime issues
@@ -64,6 +78,7 @@ Common error patterns and solutions for:
 ### Cyclic Workflow Errors
 
 #### Cycle Convergence Errors
+
 - **[error-cycle-convergence](error-cycle-convergence.md)** - Cycles don't converge
   - **Symptom**: Workflow runs forever, max iterations exceeded
   - **Cause**: No convergence condition or bad logic
@@ -73,6 +88,7 @@ Common error patterns and solutions for:
 ### DataFlow Errors
 
 #### DataFlow Template Syntax
+
 - **[error-dataflow-template-syntax](error-dataflow-template-syntax.md)** - Template string errors
   - **Symptom**: `SyntaxError` in template strings
   - **Cause**: Invalid template syntax in queries
@@ -83,25 +99,28 @@ Common error patterns and solutions for:
 
 ### Error by Symptom
 
-| Symptom | Error Type | Quick Fix |
-|---------|------------|-----------|
-| **API hangs forever** | Nexus blocking | Use AsyncLocalRuntime |
-| **TypeError: expects Workflow** | Missing .build() | Add .build() call |
-| **Node gets wrong data** | Connection params | Check 4-parameter format |
-| **ValidationError** | Parameter validation | Check required params |
-| **Infinite loop** | Cycle convergence | Add convergence condition |
-| **Template SyntaxError** | DataFlow template | Fix template syntax |
-| **Runtime fails** | Runtime execution | Check logs, validate inputs |
+| Symptom                         | Error Type            | Quick Fix                     |
+| ------------------------------- | --------------------- | ----------------------------- |
+| **API hangs forever**           | Nexus blocking        | Use AsyncLocalRuntime         |
+| **TypeError: expects Workflow** | Missing .build()      | Add .build() call             |
+| **Node gets wrong data**        | Connection params     | Check 4-parameter format      |
+| **ValidationError**             | Parameter validation  | Check required params         |
+| **Infinite loop**               | Cycle convergence     | Add convergence condition     |
+| **Template SyntaxError**        | DataFlow template     | Fix template syntax           |
+| **Runtime fails**               | Runtime execution     | Check logs, validate inputs   |
+| **"too many connections"**      | Connection exhaustion | Use `external_pool` injection |
 
 ### Error Prevention Checklist
 
 **Before Running Workflow**:
+
 - [ ] Called `.build()` on WorkflowBuilder?
 - [ ] Using AsyncLocalRuntime for Docker/FastAPI?
 - [ ] All connections use 4 parameters?
 - [ ] All required node parameters provided?
 - [ ] Cyclic workflows have convergence checks?
 - [ ] Template strings use correct syntax?
+- [ ] Using `external_pool` in multi-worker deployments?
 
 ## Common Error Patterns
 
@@ -177,23 +196,27 @@ query = "SELECT * FROM users WHERE id = {{user_id}}"  # DataFlow template
 ## Debugging Strategies
 
 ### Step 1: Check Error Message
+
 - Read full error message and stack trace
 - Identify error type and location
 - Check if it matches known patterns
 
 ### Step 2: Validate Configuration
+
 - Runtime: AsyncLocalRuntime for Docker?
 - Build: Called .build()?
 - Connections: 4 parameters?
 - Parameters: All required params?
 
 ### Step 3: Test Components
+
 - Test nodes individually
 - Test with minimal workflow
 - Add LoggerNode for visibility
 - Check intermediate results
 
 ### Step 4: Check Documentation
+
 - Node documentation for parameters
 - Framework-specific guides
 - Error troubleshooting guides
@@ -202,6 +225,7 @@ query = "SELECT * FROM users WHERE id = {{user_id}}"  # DataFlow template
 ## When to Use This Skill
 
 Use this skill when you encounter:
+
 - API hanging or blocking
 - Runtime errors during execution
 - Validation errors
@@ -228,6 +252,7 @@ Use this skill when you encounter:
 ## Support
 
 For error troubleshooting, invoke:
+
 - `sdk-navigator` - Find relevant documentation
 - `pattern-expert` - Pattern validation
 - `gold-standards-validator` - Check compliance

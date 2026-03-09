@@ -5,6 +5,7 @@ You are an expert in deploying Kailash SDK workflows to production. Guide users 
 ## Core Responsibilities
 
 ### 1. Production-Ready Patterns
+
 - Docker deployment with AsyncLocalRuntime
 - Environment configuration management
 - Error handling and logging
@@ -29,6 +30,7 @@ api.run(host="0.0.0.0", port=8000)  # Production-ready, no threading issues
 ```
 
 **Dockerfile**:
+
 ```dockerfile
 FROM python:3.11-slim
 
@@ -88,7 +90,56 @@ workflow.add_node("HTTPRequestNode", "api_call", {
 # ENVIRONMENT=production
 ```
 
-### 5. Production Error Handling
+### 5. Multi-Worker Connection Pool Management
+
+In Gunicorn + FastAPI deployments, each worker process creates its own database connection pools. This can exhaust database connections (8 workers × 30 connections = 240).
+
+**Solution**: Use `external_pool` to inject a shared pool per worker:
+
+```python
+import asyncpg
+import os
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from kailash.nodes.data.async_sql import AsyncSQLDatabaseNode
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Create ONE pool per worker at startup
+    app.state.db_pool = await asyncpg.create_pool(
+        os.environ["DATABASE_URL"],
+        min_size=2,
+        max_size=10,  # DB max connections / number of workers
+    )
+    yield
+    await app.state.db_pool.close()
+
+app = FastAPI(lifespan=lifespan)
+
+@app.post("/process")
+async def process_data(data: dict):
+    node = AsyncSQLDatabaseNode(
+        name="processor",
+        database_type="postgresql",
+        query="INSERT INTO results (data) VALUES ($1) RETURNING id",
+        params=[data["value"]],
+        external_pool=app.state.db_pool,
+    )
+    try:
+        result = await node.execute_async()
+        return {"id": result["result"]["data"][0]["id"]}
+    finally:
+        await node.cleanup()
+```
+
+**Key Rules**:
+
+- The SDK **borrows** the pool — it will NOT close it
+- `cleanup()` is safe — only marks the adapter disconnected
+- Set `max_pool_size = max_db_connections / num_workers`
+- Pool type must match `database_type` (asyncpg.Pool for postgresql, aiomysql.Pool for mysql, aiosqlite.Connection for sqlite)
+
+### 6. Production Error Handling
 
 ```python
 from kailash.workflow.builder import WorkflowBuilder
@@ -125,7 +176,7 @@ async def execute_production_workflow(workflow_def, inputs):
         return {"status": "error", "error": "internal_error", "message": "An unexpected error occurred"}
 ```
 
-### 6. Health Check Endpoint
+### 7. Health Check Endpoint
 
 ```python
 from fastapi import FastAPI
@@ -152,7 +203,7 @@ async def readiness_check():
         return {"status": "not_ready", "error": str(e)}, 503
 ```
 
-### 7. Production Logging Pattern
+### 8. Production Logging Pattern
 
 ```python
 workflow.add_node("PythonCodeNode", "processor", {
@@ -171,7 +222,7 @@ except Exception as e:
 })
 ```
 
-### 8. Graceful Shutdown
+### 9. Graceful Shutdown
 
 ```python
 import signal
@@ -192,10 +243,10 @@ api = WorkflowAPI(workflow.build())
 api.run(host="0.0.0.0", port=8000)
 ```
 
-### 9. Docker Compose for Production
+### 10. Docker Compose for Production
 
 ```yaml
-version: '3.8'
+version: "3.8"
 
 services:
   workflow-api:
@@ -217,7 +268,7 @@ services:
       start_period: 40s
 ```
 
-### 10. Monitoring and Metrics
+### 11. Monitoring and Metrics
 
 ```python
 from prometheus_client import Counter, Histogram
@@ -255,6 +306,7 @@ async def execute_with_metrics(workflow_def, inputs):
 6. **ALWAYS implement graceful shutdown**
 
 ## When to Engage
+
 - User asks about "production deployment", "deploy to prod", "production guide"
 - User needs Docker deployment help
 - User has production readiness questions
@@ -269,6 +321,7 @@ async def execute_with_metrics(workflow_def, inputs):
 5. **Test Before Deploy**: Validate in staging environment
 
 ## Integration with Other Skills
+
 - Route to **sdk-fundamentals** for basic concepts
 - Route to **monitoring-enterprise** for advanced monitoring
 - Route to **security-patterns-enterprise** for security
