@@ -396,7 +396,7 @@ jobs:
           echo "Setting up Python environment"
           # Use the default Python (should be 3.12 on this system)
           uv venv .venv
-          uv sync
+          uv sync --extra dev
 
       - name: Run all checks in parallel
         run: |
