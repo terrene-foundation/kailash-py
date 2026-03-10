@@ -175,9 +175,30 @@ For each: upload wheels, verify production install in clean venv, create GitHub 
 
 #### Step 7: Post-release
 
-1. Deploy documentation (ReadTheDocs trigger or manual)
-2. Document release in `deploy/deployments/YYYY-MM-DD-vX.Y.Z.md`
-3. Announce if applicable
+1. **Update COC template repo** (MANDATORY)
+
+   The USE repo (`~/repos/kailash/kailash-coc-claude-py`) is the COC template users clone for new projects. Its dependency pins MUST be updated to match the just-published versions, otherwise new projects start with stale SDK versions.
+
+   Update `pyproject.toml` in the USE repo:
+
+   ```
+   ~/repos/kailash/kailash-coc-claude-py/pyproject.toml
+   ```
+
+   Dependency pins to update:
+
+   ```
+   "kailash>=X.Y.Z"           → new core SDK version
+   "kailash-dataflow>=X.Y.Z"  → new or current DataFlow version
+   "kailash-kaizen>=X.Y.Z"    → new or current Kaizen version
+   "kailash-nexus>=X.Y.Z"     → new or current Nexus version
+   ```
+
+   Commit and push the change to the USE repo with message: `chore: bump SDK dependency pins to latest release`
+
+2. Deploy documentation (ReadTheDocs trigger or manual)
+3. Document release in `deploy/deployments/YYYY-MM-DD-vX.Y.Z.md`
+4. Announce if applicable
 
 #### CI Management Track
 
@@ -215,6 +236,7 @@ Quick reference for all version locations in this monorepo:
 - ALWAYS verify the published package installs correctly in a clean venv
 - ALWAYS publish in dependency order: core SDK first, then frameworks
 - ALWAYS document releases in `deploy/deployments/`
+- ALWAYS update the COC template repo (`~/repos/kailash/kailash-coc-claude-py/pyproject.toml`) dependency pins after publishing
 - Research current tool syntax — do not assume stale knowledge is correct
 
 **Automated enforcement**: `validate-deployment.js` hook automatically blocks commits containing credentials (AWS keys, Azure secrets, GCP service account JSON, private keys, GitHub/PyPI/Docker tokens) in deployment files.
