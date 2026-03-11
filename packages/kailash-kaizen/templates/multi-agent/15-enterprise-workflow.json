@@ -1,0 +1,174 @@
+{
+  "metadata": {
+    "id": "enterprise-workflow",
+    "name": "Enterprise Processing Workflow",
+    "description": "Production workflow with batch processing, human approval, and failover resilience",
+    "category": "Enterprise",
+    "complexity": "Enterprise",
+    "tags": ["enterprise", "batch", "approval", "resilient", "production"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "batch_processor",
+      "type": "BatchProcessingAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "temperature": 0.1,
+        "max_tokens": 500,
+        "max_concurrent": 50
+      },
+      "position": {"x": 100, "y": 100}
+    },
+    {
+      "id": "quality_checker",
+      "type": "ResilientAgent",
+      "config": {
+        "models": ["gpt-4", "gpt-3.5-turbo"],
+        "temperature": 0.0,
+        "max_tokens": 300,
+        "fallback_on_error": true
+      },
+      "position": {"x": 300, "y": 100}
+    },
+    {
+      "id": "compliance_approver",
+      "type": "HumanApprovalAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "approval_mode": "manual",
+        "audit_trail_enabled": true,
+        "compliance_tags": ["SOC2", "GDPR"]
+      },
+      "position": {"x": 500, "y": 100}
+    }
+  ],
+  "connections": [
+    {
+      "from": "batch_processor",
+      "to": "quality_checker",
+      "output": "batch_results",
+      "input": "items_to_check"
+    },
+    {
+      "from": "quality_checker",
+      "to": "compliance_approver",
+      "output": "verified_items",
+      "input": "items_to_approve"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "data_batch",
+      "name": "Data Batch",
+      "type": "array",
+      "description": "Batch of data items to process",
+      "required": true
+    },
+    {
+      "id": "processing_task",
+      "name": "Processing Task",
+      "type": "string",
+      "description": "Task to perform on each item",
+      "default": "Classify and extract key information",
+      "required": true
+    },
+    {
+      "id": "quality_threshold",
+      "name": "Quality Threshold",
+      "type": "number",
+      "description": "Minimum quality score for approval (0-1)",
+      "default": 0.9,
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "id": "processed_results",
+      "name": "Processed Results",
+      "type": "array",
+      "description": "Final approved and processed results"
+    },
+    {
+      "id": "processing_report",
+      "name": "Processing Report",
+      "type": "object",
+      "description": "Comprehensive processing statistics and audit trail"
+    },
+    {
+      "id": "compliance_records",
+      "name": "Compliance Records",
+      "type": "array",
+      "description": "Complete compliance and approval records"
+    }
+  ],
+  "execution": {
+    "entry_point": "batch_processor",
+    "timeout": 600,
+    "retry_policy": {
+      "max_retries": 3,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This enterprise-grade workflow demonstrates a complete production pipeline with batch processing, quality verification with fallback models, and human compliance approval. It processes large data batches with high throughput, ensures quality with multi-model verification, and maintains compliance through human oversight with full audit trails.",
+    "use_cases": [
+      "Financial transaction processing with compliance review",
+      "Healthcare data processing with HIPAA compliance",
+      "Legal document processing with attorney review",
+      "Customer data processing with GDPR compliance",
+      "Manufacturing quality control with human verification"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "High API rate limits for concurrent batch processing",
+      "Human approvers available for compliance review",
+      "Audit logging infrastructure configured",
+      "Internet connection for API access"
+    ],
+    "example_inputs": [
+      {
+        "data_batch": [
+          {"id": 1, "text": "Customer complaint about delayed shipment"},
+          {"id": 2, "text": "Feature request for mobile app"},
+          {"id": 3, "text": "Billing inquiry about invoice #12345"}
+        ],
+        "processing_task": "Classify ticket type, extract key entities, determine priority",
+        "quality_threshold": 0.9
+      }
+    ],
+    "example_outputs": [
+      {
+        "processed_results": [
+          {"id": 1, "type": "complaint", "priority": "high", "entities": ["shipment", "delay"]},
+          {"id": 2, "type": "feature_request", "priority": "medium", "entities": ["mobile_app"]},
+          {"id": 3, "type": "billing", "priority": "high", "entities": ["invoice", "12345"]}
+        ],
+        "processing_report": {
+          "total_items": 3,
+          "batch_processing_duration": 2.5,
+          "batch_throughput": 1.2,
+          "quality_check_fallbacks": 0,
+          "items_approved": 3,
+          "items_rejected": 0,
+          "approval_duration": 120.0,
+          "total_duration": 122.5,
+          "models_used": ["gpt-4", "gpt-4", "gpt-4"]
+        },
+        "compliance_records": [
+          {
+            "item_id": 1,
+            "approval_status": "approved",
+            "reviewer": "compliance_officer_1",
+            "timestamp": "2025-10-06T14:35:00Z",
+            "audit_tags": ["SOC2", "GDPR"]
+          }
+        ]
+      }
+    ]
+  }
+}

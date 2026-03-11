@@ -55,9 +55,9 @@ Before any release work, determine WHAT needs releasing by analyzing unreleased 
 
    ```
    git log <last-tag>..HEAD -- src/kailash/           → Core SDK changes?
-   git log <last-tag>..HEAD -- apps/kailash-dataflow/  → DataFlow changes?
-   git log <last-tag>..HEAD -- apps/kailash-kaizen/    → Kaizen changes?
-   git log <last-tag>..HEAD -- apps/kailash-nexus/     → Nexus changes?
+   git log <last-tag>..HEAD -- packages/kailash-dataflow/  → DataFlow changes?
+   git log <last-tag>..HEAD -- packages/kailash-kaizen/    → Kaizen changes?
+   git log <last-tag>..HEAD -- packages/kailash-nexus/     → Nexus changes?
    ```
 
 2. **Present release plan to human** — Show which packages have unreleased changes and propose:
@@ -86,31 +86,31 @@ Each framework has 3 version locations PLUS the SDK dependency pin:
 
 | File                                             | Field                              |
 | ------------------------------------------------ | ---------------------------------- |
-| `apps/kailash-dataflow/pyproject.toml`           | `version = "X.Y.Z"`                |
-| `apps/kailash-dataflow/setup.py`                 | `version="X.Y.Z"`                  |
-| `apps/kailash-dataflow/src/dataflow/__init__.py` | `__version__ = "X.Y.Z"`            |
-| `apps/kailash-dataflow/pyproject.toml`           | `dependencies: kailash>=A.B.C`     |
-| `apps/kailash-dataflow/setup.py`                 | `install_requires: kailash>=A.B.C` |
+| `packages/kailash-dataflow/pyproject.toml`           | `version = "X.Y.Z"`                |
+| `packages/kailash-dataflow/setup.py`                 | `version="X.Y.Z"`                  |
+| `packages/kailash-dataflow/src/dataflow/__init__.py` | `__version__ = "X.Y.Z"`            |
+| `packages/kailash-dataflow/pyproject.toml`           | `dependencies: kailash>=A.B.C`     |
+| `packages/kailash-dataflow/setup.py`                 | `install_requires: kailash>=A.B.C` |
 
 **kailash-kaizen:**
 
 | File                                         | Field                              |
 | -------------------------------------------- | ---------------------------------- |
-| `apps/kailash-kaizen/pyproject.toml`         | `version = "X.Y.Z"`                |
-| `apps/kailash-kaizen/setup.py`               | `version="X.Y.Z"`                  |
-| `apps/kailash-kaizen/src/kaizen/__init__.py` | `__version__ = "X.Y.Z"`            |
-| `apps/kailash-kaizen/pyproject.toml`         | `dependencies: kailash>=A.B.C`     |
-| `apps/kailash-kaizen/setup.py`               | `install_requires: kailash>=A.B.C` |
+| `packages/kailash-kaizen/pyproject.toml`         | `version = "X.Y.Z"`                |
+| `packages/kailash-kaizen/setup.py`               | `version="X.Y.Z"`                  |
+| `packages/kailash-kaizen/src/kaizen/__init__.py` | `__version__ = "X.Y.Z"`            |
+| `packages/kailash-kaizen/pyproject.toml`         | `dependencies: kailash>=A.B.C`     |
+| `packages/kailash-kaizen/setup.py`               | `install_requires: kailash>=A.B.C` |
 
 **kailash-nexus:**
 
 | File                                       | Field                              |
 | ------------------------------------------ | ---------------------------------- |
-| `apps/kailash-nexus/pyproject.toml`        | `version = "X.Y.Z"`                |
-| `apps/kailash-nexus/setup.py`              | `version="X.Y.Z"`                  |
-| `apps/kailash-nexus/src/nexus/__init__.py` | `__version__ = "X.Y.Z"`            |
-| `apps/kailash-nexus/pyproject.toml`        | `dependencies: kailash>=A.B.C`     |
-| `apps/kailash-nexus/setup.py`              | `install_requires: kailash>=A.B.C` |
+| `packages/kailash-nexus/pyproject.toml`        | `version = "X.Y.Z"`                |
+| `packages/kailash-nexus/setup.py`              | `version="X.Y.Z"`                  |
+| `packages/kailash-nexus/src/nexus/__init__.py` | `__version__ = "X.Y.Z"`            |
+| `packages/kailash-nexus/pyproject.toml`        | `dependencies: kailash>=A.B.C`     |
+| `packages/kailash-nexus/setup.py`              | `install_requires: kailash>=A.B.C` |
 
 ##### SDK Dependency Pin Update Rule
 
@@ -129,7 +129,7 @@ grep 'version=' setup.py | head -1
 grep '__version__' src/kailash/__init__.py
 
 # Each framework — version + dependency must be correct
-for fw in apps/kailash-dataflow apps/kailash-kaizen apps/kailash-nexus; do
+for fw in packages/kailash-dataflow packages/kailash-kaizen packages/kailash-nexus; do
   echo "=== $fw ==="
   grep 'version' $fw/pyproject.toml | head -1
   grep 'version=' $fw/setup.py | head -1
@@ -213,9 +213,9 @@ Quick reference for all version locations in this monorepo:
 | Package          | pyproject.toml                         | setup.py                         | **init**.py                                      | SDK Dep     |
 | ---------------- | -------------------------------------- | -------------------------------- | ------------------------------------------------ | ----------- |
 | kailash          | `pyproject.toml`                       | `setup.py`                       | `src/kailash/__init__.py`                        | —           |
-| kailash-dataflow | `apps/kailash-dataflow/pyproject.toml` | `apps/kailash-dataflow/setup.py` | `apps/kailash-dataflow/src/dataflow/__init__.py` | `kailash>=` |
-| kailash-kaizen   | `apps/kailash-kaizen/pyproject.toml`   | `apps/kailash-kaizen/setup.py`   | `apps/kailash-kaizen/src/kaizen/__init__.py`     | `kailash>=` |
-| kailash-nexus    | `apps/kailash-nexus/pyproject.toml`    | `apps/kailash-nexus/setup.py`    | `apps/kailash-nexus/src/nexus/__init__.py`       | `kailash>=` |
+| kailash-dataflow | `packages/kailash-dataflow/pyproject.toml` | `packages/kailash-dataflow/setup.py` | `packages/kailash-dataflow/src/dataflow/__init__.py` | `kailash>=` |
+| kailash-kaizen   | `packages/kailash-kaizen/pyproject.toml`   | `packages/kailash-kaizen/setup.py`   | `packages/kailash-kaizen/src/kaizen/__init__.py`     | `kailash>=` |
+| kailash-nexus    | `packages/kailash-nexus/pyproject.toml`    | `packages/kailash-nexus/setup.py`    | `packages/kailash-nexus/src/nexus/__init__.py`       | `kailash>=` |
 
 ## Agent Teams
 

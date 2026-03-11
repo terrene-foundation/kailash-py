@@ -1,0 +1,87 @@
+# Prometheus alerting rules for Kaizen AI
+
+groups:
+  - name: kaizen_alerts
+    interval: 30s
+    rules:
+      # High error rate alert
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(kaizen_errors_total[5m])) by (agent_type)
+            /
+            sum(rate(kaizen_requests_total[5m])) by (agent_type)
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: kaizen
+        annotations:
+          summary: "High error rate for {{ $labels.agent_type }}"
+          description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.agent_type }}"
+
+      # Critical error rate alert
+      - alert: CriticalErrorRate
+        expr: |
+          (
+            sum(rate(kaizen_errors_total[5m])) by (agent_type)
+            /
+            sum(rate(kaizen_requests_total[5m])) by (agent_type)
+          ) > 0.20
+        for: 2m
+        labels:
+          severity: critical
+          component: kaizen
+        annotations:
+          summary: "Critical error rate for {{ $labels.agent_type }}"
+          description: "Error rate is {{ $value | humanizePercentage }} for {{ $labels.agent_type }}"
+
+      # High latency alert
+      - alert: HighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(kaizen_request_duration_seconds_bucket[5m])) by (le, agent_type)
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: kaizen
+        annotations:
+          summary: "High latency for {{ $labels.agent_type }}"
+          description: "P95 latency is {{ $value }}s for {{ $labels.agent_type }}"
+
+      # Very high latency alert
+      - alert: VeryHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(kaizen_request_duration_seconds_bucket[5m])) by (le, agent_type)
+          ) > 10
+        for: 2m
+        labels:
+          severity: critical
+          component: kaizen
+        annotations:
+          summary: "Very high latency for {{ $labels.agent_type }}"
+          description: "P95 latency is {{ $value }}s for {{ $labels.agent_type }}"
+
+      # Service down alert
+      - alert: ServiceDown
+        expr: up{job="kaizen"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: kaizen
+        annotations:
+          summary: "Kaizen service is down"
+          description: "Kaizen service has been down for more than 1 minute"
+
+      # Low request rate (possible issue)
+      - alert: LowRequestRate
+        expr: sum(rate(kaizen_requests_total[5m])) < 0.1
+        for: 10m
+        labels:
+          severity: warning
+          component: kaizen
+        annotations:
+          summary: "Low request rate detected"
+          description: "Request rate has been below 0.1 req/s for 10 minutes"

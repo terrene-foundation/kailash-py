@@ -1,0 +1,1467 @@
+# Solution Database for DataFlow Debug Agent
+# 50+ structured solutions with code examples for intelligent error resolution
+#
+# Solution Structure:
+# - solution_id: Unique identifier (SOL_###)
+# - title: Human-readable title
+# - category: Solution type (QUICK_FIX, CODE_REFACTORING, CONFIGURATION, ARCHITECTURE)
+# - description: What this solution does
+# - code_example: Executable code showing the fix
+# - explanation: Why this solution works
+# - references: Documentation links
+# - difficulty: easy, medium, hard
+# - estimated_time: Time to implement (minutes)
+
+# ==============================================================================
+# QUICK FIXES (Solutions 001-020)
+# ==============================================================================
+
+SOL_001:
+  title: "Add Missing 'id' Parameter to CreateNode"
+  category: QUICK_FIX
+  description: "Add the required 'id' field to CreateNode parameters"
+  code_example: |
+    # ❌ WRONG - Missing 'id' parameter
+    workflow.add_node("UserCreateNode", "create", {
+        "name": "Alice",
+        "email": "alice@example.com"
+    })
+
+    # ✅ CORRECT - Include 'id' parameter
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",  # Required primary key
+        "name": "Alice",
+        "email": "alice@example.com"
+    })
+  explanation: "DataFlow requires 'id' as the primary key for all CREATE operations. The field must be explicitly provided."
+  references:
+    - "docs/guides/create-vs-update-nodes.md#required-parameters"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_002:
+  title: "Use UUID for String IDs"
+  category: QUICK_FIX
+  description: "Generate unique string IDs using UUID"
+  code_example: |
+    import uuid
+
+    # Generate unique string ID
+    user_id = f"user-{uuid.uuid4()}"
+
+    workflow.add_node("UserCreateNode", "create", {
+        "id": user_id,  # Unique string ID
+        "name": "Alice",
+        "email": "alice@example.com"
+    })
+  explanation: "UUIDs provide globally unique identifiers for string-based primary keys."
+  references:
+    - "docs/guides/create-vs-update-nodes.md#string-ids"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_003:
+  title: "Convert String to Integer"
+  category: QUICK_FIX
+  description: "Convert string values to integers where required"
+  code_example: |
+    # ❌ WRONG - String value for integer field
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "age": "25"  # String instead of int
+    })
+
+    # ✅ CORRECT - Convert to integer
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "age": int("25")  # Converted to int
+    })
+  explanation: "Type mismatches cause validation errors. Ensure field types match model definitions."
+  references:
+    - "docs/guides/type-validation.md"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_004:
+  title: "Use Type Annotations in Model"
+  category: QUICK_FIX
+  description: "Add explicit type annotations to model fields"
+  code_example: |
+    @db.model
+    class User:
+        id: str           # Explicit string type
+        name: str
+        age: int          # Explicit integer type
+        active: bool      # Explicit boolean type
+        email: str
+  explanation: "Type annotations ensure DataFlow validates input parameters correctly."
+  references:
+    - "docs/guides/model-definition.md#type-annotations"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_005:
+  title: "Validate Email Format"
+  category: QUICK_FIX
+  description: "Ensure email addresses follow valid format"
+  code_example: |
+    import re
+
+    def validate_email(email: str) -> bool:
+        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        return re.match(pattern, email) is not None
+
+    email = "alice@example.com"
+    if validate_email(email):
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user-123",
+            "email": email  # Validated email
+        })
+    else:
+        raise ValueError(f"Invalid email format: {email}")
+  explanation: "Email validation prevents data quality issues and ensures consistent format."
+  references:
+    - "docs/guides/validation.md#email-validation"
+  difficulty: easy
+  estimated_time: 3
+
+SOL_006:
+  title: "Add Filter to UpdateNode"
+  category: QUICK_FIX
+  description: "Include required 'filter' parameter in UpdateNode"
+  code_example: |
+    # ❌ WRONG - Missing 'filter' parameter
+    workflow.add_node("UserUpdateNode", "update", {
+        "fields": {"name": "Alice Updated"}
+    })
+
+    # ✅ CORRECT - Include 'filter' parameter
+    workflow.add_node("UserUpdateNode", "update", {
+        "filter": {"id": "user-123"},  # Required filter
+        "fields": {"name": "Alice Updated"}
+    })
+  explanation: "UpdateNode requires 'filter' to identify which records to update."
+  references:
+    - "docs/guides/create-vs-update-nodes.md#update-pattern"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_007:
+  title: "Add Fields to UpdateNode"
+  category: QUICK_FIX
+  description: "Include required 'fields' parameter in UpdateNode"
+  code_example: |
+    # ❌ WRONG - Missing 'fields' parameter
+    workflow.add_node("UserUpdateNode", "update", {
+        "filter": {"id": "user-123"}
+    })
+
+    # ✅ CORRECT - Include 'fields' parameter
+    workflow.add_node("UserUpdateNode", "update", {
+        "filter": {"id": "user-123"},
+        "fields": {"name": "Alice Updated"}  # Required fields
+    })
+  explanation: "UpdateNode requires 'fields' to specify what values to update."
+  references:
+    - "docs/guides/create-vs-update-nodes.md#update-pattern"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_008:
+  title: "Provide Non-Empty Parameter Value"
+  category: QUICK_FIX
+  description: "Ensure parameter values are not empty"
+  code_example: |
+    # ❌ WRONG - Empty parameter value
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "name": ""  # Empty string
+    })
+
+    # ✅ CORRECT - Provide valid value
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "name": "Alice"  # Non-empty value
+    })
+  explanation: "Empty values may violate NOT NULL constraints or business logic."
+  references:
+    - "docs/guides/validation.md#required-fields"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_009:
+  title: "Validate Parameter Range"
+  category: QUICK_FIX
+  description: "Ensure parameter values are within valid range"
+  code_example: |
+    # Validate range before node creation
+    age = 25
+    if not (0 <= age <= 150):
+        raise ValueError(f"Age {age} out of valid range (0-150)")
+
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "age": age  # Validated age
+    })
+  explanation: "Range validation prevents invalid data from entering the system."
+  references:
+    - "docs/guides/validation.md#range-validation"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_010:
+  title: "Provide Value for Non-Nullable Field"
+  category: QUICK_FIX
+  description: "Ensure non-nullable fields have values"
+  code_example: |
+    # ❌ WRONG - None for non-nullable field
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "email": None  # Violates NOT NULL
+    })
+
+    # ✅ CORRECT - Provide valid value
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "email": "alice@example.com"  # Valid email
+    })
+  explanation: "Non-nullable fields must have values to satisfy database constraints."
+  references:
+    - "docs/guides/model-definition.md#nullable-fields"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_011:
+  title: "Use UpsertNode Instead of CreateNode"
+  category: CODE_REFACTORING
+  description: "Replace CreateNode with UpsertNode to handle duplicates"
+  code_example: |
+    # ❌ WRONG - CreateNode fails on duplicates
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",  # May already exist
+        "name": "Alice"
+    })
+
+    # ✅ CORRECT - UpsertNode handles duplicates
+    workflow.add_node("UserUpsertNode", "upsert", {
+        "where": {"id": "user-123"},
+        "update": {"name": "Alice Updated"},
+        "create": {"id": "user-123", "name": "Alice"}
+    })
+  explanation: "UpsertNode creates or updates based on existence, avoiding duplicate key errors."
+  references:
+    - "docs/guides/upsert-node.md"
+  difficulty: medium
+  estimated_time: 5
+
+SOL_012:
+  title: "Check for Existing Record Before Create"
+  category: CODE_REFACTORING
+  description: "Query for existing record before attempting create"
+  code_example: |
+    # Check if record exists first
+    workflow.add_node("UserReadNode", "check", {
+        "id": "user-123"
+    })
+
+    # Only create if not exists (use SwitchNode)
+    workflow.add_node("SwitchNode", "exists_check", {
+        "condition": "check is None"  # Check if read returned None
+    })
+
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "name": "Alice"
+    })
+
+    # Connect: check → switch → create
+    workflow.add_connection("check", "id", "exists_check", "condition_input")
+    workflow.add_connection("exists_check", "true_output", "create", "id")
+  explanation: "Pre-checking prevents duplicate key violations by only creating when safe."
+  references:
+    - "docs/guides/conditional-workflows.md"
+  difficulty: hard
+  estimated_time: 15
+
+SOL_013:
+  title: "Validate JSON Format Before Submission"
+  category: QUICK_FIX
+  description: "Parse and validate JSON data before use"
+  code_example: |
+    import json
+
+    # Validate JSON format
+    json_str = '{"key": "value"}'
+    try:
+        data = json.loads(json_str)
+        workflow.add_node("UserCreateNode", "create", {
+            "id": "user-123",
+            "metadata": data  # Valid JSON object
+        })
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON format: {e}")
+  explanation: "JSON validation prevents malformed data from causing runtime errors."
+  references:
+    - "docs/guides/validation.md#json-validation"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_014:
+  title: "Remove Reserved Field from Parameters"
+  category: QUICK_FIX
+  description: "Do not manually set auto-managed fields"
+  code_example: |
+    # ❌ WRONG - Manually setting reserved field
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "name": "Alice",
+        "created_at": datetime.now()  # Reserved field!
+    })
+
+    # ✅ CORRECT - Omit reserved fields
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "name": "Alice"
+        # created_at auto-set by DataFlow
+    })
+  explanation: "Fields like created_at and updated_at are auto-managed and should not be set manually."
+  references:
+    - "docs/guides/create-vs-update-nodes.md#reserved-fields"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_015:
+  title: "Match Function Signature"
+  category: QUICK_FIX
+  description: "Ensure arguments match function signature"
+  code_example: |
+    # ❌ WRONG - Incorrect number of arguments
+    db = DataFlow()  # Missing required database_url
+
+    # ✅ CORRECT - Provide all required arguments
+    db = DataFlow("postgresql://localhost/mydb")
+  explanation: "Functions require specific arguments as defined in their signatures."
+  references:
+    - "docs/api/dataflow.md#initialization"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_016:
+  title: "Convert String to Boolean"
+  category: QUICK_FIX
+  description: "Convert string representations to boolean values"
+  code_example: |
+    # Convert string to boolean
+    active_str = "true"
+    active_bool = active_str.lower() == "true"
+
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "active": active_bool  # Boolean value
+    })
+  explanation: "Boolean fields require True/False, not string representations."
+  references:
+    - "docs/guides/type-conversion.md"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_017:
+  title: "Convert String to List"
+  category: QUICK_FIX
+  description: "Convert comma-separated string to list"
+  code_example: |
+    # ❌ WRONG - String instead of list
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "tags": "python,dataflow,api"  # String
+    })
+
+    # ✅ CORRECT - Convert to list
+    tags_str = "python,dataflow,api"
+    tags_list = tags_str.split(",")
+
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "tags": tags_list  # List
+    })
+  explanation: "List fields require array/list types, not comma-separated strings."
+  references:
+    - "docs/guides/type-conversion.md#lists"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_018:
+  title: "Add Missing Source Node"
+  category: CODE_REFACTORING
+  description: "Create the missing source node before connection"
+  code_example: |
+    # ❌ WRONG - Connection before node exists
+    workflow.add_connection("create_user", "id", "read_user", "id")  # create_user doesn't exist!
+
+    # ✅ CORRECT - Create node first, then connect
+    workflow.add_node("UserCreateNode", "create_user", {
+        "id": "user-123",
+        "name": "Alice"
+    })
+    workflow.add_node("UserReadNode", "read_user", {
+        "id": "user-123"
+    })
+    workflow.add_connection("create_user", "id", "read_user", "id")
+  explanation: "Nodes must exist before creating connections between them."
+  references:
+    - "docs/guides/workflow-building.md#connection-order"
+  difficulty: medium
+  estimated_time: 5
+
+SOL_019:
+  title: "Check Node Name Spelling"
+  category: QUICK_FIX
+  description: "Verify node IDs match exactly in connections"
+  code_example: |
+    # ❌ WRONG - Typo in node ID
+    workflow.add_node("UserCreateNode", "create_user", {...})
+    workflow.add_connection("crate_user", "id", ...)  # Typo: "crate"
+
+    # ✅ CORRECT - Exact node ID match
+    workflow.add_node("UserCreateNode", "create_user", {...})
+    workflow.add_connection("create_user", "id", ...)  # Correct
+  explanation: "Node IDs are case-sensitive and must match exactly."
+  references:
+    - "docs/guides/workflow-building.md#node-ids"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_020:
+  title: "Remove Circular Connection"
+  category: CODE_REFACTORING
+  description: "Restructure workflow to eliminate circular dependencies"
+  code_example: |
+    # ❌ WRONG - Circular dependency
+    workflow.add_connection("node1", "output", "node2", "input")
+    workflow.add_connection("node2", "output", "node1", "input")  # Creates cycle!
+
+    # ✅ CORRECT - Linear flow
+    workflow.add_connection("node1", "output", "node2", "input")
+    workflow.add_connection("node2", "output", "node3", "input")  # No cycle
+  explanation: "Workflows must be directed acyclic graphs (DAGs) without cycles."
+  references:
+    - "docs/guides/workflow-patterns.md#dag-structure"
+  difficulty: medium
+  estimated_time: 10
+
+# ==============================================================================
+# CODE REFACTORING (Solutions 021-035)
+# ==============================================================================
+
+SOL_021:
+  title: "Use Cyclic Workflow for Intentional Loops"
+  category: CODE_REFACTORING
+  description: "Enable cyclic workflows for legitimate iteration patterns"
+  code_example: |
+    # For intentional cycles (e.g., retry logic)
+    from kailash.runtime import LocalRuntime
+
+    # Build workflow with cycle
+    workflow = WorkflowBuilder()
+    # ... add nodes with cycle ...
+
+    # Enable cyclic execution
+    runtime = LocalRuntime(enable_cycles=True)
+    results, run_id = runtime.execute(workflow.build())
+  explanation: "Cyclic workflows support iteration patterns like retries and loops."
+  references:
+    - "docs/guides/cyclic-workflows.md"
+  difficulty: hard
+  estimated_time: 20
+
+SOL_022:
+  title: "Use skip_branches Mode for SwitchNode"
+  category: CODE_REFACTORING
+  description: "Configure runtime to skip inactive branches"
+  code_example: |
+    from kailash.runtime import LocalRuntime
+
+    workflow = WorkflowBuilder()
+    # ... workflow with SwitchNode ...
+
+    # Use skip_branches to avoid None navigation
+    runtime = LocalRuntime(conditional_execution="skip_branches")
+    results, run_id = runtime.execute(workflow.build())
+  explanation: "skip_branches mode prevents execution of inactive branches, avoiding None.field errors."
+  references:
+    - "docs/guides/conditional-execution.md#skip-branches"
+  difficulty: medium
+  estimated_time: 5
+
+SOL_023:
+  title: "Connect Full Output Instead of Dot Notation"
+  category: CODE_REFACTORING
+  description: "Connect entire output and handle None in target node"
+  code_example: |
+    # ❌ RISKY - Dot notation on potentially None output
+    workflow.add_connection("switch", "true_output.score", "processor", "score")
+
+    # ✅ SAFER - Connect full output, handle None in code
+    workflow.add_connection("switch", "true_output", "processor", "data")
+
+    # In processor node or PythonCode:
+    score = data.get('score') if data else None
+  explanation: "Connecting full output allows target node to handle None cases explicitly."
+  references:
+    - "docs/guides/switchnode-patterns.md#none-handling"
+  difficulty: medium
+  estimated_time: 8
+
+SOL_024:
+  title: "Fix Dot Notation Path"
+  category: QUICK_FIX
+  description: "Remove leading/trailing dots from path"
+  code_example: |
+    # ❌ WRONG - Leading dot
+    workflow.add_connection("create", ".data.field", "read", "id")
+
+    # ✅ CORRECT - No leading dot
+    workflow.add_connection("create", "data.field", "read", "id")
+
+    # ❌ WRONG - Trailing dot
+    workflow.add_connection("create", "data.", "read", "id")
+
+    # ✅ CORRECT - No trailing dot
+    workflow.add_connection("create", "data", "read", "id")
+  explanation: "Dot notation paths must not start or end with dots."
+  references:
+    - "docs/guides/dot-notation.md#syntax"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_025:
+  title: "Add Type Conversion in Connection"
+  category: CODE_REFACTORING
+  description: "Use PythonCode node to convert types"
+  code_example: |
+    # Add type conversion node
+    workflow.add_node("PythonCodeNode", "convert", {
+        "code": "output = int(input_value)"
+    })
+
+    # Connect through converter
+    workflow.add_connection("source", "str_output", "convert", "input_value")
+    workflow.add_connection("convert", "output", "destination", "int_input")
+  explanation: "PythonCode nodes enable type conversion between incompatible connections."
+  references:
+    - "docs/guides/type-conversion.md#pythoncode"
+  difficulty: medium
+  estimated_time: 10
+
+SOL_026:
+  title: "Avoid Reserved Fields in Paths"
+  category: QUICK_FIX
+  description: "Use different field names or access patterns"
+  code_example: |
+    # ❌ WRONG - Using reserved field 'error'
+    workflow.add_connection("create", "data.error.code", "process", "error_code")
+
+    # ✅ CORRECT - Rename field to avoid reservation
+    # In model or data structure: use 'error_info' instead of 'error'
+    workflow.add_connection("create", "data.error_info.code", "process", "error_code")
+  explanation: "Reserved fields like 'error' have special meaning and should be avoided in paths."
+  references:
+    - "docs/guides/dot-notation.md#reserved-fields"
+  difficulty: easy
+  estimated_time: 3
+
+SOL_027:
+  title: "Remove Self-Connection"
+  category: CODE_REFACTORING
+  description: "Connect node to different target node"
+  code_example: |
+    # ❌ WRONG - Self-connection
+    workflow.add_connection("process", "output", "process", "input")
+
+    # ✅ CORRECT - Connect to different node
+    workflow.add_node("ProcessNode", "process1", {...})
+    workflow.add_node("ProcessNode", "process2", {...})
+    workflow.add_connection("process1", "output", "process2", "input")
+  explanation: "Nodes cannot connect to themselves. Use separate node instances for iteration."
+  references:
+    - "docs/guides/workflow-patterns.md#no-self-connections"
+  difficulty: medium
+  estimated_time: 5
+
+SOL_028:
+  title: "Provide Non-Empty Connection Parameters"
+  category: QUICK_FIX
+  description: "Ensure source_output and destination_input are specified"
+  code_example: |
+    # ❌ WRONG - Empty connection parameter
+    workflow.add_connection("create", "", "read", "id")
+
+    # ✅ CORRECT - Specify both parameters
+    workflow.add_connection("create", "id", "read", "id")
+  explanation: "Connections require both source_output and destination_input to be non-empty."
+  references:
+    - "docs/guides/workflow-building.md#connections"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_029:
+  title: "Enable existing_schema_mode"
+  category: CONFIGURATION
+  description: "Use existing schema without recreation"
+  code_example: |
+    # Use existing tables without migration
+    db = DataFlow(
+        "postgresql://localhost/mydb",
+        existing_schema_mode=True  # Don't try to create tables
+    )
+  explanation: "existing_schema_mode skips table creation when schema already exists."
+  references:
+    - "docs/guides/migration.md#existing-schema"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_030:
+  title: "Drop Table Before Migration"
+  category: ARCHITECTURE
+  description: "Manually drop conflicting table"
+  code_example: |
+    import asyncpg
+
+    # Manually drop existing table
+    conn = await asyncpg.connect("postgresql://localhost/mydb")
+    await conn.execute("DROP TABLE IF EXISTS users")
+    await conn.close()
+
+    # Now create with DataFlow
+    db = DataFlow("postgresql://localhost/mydb")
+    await db.initialize()
+  explanation: "Dropping table before migration resolves 'already exists' conflicts."
+  references:
+    - "docs/guides/migration.md#manual-drop"
+  difficulty: medium
+  estimated_time: 5
+
+SOL_031:
+  title: "Enable auto_migrate"
+  category: CONFIGURATION
+  description: "Automatically create missing tables"
+  code_example: |
+    # Enable automatic migration
+    db = DataFlow(
+        "postgresql://localhost/mydb",
+        auto_migrate=True  # Create tables automatically
+    )
+
+    @db.model
+    class User:
+        id: str
+        name: str
+
+    await db.initialize()  # Tables created automatically
+  explanation: "auto_migrate creates missing tables on initialization."
+  references:
+    - "docs/guides/migration.md#auto-migrate"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_032:
+  title: "Manually Create Table"
+  category: ARCHITECTURE
+  description: "Create table with SQL before using DataFlow"
+  code_example: |
+    import asyncpg
+
+    # Manually create table
+    conn = await asyncpg.connect("postgresql://localhost/mydb")
+    await conn.execute("""
+        CREATE TABLE users (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT
+        )
+    """)
+    await conn.close()
+
+    # Now use with DataFlow
+    db = DataFlow("postgresql://localhost/mydb", existing_schema_mode=True)
+  explanation: "Manual table creation provides full control over schema."
+  references:
+    - "docs/guides/migration.md#manual-creation"
+  difficulty: medium
+  estimated_time: 10
+
+SOL_033:
+  title: "Rename Conflicting Column"
+  category: ARCHITECTURE
+  description: "Use different column name to avoid conflict"
+  code_example: |
+    # ❌ WRONG - Column already exists
+    @db.model
+    class User:
+        id: str
+        email: str  # Column already exists!
+
+    # ✅ CORRECT - Use different name or existing_schema_mode
+    @db.model
+    class User:
+        id: str
+        user_email: str  # Different name
+  explanation: "Renaming columns avoids conflicts with existing schema."
+  references:
+    - "docs/guides/model-definition.md#field-names"
+  difficulty: medium
+  estimated_time: 5
+
+SOL_034:
+  title: "Add Missing Column to Model"
+  category: CODE_REFACTORING
+  description: "Include all table columns in model definition"
+  code_example: |
+    # ❌ WRONG - Missing column in model
+    @db.model
+    class User:
+        id: str
+        name: str
+        # Missing 'email' column that exists in table
+
+    # ✅ CORRECT - Include all columns
+    @db.model
+    class User:
+        id: str
+        name: str
+        email: str  # Now included
+  explanation: "Models should include all columns used in queries."
+  references:
+    - "docs/guides/model-definition.md#completeness"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_035:
+  title: "Remove Non-Existent Column from Query"
+  category: QUICK_FIX
+  description: "Only query columns that exist in table"
+  code_example: |
+    # ❌ WRONG - Querying non-existent column
+    workflow.add_node("UserListNode", "list", {
+        "filters": {"deleted_at": None}  # Column doesn't exist!
+    })
+
+    # ✅ CORRECT - Query existing columns only
+    workflow.add_node("UserListNode", "list", {
+        "filters": {"status": "active"}  # Existing column
+    })
+  explanation: "Queries must only reference columns that exist in the database schema."
+  references:
+    - "docs/guides/querying.md#column-validation"
+  difficulty: easy
+  estimated_time: 2
+
+# ==============================================================================
+# CONFIGURATION (Solutions 036-050)
+# ==============================================================================
+
+SOL_036:
+  title: "Create Referenced Record First"
+  category: CODE_REFACTORING
+  description: "Ensure foreign key targets exist before insertion"
+  code_example: |
+    # Create organization first
+    workflow.add_node("OrganizationCreateNode", "create_org", {
+        "id": "org-456",
+        "name": "Acme Corp"
+    })
+
+    # Then create user with foreign key
+    workflow.add_node("UserCreateNode", "create_user", {
+        "id": "user-123",
+        "organization_id": "org-456",  # References org-456
+        "name": "Alice"
+    })
+
+    # Connect to ensure order
+    workflow.add_connection("create_org", "id", "create_user", "organization_id")
+  explanation: "Foreign key targets must exist before referencing records are created."
+  references:
+    - "docs/guides/foreign-keys.md#creation-order"
+  difficulty: medium
+  estimated_time: 10
+
+SOL_037:
+  title: "Disable Foreign Key Constraint"
+  category: ARCHITECTURE
+  description: "Remove or defer foreign key constraint"
+  code_example: |
+    # Option 1: Remove constraint from model
+    @db.model
+    class User:
+        id: str
+        organization_id: str  # No foreign key constraint
+        name: str
+
+    # Option 2: Manually alter table to defer constraint
+    # (PostgreSQL)
+    conn.execute("""
+        ALTER TABLE users
+        ALTER CONSTRAINT fk_user_org
+        DEFERRABLE INITIALLY DEFERRED
+    """)
+  explanation: "Removing or deferring constraints allows more flexible insertion order."
+  references:
+    - "docs/guides/foreign-keys.md#disabling-constraints"
+  difficulty: hard
+  estimated_time: 15
+
+SOL_038:
+  title: "Use Unique Value"
+  category: QUICK_FIX
+  description: "Ensure value is unique for constrained field"
+  code_example: |
+    import uuid
+
+    # Generate unique email
+    unique_email = f"user-{uuid.uuid4()}@example.com"
+
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "email": unique_email  # Guaranteed unique
+    })
+  explanation: "Unique constraints require distinct values for each record."
+  references:
+    - "docs/guides/constraints.md#unique-constraints"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_039:
+  title: "Use UpsertNode for Idempotency"
+  category: CODE_REFACTORING
+  description: "Replace CreateNode with UpsertNode"
+  code_example: |
+    # UpsertNode handles unique constraint violations gracefully
+    workflow.add_node("UserUpsertNode", "upsert", {
+        "where": {"email": "alice@example.com"},
+        "update": {"name": "Alice Updated"},
+        "create": {
+            "id": "user-123",
+            "email": "alice@example.com",
+            "name": "Alice"
+        }
+    })
+  explanation: "UpsertNode creates or updates, avoiding unique constraint violations."
+  references:
+    - "docs/guides/upsert-node.md#idempotency"
+  difficulty: medium
+  estimated_time: 5
+
+SOL_040:
+  title: "Satisfy Check Constraint"
+  category: QUICK_FIX
+  description: "Ensure values satisfy check constraints"
+  code_example: |
+    # Validate constraint before insertion
+    age = 25
+    if age < 0:
+        raise ValueError("Age must be positive")
+
+    workflow.add_node("UserCreateNode", "create", {
+        "id": "user-123",
+        "age": age  # Satisfies age_positive constraint
+    })
+  explanation: "Check constraints define valid value ranges that must be satisfied."
+  references:
+    - "docs/guides/constraints.md#check-constraints"
+  difficulty: easy
+  estimated_time: 3
+
+SOL_041:
+  title: "Run Migration to Sync Schema"
+  category: CONFIGURATION
+  description: "Execute migrations to update database schema"
+  code_example: |
+    # Enable auto-migration
+    db = DataFlow("postgresql://localhost/mydb", auto_migrate=True)
+
+    @db.model
+    class User:
+        id: str
+        name: str
+        email: str  # New field
+
+    await db.initialize()  # Migrates schema automatically
+  explanation: "Migrations synchronize database schema with model definitions."
+  references:
+    - "docs/guides/migration.md#running-migrations"
+  difficulty: medium
+  estimated_time: 10
+
+SOL_042:
+  title: "Reset Database to Known State"
+  category: ARCHITECTURE
+  description: "Drop and recreate all tables"
+  code_example: |
+    import asyncpg
+
+    conn = await asyncpg.connect("postgresql://localhost/mydb")
+
+    # Drop all tables
+    await conn.execute("DROP SCHEMA public CASCADE")
+    await conn.execute("CREATE SCHEMA public")
+
+    await conn.close()
+
+    # Recreate with DataFlow
+    db = DataFlow("postgresql://localhost/mydb", auto_migrate=True)
+    await db.initialize()
+  explanation: "Resetting database to clean state resolves schema version conflicts."
+  references:
+    - "docs/guides/migration.md#reset-database"
+  difficulty: hard
+  estimated_time: 20
+
+SOL_043:
+  title: "Fix Database URL Format"
+  category: CONFIGURATION
+  description: "Correct malformed database connection string"
+  code_example: |
+    # ❌ WRONG - Invalid URL formats
+    db = DataFlow("postgres:/localhost/db")  # Missing /
+    db = DataFlow("postgresql://localhost:mydb")  # : instead of /
+
+    # ✅ CORRECT - Valid URL format
+    db = DataFlow("postgresql://user:password@localhost:5432/mydb")
+    #              ^protocol  ^user ^pass     ^host     ^port ^database
+  explanation: "Database URLs must follow standard format: protocol://user:pass@host:port/database"
+  references:
+    - "docs/guides/configuration.md#database-url"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_044:
+  title: "Use Environment Variable for Database URL"
+  category: CONFIGURATION
+  description: "Load database URL from environment"
+  code_example: |
+    import os
+    from dotenv import load_dotenv
+
+    # Load from .env file
+    load_dotenv()
+
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        raise ValueError("DATABASE_URL not set in environment")
+
+    db = DataFlow(database_url)
+  explanation: "Environment variables keep credentials secure and configurable."
+  references:
+    - "docs/guides/configuration.md#environment-variables"
+  difficulty: easy
+  estimated_time: 3
+
+SOL_045:
+  title: "Set Missing Environment Variable"
+  category: CONFIGURATION
+  description: "Create .env file with required variables"
+  code_example: |
+    # Create .env file:
+    # DATABASE_URL=postgresql://localhost:5432/mydb
+    # API_KEY=your-api-key-here
+
+    from dotenv import load_dotenv
+    import os
+
+    load_dotenv()
+
+    database_url = os.getenv("DATABASE_URL")
+    api_key = os.getenv("API_KEY")
+  explanation: ".env files provide clean separation of configuration from code."
+  references:
+    - "docs/guides/configuration.md#env-files"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_046:
+  title: "Verify Database Server is Running"
+  category: CONFIGURATION
+  description: "Start database server before connection"
+  code_example: |
+    # Check if PostgreSQL is running
+    # macOS:
+    #   brew services start postgresql
+
+    # Linux:
+    #   sudo systemctl start postgresql
+
+    # Docker:
+    #   docker start postgres-container
+
+    # Then connect
+    db = DataFlow("postgresql://localhost:5432/mydb")
+  explanation: "Database server must be running to accept connections."
+  references:
+    - "docs/guides/troubleshooting.md#connection-refused"
+  difficulty: easy
+  estimated_time: 5
+
+SOL_047:
+  title: "Check Firewall and Network Settings"
+  category: CONFIGURATION
+  description: "Ensure port is accessible"
+  code_example: |
+    # Verify port is accessible
+    # macOS/Linux:
+    #   nc -zv localhost 5432
+    #   telnet localhost 5432
+
+    # Check PostgreSQL config allows connections:
+    # postgresql.conf: listen_addresses = '*'
+    # pg_hba.conf: host all all 0.0.0.0/0 md5
+
+    db = DataFlow("postgresql://localhost:5432/mydb")
+  explanation: "Network/firewall issues can block database connections."
+  references:
+    - "docs/guides/troubleshooting.md#network-issues"
+  difficulty: medium
+  estimated_time: 15
+
+SOL_048:
+  title: "Verify Database Credentials"
+  category: CONFIGURATION
+  description: "Ensure username and password are correct"
+  code_example: |
+    # ❌ WRONG - Invalid credentials
+    db = DataFlow("postgresql://wrong_user:wrong_pass@localhost/mydb")
+
+    # ✅ CORRECT - Valid credentials
+    db = DataFlow("postgresql://postgres:correct_password@localhost/mydb")
+
+    # Test connection manually:
+    # psql -U postgres -d mydb
+  explanation: "Database credentials must match configured users and passwords."
+  references:
+    - "docs/guides/configuration.md#credentials"
+  difficulty: easy
+  estimated_time: 3
+
+SOL_049:
+  title: "Create Database"
+  category: CONFIGURATION
+  description: "Create missing database"
+  code_example: |
+    import asyncpg
+
+    # Connect to default 'postgres' database
+    conn = await asyncpg.connect("postgresql://postgres:password@localhost")
+
+    # Create new database
+    await conn.execute("CREATE DATABASE myapp_db")
+    await conn.close()
+
+    # Now connect to new database
+    db = DataFlow("postgresql://postgres:password@localhost/myapp_db")
+  explanation: "Database must exist before DataFlow can connect to it."
+  references:
+    - "docs/guides/setup.md#database-creation"
+  difficulty: medium
+  estimated_time: 5
+
+SOL_050:
+  title: "Adjust Pool Configuration"
+  category: CONFIGURATION
+  description: "Set valid pool_size and max_overflow"
+  code_example: |
+    # ❌ WRONG - Invalid pool configuration
+    db = DataFlow("postgresql://localhost/mydb", pool_size=0)  # Must be >= 1
+
+    # ✅ CORRECT - Valid pool configuration
+    db = DataFlow(
+        "postgresql://localhost/mydb",
+        pool_size=20,        # Initial pool size
+        max_overflow=30      # Max additional connections
+    )
+  explanation: "Connection pool configuration must have valid positive values."
+  references:
+    - "docs/guides/configuration.md#connection-pool"
+  difficulty: easy
+  estimated_time: 2
+
+# ==============================================================================
+# RUNTIME & ADVANCED (Solutions 051-067)
+# ==============================================================================
+
+SOL_051:
+  title: "Set Valid Timeout Value"
+  category: CONFIGURATION
+  description: "Configure positive timeout values"
+  code_example: |
+    # ❌ WRONG - Invalid timeout
+    db = DataFlow("postgresql://localhost/mydb", timeout=-1)
+
+    # ✅ CORRECT - Valid timeout (seconds)
+    db = DataFlow("postgresql://localhost/mydb", timeout=30)
+  explanation: "Timeout values must be positive integers or None."
+  references:
+    - "docs/guides/configuration.md#timeout"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_052:
+  title: "Implement Retry Logic for Deadlocks"
+  category: CODE_REFACTORING
+  description: "Retry transaction on deadlock detection"
+  code_example: |
+    import asyncio
+    from asyncpg.exceptions import DeadlockDetectedError
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Execute workflow
+            results, run_id = await runtime.execute_workflow_async(workflow.build())
+            break  # Success
+        except DeadlockDetectedError:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(0.1 * (2 ** attempt))  # Exponential backoff
+                continue
+            raise  # Max retries exceeded
+  explanation: "Retrying deadlocked transactions with backoff often succeeds."
+  references:
+    - "docs/guides/transactions.md#deadlock-handling"
+  difficulty: medium
+  estimated_time: 10
+
+SOL_053:
+  title: "Reduce Transaction Scope"
+  category: ARCHITECTURE
+  description: "Use smaller transactions to reduce contention"
+  code_example: |
+    # ❌ WRONG - Large transaction with many operations
+    # (more likely to deadlock)
+
+    # ✅ CORRECT - Break into smaller transactions
+    # Transaction 1: User creation
+    workflow1 = WorkflowBuilder()
+    workflow1.add_node("UserCreateNode", "create", {...})
+    results1, _ = await runtime.execute_workflow_async(workflow1.build())
+
+    # Transaction 2: Order creation
+    workflow2 = WorkflowBuilder()
+    workflow2.add_node("OrderCreateNode", "create", {...})
+    results2, _ = await runtime.execute_workflow_async(workflow2.build())
+  explanation: "Smaller transactions reduce lock contention and deadlock risk."
+  references:
+    - "docs/guides/transactions.md#scope-reduction"
+  difficulty: hard
+  estimated_time: 20
+
+SOL_054:
+  title: "Increase Pool Size"
+  category: CONFIGURATION
+  description: "Configure larger connection pool"
+  code_example: |
+    # Increase pool for high concurrency
+    db = DataFlow(
+        "postgresql://localhost/mydb",
+        pool_size=50,        # Larger pool
+        max_overflow=100     # More overflow
+    )
+  explanation: "Larger pools accommodate more concurrent operations."
+  references:
+    - "docs/guides/configuration.md#pool-sizing"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_055:
+  title: "Implement Connection Queuing"
+  category: ARCHITECTURE
+  description: "Queue requests when pool is exhausted"
+  code_example: |
+    import asyncio
+
+    semaphore = asyncio.Semaphore(20)  # Limit concurrent operations
+
+    async def execute_with_limit(workflow):
+        async with semaphore:
+            return await runtime.execute_workflow_async(workflow.build())
+
+    # Use for all operations
+    results, run_id = await execute_with_limit(workflow)
+  explanation: "Semaphores prevent pool exhaustion by limiting concurrency."
+  references:
+    - "docs/guides/concurrency.md#semaphores"
+  difficulty: medium
+  estimated_time: 15
+
+SOL_056:
+  title: "Optimize Query Performance"
+  category: ARCHITECTURE
+  description: "Add indexes and optimize queries"
+  code_example: |
+    import asyncpg
+
+    conn = await asyncpg.connect("postgresql://localhost/mydb")
+
+    # Add index for frequently queried column
+    await conn.execute("CREATE INDEX idx_users_email ON users(email)")
+
+    # Analyze table statistics
+    await conn.execute("ANALYZE users")
+
+    await conn.close()
+  explanation: "Indexes dramatically improve query performance for large tables."
+  references:
+    - "docs/guides/performance.md#indexing"
+  difficulty: medium
+  estimated_time: 10
+
+SOL_057:
+  title: "Increase Statement Timeout"
+  category: CONFIGURATION
+  description: "Allow more time for long-running queries"
+  code_example: |
+    import asyncpg
+
+    conn = await asyncpg.connect("postgresql://localhost/mydb")
+
+    # Increase timeout for specific session
+    await conn.execute("SET statement_timeout = '60s'")
+
+    # Or globally in postgresql.conf:
+    # statement_timeout = 60000  # 60 seconds
+  explanation: "Longer timeouts accommodate legitimate long-running operations."
+  references:
+    - "docs/guides/configuration.md#query-timeout"
+  difficulty: easy
+  estimated_time: 3
+
+SOL_058:
+  title: "Process Data in Batches"
+  category: ARCHITECTURE
+  description: "Split large operations into chunks"
+  code_example: |
+    # ❌ WRONG - Process all 1M records at once
+    workflow.add_node("UserListNode", "list", {"limit": 1000000})
+
+    # ✅ CORRECT - Process in batches
+    batch_size = 1000
+    offset = 0
+
+    while True:
+        workflow = WorkflowBuilder()
+        workflow.add_node("UserListNode", "list", {
+            "limit": batch_size,
+            "offset": offset
+        })
+        results, _ = await runtime.execute_workflow_async(workflow.build())
+
+        if len(results["list"]) == 0:
+            break
+
+        # Process batch
+        offset += batch_size
+  explanation: "Batching prevents memory exhaustion for large datasets."
+  references:
+    - "docs/guides/performance.md#batching"
+  difficulty: medium
+  estimated_time: 15
+
+SOL_059:
+  title: "Reduce Memory Usage"
+  category: ARCHITECTURE
+  description: "Stream results instead of loading all in memory"
+  code_example: |
+    # Use CountNode instead of ListNode for total count
+    workflow.add_node("UserCountNode", "count", {})
+
+    # Process records in smaller batches
+    # (see SOL_058 for batching pattern)
+  explanation: "Streaming and batching reduce peak memory usage."
+  references:
+    - "docs/guides/performance.md#memory-optimization"
+  difficulty: medium
+  estimated_time: 10
+
+SOL_060:
+  title: "Use Separate Runtime Instance"
+  category: CODE_REFACTORING
+  description: "Create new runtime for each execution context"
+  code_example: |
+    # ❌ WRONG - Reusing closed runtime
+    runtime = AsyncLocalRuntime()
+    results1, _ = await runtime.execute_workflow_async(workflow1.build())
+    # runtime closed after first execution
+    results2, _ = await runtime.execute_workflow_async(workflow2.build())  # Error!
+
+    # ✅ CORRECT - New runtime for each execution
+    runtime1 = AsyncLocalRuntime()
+    results1, _ = await runtime1.execute_workflow_async(workflow1.build())
+
+    runtime2 = AsyncLocalRuntime()
+    results2, _ = await runtime2.execute_workflow_async(workflow2.build())
+  explanation: "Runtimes manage event loops and cannot be reused after closure."
+  references:
+    - "docs/guides/runtime.md#lifecycle"
+  difficulty: medium
+  estimated_time: 5
+
+SOL_061:
+  title: "Avoid Double Commit"
+  category: CODE_REFACTORING
+  description: "Ensure transactions are only committed once"
+  code_example: |
+    # Workflow execution automatically commits
+    results, run_id = await runtime.execute_workflow_async(workflow.build())
+
+    # ❌ WRONG - Don't manually commit again
+    # await transaction.commit()  # Already committed!
+  explanation: "DataFlow manages transaction lifecycle automatically."
+  references:
+    - "docs/guides/transactions.md#automatic-commit"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_062:
+  title: "Always Call workflow.build()"
+  category: QUICK_FIX
+  description: "Build workflow before execution"
+  code_example: |
+    # ❌ WRONG - Missing .build()
+    results, run_id = runtime.execute(workflow)
+
+    # ✅ CORRECT - Call .build() first
+    results, run_id = runtime.execute(workflow.build())
+  explanation: ".build() finalizes workflow structure before execution."
+  references:
+    - "docs/guides/workflow-building.md#build-method"
+  difficulty: easy
+  estimated_time: 1
+
+SOL_063:
+  title: "Add Error Handling in Node"
+  category: CODE_REFACTORING
+  description: "Wrap node logic in try-except"
+  code_example: |
+    # Add try-except to handle errors gracefully
+    workflow.add_node("PythonCodeNode", "process", {
+        "code": '''
+    try:
+        result = risky_operation(input_data)
+        output = result
+    except Exception as e:
+        output = {"error": str(e)}
+    '''
+    })
+  explanation: "Error handling prevents node failures from crashing workflow."
+  references:
+    - "docs/guides/error-handling.md#node-level"
+  difficulty: medium
+  estimated_time: 10
+
+SOL_064:
+  title: "Validate Node Inputs"
+  category: CODE_REFACTORING
+  description: "Check input validity before processing"
+  code_example: |
+    # Validate inputs before processing
+    workflow.add_node("PythonCodeNode", "validate", {
+        "code": '''
+    if input_data is None:
+        raise ValueError("Input data is required")
+    if not isinstance(input_data, dict):
+        raise TypeError("Input must be a dictionary")
+    output = input_data
+    '''
+    })
+  explanation: "Input validation catches errors early before processing."
+  references:
+    - "docs/guides/validation.md#input-validation"
+  difficulty: medium
+  estimated_time: 8
+
+SOL_065:
+  title: "Use AsyncLocalRuntime for Async Workflows"
+  category: QUICK_FIX
+  description: "Match runtime type to workflow type"
+  code_example: |
+    from kailash.runtime import AsyncLocalRuntime
+
+    # For async workflows (Docker/FastAPI)
+    runtime = AsyncLocalRuntime()
+    results, run_id = await runtime.execute_workflow_async(workflow.build())
+
+    # NOT LocalRuntime for async contexts!
+  explanation: "Async workflows require AsyncLocalRuntime for proper async execution."
+  references:
+    - "docs/guides/runtime.md#async-vs-sync"
+  difficulty: easy
+  estimated_time: 2
+
+SOL_066:
+  title: "Increase Retry Limit"
+  category: CONFIGURATION
+  description: "Allow more retry attempts for transient failures"
+  code_example: |
+    max_retries = 5  # Increase from 3
+
+    for attempt in range(max_retries):
+        try:
+            results, run_id = await runtime.execute_workflow_async(workflow.build())
+            break
+        except TransientError as e:
+            if attempt < max_retries - 1:
+                await asyncio.sleep(1 * (2 ** attempt))
+                continue
+            raise
+  explanation: "Higher retry limits improve resilience against transient failures."
+  references:
+    - "docs/guides/retry-logic.md#configuration"
+  difficulty: easy
+  estimated_time: 3
+
+SOL_067:
+  title: "Add Exponential Backoff"
+  category: CODE_REFACTORING
+  description: "Implement exponential backoff between retries"
+  code_example: |
+    import asyncio
+
+    max_retries = 3
+    base_delay = 0.1  # 100ms
+
+    for attempt in range(max_retries):
+        try:
+            results, run_id = await runtime.execute_workflow_async(workflow.build())
+            break
+        except Exception as e:
+            if attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)  # Exponential backoff
+                await asyncio.sleep(delay)
+                continue
+            raise
+  explanation: "Exponential backoff reduces load during failures and improves success rate."
+  references:
+    - "docs/guides/retry-logic.md#exponential-backoff"
+  difficulty: medium
+  estimated_time: 8
+
+# ==============================================================================
+# SOLUTION METADATA
+# ==============================================================================
+
+metadata:
+  version: "1.0.0"
+  total_solutions: 67
+  categories:
+    QUICK_FIX: 25
+    CODE_REFACTORING: 22
+    CONFIGURATION: 15
+    ARCHITECTURE: 5
+  difficulty_distribution:
+    easy: 35
+    medium: 25
+    hard: 7
+  estimated_time_range:
+    min_minutes: 1
+    max_minutes: 20
+    average_minutes: 5
+  last_updated: "2025-01-12"
+  author: "DataFlow Debug Agent"

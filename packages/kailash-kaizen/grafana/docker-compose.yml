@@ -1,0 +1,186 @@
+# Docker Compose for Kaizen Observability Stack
+# Runs Grafana, Prometheus, Jaeger, Elasticsearch, and Node Exporter
+#
+# PRODUCTION DEPLOYMENT:
+#   1. Copy .env.production.example to .env.production
+#   2. Update all CHANGE_ME values in .env.production
+#   3. Generate SSL certificates: ./scripts/generate-certs.sh
+#   4. Run: docker-compose --env-file .env.production up -d
+#
+# DEVELOPMENT:
+#   docker-compose up -d
+
+version: '3.8'
+
+services:
+  # Prometheus - Metrics collection and storage
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: kaizen-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus-htpasswd:/etc/prometheus/prometheus-htpasswd:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - kaizen-observability
+    restart: unless-stopped
+    user: "65534:65534"  # Run as nobody user for security
+
+  # Grafana - Metrics visualization and dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: kaizen-grafana
+    env_file:
+      - .env.production  # Load production secrets (optional, falls back to defaults)
+    ports:
+      # Development: HTTP on 3000
+      # Production: HTTPS on 443 (requires SSL certs)
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      # Admin credentials (from .env.production or defaults)
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+
+      # HTTPS/TLS Configuration
+      - GF_SERVER_PROTOCOL=${GRAFANA_SERVER_PROTOCOL:-http}
+      - GF_SERVER_DOMAIN=${GRAFANA_SERVER_DOMAIN:-localhost}
+      - GF_SERVER_CERT_FILE=${GRAFANA_SERVER_CERT_FILE:-}
+      - GF_SERVER_CERT_KEY=${GRAFANA_SERVER_KEY_FILE:-}
+      - GF_SERVER_ROOT_URL=${GRAFANA_SERVER_PROTOCOL:-http}://${GRAFANA_SERVER_DOMAIN:-localhost}:${GRAFANA_PORT:-3000}
+
+      # OAuth Configuration (optional)
+      - GF_AUTH_GENERIC_OAUTH_ENABLED=${GRAFANA_AUTH_OAUTH_ENABLED:-false}
+      - GF_AUTH_GENERIC_OAUTH_NAME=${GRAFANA_AUTH_OAUTH_NAME:-OAuth}
+      - GF_AUTH_GENERIC_OAUTH_CLIENT_ID=${GRAFANA_AUTH_OAUTH_CLIENT_ID:-}
+      - GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET=${GRAFANA_AUTH_OAUTH_CLIENT_SECRET:-}
+      - GF_AUTH_GENERIC_OAUTH_SCOPES=${GRAFANA_AUTH_OAUTH_SCOPES:-openid email profile}
+      - GF_AUTH_GENERIC_OAUTH_AUTH_URL=${GRAFANA_AUTH_OAUTH_AUTH_URL:-}
+      - GF_AUTH_GENERIC_OAUTH_TOKEN_URL=${GRAFANA_AUTH_OAUTH_TOKEN_URL:-}
+      - GF_AUTH_GENERIC_OAUTH_API_URL=${GRAFANA_AUTH_OAUTH_API_URL:-}
+      - GF_AUTH_GENERIC_OAUTH_ALLOWED_DOMAINS=${GRAFANA_AUTH_OAUTH_ALLOWED_DOMAINS:-}
+
+      # LDAP Configuration (optional)
+      - GF_AUTH_LDAP_ENABLED=${GRAFANA_AUTH_LDAP_ENABLED:-false}
+      - GF_AUTH_LDAP_CONFIG_FILE=${GRAFANA_AUTH_LDAP_CONFIG_FILE:-}
+
+      # Security Headers (production hardening)
+      - GF_SECURITY_DISABLE_GRAVATAR=${GRAFANA_SECURITY_DISABLE_GRAVATAR:-true}
+      - GF_SECURITY_COOKIE_SECURE=${GRAFANA_SECURITY_COOKIE_SECURE:-false}
+      - GF_SECURITY_STRICT_TRANSPORT_SECURITY=${GRAFANA_SECURITY_STRICT_TRANSPORT_SECURITY:-false}
+      - GF_SECURITY_STRICT_TRANSPORT_SECURITY_MAX_AGE=${GRAFANA_SECURITY_STRICT_TRANSPORT_SECURITY_MAX_AGE:-31536000}
+      - GF_SECURITY_STRICT_TRANSPORT_SECURITY_PRELOAD=${GRAFANA_SECURITY_STRICT_TRANSPORT_SECURITY_PRELOAD:-false}
+      - GF_SECURITY_X_CONTENT_TYPE_OPTIONS=${GRAFANA_SECURITY_X_CONTENT_TYPE_OPTIONS:-true}
+      - GF_SECURITY_X_XSS_PROTECTION=${GRAFANA_SECURITY_X_XSS_PROTECTION:-true}
+      - GF_SECURITY_CONTENT_SECURITY_POLICY=${GRAFANA_SECURITY_CONTENT_SECURITY_POLICY:-false}
+
+      # Access Control
+      - GF_AUTH_ANONYMOUS_ENABLED=${GRAFANA_AUTH_ANONYMOUS_ENABLED:-false}
+      - GF_USERS_ALLOW_SIGN_UP=${GRAFANA_USERS_ALLOW_SIGN_UP:-false}
+
+      # Default plugins
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - ./dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./datasources:/etc/grafana/provisioning/datasources:ro
+      - ./ssl:/etc/grafana/ssl:ro  # SSL certificates (optional, for HTTPS)
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - kaizen-observability
+    restart: unless-stopped
+
+  # Elasticsearch - Jaeger storage backend (production)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: kaizen-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ES_PASSWORD:-changeme}
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      # Disable TLS for development (enable in production)
+      - xpack.security.http.ssl.enabled=${ES_TLS_ENABLED:-false}
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - kaizen-observability
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Jaeger - Distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: kaizen-jaeger
+    env_file:
+      - .env.production  # Load production secrets (optional)
+    ports:
+      - "16686:16686"  # Jaeger UI (production: behind reverse proxy)
+      - "4317:4317"    # OTLP gRPC receiver
+      - "4318:4318"    # OTLP HTTP receiver
+      - "14250:14250"  # gRPC receiver
+      - "14268:14268"  # HTTP receiver (Jaeger thrift)
+      - "14269:14269"  # Admin port (health check, metrics)
+    environment:
+      # Storage backend: in-memory (dev) or elasticsearch (production)
+      - SPAN_STORAGE_TYPE=${SPAN_STORAGE_TYPE:-memory}
+
+      # Elasticsearch configuration (production)
+      - ES_SERVER_URLS=${ES_SERVER_URLS:-http://elasticsearch:9200}
+      - ES_USERNAME=${ES_USERNAME:-elastic}
+      - ES_PASSWORD=${ES_PASSWORD:-changeme}
+      - ES_TLS_ENABLED=${ES_TLS_ENABLED:-false}
+      - ES_TLS_SKIP_HOST_VERIFY=${ES_TLS_SKIP_HOST_VERIFY:-true}
+
+      # Collector settings
+      - COLLECTOR_OTLP_ENABLED=true
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - LOG_LEVEL=${JAEGER_LOG_LEVEL:-info}
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - kaizen-observability
+    restart: unless-stopped
+
+  # Node Exporter - System metrics (CPU, memory, disk)
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: kaizen-node-exporter
+    ports:
+      - "9100:9100"
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    networks:
+      - kaizen-observability
+    restart: unless-stopped
+
+networks:
+  kaizen-observability:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  elasticsearch-data:

@@ -1,6 +1,8 @@
-# Enterprise Agent Trust Protocol (EATP) - v0.8.0
+# Enterprise Agent Trust Protocol (EATP) — Kaizen Integration
 
 **Cryptographically verifiable trust chains for AI agents**, enabling enterprise-grade accountability, authorization, and secure multi-agent communication.
+
+> **Architecture Note**: As of v0.1.0, EATP is a standalone SDK (`pip install eatp`). Kaizen's `kaizen.trust` module is a **shim layer** that re-exports from the standalone package. Canonical code lives in `packages/eatp/src/eatp/`. For standalone SDK documentation, see `skills/26-eatp-reference/`.
 
 ## Overview
 
@@ -15,7 +17,8 @@ EATP provides complete trust infrastructure for AI agents:
 - **A2A HTTP Service**: REST/JSON-RPC API for trust operations
 - **RFC 3161 Timestamping** (v1.1.0): Cryptographic timestamping for audit records with TSA integration
 
-**Location**: `kaizen.trust` module
+**Location**: `kaizen.trust` module (shims to `eatp` package)
+**Canonical Source**: `packages/eatp/src/eatp/`
 
 ## Quick Start
 
@@ -32,7 +35,7 @@ from kaizen.trust import (
 )
 
 # Initialize trust components
-store = PostgresTrustStore(connection_string="postgresql://...")
+store = PostgresTrustStore(connection_string=os.environ["TRUST_DATABASE_URL"])
 registry = OrganizationalAuthorityRegistry()
 key_manager = TrustKeyManager()
 trust_ops = TrustOperations(registry, key_manager, store)
@@ -188,7 +191,7 @@ chain = TrustLineageChain(
     genesis=GenesisRecord(
         agent_id="agent-001",
         authority_id="org-acme",
-        authority_type=AuthorityType.ORGANIZATIONAL,
+        authority_type=AuthorityType.ORGANIZATION,
         timestamp=datetime.utcnow(),
         public_key=public_key,
         signature=signature,
@@ -230,11 +233,11 @@ chain = await trust_ops.establish(
 
 # DELEGATE - Grant capability from one agent to another
 delegation = await trust_ops.delegate(
-    from_agent_id="supervisor-001",
-    to_agent_id="worker-001",
-    capability="process_data",
-    constraints={"max_records": 100},
-    duration_hours=24,
+    delegator_id="supervisor-001",
+    delegatee_id="worker-001",
+    task_id="data-processing-q4",
+    capabilities=["process_data"],
+    additional_constraints=["max_records:100"],
 )
 
 # VERIFY - Check if agent can perform action
@@ -248,7 +251,7 @@ await trust_ops.audit(
     agent_id="agent-001",
     action="analyze_data",
     result=ActionResult.SUCCESS,
-    metadata={"records_processed": 500},
+    context_data={"records_processed": 500},
 )
 ```
 
@@ -266,7 +269,7 @@ from kaizen.trust import (
 )
 
 # Initialize registry
-store = PostgresAgentRegistryStore(connection_string="postgresql://...")
+store = PostgresAgentRegistryStore(connection_string=os.environ["REGISTRY_DATABASE_URL"])
 registry = AgentRegistry(store=store)
 
 # Register agents
@@ -404,7 +407,7 @@ config = ESAConfig(
     ),
     connection_info=SystemConnectionInfo(
         protocol="https",
-        host="erp.company.com",
+        host="erp.example.com",
         port=443,
     ),
     capabilities=[
@@ -459,7 +462,8 @@ card = await card_generator.generate("agent-001")
 app = create_a2a_app(service)
 
 # Run server
-# uvicorn app:app --host 0.0.0.0 --port 8000
+# uvicorn app:app --host 127.0.0.1 --port 8000
+# WARNING: Use 0.0.0.0 only behind a reverse proxy with authentication
 ```
 
 **Available Endpoints**:
@@ -634,7 +638,7 @@ await audit_logger.log(SecurityEvent(
 
 ```bash
 # Run full adversarial security suite
-python -m pytest apps/kailash-kaizen/tests/security/ -v --timeout=120
+python -m pytest packages/kailash-kaizen/tests/security/ -v --timeout=120
 ```
 
 **Categories**: Key extraction resistance (26), delegation manipulation (23), constraint gaming (42), revocation races (10), cross-org boundaries (13), audit integrity (13).
@@ -653,9 +657,31 @@ python -m pytest tests/unit/runtime/trust/test_node_trust_verification.py -v
 - **Trust tests**: `.github/workflows/trust-tests.yml` (Monday schedule + PR triggers)
 - **Security tests**: `.github/workflows/security-tests.yml` (Wednesday schedule + PR triggers)
 
+## Shim Architecture (Post-Extraction)
+
+After EATP SDK extraction, `kaizen.trust` files are thin shims:
+
+```python
+# packages/kailash-kaizen/src/kaizen/trust/chain.py
+from eatp.chain import *  # noqa: F401,F403
+```
+
+**Import Mapping**:
+| Kaizen Shim Import | Canonical Import |
+|---|---|
+| `from kaizen.trust import TrustOperations` | `from eatp import TrustOperations` |
+| `from kaizen.trust.crypto import generate_keypair` | `from eatp.crypto import generate_keypair` |
+| `from kaizen.trust.authority import OrganizationalAuthority` | `from eatp.authority import OrganizationalAuthority` |
+
+Kaizen adds `PostgresTrustStore` (DataFlow-backed) which is NOT in the standalone SDK. For lightweight storage, the standalone SDK provides `InMemoryTrustStore` and `FilesystemStore`.
+
+**For standalone SDK details**: See `skills/26-eatp-reference/eatp-sdk-quickstart.md`
+
 ## Support
 
-- **Source**: `src/kaizen/trust/`
-- **Tests**: `tests/unit/trust/`, `tests/integration/trust/`, `tests/e2e/trust/`
-- **Security Tests**: `apps/kailash-kaizen/tests/security/`
-- **Examples**: `examples/trust/` (see EATP examples)
+- **Canonical Source**: `packages/eatp/src/eatp/` (standalone SDK)
+- **Kaizen Shims**: `packages/kailash-kaizen/src/kaizen/trust/`
+- **EATP Tests**: `packages/eatp/tests/` (1177 tests)
+- **Kaizen Trust Tests**: `packages/kailash-kaizen/tests/unit/trust/` (1623 tests, exercises same code via shims)
+- **Security Tests**: `packages/kailash-kaizen/tests/security/`
+- **Examples**: `packages/eatp/examples/` (standalone), `examples/trust/` (Kaizen integration)

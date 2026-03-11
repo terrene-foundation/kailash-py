@@ -9,14 +9,14 @@ on:
       - "src/kailash/runtime/base.py"
       - "src/kailash/runtime/local.py"
       - "src/kailash/runtime/async_local.py"
-      - "apps/kailash-kaizen/src/kaizen/trust/**"
-      - "apps/kailash-dataflow/src/dataflow/trust/**"
-      - "apps/kailash-nexus/src/nexus/trust/**"
+      - "packages/kailash-kaizen/src/kaizen/trust/**"
+      - "packages/kailash-dataflow/src/dataflow/trust/**"
+      - "packages/kailash-nexus/src/nexus/trust/**"
       - "tests/unit/runtime/trust/**"
-      - "apps/kailash-kaizen/tests/unit/trust/**"
-      - "apps/kailash-kaizen/tests/integration/trust/**"
-      - "apps/kailash-dataflow/tests/unit/trust/**"
-      - "apps/kailash-nexus/tests/unit/trust/**"
+      - "packages/kailash-kaizen/tests/unit/trust/**"
+      - "packages/kailash-kaizen/tests/integration/trust/**"
+      - "packages/kailash-dataflow/tests/unit/trust/**"
+      - "packages/kailash-nexus/tests/unit/trust/**"
   schedule:
     - cron: "0 6 * * 1" # Monday at 6:00 UTC
   workflow_dispatch:
@@ -56,9 +56,9 @@ jobs:
       - name: Install dependencies
         run: |
           uv pip install -e ".[dev]" --system
-          uv pip install -e "apps/kailash-kaizen[dev]" --system
-          uv pip install -e "apps/kailash-dataflow[dev]" --system
-          uv pip install -e "apps/kailash-nexus[dev]" --system
+          uv pip install -e "packages/kailash-kaizen[dev]" --system
+          uv pip install -e "packages/kailash-dataflow[dev]" --system
+          uv pip install -e "packages/kailash-nexus[dev]" --system
 
       - name: Create reports directory
         run: mkdir -p reports
@@ -73,7 +73,7 @@ jobs:
 
       - name: Run Kaizen Trust Unit Tests
         run: |
-          python -m pytest apps/kailash-kaizen/tests/unit/trust/ \
+          python -m pytest packages/kailash-kaizen/tests/unit/trust/ \
             -v --tb=short --timeout=120 \
             --junitxml=reports/kaizen-trust-results.xml \
             2>&1 | tee reports/kaizen-trust.log
@@ -81,7 +81,7 @@ jobs:
 
       - name: Run DataFlow Trust Tests
         run: |
-          python -m pytest apps/kailash-dataflow/tests/unit/trust/ \
+          python -m pytest packages/kailash-dataflow/tests/unit/trust/ \
             -v --tb=short --timeout=60 \
             --junitxml=reports/dataflow-trust-results.xml \
             2>&1 | tee reports/dataflow-trust.log
@@ -89,7 +89,7 @@ jobs:
 
       - name: Run Nexus Trust Tests
         run: |
-          python -m pytest apps/kailash-nexus/tests/unit/trust/ \
+          python -m pytest packages/kailash-nexus/tests/unit/trust/ \
             -v --tb=short --timeout=60 \
             --junitxml=reports/nexus-trust-results.xml \
             2>&1 | tee reports/nexus-trust.log

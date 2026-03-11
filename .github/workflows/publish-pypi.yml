@@ -44,9 +44,9 @@ jobs:
             PACKAGE="${{ inputs.package }}"
             case "$PACKAGE" in
               kailash)           echo "package_dir=." >> $GITHUB_OUTPUT ;;
-              kailash-dataflow)  echo "package_dir=apps/kailash-dataflow" >> $GITHUB_OUTPUT ;;
-              kailash-kaizen)    echo "package_dir=apps/kailash-kaizen" >> $GITHUB_OUTPUT ;;
-              kailash-nexus)     echo "package_dir=apps/kailash-nexus" >> $GITHUB_OUTPUT ;;
+              kailash-dataflow)  echo "package_dir=packages/kailash-dataflow" >> $GITHUB_OUTPUT ;;
+              kailash-kaizen)    echo "package_dir=packages/kailash-kaizen" >> $GITHUB_OUTPUT ;;
+              kailash-nexus)     echo "package_dir=packages/kailash-nexus" >> $GITHUB_OUTPUT ;;
             esac
             echo "package=$PACKAGE" >> $GITHUB_OUTPUT
             echo "version=manual" >> $GITHUB_OUTPUT
@@ -54,15 +54,15 @@ jobs:
             TAG="${GITHUB_REF#refs/tags/}"
             if [[ "$TAG" =~ ^dataflow-v(.+)$ ]]; then
               echo "package=kailash-dataflow" >> $GITHUB_OUTPUT
-              echo "package_dir=apps/kailash-dataflow" >> $GITHUB_OUTPUT
+              echo "package_dir=packages/kailash-dataflow" >> $GITHUB_OUTPUT
               VERSION="${BASH_REMATCH[1]}"
             elif [[ "$TAG" =~ ^kaizen-v(.+)$ ]]; then
               echo "package=kailash-kaizen" >> $GITHUB_OUTPUT
-              echo "package_dir=apps/kailash-kaizen" >> $GITHUB_OUTPUT
+              echo "package_dir=packages/kailash-kaizen" >> $GITHUB_OUTPUT
               VERSION="${BASH_REMATCH[1]}"
             elif [[ "$TAG" =~ ^nexus-v(.+)$ ]]; then
               echo "package=kailash-nexus" >> $GITHUB_OUTPUT
-              echo "package_dir=apps/kailash-nexus" >> $GITHUB_OUTPUT
+              echo "package_dir=packages/kailash-nexus" >> $GITHUB_OUTPUT
               VERSION="${BASH_REMATCH[1]}"
             elif [[ "$TAG" =~ ^v(.+)$ ]]; then
               echo "package=kailash" >> $GITHUB_OUTPUT

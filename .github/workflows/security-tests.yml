@@ -6,7 +6,7 @@ on:
     branches: [main]
     paths:
       - "src/kailash/runtime/trust/**"
-      - "apps/kailash-kaizen/src/kaizen/trust/**"
+      - "packages/kailash-kaizen/src/kaizen/trust/**"
       - "tests/security/**"
   schedule:
     - cron: "0 3 * * 3" # Wednesday at 3:00 UTC
@@ -50,7 +50,7 @@ jobs:
       - name: Install dependencies
         run: |
           uv pip install -e ".[dev]" --system
-          uv pip install -e "apps/kailash-kaizen[dev]" --system
+          uv pip install -e "packages/kailash-kaizen[dev]" --system
 
       - name: Run Security Test Suite
         run: |

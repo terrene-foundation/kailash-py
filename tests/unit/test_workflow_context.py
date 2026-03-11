@@ -224,5 +224,5 @@ result = {'context_value': context_value}
         assert context1_value != context2_value
 
 
-# DataFlow-specific transaction node tests moved to apps/kailash-dataflow/tests/
+# DataFlow-specific transaction node tests moved to packages/kailash-dataflow/tests/
 # This keeps the core SDK test suite free of app dependencies

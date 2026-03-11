@@ -1,0 +1,117 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kailash-kaizen"
+version = "1.2.5"
+description = "Advanced AI agent framework built on Kailash SDK"
+authors = [{name = "Terrene Foundation", email = "info@terrene.foundation"}]
+readme = "README.md"
+license = {text = "Apache-2.0"}
+keywords = ["kailash", "ai", "agents", "workflow", "automation", "signature-programming"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "kailash>=0.12.5",
+    "eatp>=0.1.0",
+    "pydantic>=2.0.0",
+    "typing-extensions>=4.5.0",
+    "PyJWT>=2.8.0",
+    "bcrypt>=4.0.0",
+    "redis>=5.0.0",
+]
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "isort>=5.12",
+    "ruff>=0.1.0",
+    "fakeredis>=2.20.0",
+]
+azure = [
+    "azure-ai-inference>=1.0.0b9",
+    "azure-identity>=1.15.0",
+    "azure-core>=1.38.0",  # CVE-2026-21226 fix
+    "aiohttp>=3.13.3",  # CVE-2025-69223+ fixes
+]
+tokens = [
+    "tiktoken>=0.5.0",  # Accurate token counting for OpenAI/Anthropic models
+]
+google = [
+    "google-genai>=1.21.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/terrene-foundation/kailash-py"
+Documentation = "https://docs.kailash.com/kaizen"
+Repository = "https://github.com/terrene-foundation/kailash-py"
+Issues = "https://github.com/terrene-foundation/kailash-py/issues"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "unit: Unit tests (fast, isolated)",
+    "integration: Integration tests (real services)",
+    "e2e: End-to-end tests (complete flows)",
+    "requires_azure: Tests requiring Azure AI Foundry credentials",
+    "requires_docker: Tests requiring Docker Model Runner",
+    "requires_google: Tests requiring Google Gemini credentials",
+]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*", "examples/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+
+[tool.ruff.lint]
+# Ignore specific rules that cause false positives
+extend-ignore = [
+    "F401",  # Unused imports in __init__.py (re-exports)
+    "F811",  # Redefinition of functions (known issue, post-release fix)
+    "F821",  # Undefined names (forward references in type hints)
+    "E402",  # Module level import not at top (conditional imports)
+    "E721",  # Type comparison using ==  (acceptable pattern)
+    "E712",  # Comparison to True/False (acceptable pattern)
+    "E722",  # Bare except clauses (intentional fallback patterns)
+    "E741",  # Ambiguous variable names (common patterns)
+    "F841",  # Local variable assigned but never used
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Allow all patterns in test files
+"tests/**/*.py" = ["E", "F"]

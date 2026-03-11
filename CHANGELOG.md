@@ -301,7 +301,7 @@ result = await node_instance.execute_async(**inputs)  # Merges config internally
 
 **Evidence**: Users independently discovered bug and documented workarounds: "Use LocalRuntime (not AsyncLocalRuntime) - AsyncLocalRuntime has parameter passing bug"
 
-**Full Bug Report**: apps/kailash-dataflow/reports/bugs/014-asynclocalruntime/
+**Full Bug Report**: packages/kailash-dataflow/reports/bugs/014-asynclocalruntime/
 
 ### [0.9.25] - 2025-10-15
 
@@ -456,7 +456,7 @@ This release removes the confusing `src/kailash/nexus` module, adds comprehensiv
 
 #### Removed
 
-- ⚠️ **BREAKING**: Removed `src/kailash/nexus` module (use `apps/kailash-nexus` instead)
+- ⚠️ **BREAKING**: Removed `src/kailash/nexus` module (use `packages/kailash-nexus` instead)
 - Removed `tests/integration/test_nexus_framework.py`
 - Removed outdated nexus import references from documentation
 

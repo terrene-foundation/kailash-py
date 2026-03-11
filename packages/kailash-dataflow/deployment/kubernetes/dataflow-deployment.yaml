@@ -1,0 +1,180 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dataflow
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dataflow-config
+  namespace: dataflow
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  WORKER_PROCESSES: "4"
+  WORKER_THREADS: "8"
+  MAX_CONNECTIONS: "1000"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dataflow-secrets
+  namespace: dataflow
+type: Opaque
+stringData:
+  DATABASE_URL: "postgresql://dataflow:dataflow123@postgres-service:5432/dataflow_db"
+  REDIS_URL: "redis://redis-service:6379/0"
+  SECRET_KEY: "your-production-secret-key-here"
+  ENCRYPTION_KEY: "your-32-character-encryption-key"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dataflow-app
+  namespace: dataflow
+  labels:
+    app: dataflow
+    component: backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: dataflow
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: dataflow
+        component: backend
+    spec:
+      containers:
+      - name: dataflow
+        image: kailash-dataflow:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        envFrom:
+        - configMapRef:
+            name: dataflow-config
+        - secretRef:
+            name: dataflow-secrets
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: logs
+          mountPath: /app/logs
+        - name: uploads
+          mountPath: /app/uploads
+      volumes:
+      - name: logs
+        emptyDir: {}
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: dataflow-uploads-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dataflow-service
+  namespace: dataflow
+  labels:
+    app: dataflow
+    component: backend
+spec:
+  selector:
+    app: dataflow
+    component: backend
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8000
+    name: http
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: dataflow-ingress
+  namespace: dataflow
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+spec:
+  tls:
+  - hosts:
+    - api.dataflow.example.com
+    secretName: dataflow-tls
+  rules:
+  - host: api.dataflow.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: dataflow-service
+            port:
+              number: 80
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: dataflow-hpa
+  namespace: dataflow
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dataflow-app
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dataflow-uploads-pvc
+  namespace: dataflow
+spec:
+  accessModes:
+  - ReadWriteMany
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 10Gi

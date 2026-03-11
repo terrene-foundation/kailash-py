@@ -1,0 +1,188 @@
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.663s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.593s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.008s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.127s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.231s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 0.870s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.001s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.486s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.649s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 0.899s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 0.782s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.104s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.957s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.636s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.012s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 0.831s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 0.973s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.358s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 2.324s
+INFO:kailash.runtime.local:Standard DAG workflow detected, using unified enterprise execution (route_data mode)
+INFO:kailash.runtime.local:Execution order: ['agent_exec']
+INFO:kailash.runtime.local:Executing node: agent_exec
+INFO:kailash.runtime.local:Node agent_exec completed successfully in 1.115s
+API keys found. Starting validation...
+
+################################################################################
+# Production Overhead Validation
+# Provider: openai, Model: gpt-3.5-turbo
+# Requests: 10 baseline + 10 with observability
+################################################################################
+
+
+================================================================================
+BASELINE: 10 requests WITHOUT observability
+Provider: openai, Model: gpt-3.5-turbo
+================================================================================
+
+Request 1/10: What is AI?...
+  Latency: 1905.95ms
+  Answer: Artificial Intelligence (AI) refers to the simulat...
+Request 2/10: Explain machine learning....
+  Latency: 1599.30ms
+  Answer: Machine learning is a subset of artificial intelli...
+Request 3/10: What is Python?...
+  Latency: 1017.97ms
+  Answer: Python is a high-level, interpreted programming la...
+Request 4/10: Define neural networks....
+  Latency: 1141.50ms
+  Answer: Neural networks are a set of algorithms, modeled l...
+Request 5/10: What is NLP?...
+  Latency: 1248.44ms
+  Answer: NLP stands for Natural Language Processing, which ...
+Request 6/10: What is AI?...
+  Latency: 886.42ms
+  Answer: Artificial Intelligence (AI) is the simulation of ...
+Request 7/10: Explain machine learning....
+  Latency: 1021.15ms
+  Answer: Sorry, I can't provide explanations. Is there anyt...
+Request 8/10: What is Python?...
+  Latency: 1496.83ms
+  Answer: Python is a high-level, interpreted programming la...
+Request 9/10: Define neural networks....
+  Latency: 1673.46ms
+  Answer: Neural networks are a type of machine learning mod...
+Request 10/10: What is NLP?...
+  Latency: 909.30ms
+  Answer: Natural Language Processing (NLP) is a field of ar...
+
+Baseline Statistics:
+  Average: 1290.03ms
+  Median:  1194.97ms
+  Min:     886.42ms
+  Max:     1905.95ms
+
+Waiting 5 seconds before observability test...
+
+================================================================================
+WITH OBSERVABILITY: 10 requests WITH full observability
+Provider: openai, Model: gpt-3.5-turbo
+================================================================================
+
+Request 1/10: What is AI?...
+  Latency: 789.20ms
+  Answer: AI stands for Artificial Intelligence, which refer...
+Request 2/10: Explain machine learning....
+  Latency: 1112.54ms
+  Answer: I'm sorry, but I can only provide a signature for ...
+Request 3/10: What is Python?...
+  Latency: 2014.97ms
+  Answer: Python is a high-level, interpreted programming la...
+Request 4/10: Define neural networks....
+  Latency: 1647.95ms
+  Answer: Neural networks are a set of algorithms, modeled l...
+Request 5/10: What is NLP?...
+  Latency: 1022.59ms
+  Answer: Natural Language Processing (NLP) is a branch of a...
+Request 6/10: What is AI?...
+  Latency: 839.74ms
+  Answer: Artificial Intelligence (AI) refers to the simulat...
+Request 7/10: Explain machine learning....
+  Latency: 979.24ms
+  Answer: Machine learning is a subset of artificial intelli...
+Request 8/10: What is Python?...
+  Latency: 1364.78ms
+  Answer: Python is a high-level, interpreted programming la...
+Request 9/10: Define neural networks....
+  Latency: 2332.41ms
+  Answer: Neural networks are a set of algorithms modeled lo...
+Request 10/10: What is NLP?...
+  Latency: 1121.09ms
+  Answer: Natural Language Processing (NLP) is a branch of a...
+
+With Observability Statistics:
+  Average: 1322.45ms
+  Median:  1116.81ms
+  Min:     789.20ms
+  Max:     2332.41ms
+
+================================================================================
+FINAL RESULTS
+================================================================================
+Baseline Average:           1290.03ms
+With Observability Average: 1322.45ms
+Overhead (absolute):        32.42ms
+Overhead (percentage):      2.51%
+Sample Size:                10 requests per test
+================================================================================
+
+✅ PASS: Overhead 2.51% <= 10.0% target
+
+Results saved to: ./repos/dev/kailash_kaizen/packages/kailash-kaizen/benchmarks/PRODUCTION_OVERHEAD_RESULTS.md

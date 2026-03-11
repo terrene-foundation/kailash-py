@@ -1,0 +1,111 @@
+{
+  "metadata": {
+    "id": "tool-using-agent",
+    "name": "Tool-Using Agent",
+    "description": "ReAct-based agent that reasons and uses external tools",
+    "category": "Single Agent",
+    "complexity": "Advanced",
+    "tags": ["react", "tools", "reasoning", "actions", "advanced"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "react_agent",
+      "type": "ReActAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-4",
+        "temperature": 0.0,
+        "max_tokens": 2000,
+        "max_iterations": 5
+      },
+      "position": {"x": 100, "y": 100}
+    }
+  ],
+  "connections": [],
+  "inputs": [
+    {
+      "id": "task",
+      "name": "Task",
+      "type": "string",
+      "description": "Task requiring reasoning and tool use",
+      "default": "What's the current weather in San Francisco and should I bring an umbrella?",
+      "required": true
+    },
+    {
+      "id": "available_tools",
+      "name": "Available Tools",
+      "type": "array",
+      "description": "List of available tools (search, calculator, weather API, etc.)",
+      "default": ["weather_api", "search"],
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "id": "answer",
+      "name": "Answer",
+      "type": "string",
+      "description": "Final answer after reasoning and tool use"
+    },
+    {
+      "id": "reasoning_trace",
+      "name": "Reasoning Trace",
+      "type": "array",
+      "description": "Step-by-step reasoning and actions taken"
+    },
+    {
+      "id": "tools_used",
+      "name": "Tools Used",
+      "type": "array",
+      "description": "List of tools invoked during execution"
+    }
+  ],
+  "execution": {
+    "entry_point": "react_agent",
+    "timeout": 120,
+    "retry_policy": {
+      "max_retries": 2,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This workflow implements a ReAct (Reasoning + Acting) agent that can reason about tasks and use external tools to accomplish them. The agent alternates between reasoning steps and tool invocations, making it ideal for complex tasks requiring both thinking and action.",
+    "use_cases": [
+      "Multi-step research tasks requiring web search and data aggregation",
+      "Mathematical computations with calculator tools",
+      "Weather queries combining API calls and reasoning",
+      "Database queries with result interpretation",
+      "System administration tasks with command execution"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "External tools configured and accessible (APIs, databases, etc.)",
+      "Internet connection for API access",
+      "GPT-4 recommended for complex reasoning"
+    ],
+    "example_inputs": [
+      {
+        "task": "What's the current weather in San Francisco and should I bring an umbrella?",
+        "available_tools": ["weather_api"]
+      },
+      {
+        "task": "Find the latest research papers on quantum computing published in 2024",
+        "available_tools": ["arxiv_search", "web_search"]
+      }
+    ],
+    "example_outputs": [
+      {
+        "answer": "The current weather in San Francisco is partly cloudy with a 60% chance of rain this afternoon. Yes, you should bring an umbrella as rain is likely later today.",
+        "reasoning_trace": [
+          {"step": 1, "thought": "I need to check the current weather in San Francisco", "action": "call weather_api"},
+          {"step": 2, "observation": "Weather data shows partly cloudy, 60% rain chance"},
+          {"step": 3, "thought": "With 60% rain chance, an umbrella is advisable", "action": "formulate_answer"}
+        ],
+        "tools_used": ["weather_api"]
+      }
+    ]
+  }
+}

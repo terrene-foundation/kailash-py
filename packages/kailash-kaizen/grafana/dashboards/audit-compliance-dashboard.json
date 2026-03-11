@@ -1,0 +1,430 @@
+{
+  "dashboard": {
+    "title": "Kaizen Audit & Compliance",
+    "description": "Compliance monitoring for Kaizen agents with audit trails, user activity, and governance metrics (SOC2, GDPR, HIPAA)",
+    "tags": ["kaizen", "audit", "compliance", "governance", "security"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Audit Events Volume",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(audit_events_total[5m]) * 60",
+            "legendFormat": "Events/min",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "short",
+            "label": "Events/min",
+            "logBase": 1,
+            "show": true,
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Audit Events by Action Type",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(audit_events_total[5m])",
+            "legendFormat": "{{action}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Events/sec",
+            "logBase": 1,
+            "show": true
+          }
+        ],
+        "legend": {
+          "show": true,
+          "alignAsTable": true,
+          "values": true,
+          "current": true
+        }
+      },
+      {
+        "id": 3,
+        "title": "Audit Events by Result",
+        "type": "piechart",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "sum by (result) (audit_events_total)",
+            "legendFormat": "{{result}}",
+            "refId": "A"
+          }
+        ],
+        "pieType": "pie",
+        "legend": {
+          "show": true,
+          "values": true,
+          "percentage": true
+        }
+      },
+      {
+        "id": 4,
+        "title": "Failed/Denied Actions Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(audit_events_total{result=\"failure\"}[5m])",
+            "legendFormat": "Failures",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(audit_events_total{result=\"denied\"}[5m])",
+            "legendFormat": "Denied",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Events/sec",
+            "logBase": 1,
+            "show": true
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [10],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              },
+              "reducer": {
+                "params": [],
+                "type": "avg"
+              },
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "name": "High Failure Rate",
+          "noDataState": "no_data",
+          "message": "Audit failure rate exceeded threshold"
+        }
+      },
+      {
+        "id": 5,
+        "title": "Active Users (Last Hour)",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "count(count by (user_id) (audit_events_total{user_id!=\"\"}))",
+            "refId": "A"
+          }
+        ],
+        "format": "short",
+        "sparkline": {
+          "show": true,
+          "full": false
+        }
+      },
+      {
+        "id": 6,
+        "title": "Audit Trail Completeness",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 16},
+        "targets": [
+          {
+            "expr": "(count(audit_events_total) / count(agent_loop_total)) * 100",
+            "refId": "A"
+          }
+        ],
+        "format": "percent",
+        "gauge": {
+          "show": true,
+          "minValue": 0,
+          "maxValue": 100,
+          "thresholdMarkers": true
+        },
+        "thresholds": "80,95",
+        "colors": ["#d44a3a", "#e0b400", "#299c46"]
+      },
+      {
+        "id": 7,
+        "title": "Critical Actions (Last 24h)",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "sum(increase(audit_events_total{danger_level=\"CRITICAL\"}[24h]))",
+            "refId": "A"
+          }
+        ],
+        "format": "short",
+        "colorBackground": true,
+        "thresholds": "10,50",
+        "colors": ["#299c46", "#e0b400", "#d44a3a"]
+      },
+      {
+        "id": 8,
+        "title": "Audit Append Failures",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 16},
+        "targets": [
+          {
+            "expr": "sum(increase(audit_append_failures_total[1h]))",
+            "refId": "A"
+          }
+        ],
+        "format": "short",
+        "colorBackground": true,
+        "thresholds": "1,10",
+        "colors": ["#299c46", "#e0b400", "#d44a3a"]
+      },
+      {
+        "id": 9,
+        "title": "Top Users by Activity",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "topk(10, sum by (user_id) (rate(audit_events_total[1h])))",
+            "refId": "A",
+            "format": "table"
+          }
+        ],
+        "columns": [
+          {"text": "User ID", "value": "user_id"},
+          {"text": "Events/sec", "value": "Value"}
+        ],
+        "sort": {"col": 1, "desc": true}
+      },
+      {
+        "id": 10,
+        "title": "Top Agents by Activity",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+        "targets": [
+          {
+            "expr": "topk(10, sum by (agent_id) (rate(audit_events_total[1h])))",
+            "refId": "A",
+            "format": "table"
+          }
+        ],
+        "columns": [
+          {"text": "Agent ID", "value": "agent_id"},
+          {"text": "Events/sec", "value": "Value"}
+        ],
+        "sort": {"col": 1, "desc": true}
+      },
+      {
+        "id": 11,
+        "title": "Permission Requests Over Time",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+        "targets": [
+          {
+            "expr": "rate(permission_requested[5m])",
+            "legendFormat": "Requested",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(permission_granted[5m])",
+            "legendFormat": "Granted",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(permission_denied[5m])",
+            "legendFormat": "Denied",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Requests/sec",
+            "logBase": 1,
+            "show": true
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Tool Execution Audit Trail",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+        "targets": [
+          {
+            "expr": "rate(audit_events_total{action=\"tool_execute\"}[5m])",
+            "legendFormat": "{{tool_name}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Executions/sec",
+            "logBase": 1,
+            "show": true
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Compliance Score (SOC2)",
+        "type": "singlestat",
+        "gridPos": {"h": 6, "w": 8, "x": 0, "y": 36},
+        "targets": [
+          {
+            "expr": "100 * (1 - (sum(rate(audit_append_failures_total[24h])) / sum(rate(audit_events_total[24h]))))",
+            "refId": "A"
+          }
+        ],
+        "format": "percent",
+        "gauge": {
+          "show": true,
+          "minValue": 0,
+          "maxValue": 100,
+          "thresholdMarkers": true
+        },
+        "thresholds": "95,99",
+        "colors": ["#d44a3a", "#e0b400", "#299c46"],
+        "description": "Audit trail integrity score based on successful audit writes"
+      },
+      {
+        "id": 14,
+        "title": "Data Access Compliance (GDPR)",
+        "type": "singlestat",
+        "gridPos": {"h": 6, "w": 8, "x": 8, "y": 36},
+        "targets": [
+          {
+            "expr": "100 * (sum(rate(audit_events_total{action=~\"data_access|data_export|data_delete\"}[24h])) / sum(rate(audit_events_total[24h])))",
+            "refId": "A"
+          }
+        ],
+        "format": "percent",
+        "gauge": {
+          "show": true,
+          "minValue": 0,
+          "maxValue": 100,
+          "thresholdMarkers": true
+        },
+        "thresholds": "50,80",
+        "colors": ["#299c46", "#e0b400", "#d44a3a"],
+        "description": "Percentage of audited data access events (GDPR compliance)"
+      },
+      {
+        "id": 15,
+        "title": "Security Events (HIPAA)",
+        "type": "singlestat",
+        "gridPos": {"h": 6, "w": 8, "x": 16, "y": 36},
+        "targets": [
+          {
+            "expr": "sum(increase(audit_events_total{action=~\"phi_access|phi_export|phi_modify\"}[24h]))",
+            "refId": "A"
+          }
+        ],
+        "format": "short",
+        "sparkline": {
+          "show": true,
+          "full": true
+        },
+        "colorBackground": false,
+        "description": "Protected Health Information (PHI) access events"
+      },
+      {
+        "id": 16,
+        "title": "Audit Event Timeline (Last 100)",
+        "type": "table",
+        "gridPos": {"h": 10, "w": 24, "x": 0, "y": 42},
+        "targets": [
+          {
+            "expr": "topk(100, audit_events_total)",
+            "refId": "A",
+            "format": "table",
+            "instant": false
+          }
+        ],
+        "columns": [
+          {"text": "Timestamp", "value": "Time"},
+          {"text": "Agent ID", "value": "agent_id"},
+          {"text": "Action", "value": "action"},
+          {"text": "Result", "value": "result"},
+          {"text": "User ID", "value": "user_id"},
+          {"text": "Danger Level", "value": "danger_level"}
+        ],
+        "sort": {"col": 0, "desc": true},
+        "pageSize": 20
+      },
+      {
+        "id": 17,
+        "title": "Retention Policy Compliance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 52},
+        "targets": [
+          {
+            "expr": "audit_retention_days",
+            "legendFormat": "Retention Days",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "d",
+            "label": "Days",
+            "logBase": 1,
+            "show": true
+          }
+        ],
+        "thresholds": [
+          {
+            "value": 90,
+            "colorMode": "critical",
+            "op": "lt",
+            "fill": true,
+            "line": true
+          }
+        ],
+        "description": "Audit log retention period (compliance requires ≥90 days)"
+      },
+      {
+        "id": 18,
+        "title": "Immutability Verification",
+        "type": "singlestat",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 52},
+        "targets": [
+          {
+            "expr": "audit_immutability_checks_passed / audit_immutability_checks_total * 100",
+            "refId": "A"
+          }
+        ],
+        "format": "percent",
+        "gauge": {
+          "show": true,
+          "minValue": 0,
+          "maxValue": 100,
+          "thresholdMarkers": true
+        },
+        "thresholds": "99,99.9",
+        "colors": ["#d44a3a", "#e0b400", "#299c46"],
+        "description": "Audit trail immutability validation (append-only verification)"
+      }
+    ]
+  }
+}

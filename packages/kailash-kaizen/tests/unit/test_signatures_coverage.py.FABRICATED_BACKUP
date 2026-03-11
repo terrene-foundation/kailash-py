@@ -1,0 +1,846 @@
+"""
+Tier 1 Unit Tests for Signature Systems - TODO-150 Coverage Improvement
+
+Focus: Critical coverage gaps in signatures/ modules (37-66% → 85%+ target)
+Business Priority: P0 - Core signature programming functionality
+Missing Coverage:
+- signatures/patterns.py: 144 lines (37% coverage)
+- signatures/enterprise.py: 153 lines (55% coverage)
+- signatures/core.py: 207 lines (66% coverage)
+
+These tests focus on covering the signature programming system that is
+the core differentiator of the Kaizen framework.
+"""
+
+import pytest
+import time
+import json
+from unittest.mock import Mock, patch, MagicMock
+from typing import Dict, List, Any, Optional
+from dataclasses import dataclass
+
+# Import the modules to ensure coverage tracking
+from src.kaizen.signatures.core import (
+    Signature,
+    SignatureParser,
+    SignatureValidator,
+    SignatureCompiler,
+    SignatureTemplate,
+    SignatureOptimizer,
+    ParseResult,
+    ValidationResult
+)
+
+
+class TestSignature:
+    """Test Signature core functionality for coverage."""
+
+    def test_signature_initialization(self):
+        """Test Signature can be initialized with required parameters."""
+        signature = Signature(
+            inputs=["question", "context"],
+            outputs=["answer", "reasoning"],
+            signature_type="multi_io",
+            name="test_signature"
+        )
+
+        assert signature.inputs == ["question", "context"]
+        assert signature.outputs == ["answer", "reasoning"]
+        assert signature.signature_type == "multi_io"
+        assert signature.name == "test_signature"
+
+    def test_signature_default_initialization(self):
+        """Test Signature initialization with defaults."""
+        signature = Signature(
+            inputs=["input"],
+            outputs=["output"]
+        )
+
+        assert signature.signature_type == "basic"
+        assert signature.name.startswith("signature_")
+        assert signature.input_types == {}
+        assert signature.output_types == {}
+        assert signature.parameters == {}
+
+    def test_signature_enterprise_features(self):
+        """Test Signature with enterprise features."""
+        signature = Signature(
+            inputs=["sensitive_data"],
+            outputs=["processed_data"],
+            requires_privacy_check=True,
+            requires_audit_trail=True,
+            supports_multi_modal=True
+        )
+
+        assert signature.requires_privacy_check == True
+        assert signature.requires_audit_trail == True
+        assert signature.supports_multi_modal == True
+
+    def test_signature_has_list_outputs(self):
+        """Test has_list_outputs property."""
+        # Signature without list outputs
+        signature1 = Signature(
+            inputs=["input"],
+            outputs=["output1", "output2"]
+        )
+        assert signature1.has_list_outputs == False
+
+        # Signature with list outputs
+        signature2 = Signature(
+            inputs=["input"],
+            outputs=["output1", ["list_item1", "list_item2"]]
+        )
+        assert signature2.has_list_outputs == True
+
+    def test_signature_performance_hooks(self):
+        """Test performance hook management."""
+        signature = Signature(
+            inputs=["input"],
+            outputs=["output"]
+        )
+
+        # Initially no performance tracking
+        assert signature.has_performance_tracking == False
+        assert len(signature.performance_hooks) == 0
+
+        # Add performance hook
+        signature.add_performance_hook("execution_time")
+        assert signature.has_performance_tracking == True
+        assert "execution_time" in signature.performance_hooks
+
+        # Don't add duplicate hooks
+        signature.add_performance_hook("execution_time")
+        assert len(signature.performance_hooks) == 1
+
+    def test_signature_to_dict(self):
+        """Test signature dictionary conversion."""
+        signature = Signature(
+            inputs=["question"],
+            outputs=["answer"],
+            signature_type="basic",
+            name="test_signature",
+            description="Test signature description",
+            execution_pattern="chain_of_thought"
+        )
+
+        signature_dict = signature.to_dict()
+
+        assert signature_dict["inputs"] == ["question"]
+        assert signature_dict["outputs"] == ["answer"]
+        assert signature_dict["signature_type"] == "basic"
+        assert signature_dict["name"] == "test_signature"
+        assert signature_dict["description"] == "Test signature description"
+        assert signature_dict["execution_pattern"] == "chain_of_thought"
+
+
+class TestSignatureParser:
+    """Test SignatureParser implementation for coverage."""
+
+    def test_parser_initialization(self):
+        """Test SignatureParser initialization."""
+        parser = SignatureParser()
+
+        assert hasattr(parser, 'basic_pattern')
+        assert hasattr(parser, 'multi_io_pattern')
+        assert hasattr(parser, 'list_output_pattern')
+        assert hasattr(parser, 'enterprise_keywords')
+        assert hasattr(parser, 'multimodal_keywords')
+
+    def test_parse_basic_signature(self):
+        """Test parsing basic signature syntax."""
+        parser = SignatureParser()
+
+        result = parser.parse("question -> answer")
+
+        assert result.is_valid == True
+        assert result.inputs == ["question"]
+        assert result.outputs == ["answer"]
+        assert result.signature_type == "basic"
+
+    def test_parse_multi_input_signature(self):
+        """Test parsing multi-input signature."""
+        parser = SignatureParser()
+
+        result = parser.parse("context, question -> answer")
+
+        assert result.is_valid == True
+        assert result.inputs == ["context", "question"]
+        assert result.outputs == ["answer"]
+        assert result.signature_type == "multi_io"
+
+    def test_parse_multi_output_signature(self):
+        """Test parsing multi-output signature."""
+        parser = SignatureParser()
+
+        result = parser.parse("question -> reasoning, answer")
+
+        assert result.is_valid == True
+        assert result.inputs == ["question"]
+        assert result.outputs == ["reasoning", "answer"]
+        assert result.signature_type == "multi_io"
+
+    def test_parse_complex_list_outputs(self):
+        """Test parsing signatures with list outputs."""
+        parser = SignatureParser()
+
+        result = parser.parse("topic -> [analysis1, analysis2], summary")
+
+        assert result.is_valid == True
+        assert result.inputs == ["topic"]
+        assert result.has_list_outputs == True
+        assert result.signature_type == "complex"
+
+    def test_parse_enterprise_signature(self):
+        """Test parsing enterprise signature with keywords."""
+        parser = SignatureParser()
+
+        result = parser.parse("customer_data -> privacy_checked_analysis, audit_trail")
+
+        assert result.is_valid == True
+        assert result.signature_type == "enterprise"
+        assert result.requires_privacy_check == True
+        assert result.requires_audit_trail == True
+
+    def test_parse_multimodal_signature(self):
+        """Test parsing multi-modal signature."""
+        parser = SignatureParser()
+
+        result = parser.parse("text, image -> analysis, visual_description")
+
+        assert result.is_valid == True
+        assert result.signature_type == "multi_modal"
+        assert result.supports_multi_modal == True
+        assert result.input_types["image"] == "image"
+        assert result.input_types["text"] == "text"
+
+    def test_parse_invalid_signatures(self):
+        """Test parsing invalid signature syntax."""
+        parser = SignatureParser()
+
+        # Empty signature
+        result = parser.parse("")
+        assert result.is_valid == False
+        assert "Empty signature string" in result.error_message
+
+        # Missing arrow
+        result = parser.parse("question answer")
+        assert result.is_valid == False
+        assert "missing arrow" in result.error_message
+
+        # Multiple arrows
+        result = parser.parse("input -> middle -> output")
+        assert result.is_valid == False
+        assert "multiple arrows" in result.error_message
+
+        # Missing inputs
+        result = parser.parse("-> output")
+        assert result.is_valid == False
+        assert "missing inputs" in result.error_message
+
+        # Missing outputs
+        result = parser.parse("input ->")
+        assert result.is_valid == False
+        assert "missing outputs" in result.error_message
+
+        # Trailing comma
+        result = parser.parse("input1, input2, -> output")
+        assert result.is_valid == False
+        assert "trailing comma" in result.error_message
+
+    def test_parse_input_types_detection(self):
+        """Test automatic input type detection."""
+        parser = SignatureParser()
+
+        result = parser.parse("image, audio, video, text -> description")
+
+        assert result.input_types["image"] == "image"
+        assert result.input_types["audio"] == "audio"
+        assert result.input_types["video"] == "video"
+        assert result.input_types["text"] == "text"
+
+    def test_parse_privacy_requirements(self):
+        """Test privacy requirement detection."""
+        parser = SignatureParser()
+
+        # With privacy keywords
+        result = parser.parse("personal_data -> gdpr_compliant_analysis")
+        assert result.requires_privacy_check == True
+
+        # Without privacy keywords
+        result = parser.parse("public_data -> analysis")
+        assert result.requires_privacy_check == False
+
+    def test_parse_audit_requirements(self):
+        """Test audit requirement detection."""
+        parser = SignatureParser()
+
+        # With audit keywords
+        result = parser.parse("financial_data -> compliance_report, audit_log")
+        assert result.requires_audit_trail == True
+
+        # Without audit keywords
+        result = parser.parse("simple_data -> result")
+        assert result.requires_audit_trail == False
+
+
+class TestSignatureValidator:
+    """Test SignatureValidator implementation for coverage."""
+
+    def test_validator_initialization(self):
+        """Test SignatureValidator initialization."""
+        validator = SignatureValidator()
+
+        assert hasattr(validator, 'supported_modalities')
+        assert 'text' in validator.supported_modalities
+        assert 'image' in validator.supported_modalities
+
+    def test_validate_basic_signature(self):
+        """Test validating basic signature."""
+        validator = SignatureValidator()
+        signature = Signature(
+            inputs=["question"],
+            outputs=["answer"]
+        )
+
+        result = validator.validate(signature)
+
+        assert result.is_valid == True
+        assert len(result.errors) == 0
+
+    def test_validate_signature_with_errors(self):
+        """Test validating signature with errors."""
+        validator = SignatureValidator()
+
+        # Signature with no inputs
+        signature = Signature(
+            inputs=[],
+            outputs=["answer"]
+        )
+
+        result = validator.validate(signature)
+
+        assert result.is_valid == False
+        assert len(result.errors) > 0
+        assert any("at least one input" in error for error in result.errors)
+
+    def test_validate_type_annotations(self):
+        """Test validating type annotations."""
+        validator = SignatureValidator()
+
+        signature = Signature(
+            inputs=["question"],
+            outputs=["answer"],
+            input_types={"question": "text", "unknown_input": "text"},
+            output_types={"answer": "text", "unknown_output": "text"}
+        )
+
+        result = validator.validate(signature)
+
+        assert result.is_valid == False
+        assert any("unknown input" in error.lower() for error in result.errors)
+        assert any("unknown output" in error.lower() for error in result.errors)
+
+    def test_validate_multimodal_signature(self):
+        """Test validating multi-modal signature."""
+        validator = SignatureValidator()
+
+        # Valid multi-modal signature
+        signature = Signature(
+            inputs=["text_input", "image_input"],
+            outputs=["description"],
+            supports_multi_modal=True,
+            input_types={"text_input": "text", "image_input": "image"}
+        )
+
+        result = validator.validate(signature)
+
+        assert result.is_valid == True
+        assert result.multi_modal_supported == True
+        assert "text" in result.supported_modalities
+        assert "image" in result.supported_modalities
+
+        # Invalid multi-modal signature with unsupported modality
+        signature_invalid = Signature(
+            inputs=["text_input", "unknown_input"],
+            outputs=["description"],
+            supports_multi_modal=True,
+            input_types={"text_input": "text", "unknown_input": "unsupported_type"}
+        )
+
+        result = validator.validate(signature_invalid)
+
+        assert result.is_valid == False
+        assert any("unsupported modality" in error.lower() for error in result.errors)
+
+    def test_validate_list_outputs(self):
+        """Test validating signatures with list outputs."""
+        validator = SignatureValidator()
+
+        signature = Signature(
+            inputs=["topic"],
+            outputs=[["item1", "item2"], "summary"],
+            output_types={"item1": "text", "item2": "text", "summary": "text"}
+        )
+
+        result = validator.validate(signature)
+
+        assert result.is_valid == True
+        assert result.has_type_checking == True
+
+
+class TestSignatureCompiler:
+    """Test SignatureCompiler implementation for coverage."""
+
+    def test_compiler_initialization(self):
+        """Test SignatureCompiler initialization."""
+        compiler = SignatureCompiler()
+
+        assert hasattr(compiler, 'node_type_mapping')
+        assert hasattr(compiler, 'execution_pattern_templates')
+        assert "basic" in compiler.node_type_mapping
+        assert "chain_of_thought" in compiler.execution_pattern_templates
+
+    def test_compile_basic_signature(self):
+        """Test compiling basic signature."""
+        compiler = SignatureCompiler()
+
+        signature = Signature(
+            inputs=["question"],
+            outputs=["answer"],
+            signature_type="basic"
+        )
+
+        result = compiler.compile_to_workflow_params(signature)
+
+        assert "node_type" in result
+        assert "parameters" in result
+        assert result["parameters"]["inputs"] == ["question"]
+        assert result["parameters"]["outputs"] == ["answer"]
+
+    def test_compile_multimodal_signature(self):
+        """Test compiling multi-modal signature."""
+        compiler = SignatureCompiler()
+
+        signature = Signature(
+            inputs=["text", "image"],
+            outputs=["description"],
+            signature_type="multi_modal",
+            supports_multi_modal=True,
+            input_types={"text": "text", "image": "image"}
+        )
+
+        result = compiler.compile_to_workflow_params(signature)
+
+        assert result["node_type"] == "MultiModalLLMNode"
+        assert result["parameters"]["supports_vision"] == True
+        assert "input_modalities" in result["parameters"]
+
+    def test_compile_enterprise_signature(self):
+        """Test compiling enterprise signature."""
+        compiler = SignatureCompiler()
+
+        signature = Signature(
+            inputs=["sensitive_data"],
+            outputs=["processed_data"],
+            requires_privacy_check=True,
+            requires_audit_trail=True
+        )
+
+        result = compiler.compile_to_workflow_params(signature)
+
+        assert result["parameters"]["security_enabled"] == True
+        assert "validation_nodes" in result
+        assert result["validation_nodes"]["privacy_validation"] == True
+        assert result["validation_nodes"]["audit_logging"] == True
+
+    def test_compile_with_execution_pattern(self):
+        """Test compiling signature with execution pattern."""
+        compiler = SignatureCompiler()
+
+        signature = Signature(
+            inputs=["problem"],
+            outputs=["solution"],
+            execution_pattern="chain_of_thought"
+        )
+
+        result = compiler.compile_to_workflow_params(signature)
+
+        assert "execution_pattern" in result["parameters"]
+        assert result["parameters"]["execution_pattern"] == "chain_of_thought"
+        assert "prompt_template" in result["parameters"]
+
+    def test_compile_to_workflow_config(self):
+        """Test compiling to workflow configuration."""
+        compiler = SignatureCompiler()
+
+        signature = "question -> answer"
+        config = {
+            "model": "test-model",
+            "temperature": 0.7,
+            "max_tokens": 1000
+        }
+
+        result = compiler.compile_to_workflow_config(signature, config)
+
+        assert "node_type" in result
+        assert "node_id" in result
+        assert "node_params" in result
+
+    def test_compile_to_workflow_config_with_invalid_signature(self):
+        """Test compiling invalid signature to workflow config."""
+        compiler = SignatureCompiler()
+
+        # Test with invalid signature string
+        with pytest.raises(ValueError, match="Invalid signature syntax"):
+            compiler.compile_to_workflow_config("invalid syntax", {"model": "test"})
+
+        # Test with None signature
+        with pytest.raises(ValueError, match="Signature cannot be None"):
+            compiler.compile_to_workflow_config(None, {"model": "test"})
+
+        # Test with empty signature
+        with pytest.raises(ValueError, match="Signature string cannot be empty"):
+            compiler.compile_to_workflow_config("", {"model": "test"})
+
+        # Test with missing model config
+        with pytest.raises(ValueError, match="must include 'model' parameter"):
+            compiler.compile_to_workflow_config("question -> answer", {})
+
+    def test_compile_to_workflow(self):
+        """Test compiling to complete workflow."""
+        compiler = SignatureCompiler()
+
+        signature = "question -> answer"
+        config = {
+            "model": "test-model",
+            "temperature": 0.7
+        }
+
+        workflow = compiler.compile_to_workflow(signature, config)
+
+        assert workflow is not None
+        # Workflow should be built and ready for execution
+
+    def test_flatten_outputs(self):
+        """Test output flattening utility."""
+        compiler = SignatureCompiler()
+
+        # Test with mixed outputs
+        outputs = ["simple", ["list1", "list2"], "another_simple"]
+        flattened = compiler._flatten_outputs(outputs)
+
+        assert flattened == ["simple", "list1", "list2", "another_simple"]
+
+        # Test with no list outputs
+        outputs = ["output1", "output2"]
+        flattened = compiler._flatten_outputs(outputs)
+
+        assert flattened == ["output1", "output2"]
+
+
+class TestSignatureTemplate:
+    """Test SignatureTemplate implementation for coverage."""
+
+    def test_template_initialization(self):
+        """Test SignatureTemplate initialization."""
+        template = SignatureTemplate("test_template")
+
+        assert template.name == "test_template"
+        assert template.pattern is None
+        assert template.description is None
+        assert template.default_parameters == {}
+
+    def test_template_builder_pattern(self):
+        """Test template builder pattern methods."""
+        template = SignatureTemplate("test_template")
+
+        result = (template
+                 .set_pattern("question -> answer")
+                 .set_description("A simple QA template")
+                 .add_parameter("temperature", 0.7)
+                 .add_parameter("max_tokens", 1000))
+
+        assert result == template  # Should return self for chaining
+        assert template.pattern == "question -> answer"
+        assert template.description == "A simple QA template"
+        assert template.default_parameters["temperature"] == 0.7
+        assert template.default_parameters["max_tokens"] == 1000
+
+    def test_template_instantiation(self):
+        """Test template instantiation."""
+        template = SignatureTemplate("qa_template")
+        template.set_pattern("question -> answer")
+        template.add_parameter("temperature", 0.7)
+
+        # Instantiate with default parameters
+        signature = template.instantiate()
+
+        assert isinstance(signature, Signature)
+        assert signature.inputs == ["question"]
+        assert signature.outputs == ["answer"]
+        assert signature.parameters["temperature"] == 0.7
+
+        # Instantiate with custom parameters
+        custom_params = {"temperature": 0.9, "max_tokens": 1500}
+        signature = template.instantiate(custom_params)
+
+        assert signature.parameters["temperature"] == 0.9
+        assert signature.parameters["max_tokens"] == 1500
+
+    def test_template_instantiation_errors(self):
+        """Test template instantiation error handling."""
+        template = SignatureTemplate("invalid_template")
+
+        # Template without pattern should raise error
+        with pytest.raises(ValueError, match="has no pattern defined"):
+            template.instantiate()
+
+        # Template with invalid pattern should raise error
+        template.set_pattern("invalid syntax")
+        with pytest.raises(ValueError, match="Template pattern is invalid"):
+            template.instantiate()
+
+
+class TestSignatureOptimizer:
+    """Test SignatureOptimizer implementation for coverage."""
+
+    def test_optimizer_initialization(self):
+        """Test SignatureOptimizer initialization."""
+        optimizer = SignatureOptimizer()
+
+        assert hasattr(optimizer, 'optimization_strategies')
+        assert "performance" in optimizer.optimization_strategies
+        assert "memory" in optimizer.optimization_strategies
+        assert "accuracy" in optimizer.optimization_strategies
+
+    def test_optimize_performance(self):
+        """Test performance optimization."""
+        optimizer = SignatureOptimizer()
+
+        signature = Signature(
+            inputs=["question"],
+            outputs=["answer"],
+            parameters={"temperature": 0.8, "max_tokens": 1200}
+        )
+
+        optimized = optimizer.optimize(signature, "performance")
+
+        assert optimized.optimization_enabled == True
+        assert "execution_time" in optimized.performance_hooks
+        assert "token_usage" in optimized.performance_hooks
+        # Parameters should be optimized for speed
+        assert optimized.parameters["temperature"] <= 0.5
+        assert optimized.parameters["max_tokens"] <= 800
+
+    def test_optimize_memory(self):
+        """Test memory optimization."""
+        optimizer = SignatureOptimizer()
+
+        signature = Signature(
+            inputs=["question"],
+            outputs=["answer"],
+            parameters={"max_tokens": 1200}
+        )
+
+        optimized = optimizer.optimize(signature, "memory")
+
+        assert "memory_usage" in optimized.performance_hooks
+        assert optimized.parameters["max_tokens"] <= 500
+
+    def test_optimize_accuracy(self):
+        """Test accuracy optimization."""
+        optimizer = SignatureOptimizer()
+
+        signature = Signature(
+            inputs=["question"],
+            outputs=["answer"],
+            parameters={"temperature": 0.5}
+        )
+
+        optimized = optimizer.optimize(signature, "accuracy")
+
+        assert "accuracy_score" in optimized.performance_hooks
+        # Temperature should be increased for accuracy
+        assert optimized.parameters["temperature"] > 0.5
+
+    def test_optimize_invalid_strategy(self):
+        """Test optimization with invalid strategy."""
+        optimizer = SignatureOptimizer()
+
+        signature = Signature(inputs=["input"], outputs=["output"])
+
+        with pytest.raises(ValueError, match="Unknown optimization strategy"):
+            optimizer.optimize(signature, "invalid_strategy")
+
+    def test_auto_tune(self):
+        """Test auto-tuning based on performance data."""
+        optimizer = SignatureOptimizer()
+
+        signature = Signature(
+            inputs=["question"],
+            outputs=["answer"],
+            parameters={"temperature": 0.7, "max_tokens": 1000}
+        )
+
+        performance_data = {
+            "avg_execution_time": 6.0,  # Slow
+            "avg_token_usage": 1200,    # High usage
+            "accuracy_score": 0.75      # Decent accuracy
+        }
+
+        tuned = optimizer.auto_tune(signature, performance_data)
+
+        # Should make adjustments based on performance data
+        assert tuned.parameters["temperature"] != signature.parameters["temperature"]
+        assert len(tuned.optimization_history) > 0
+
+    def test_enable_caching(self):
+        """Test enabling caching optimization."""
+        optimizer = SignatureOptimizer()
+
+        signature = Signature(
+            inputs=["question"],
+            outputs=["answer"]
+        )
+
+        cached = optimizer.enable_caching(signature, "semantic")
+
+        assert cached.caching_enabled == True
+        assert cached.cache_strategy == "semantic"
+        assert cached.cache_key_generation is not None
+
+        # Test different cache strategies
+        exact_cached = optimizer.enable_caching(signature, "exact")
+        assert exact_cached.cache_strategy == "exact"
+
+        fuzzy_cached = optimizer.enable_caching(signature, "fuzzy")
+        assert fuzzy_cached.cache_strategy == "fuzzy"
+
+    def test_cache_key_generation(self):
+        """Test cache key generation functions."""
+        optimizer = SignatureOptimizer()
+
+        # Test semantic cache key generation
+        semantic_generator = optimizer._create_cache_key_generator("semantic")
+        inputs = {"question": "What is AI?", "context": "Machine learning"}
+        key1 = semantic_generator(inputs)
+        key2 = semantic_generator(inputs)
+        assert key1 == key2  # Same inputs should generate same key
+
+        # Test exact cache key generation
+        exact_generator = optimizer._create_cache_key_generator("exact")
+        key3 = exact_generator(inputs)
+        assert isinstance(key3, int)  # Should be a hash
+
+        # Test fuzzy cache key generation
+        fuzzy_generator = optimizer._create_cache_key_generator("fuzzy")
+        key4 = fuzzy_generator(inputs)
+        assert isinstance(key4, int)
+
+    def test_invalid_cache_strategy(self):
+        """Test invalid cache strategy."""
+        optimizer = SignatureOptimizer()
+
+        with pytest.raises(ValueError, match="Unknown cache strategy"):
+            optimizer._create_cache_key_generator("invalid_strategy")
+
+
+class TestSignatureIntegration:
+    """Test integration between signature system components."""
+
+    def test_complete_signature_workflow(self):
+        """Test complete signature processing workflow."""
+        # Parse signature
+        parser = SignatureParser()
+        parse_result = parser.parse("context, question -> reasoning, answer")
+
+        assert parse_result.is_valid == True
+
+        # Create signature from parse result
+        signature = Signature(
+            inputs=parse_result.inputs,
+            outputs=parse_result.outputs,
+            signature_type=parse_result.signature_type
+        )
+
+        # Validate signature
+        validator = SignatureValidator()
+        validation_result = validator.validate(signature)
+
+        assert validation_result.is_valid == True
+
+        # Optimize signature
+        optimizer = SignatureOptimizer()
+        optimized_signature = optimizer.optimize(signature, "performance")
+
+        assert optimized_signature.optimization_enabled == True
+
+        # Compile to workflow
+        compiler = SignatureCompiler()
+        workflow_params = compiler.compile_to_workflow_params(optimized_signature)
+
+        assert "node_type" in workflow_params
+        assert "parameters" in workflow_params
+
+    def test_template_to_workflow_integration(self):
+        """Test template-based signature workflow."""
+        # Create template
+        template = SignatureTemplate("reasoning_template")
+        template.set_pattern("problem -> step_by_step_solution, final_answer")
+        template.set_description("Multi-step reasoning template")
+        template.add_parameter("execution_pattern", "chain_of_thought")
+
+        # Instantiate signature
+        signature = template.instantiate()
+
+        # Validate
+        validator = SignatureValidator()
+        validation_result = validator.validate(signature)
+
+        assert validation_result.is_valid == True
+
+        # Compile
+        compiler = SignatureCompiler()
+        config = {"model": "test-model", "temperature": 0.7}
+        workflow_config = compiler.compile_to_workflow_config(signature, config)
+
+        assert workflow_config["node_type"] is not None
+        assert workflow_config["node_params"] is not None
+
+    def test_error_propagation(self):
+        """Test error propagation through the signature system."""
+        # Invalid parse should prevent further processing
+        parser = SignatureParser()
+        parse_result = parser.parse("invalid -> -> syntax")
+
+        assert parse_result.is_valid == False
+
+        # Using invalid parse result should raise errors
+        compiler = SignatureCompiler()
+        config = {"model": "test-model"}
+
+        with pytest.raises(ValueError):
+            compiler.compile_to_workflow_config(parse_result, config)
+
+    def test_performance_tracking_integration(self):
+        """Test performance tracking through optimization."""
+        signature = Signature(
+            inputs=["data"],
+            outputs=["analysis"]
+        )
+
+        # Optimize for performance
+        optimizer = SignatureOptimizer()
+        optimized = optimizer.optimize(signature, "performance")
+
+        # Should have performance hooks
+        assert len(optimized.performance_hooks) > 0
+        assert optimized.has_performance_tracking == True
+
+        # Auto-tune with performance data
+        performance_data = {"avg_execution_time": 2.0, "accuracy_score": 0.9}
+        tuned = optimizer.auto_tune(optimized, performance_data)
+
+        # Should record optimization history
+        assert len(tuned.optimization_history) > 0
+        assert "performance_data" in tuned.optimization_history[0]

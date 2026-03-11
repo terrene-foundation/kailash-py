@@ -102,7 +102,7 @@ Created 127 adversarial tests verifying trust framework security properties unde
 **Run security tests**:
 
 ```bash
-python -m pytest apps/kailash-kaizen/tests/security/ -v --timeout=120
+python -m pytest packages/kailash-kaizen/tests/security/ -v --timeout=120
 ```
 
 ## CI/CD Workflows (CARE-041)

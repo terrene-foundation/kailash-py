@@ -31,7 +31,7 @@ This fix adds `_lock = threading.Lock()` and wraps all 7 delegation operations t
 
 ### Modified Files
 
-1. **`apps/kailash-dataflow/src/dataflow/trust/multi_tenant.py`**
+1. **`packages/kailash-dataflow/src/dataflow/trust/multi_tenant.py`**
    - Added `import threading`
    - Added `self._lock = threading.Lock()` in `__init__`
    - Wrapped 7 delegation operations with `with self._lock:`
@@ -43,7 +43,7 @@ This fix adds `_lock = threading.Lock()` and wraps all 7 delegation operations t
      - `get_active_delegations_for_agent()` - Get agent delegations
      - `get_row_filter()` - Get row filter for delegation
 
-2. **`apps/kailash-dataflow/tests/unit/trust/test_multi_tenant_thread_safety.py`** (NEW)
+2. **`packages/kailash-dataflow/tests/unit/trust/test_multi_tenant_thread_safety.py`** (NEW)
    - Added 13 new thread safety tests:
      - test_concurrent_delegation_creation (50 threads)
      - test_concurrent_verification (50 threads)

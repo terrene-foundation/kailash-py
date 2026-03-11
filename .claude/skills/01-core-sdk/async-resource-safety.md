@@ -65,9 +65,9 @@ def __del__(self, _warnings=warnings):
 
 | Location                                                           | Class                         | Pattern                                                                    |
 | ------------------------------------------------------------------ | ----------------------------- | -------------------------------------------------------------------------- |
-| `apps/kailash-dataflow/src/dataflow/adapters/sqlite_enterprise.py` | `SQLiteEnterpriseTransaction` | `_warnings=warnings`, class-level `_committed`                             |
-| `apps/kailash-dataflow/src/dataflow/adapters/postgresql.py`        | `PostgreSQLTransaction`       | Same pattern                                                               |
-| `apps/kailash-dataflow/src/dataflow/adapters/mysql.py`             | `MySQLTransaction`            | Same pattern                                                               |
+| `packages/kailash-dataflow/src/dataflow/adapters/sqlite_enterprise.py` | `SQLiteEnterpriseTransaction` | `_warnings=warnings`, class-level `_committed`                             |
+| `packages/kailash-dataflow/src/dataflow/adapters/postgresql.py`        | `PostgreSQLTransaction`       | Same pattern                                                               |
+| `packages/kailash-dataflow/src/dataflow/adapters/mysql.py`             | `MySQLTransaction`            | Same pattern                                                               |
 | `src/kailash/nodes/data/async_sql.py`                              | `AsyncSQLDatabaseNode`        | Same pattern (node, not transaction — `__del__` guards connection cleanup) |
 
 ## 2. Double-Check Locking for asyncio
@@ -114,8 +114,8 @@ Key invariants:
 
 | Location                                                    | Class                              |
 | ----------------------------------------------------------- | ---------------------------------- |
-| `apps/kailash-kaizen/src/kaizen/memory/persistent_tiers.py` | `WarmMemoryTier._get_connection()` |
-| `apps/kailash-kaizen/src/kaizen/memory/persistent_tiers.py` | `ColdMemoryTier._get_connection()` |
+| `packages/kailash-kaizen/src/kaizen/memory/persistent_tiers.py` | `WarmMemoryTier._get_connection()` |
+| `packages/kailash-kaizen/src/kaizen/memory/persistent_tiers.py` | `ColdMemoryTier._get_connection()` |
 
 ## 3. Pool Closed-State Guards
 

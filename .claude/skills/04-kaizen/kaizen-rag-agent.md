@@ -29,4 +29,4 @@ class RAGAgent(BaseAgent):
 
 ## References
 - **Specialist**: `.claude/agents/frameworks/kaizen-specialist.md` lines 229-247
-- **Examples**: `apps/kailash-kaizen/examples/4-advanced-rag/`
+- **Examples**: `packages/kailash-kaizen/examples/4-advanced-rag/`

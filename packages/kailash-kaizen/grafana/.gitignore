@@ -1,0 +1,45 @@
+# Production Environment and Secrets
+# ====================================
+# CRITICAL: Never commit production secrets to git!
+
+# Production environment file (contains passwords, API keys, secrets)
+.env.production
+
+# SSL/TLS Certificates (private keys must never be committed)
+ssl/*.key
+ssl/*.crt
+ssl/*.csr
+ssl/*.pem
+
+# Prometheus Authentication (hashed passwords)
+prometheus-htpasswd
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*~
+
+# Backup files
+*.backup
+*.bak
+grafana-backup.json
+
+# Docker volumes (local data)
+grafana-data/
+prometheus-data/
+elasticsearch-data/
+
+# Logs
+*.log
+logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace

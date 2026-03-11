@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Interactive Agent - Control Protocol Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 30px;
+            border-radius: 15px 15px 0 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .status-dot.connected {
+            background: #10b981;
+        }
+
+        .status-dot.disconnected {
+            background: #ef4444;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .main-content {
+            background: white;
+            padding: 30px;
+            border-radius: 0 0 15px 15px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-height: 400px;
+        }
+
+        .progress-container {
+            margin-bottom: 25px;
+        }
+
+        .progress-bar-container {
+            background: #e5e7eb;
+            height: 8px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .progress-text {
+            font-size: 14px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        .message-container {
+            margin-bottom: 25px;
+        }
+
+        .message {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .message-title {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .message-content {
+            color: #333;
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        .input-group {
+            margin-top: 15px;
+        }
+
+        .input-group input[type="text"] {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .input-group input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            flex: 1;
+            min-width: 100px;
+        }
+
+        button.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        button.primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button.secondary {
+            background: #e5e7eb;
+            color: #333;
+        }
+
+        button.secondary:hover {
+            background: #d1d5db;
+        }
+
+        button.success {
+            background: #10b981;
+            color: white;
+        }
+
+        button.success:hover {
+            background: #059669;
+        }
+
+        button.danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        button.danger:hover {
+            background: #dc2626;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .log-container {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #e5e7eb;
+        }
+
+        .log-title {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .log {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+        }
+
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #e5e7eb;
+            color: #666;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-entry .timestamp {
+            color: #999;
+            font-size: 11px;
+        }
+
+        .approval-details {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+
+        .approval-details h4 {
+            color: #92400e;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .approval-details pre {
+            color: #78350f;
+            font-size: 12px;
+            overflow-x: auto;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state h2 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Web Interactive Agent</h1>
+            <p>Real-time bidirectional communication with Server-Sent Events</p>
+            <div class="status">
+                <div class="status-dot disconnected" id="statusDot"></div>
+                <span id="statusText">Connecting to agent...</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="progress-container" id="progressContainer" style="display: none;">
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+                <div class="progress-text" id="progressText">Starting...</div>
+            </div>
+
+            <div class="message-container" id="messageContainer">
+                <div class="empty-state">
+                    <h2>Waiting for agent...</h2>
+                    <p>The agent will send questions and requests here.</p>
+                </div>
+            </div>
+
+            <div class="log-container">
+                <div class="log-title">Event Log</div>
+                <div class="log" id="eventLog"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const BASE_URL = window.location.origin || 'http://127.0.0.1:8765';
+        const SSE_URL = `${BASE_URL}/stream`;
+        const CONTROL_URL = `${BASE_URL}/control`;
+
+        // State
+        let eventSource = null;
+        let currentRequest = null;
+
+        // DOM elements
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const messageContainer = document.getElementById('messageContainer');
+        const eventLog = document.getElementById('eventLog');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+
+        // Initialize SSE connection
+        function connectToAgent() {
+            addLog('Connecting to agent SSE stream...');
+
+            eventSource = new EventSource(SSE_URL);
+
+            eventSource.onopen = () => {
+                updateStatus(true);
+                addLog('✅ Connected to agent');
+            };
+
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleAgentMessage(data);
+                } catch (error) {
+                    console.error('Error parsing SSE data:', error);
+                }
+            };
+
+            eventSource.onerror = () => {
+                updateStatus(false);
+                addLog('❌ Connection lost. Reconnecting...');
+                setTimeout(connectToAgent, 3000);
+            };
+        }
+
+        // Handle messages from agent
+        function handleAgentMessage(message) {
+            addLog(`📨 Received: ${message.type} (ID: ${message.request_id})`);
+
+            currentRequest = message;
+
+            if (message.type === 'question') {
+                showQuestion(message);
+            } else if (message.type === 'approval') {
+                showApproval(message);
+            } else if (message.type === 'progress') {
+                showProgress(message);
+            }
+        }
+
+        // Display question to user
+        function showQuestion(message) {
+            const { question, options } = message.data;
+
+            let html = `
+                <div class="message">
+                    <div class="message-title">❓ Question</div>
+                    <div class="message-content">${question}</div>
+            `;
+
+            if (options && options.length > 0) {
+                html += '<div class="button-group">';
+                options.forEach(option => {
+                    html += `<button class="primary" onclick="answerQuestion('${option}')">${option}</button>`;
+                });
+                html += '</div>';
+            } else {
+                html += `
+                    <div class="input-group">
+                        <input type="text" id="answerInput" placeholder="Type your answer...">
+                    </div>
+                    <div class="button-group">
+                        <button class="primary" onclick="submitTextAnswer()">Submit</button>
+                    </div>
+                `;
+            }
+
+            html += '</div>';
+            messageContainer.innerHTML = html;
+
+            // Focus input if text input
+            if (!options || options.length === 0) {
+                setTimeout(() => {
+                    const input = document.getElementById('answerInput');
+                    if (input) {
+                        input.focus();
+                        input.addEventListener('keypress', (e) => {
+                            if (e.key === 'Enter') submitTextAnswer();
+                        });
+                    }
+                }, 100);
+            }
+        }
+
+        // Display approval request
+        function showApproval(message) {
+            const { action, details } = message.data;
+
+            let html = `
+                <div class="message">
+                    <div class="message-title">⚠️  Approval Required</div>
+                    <div class="message-content">${action}</div>
+            `;
+
+            if (details) {
+                html += `
+                    <div class="approval-details">
+                        <h4>Details:</h4>
+                        <pre>${JSON.stringify(details, null, 2)}</pre>
+                    </div>
+                `;
+            }
+
+            html += `
+                <div class="button-group">
+                    <button class="success" onclick="sendApproval(true)">✓ Approve</button>
+                    <button class="danger" onclick="sendApproval(false)">✗ Deny</button>
+                </div>
+            `;
+
+            html += '</div>';
+            messageContainer.innerHTML = html;
+        }
+
+        // Show progress update
+        function showProgress(message) {
+            const { message: text, percent } = message.data;
+
+            progressContainer.style.display = 'block';
+            progressBar.style.width = `${percent}%`;
+            progressText.textContent = `${text} (${Math.round(percent)}%)`;
+
+            if (percent >= 100) {
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                }, 2000);
+            }
+        }
+
+        // Answer question with option
+        function answerQuestion(answer) {
+            sendResponse({ answer });
+            addLog(`💬 Answered: ${answer}`);
+        }
+
+        // Submit text answer
+        function submitTextAnswer() {
+            const input = document.getElementById('answerInput');
+            if (!input || !input.value.trim()) {
+                alert('Please enter an answer');
+                return;
+            }
+
+            const answer = input.value.trim();
+            sendResponse({ answer });
+            addLog(`💬 Answered: ${answer}`);
+        }
+
+        // Send approval response
+        function sendApproval(approved) {
+            sendResponse({ approved });
+            addLog(`${approved ? '✅ Approved' : '❌ Denied'}`);
+        }
+
+        // Send response to agent
+        async function sendResponse(data) {
+            if (!currentRequest) {
+                console.error('No current request');
+                return;
+            }
+
+            const payload = {
+                request_id: currentRequest.request_id,
+                data: data,
+                error: null
+            };
+
+            try {
+                const response = await fetch(CONTROL_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                // Clear current UI
+                messageContainer.innerHTML = `
+                    <div class="empty-state">
+                        <h2>Response sent!</h2>
+                        <p>Waiting for next request...</p>
+                    </div>
+                `;
+
+                currentRequest = null;
+
+            } catch (error) {
+                console.error('Error sending response:', error);
+                addLog(`❌ Error sending response: ${error.message}`);
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        // Update connection status
+        function updateStatus(connected) {
+            statusDot.className = connected ? 'status-dot connected' : 'status-dot disconnected';
+            statusText.textContent = connected ? 'Connected to agent' : 'Disconnected';
+        }
+
+        // Add log entry
+        function addLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="timestamp">${timestamp}</span> ${message}`;
+            eventLog.insertBefore(entry, eventLog.firstChild);
+
+            // Keep only last 50 entries
+            while (eventLog.children.length > 50) {
+                eventLog.removeChild(eventLog.lastChild);
+            }
+        }
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            addLog('🚀 Web UI initialized');
+            connectToAgent();
+        });
+    </script>
+</body>
+</html>

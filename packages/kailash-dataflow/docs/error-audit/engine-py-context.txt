@@ -1,0 +1,272 @@
+=== Line 167 ===
+        else:
+            # Validate database_url if provided
+            if database_url and not self._is_valid_database_url(database_url):
+                # Enhanced error with catalog-based solutions (DF-401)
+                if ErrorEnhancer is not None:  # noqa: F823
+                    raise ErrorEnhancer.enhance_invalid_database_url(
+                        database_url=database_url,
+                        error_message="URL format validation failed",
+                    )
+                else:
+                    raise ValueError(
+
+=== Line 172 ===
+                    raise ErrorEnhancer.enhance_invalid_database_url(
+                        database_url=database_url,
+                        error_message="URL format validation failed",
+                    )
+                else:
+                    raise ValueError(
+                        f"Invalid database URL: {database_url}. URL format validation failed."
+                    )
+            # Create config from environment or parameters
+            if database_url is None and all(
+                param is None
+
+=== Line 736 ===
+        # Validate model
+        model_name = cls.__name__
+
+        # Check for duplicate registration
+        if model_name in self._models:
+            raise ValueError(f"Model '{model_name}' is already registered")
+
+        # Models without fields are allowed (they might define fields dynamically)
+
+        # Extract model fields from annotations (including inherited)
+        fields = {}
+
+=== Line 1076 ===
+            if operations:
+                logger.info(
+                    f"Enhanced schema management detected {len(operations)} operations for '{model_name}', falling back to migration system for execution"
+                )
+                # Raise exception to trigger fallback to migration system
+                raise Exception(
+                    f"Enhanced schema management requires fallback to migration system for {len(operations)} operations"
+                )
+            else:
+                logger.info(
+                    f"PostgreSQL enhanced schema management completed for model '{model_name}' - no operations needed"
+
+=== Line 1160 ===
+
+            # Apply changes automatically (production)
+            success, migrations = await db.auto_migrate(auto_confirm=True)
+        """
+        if self._migration_system is None:
+            raise RuntimeError(
+                "Auto-migration is not available. Migration system not initialized. "
+                "Ensure migration_enabled=True when creating DataFlow instance."
+            )
+
+        # If no target schema provided, build it from registered models
+
+=== Line 1257 ===
+        Example:
+            >>> registry = db.get_model_registry()
+            >>> issues = registry.validate_consistency()
+        """
+        if not self._enable_model_persistence:
+            raise RuntimeError(
+                "Model persistence is disabled for this DataFlow instance"
+            )
+        return self._model_registry
+
+    def validate_model_consistency(self) -> Dict[str, List[str]]:
+
+=== Line 2041 ===
+                scheme = (
+                    database_url.split("://")[0] if "://" in database_url else "unknown"
+                )
+            except:
+                scheme = "unknown"
+            raise NotImplementedError(
+                f"Real schema discovery is currently supported for PostgreSQL and SQLite only. "
+                f"Database URL uses unsupported scheme: {scheme}. MongoDB uses flexible schema and doesn't require schema discovery."
+            )
+
+    async def _inspect_postgresql_schema_real(
+
+=== Line 2217 ===
+        Raises:
+            NotImplementedError: For in-memory SQLite databases (schema discovery not supported)
+        """
+        # Check if this is a memory database
+        if database_url == ":memory:" or "memory" in database_url.lower():
+            raise NotImplementedError(
+                "Schema discovery is not supported for in-memory SQLite databases. "
+                "Only file-based SQLite databases support schema discovery."
+            )
+
+        try:
+
+=== Line 3305 ===
+        )
+
+        if not fields:
+            # Enhanced error with catalog-based solutions (DF-604)
+            if ErrorEnhancer is not None:
+                raise ErrorEnhancer.enhance_invalid_model_definition(
+                    model_name=model_name,
+                    validation_error="Model has no fields defined (missing type annotations)",
+                )
+            else:
+                raise ValueError(
+
+=== Line 3310 ===
+                raise ErrorEnhancer.enhance_invalid_model_definition(
+                    model_name=model_name,
+                    validation_error="Model has no fields defined (missing type annotations)",
+                )
+            else:
+                raise ValueError(
+                    f"Model '{model_name}' has no fields defined (missing type annotations)"
+                )
+
+        # Start building CREATE TABLE statement with safety protection
+        sql_parts = [f"CREATE TABLE IF NOT EXISTS {table_name} ("]
+
+=== Line 4060 ===
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    is_compatible = loop.run_until_complete(validate_schema())
+
+                if not is_compatible:
+                    raise RuntimeError(
+                        f"Model '{model_name}' is not compatible with existing database schema. "
+                        f"Please ensure database tables match model definitions or disable "
+                        f"existing_schema_mode to allow migrations."
+                    )
+
+
+=== Line 5257 ===
+        # The NodeGenerator already stores nodes in self._nodes, so we don't need fallback
+        if not nodes:
+            logger.warning(f"Failed to generate CRUD nodes for model {model_name}")
+            # Enhanced error with catalog-based solutions (DF-703)
+            if ErrorEnhancer is not None:
+                raise ErrorEnhancer.enhance_node_generation_failed(
+                    model_name=model_name,
+                    generation_error="CRUD node generation returned empty result",
+                )
+            else:
+                raise RuntimeError(
+
+=== Line 5262 ===
+                raise ErrorEnhancer.enhance_node_generation_failed(
+                    model_name=model_name,
+                    generation_error="CRUD node generation returned empty result",
+                )
+            else:
+                raise RuntimeError(
+                    f"Failed to generate CRUD nodes for model '{model_name}': CRUD node generation returned empty result"
+                )
+
+        # Log TDD context if active
+        if self._tdd_mode and self._test_context:
+
+=== Line 5283 ===
+        # The NodeGenerator already stores nodes in self._nodes, so we don't need fallback
+        if not nodes:
+            logger.warning(f"Failed to generate bulk nodes for model {model_name}")
+            # Enhanced error with catalog-based solutions (DF-703)
+            if ErrorEnhancer is not None:
+                raise ErrorEnhancer.enhance_node_generation_failed(
+                    model_name=model_name,
+                    generation_error="Bulk node generation returned empty result",
+                )
+            else:
+                raise RuntimeError(
+
+=== Line 5288 ===
+                raise ErrorEnhancer.enhance_node_generation_failed(
+                    model_name=model_name,
+                    generation_error="Bulk node generation returned empty result",
+                )
+            else:
+                raise RuntimeError(
+                    f"Failed to generate bulk nodes for model '{model_name}': Bulk node generation returned empty result"
+                )
+
+        # Log TDD context if active
+        if self._tdd_mode and self._test_context:
+
+=== Line 5606 ===
+                file_path = db_url.replace("sqlite:///", "/")
+                return await aiosqlite.connect(file_path)
+        else:
+            # Enhanced error with catalog-based solutions (DF-401)
+            if ErrorEnhancer is not None:
+                raise ErrorEnhancer.enhance_invalid_database_url(
+                    database_url=db_url,
+                    error_message="Database type not supported (only PostgreSQL, MySQL, SQLite)",
+                )
+            else:
+                raise ValueError(
+
+=== Line 5611 ===
+                raise ErrorEnhancer.enhance_invalid_database_url(
+                    database_url=db_url,
+                    error_message="Database type not supported (only PostgreSQL, MySQL, SQLite)",
+                )
+            else:
+                raise ValueError(
+                    f"Database type not supported for '{db_url}': only PostgreSQL, MySQL, SQLite"
+                )
+
+    def _class_name_to_table_name(self, class_name: str) -> str:
+        """Convert class name to table name with pluralization."""
+
+=== Line 5895 ===
+                    or url.startswith("../")
+                    or url.startswith("/")
+                ):
+                    return True
+                else:
+                    raise ValueError(
+                        "Invalid database URL. For file databases, use .db, .sqlite, or .sqlite3 extensions "
+                        "or provide a full URL like sqlite:///path/to/db.sqlite"
+                    )
+
+            scheme = url.split("://")[0].lower()
+
+=== Line 5902 ===
+                        "or provide a full URL like sqlite:///path/to/db.sqlite"
+                    )
+
+            scheme = url.split("://")[0].lower()
+            if scheme not in supported_schemes:
+                raise ValueError(
+                    f"Unsupported database scheme '{scheme}'. "
+                    f"DataFlow supports PostgreSQL, MySQL, SQLite, and MongoDB. "
+                    f"Use URLs like: postgresql://user:pass@localhost/db, mysql://user:pass@localhost/db, sqlite:///path/to/db.sqlite, or mongodb://localhost:27017/db"
+                )
+
+
+=== Line 5915 ===
+
+            # Database-specific URL validation
+            if base_scheme in ["postgresql", "postgres"]:
+                # PostgreSQL URL validation
+                if "@" not in url or "/" not in url.split("@")[1]:
+                    raise ValueError(
+                        "Invalid PostgreSQL URL format. "
+                        "Expected: postgresql://user:pass@host:port/database"
+                    )
+            elif base_scheme == "mysql":
+                # MySQL URL validation
+
+=== Line 5922 ===
+                        "Expected: postgresql://user:pass@host:port/database"
+                    )
+            elif base_scheme == "mysql":
+                # MySQL URL validation
+                if "@" not in url or "/" not in url.split("@")[1]:
+                    raise ValueError(
+                        "Invalid MySQL URL format. "
+                        "Expected: mysql://user:pass@host:port/database"
+                    )
+            elif base_scheme == "sqlite":
+                # SQLite URL validation - flexible for file paths

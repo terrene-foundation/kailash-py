@@ -1,0 +1,25 @@
+176:                    raise ErrorEnhancer.enhance_invalid_database_url(
+181:                    raise ValueError(
+752:                raise ValueError(f"Model '{model_name}' is already registered")
+1195:                raise RuntimeError(message)
+1299:                raise RuntimeError(
+2096:                raise NotImplementedError(message)
+2281:                raise NotImplementedError(message)
+2530:                # Re-raise NotImplementedError - these should not be caught
+3366:                raise ErrorEnhancer.enhance_invalid_model_definition(
+3371:                raise ValueError(
+4134:                        raise RuntimeError(message)
+5327:                raise ErrorEnhancer.enhance_node_generation_failed(
+5332:                raise RuntimeError(
+5353:                raise ErrorEnhancer.enhance_node_generation_failed(
+5358:                raise RuntimeError(
+5676:                raise ErrorEnhancer.enhance_invalid_database_url(
+5681:                raise ValueError(
+5967:                        raise ErrorEnhancer.enhance_invalid_database_url(
+5972:                        raise ValueError(
+5981:                    raise ErrorEnhancer.enhance_invalid_database_url(
+5986:                    raise ValueError(
+6001:                        raise ErrorEnhancer.enhance_invalid_database_url(
+6006:                        raise ValueError(
+6015:                        raise ErrorEnhancer.enhance_invalid_database_url(
+6020:                        raise ValueError(

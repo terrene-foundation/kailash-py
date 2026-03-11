@@ -1,0 +1,288 @@
+{
+  "dashboard": {
+    "title": "Kaizen Agent Monitoring",
+    "description": "Comprehensive monitoring dashboard for Kaizen agents with metrics, performance, and health indicators",
+    "tags": ["kaizen", "agents", "monitoring"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "10s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Agent Loop Duration (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "agent_loop_duration_ms_p95",
+            "legendFormat": "{{agent_id}} - p95",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": "Duration",
+            "logBase": 1,
+            "show": true
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [5000],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              },
+              "reducer": {
+                "params": [],
+                "type": "avg"
+              },
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "name": "Agent Loop Duration High",
+          "noDataState": "no_data",
+          "message": "Agent loop duration exceeded 5 seconds"
+        }
+      },
+      {
+        "id": 2,
+        "title": "Agent Loop Success Rate",
+        "type": "singlestat",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "rate(agent_loop_success[5m]) / rate(agent_loop_total[5m]) * 100",
+            "refId": "A"
+          }
+        ],
+        "format": "percent",
+        "gauge": {
+          "show": true,
+          "minValue": 0,
+          "maxValue": 100,
+          "thresholdMarkers": true,
+          "thresholdLabels": false
+        },
+        "thresholds": "80,95",
+        "colors": ["#d44a3a", "#e0b400", "#299c46"]
+      },
+      {
+        "id": 3,
+        "title": "Tool Execution Count by Tool",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "rate(tool_execution_total[5m])",
+            "legendFormat": "{{tool_name}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Executions/sec",
+            "logBase": 1,
+            "show": true
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Tool Execution Latency (p95)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "tool_execution_duration_ms_p95",
+            "legendFormat": "{{tool_name}} - p95",
+            "refId": "A"
+          },
+          {
+            "expr": "tool_execution_duration_ms_p50",
+            "legendFormat": "{{tool_name}} - p50",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": "Duration",
+            "logBase": 1,
+            "show": true
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "API Calls by Provider",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "rate(api_calls_total[5m])",
+            "legendFormat": "{{provider}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Calls/sec",
+            "logBase": 1,
+            "show": true
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "API Cost per Hour (USD)",
+        "type": "singlestat",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "sum(rate(api_cost_usd[1h]))",
+            "refId": "A"
+          }
+        ],
+        "format": "currencyUSD",
+        "gauge": {
+          "show": true,
+          "minValue": 0,
+          "maxValue": 100,
+          "thresholdMarkers": true
+        },
+        "thresholds": "50,80",
+        "colors": ["#299c46", "#e0b400", "#d44a3a"]
+      },
+      {
+        "id": 7,
+        "title": "Active Agents",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "active_agents",
+            "refId": "A"
+          }
+        ],
+        "format": "short",
+        "sparkline": {
+          "show": true,
+          "full": false,
+          "lineColor": "rgb(31, 120, 193)",
+          "fillColor": "rgba(31, 118, 189, 0.18)"
+        }
+      },
+      {
+        "id": 8,
+        "title": "Memory Usage (MB)",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 6, "y": 24},
+        "targets": [
+          {
+            "expr": "memory_bytes / 1024 / 1024",
+            "refId": "A"
+          }
+        ],
+        "format": "decmbytes",
+        "gauge": {
+          "show": true,
+          "minValue": 0,
+          "maxValue": 2048,
+          "thresholdMarkers": true
+        },
+        "thresholds": "1024,1536"
+      },
+      {
+        "id": 9,
+        "title": "Error Rate",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 12, "y": 24},
+        "targets": [
+          {
+            "expr": "rate(errors_total[5m])",
+            "refId": "A"
+          }
+        ],
+        "format": "ops",
+        "colorBackground": true,
+        "thresholds": "0.1,1",
+        "colors": ["#299c46", "#e0b400", "#d44a3a"]
+      },
+      {
+        "id": 10,
+        "title": "Audit Events per Minute",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 18, "y": 24},
+        "targets": [
+          {
+            "expr": "rate(audit_events_total[1m]) * 60",
+            "refId": "A"
+          }
+        ],
+        "format": "short",
+        "sparkline": {
+          "show": true,
+          "full": false
+        }
+      },
+      {
+        "id": 11,
+        "title": "Permission Approval Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+        "targets": [
+          {
+            "expr": "rate(permission_granted[5m]) / rate(permission_requested[5m]) * 100",
+            "legendFormat": "Approval Rate",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percent",
+            "label": "Approval Rate",
+            "logBase": 1,
+            "show": true,
+            "min": 0,
+            "max": 100
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Tool Execution Success Rate by Tool",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+        "targets": [
+          {
+            "expr": "rate(tool_execution_success[5m]) / rate(tool_execution_total[5m]) * 100",
+            "legendFormat": "{{tool_name}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percent",
+            "label": "Success Rate",
+            "logBase": 1,
+            "show": true,
+            "min": 0,
+            "max": 100
+          }
+        ]
+      }
+    ]
+  }
+}

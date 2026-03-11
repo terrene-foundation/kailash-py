@@ -91,5 +91,5 @@ def test_qa_agent(simple_qa_example, assert_async_strategy, test_queries):
 **Test Data**: `test_queries`, `test_documents`, `test_code_snippets`
 
 ## References
-- **Source**: `apps/kailash-kaizen/tests/conftest.py`
+- **Source**: `packages/kailash-kaizen/tests/conftest.py`
 - **Specialist**: `.claude/agents/frameworks/kaizen-specialist.md` lines 382-404

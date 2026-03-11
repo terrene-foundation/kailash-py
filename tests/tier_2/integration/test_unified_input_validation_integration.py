@@ -40,7 +40,12 @@ import pytest_asyncio
 # Add apps directory to path for nexus imports
 sys.path.insert(
     0,
-    str(Path(__file__).parent.parent.parent.parent / "apps" / "kailash-nexus" / "src"),
+    str(
+        Path(__file__).parent.parent.parent.parent
+        / "packages"
+        / "kailash-nexus"
+        / "src"
+    ),
 )
 
 # Import Nexus and validation

@@ -1,0 +1,129 @@
+{
+  "metadata": {
+    "id": "content-moderation",
+    "name": "Content Moderation Workflow",
+    "description": "Automated content generation with human approval for compliance",
+    "category": "Multi Agent",
+    "complexity": "Advanced",
+    "tags": ["content-generation", "human-approval", "compliance", "moderation"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "content_generator",
+      "type": "CodeGenerationAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-4",
+        "temperature": 0.7,
+        "max_tokens": 1000
+      },
+      "position": {"x": 100, "y": 100}
+    },
+    {
+      "id": "approver",
+      "type": "HumanApprovalAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "approval_mode": "manual",
+        "audit_trail_enabled": true
+      },
+      "position": {"x": 300, "y": 100}
+    }
+  ],
+  "connections": [
+    {
+      "from": "content_generator",
+      "to": "approver",
+      "output": "generated_content",
+      "input": "content_to_review"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "content_request",
+      "name": "Content Request",
+      "type": "string",
+      "description": "Description of content to generate",
+      "default": "Write a product description for our new AI-powered analytics platform",
+      "required": true
+    },
+    {
+      "id": "approval_criteria",
+      "name": "Approval Criteria",
+      "type": "array",
+      "description": "Criteria for human approval",
+      "default": ["brand compliance", "accuracy", "tone"],
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "id": "approved_content",
+      "name": "Approved Content",
+      "type": "string",
+      "description": "Content approved by human reviewer"
+    },
+    {
+      "id": "approval_status",
+      "name": "Approval Status",
+      "type": "object",
+      "description": "Approval decision and feedback"
+    },
+    {
+      "id": "audit_trail",
+      "name": "Audit Trail",
+      "type": "array",
+      "description": "Complete audit trail of generation and approval"
+    }
+  ],
+  "execution": {
+    "entry_point": "content_generator",
+    "timeout": 300,
+    "retry_policy": {
+      "max_retries": 2,
+      "backoff": "linear"
+    }
+  },
+  "documentation": {
+    "overview": "This multi-agent workflow generates content and requires human approval before publishing. The CodeGenerationAgent creates the content, then HumanApprovalAgent requests human review before releasing it. Perfect for regulated industries, brand-sensitive content, and compliance-critical publishing workflows.",
+    "use_cases": [
+      "Marketing content approval for brand compliance",
+      "Financial report generation with regulatory review",
+      "Legal document drafting with attorney approval",
+      "Medical content creation with clinical review",
+      "Product descriptions requiring quality assurance"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "Human approver available for review",
+      "Approval callback configured (CLI, web form, or webhook)",
+      "Internet connection for API access"
+    ],
+    "example_inputs": [
+      {
+        "content_request": "Write a product description for our new AI-powered analytics platform",
+        "approval_criteria": ["brand compliance", "technical accuracy", "clear value proposition"]
+      }
+    ],
+    "example_outputs": [
+      {
+        "approved_content": "Transform your data into actionable insights with our AI-powered analytics platform. Advanced machine learning algorithms automatically detect patterns, predict trends, and recommend data-driven decisions—all in real-time.",
+        "approval_status": {
+          "approved": true,
+          "reviewer": "marketing_manager",
+          "feedback": "Looks good, approved for publication",
+          "timestamp": "2025-10-06T14:30:00Z"
+        },
+        "audit_trail": [
+          {"step": 1, "action": "content_generated", "agent": "content_generator", "timestamp": "2025-10-06T14:25:00Z"},
+          {"step": 2, "action": "approval_requested", "agent": "approver", "timestamp": "2025-10-06T14:25:05Z"},
+          {"step": 3, "action": "approved", "reviewer": "marketing_manager", "timestamp": "2025-10-06T14:30:00Z"}
+        ]
+      }
+    ]
+  }
+}

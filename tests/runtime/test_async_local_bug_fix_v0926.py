@@ -25,7 +25,7 @@ try:
     import sys
 
     dataflow_path = (
-        Path(__file__).parent.parent.parent / "apps" / "kailash-dataflow" / "src"
+        Path(__file__).parent.parent.parent / "packages" / "kailash-dataflow" / "src"
     )
     if str(dataflow_path) not in sys.path:
         sys.path.insert(0, str(dataflow_path))

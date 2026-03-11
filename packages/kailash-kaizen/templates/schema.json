@@ -1,0 +1,243 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Kaizen Workflow Template",
+  "description": "JSON schema for Kaizen Studio workflow templates",
+  "type": "object",
+  "required": ["metadata", "agents", "connections", "inputs", "outputs", "execution", "documentation"],
+  "properties": {
+    "metadata": {
+      "type": "object",
+      "required": ["id", "name", "description", "category", "complexity", "tags", "version"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$",
+          "description": "Unique template identifier (kebab-case)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable template name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Brief template description"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["Single Agent", "Multi Agent", "Multi-Modal", "Enterprise"],
+          "description": "Template category"
+        },
+        "complexity": {
+          "type": "string",
+          "enum": ["Beginner", "Intermediate", "Advanced", "Enterprise"],
+          "description": "Complexity level"
+        },
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Search tags"
+        },
+        "author": {
+          "type": "string",
+          "description": "Template author"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Semantic version (e.g., 1.0.0)"
+        },
+        "created": {
+          "type": "string",
+          "format": "date",
+          "description": "Creation date (YYYY-MM-DD)"
+        }
+      }
+    },
+    "agents": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "config"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique agent instance ID"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "SimpleQAAgent",
+              "MemoryAgent",
+              "ChainOfThoughtAgent",
+              "RAGResearchAgent",
+              "CodeGenerationAgent",
+              "ReActAgent",
+              "BatchProcessingAgent",
+              "HumanApprovalAgent",
+              "ResilientAgent",
+              "StreamingChatAgent",
+              "SelfReflectionAgent",
+              "VisionAgent",
+              "TranscriptionAgent",
+              "MultiModalAgent"
+            ],
+            "description": "Kaizen agent type"
+          },
+          "config": {
+            "type": "object",
+            "description": "Agent configuration parameters"
+          },
+          "position": {
+            "type": "object",
+            "properties": {
+              "x": {"type": "number"},
+              "y": {"type": "number"}
+            },
+            "description": "Visual canvas position (optional)"
+          }
+        }
+      }
+    },
+    "connections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "output", "input"],
+        "properties": {
+          "from": {
+            "type": "string",
+            "description": "Source agent ID"
+          },
+          "to": {
+            "type": "string",
+            "description": "Target agent ID"
+          },
+          "output": {
+            "type": "string",
+            "description": "Source output field name"
+          },
+          "input": {
+            "type": "string",
+            "description": "Target input field name"
+          }
+        }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "type", "description"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Input parameter ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable input name"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["string", "number", "boolean", "array", "object"],
+            "description": "Input data type"
+          },
+          "description": {
+            "type": "string",
+            "description": "Input description"
+          },
+          "default": {
+            "description": "Default input value (optional)"
+          },
+          "required": {
+            "type": "boolean",
+            "description": "Whether input is required"
+          }
+        }
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "type", "description"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Output field ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable output name"
+          },
+          "type": {
+            "type": "string",
+            "enum": ["string", "number", "boolean", "array", "object"],
+            "description": "Output data type"
+          },
+          "description": {
+            "type": "string",
+            "description": "Output description"
+          }
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "required": ["entry_point"],
+      "properties": {
+        "entry_point": {
+          "type": "string",
+          "description": "Agent ID to start execution"
+        },
+        "timeout": {
+          "type": "number",
+          "description": "Execution timeout in seconds"
+        },
+        "retry_policy": {
+          "type": "object",
+          "properties": {
+            "max_retries": {"type": "number"},
+            "backoff": {
+              "type": "string",
+              "enum": ["linear", "exponential"]
+            }
+          }
+        }
+      }
+    },
+    "documentation": {
+      "type": "object",
+      "required": ["overview", "use_cases"],
+      "properties": {
+        "overview": {
+          "type": "string",
+          "description": "Workflow overview and explanation"
+        },
+        "use_cases": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Real-world use cases"
+        },
+        "prerequisites": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Prerequisites and requirements"
+        },
+        "example_inputs": {
+          "type": "array",
+          "items": {"type": "object"},
+          "description": "Example input data"
+        },
+        "example_outputs": {
+          "type": "array",
+          "items": {"type": "object"},
+          "description": "Example output data"
+        }
+      }
+    }
+  }
+}

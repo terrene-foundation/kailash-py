@@ -486,7 +486,7 @@ See the complete :doc:`DataFlow API Reference <../api/dataflow>` for detailed do
 Examples Repository
 -------------------
 
-Complete production examples available in the ``apps/kailash-dataflow/examples/`` directory:
+Complete production examples available in the ``packages/kailash-dataflow/examples/`` directory:
 
 - **E-commerce Platform**: Complete online store with inventory, orders, and analytics
 - **User Management System**: Multi-tenant user management with RBAC

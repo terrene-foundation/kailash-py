@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  qa-agent:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    image: kaizen:latest
+    container_name: kaizen-qa-agent
+    restart: unless-stopped
+
+    # Environment configuration
+    env_file:
+      - .env
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '1'
+          memory: 512M
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Run the simple QA agent
+    command: ["python", "/app/examples/1-single-agent/simple-qa/workflow.py"]
+
+    # Mount examples for easy development
+    volumes:
+      - ./workflow.py:/app/workflow.py:ro
+
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

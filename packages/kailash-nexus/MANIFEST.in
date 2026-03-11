@@ -1,0 +1,22 @@
+include README.md
+include LICENSE
+include NOTICE
+include PATENTS
+include pyproject.toml
+include setup.py
+
+recursive-include src *.py *.pyi
+
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude *.egg-info
+
+prune tests
+prune docs
+prune examples
+prune .git
+prune .pytest_cache
+prune .mypy_cache
+prune .ruff_cache

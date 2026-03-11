@@ -1,0 +1,135 @@
+{
+  "metadata": {
+    "id": "audio-transcription",
+    "name": "Audio Transcription",
+    "description": "Speech-to-text transcription using TranscriptionAgent with Whisper",
+    "category": "Multi-Modal",
+    "complexity": "Intermediate",
+    "tags": ["audio", "transcription", "speech-to-text", "whisper", "multi-modal"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "transcription_agent",
+      "type": "TranscriptionAgent",
+      "config": {
+        "model": "whisper-1",
+        "language": "en",
+        "response_format": "text",
+        "temperature": 0.0
+      },
+      "position": {"x": 100, "y": 100}
+    }
+  ],
+  "connections": [],
+  "inputs": [
+    {
+      "id": "audio_path",
+      "name": "Audio Path",
+      "type": "string",
+      "description": "Path to audio file (MP3, WAV, etc.)",
+      "default": "/path/to/audio.mp3",
+      "required": true
+    },
+    {
+      "id": "language",
+      "name": "Language",
+      "type": "string",
+      "description": "Language code (e.g., 'en', 'es', 'fr')",
+      "default": "en",
+      "required": false
+    },
+    {
+      "id": "include_timestamps",
+      "name": "Include Timestamps",
+      "type": "boolean",
+      "description": "Whether to include word-level timestamps",
+      "default": false,
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "id": "transcription",
+      "name": "Transcription",
+      "type": "string",
+      "description": "Full text transcription of audio"
+    },
+    {
+      "id": "language_detected",
+      "name": "Language Detected",
+      "type": "string",
+      "description": "Detected language code"
+    },
+    {
+      "id": "duration_seconds",
+      "name": "Duration (seconds)",
+      "type": "number",
+      "description": "Audio duration in seconds"
+    },
+    {
+      "id": "segments",
+      "name": "Segments",
+      "type": "array",
+      "description": "Transcription segments with timestamps (if requested)"
+    }
+  ],
+  "execution": {
+    "entry_point": "transcription_agent",
+    "timeout": 120,
+    "retry_policy": {
+      "max_retries": 3,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This workflow transcribes audio files to text using TranscriptionAgent powered by OpenAI's Whisper model. It supports multiple languages, formats, and can optionally provide word-level timestamps. Perfect for meeting transcriptions, podcast subtitles, voice commands, and accessibility applications.",
+    "use_cases": [
+      "Meeting and conference call transcription",
+      "Podcast and video subtitle generation",
+      "Voice command processing for applications",
+      "Call center quality assurance and analytics",
+      "Interview transcription for research",
+      "Accessibility: audio content for hearing-impaired users"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "Audio file accessible via file path",
+      "Internet connection for API access",
+      "Supported formats: MP3, MP4, MPEG, MPGA, M4A, WAV, WEBM",
+      "Max file size: 25 MB (OpenAI Whisper limit)"
+    ],
+    "example_inputs": [
+      {
+        "audio_path": "/examples/meeting.mp3",
+        "language": "en",
+        "include_timestamps": true
+      },
+      {
+        "audio_path": "/examples/podcast.wav",
+        "language": "en",
+        "include_timestamps": false
+      },
+      {
+        "audio_path": "/examples/spanish_interview.mp3",
+        "language": "es",
+        "include_timestamps": true
+      }
+    ],
+    "example_outputs": [
+      {
+        "transcription": "Welcome to today's meeting. Let's start by reviewing the quarterly results. Revenue is up 15% compared to last quarter, which is excellent news. The marketing campaign was particularly successful in the EMEA region.",
+        "language_detected": "en",
+        "duration_seconds": 18.5,
+        "segments": [
+          {"start": 0.0, "end": 2.5, "text": "Welcome to today's meeting."},
+          {"start": 2.5, "end": 5.8, "text": "Let's start by reviewing the quarterly results."},
+          {"start": 5.8, "end": 11.2, "text": "Revenue is up 15% compared to last quarter, which is excellent news."},
+          {"start": 11.2, "end": 18.5, "text": "The marketing campaign was particularly successful in the EMEA region."}
+        ]
+      }
+    ]
+  }
+}

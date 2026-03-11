@@ -1,0 +1,722 @@
+# Error Pattern Database for DataFlow Debug Agent
+# 50+ patterns across 5 categories for intelligent error categorization
+#
+# Pattern Structure:
+# - pattern_id: Unique identifier (CATEGORY_###)
+# - name: Human-readable name
+# - category: Error category (PARAMETER, CONNECTION, MIGRATION, CONFIGURATION, RUNTIME)
+# - regex: Regular expression for error matching
+# - semantic_features: Additional context-based matching
+# - severity: low, medium, high, critical
+# - examples: Example error messages that match this pattern
+# - related_solutions: Solution IDs from solutions.yaml
+
+# ==============================================================================
+# CATEGORY 1: PARAMETER ERRORS (15 patterns)
+# ==============================================================================
+
+PARAM_001:
+  name: "Missing Required Parameter 'id'"
+  category: PARAMETER
+  regex: ".*[Mm]issing.*'id'.*|.*'id'.*required.*|.*[Rr]equired.*'id'.*"
+  semantic_features:
+    - error_type: [KeyError, ValueError, ValidationError]
+    - stacktrace_location: [CreateNode, UpdateNode, DeleteNode]
+    - missing_field: "id"
+  severity: high
+  examples:
+    - "KeyError: 'id' - required parameter missing"
+    - "ValidationError: Field 'id' is required for CREATE operations"
+    - "Missing required parameter 'id' in CreateNode"
+  related_solutions: [SOL_001, SOL_002]
+
+PARAM_002:
+  name: "Type Mismatch - Integer Expected"
+  category: PARAMETER
+  regex: ".*[Tt]ype.*[Mm]ismatch.*int.*|.*[Ee]xpected.*int.*got.*|.*must be.*int.*"
+  semantic_features:
+    - error_type: [TypeError, ValidationError]
+    - expected_type: int
+    - actual_type: [str, float, dict, list]
+  severity: medium
+  examples:
+    - "TypeError: expected int, got str"
+    - "ValidationError: field 'age' must be int, not str"
+    - "Type mismatch: expected integer, received '25' (string)"
+  related_solutions: [SOL_003, SOL_004]
+
+PARAM_003:
+  name: "Type Mismatch - String Expected"
+  category: PARAMETER
+  regex: ".*[Tt]ype.*[Mm]ismatch.*str.*|.*[Ee]xpected.*str.*got.*|.*must be.*str.*"
+  semantic_features:
+    - error_type: [TypeError, ValidationError]
+    - expected_type: str
+    - actual_type: [int, float, dict, list]
+  severity: medium
+  examples:
+    - "TypeError: expected str, got int"
+    - "ValidationError: field 'name' must be str, not int"
+    - "Type mismatch: expected string, received 123 (integer)"
+  related_solutions: [SOL_003, SOL_004]
+
+PARAM_004:
+  name: "Invalid Email Format"
+  category: PARAMETER
+  regex: ".*[Ii]nvalid.*email.*|.*email.*[Ff]ormat.*|.*not a valid email.*"
+  semantic_features:
+    - error_type: [ValueError, ValidationError]
+    - field_name: [email, user_email, contact_email]
+  severity: low
+  examples:
+    - "ValueError: invalid email format 'user@domain'"
+    - "ValidationError: 'notanemail' is not a valid email address"
+  related_solutions: [SOL_005]
+
+PARAM_005:
+  name: "Missing Filter in UpdateNode"
+  category: PARAMETER
+  regex: ".*UPDATE.*must contain.*'filter'.*|.*[Mm]issing.*filter.*UpdateNode.*"
+  semantic_features:
+    - error_type: [KeyError, ValueError]
+    - node_type: UpdateNode
+    - missing_field: filter
+  severity: high
+  examples:
+    - "ValueError: UPDATE request must contain 'filter' field"
+    - "KeyError: 'filter' - UpdateNode requires filter parameter"
+  related_solutions: [SOL_006, SOL_007]
+
+PARAM_006:
+  name: "Missing Fields in UpdateNode"
+  category: PARAMETER
+  regex: ".*UPDATE.*must contain.*'fields'.*|.*[Mm]issing.*fields.*UpdateNode.*"
+  semantic_features:
+    - error_type: [KeyError, ValueError]
+    - node_type: UpdateNode
+    - missing_field: fields
+  severity: high
+  examples:
+    - "ValueError: UPDATE request must contain 'fields' parameter"
+    - "KeyError: 'fields' - UpdateNode requires fields parameter"
+  related_solutions: [SOL_006, SOL_007]
+
+PARAM_007:
+  name: "Empty Parameter Value"
+  category: PARAMETER
+  regex: ".*[Ee]mpty.*parameter.*|.*parameter.*cannot be empty.*|.*value.*required.*"
+  semantic_features:
+    - error_type: [ValueError]
+    - value: ["", None, [], {}]
+  severity: medium
+  examples:
+    - "ValueError: parameter 'name' cannot be empty"
+    - "Empty value provided for required field 'email'"
+  related_solutions: [SOL_008]
+
+PARAM_008:
+  name: "Invalid Parameter Value Range"
+  category: PARAMETER
+  regex: ".*[Vv]alue.*out of range.*|.*must be.*between.*|.*exceeds.*maximum.*"
+  semantic_features:
+    - error_type: [ValueError, ValidationError]
+  severity: low
+  examples:
+    - "ValueError: age must be between 0 and 150"
+    - "ValidationError: quantity exceeds maximum allowed (1000)"
+  related_solutions: [SOL_009]
+
+PARAM_009:
+  name: "Null Value for Non-Nullable Field"
+  category: PARAMETER
+  regex: ".*[Nn]ull.*not allowed.*|.*cannot be [Nn]ull.*|.*[Rr]equired field.*"
+  semantic_features:
+    - error_type: [ValueError, ValidationError, IntegrityError]
+    - value: None
+  severity: high
+  examples:
+    - "IntegrityError: null value in column 'user_id' violates not-null constraint"
+    - "ValidationError: field 'email' cannot be null"
+  related_solutions: [SOL_010]
+
+PARAM_010:
+  name: "Duplicate Parameter Key"
+  category: PARAMETER
+  regex: ".*[Dd]uplicate.*key.*|.*[Aa]lready exists.*|.*[Uu]nique.*constraint.*"
+  semantic_features:
+    - error_type: [IntegrityError, ValueError]
+    - constraint_type: unique
+  severity: high
+  examples:
+    - "IntegrityError: duplicate key value violates unique constraint 'users_email_key'"
+    - "ValueError: record with id 'user-123' already exists"
+  related_solutions: [SOL_011, SOL_012]
+
+PARAM_011:
+  name: "Invalid JSON Format"
+  category: PARAMETER
+  regex: ".*[Ii]nvalid.*JSON.*|.*JSON.*[Dd]ecode.*error.*|.*malformed.*JSON.*"
+  semantic_features:
+    - error_type: [JSONDecodeError, ValueError]
+  severity: medium
+  examples:
+    - "JSONDecodeError: Expecting property name enclosed in double quotes"
+    - "Invalid JSON format in field 'metadata'"
+  related_solutions: [SOL_013]
+
+PARAM_012:
+  name: "Reserved Field Name Used"
+  category: PARAMETER
+  regex: ".*[Rr]eserved.*field.*|.*cannot use.*'created_at'.*|.*cannot use.*'updated_at'.*"
+  semantic_features:
+    - error_type: [ValueError, ValidationError]
+    - field_name: [created_at, updated_at, id]
+  severity: medium
+  examples:
+    - "ValueError: cannot manually set 'created_at' - auto-managed field"
+    - "Field 'updated_at' is reserved and auto-managed"
+  related_solutions: [SOL_014]
+
+PARAM_013:
+  name: "Parameter Count Mismatch"
+  category: PARAMETER
+  regex: ".*[Tt]oo many.*arguments.*|.*[Mm]issing.*required.*arguments.*|.*[Uu]nexpected.*argument.*"
+  semantic_features:
+    - error_type: [TypeError]
+  severity: medium
+  examples:
+    - "TypeError: function takes 3 arguments but 5 were given"
+    - "Missing required positional argument: 'database_url'"
+  related_solutions: [SOL_015]
+
+PARAM_014:
+  name: "Invalid Boolean Value"
+  category: PARAMETER
+  regex: ".*[Ee]xpected.*bool.*|.*must be.*[Tt]rue or [Ff]alse.*|.*[Ii]nvalid.*boolean.*"
+  semantic_features:
+    - error_type: [TypeError, ValueError]
+    - expected_type: bool
+    - actual_type: [str, int]
+  severity: low
+  examples:
+    - "TypeError: expected bool, got str 'yes'"
+    - "ValidationError: 'active' must be True or False"
+  related_solutions: [SOL_016]
+
+PARAM_015:
+  name: "Invalid List/Array Format"
+  category: PARAMETER
+  regex: ".*[Ee]xpected.*list.*|.*must be.*array.*|.*[Ii]nvalid.*list.*format.*"
+  semantic_features:
+    - error_type: [TypeError, ValueError]
+    - expected_type: list
+    - actual_type: [str, dict, int]
+  severity: medium
+  examples:
+    - "TypeError: expected list, got str"
+    - "ValidationError: 'tags' must be a list/array"
+  related_solutions: [SOL_017]
+
+PARAM_016:
+  name: "Database NOT NULL Constraint - Missing Required Field"
+  category: PARAMETER
+  regex: ".*NOT NULL constraint failed.*|.*constraint.*NOT NULL.*failed.*|.*column.*not null.*"
+  semantic_features:
+    - error_type: [OperationalError, IntegrityError, RuntimeExecutionError, WorkflowExecutionError]
+    - stacktrace_location: [nodes.py, engine.py]
+  severity: high
+  examples:
+    - "NOT NULL constraint failed: users.id"
+    - "Database query failed: NOT NULL constraint failed: users.id"
+    - "IntegrityError: NOT NULL constraint failed: table.column"
+  related_solutions: [SOL_001, SOL_002]
+
+# ==============================================================================
+# CATEGORY 2: CONNECTION ERRORS (10 patterns)
+# ==============================================================================
+
+CONN_001:
+  name: "Source Node Not Found"
+  category: CONNECTION
+  regex: ".*[Ss]ource node.*not found.*|.*[Nn]ode.*does not exist.*|.*[Mm]issing.*node.*|.*[Nn]ode.*not found.*"
+  semantic_features:
+    - error_type: [KeyError, ValueError, WorkflowValidationError]
+    - context: connection_validation
+    - missing_node_type: source
+  severity: critical
+  examples:
+    - "ValueError: Source node 'create_user' not found in workflow"
+    - "KeyError: Connection references non-existent node 'process_data'"
+    - "WorkflowValidationError: Source node 'nonexistent_node' not found in workflow"
+    - "KeyError: Node 'process_1' not found"
+  related_solutions: [SOL_018, SOL_019]
+
+CONN_002:
+  name: "Destination Node Not Found"
+  category: CONNECTION
+  regex: ".*[Dd]estination node.*not found.*|.*[Tt]arget node.*does not exist.*"
+  semantic_features:
+    - error_type: [KeyError, ValueError]
+    - context: connection_validation
+    - missing_node_type: destination
+  severity: critical
+  examples:
+    - "ValueError: Destination node 'read_user' not found in workflow"
+    - "Connection target 'update_user' does not exist"
+  related_solutions: [SOL_018, SOL_019]
+
+CONN_003:
+  name: "Circular Dependency Detected"
+  category: CONNECTION
+  regex: ".*[Cc]ircular.*dependency.*|.*[Cc]ycle.*detected.*|.*[Nn]ode.*creates.*loop.*"
+  semantic_features:
+    - error_type: [ValueError]
+    - context: workflow_validation
+  severity: high
+  examples:
+    - "ValueError: Circular dependency detected: node1 -> node2 -> node1"
+    - "Workflow cycle detected in connection chain"
+  related_solutions: [SOL_020, SOL_021]
+
+CONN_004:
+  name: "Dot Notation on None Value"
+  category: CONNECTION
+  regex: ".*'NoneType'.*has no attribute.*|.*cannot access.*on None.*|.*dot notation.*None.*"
+  semantic_features:
+    - error_type: [AttributeError]
+    - context: parameter_navigation
+  severity: high
+  examples:
+    - "AttributeError: 'NoneType' object has no attribute 'score'"
+    - "Cannot access 'data.score' - parent is None"
+  related_solutions: [SOL_022, SOL_023]
+
+CONN_005:
+  name: "Invalid Dot Notation - Leading Dot"
+  category: CONNECTION
+  regex: ".*[Ii]nvalid.*dot notation.*leading.*|.*cannot start with.*dot.*"
+  semantic_features:
+    - error_type: [ValueError]
+    - pattern: "^\\..*"
+  severity: medium
+  examples:
+    - "ValueError: Invalid dot notation '.data.field' - cannot start with dot"
+    - "Dot notation path '.field' has leading dot"
+  related_solutions: [SOL_024]
+
+CONN_006:
+  name: "Invalid Dot Notation - Trailing Dot"
+  category: CONNECTION
+  regex: ".*[Ii]nvalid.*dot notation.*trailing.*|.*cannot end with.*dot.*"
+  semantic_features:
+    - error_type: [ValueError]
+    - pattern: ".*\\.$"
+  severity: medium
+  examples:
+    - "ValueError: Invalid dot notation 'data.' - cannot end with dot"
+    - "Dot notation path 'field.' has trailing dot"
+  related_solutions: [SOL_024]
+
+CONN_007:
+  name: "Connection Type Mismatch"
+  category: CONNECTION
+  regex: ".*[Tt]ype mismatch.*connection.*|.*[Ii]ncompatible.*types.*|.*cannot connect.*"
+  semantic_features:
+    - error_type: [TypeError, ValueError]
+    - context: connection_validation
+  severity: medium
+  examples:
+    - "TypeError: Cannot connect int output to str input"
+    - "Type mismatch in connection: expected dict, got list"
+  related_solutions: [SOL_025]
+
+CONN_008:
+  name: "Reserved Field in Dot Notation"
+  category: CONNECTION
+  regex: ".*[Rr]eserved.*field.*in path.*|.*cannot access.*reserved.*"
+  semantic_features:
+    - error_type: [ValueError]
+    - reserved_fields: [error, status, metadata, created_at, updated_at]
+  severity: low
+  examples:
+    - "ValueError: Reserved field 'error' in dot notation path 'data.error.code'"
+    - "Cannot access reserved field 'metadata' in path"
+  related_solutions: [SOL_026]
+
+CONN_009:
+  name: "Self-Connection Detected"
+  category: CONNECTION
+  regex: ".*[Ss]elf-connection.*|.*[Nn]ode connects to itself.*|.*[Cc]annot connect.*to same node.*"
+  semantic_features:
+    - error_type: [ValueError]
+    - context: connection_validation
+  severity: high
+  examples:
+    - "ValueError: Self-connection not allowed - node 'process' connects to itself"
+    - "Cannot create connection where source and destination are the same"
+  related_solutions: [SOL_027]
+
+CONN_010:
+  name: "Empty Connection Parameter"
+  category: CONNECTION
+  regex: ".*[Ee]mpty.*connection.*parameter.*|.*source_output.*cannot be empty.*|.*destination_input.*cannot be empty.*"
+  semantic_features:
+    - error_type: [ValueError]
+    - empty_field: [source_output, destination_input]
+  severity: high
+  examples:
+    - "ValueError: source_output cannot be empty"
+    - "Empty destination_input parameter in connection"
+  related_solutions: [SOL_028]
+
+# ==============================================================================
+# CATEGORY 3: MIGRATION ERRORS (8 patterns)
+# ==============================================================================
+
+MIG_001:
+  name: "Table Already Exists"
+  category: MIGRATION
+  regex: ".*[Tt]able.*already exists.*|.*relation.*already exists.*"
+  semantic_features:
+    - error_type: [OperationalError, ProgrammingError]
+    - sql_error_code: ["42P07"]  # PostgreSQL
+  severity: medium
+  examples:
+    - "OperationalError: table 'users' already exists"
+    - "ProgrammingError: relation 'products' already exists"
+  related_solutions: [SOL_029, SOL_030]
+
+MIG_002:
+  name: "Table Not Found"
+  category: MIGRATION
+  regex: ".*[Tt]able.*does not exist.*|.*no such table.*|.*relation.*does not exist.*"
+  semantic_features:
+    - error_type: [OperationalError, ProgrammingError]
+    - sql_error_code: ["42P01"]  # PostgreSQL
+  severity: high
+  examples:
+    - "OperationalError: no such table: users"
+    - "ProgrammingError: relation 'products' does not exist"
+  related_solutions: [SOL_031, SOL_032]
+
+MIG_003:
+  name: "Column Already Exists"
+  category: MIGRATION
+  regex: ".*[Cc]olumn.*already exists.*|.*duplicate column.*"
+  semantic_features:
+    - error_type: [OperationalError, ProgrammingError]
+    - sql_error_code: ["42701"]  # PostgreSQL
+  severity: medium
+  examples:
+    - "OperationalError: column 'email' already exists"
+    - "ProgrammingError: duplicate column name 'status'"
+  related_solutions: [SOL_033]
+
+MIG_004:
+  name: "Column Not Found"
+  category: MIGRATION
+  regex: ".*[Cc]olumn.*does not exist.*|.*no such column.*"
+  semantic_features:
+    - error_type: [OperationalError, ProgrammingError]
+    - sql_error_code: ["42703"]  # PostgreSQL
+  severity: high
+  examples:
+    - "OperationalError: no such column: user_email"
+    - "ProgrammingError: column 'deleted_at' does not exist"
+  related_solutions: [SOL_034, SOL_035]
+
+MIG_005:
+  name: "Foreign Key Constraint Violation"
+  category: MIGRATION
+  regex: ".*[Ff]oreign key.*constraint.*|.*violates foreign key.*"
+  semantic_features:
+    - error_type: [IntegrityError]
+    - sql_error_code: ["23503"]  # PostgreSQL
+  severity: high
+  examples:
+    - "IntegrityError: foreign key constraint 'fk_user_org' violated"
+    - "violates foreign key constraint on table 'orders'"
+  related_solutions: [SOL_036, SOL_037]
+
+MIG_006:
+  name: "Unique Constraint Violation"
+  category: MIGRATION
+  regex: ".*[Uu]nique.*constraint.*|.*duplicate key value.*"
+  semantic_features:
+    - error_type: [IntegrityError]
+    - sql_error_code: ["23505"]  # PostgreSQL
+  severity: high
+  examples:
+    - "IntegrityError: unique constraint 'users_email_key' violated"
+    - "duplicate key value violates unique constraint"
+  related_solutions: [SOL_038, SOL_039]
+
+MIG_007:
+  name: "Check Constraint Violation"
+  category: MIGRATION
+  regex: ".*[Cc]heck.*constraint.*|.*violates check constraint.*"
+  semantic_features:
+    - error_type: [IntegrityError]
+    - sql_error_code: ["23514"]  # PostgreSQL
+  severity: medium
+  examples:
+    - "IntegrityError: check constraint 'age_positive' violated"
+    - "violates check constraint 'valid_status'"
+  related_solutions: [SOL_040]
+
+MIG_008:
+  name: "Schema Version Mismatch"
+  category: MIGRATION
+  regex: ".*[Ss]chema.*version.*mismatch.*|.*[Mm]igration.*out of sync.*"
+  semantic_features:
+    - error_type: [ValueError, RuntimeError]
+    - context: migration_system
+  severity: critical
+  examples:
+    - "RuntimeError: schema version mismatch - expected v5, found v3"
+    - "Migration out of sync: database schema does not match model"
+  related_solutions: [SOL_041, SOL_042]
+
+# ==============================================================================
+# CATEGORY 4: CONFIGURATION ERRORS (7 patterns)
+# ==============================================================================
+
+CONFIG_001:
+  name: "Invalid Database URL Format"
+  category: CONFIGURATION
+  regex: ".*[Ii]nvalid.*database.*URL.*|.*malformed.*connection.*string.*"
+  semantic_features:
+    - error_type: [ValueError]
+    - context: database_initialization
+  severity: critical
+  examples:
+    - "ValueError: Invalid database URL format 'postgres:/localhost/db'"
+    - "Malformed connection string - missing port"
+  related_solutions: [SOL_043, SOL_044]
+
+CONFIG_002:
+  name: "Missing Environment Variable"
+  category: CONFIGURATION
+  regex: ".*[Ee]nvironment variable.*not set.*|.*missing.*env var.*"
+  semantic_features:
+    - error_type: [KeyError, ValueError]
+    - context: configuration
+  severity: high
+  examples:
+    - "KeyError: Environment variable 'DATABASE_URL' not set"
+    - "Missing required env var: API_KEY"
+  related_solutions: [SOL_045]
+
+CONFIG_003:
+  name: "Database Connection Failed"
+  category: CONFIGURATION
+  regex: ".*[Cc]onnection.*refused.*|.*[Cc]ould not connect.*|.*[Cc]onnection.*failed.*"
+  semantic_features:
+    - error_type: [OperationalError, ConnectionError]
+    - context: database_connection
+  severity: critical
+  examples:
+    - "OperationalError: could not connect to server"
+    - "ConnectionError: connection refused on port 5432"
+  related_solutions: [SOL_046, SOL_047]
+
+CONFIG_004:
+  name: "Authentication Failed"
+  category: CONFIGURATION
+  regex: ".*[Aa]uthentication.*failed.*|.*[Ii]nvalid.*credentials.*|.*password.*authentication failed.*"
+  semantic_features:
+    - error_type: [OperationalError]
+    - context: database_connection
+  severity: critical
+  examples:
+    - "OperationalError: password authentication failed for user 'postgres'"
+    - "Invalid credentials for database connection"
+  related_solutions: [SOL_048]
+
+CONFIG_005:
+  name: "Database Does Not Exist"
+  category: CONFIGURATION
+  regex: ".*[Dd]atabase.*does not exist.*|.*unknown database.*"
+  semantic_features:
+    - error_type: [OperationalError, ProgrammingError]
+    - sql_error_code: ["3D000"]  # PostgreSQL
+  severity: high
+  examples:
+    - "OperationalError: database 'myapp_db' does not exist"
+    - "Unknown database 'production_db'"
+  related_solutions: [SOL_049]
+
+CONFIG_006:
+  name: "Invalid Pool Configuration"
+  category: CONFIGURATION
+  regex: ".*[Ii]nvalid.*pool.*config.*|.*pool_size.*must be.*|.*max_overflow.*invalid.*"
+  semantic_features:
+    - error_type: [ValueError]
+    - context: connection_pool
+  severity: medium
+  examples:
+    - "ValueError: pool_size must be >= 1"
+    - "Invalid pool configuration: max_overflow cannot be negative"
+  related_solutions: [SOL_050]
+
+CONFIG_007:
+  name: "Timeout Configuration Error"
+  category: CONFIGURATION
+  regex: ".*[Tt]imeout.*must be.*|.*[Ii]nvalid.*timeout.*value.*"
+  semantic_features:
+    - error_type: [ValueError]
+    - context: configuration
+  severity: low
+  examples:
+    - "ValueError: timeout must be positive integer"
+    - "Invalid timeout value: cannot be None"
+  related_solutions: [SOL_051]
+
+# ==============================================================================
+# CATEGORY 5: RUNTIME ERRORS (10 patterns)
+# ==============================================================================
+
+RUNTIME_001:
+  name: "Transaction Deadlock"
+  category: RUNTIME
+  regex: ".*[Dd]eadlock.*detected.*|.*could not obtain lock.*"
+  semantic_features:
+    - error_type: [OperationalError]
+    - sql_error_code: ["40P01"]  # PostgreSQL
+  severity: critical
+  examples:
+    - "OperationalError: deadlock detected"
+    - "could not obtain lock on row in relation 'users'"
+  related_solutions: [SOL_052, SOL_053]
+
+RUNTIME_002:
+  name: "Connection Pool Exhausted"
+  category: RUNTIME
+  regex: ".*[Pp]ool.*exhausted.*|.*[Tt]imeout.*waiting for connection.*|.*[Cc]onnection pool.*full.*"
+  semantic_features:
+    - error_type: [TimeoutError, PoolError]
+    - context: connection_pool
+  severity: critical
+  examples:
+    - "TimeoutError: timeout waiting for connection from pool"
+    - "PoolError: connection pool exhausted (size: 20)"
+  related_solutions: [SOL_054, SOL_055]
+
+RUNTIME_003:
+  name: "Query Timeout"
+  category: RUNTIME
+  regex: ".*[Qq]uery.*timeout.*|.*statement.*timeout.*|.*[Cc]anceling.*statement.*"
+  semantic_features:
+    - error_type: [OperationalError, TimeoutError]
+    - sql_error_code: ["57014"]  # PostgreSQL
+  severity: high
+  examples:
+    - "OperationalError: query canceled due to statement timeout"
+    - "TimeoutError: query exceeded 30 second timeout"
+  related_solutions: [SOL_056, SOL_057]
+
+RUNTIME_004:
+  name: "Out of Memory"
+  category: RUNTIME
+  regex: ".*[Oo]ut of memory.*|.*[Mm]emory.*exhausted.*|.*cannot allocate memory.*"
+  semantic_features:
+    - error_type: [MemoryError, OperationalError]
+  severity: critical
+  examples:
+    - "MemoryError: out of memory"
+    - "OperationalError: server out of memory"
+  related_solutions: [SOL_058, SOL_059]
+
+RUNTIME_005:
+  name: "Event Loop Closed"
+  category: RUNTIME
+  regex: ".*[Ee]vent loop.*closed.*|.*[Rr]untime.*already closed.*"
+  semantic_features:
+    - error_type: [RuntimeError]
+    - context: async_runtime
+  severity: high
+  examples:
+    - "RuntimeError: Event loop is closed"
+    - "Cannot execute query - runtime already closed"
+  related_solutions: [SOL_060]
+
+RUNTIME_006:
+  name: "Transaction Already Committed"
+  category: RUNTIME
+  regex: ".*[Tt]ransaction.*already.*committed.*|.*[Cc]annot commit.*twice.*"
+  semantic_features:
+    - error_type: [RuntimeError, OperationalError]
+    - context: transaction_management
+  severity: medium
+  examples:
+    - "RuntimeError: transaction already committed"
+    - "Cannot commit - transaction already finalized"
+  related_solutions: [SOL_061]
+
+RUNTIME_007:
+  name: "Workflow Build Not Called"
+  category: RUNTIME
+  regex: ".*must call.*\\.build\\(\\).*|.*[Ww]orkflow not built.*"
+  semantic_features:
+    - error_type: [ValueError, RuntimeError]
+    - context: workflow_execution
+  severity: high
+  examples:
+    - "ValueError: must call workflow.build() before execution"
+    - "RuntimeError: workflow not built - call build() first"
+  related_solutions: [SOL_062]
+
+RUNTIME_008:
+  name: "Node Execution Failed"
+  category: RUNTIME
+  regex: ".*[Nn]ode.*execution failed.*|.*[Ee]rror in node.*"
+  semantic_features:
+    - error_type: [RuntimeError]
+    - context: node_execution
+  severity: high
+  examples:
+    - "RuntimeError: Node 'create_user' execution failed"
+    - "Error in node 'process_data': invalid input"
+  related_solutions: [SOL_063, SOL_064]
+
+RUNTIME_009:
+  name: "Async/Sync Runtime Mismatch"
+  category: RUNTIME
+  regex: ".*[Aa]sync.*runtime.*required.*|.*[Cc]annot use.*LocalRuntime.*with async.*"
+  semantic_features:
+    - error_type: [RuntimeError, TypeError]
+    - context: runtime_execution
+  severity: high
+  examples:
+    - "RuntimeError: async runtime required - use AsyncLocalRuntime"
+    - "TypeError: cannot use LocalRuntime with async workflow"
+  related_solutions: [SOL_065]
+
+RUNTIME_010:
+  name: "Maximum Retries Exceeded"
+  category: RUNTIME
+  regex: ".*[Mm]aximum.*retries.*exceeded.*|.*[Rr]etry.*limit.*reached.*"
+  semantic_features:
+    - error_type: [RuntimeError, OperationalError]
+    - context: retry_logic
+  severity: medium
+  examples:
+    - "RuntimeError: maximum retries (3) exceeded for operation"
+    - "Retry limit reached - operation failed after 5 attempts"
+  related_solutions: [SOL_066, SOL_067]
+
+# ==============================================================================
+# PATTERN METADATA
+# ==============================================================================
+
+metadata:
+  version: "1.0.0"
+  total_patterns: 50
+  categories:
+    PARAMETER: 15
+    CONNECTION: 10
+    MIGRATION: 8
+    CONFIGURATION: 7
+    RUNTIME: 10
+  last_updated: "2025-01-12"
+  author: "DataFlow Debug Agent"

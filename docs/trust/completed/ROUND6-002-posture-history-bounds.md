@@ -30,7 +30,7 @@ This fix adds `_max_history_size = 10000` with `_record_transition()` helper tha
 
 ### Modified Files
 
-1. **`apps/kailash-kaizen/src/kaizen/trust/postures.py`**
+1. **`packages/kailash-kaizen/src/kaizen/trust/postures.py`**
    - Added `_max_history_size = 10000` class constant
    - Added `_record_transition()` helper method:
      - Appends transition to `_history`
@@ -41,7 +41,7 @@ This fix adds `_max_history_size = 10000` with `_record_transition()` helper tha
      - `transition()` method (main transition path)
      - `emergency_downgrade()` method (emergency transitions)
 
-2. **`apps/kailash-kaizen/tests/unit/trust/test_posture_history_bounds.py`** (NEW)
+2. **`packages/kailash-kaizen/tests/unit/trust/test_posture_history_bounds.py`** (NEW)
    - Added 19 new memory DoS prevention tests:
      - test_history_size_limit_enforced (11k transitions)
      - test_trim_strategy_keeps_recent (11k transitions)

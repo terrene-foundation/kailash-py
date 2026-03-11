@@ -1,0 +1,114 @@
+{
+  "dashboard": {
+    "title": "Kaizen AI - Production Overview",
+    "tags": ["kaizen", "ai", "production"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(kaizen_requests_total[5m])) by (agent_type)",
+            "legendFormat": "{{ agent_type }}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Requests/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Error Rate",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(kaizen_errors_total[5m])) by (agent_type, error_type)",
+            "legendFormat": "{{ agent_type }} - {{ error_type }}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "errps", "label": "Errors/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Request Duration (P50, P95, P99)",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 24, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, sum(rate(kaizen_request_duration_seconds_bucket[5m])) by (le, agent_type))",
+            "legendFormat": "{{ agent_type }} - P50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(kaizen_request_duration_seconds_bucket[5m])) by (le, agent_type))",
+            "legendFormat": "{{ agent_type }} - P95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(kaizen_request_duration_seconds_bucket[5m])) by (le, agent_type))",
+            "legendFormat": "{{ agent_type }} - P99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Duration"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Success Rate",
+        "type": "singlestat",
+        "gridPos": {"x": 0, "y": 16, "w": 8, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(rate(kaizen_requests_total{status=\"success\"}[5m])) / sum(rate(kaizen_requests_total[5m])) * 100",
+            "refId": "A"
+          }
+        ],
+        "format": "percent",
+        "thresholds": "90,95",
+        "colors": ["#d44a3a", "#e0b400", "#299c46"]
+      },
+      {
+        "id": 5,
+        "title": "Total Requests (5m)",
+        "type": "singlestat",
+        "gridPos": {"x": 8, "y": 16, "w": 8, "h": 4},
+        "targets": [
+          {
+            "expr": "sum(increase(kaizen_requests_total[5m]))",
+            "refId": "A"
+          }
+        ],
+        "format": "short"
+      },
+      {
+        "id": 6,
+        "title": "Active Agents",
+        "type": "singlestat",
+        "gridPos": {"x": 16, "y": 16, "w": 8, "h": 4},
+        "targets": [
+          {
+            "expr": "active_agents",
+            "refId": "A"
+          }
+        ],
+        "format": "short"
+      }
+    ]
+  }
+}

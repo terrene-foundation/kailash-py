@@ -1,0 +1,112 @@
+{
+  "metadata": {
+    "id": "bulk-document-analysis",
+    "name": "Bulk Document Analysis",
+    "description": "High-throughput batch processing of documents using BatchProcessingAgent",
+    "category": "Single Agent",
+    "complexity": "Intermediate",
+    "tags": ["batch", "concurrent", "document-analysis", "high-throughput"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "batch_agent",
+      "type": "BatchProcessingAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "temperature": 0.3,
+        "max_tokens": 500,
+        "max_concurrent": 20
+      },
+      "position": {"x": 100, "y": 100}
+    }
+  ],
+  "connections": [],
+  "inputs": [
+    {
+      "id": "documents",
+      "name": "Documents",
+      "type": "array",
+      "description": "Array of documents to process",
+      "default": [
+        {"id": 1, "text": "First document content..."},
+        {"id": 2, "text": "Second document content..."}
+      ],
+      "required": true
+    },
+    {
+      "id": "analysis_task",
+      "name": "Analysis Task",
+      "type": "string",
+      "description": "Task to perform on each document",
+      "default": "Extract key topics and sentiment",
+      "required": true
+    }
+  ],
+  "outputs": [
+    {
+      "id": "results",
+      "name": "Analysis Results",
+      "type": "array",
+      "description": "Analysis results for all documents"
+    },
+    {
+      "id": "processing_stats",
+      "name": "Processing Statistics",
+      "type": "object",
+      "description": "Batch processing statistics (duration, throughput, etc.)"
+    }
+  ],
+  "execution": {
+    "entry_point": "batch_agent",
+    "timeout": 300,
+    "retry_policy": {
+      "max_retries": 3,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This workflow processes large batches of documents concurrently using BatchProcessingAgent. It can handle thousands of documents with high throughput by processing multiple items in parallel with configurable concurrency limits. Perfect for bulk document classification, sentiment analysis, and data transformation at scale.",
+    "use_cases": [
+      "Bulk document classification and categorization",
+      "Large-scale sentiment analysis of customer feedback",
+      "Batch translation of documentation",
+      "Data transformation and ETL pipelines",
+      "Mass email/ticket classification for support systems"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "Internet connection for API access",
+      "Sufficient API rate limits for concurrent requests"
+    ],
+    "example_inputs": [
+      {
+        "documents": [
+          {"id": 1, "text": "Customer loves the new feature, very satisfied"},
+          {"id": 2, "text": "Disappointed with slow response time"},
+          {"id": 3, "text": "Product works as expected, no complaints"}
+        ],
+        "analysis_task": "Classify sentiment as positive, negative, or neutral"
+      }
+    ],
+    "example_outputs": [
+      {
+        "results": [
+          {"id": 1, "sentiment": "positive", "confidence": 0.92},
+          {"id": 2, "sentiment": "negative", "confidence": 0.88},
+          {"id": 3, "sentiment": "neutral", "confidence": 0.85}
+        ],
+        "processing_stats": {
+          "total_items": 3,
+          "duration_seconds": 1.2,
+          "throughput_per_second": 2.5,
+          "concurrent_workers": 20,
+          "success_rate": 1.0
+        }
+      }
+    ]
+  }
+}

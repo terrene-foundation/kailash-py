@@ -1,0 +1,108 @@
+# Prometheus Configuration for Kaizen Observability Stack
+# ========================================================
+# Production-ready configuration with authentication and security hardening
+#
+# For production deployment:
+#   1. Update external_labels (cluster, environment)
+#   2. Generate basic auth credentials: ./scripts/generate-prometheus-auth.sh
+#   3. Update retention settings for your workload
+#   4. Configure alertmanager endpoints
+#   5. Add agent scrape targets
+
+global:
+  scrape_interval: 10s
+  evaluation_interval: 10s
+
+  # External labels for multi-cluster deployments
+  # Update these for your environment
+  external_labels:
+    cluster: 'kaizen-production'
+    environment: 'production'
+    region: 'us-east-1'  # Update for your region
+
+# Alerting configuration (optional - requires Alertmanager)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          # - alertmanager:9093
+
+# Rule files for alerting
+rule_files:
+  # - "alerts/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Scrape Prometheus itself for monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Scrape Kaizen agents metrics endpoint
+  # Configure your agent to expose metrics at /metrics
+  - job_name: 'kaizen-agents'
+    scrape_interval: 5s
+    scrape_timeout: 5s
+    metrics_path: '/metrics'
+
+    # Basic authentication (production)
+    # Uncomment and configure for production deployments
+    # basic_auth:
+    #   username: 'prometheus'
+    #   password_file: /etc/prometheus/prometheus-password.txt
+
+    # TLS configuration (production)
+    # Uncomment for HTTPS agent endpoints
+    # tls_config:
+    #   ca_file: /etc/prometheus/ca.crt
+    #   cert_file: /etc/prometheus/client.crt
+    #   key_file: /etc/prometheus/client.key
+    #   insecure_skip_verify: false
+
+    static_configs:
+      - targets:
+        # Add your Kaizen agent endpoints here
+        # Example: - 'localhost:8000'
+        # Example: - 'agent-1:8000'
+        # Example: - 'agent-2:8000'
+        []
+
+    relabel_configs:
+      # Add agent_id label from target
+      - source_labels: [__address__]
+        target_label: instance
+      - source_labels: [instance]
+        regex: '(.+):.+'
+        replacement: '$1'
+        target_label: agent_id
+
+    # Metric relabeling (optional)
+    # metric_relabel_configs:
+    #   - source_labels: [__name__]
+    #     regex: 'unwanted_metric.*'
+    #     action: drop
+
+  # Scrape Jaeger metrics (if using Jaeger for tracing)
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['jaeger:14269']
+
+  # Node exporter for system metrics (CPU, memory, disk)
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+# Storage configuration
+storage:
+  tsdb:
+    path: /prometheus
+
+    # Retention policies (adjust for your workload)
+    # Development: 15d / 10GB
+    # Production:  30d / 50GB
+    # Enterprise:  90d / 200GB
+    retention.time: 30d
+    retention.size: 50GB
+
+    # Compression (enabled by default, reduces disk usage by ~50%)
+    # wal_compression: true

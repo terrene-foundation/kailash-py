@@ -125,7 +125,9 @@ ignore = ["E203", "E501", "E722", "F401", "F841"]
 "scripts/refactor-pythoncode-to-functions.py" = ["E722"]
 "src/kailash/nodes/api/security.py" = ["E722"]
 "tests/conftest_sdk_dev.py" = ["E722"]
-# Ignore import ordering and undefined names in apps directory (separate packages)
+# Ignore import ordering and undefined names in packages directory (separate packages)
+"packages/**/*.py" = ["E402", "F821", "F811", "E721"]
+# Keep apps/ rules for internal apps
 "apps/**/*.py" = ["E402", "F821", "F811", "E721"]
 # Ignore undefined names in test files that may use mocks
 "tests/**/*.py" = ["F821", "F811", "E721"]

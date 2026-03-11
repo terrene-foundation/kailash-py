@@ -1,0 +1,53 @@
+# Dockerfile for reproducible Kaizen benchmarks
+# Provides fixed environment for consistent performance measurements
+
+FROM python:3.12-slim
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Ollama
+RUN curl -fsSL https://ollama.ai/install.sh | sh
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements
+COPY pyproject.toml setup.py ./
+COPY src ./src
+COPY benchmarks ./benchmarks
+COPY tests ./tests
+
+# Install Python dependencies
+RUN pip install --upgrade pip && \
+    pip install -e ".[dev]" && \
+    pip install kailash-dataflow>=0.7.12 psutil
+
+# Pull Ollama model
+RUN ollama serve & \
+    sleep 10 && \
+    ollama pull llama3.2:1b && \
+    pkill ollama
+
+# Create results directory
+RUN mkdir -p /app/benchmarks/results
+
+# Document hardware specs
+RUN echo "Docker Container Specs:" > /app/benchmarks/results/container_specs.txt && \
+    echo "Python Version: $(python --version)" >> /app/benchmarks/results/container_specs.txt && \
+    echo "CPU Info:" >> /app/benchmarks/results/container_specs.txt && \
+    cat /proc/cpuinfo | grep "model name" | head -1 >> /app/benchmarks/results/container_specs.txt && \
+    echo "Memory Info:" >> /app/benchmarks/results/container_specs.txt && \
+    cat /proc/meminfo | grep "MemTotal" >> /app/benchmarks/results/container_specs.txt
+
+# Default command: Run all benchmark suites
+CMD ["sh", "-c", "ollama serve & sleep 10 && for suite in benchmarks/suite*.py; do python $suite; done"]

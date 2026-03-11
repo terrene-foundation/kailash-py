@@ -81,14 +81,14 @@ Files that reference internal source code paths. Remove lines/paragraphs contain
 | `agents/testing-specialist.md`                | `tests/utils/test-env`                                                           |
 | `agents/deployment-specialist.md`             | Internal infrastructure references                                               |
 | `agents/management/git-release-specialist.md` | PyPI/version internal references                                                 |
-| `agents/frameworks/dataflow-specialist.md`    | `apps/kailash-dataflow/src/`, internal class names                               |
-| `agents/frameworks/nexus-specialist.md`       | `apps/kailash-nexus/src/`                                                        |
-| `agents/frameworks/kaizen-specialist.md`      | `apps/kailash-kaizen/src/`                                                       |
+| `agents/frameworks/dataflow-specialist.md`    | `packages/kailash-dataflow/src/`, internal class names                               |
+| `agents/frameworks/nexus-specialist.md`       | `packages/kailash-nexus/src/`                                                        |
+| `agents/frameworks/kaizen-specialist.md`      | `packages/kailash-kaizen/src/`                                                       |
 | `agents/frameworks/mcp-specialist.md`         | Internal references                                                              |
 | `skills/01-core-sdk/`                         | `src/kailash/`                                                                   |
-| `skills/02-dataflow/`                         | `apps/kailash-dataflow/src/`                                                     |
+| `skills/02-dataflow/`                         | `packages/kailash-dataflow/src/`                                                     |
 | `skills/03-nexus/`                            | Internal references                                                              |
-| `skills/04-kaizen/`                           | `apps/kailash-kaizen/src/`                                                       |
+| `skills/04-kaizen/`                           | `packages/kailash-kaizen/src/`                                                       |
 | `skills/05-kailash-mcp/`                      | Internal references                                                              |
 | `skills/10-deployment-git/`                   | Internal CI references                                                           |
 | `skills/12-testing-strategies/`               | Internal test infra references                                                   |
@@ -148,9 +148,9 @@ These patterns are stripped from ALL files during sync (not just the ones listed
 
 ```
 src/kailash/                              # Internal SDK source
-apps/kailash-dataflow/src/                # Internal DataFlow source
-apps/kailash-kaizen/src/                  # Internal Kaizen source
-apps/kailash-nexus/src/                   # Internal Nexus source
+packages/kailash-dataflow/src/                # Internal DataFlow source
+packages/kailash-kaizen/src/                  # Internal Kaizen source
+packages/kailash-nexus/src/                   # Internal Nexus source
 # contrib (removed)/                         # Builder-only docs
 tests/utils/test-env                      # Internal test infrastructure
 ./  # Absolute paths

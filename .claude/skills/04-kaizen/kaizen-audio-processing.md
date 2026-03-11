@@ -23,4 +23,4 @@ print(result['language'])
 - Languages: 90+ supported
 
 ## References
-- **Examples**: `apps/kailash-kaizen/examples/8-multi-modal/audio-transcription/`
+- **Examples**: `packages/kailash-kaizen/examples/8-multi-modal/audio-transcription/`
