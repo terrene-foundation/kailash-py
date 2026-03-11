@@ -30,9 +30,9 @@ learning/                              # Per-repo learning data
 
 ```
 src/kailash/                              # Internal SDK source - NEVER sync
-apps/kailash-dataflow/src/                # Internal DataFlow source
-apps/kailash-kaizen/src/                  # Internal Kaizen source
-apps/kailash-nexus/src/                   # Internal Nexus source
+packages/kailash-dataflow/src/                # Internal DataFlow source
+packages/kailash-kaizen/src/                  # Internal Kaizen source
+packages/kailash-nexus/src/                   # Internal Nexus source
 # contrib (removed)/                         # Builder-only docs
 ```
 

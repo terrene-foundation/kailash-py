@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  # ChromaDB for vector storage
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: kaizen-chromadb
+    restart: unless-stopped
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - ALLOW_RESET=true
+      - ANONYMIZED_TELEMETRY=false
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - kaizen-network
+
+  # RAG Agent
+  rag-agent:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    image: kaizen:latest
+    container_name: kaizen-rag-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - CHROMA_HOST=chromadb
+      - CHROMA_PORT=8000
+    depends_on:
+      chromadb:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+    command: ["python", "/app/examples/1-single-agent/rag-research/workflow.py"]
+    networks:
+      - kaizen-network
+
+networks:
+  kaizen-network:
+    driver: bridge
+
+volumes:
+  chroma-data:
+    driver: local

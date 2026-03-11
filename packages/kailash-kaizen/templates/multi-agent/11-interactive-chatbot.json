@@ -1,0 +1,135 @@
+{
+  "metadata": {
+    "id": "interactive-chatbot",
+    "name": "Interactive Streaming Chatbot",
+    "description": "Real-time streaming chat with conversation memory",
+    "category": "Multi Agent",
+    "complexity": "Advanced",
+    "tags": ["streaming", "chat", "memory", "conversation", "real-time"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "streaming_agent",
+      "type": "StreamingChatAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "temperature": 0.7,
+        "max_tokens": 500,
+        "streaming_enabled": true
+      },
+      "position": {"x": 100, "y": 100}
+    },
+    {
+      "id": "memory_agent",
+      "type": "MemoryAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "memory_window": 20,
+        "memory_persistence": true
+      },
+      "position": {"x": 300, "y": 100}
+    }
+  ],
+  "connections": [
+    {
+      "from": "streaming_agent",
+      "to": "memory_agent",
+      "output": "streaming_response",
+      "input": "response_to_store"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "user_message",
+      "name": "User Message",
+      "type": "string",
+      "description": "User's message in conversation",
+      "default": "Tell me about your capabilities",
+      "required": true
+    },
+    {
+      "id": "session_id",
+      "name": "Session ID",
+      "type": "string",
+      "description": "Conversation session identifier",
+      "default": "user-session-123",
+      "required": true
+    }
+  ],
+  "outputs": [
+    {
+      "id": "streaming_tokens",
+      "name": "Streaming Tokens",
+      "type": "array",
+      "description": "Real-time token stream for UI display"
+    },
+    {
+      "id": "complete_response",
+      "name": "Complete Response",
+      "type": "string",
+      "description": "Full response after streaming completes"
+    },
+    {
+      "id": "conversation_context",
+      "name": "Conversation Context",
+      "type": "object",
+      "description": "Current conversation state and memory"
+    }
+  ],
+  "execution": {
+    "entry_point": "streaming_agent",
+    "timeout": 60,
+    "retry_policy": {
+      "max_retries": 3,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This multi-agent workflow creates an interactive chatbot with real-time token streaming and conversation memory. StreamingChatAgent provides instant user feedback by streaming tokens as they're generated, while MemoryAgent maintains conversation context across turns. Perfect for responsive chat interfaces and conversational AI applications.",
+    "use_cases": [
+      "Customer support chatbots with real-time responses",
+      "Interactive virtual assistants with context awareness",
+      "Educational tutors with personalized learning paths",
+      "Technical support bots maintaining issue context",
+      "Conversational interfaces for web and mobile apps"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "WebSocket or streaming-capable UI for real-time display",
+      "Memory storage configured (Redis, database, or in-memory)",
+      "Internet connection for API access"
+    ],
+    "example_inputs": [
+      {
+        "user_message": "Tell me about your capabilities",
+        "session_id": "user-session-123"
+      },
+      {
+        "user_message": "Can you help me debug my Python code?",
+        "session_id": "user-session-123"
+      }
+    ],
+    "example_outputs": [
+      {
+        "streaming_tokens": [
+          {"token": "I", "timestamp": "2025-10-06T14:30:00.001Z"},
+          {"token": " can", "timestamp": "2025-10-06T14:30:00.012Z"},
+          {"token": " help", "timestamp": "2025-10-06T14:30:00.023Z"},
+          {"token": " with", "timestamp": "2025-10-06T14:30:00.034Z"}
+        ],
+        "complete_response": "I can help with a wide range of tasks including answering questions, writing code, analyzing data, and more. What would you like assistance with?",
+        "conversation_context": {
+          "session_id": "user-session-123",
+          "turn_count": 1,
+          "memory_entries": 1,
+          "total_tokens": 95
+        }
+      }
+    ]
+  }
+}

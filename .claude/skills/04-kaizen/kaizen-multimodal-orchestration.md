@@ -24,4 +24,4 @@ result = agent.analyze(image="/path/to/invoice.png")
 ```
 
 ## References
-- **Examples**: `apps/kailash-kaizen/examples/8-multi-modal/document-understanding/`
+- **Examples**: `packages/kailash-kaizen/examples/8-multi-modal/document-understanding/`

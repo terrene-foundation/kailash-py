@@ -1,0 +1,133 @@
+{
+  "metadata": {
+    "id": "self-improving-writer",
+    "name": "Self-Improving Writer",
+    "description": "Iterative content refinement using SelfReflectionAgent",
+    "category": "Single Agent",
+    "complexity": "Advanced",
+    "tags": ["reflection", "self-improvement", "content-generation", "iterative"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "reflection_agent",
+      "type": "SelfReflectionAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-4",
+        "temperature": 0.7,
+        "max_tokens": 1500,
+        "max_cycles": 5,
+        "improvement_threshold": 0.9
+      },
+      "position": {"x": 100, "y": 100}
+    }
+  ],
+  "connections": [],
+  "inputs": [
+    {
+      "id": "task",
+      "name": "Writing Task",
+      "type": "string",
+      "description": "Content generation task",
+      "default": "Write a blog post about the benefits of test-driven development",
+      "required": true
+    },
+    {
+      "id": "quality_criteria",
+      "name": "Quality Criteria",
+      "type": "array",
+      "description": "Criteria for evaluating content quality",
+      "default": ["clarity", "technical accuracy", "engagement", "structure"],
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "id": "final_content",
+      "name": "Final Content",
+      "type": "string",
+      "description": "Refined content after iterations"
+    },
+    {
+      "id": "quality_score",
+      "name": "Quality Score",
+      "type": "number",
+      "description": "Final quality score (0-1)"
+    },
+    {
+      "id": "reflection_history",
+      "name": "Reflection History",
+      "type": "array",
+      "description": "History of iterations and improvements"
+    },
+    {
+      "id": "iterations_used",
+      "name": "Iterations Used",
+      "type": "number",
+      "description": "Number of refinement iterations"
+    }
+  ],
+  "execution": {
+    "entry_point": "reflection_agent",
+    "timeout": 180,
+    "retry_policy": {
+      "max_retries": 2,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This workflow generates high-quality content through iterative self-reflection. The agent creates an initial draft, critiques it, and produces improved versions until quality criteria are met. Perfect for content that requires polish, such as blog posts, marketing copy, and technical documentation.",
+    "use_cases": [
+      "Blog post and article writing with quality assurance",
+      "Marketing copy optimization and A/B testing preparation",
+      "Technical documentation refinement",
+      "Code review comments and explanations",
+      "Email and communication drafting with tone adjustment"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "Internet connection for API access",
+      "GPT-4 recommended for better reflection capabilities"
+    ],
+    "example_inputs": [
+      {
+        "task": "Write a blog post about the benefits of test-driven development",
+        "quality_criteria": ["clarity", "technical accuracy", "engagement", "structure"]
+      },
+      {
+        "task": "Create marketing copy for a new SaaS product launch",
+        "quality_criteria": ["persuasiveness", "clarity", "call-to-action strength"]
+      }
+    ],
+    "example_outputs": [
+      {
+        "final_content": "Test-Driven Development: Building Better Software Through Testing First\n\nTest-Driven Development (TDD) is a software development approach that has revolutionized how we write code...\n\n[High-quality, polished blog post content after 3 iterations of refinement]",
+        "quality_score": 0.92,
+        "reflection_history": [
+          {
+            "iteration": 1,
+            "critique": "Initial draft lacks concrete examples and the structure could be improved",
+            "improvements": ["Added 3 real-world examples", "Reorganized into clear sections"],
+            "score": 0.75
+          },
+          {
+            "iteration": 2,
+            "critique": "Examples are good, but technical accuracy could be enhanced",
+            "improvements": ["Added code snippets", "Clarified TDD cycle"],
+            "score": 0.85
+          },
+          {
+            "iteration": 3,
+            "critique": "Strong content, minor engagement improvements needed",
+            "improvements": ["Added engaging introduction", "Strengthened conclusion"],
+            "score": 0.92
+          }
+        ],
+        "iterations_used": 3
+      }
+    ]
+  }
+}

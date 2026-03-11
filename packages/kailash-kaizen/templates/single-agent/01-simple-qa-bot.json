@@ -1,0 +1,87 @@
+{
+  "metadata": {
+    "id": "simple-qa-bot",
+    "name": "Simple Q&A Bot",
+    "description": "Basic question answering with confidence scoring using SimpleQAAgent",
+    "category": "Single Agent",
+    "complexity": "Beginner",
+    "tags": ["qa", "simple", "beginner", "question-answering"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "qa_agent",
+      "type": "SimpleQAAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "temperature": 0.1,
+        "max_tokens": 500
+      },
+      "position": {"x": 100, "y": 100}
+    }
+  ],
+  "connections": [],
+  "inputs": [
+    {
+      "id": "user_question",
+      "name": "Question",
+      "type": "string",
+      "description": "Question to answer",
+      "default": "What is artificial intelligence?",
+      "required": true
+    }
+  ],
+  "outputs": [
+    {
+      "id": "answer",
+      "name": "Answer",
+      "type": "string",
+      "description": "Answer to the question"
+    },
+    {
+      "id": "confidence",
+      "name": "Confidence Score",
+      "type": "number",
+      "description": "Confidence score (0-1)"
+    }
+  ],
+  "execution": {
+    "entry_point": "qa_agent",
+    "timeout": 30,
+    "retry_policy": {
+      "max_retries": 3,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This workflow demonstrates basic question answering using SimpleQAAgent. It takes a user question as input and returns an answer with a confidence score. Perfect for simple FAQ systems, knowledge base queries, and customer support chatbots.",
+    "use_cases": [
+      "Customer support chatbots answering common questions",
+      "FAQ automation for websites and documentation",
+      "Knowledge base queries for internal tools",
+      "Educational Q&A systems"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "Internet connection for API access"
+    ],
+    "example_inputs": [
+      {"user_question": "What is artificial intelligence?"},
+      {"user_question": "How does machine learning work?"},
+      {"user_question": "What are the benefits of cloud computing?"}
+    ],
+    "example_outputs": [
+      {
+        "answer": "Artificial Intelligence (AI) is a branch of computer science focused on creating intelligent machines that can perform tasks typically requiring human intelligence, such as visual perception, speech recognition, decision-making, and language translation.",
+        "confidence": 0.95
+      },
+      {
+        "answer": "Machine learning is a subset of AI that enables computers to learn from data without being explicitly programmed. It uses algorithms to identify patterns in data and make predictions or decisions based on those patterns.",
+        "confidence": 0.92
+      }
+    ]
+  }
+}

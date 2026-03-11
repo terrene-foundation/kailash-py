@@ -228,5 +228,5 @@ The tests successfully validate that:
 
 - **Tier 2 Tests**: `tests/integration/nexus/*.py`
 - **Tier 3 Tests**: `tests/e2e/nexus/*.py`
-- **Source Files**: `apps/kailash-nexus/src/nexus/*.py`
+- **Source Files**: `packages/kailash-nexus/src/nexus/*.py`
 - **Test Results**: 248 existing unit tests + 46 new passing integration/E2E tests = 294 total passing tests

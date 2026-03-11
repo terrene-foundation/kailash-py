@@ -112,9 +112,9 @@ Apply these to ALL files during sync:
 ```
 # Internal source paths (users don't have these directories)
 src/kailash/
-apps/kailash-dataflow/src/
-apps/kailash-kaizen/src/
-apps/kailash-nexus/src/
+packages/kailash-dataflow/src/
+packages/kailash-kaizen/src/
+packages/kailash-nexus/src/
 
 # Builder infrastructure
 # contrib (removed)/

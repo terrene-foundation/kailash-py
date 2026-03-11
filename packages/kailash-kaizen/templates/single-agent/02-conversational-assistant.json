@@ -1,0 +1,113 @@
+{
+  "metadata": {
+    "id": "conversational-assistant",
+    "name": "Conversational Assistant",
+    "description": "Multi-turn conversational assistant with memory using MemoryAgent",
+    "category": "Single Agent",
+    "complexity": "Beginner",
+    "tags": ["conversation", "memory", "chatbot", "beginner"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "conversation_agent",
+      "type": "MemoryAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "temperature": 0.7,
+        "max_tokens": 500,
+        "memory_window": 10
+      },
+      "position": {"x": 100, "y": 100}
+    }
+  ],
+  "connections": [],
+  "inputs": [
+    {
+      "id": "user_message",
+      "name": "Message",
+      "type": "string",
+      "description": "User message in conversation",
+      "default": "Hello! Can you help me with Python programming?",
+      "required": true
+    },
+    {
+      "id": "session_id",
+      "name": "Session ID",
+      "type": "string",
+      "description": "Conversation session identifier",
+      "default": "default-session",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "id": "response",
+      "name": "Response",
+      "type": "string",
+      "description": "Agent's conversational response"
+    },
+    {
+      "id": "conversation_history",
+      "name": "Conversation History",
+      "type": "array",
+      "description": "Full conversation history"
+    }
+  ],
+  "execution": {
+    "entry_point": "conversation_agent",
+    "timeout": 30,
+    "retry_policy": {
+      "max_retries": 3,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This workflow creates a conversational assistant that remembers previous interactions using MemoryAgent. It maintains conversation context across multiple turns, enabling natural multi-turn dialogues. Perfect for chatbots, virtual assistants, and interactive help systems.",
+    "use_cases": [
+      "Interactive customer service chatbots with context awareness",
+      "Personal assistant applications remembering user preferences",
+      "Educational tutors tracking student progress across sessions",
+      "Technical support systems maintaining conversation context"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "Internet connection for API access"
+    ],
+    "example_inputs": [
+      {
+        "user_message": "Hello! Can you help me with Python programming?",
+        "session_id": "user-123"
+      },
+      {
+        "user_message": "What's the difference between lists and tuples?",
+        "session_id": "user-123"
+      },
+      {
+        "user_message": "Can you show me an example of using a list?",
+        "session_id": "user-123"
+      }
+    ],
+    "example_outputs": [
+      {
+        "response": "Hello! I'd be happy to help you with Python programming. What would you like to learn about?",
+        "conversation_history": [
+          {"role": "user", "content": "Hello! Can you help me with Python programming?"},
+          {"role": "assistant", "content": "Hello! I'd be happy to help you with Python programming. What would you like to learn about?"}
+        ]
+      },
+      {
+        "response": "Great question! Lists are mutable (can be modified) while tuples are immutable (cannot be changed after creation). Lists use square brackets [] and tuples use parentheses ().",
+        "conversation_history": [
+          {"role": "user", "content": "Hello! Can you help me with Python programming?"},
+          {"role": "assistant", "content": "Hello! I'd be happy to help you with Python programming. What would you like to learn about?"},
+          {"role": "user", "content": "What's the difference between lists and tuples?"},
+          {"role": "assistant", "content": "Great question! Lists are mutable..."}
+        ]
+      }
+    ]
+  }
+}

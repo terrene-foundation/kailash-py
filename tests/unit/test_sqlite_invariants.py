@@ -213,7 +213,7 @@ class TestNoDirectAiosqliteConnect:
     # Directories that MUST route through the pool
     _SCAN_DIRS = [
         "src/kailash/nodes/data",
-        "apps/kailash-dataflow/src/dataflow/adapters",
+        "packages/kailash-dataflow/src/dataflow/adapters",
     ]
 
     # Files that are ALLOWED to call aiosqlite.connect() directly
@@ -233,7 +233,7 @@ class TestNoDirectAiosqliteConnect:
         """Walk up from this test file to find the repo root."""
         current = Path(__file__).resolve()
         for parent in current.parents:
-            if (parent / "src").is_dir() and (parent / "apps").is_dir():
+            if (parent / "src").is_dir() and (parent / "packages").is_dir():
                 return parent
         pytest.skip("Cannot locate repo root")
 

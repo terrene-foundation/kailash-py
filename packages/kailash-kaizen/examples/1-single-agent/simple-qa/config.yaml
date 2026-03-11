@@ -1,0 +1,112 @@
+# Simple Q&A Agent Configuration
+
+# Development Configuration
+dev:
+  llm_config:
+    provider: "openai"
+    model: "gpt-3.5-turbo"  # Faster and cheaper for development
+    temperature: 0.1
+    max_tokens: 300
+
+  workflow_config:
+    timeout: 10  # Shorter timeout for dev
+    retry_attempts: 2
+    log_level: "DEBUG"
+
+  quality_config:
+    min_confidence_threshold: 0.5
+    enable_content_filtering: false
+
+  monitoring_config:
+    enable_metrics: true
+    log_execution_traces: true
+    performance_monitoring: true
+
+# Production Configuration
+prod:
+  llm_config:
+    provider: "openai"
+    model: "gpt-4"  # Higher quality for production
+    temperature: 0.1
+    max_tokens: 300
+
+  workflow_config:
+    timeout: 30
+    retry_attempts: 3
+    log_level: "INFO"
+
+  quality_config:
+    min_confidence_threshold: 0.7  # Higher threshold for prod
+    enable_content_filtering: true
+
+  monitoring_config:
+    enable_metrics: true
+    log_execution_traces: true
+    performance_monitoring: true
+    alert_on_errors: true
+
+  security_config:
+    input_validation: true
+    output_sanitization: true
+    rate_limiting: true
+    audit_logging: true
+
+# Enterprise Configuration
+enterprise:
+  llm_config:
+    provider: "openai"
+    model: "gpt-4"
+    temperature: 0.05  # More deterministic for enterprise
+    max_tokens: 500    # Longer responses allowed
+
+  workflow_config:
+    timeout: 45
+    retry_attempts: 5
+    log_level: "INFO"
+
+  quality_config:
+    min_confidence_threshold: 0.8  # Highest threshold
+    enable_content_filtering: true
+    require_reasoning_validation: true
+
+  monitoring_config:
+    enable_metrics: true
+    log_execution_traces: true
+    performance_monitoring: true
+    alert_on_errors: true
+    sla_monitoring: true
+
+  security_config:
+    input_validation: true
+    output_sanitization: true
+    rate_limiting: true
+    audit_logging: true
+    compliance_reporting: true
+
+  enterprise_features:
+    multi_tenant_isolation: true
+    custom_model_deployment: false
+    advanced_caching: true
+    failover_mechanisms: true
+
+# Test Configuration
+test:
+  llm_config:
+    provider: "mock"  # Use mock provider for testing
+    model: "test-model"
+    temperature: 0.0
+    max_tokens: 100
+
+  workflow_config:
+    timeout: 5
+    retry_attempts: 1
+    log_level: "ERROR"  # Minimize test noise
+
+  quality_config:
+    min_confidence_threshold: 0.0  # Allow all responses in tests
+    enable_content_filtering: false
+
+  monitoring_config:
+    enable_metrics: false
+    log_execution_traces: false
+    performance_monitoring: false

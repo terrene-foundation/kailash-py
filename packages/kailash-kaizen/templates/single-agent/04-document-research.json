@@ -1,0 +1,109 @@
+{
+  "metadata": {
+    "id": "document-research",
+    "name": "Document Research",
+    "description": "RAG-based document research and question answering using RAGResearchAgent",
+    "category": "Single Agent",
+    "complexity": "Intermediate",
+    "tags": ["rag", "research", "document-analysis", "retrieval"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "rag_agent",
+      "type": "RAGResearchAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-3.5-turbo",
+        "temperature": 0.3,
+        "max_tokens": 800,
+        "top_k_results": 5
+      },
+      "position": {"x": 100, "y": 100}
+    }
+  ],
+  "connections": [],
+  "inputs": [
+    {
+      "id": "query",
+      "name": "Research Query",
+      "type": "string",
+      "description": "Question to research in document collection",
+      "default": "What are the key findings about climate change impacts?",
+      "required": true
+    },
+    {
+      "id": "document_collection",
+      "name": "Document Collection",
+      "type": "string",
+      "description": "Name or path to document collection",
+      "default": "research-papers",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "id": "answer",
+      "name": "Answer",
+      "type": "string",
+      "description": "Research-based answer with citations"
+    },
+    {
+      "id": "sources",
+      "name": "Sources",
+      "type": "array",
+      "description": "Relevant document sources cited"
+    },
+    {
+      "id": "confidence",
+      "name": "Confidence",
+      "type": "number",
+      "description": "Confidence in answer based on source quality"
+    }
+  ],
+  "execution": {
+    "entry_point": "rag_agent",
+    "timeout": 60,
+    "retry_policy": {
+      "max_retries": 3,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This workflow performs document research using Retrieval-Augmented Generation (RAG). It searches a document collection for relevant information and generates accurate, citation-backed answers. Perfect for research tasks, knowledge base queries, and document analysis.",
+    "use_cases": [
+      "Research paper analysis and literature review",
+      "Corporate knowledge base question answering",
+      "Legal document research and case law lookup",
+      "Technical documentation search and troubleshooting",
+      "Medical research and clinical guideline queries"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "Document collection indexed in vector database",
+      "Internet connection for API access"
+    ],
+    "example_inputs": [
+      {
+        "query": "What are the key findings about climate change impacts?",
+        "document_collection": "climate-research"
+      },
+      {
+        "query": "What are the best practices for microservices architecture?",
+        "document_collection": "tech-docs"
+      }
+    ],
+    "example_outputs": [
+      {
+        "answer": "Key findings on climate change impacts include: 1) Global temperatures have risen 1.1°C since pre-industrial times, 2) Sea levels are rising at 3.3mm per year, 3) Extreme weather events are increasing in frequency and severity, and 4) Arctic ice is declining at 13% per decade. These findings are based on IPCC reports and peer-reviewed research.",
+        "sources": [
+          {"title": "IPCC Sixth Assessment Report", "relevance": 0.95},
+          {"title": "Climate Change Indicators 2023", "relevance": 0.89}
+        ],
+        "confidence": 0.93
+      }
+    ]
+  }
+}

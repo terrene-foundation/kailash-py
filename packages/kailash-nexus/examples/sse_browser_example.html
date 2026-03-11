@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kailash Nexus SSE Streaming Example</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .config-section {
+            margin-bottom: 25px;
+        }
+
+        .config-section label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .config-section input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .config-section input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 25px;
+        }
+
+        button {
+            flex: 1;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: #e0e0e0;
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-weight: 500;
+            display: none;
+        }
+
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeeba;
+            display: block;
+        }
+
+        .events-container {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 20px;
+            min-height: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .events-container h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .event {
+            background: white;
+            border-left: 4px solid #667eea;
+            padding: 12px;
+            margin-bottom: 12px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .event-type {
+            font-weight: 600;
+            color: #667eea;
+            text-transform: uppercase;
+            font-size: 12px;
+        }
+
+        .event-id {
+            color: #999;
+            font-size: 11px;
+        }
+
+        .event-data {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            color: #333;
+        }
+
+        .event-timestamp {
+            color: #666;
+            font-size: 11px;
+            margin-top: 8px;
+        }
+
+        .event.error {
+            border-left-color: #dc3545;
+        }
+
+        .event.error .event-type {
+            color: #dc3545;
+        }
+
+        .event.complete {
+            border-left-color: #28a745;
+        }
+
+        .event.complete .event-type {
+            color: #28a745;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        .no-events {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+        }
+
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌊 Kailash Nexus SSE Streaming</h1>
+            <p>Real-time Server-Sent Events demonstration using browser EventSource API</p>
+        </div>
+
+        <div class="content">
+            <div class="config-section">
+                <label for="serverUrl">Server URL</label>
+                <input
+                    type="text"
+                    id="serverUrl"
+                    value="http://localhost:8000/workflows/test_sse/execute"
+                    placeholder="http://localhost:8000/workflows/your_workflow/execute"
+                >
+            </div>
+
+            <div class="button-group">
+                <button id="connectBtn" class="btn-primary" onclick="connectSSE()">
+                    📡 Connect & Stream
+                </button>
+                <button id="disconnectBtn" class="btn-secondary" onclick="disconnectSSE()" disabled>
+                    ⏹️ Disconnect
+                </button>
+                <button class="btn-secondary" onclick="clearEvents()">
+                    🗑️ Clear Events
+                </button>
+            </div>
+
+            <div id="statusIndicator" class="status"></div>
+
+            <div class="events-container">
+                <h3>📬 Event Stream</h3>
+                <div id="eventsDisplay">
+                    <div class="no-events">
+                        Click "Connect & Stream" to start receiving events from the server.
+                        <br><br>
+                        <strong>Requirements:</strong>
+                        <ul style="text-align: left; display: inline-block; margin-top: 10px;">
+                            <li>Nexus server running on specified URL</li>
+                            <li>Workflow registered and available</li>
+                            <li>SSE streaming mode enabled</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="eventCount">0</div>
+                    <div class="stat-label">Events Received</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="lastEventId">-</div>
+                    <div class="stat-label">Last Event ID</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="connectionTime">0s</div>
+                    <div class="stat-label">Connection Time</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let eventCount = 0;
+        let lastEventId = null;
+        let connectionStartTime = null;
+        let connectionTimer = null;
+
+        function updateStatus(status, message) {
+            const indicator = document.getElementById('statusIndicator');
+            indicator.className = `status ${status}`;
+            indicator.textContent = message;
+        }
+
+        function updateStats() {
+            document.getElementById('eventCount').textContent = eventCount;
+            document.getElementById('lastEventId').textContent = lastEventId || '-';
+
+            if (connectionStartTime) {
+                const elapsed = Math.floor((Date.now() - connectionStartTime) / 1000);
+                document.getElementById('connectionTime').textContent = `${elapsed}s`;
+            }
+        }
+
+        function addEvent(type, data, id) {
+            const eventsDisplay = document.getElementById('eventsDisplay');
+
+            // Remove "no events" message
+            const noEvents = eventsDisplay.querySelector('.no-events');
+            if (noEvents) {
+                noEvents.remove();
+            }
+
+            const eventElement = document.createElement('div');
+            eventElement.className = `event ${type}`;
+
+            const timestamp = new Date().toLocaleTimeString();
+
+            eventElement.innerHTML = `
+                <div class="event-header">
+                    <span class="event-type">${type}</span>
+                    <span class="event-id">ID: ${id || 'N/A'}</span>
+                </div>
+                <div class="event-data">${JSON.stringify(data, null, 2)}</div>
+                <div class="event-timestamp">Received at ${timestamp}</div>
+            `;
+
+            eventsDisplay.insertBefore(eventElement, eventsDisplay.firstChild);
+
+            eventCount++;
+            if (id) lastEventId = id;
+            updateStats();
+        }
+
+        function connectSSE() {
+            const url = document.getElementById('serverUrl').value;
+
+            if (!url) {
+                alert('Please enter a server URL');
+                return;
+            }
+
+            // Disable connect button, enable disconnect
+            document.getElementById('connectBtn').disabled = true;
+            document.getElementById('disconnectBtn').disabled = false;
+
+            updateStatus('connecting', '🔄 Connecting to server...');
+            connectionStartTime = Date.now();
+
+            // Update connection timer every second
+            connectionTimer = setInterval(updateStats, 1000);
+
+            // For SSE, we need to use POST with stream mode
+            // EventSource only supports GET, so we'll use fetch with stream
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream'
+                },
+                body: JSON.stringify({ mode: 'stream' })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                updateStatus('connected', '✅ Connected - Streaming events...');
+
+                // Read SSE stream
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                // Track current event fields
+                let currentEvent = {};
+
+                function readStream() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) {
+                            updateStatus('disconnected', '⏹️ Stream ended');
+                            document.getElementById('connectBtn').disabled = false;
+                            document.getElementById('disconnectBtn').disabled = true;
+                            clearInterval(connectionTimer);
+                            return;
+                        }
+
+                        // Decode chunk and add to buffer
+                        buffer += decoder.decode(value, { stream: true });
+
+                        // Process complete lines
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+                        for (const line of lines) {
+                            if (line === '') {
+                                // Empty line = dispatch event
+                                if (currentEvent.data || currentEvent.event) {
+                                    const eventType = currentEvent.event || 'message';
+                                    let eventData;
+
+                                    try {
+                                        eventData = JSON.parse(currentEvent.data || '{}');
+                                    } catch (e) {
+                                        eventData = currentEvent.data;
+                                    }
+
+                                    addEvent(eventType, eventData, currentEvent.id);
+                                    currentEvent = {};
+                                }
+                            } else if (line.startsWith(':')) {
+                                // Comment (keepalive) - ignore
+                                console.log('Keepalive:', line);
+                            } else if (line.includes(':')) {
+                                // Parse field
+                                const colonIndex = line.indexOf(':');
+                                const field = line.slice(0, colonIndex);
+                                let value = line.slice(colonIndex + 1);
+
+                                // Remove leading space (SSE spec)
+                                if (value.startsWith(' ')) {
+                                    value = value.slice(1);
+                                }
+
+                                currentEvent[field] = value;
+                            }
+                        }
+
+                        readStream();
+                    }).catch(error => {
+                        console.error('Stream read error:', error);
+                        updateStatus('disconnected', `❌ Error: ${error.message}`);
+                        document.getElementById('connectBtn').disabled = false;
+                        document.getElementById('disconnectBtn').disabled = true;
+                        clearInterval(connectionTimer);
+                    });
+                }
+
+                readStream();
+            })
+            .catch(error => {
+                console.error('Connection error:', error);
+                updateStatus('disconnected', `❌ Connection failed: ${error.message}`);
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+                clearInterval(connectionTimer);
+            });
+        }
+
+        function disconnectSSE() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+
+            updateStatus('disconnected', '⏹️ Disconnected from server');
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('disconnectBtn').disabled = true;
+
+            if (connectionTimer) {
+                clearInterval(connectionTimer);
+                connectionTimer = null;
+            }
+        }
+
+        function clearEvents() {
+            const eventsDisplay = document.getElementById('eventsDisplay');
+            eventsDisplay.innerHTML = '<div class="no-events">Events cleared. Connect to see new events.</div>';
+            eventCount = 0;
+            lastEventId = null;
+            updateStats();
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            disconnectSSE();
+        });
+    </script>
+</body>
+</html>

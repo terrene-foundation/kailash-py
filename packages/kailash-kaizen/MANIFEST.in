@@ -1,0 +1,72 @@
+# MANIFEST.in - Controls which files are included in source distribution
+# This file ensures that examples, docs, and other assets are included
+# when users install from source or download the sdist package.
+
+# Core package files
+include README.md
+include LICENSE
+include NOTICE
+include PATENTS
+include CHANGELOG.md
+include CONTRIBUTING.md
+include pyproject.toml
+include setup.py
+
+# Configuration files
+include pytest.ini
+include .env.example
+include mcp_registry.json
+
+# Documentation
+recursive-include docs *.md *.rst *.txt *.png *.jpg *.svg
+recursive-include docs *.py  # Include doc build scripts
+
+# Examples - critical for users to learn the framework
+recursive-include examples *.py *.md *.txt *.yaml *.yml *.json
+recursive-include examples *.sh  # Include any example scripts
+
+# Tests - useful for users who install from source
+recursive-include tests *.py
+include tests/conftest.py
+include tests/pytest.ini
+
+# Configuration and deployment files
+recursive-include config *.yaml *.yml *.json *.toml
+recursive-include k8s *.yaml *.yml
+recursive-include monitoring *.yaml *.yml *.json
+
+# Scripts
+recursive-include scripts *.py *.sh
+
+# Exclude compiled Python files
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude *.so
+global-exclude *.dylib
+
+# Exclude development/build artifacts
+global-exclude .coverage
+global-exclude coverage.xml
+global-exclude .pytest_cache
+global-exclude *.egg-info
+global-exclude dist
+global-exclude build
+
+# Exclude editor/IDE files
+global-exclude .vscode
+global-exclude .idea
+global-exclude *.swp
+global-exclude *.swo
+global-exclude *~
+
+# Exclude git files
+global-exclude .git
+global-exclude .gitignore
+global-exclude .gitattributes
+
+# Exclude Docker development files
+global-exclude docker-compose.yml
+global-exclude Dockerfile
+global-exclude .dockerignore

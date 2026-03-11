@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  # Shared memory service using Redis
+  redis:
+    image: redis:7-alpine
+    container_name: kaizen-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - kaizen-network
+
+  # Supervisor agent
+  supervisor:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    image: kaizen:latest
+    container_name: kaizen-supervisor
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - AGENT_ROLE=supervisor
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '1'
+          memory: 512M
+    command: ["python", "/app/examples/2-multi-agent/supervisor-worker/workflow.py"]
+    networks:
+      - kaizen-network
+
+  # Worker agents (scalable)
+  worker:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    image: kaizen:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - AGENT_ROLE=worker
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+      supervisor:
+        condition: service_started
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+      replicas: 3
+    networks:
+      - kaizen-network
+
+networks:
+  kaizen-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local

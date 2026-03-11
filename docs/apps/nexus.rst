@@ -555,7 +555,7 @@ See the complete :doc:`Nexus API Reference <../api/nexus>` for detailed document
 Examples Repository
 -------------------
 
-Complete production examples in ``apps/kailash-nexus/examples/``:
+Complete production examples in ``packages/kailash-nexus/examples/``:
 
 - **Enterprise Workflow Hub**: Multi-tenant workflow platform
 - **AI Agent Orchestrator**: Coordinate multiple AI agents

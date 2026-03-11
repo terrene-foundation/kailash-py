@@ -1,0 +1,89 @@
+{
+  "metadata": {
+    "id": "complex-reasoning-task",
+    "name": "Complex Reasoning Task",
+    "description": "Step-by-step reasoning for complex problems using ChainOfThoughtAgent",
+    "category": "Single Agent",
+    "complexity": "Intermediate",
+    "tags": ["reasoning", "chain-of-thought", "problem-solving", "intermediate"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "reasoning_agent",
+      "type": "ChainOfThoughtAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-4",
+        "temperature": 0.2,
+        "max_tokens": 1000
+      },
+      "position": {"x": 100, "y": 100}
+    }
+  ],
+  "connections": [],
+  "inputs": [
+    {
+      "id": "problem",
+      "name": "Problem",
+      "type": "string",
+      "description": "Complex problem requiring step-by-step reasoning",
+      "default": "If it takes 5 machines 5 minutes to make 5 widgets, how long would it take 100 machines to make 100 widgets?",
+      "required": true
+    }
+  ],
+  "outputs": [
+    {
+      "id": "answer",
+      "name": "Answer",
+      "type": "string",
+      "description": "Final answer to the problem"
+    },
+    {
+      "id": "reasoning_steps",
+      "name": "Reasoning Steps",
+      "type": "array",
+      "description": "Step-by-step reasoning process"
+    }
+  ],
+  "execution": {
+    "entry_point": "reasoning_agent",
+    "timeout": 60,
+    "retry_policy": {
+      "max_retries": 3,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This workflow tackles complex problems using Chain-of-Thought reasoning. The agent breaks down problems into logical steps, showing its reasoning process before arriving at an answer. Ideal for math problems, logical puzzles, strategic planning, and complex decision-making.",
+    "use_cases": [
+      "Mathematical problem solving with step-by-step explanations",
+      "Logical reasoning and puzzle solving",
+      "Strategic planning and decision analysis",
+      "Complex troubleshooting and debugging",
+      "Educational scenarios requiring detailed explanations"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "Internet connection for API access",
+      "GPT-4 access recommended for complex reasoning"
+    ],
+    "example_inputs": [
+      {"problem": "If it takes 5 machines 5 minutes to make 5 widgets, how long would it take 100 machines to make 100 widgets?"},
+      {"problem": "A bat and ball cost $1.10 together. The bat costs $1.00 more than the ball. How much does the ball cost?"},
+      {"problem": "Should we prioritize feature A or feature B given our resource constraints and market demands?"}
+    ],
+    "example_outputs": [
+      {
+        "answer": "5 minutes",
+        "reasoning_steps": [
+          "Step 1: Determine the rate per machine. If 5 machines make 5 widgets in 5 minutes, each machine makes 1 widget in 5 minutes.",
+          "Step 2: Calculate for 100 machines. Since each machine works at the same rate (1 widget per 5 minutes), 100 machines will make 100 widgets in 5 minutes.",
+          "Step 3: Conclusion - The answer is 5 minutes."
+        ]
+      }
+    ]
+  }
+}

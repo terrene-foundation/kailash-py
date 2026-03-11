@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # MCP Server (provides tools/resources to agents)
+  mcp-server:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    image: kaizen:latest
+    container_name: kaizen-mcp-server
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - MCP_ROLE=server
+      - MCP_SERVER_NAME=kaizen-tools
+      - MCP_SERVER_VERSION=1.0.0
+    ports:
+      - "8080:8080"  # MCP server port
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - kaizen-network
+
+  # MCP Client Agent (uses tools from server)
+  mcp-client:
+    build:
+      context: ../../..
+      dockerfile: Dockerfile
+    image: kaizen:latest
+    container_name: kaizen-mcp-client
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - MCP_ROLE=client
+      - MCP_SERVER_URL=http://mcp-server:8080
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '1'
+          memory: 512M
+    command: ["python", "/app/examples/5-mcp-integration/agent-as-client/workflow.py"]
+    networks:
+      - kaizen-network
+
+networks:
+  kaizen-network:
+    driver: bridge

@@ -1,0 +1,109 @@
+{
+  "metadata": {
+    "id": "code-generator",
+    "name": "Code Generator",
+    "description": "Multi-language code generation with explanations using CodeGenerationAgent",
+    "category": "Single Agent",
+    "complexity": "Intermediate",
+    "tags": ["code-generation", "programming", "development", "intermediate"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "code_agent",
+      "type": "CodeGenerationAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-4",
+        "temperature": 0.2,
+        "max_tokens": 1500
+      },
+      "position": {"x": 100, "y": 100}
+    }
+  ],
+  "connections": [],
+  "inputs": [
+    {
+      "id": "task_description",
+      "name": "Task Description",
+      "type": "string",
+      "description": "Description of code to generate",
+      "default": "Write a Python function to check if a string is a palindrome",
+      "required": true
+    },
+    {
+      "id": "programming_language",
+      "name": "Programming Language",
+      "type": "string",
+      "description": "Target programming language",
+      "default": "python",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "id": "generated_code",
+      "name": "Generated Code",
+      "type": "string",
+      "description": "Complete generated code"
+    },
+    {
+      "id": "explanation",
+      "name": "Explanation",
+      "type": "string",
+      "description": "Code explanation and usage guide"
+    },
+    {
+      "id": "test_cases",
+      "name": "Test Cases",
+      "type": "array",
+      "description": "Example test cases for the code"
+    }
+  ],
+  "execution": {
+    "entry_point": "code_agent",
+    "timeout": 60,
+    "retry_policy": {
+      "max_retries": 3,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This workflow generates production-quality code in multiple programming languages with detailed explanations and test cases. Perfect for rapid prototyping, code assistance, learning, and automating repetitive coding tasks.",
+    "use_cases": [
+      "Rapid prototyping and proof-of-concept development",
+      "Code snippets for documentation and tutorials",
+      "Automated test case generation",
+      "Learning new programming languages and frameworks",
+      "Boilerplate code generation for common patterns"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "Internet connection for API access",
+      "GPT-4 recommended for complex code generation"
+    ],
+    "example_inputs": [
+      {
+        "task_description": "Write a Python function to check if a string is a palindrome",
+        "programming_language": "python"
+      },
+      {
+        "task_description": "Create a REST API endpoint for user authentication",
+        "programming_language": "javascript"
+      }
+    ],
+    "example_outputs": [
+      {
+        "generated_code": "def is_palindrome(s: str) -> bool:\n    \"\"\"Check if string is palindrome (case-insensitive, ignores spaces).\"\"\"\n    cleaned = ''.join(s.lower().split())\n    return cleaned == cleaned[::-1]",
+        "explanation": "This function checks if a string is a palindrome by: 1) Converting to lowercase, 2) Removing spaces, 3) Comparing the string with its reverse. Returns True if palindrome, False otherwise.",
+        "test_cases": [
+          {"input": "racecar", "expected": true},
+          {"input": "hello", "expected": false},
+          {"input": "A man a plan a canal Panama", "expected": true}
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,558 @@
+{
+  "dashboard": {
+    "title": "Kaizen Performance Metrics",
+    "description": "Performance monitoring for Kaizen agents with resource usage, overhead tracking, and latency distributions",
+    "tags": ["kaizen", "performance", "observability", "metrics"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "5s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Observability Metrics Overhead (%)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "observability_metrics_overhead_percent",
+            "legendFormat": "Metrics Overhead",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percent",
+            "label": "Overhead %",
+            "logBase": 1,
+            "show": true,
+            "min": 0,
+            "max": 10
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [2.0],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              },
+              "reducer": {
+                "params": [],
+                "type": "avg"
+              },
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "name": "Metrics Overhead High",
+          "noDataState": "no_data",
+          "message": "Metrics collection overhead exceeded 2% target (ADR-017 NFR-1)"
+        },
+        "thresholds": [
+          {
+            "value": 2.0,
+            "colorMode": "critical",
+            "op": "gt",
+            "fill": true,
+            "line": true
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Observability Logging Overhead (%)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "targets": [
+          {
+            "expr": "observability_logging_overhead_percent",
+            "legendFormat": "Logging Overhead",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percent",
+            "label": "Overhead %",
+            "logBase": 1,
+            "show": true,
+            "min": 0,
+            "max": 10
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [5.0],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              },
+              "reducer": {
+                "params": [],
+                "type": "avg"
+              },
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "name": "Logging Overhead High",
+          "noDataState": "no_data",
+          "message": "Logging overhead exceeded 5% target (ADR-017 NFR-2)"
+        },
+        "thresholds": [
+          {
+            "value": 5.0,
+            "colorMode": "critical",
+            "op": "gt",
+            "fill": true,
+            "line": true
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Observability Tracing Overhead (%)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+        "targets": [
+          {
+            "expr": "observability_tracing_overhead_percent",
+            "legendFormat": "Tracing Overhead",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percent",
+            "label": "Overhead %",
+            "logBase": 1,
+            "show": true,
+            "min": 0,
+            "max": 5
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [1.0],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              },
+              "reducer": {
+                "params": [],
+                "type": "avg"
+              },
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "name": "Tracing Overhead High",
+          "noDataState": "no_data",
+          "message": "Tracing overhead exceeded 1% target (ADR-017 NFR-3)"
+        },
+        "thresholds": [
+          {
+            "value": 1.0,
+            "colorMode": "critical",
+            "op": "gt",
+            "fill": true,
+            "line": true
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Audit Append Latency (ms)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+        "targets": [
+          {
+            "expr": "audit_append_duration_ms_p95",
+            "legendFormat": "p95 Latency",
+            "refId": "A"
+          },
+          {
+            "expr": "audit_append_duration_ms_p50",
+            "legendFormat": "p50 Latency",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": "Latency",
+            "logBase": 1,
+            "show": true,
+            "min": 0
+          }
+        ],
+        "alert": {
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [10.0],
+                "type": "gt"
+              },
+              "operator": {
+                "type": "and"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              },
+              "reducer": {
+                "params": [],
+                "type": "avg"
+              },
+              "type": "query"
+            }
+          ],
+          "executionErrorState": "alerting",
+          "name": "Audit Latency High",
+          "noDataState": "no_data",
+          "message": "Audit append latency exceeded 10ms target (ADR-017 NFR-4)"
+        },
+        "thresholds": [
+          {
+            "value": 10.0,
+            "colorMode": "critical",
+            "op": "gt",
+            "fill": true,
+            "line": true
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "CPU Usage (%)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+        "targets": [
+          {
+            "expr": "cpu_usage_percent",
+            "legendFormat": "{{agent_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percent",
+            "label": "CPU %",
+            "logBase": 1,
+            "show": true,
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "thresholds": [
+          {
+            "value": 80.0,
+            "colorMode": "critical",
+            "op": "gt",
+            "fill": true,
+            "line": true
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Memory Usage (MB)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+        "targets": [
+          {
+            "expr": "memory_bytes / 1024 / 1024",
+            "legendFormat": "{{agent_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "decmbytes",
+            "label": "Memory",
+            "logBase": 1,
+            "show": true,
+            "min": 0
+          }
+        ],
+        "thresholds": [
+          {
+            "value": 1536,
+            "colorMode": "critical",
+            "op": "gt",
+            "fill": true,
+            "line": true
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Operation Latency Percentile Distribution",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 24},
+        "targets": [
+          {
+            "expr": "agent_loop_duration_ms_p99",
+            "legendFormat": "Agent Loop p99",
+            "refId": "A"
+          },
+          {
+            "expr": "agent_loop_duration_ms_p95",
+            "legendFormat": "Agent Loop p95",
+            "refId": "B"
+          },
+          {
+            "expr": "agent_loop_duration_ms_p50",
+            "legendFormat": "Agent Loop p50",
+            "refId": "C"
+          },
+          {
+            "expr": "tool_execution_duration_ms_p99",
+            "legendFormat": "Tool Execution p99",
+            "refId": "D"
+          },
+          {
+            "expr": "tool_execution_duration_ms_p95",
+            "legendFormat": "Tool Execution p95",
+            "refId": "E"
+          },
+          {
+            "expr": "tool_execution_duration_ms_p50",
+            "legendFormat": "Tool Execution p50",
+            "refId": "F"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": "Latency",
+            "logBase": 1,
+            "show": true
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Throughput (ops/sec)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 32},
+        "targets": [
+          {
+            "expr": "rate(agent_loop_total[1m])",
+            "legendFormat": "Agent Loops",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(tool_execution_total[1m])",
+            "legendFormat": "Tool Executions",
+            "refId": "B"
+          },
+          {
+            "expr": "rate(api_calls_total[1m])",
+            "legendFormat": "API Calls",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Ops/sec",
+            "logBase": 1,
+            "show": true
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "Request Rate by Agent",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 32},
+        "targets": [
+          {
+            "expr": "rate(agent_loop_total[1m])",
+            "legendFormat": "{{agent_id}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Requests/sec",
+            "logBase": 1,
+            "show": true
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "Disk I/O (MB/s)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 40},
+        "targets": [
+          {
+            "expr": "rate(disk_read_bytes[1m]) / 1024 / 1024",
+            "legendFormat": "Read",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(disk_write_bytes[1m]) / 1024 / 1024",
+            "legendFormat": "Write",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "MBs",
+            "label": "MB/s",
+            "logBase": 1,
+            "show": true
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Network I/O (MB/s)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 40},
+        "targets": [
+          {
+            "expr": "rate(network_received_bytes[1m]) / 1024 / 1024",
+            "legendFormat": "Received",
+            "refId": "A"
+          },
+          {
+            "expr": "rate(network_sent_bytes[1m]) / 1024 / 1024",
+            "legendFormat": "Sent",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "MBs",
+            "label": "MB/s",
+            "logBase": 1,
+            "show": true
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Performance Target Compliance",
+        "type": "singlestat",
+        "gridPos": {"h": 4, "w": 6, "x": 0, "y": 48},
+        "targets": [
+          {
+            "expr": "(observability_metrics_overhead_percent < 2 and observability_logging_overhead_percent < 5 and observability_tracing_overhead_percent < 1 and audit_append_duration_ms_p95 < 10) * 100",
+            "refId": "A"
+          }
+        ],
+        "format": "percent",
+        "gauge": {
+          "show": true,
+          "minValue": 0,
+          "maxValue": 100,
+          "thresholdMarkers": true
+        },
+        "thresholds": "50,90",
+        "colors": ["#d44a3a", "#e0b400", "#299c46"]
+      },
+      {
+        "id": 13,
+        "title": "GC Pause Time (ms)",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 18, "x": 6, "y": 48},
+        "targets": [
+          {
+            "expr": "gc_pause_duration_ms_p95",
+            "legendFormat": "p95 GC Pause",
+            "refId": "A"
+          },
+          {
+            "expr": "gc_pause_duration_ms_p50",
+            "legendFormat": "p50 GC Pause",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ms",
+            "label": "Duration",
+            "logBase": 1,
+            "show": true
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "title": "Cache Hit Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 56},
+        "targets": [
+          {
+            "expr": "rate(cache_hits[5m]) / (rate(cache_hits[5m]) + rate(cache_misses[5m])) * 100",
+            "legendFormat": "Hit Rate",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "percent",
+            "label": "Hit Rate %",
+            "logBase": 1,
+            "show": true,
+            "min": 0,
+            "max": 100
+          }
+        ],
+        "thresholds": [
+          {
+            "value": 80.0,
+            "colorMode": "custom",
+            "op": "lt",
+            "fill": true,
+            "line": true
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "title": "Context Switch Rate",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 56},
+        "targets": [
+          {
+            "expr": "rate(context_switches_total[1m])",
+            "legendFormat": "Context Switches/sec",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {
+            "format": "ops",
+            "label": "Switches/sec",
+            "logBase": 1,
+            "show": true
+          }
+        ]
+      }
+    ]
+  }
+}

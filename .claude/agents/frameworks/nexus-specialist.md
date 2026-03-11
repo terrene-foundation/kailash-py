@@ -201,18 +201,18 @@ app = Nexus(preset="saas", cors_origins=["https://app.example.com"])
 ### Key Files
 
 - `src/kailash/nodes/handler.py` - HandlerNode implementation
-- `apps/kailash-nexus/src/nexus/core.py` - handler() decorator, register_handler()
+- `packages/kailash-nexus/src/nexus/core.py` - handler() decorator, register_handler()
 - `tests/unit/nodes/test_handler_node.py` - 22 SDK unit tests
-- `apps/kailash-nexus/tests/unit/test_handler_registration.py` - 16 Nexus unit tests
-- `apps/kailash-nexus/tests/integration/test_handler_execution.py` - 7 integration tests
-- `apps/kailash-nexus/tests/e2e/test_handler_e2e.py` - 3 E2E tests
+- `packages/kailash-nexus/tests/unit/test_handler_registration.py` - 16 Nexus unit tests
+- `packages/kailash-nexus/tests/integration/test_handler_execution.py` - 7 integration tests
+- `packages/kailash-nexus/tests/e2e/test_handler_e2e.py` - 3 E2E tests
 
 ### Migration Documentation
 
-- `apps/kailash-nexus/docs/migration/handler-migration-guide.md` - 5 migration patterns, 6-phase checklist
-- `apps/kailash-nexus/docs/migration/real-project-patterns.md` - 8 real-world patterns from 3 projects
-- `apps/kailash-nexus/tests/docs/migration/` - 26 doc validation tests
-- `apps/kailash-nexus/tests/docs/real_projects/` - 38 doc validation tests (incl. auth integration)
+- `packages/kailash-nexus/docs/migration/handler-migration-guide.md` - 5 migration patterns, 6-phase checklist
+- `packages/kailash-nexus/docs/migration/real-project-patterns.md` - 8 real-world patterns from 3 projects
+- `packages/kailash-nexus/tests/docs/migration/` - 26 doc validation tests
+- `packages/kailash-nexus/tests/docs/real_projects/` - 38 doc validation tests (incl. auth integration)
 
 **Type Mapping Limitation**: `_derive_params_from_signature()` maps complex generics (e.g., `List[dict]`) to `str`. Use plain `list` instead.
 
@@ -220,8 +220,8 @@ app = Nexus(preset="saas", cors_origins=["https://app.example.com"])
 
 - `.claude/skills/03-nexus/golden-patterns-catalog.md` - Top 10 patterns ranked by production usage
 - `.claude/skills/03-nexus/codegen-decision-tree.md` - Decision tree, anti-patterns, scaffolding templates
-- `apps/kailash-nexus/tests/docs/golden_patterns/` - 53 golden pattern validation tests
-- `apps/kailash-nexus/tests/docs/templates/` - 19 scaffolding template validation tests
+- `packages/kailash-nexus/tests/docs/golden_patterns/` - 53 golden pattern validation tests
+- `packages/kailash-nexus/tests/docs/templates/` - 19 scaffolding template validation tests
 
 ## Authentication & Authorization (NexusAuthPlugin)
 

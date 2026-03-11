@@ -1,0 +1,22 @@
+Kailash Nexus
+Copyright 2025 Terrene Foundation
+
+This product includes software developed at Terrene Foundation
+(https://github.com/terrene-foundation/kailash-py).
+
+Kailash Nexus is a zero-configuration multi-channel platform built on the
+Kailash SDK, enabling simultaneous API, CLI, and MCP deployment from a
+single workflow definition.
+
+This software is licensed under the Apache License, Version 2.0.
+See the LICENSE file for the full license text.
+
+PATENT NOTICE:
+The technology in this software is the subject of patent applications owned by
+Terrene Foundation See the PATENTS file in the root repository for details.
+Under Apache License 2.0, Section 3, each Contributor grants a patent license
+covering claims necessarily infringed by their Contribution(s) alone or by
+combination of their Contribution(s) with the Work.
+
+Third-party components included in this distribution may be subject to
+separate license terms as noted in their respective license files.

@@ -1,0 +1,148 @@
+{
+  "metadata": {
+    "id": "document-understanding",
+    "name": "Multi-Modal Document Understanding",
+    "description": "Complete document understanding combining vision and audio transcription",
+    "category": "Multi-Modal",
+    "complexity": "Advanced",
+    "tags": ["multi-modal", "vision", "audio", "document-understanding", "comprehensive"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "vision_processor",
+      "type": "VisionAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-4-vision-preview",
+        "temperature": 0.1,
+        "max_tokens": 1000
+      },
+      "position": {"x": 100, "y": 100}
+    },
+    {
+      "id": "audio_processor",
+      "type": "TranscriptionAgent",
+      "config": {
+        "model": "whisper-1",
+        "language": "en",
+        "response_format": "text",
+        "temperature": 0.0
+      },
+      "position": {"x": 100, "y": 250}
+    }
+  ],
+  "connections": [],
+  "inputs": [
+    {
+      "id": "image_path",
+      "name": "Document Image",
+      "type": "string",
+      "description": "Path to document image (slides, diagrams, etc.)",
+      "required": false
+    },
+    {
+      "id": "audio_path",
+      "name": "Audio Recording",
+      "type": "string",
+      "description": "Path to accompanying audio (narration, presentation, etc.)",
+      "required": false
+    },
+    {
+      "id": "analysis_goal",
+      "name": "Analysis Goal",
+      "type": "string",
+      "description": "What to extract from the document",
+      "default": "Summarize the key points from both visual and audio content",
+      "required": true
+    }
+  ],
+  "outputs": [
+    {
+      "id": "visual_analysis",
+      "name": "Visual Analysis",
+      "type": "object",
+      "description": "Analysis results from image/document"
+    },
+    {
+      "id": "audio_transcription",
+      "name": "Audio Transcription",
+      "type": "object",
+      "description": "Transcription results from audio"
+    },
+    {
+      "id": "combined_summary",
+      "name": "Combined Summary",
+      "type": "string",
+      "description": "Integrated summary of visual and audio content"
+    },
+    {
+      "id": "key_insights",
+      "name": "Key Insights",
+      "type": "array",
+      "description": "Key insights extracted from both modalities"
+    }
+  ],
+  "execution": {
+    "entry_point": "vision_processor",
+    "timeout": 180,
+    "retry_policy": {
+      "max_retries": 3,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This advanced multi-modal workflow combines vision and audio analysis for comprehensive document understanding. VisionAgent analyzes visual content (slides, diagrams, charts) while TranscriptionAgent processes accompanying audio (presentations, narrations). Perfect for processing conference presentations, video lectures, product demos, and any content combining visual and audio information.",
+    "use_cases": [
+      "Conference presentation analysis (slides + speaker audio)",
+      "Video lecture summarization (visuals + narration)",
+      "Product demo documentation (screenshots + walkthrough audio)",
+      "Training material processing (documentation + instructor audio)",
+      "Legal proceeding documentation (exhibits + testimony)",
+      "Medical case reviews (imaging + physician notes/audio)"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "Both image and audio files accessible via file paths",
+      "Internet connection for API access",
+      "Image formats: PNG, JPG, JPEG, WEBP",
+      "Audio formats: MP3, WAV, MP4, M4A, WEBM (max 25 MB)"
+    ],
+    "example_inputs": [
+      {
+        "image_path": "/examples/presentation_slide.png",
+        "audio_path": "/examples/presentation_audio.mp3",
+        "analysis_goal": "Create a comprehensive summary of this product launch presentation"
+      },
+      {
+        "image_path": "/examples/technical_diagram.png",
+        "audio_path": "/examples/walkthrough.mp3",
+        "analysis_goal": "Explain this system architecture based on the diagram and walkthrough"
+      }
+    ],
+    "example_outputs": [
+      {
+        "visual_analysis": {
+          "slide_content": "Product roadmap diagram showing Q1-Q4 2025 milestones",
+          "key_elements": ["timeline", "milestones", "feature releases", "market launches"],
+          "detected_text": ["Q1: Beta Launch", "Q2: Public Release", "Q3: Enterprise Features", "Q4: Global Expansion"]
+        },
+        "audio_transcription": {
+          "transcription": "As you can see on this slide, we have an ambitious roadmap for 2025. We're starting with a beta launch in Q1, targeting early adopters. The public release follows in Q2, with enterprise features rolling out in Q3. By Q4, we'll be ready for global expansion.",
+          "duration": 22.5,
+          "language": "en"
+        },
+        "combined_summary": "The 2025 product roadmap follows a four-phase approach: Q1 begins with a beta launch targeting early adopters, Q2 transitions to public release for broader market access, Q3 introduces enterprise features for business customers, and Q4 focuses on global market expansion. This staged rollout ensures quality validation and feature maturity at each phase.",
+        "key_insights": [
+          "Four-phase rollout strategy across 2025",
+          "Early adopter validation in beta phase",
+          "Enterprise features as separate phase (Q3)",
+          "Global expansion planned for year-end (Q4)",
+          "Progressive feature maturity approach"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,64 @@
+version: '3.8'
+
+name: kailash_sdk
+
+# PROD-001: Docker Compose configuration for local testing
+# Services: PostgreSQL (audit trail) + Kaizen application
+
+services:
+  # Use shared test-postgres from kailash_sdk test-environment
+  test-postgres:
+    image: postgres:15
+    container_name: kailash_sdk_test_postgres
+    environment:
+      POSTGRES_DB: kailash_test
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d kailash_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - kailash-test-network
+
+  kaizen:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kaizen-app
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://test_user:test_password@test-postgres:5432/kailash_test
+      KAIZEN_ENV: production
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "from kaizen.core.base_agent import BaseAgent; print('healthy')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    networks:
+      - kailash-test-network
+    restart: unless-stopped
+
+volumes:
+  # Shared volumes from kailash_sdk test-environment
+  postgres_test_data:
+    external: true
+    name: kailash_sdk_postgres_test_data
+  kaizen_data:
+    driver: local
+
+networks:
+  kailash-test-network:
+    external: true
+    name: kailash_test_network

@@ -1,0 +1,98 @@
+{
+  "metadata": {
+    "id": "high-availability-qa",
+    "name": "High-Availability Q&A",
+    "description": "Multi-model fallback question answering using ResilientAgent",
+    "category": "Single Agent",
+    "complexity": "Intermediate",
+    "tags": ["fallback", "resilient", "high-availability", "multi-model"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "resilient_agent",
+      "type": "ResilientAgent",
+      "config": {
+        "models": ["gpt-4", "gpt-3.5-turbo", "ollama:llama2"],
+        "temperature": 0.3,
+        "max_tokens": 500,
+        "fallback_on_error": true
+      },
+      "position": {"x": 100, "y": 100}
+    }
+  ],
+  "connections": [],
+  "inputs": [
+    {
+      "id": "question",
+      "name": "Question",
+      "type": "string",
+      "description": "Question to answer with fallback support",
+      "default": "What are the key principles of microservices architecture?",
+      "required": true
+    }
+  ],
+  "outputs": [
+    {
+      "id": "answer",
+      "name": "Answer",
+      "type": "string",
+      "description": "Answer from successful model"
+    },
+    {
+      "id": "model_used",
+      "name": "Model Used",
+      "type": "string",
+      "description": "Which model successfully answered (after fallbacks)"
+    },
+    {
+      "id": "fallback_chain",
+      "name": "Fallback Chain",
+      "type": "array",
+      "description": "List of models attempted before success"
+    }
+  ],
+  "execution": {
+    "entry_point": "resilient_agent",
+    "timeout": 90,
+    "retry_policy": {
+      "max_retries": 3,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This workflow provides high-availability question answering by automatically falling back through a chain of models if the primary model fails. It tries GPT-4 first, falls back to GPT-3.5-turbo if unavailable, and finally uses a local model as the last resort. Perfect for production systems requiring guaranteed uptime.",
+    "use_cases": [
+      "Production systems requiring 99.9%+ uptime SLAs",
+      "Cost optimization by trying expensive models first, falling back to cheaper ones",
+      "Provider redundancy to avoid vendor lock-in",
+      "Disaster recovery for AI-powered services",
+      "Progressive degradation for graceful failure handling"
+    ],
+    "prerequisites": [
+      "OpenAI API key configured as OPENAI_API_KEY environment variable",
+      "Ollama installed locally for fallback (optional)",
+      "Internet connection for cloud API access",
+      "Multiple model access configured"
+    ],
+    "example_inputs": [
+      {"question": "What are the key principles of microservices architecture?"},
+      {"question": "Explain quantum entanglement in simple terms"},
+      {"question": "What are the benefits of serverless computing?"}
+    ],
+    "example_outputs": [
+      {
+        "answer": "Key principles of microservices architecture include: 1) Single Responsibility - each service does one thing well, 2) Independence - services can be deployed and scaled independently, 3) Decentralization - distributed data and governance, 4) API-first - well-defined service interfaces, 5) Resilience - design for failure.",
+        "model_used": "gpt-4",
+        "fallback_chain": ["gpt-4"]
+      },
+      {
+        "answer": "Microservices are small, independent services that communicate via APIs...",
+        "model_used": "gpt-3.5-turbo",
+        "fallback_chain": ["gpt-4 (failed - rate limit)", "gpt-3.5-turbo (success)"]
+      }
+    ]
+  }
+}

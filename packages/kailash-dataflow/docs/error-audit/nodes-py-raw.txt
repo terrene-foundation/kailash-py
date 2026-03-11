@@ -1,0 +1,26 @@
+361:                                raise ErrorEnhancer.enhance_auto_managed_field_conflict(
+369:                                raise ValueError(
+550:                                                raise ErrorEnhancer.enhance_unsafe_filter_operator(
+558:                                                raise ValueError(
+1017:                        raise ErrorEnhancer.enhance_async_context_error(
+1027:                        raise RuntimeError(
+1110:                                    raise ErrorEnhancer.enhance_create_vs_update_node_confusion(
+1117:                                    raise ValueError(
+1221:                                    raise ErrorEnhancer.enhance_missing_required_field(
+1231:                                    raise ValueError(
+1563:                            raise ErrorEnhancer.enhance_read_node_missing_id(
+1572:                            raise NodeValidationError(
+1629:                            raise ErrorEnhancer.enhance_read_node_not_found(
+1638:                            raise NodeExecutionError(
+1779:                            raise ErrorEnhancer.enhance_update_node_missing_filter_id(
+1789:                            raise NodeValidationError(
+2061:                            raise ErrorEnhancer.enhance_delete_node_missing_id(
+2071:                            raise ValueError(
+2452:                                raise ErrorEnhancer.enhance_upsert_node_empty_conflict_on(
+2461:                                raise NodeValidationError(
+2475:                            raise ErrorEnhancer.enhance_upsert_node_missing_where(
+2485:                            raise NodeValidationError(
+2495:                            raise ErrorEnhancer.enhance_upsert_node_missing_operations(
+2505:                            raise NodeValidationError(
+2716:                        raise NodeExecutionError(
+2768:                    raise NodeExecutionError(f"Upsert failed for {self.model_name}")

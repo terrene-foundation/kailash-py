@@ -329,6 +329,6 @@ All features (logging, error handling, retries, performance tracking, memory) ar
 
 ## References
 
-- **Source**: `apps/kailash-kaizen/src/kaizen/core/base_agent.py`
-- **Examples**: `apps/kailash-kaizen/examples/1-single-agent/`
-- **Tests**: `apps/kailash-kaizen/tests/unit/core/test_base_agent.py`
+- **Source**: `packages/kailash-kaizen/src/kaizen/core/base_agent.py`
+- **Examples**: `packages/kailash-kaizen/examples/1-single-agent/`
+- **Tests**: `packages/kailash-kaizen/tests/unit/core/test_base_agent.py`

@@ -1,0 +1,308 @@
+Integration Test Refactoring Report
+============================================================
+
+File: tests/integration/test_dataflow_bug_011_012_integration.py
+  Line 47 [HARDCODED_URL]: connection_string="postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test",
+  Line 113 [HARDCODED_URL]: connection_string="postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test",
+  Line 193 [HARDCODED_URL]: connection_string="postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test",
+  Line 233 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test",
+  Line 272 [HARDCODED_URL]: connection_string="postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test",
+  Line 321 [HARDCODED_URL]: connection_string="postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test",
+
+File: tests/integration/model_registry/test_model_registry_edge_cases.py
+  Line 30 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+
+File: tests/integration/model_registry/test_model_registry_with_migrations.py
+  Line 27 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test",
+
+File: tests/integration/security/test_sql_injection_prevention.py
+  Line 27 [HARDCODED_URL]: "TEST_POSTGRES_URL", "postgresql://test:test@localhost:5432/test_dataflow"
+
+File: tests/integration/security/test_unsafe_ddl_protection.py
+  Line 27 [HARDCODED_URL]: database_url="postgresql://test:test@localhost:5432/test"
+  Line 83 [HARDCODED_URL]: database_url="postgresql://test:test@localhost:5432/test"
+  Line 107 [HARDCODED_URL]: database_url="postgresql://test:test@localhost:5432/test"
+  Line 134 [HARDCODED_URL]: database_url="postgresql://test:test@localhost:5432/test"
+  Line 162 [HARDCODED_URL]: database_url="postgresql://test:test@localhost:5432/test"
+  Line 211 [HARDCODED_URL]: database_url="postgresql://test:test@localhost:5432/test"
+  Line 240 [HARDCODED_URL]: database_url="postgresql://test:test@localhost:5432/test"
+  Line 265 [HARDCODED_URL]: ("postgresql://test:test@localhost:5432/test", "postgresql"),
+
+File: tests/integration/tenancy/test_multi_tenant_database_integration.py
+  Line 31 [HARDCODED_URL]: # self.dataflow = DataFlow("postgresql://test_user:test_password@localhost:5434/kailash_test")
+  Line 311 [HARDCODED_URL]: # self.dataflow = DataFlow("postgresql://test_user:test_password@localhost:5434/kailash_test")
+  Line 539 [HARDCODED_URL]: # source_db = DataFlow("postgresql://test_user:test_password@localhost:5434/kailash_test")
+  Line 540 [HARDCODED_URL]: # target_db = DataFlow("postgresql://test_user:test_password@localhost:5434/kailash_test_migration")
+  Line 629 [HARDCODED_URL]: # dataflow = DataFlow("postgresql://test_user:test_password@localhost:5434/kailash_test")
+
+File: tests/integration/tenancy/test_multi_tenancy_integration.py
+  Line 34 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test",
+
+File: tests/integration/web/test_web_migration_api_integration.py
+  Line 95 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 112 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 172 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 200 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 228 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 276 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 308 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 359 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 402 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 462 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 520 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 537 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 562 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 591 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 649 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 674 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 707 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 733 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+
+File: tests/integration/bulk_operations/test_bulk_delete_node_integration.py
+  Line 45 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+
+File: tests/integration/bulk_operations/test_bulk_update_node_integration.py
+  Line 35 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+
+File: tests/integration/bulk_operations/test_bulk_upsert_node_integration.py
+  Line 36 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+
+File: tests/integration/personas/test_user_persona_integration.py
+  Line 27 [HARDCODED_URL]: url="postgresql://test:test@localhost:5434/test_dataflow", pool_size=5
+  Line 291 [HARDCODED_URL]: database_url="postgresql://test:test@localhost:5434/test_enterprise",
+  Line 682 [HARDCODED_URL]: database_url="postgresql://test:test@localhost:5434/test_data_pipeline",
+  Line 950 [HARDCODED_URL]: database_url="postgresql://test:test@localhost:5434/test_production",
+
+File: tests/integration/testing/test_tdd_infrastructure_integration.py
+  Line 206 [HARDCODED_URL]: "database_url": "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test",
+  Line 362 [HARDCODED_URL]: database_url="postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test",
+  Line 392 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+  Line 471 [HARDCODED_URL]: "postgresql://dataflow_test:dataflow_test_password@localhost:5434/dataflow_test"
+
+File: tests/integration/adapters/test_multi_database_integration.py
+  Line 39 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 46 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 53 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 79 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 103 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+
+File: tests/integration/adapters/test_connection_lifecycle_integration.py
+  Line 35 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 68 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 92 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 136 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 155 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 180 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 184 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 225 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 253 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 283 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 303 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 324 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 327 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 365 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 394 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 427 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 449 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 475 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 505 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 546 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 572 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 575 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+
+File: tests/integration/adapters/test_cross_database_operations.py
+  Line 31 [HARDCODED_URL]: #     "postgresql": DataFlow("postgresql://test_user:test_password@localhost:5434/kailash_test"),
+  Line 76 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 397 [HARDCODED_URL]: # source_db = DataFlow("postgresql://test_user:test_password@localhost:5434/kailash_test")
+  Line 462 [HARDCODED_URL]: # target_db = DataFlow("postgresql://test_user:test_password@localhost:5434/kailash_test")
+  Line 544 [HARDCODED_URL]: #     "postgresql": DataFlow("postgresql://test_user:test_password@localhost:5434/kailash_test"),
+
+File: tests/integration/adapters/test_postgresql_adapter_integration.py
+  Line 33 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 53 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 87 [HARDCODED_URL]: "postgresql://bad_user:bad_pass@localhost:5434/kailash_test"
+
+File: tests/integration/adapters/test_multi_database_support.py
+  Line 30 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 40 [HARDCODED_URL]: == "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 54 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 64 [HARDCODED_URL]: == "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 78 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/cache_db",
+  Line 88 [HARDCODED_URL]: == "postgresql://test_user:test_password@localhost:5434/cache_db"
+  Line 103 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 117 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 131 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 152 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 156 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 160 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 212 [HARDCODED_URL]: valid_url = "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 247 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/db",
+  Line 261 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/analytics",
+  Line 275 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/cache",
+  Line 290 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/pg_enterprise",
+  Line 291 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/analytics_enterprise",
+  Line 292 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/cache_enterprise",
+  Line 335 [HARDCODED_URL]: ("postgresql://test_user:test_password@localhost:5434/db", "postgresql"),
+  Line 337 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/analytics",
+  Line 340 [HARDCODED_URL]: ("postgresql://test_user:test_password@localhost:5434/cache", "postgresql"),
+  Line 376 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/db",
+  Line 399 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/analytics",
+  Line 426 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/cache",
+  Line 480 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/legacy",
+  Line 493 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/modern",
+  Line 526 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 530 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 534 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 579 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/db",
+  Line 580 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/analytics",
+  Line 581 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/cache",
+  Line 615 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/primary",
+  Line 620 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/analytics",
+  Line 625 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/cache",
+  Line 670 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/default",
+  Line 671 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/analytics_default",
+  Line 672 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/cache_default",
+
+File: tests/integration/adapters/test_adapter_integration.py
+  Line 35 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 83 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 107 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 110 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 142 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 193 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 219 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 269 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 296 [HARDCODED_URL]: ("postgresql://user:pass@localhost:5432/db", "postgresql"),
+  Line 379 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 433 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 466 [HARDCODED_URL]: "postgresql://user:pass@localhost:5432/testdb?sslmode=require",
+  Line 499 [HARDCODED_URL]: ("postgresql://user:pass@localhost:5432/testdb", PostgreSQLAdapter),
+  Line 516 [HARDCODED_URL]: "postgresql://user:pass@localhost:5432/testdb?sslmode=require&connect_timeout=10",
+  Line 550 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 571 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 621 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 649 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 686 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+
+File: tests/integration/schema/test_existing_schema_mode_validation.py
+  Line 31 [HARDCODED_URL]: "postgresql://kailash:kailash123@localhost:5434/kailash",
+  Line 69 [HARDCODED_URL]: "postgresql://kailash:kailash123@localhost:5434/kailash",
+  Line 96 [HARDCODED_URL]: "postgresql://kailash:kailash123@localhost:5434/kailash",
+  Line 137 [HARDCODED_URL]: "postgresql://kailash:kailash123@localhost:5434/kailash",
+  Line 168 [HARDCODED_URL]: "postgresql://kailash:kailash123@localhost:5434/kailash",
+  Line 223 [HARDCODED_URL]: "postgresql://kailash:kailash123@localhost:5434/kailash",
+  Line 249 [HARDCODED_URL]: "postgresql://kailash:kailash123@localhost:5434/kailash",
+  Line 275 [HARDCODED_URL]: "postgresql://kailash:kailash123@localhost:5434/kailash",
+  Line 288 [HARDCODED_URL]: "postgresql://kailash:kailash123@localhost:5434/kailash",
+  Line 302 [HARDCODED_URL]: "postgresql://kailash:kailash123@localhost:5434/kailash",
+
+File: tests/integration/schema/test_real_schema_discovery.py
+  Line 119 [HARDCODED_URL]: "database": "postgresql://test_user:test_password@localhost:5434/kailash_test"
+
+File: tests/integration/transactions/test_dataflow_node_transaction_awareness.py
+  Line 30 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 148 [HARDCODED_URL]: database_url="postgresql://postgres:postgres@localhost:5432/dataflow_test"
+  Line 245 [HARDCODED_URL]: database_url="postgresql://postgres:postgres@localhost:5432/dataflow_test"
+
+File: tests/integration/transactions/test_workflow_context_integration.py
+  Line 131 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 320 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test"
+
+File: tests/integration/dataflow_alpha/test_real_database_operations.py
+  Line 94 [DIRECT_CONNECT]: conn = await asyncpg.connect(database_url)
+  Line 135 [DIRECT_CONNECT]: conn = await asyncpg.connect(database_url)
+  Line 170 [DIRECT_CONNECT]: conn = await asyncpg.connect(database_url)
+  Line 219 [DIRECT_CONNECT]: conn = await asyncpg.connect(database_url)
+  Line 273 [DIRECT_CONNECT]: conn = await asyncpg.connect(database_url)
+  Line 330 [DIRECT_CONNECT]: conn = await asyncpg.connect(database_url)
+  Line 395 [DIRECT_CONNECT]: conn = await asyncpg.connect(database_url)
+
+File: tests/integration/migration/test_mitigation_strategy_engine_integration.py
+  Line 85 [DIRECT_CONNECT]: conn = await asyncpg.connect(database_config)
+  Line 109 [DIRECT_CONNECT]: connection = await asyncpg.connect(self.database_url)
+
+File: tests/integration/migration/test_migration_bug_006_integration.py
+  Line 174 [HARDCODED_URL]: "TEST_DATABASE_URL", "postgresql://test:test@localhost:5434/test_existing_db"
+  Line 274 [HARDCODED_URL]: "TEST_DATABASE_URL", "postgresql://test:test@localhost:5434/test_edge_cases"
+  Line 281 [DIRECT_CONNECT]: conn = await asyncpg.connect(db_url)
+  Line 360 [DIRECT_CONNECT]: conn = await asyncpg.connect(db_url)
+  Line 393 [DIRECT_CONNECT]: conn = await asyncpg.connect(db_url)
+  Line 452 [ENV_VAR]: db_url = os.getenv("TEST_DATABASE_URL")
+  Line 455 [HARDCODED_URL]: print("Set it to: postgresql://test:test@localhost:5434/test_db")
+
+File: tests/integration/migration/test_fk_safe_migration_integration.py
+  Line 50 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 62 [DIRECT_CONNECT]: conn = await asyncpg.connect(TEST_DATABASE_URL)
+  Line 343 [DIRECT_CONNECT]: conn = await asyncpg.connect(TEST_DATABASE_URL)
+
+File: tests/integration/migration/test_dependency_analyzer_integration.py
+  Line 63 [DIRECT_CONNECT]: conn = await asyncpg.connect(database_config)
+  Line 87 [DIRECT_CONNECT]: connection = await asyncpg.connect(self.database_url)
+
+File: tests/integration/migration/test_migration_trigger_system.py
+  Line 72 [HARDCODED_URL]: database_url="postgresql://test:test@localhost:5432/test",
+  Line 133 [HARDCODED_URL]: database_url="postgresql://test:test@localhost:5432/test",
+
+File: tests/integration/migration/test_dependency_analyzer_integration_fixed.py
+  Line 52 [DIRECT_CONNECT]: conn = await asyncpg.connect(database_config)
+  Line 76 [DIRECT_CONNECT]: connection = await asyncpg.connect(self.database_url)
+
+File: tests/integration/migration/test_migration_performance_tracker_integration.py
+  Line 74 [DIRECT_CONNECT]: connection = await asyncpg.connect(database_url)
+  Line 116 [DIRECT_CONNECT]: connection = await asyncpg.connect(postgres_connection["database_url"])
+  Line 252 [DIRECT_CONNECT]: connection = await asyncpg.connect(postgres_connection["database_url"])
+  Line 309 [DIRECT_CONNECT]: connection = await asyncpg.connect(postgres_connection["database_url"])
+  Line 471 [DIRECT_CONNECT]: conn = await asyncpg.connect(postgres_connection["database_url"])
+  Line 562 [DIRECT_CONNECT]: connection = await asyncpg.connect(postgres_connection["database_url"])
+  Line 725 [DIRECT_CONNECT]: connection = await asyncpg.connect(postgres_connection["database_url"])
+  Line 858 [DIRECT_CONNECT]: connection = await asyncpg.connect(database_url)
+  Line 923 [DIRECT_CONNECT]: connection = await asyncpg.connect(postgres_connection["database_url"])
+
+File: tests/integration/migration/test_migration_lock_manager_integration.py
+  Line 50 [DIRECT_CONNECT]: connection = await asyncpg.connect(test_suite.config.url)
+
+File: tests/integration/migration/test_risk_assessment_engine_integration.py
+  Line 87 [DIRECT_CONNECT]: connection = await asyncpg.connect(**connection_params)
+
+File: tests/integration/core_engine/test_engine_relationship_integration.py
+  Line 20 [HARDCODED_URL]: INTEGRATION_DB_URL = "postgresql://test_user:test_password@localhost:5434/kailash_test"
+
+File: tests/integration/core_engine/test_workflow_connection_integration.py
+  Line 88 [HARDCODED_URL]: "database": "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 244 [HARDCODED_URL]: "connection_string": "postgresql://test_user:test_password@localhost:5434/kailash_test",
+
+File: tests/integration/core_engine/test_enterprise_features_integration.py
+  Line 33 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+
+File: tests/integration/core_engine/test_performance_validation.py
+  Line 35 [HARDCODED_URL]: self.db_url = "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 35 [URL_ASSIGNMENT]: self.db_url = "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 119 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 262 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 346 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 404 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 527 [HARDCODED_URL]: database_url="postgresql://test_user:test_password@localhost:5434/kailash_test"
+
+File: tests/integration/core_engine/test_database_operations.py
+  Line 48 [HARDCODED_URL]: == "postgresql://test_user:test_password@localhost:5434/kailash_test"
+
+File: tests/integration/core_engine/test_production_dataflow.py
+  Line 35 [HARDCODED_URL]: "postgresql://postgres:password@localhost:5432/dataflow_test",
+
+File: tests/integration/core_engine/test_generated_node_integration.py
+  Line 32 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test",
+  Line 37 [HARDCODED_URL]: INTEGRATION_DB_URL = "postgresql://test_user:test_password@localhost:5434/kailash_test"
+
+File: tests/integration/core_engine/test_postgresql_parameter_conversion_bug.py
+  Line 37 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+  Line 168 [HARDCODED_URL]: "postgresql://test_user:test_password@localhost:5434/kailash_test"
+
+File: tests/integration/core_engine/test_postgresql_test_manager_integration.py
+  Line 77 [DIRECT_CONNECT]: conn = await asyncpg.connect(container_info.database_url)
+  Line 319 [DIRECT_CONNECT]: conn = await asyncpg.connect(test_db_url)
+  Line 330 [DIRECT_CONNECT]: conn = await asyncpg.connect(test_db_url)
+  Line 496 [DIRECT_CONNECT]: conn = await asyncpg.connect(container_info2.database_url)
+
+
+Total files: 42
+Total issues: 218

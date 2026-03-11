@@ -1,0 +1,127 @@
+{
+  "metadata": {
+    "id": "image-analysis",
+    "name": "Image Analysis",
+    "description": "Visual question answering and image analysis using VisionAgent",
+    "category": "Multi-Modal",
+    "complexity": "Intermediate",
+    "tags": ["vision", "image-analysis", "ocr", "visual-qa", "multi-modal"],
+    "author": "Kaizen Team",
+    "version": "1.0.0",
+    "created": "2025-10-06"
+  },
+  "agents": [
+    {
+      "id": "vision_agent",
+      "type": "VisionAgent",
+      "config": {
+        "llm_provider": "openai",
+        "model": "gpt-4-vision-preview",
+        "temperature": 0.2,
+        "max_tokens": 800
+      },
+      "position": {"x": 100, "y": 100}
+    }
+  ],
+  "connections": [],
+  "inputs": [
+    {
+      "id": "image_path",
+      "name": "Image Path",
+      "type": "string",
+      "description": "Path to image file (PNG, JPG, etc.)",
+      "default": "/path/to/image.png",
+      "required": true
+    },
+    {
+      "id": "question",
+      "name": "Question",
+      "type": "string",
+      "description": "Question about the image",
+      "default": "What objects can you see in this image?",
+      "required": true
+    },
+    {
+      "id": "analysis_type",
+      "name": "Analysis Type",
+      "type": "string",
+      "description": "Type of analysis to perform",
+      "default": "general_description",
+      "required": false
+    }
+  ],
+  "outputs": [
+    {
+      "id": "answer",
+      "name": "Answer",
+      "type": "string",
+      "description": "Answer to the question about the image"
+    },
+    {
+      "id": "detected_objects",
+      "name": "Detected Objects",
+      "type": "array",
+      "description": "List of objects detected in the image"
+    },
+    {
+      "id": "confidence",
+      "name": "Confidence",
+      "type": "number",
+      "description": "Confidence score for the analysis"
+    }
+  ],
+  "execution": {
+    "entry_point": "vision_agent",
+    "timeout": 60,
+    "retry_policy": {
+      "max_retries": 3,
+      "backoff": "exponential"
+    }
+  },
+  "documentation": {
+    "overview": "This workflow analyzes images and answers visual questions using VisionAgent with GPT-4 Vision or Ollama vision models (llava, bakllava). It can perform tasks like object detection, OCR, scene understanding, and visual question answering. Perfect for document processing, image classification, and visual search applications.",
+    "use_cases": [
+      "Document OCR and text extraction from images",
+      "Product image analysis for e-commerce cataloging",
+      "Medical image analysis and diagnosis assistance",
+      "Receipt and invoice processing for expense management",
+      "Visual quality control in manufacturing",
+      "Accessibility: image description for visually impaired users"
+    ],
+    "prerequisites": [
+      "OpenAI API key (for GPT-4 Vision) or Ollama installed (for llava/bakllava)",
+      "Image file accessible via file path",
+      "Internet connection for cloud API (if using OpenAI)",
+      "Supported image formats: PNG, JPG, JPEG, WEBP"
+    ],
+    "example_inputs": [
+      {
+        "image_path": "/examples/receipt.jpg",
+        "question": "What is the total amount on this receipt?",
+        "analysis_type": "ocr"
+      },
+      {
+        "image_path": "/examples/product.png",
+        "question": "Describe this product and its key features",
+        "analysis_type": "product_description"
+      },
+      {
+        "image_path": "/examples/diagram.png",
+        "question": "Explain this architecture diagram",
+        "analysis_type": "technical_diagram"
+      }
+    ],
+    "example_outputs": [
+      {
+        "answer": "The receipt shows a total amount of $47.23, including tax of $3.85. The purchase was made at Coffee Shop Inc. on October 6, 2025 at 2:30 PM.",
+        "detected_objects": ["receipt", "text", "numbers", "logo"],
+        "confidence": 0.94
+      },
+      {
+        "answer": "This product is a wireless Bluetooth speaker with a cylindrical design. Key features include: waterproof construction (IPX7 rating), 360-degree sound, USB-C charging port, and fabric covering in blue color.",
+        "detected_objects": ["speaker", "usb_port", "fabric_texture", "product"],
+        "confidence": 0.91
+      }
+    ]
+  }
+}

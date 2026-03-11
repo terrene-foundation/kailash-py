@@ -1,0 +1,53 @@
+@startuml Kaizen Production Architecture
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Kaizen AI - Production Deployment Architecture
+
+Person(user, "User", "End user or API client")
+
+System_Boundary(k8s, "Kubernetes Cluster") {
+    Container(lb, "Load Balancer", "K8s Service", "Routes traffic to pods")
+
+    Container(pod1, "Kaizen Pod 1", "Python 3.12-Alpine", "Agent runtime with health checks")
+    Container(pod2, "Kaizen Pod 2", "Python 3.12-Alpine", "Agent runtime with health checks")
+    Container(pod3, "Kaizen Pod N", "Python 3.12-Alpine", "Scaled pods")
+
+    ContainerDb(redis, "Redis", "Cache & Memory", "Shared memory pool")
+    ContainerDb(postgres, "PostgreSQL", "Database", "Persistent storage")
+}
+
+System_Boundary(monitoring, "Monitoring Stack") {
+    Container(prometheus, "Prometheus", "Metrics", "Collects metrics from pods")
+    Container(grafana, "Grafana", "Dashboards", "Visualizes metrics")
+    Container(alertmanager, "Alertmanager", "Alerts", "Alert routing")
+}
+
+System_Ext(openai, "OpenAI API", "LLM Provider")
+System_Ext(anthropic, "Anthropic API", "LLM Provider")
+
+Rel(user, lb, "HTTP/HTTPS", "Requests")
+Rel(lb, pod1, "Routes", "8080")
+Rel(lb, pod2, "Routes", "8080")
+Rel(lb, pod3, "Routes", "8080")
+
+Rel(pod1, redis, "Read/Write", "6379")
+Rel(pod2, redis, "Read/Write", "6379")
+Rel(pod3, redis, "Read/Write", "6379")
+
+Rel(pod1, postgres, "Persist", "5432")
+Rel(pod2, postgres, "Persist", "5432")
+Rel(pod3, postgres, "Persist", "5432")
+
+Rel(pod1, openai, "LLM Requests", "443/HTTPS")
+Rel(pod2, anthropic, "LLM Requests", "443/HTTPS")
+
+Rel(prometheus, pod1, "Scrape metrics", "9090")
+Rel(prometheus, pod2, "Scrape metrics", "9090")
+Rel(prometheus, pod3, "Scrape metrics", "9090")
+
+Rel(grafana, prometheus, "Query", "9090")
+Rel(prometheus, alertmanager, "Alerts", "9093")
+
+@enduml

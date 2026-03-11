@@ -1,0 +1,233 @@
+=== Line 361 ===
+                        if auto_managed_fields:
+                            # Enhanced error with catalog-based solutions (DF-104)
+                            if ErrorEnhancer is not None:
+                                raise ErrorEnhancer.enhance_auto_managed_field_conflict(
+                                    node_id=getattr(self, "node_id", self.model_name),
+                                    fields=auto_managed_fields,
+                                    model_name=self.model_name,
+
+=== Line 369 ===
+                                )
+                            else:
+                                # Fallback to ValueError if ErrorEnhancer not available
+                                raise ValueError(
+                                    f"Cannot provide {', '.join(auto_managed_fields)} for {operation} operation. "
+                                    f"These fields are auto-managed by DataFlow (created_at, updated_at). "
+                                    f"Remove them from the input parameters."
+
+=== Line 550 ===
+                                        ]
+                                        if op not in allowed_ops:
+                                            if ErrorEnhancer is not None:
+                                                raise ErrorEnhancer.enhance_unsafe_filter_operator(
+                                                    model_name=self.model_name,
+                                                    field_name=field,
+                                                    operator=op,
+
+=== Line 558 ===
+                                                    original_error=ValueError(f"Unsafe filter operator '{op}' in field '{field}'")
+                                                )
+                                            else:
+                                                raise ValueError(
+                                                    f"Unsafe filter operator '{op}' in field '{field}'"
+                                                )
+
+
+=== Line 1017 ===
+                    loop = asyncio.get_running_loop()
+                    # We're in an async context, can't use run() safely
+                    if ErrorEnhancer is not None:
+                        raise ErrorEnhancer.enhance_async_context_error(
+                            node_class=self.__class__.__name__,
+                            method="run()",
+                            correct_method="async_run()",
+
+=== Line 1027 ===
+                            )
+                        )
+                    else:
+                        raise RuntimeError(
+                            f"Cannot use synchronous run() from within an async context. "
+                            f"Use 'await {self.__class__.__name__}.async_run()' instead."
+                        )
+
+=== Line 1110 ===
+                            if "data" not in model_fields:
+                                # Enhanced error with catalog-based solutions (DF-602)
+                                if ErrorEnhancer is not None:
+                                    raise ErrorEnhancer.enhance_create_vs_update_node_confusion(
+                                        node_type=f"{self.model_name}CreateNode",
+                                        received_structure="data wrapper (nested)",
+                                        expected_structure="flat fields (top-level)",
+
+=== Line 1117 ===
+                                    )
+                                else:
+                                    # Fallback to ValueError if ErrorEnhancer not available
+                                    raise ValueError(
+                                        f"Invalid parameter structure for {self.model_name}CreateNode. "
+                                        f"Received nested 'data' wrapper but CreateNode expects flat fields at top level. "
+                                        f"Example: {{'id': 1, 'name': 'Alice'}} not {{'data': {{'id': 1, 'name': 'Alice'}}}}"
+
+=== Line 1221 ===
+                            elif field_info.get("required", True):
+                                # Enhanced error with catalog-based solutions (DF-105)
+                                if ErrorEnhancer is not None:
+                                    raise ErrorEnhancer.enhance_missing_required_field(
+                                        node_id=getattr(
+                                            self, "node_id", self.model_name
+                                        ),
+
+=== Line 1231 ===
+                                    )
+                                else:
+                                    # Fallback to ValueError if ErrorEnhancer not available
+                                    raise ValueError(
+                                        f"Missing required field '{field_name}' for {self.model_name}. "
+                                        f"Expected fields: {field_names}"
+                                    )
+
+=== Line 1563 ===
+                        from kailash.sdk_exceptions import NodeValidationError
+
+                        if ErrorEnhancer is not None:
+                            raise ErrorEnhancer.enhance_read_node_missing_id(
+                                model_name=self.model_name,
+                                node_id=getattr(self, "node_id", f"{self.model_name}ReadNode"),
+                                original_error=NodeValidationError(
+
+=== Line 1572 ===
+                                )
+                            )
+                        else:
+                            raise NodeValidationError(
+                                f"{self.model_name}ReadNode requires 'id' or 'record_id' parameter. "
+                                f"Example: workflow.add_node('{self.model_name}ReadNode', 'read', {{'id': record_id}})"
+                            )
+
+=== Line 1629 ===
+                        from kailash.sdk_exceptions import NodeExecutionError
+
+                        if ErrorEnhancer is not None:
+                            raise ErrorEnhancer.enhance_read_node_not_found(
+                                model_name=self.model_name,
+                                record_id=str(record_id),
+                                node_id=getattr(self, "node_id", f"{self.model_name}ReadNode"),
+
+=== Line 1638 ===
+                                )
+                            )
+                        else:
+                            raise NodeExecutionError(
+                                f"Record with id={record_id} not found in {self.model_name} table"
+                            )
+
+
+=== Line 1779 ===
+                        from kailash.sdk_exceptions import NodeValidationError
+
+                        if ErrorEnhancer is not None:
+                            raise ErrorEnhancer.enhance_update_node_missing_filter_id(
+                                model_name=self.model_name,
+                                node_id=getattr(self, "node_id", f"{self.model_name}UpdateNode"),
+                                original_error=NodeValidationError(
+
+=== Line 1789 ===
+                                )
+                            )
+                        else:
+                            raise NodeValidationError(
+                                f"{self.model_name}UpdateNode requires 'id' or 'record_id' in filter parameter. "
+                                f"Example: workflow.add_node('{self.model_name}UpdateNode', 'update', "
+                                f"{{'filter': {{'id': record_id}}, 'fields': {{'name': 'value'}}}})"
+
+=== Line 2061 ===
+
+                    if record_id is None:
+                        if ErrorEnhancer is not None:
+                            raise ErrorEnhancer.enhance_delete_node_missing_id(
+                                model_name=self.model_name,
+                                node_id=getattr(self, "node_id", f"{self.model_name}DeleteNode"),
+                                original_error=ValueError(
+
+=== Line 2071 ===
+                                )
+                            )
+                        else:
+                            raise ValueError(
+                                f"{self.model_name}DeleteNode requires 'id' or 'record_id' parameter. "
+                                "Cannot delete record without specifying which record to delete. "
+                                "Refusing to proceed to prevent accidental data loss."
+
+=== Line 2452 ===
+                            from kailash.sdk_exceptions import NodeValidationError
+
+                            if ErrorEnhancer is not None:
+                                raise ErrorEnhancer.enhance_upsert_node_empty_conflict_on(
+                                    model_name=self.model_name,
+                                    node_id=getattr(self, "node_id", f"{self.model_name}UpsertNode"),
+                                    original_error=NodeValidationError(
+
+=== Line 2461 ===
+                                    )
+                                )
+                            else:
+                                raise NodeValidationError(
+                                    f"{self.model_name}UpsertNode: conflict_on must contain at least one field when specified. "
+                                    f"To use default conflict detection (based on 'where' fields), omit the conflict_on parameter entirely."
+                                )
+
+=== Line 2475 ===
+                        from kailash.sdk_exceptions import NodeValidationError
+
+                        if ErrorEnhancer is not None:
+                            raise ErrorEnhancer.enhance_upsert_node_missing_where(
+                                model_name=self.model_name,
+                                node_id=getattr(self, "node_id", f"{self.model_name}UpsertNode"),
+                                original_error=NodeValidationError(
+
+=== Line 2485 ===
+                                )
+                            )
+                        else:
+                            raise NodeValidationError(
+                                f"{self.model_name}UpsertNode requires 'where' parameter. "
+                                f"Example: {{'where': {{'email': 'user@example.com'}}, "
+                                f"'update': {{'name': 'Updated'}}, 'create': {{'email': '...', 'name': 'New'}}}}"
+
+=== Line 2495 ===
+                        from kailash.sdk_exceptions import NodeValidationError
+
+                        if ErrorEnhancer is not None:
+                            raise ErrorEnhancer.enhance_upsert_node_missing_operations(
+                                model_name=self.model_name,
+                                node_id=getattr(self, "node_id", f"{self.model_name}UpsertNode"),
+                                has_update=bool(update_data),
+
+=== Line 2505 ===
+                                )
+                            )
+                        else:
+                            raise NodeValidationError(
+                                f"{self.model_name}UpsertNode requires 'update' or 'create' parameter"
+                            )
+
+
+=== Line 2716 ===
+                    else:
+                        from kailash.sdk_exceptions import NodeExecutionError
+
+                        raise NodeExecutionError(
+                            f"Unsupported database type for upsert: {database_type}"
+                        )
+
+
+=== Line 2768 ===
+
+                    from kailash.sdk_exceptions import NodeExecutionError
+
+                    raise NodeExecutionError(f"Upsert failed for {self.model_name}")
+
+                elif operation == "count":
+                    # NEW v0.8.1: Efficient COUNT(*) operation
