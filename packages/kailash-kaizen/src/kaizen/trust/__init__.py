@@ -401,6 +401,9 @@ from kaizen.trust.store import (
     TransactionContext,
 )
 
+# EATP Reasoning Trace Extension
+from kaizen.trust.reasoning import ConfidentialityLevel, ReasoningTrace
+
 # CARE-014: External Timestamp Anchoring
 from kaizen.trust.timestamping import (
     LocalTimestampAuthority,
@@ -714,4 +717,7 @@ __all__ = [
     # Trust Knowledge Bridge - CARE-038
     "InMemoryKnowledgeStore",
     "TrustKnowledgeBridge",
+    # Reasoning Trace Extension
+    "ConfidentialityLevel",
+    "ReasoningTrace",
 ]

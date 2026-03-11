@@ -2,7 +2,7 @@
 
 Critical patterns, security considerations, and gotchas discovered during the EATP SDK extraction and red team validation.
 
-**Source**: `packages/eatp/` | **Tests**: 1177 passed | **Red team**: 2 rounds, 5 agents, all critical/high resolved
+**Source**: `packages/eatp/` | **Tests**: 1557 passed | **Red team**: 3 rounds, 5 agents, all critical/high resolved
 
 ## Critical Gotchas
 
@@ -83,6 +83,143 @@ chain_hash = chain.hash()           # NOT chain.compute_hash()
 
 # Signing payload
 payload = genesis.to_signing_payload()  # NOT genesis.signing_payload (it's a method, not property)
+```
+
+### 7. Reasoning Signature Signs Trace Content, Not Parent Record
+
+```python
+from eatp.crypto import sign_reasoning_trace, verify_reasoning_signature
+
+# The reasoning_signature is computed from trace.to_signing_payload()
+# It is NOT part of the parent DelegationRecord/AuditAnchor signature
+sig = sign_reasoning_trace(trace, private_key)
+ok = verify_reasoning_signature(trace, sig, public_key)
+
+# This means: adding/removing a reasoning trace does NOT invalidate
+# the parent record's existing signature. Backward compatible by design.
+```
+
+### 8. ConfidentialityLevel Affects Serialization
+
+Higher confidentiality levels cause automatic redaction in interop formats:
+
+| Level        | W3C VC / SD-JWT Behavior                                        |
+| ------------ | --------------------------------------------------------------- |
+| PUBLIC       | Full trace included                                             |
+| RESTRICTED   | Included when `disclose_reasoning=True`                         |
+| CONFIDENTIAL | Included when disclosed, but `alternatives_considered` stripped |
+| SECRET       | Only hash survives, trace withheld                              |
+| TOP_SECRET   | Only hash survives, trace withheld                              |
+
+Hash and signature are always included (they are integrity proofs, not confidential content).
+
+### 9. REASONING_REQUIRED Enforcement Depends on Verification Level
+
+When `REASONING_REQUIRED` is active and reasoning is missing, behavior depends on the verification level:
+
+- **STANDARD level**: Produces a **warning-severity violation** (`valid=True`). Advisory only.
+- **FULL level**: Produces a **hard failure** (`valid=False`). Blocks the action.
+
+```python
+# At STANDARD level (default):
+# result.violations = [{"constraint_type": "reasoning_required", "severity": "warning", ...}]
+# result.reasoning_present = False
+# result.valid = True  (advisory warning only)
+
+# At FULL level:
+# result.valid = False  (hard failure)
+# result.reason = "REASONING_REQUIRED constraint active but no reasoning trace present..."
+```
+
+This is important: the same constraint has different enforcement semantics depending on verification level.
+
+### 10. Standalone Reasoning Signatures Differ from Operations Signatures
+
+When `ops.delegate()` or `ops.audit()` signs a reasoning trace, it binds the signature to the parent record via `context_id=record.id`. Standalone `sign_reasoning_trace(trace, key)` without `context_id` produces a **different signature** that won't verify against the operations-created one.
+
+```python
+# Operations-created signature (uses context_id internally):
+delegation = await ops.delegate(..., reasoning_trace=trace)
+# delegation.reasoning_signature is bound to delegation.id
+
+# Standalone verification MUST match:
+ok = verify_reasoning_signature(trace, delegation.reasoning_signature, pub_key,
+                                 context_id=delegation.id)  # Must pass context_id!
+
+# Without context_id → silent crypto failure:
+ok = verify_reasoning_signature(trace, delegation.reasoning_signature, pub_key)  # False!
+```
+
+## Reasoning Trace Patterns
+
+### Pattern: Privacy-First Reasoning (Classify Before Creating)
+
+Always set the confidentiality level before attaching evidence or alternatives:
+
+```python
+from eatp.reasoning import ReasoningTrace, ConfidentialityLevel
+from datetime import datetime, timezone
+
+# CORRECT: classify first, then populate
+trace = ReasoningTrace(
+    decision="Grant elevated access for incident response",
+    rationale="Active security incident requires immediate analyst access",
+    confidentiality=ConfidentialityLevel.SECRET,  # Set first
+    timestamp=datetime.now(timezone.utc),
+    evidence=[{"type": "incident_ticket", "id": "INC-4521"}],
+    methodology="incident_response_protocol",
+    confidence=0.95,
+)
+
+# WRONG: creating with PUBLIC then upgrading later risks
+# the trace having already been serialized/transmitted at PUBLIC level
+```
+
+### Pattern: Using REASONING_REQUIRED for Compliance Workflows
+
+```python
+from eatp import CapabilityRequest, TrustOperations
+from eatp.chain import CapabilityType, ConstraintType
+
+# Establish agent with REASONING_REQUIRED constraint
+chain = await ops.establish(
+    agent_id="compliance-agent",
+    authority_id="org-acme",
+    capabilities=[
+        CapabilityRequest(
+            capability="approve_transaction",
+            capability_type=CapabilityType.ACTION,
+        ),
+    ],
+    constraints=["reasoning_required"],
+)
+
+# Now delegations and audits without reasoning_trace
+# will generate warning violations during VERIFY
+result = await ops.verify(
+    agent_id="compliance-agent",
+    action="approve_transaction",
+)
+# result.reasoning_present will be False if no traces attached
+# result.violations will include a "reasoning_required" warning
+```
+
+### Anti-Pattern: Storing Unencrypted TOP_SECRET Reasoning
+
+```python
+# WRONG: TOP_SECRET reasoning stored in plaintext logs/databases
+trace = ReasoningTrace(
+    decision="Critical infrastructure access decision",
+    rationale="Nuclear facility override authorization",
+    confidentiality=ConfidentialityLevel.TOP_SECRET,
+    timestamp=datetime.now(timezone.utc),
+)
+logger.info(f"Reasoning: {trace.to_dict()}")  # Leaks TOP_SECRET to logs!
+
+# CORRECT: Use selective disclosure; only store hash
+from eatp.crypto import hash_reasoning_trace
+trace_hash = hash_reasoning_trace(trace)
+logger.info(f"Reasoning hash: {trace_hash}")  # Safe: only hash in logs
 ```
 
 ## Security Patterns
@@ -187,7 +324,7 @@ This means:
 
 - Canonical code lives in `packages/eatp/src/eatp/`
 - Kaizen tests exercise the same code through shim imports
-- 1177 EATP tests + 1623 Kaizen trust tests = 2800 total coverage
+- 1557 EATP tests + Kaizen trust shim tests for total coverage
 
 ### Store Architecture
 

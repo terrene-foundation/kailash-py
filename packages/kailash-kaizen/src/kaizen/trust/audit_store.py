@@ -143,9 +143,10 @@ class PostgresAuditStore(AuditStore):
             AuditStoreError: If storage fails
         """
         try:
-            # Serialize anchor to dictionary
-            anchor_dict = anchor.to_signing_payload()
-            anchor_dict["context"] = anchor.context
+            # Serialize anchor to dictionary using to_dict() which includes
+            # all fields (reasoning trace, human origin, etc.), not just the
+            # signing payload which intentionally excludes reasoning fields.
+            anchor_dict = anchor.to_dict()
 
             # Build workflow using AuditRecord_Create node
             # Note: We use Create, not Upsert, to enforce append-only
@@ -458,6 +459,8 @@ class PostgresAuditStore(AuditStore):
         """
         Deserialize an AuditAnchor from a database record.
 
+        Preserves reasoning trace fields when present (backward compatible).
+
         Args:
             record: Database record
 
@@ -465,6 +468,14 @@ class PostgresAuditStore(AuditStore):
             AuditAnchor instance
         """
         anchor_data = record.get("anchor_data", {})
+
+        # Reasoning trace deserialization (backward compatible — None if absent)
+        reasoning_trace = None
+        reasoning_trace_dict = anchor_data.get("reasoning_trace")
+        if reasoning_trace_dict:
+            from eatp.reasoning import ReasoningTrace
+
+            reasoning_trace = ReasoningTrace.from_dict(reasoning_trace_dict)
 
         return AuditAnchor(
             id=record["id"],
@@ -481,6 +492,10 @@ class PostgresAuditStore(AuditStore):
             parent_anchor_id=record.get("parent_anchor_id"),
             signature=record["signature"],
             context=anchor_data.get("context", {}),
+            # Reasoning trace extension (preserved from anchor_data)
+            reasoning_trace=reasoning_trace,
+            reasoning_trace_hash=anchor_data.get("reasoning_trace_hash"),
+            reasoning_signature=anchor_data.get("reasoning_signature"),
         )
 
     # Explicitly prevent update and delete operations
