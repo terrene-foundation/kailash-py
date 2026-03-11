@@ -1,0 +1,97 @@
+site_name: EATP — Enterprise Agent Trust Protocol
+site_description: Cryptographic trust chains, delegation, and verification for AI agent systems
+site_author: Terrene Foundation
+site_url: https://docs.terrenefoundation.org/eatp
+
+repo_url: https://github.com/terrene-foundation/eatp-python
+repo_name: terrene-foundation/eatp-python
+
+copyright: "Apache 2.0 — A public good by the Terrene Foundation"
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - content.code.copy
+    - content.code.annotate
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - search.highlight
+    - toc.follow
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            members_order: source
+            docstring_style: google
+            show_signature_annotations: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+      - CLI Guide: getting-started/cli.md
+  - Concepts:
+      - Trust Lineage Chain: concepts/trust-chain.md
+      - Four Operations: concepts/operations.md
+      - Constraints: concepts/constraints.md
+      - Trust Postures: concepts/postures.md
+      - Enforcement: concepts/enforcement.md
+  - API Reference:
+      - eatp: api/index.md
+      - eatp.chain: api/chain.md
+      - eatp.crypto: api/crypto.md
+      - eatp.operations: api/operations.md
+      - eatp.store: api/store.md
+      - eatp.constraints: api/constraints.md
+      - eatp.enforce: api/enforce.md
+      - eatp.interop: api/interop.md
+      - eatp.postures: api/postures.md
+      - eatp.merkle: api/merkle.md
+      - eatp.scoring: api/scoring.md
+      - eatp.cli: api/cli.md
+  - Examples:
+      - Basic Lifecycle: examples/quickstart.md
+      - Multi-Level Delegation: examples/delegation.md
+      - Constraint Templates: examples/templates.md
+      - Shadow Mode: examples/shadow.md
+      - JWT Interop: examples/jwt.md
+  - Specification:
+      - Wire Format: spec/wire-format.md
+      - JSON Schemas: spec/schemas.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true

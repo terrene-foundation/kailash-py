@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eatp.terrene.dev/schemas/constraint-envelope.schema.json",
+  "title": "EATP Constraint Envelope",
+  "description": "Aggregated constraints governing an agent's behavior.",
+  "type": "object",
+  "required": [
+    "id",
+    "agent_id",
+    "constraints",
+    "constraint_type",
+    "effective_from",
+    "signature"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique envelope identifier"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Agent these constraints apply to"
+    },
+    "constraints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dimension", "value"],
+        "properties": {
+          "dimension": {
+            "type": "string",
+            "description": "Constraint dimension (e.g., 'financial', 'temporal')"
+          },
+          "value": {
+            "description": "Constraint value (type depends on dimension)"
+          },
+          "source": {
+            "type": "string",
+            "description": "Where this constraint came from"
+          }
+        }
+      },
+      "description": "List of active constraints"
+    },
+    "constraint_type": {
+      "type": "string",
+      "enum": ["direct", "inherited", "delegated", "composite"],
+      "description": "How constraints were established"
+    },
+    "effective_from": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "effective_until": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "signature": {
+      "type": "string",
+      "description": "Base64-encoded Ed25519 signature"
+    },
+    "context": {
+      "type": "object",
+      "description": "Runtime context for constraint evaluation",
+      "additionalProperties": true
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}

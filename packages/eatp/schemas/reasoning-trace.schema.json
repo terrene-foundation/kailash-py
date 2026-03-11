@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eatp.terrene.dev/schemas/reasoning-trace.schema.json",
+  "title": "EATP Reasoning Trace",
+  "description": "Structured rationale for a trust decision. Attachable to Delegation Records and Audit Anchors.",
+  "type": "object",
+  "required": ["decision", "rationale", "confidentiality", "timestamp"],
+  "properties": {
+    "decision": {
+      "type": "string",
+      "description": "What was decided — a concise statement of the decision or action"
+    },
+    "rationale": {
+      "type": "string",
+      "description": "Why this decision was made — human-readable justification"
+    },
+    "confidentiality": {
+      "type": "string",
+      "default": "restricted",
+      "description": "Disclosure classification. Standard levels: public, restricted, confidential, secret, top_secret. Included in signature computation to prevent downgrade attacks.",
+      "examples": [
+        "public",
+        "restricted",
+        "confidential",
+        "secret",
+        "top_secret"
+      ]
+    },
+    "alternatives_considered": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Other options that were evaluated and rejected, with brief reasons"
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidence_ref" },
+      "description": "References to supporting evidence"
+    },
+    "methodology": {
+      "type": "string",
+      "description": "How the decision was reached"
+    },
+    "confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Decision confidence score (0.0 = no confidence, 1.0 = full confidence). MUST be in range [0.0, 1.0]; values outside this range MUST be rejected at construction time."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this reasoning was recorded (ISO 8601)"
+    }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "evidence_ref": {
+      "type": "object",
+      "description": "Reference to a piece of supporting evidence",
+      "required": ["type", "ref"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Category of evidence (e.g., 'performance_report', 'policy')"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Resolvable reference to the evidence"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

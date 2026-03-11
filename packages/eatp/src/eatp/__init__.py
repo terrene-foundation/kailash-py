@@ -1,0 +1,131 @@
+# Copyright 2026 Terrene Foundation
+# SPDX-License-Identifier: Apache-2.0
+
+"""
+Enterprise Agent Trust Protocol (EATP) SDK.
+
+Cryptographic trust chains, delegation, and verification for AI agent systems.
+A public good by the Terrene Foundation (Apache 2.0).
+
+EATP provides four core operations:
+    - ESTABLISH: Create initial trust for an agent (genesis record + key binding)
+    - DELEGATE: Transfer trust from one agent to another with constraints
+    - VERIFY: Validate an agent's trust chain and produce a verification verdict
+    - AUDIT: Record agent actions in an immutable, hash-linked audit trail
+
+Quick Start::
+
+    from eatp import TrustOperations, TrustKeyManager, CapabilityRequest
+    from eatp.chain import AuthorityType, CapabilityType
+    from eatp.crypto import generate_keypair
+    from eatp.store.memory import InMemoryTrustStore
+    from eatp.authority import OrganizationalAuthority, AuthorityPermission
+
+    # 1. Setup
+    store = InMemoryTrustStore()
+    await store.initialize()
+    key_mgr = TrustKeyManager()
+    priv_key, pub_key = generate_keypair()
+    key_mgr.register_key("key-org", priv_key)
+
+    # 2. Register authority
+    authority = OrganizationalAuthority(
+        id="org-acme", name="ACME",
+        authority_type=AuthorityType.ORGANIZATION,
+        public_key=pub_key, signing_key_id="key-org",
+        permissions=[AuthorityPermission.CREATE_AGENTS],
+    )
+
+    # 3. Create TrustOperations and use the 4 operations
+    ops = TrustOperations(authority_registry=registry, key_manager=key_mgr, trust_store=store)
+    chain = await ops.establish(agent_id="agent-001", authority_id="org-acme", capabilities=[...])
+    result = await ops.verify(agent_id="agent-001", action="analyze_data")
+"""
+
+__version__ = "0.1.0"
+
+# Core types
+from eatp.chain import (
+    AuditAnchor,
+    AuthorityType,
+    CapabilityAttestation,
+    CapabilityType,
+    ConstraintEnvelope,
+    ConstraintType,
+    DelegationRecord,
+    GenesisRecord,
+    TrustLineageChain,
+    VerificationLevel,
+    VerificationResult,
+)
+from eatp.operations import (
+    CapabilityRequest,
+    TrustKeyManager,
+    TrustOperations,
+)
+
+# Reasoning traces
+from eatp.reasoning import ConfidentialityLevel, ReasoningTrace
+
+# Stores
+from eatp.store import TrustStore
+from eatp.store.memory import InMemoryTrustStore
+
+# Crypto
+from eatp.crypto import generate_keypair, sign, verify_signature
+
+# Authority
+from eatp.authority import (
+    AuthorityPermission,
+    AuthorityRegistryProtocol,
+    OrganizationalAuthority,
+)
+
+# Postures
+from eatp.postures import PostureStateMachine, TrustPosture
+
+# Exceptions
+from eatp.exceptions import (
+    TrustError,
+    TrustChainNotFoundError,
+)
+
+__all__ = [
+    "__version__",
+    # Operations
+    "TrustOperations",
+    "TrustKeyManager",
+    "CapabilityRequest",
+    "AuthorityRegistryProtocol",
+    # Chain types
+    "TrustLineageChain",
+    "GenesisRecord",
+    "DelegationRecord",
+    "CapabilityAttestation",
+    "ConstraintEnvelope",
+    "AuditAnchor",
+    "VerificationResult",
+    "VerificationLevel",
+    "AuthorityType",
+    "CapabilityType",
+    "ConstraintType",
+    # Reasoning traces
+    "ConfidentialityLevel",
+    "ReasoningTrace",
+    # Stores
+    "TrustStore",
+    "InMemoryTrustStore",
+    # Crypto
+    "generate_keypair",
+    "sign",
+    "verify_signature",
+    # Authority
+    "OrganizationalAuthority",
+    "AuthorityPermission",
+    # Postures
+    "TrustPosture",
+    "PostureStateMachine",
+    # Exceptions
+    "TrustError",
+    "TrustChainNotFoundError",
+]

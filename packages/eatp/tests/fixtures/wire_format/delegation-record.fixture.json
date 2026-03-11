@@ -1,0 +1,24 @@
+{
+  "id": "del-12345678-1234-1234-1234-123456789012",
+  "delegator_id": "agent-001",
+  "delegatee_id": "agent-002",
+  "task_id": "task-analysis-001",
+  "capabilities_delegated": [
+    "analyze_data"
+  ],
+  "constraint_subset": [
+    "read_only",
+    "no_pii",
+    "max_100_records"
+  ],
+  "delegated_at": "2025-01-15T10:30:00+00:00",
+  "expires_at": "2025-07-15T10:30:00+00:00",
+  "signature": "oowOlJViMi284pdyvP5jF4IlHdZqRBwXtd6RKXsAgkES3Q7uzOjon9U6cedw+tlQQB29jU3/XDI3CcWDwoOvBQ==",
+  "parent_delegation_id": null,
+  "delegation_chain": [
+    "org-acme",
+    "agent-001",
+    "agent-002"
+  ],
+  "delegation_depth": 1
+}

@@ -1,0 +1,11 @@
+{
+  "valid": true,
+  "level": "standard",
+  "reason": null,
+  "capability_used": "analyze_data",
+  "effective_constraints": [
+    "read_only",
+    "no_pii"
+  ],
+  "violations": []
+}

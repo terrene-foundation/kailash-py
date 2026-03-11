@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eatp.terrene.dev/schemas/signed-envelope.schema.json",
+  "title": "EATP Signed Message Envelope",
+  "description": "Signed envelope for secure agent-to-agent messaging.",
+  "type": "object",
+  "required": [
+    "id",
+    "sender_id",
+    "recipient_id",
+    "payload",
+    "timestamp",
+    "signature",
+    "nonce"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique message identifier"
+    },
+    "sender_id": {
+      "type": "string",
+      "description": "Agent ID of the sender"
+    },
+    "recipient_id": {
+      "type": "string",
+      "description": "Agent ID of the recipient"
+    },
+    "payload": {
+      "type": "object",
+      "description": "Message payload (encrypted or plain)",
+      "properties": {
+        "content_type": { "type": "string" },
+        "data": { "description": "The message data" },
+        "encrypted": { "type": "boolean", "default": false }
+      }
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "nonce": {
+      "type": "string",
+      "description": "Random nonce for replay protection"
+    },
+    "signature": {
+      "type": "string",
+      "description": "Base64-encoded Ed25519 signature over the envelope"
+    },
+    "reply_to": {
+      "type": ["string", "null"],
+      "description": "ID of message this is replying to"
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true
+}
