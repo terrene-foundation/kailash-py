@@ -18,7 +18,7 @@ You are an expert in the Enterprise Agent Trust Protocol (EATP) framework. Your 
 
 - `packages/eatp/src/eatp/` - Standalone EATP SDK (Apache 2.0, Terrene Foundation)
 - `packages/eatp/examples/` - Working examples (quickstart, foundation_deployment, etc.)
-- `packages/eatp/tests/` - 1177 tests (unit + integration + adversarial security)
+- `packages/eatp/tests/` - 1557 tests (unit + integration + adversarial security)
 
 ### REFERENCE: Kaizen Trust Integration
 
@@ -78,9 +78,27 @@ EATP separates these moments. Humans invest judgment once when establishing trus
 ### EATP Operations
 
 - **ESTABLISH** - Create agent identity and initial trust
-- **DELEGATE** - Transfer authority with constraints
-- **VERIFY** - Validate trust chain and permissions
-- **AUDIT** - Record and trace all trust operations
+- **DELEGATE** - Transfer authority with constraints (accepts optional `reasoning_trace`)
+- **VERIFY** - Validate trust chain and permissions (checks reasoning at STANDARD and FULL levels)
+- **AUDIT** - Record and trace all trust operations (accepts optional `reasoning_trace`)
+
+### Reasoning Traces
+
+Reasoning traces capture WHY a decision was made during delegation and audit operations. They are fully optional and backward compatible.
+
+- **ReasoningTrace** dataclass (`eatp.reasoning`) with `decision`, `rationale`, `confidentiality`, `timestamp`, `alternatives_considered`, `evidence`, `methodology`, `confidence`
+- **ConfidentialityLevel** enum: `PUBLIC < RESTRICTED < CONFIDENTIAL < SECRET < TOP_SECRET` (supports ordering comparisons)
+- **REASONING_REQUIRED** constraint type on `ConstraintType` (`eatp.chain`)
+- Crypto: `hash_reasoning_trace()`, `sign_reasoning_trace()`, `verify_reasoning_signature()` in `eatp.crypto`
+- Verification: QUICK (no check), STANDARD (presence check), FULL (crypto verification)
+- `VerificationResult.reasoning_present` and `reasoning_verified` fields (both `Optional[bool]`)
+- Enforcement: StrictEnforcer and ShadowEnforcer propagate reasoning metrics
+- Selective disclosure: Confidentiality-based redaction (PUBLIC/RESTRICTED visible, CONFIDENTIAL+ redacted)
+- Scoring: `reasoning_coverage` factor (~5% weight when REASONING_REQUIRED active)
+- Knowledge bridge: `reasoning_trace_to_knowledge()` converts to `DECISION_RATIONALE` entries
+- Interop: W3C VC, SD-JWT, JWT, UCAN all support reasoning fields
+
+**GOTCHA**: Dual-binding model — `reasoning_trace_hash` IS bound into the parent record's `to_signing_payload()` (v2.2, prevents substitution attacks). The `reasoning_signature` separately signs the trace content bound to the parent record ID. Both bindings must be verified at FULL level. At FULL level, REASONING_REQUIRED + missing trace = hard failure (`valid=False`).
 
 ### The Traceability Distinction (Critical)
 
@@ -104,7 +122,8 @@ packages/eatp/src/eatp/
 ├── chain.py               # Core data structures (5 elements + enums)
 ├── operations/            # TrustOperations (4 core operations)
 ├── authority.py           # AuthorityRegistryProtocol (canonical), OrganizationalAuthority
-├── crypto.py              # Ed25519 via PyNaCl (generate_keypair, sign, verify_signature)
+├── crypto.py              # Ed25519 via PyNaCl (generate_keypair, sign, verify_signature, hash/sign/verify reasoning)
+├── reasoning.py           # ReasoningTrace dataclass, ConfidentialityLevel enum
 ├── store/                 # TrustStore ABC + InMemoryTrustStore + FilesystemStore
 ├── enforce/               # StrictEnforcer, Verdict, shadow mode, decorators
 ├── postures.py            # TrustPosture, PostureStateMachine
@@ -236,6 +255,7 @@ Invoke these skills when needed:
 - `26-eatp-reference/eatp-sdk-quickstart.md` - Standalone SDK quick start
 - `26-eatp-reference/eatp-sdk-api-reference.md` - Complete API surface
 - `26-eatp-reference/eatp-sdk-patterns.md` - Implementation patterns and gotchas
+- `26-eatp-reference/eatp-sdk-reasoning-traces.md` - Reasoning trace extension deep dive
 - `04-kaizen/kaizen-trust-eatp.md` - Kaizen trust integration (shim layer)
 - `27-care-reference/SKILL.md` - CARE governance reference
 
@@ -248,5 +268,6 @@ packages/eatp/src/eatp/__init__.py (PRIMARY - SDK API surface)
 packages/eatp/src/eatp/operations/__init__.py (PRIMARY - 4 operations)
 packages/eatp/src/eatp/authority.py (PRIMARY - AuthorityRegistryProtocol)
 packages/eatp/src/eatp/chain.py (PRIMARY - 5 elements)
+packages/eatp/src/eatp/reasoning.py (PRIMARY - ReasoningTrace, ConfidentialityLevel)
 packages/eatp/examples/quickstart.py (REFERENCE - working example)
 ```

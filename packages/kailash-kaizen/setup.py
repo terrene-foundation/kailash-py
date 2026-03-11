@@ -34,6 +34,7 @@ setup(
     python_requires=">=3.11",
     install_requires=[
         "kailash>=0.12.5",
+        "eatp>=0.1.0",
         "pydantic>=2.0.0",
         "typing-extensions>=4.5.0",
         "PyJWT>=2.8.0",
