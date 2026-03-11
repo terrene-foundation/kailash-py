@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "EATP Claude Code hook configuration. Verifies agent trust before tool execution and audits all actions.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "command": "eatp verify dev-agent --action bash_execute --json --store-dir ${EATP_STORE_DIR:-~/.eatp}",
+        "description": "Verify trust before shell command execution"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "command": "eatp audit-action dev-agent --action $TOOL_NAME --result success --json --store-dir ${EATP_STORE_DIR:-~/.eatp} 2>/dev/null || true",
+        "description": "Audit trail of all tool actions"
+      }
+    ]
+  },
+  "setup": {
+    "description": "Run once to initialize EATP for Claude Code",
+    "commands": [
+      "eatp init --name 'Development Authority' --yes",
+      "eatp establish dev-agent --authority dev-authority --capabilities read,write,edit,grep,glob --yes",
+      "eatp constrain dev-agent --template minimal --yes"
+    ]
+  }
+}

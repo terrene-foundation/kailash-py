@@ -1,0 +1,19 @@
+{
+  "id": "cap-12345678-1234-1234-1234-123456789012",
+  "capability": "analyze_data",
+  "capability_type": "action",
+  "constraints": [
+    "read_only",
+    "no_pii"
+  ],
+  "attester_id": "org-acme",
+  "attested_at": "2025-01-15T10:30:00+00:00",
+  "expires_at": "2026-01-15T10:30:00+00:00",
+  "signature": "tqjUbQ7tzeXQMuKe/lrJUOumkrupbyuLobclf0sk4RrVKSvw3t7zmxF55uHq0JYSzLvXmwmG4UjuB24u5jkjCA==",
+  "scope": {
+    "tables": [
+      "transactions",
+      "reports"
+    ]
+  }
+}

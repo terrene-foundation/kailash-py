@@ -1,0 +1,18 @@
+{
+  "generated_by": "python-eatp-sdk",
+  "version": "0.1.0",
+  "timestamp": "2026-03-11T03:17:47.563168+00:00",
+  "fixtures": [
+    "genesis-record",
+    "capability-attestation",
+    "delegation-record",
+    "audit-anchor",
+    "constraint-envelope",
+    "verification-verdict",
+    "full-chain"
+  ],
+  "crypto": {
+    "algorithm": "Ed25519",
+    "library": "PyNaCl"
+  }
+}

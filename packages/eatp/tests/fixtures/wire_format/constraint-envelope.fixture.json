@@ -1,0 +1,30 @@
+{
+  "id": "env-agent-001",
+  "agent_id": "agent-001",
+  "constraint_hash": "d95524509653d38d81c3e6b04d7467f56c19fb5afee05408cd6f04a4886bbe8f",
+  "active_constraints": [
+    {
+      "id": "c-001",
+      "constraint_type": "resource_limit",
+      "value": "max_api_calls:1000",
+      "source": "cap-001",
+      "priority": 1
+    },
+    {
+      "id": "c-002",
+      "constraint_type": "time_window",
+      "value": "business_hours_only",
+      "source": "cap-001",
+      "priority": 2
+    },
+    {
+      "id": "c-003",
+      "constraint_type": "data_scope",
+      "value": "department_data_only",
+      "source": "del-001",
+      "priority": 1
+    }
+  ],
+  "computed_at": "2026-03-11T03:17:47.561661+00:00",
+  "valid_until": null
+}

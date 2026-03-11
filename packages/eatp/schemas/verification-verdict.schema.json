@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eatp.terrene.dev/schemas/verification-verdict.schema.json",
+  "title": "EATP Verification Verdict",
+  "description": "Result of a VERIFY operation — the authorization decision.",
+  "type": "object",
+  "required": ["valid", "level"],
+  "properties": {
+    "valid": {
+      "type": "boolean",
+      "description": "Whether the verification passed"
+    },
+    "level": {
+      "type": "string",
+      "enum": ["quick", "standard", "full"],
+      "description": "Verification thoroughness level"
+    },
+    "reason": {
+      "type": ["string", "null"],
+      "description": "Human-readable reason for the verdict"
+    },
+    "capability_used": {
+      "type": ["string", "null"],
+      "description": "Which capability was matched"
+    },
+    "effective_constraints": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Constraints that applied during verification"
+    },
+    "violations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": { "type": "string" },
+          "message": { "type": "string" },
+          "dimension": { "type": "string" }
+        }
+      },
+      "description": "Constraint violations found"
+    }
+  },
+  "additionalProperties": true
+}

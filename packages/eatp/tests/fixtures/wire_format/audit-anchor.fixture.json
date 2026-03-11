@@ -1,0 +1,15 @@
+{
+  "id": "aud-12345678-1234-1234-1234-123456789012",
+  "agent_id": "agent-001",
+  "action": "analyze_data",
+  "resource": "transactions_table",
+  "timestamp": "2025-01-15T10:30:00+00:00",
+  "trust_chain_hash": "e62f179754e6d214e749145bbe94fd0d63ade092a6289e6300d4a745dd288bbb",
+  "result": "success",
+  "signature": "JNqycTyOJqxrEE0vlgY5p7/BT+Xn7nCnkFU1h+rg+2yRsrmgc04Dwhhf9ggnP7st9uod8hd4ptfeNh6e0rJ9Bg==",
+  "parent_anchor_id": null,
+  "context": {
+    "records_analyzed": 42,
+    "duration_ms": 150
+  }
+}
