@@ -124,7 +124,7 @@ def _make_chain(
             active_constraints=[
                 Constraint(
                     id="con-001",
-                    constraint_type=ConstraintType.RESOURCE_LIMIT,
+                    constraint_type=ConstraintType.FINANCIAL,
                     value=100,
                     source="cap-001",
                     priority=1,

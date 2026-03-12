@@ -131,13 +131,13 @@ def _make_constraint_envelope_with_reasoning_required(agent_id: str = "agent-001
         active_constraints=[
             Constraint(
                 id="c-001",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.FINANCIAL,
                 value="max_api_calls:100",
                 source="cap-001",
             ),
             Constraint(
                 id="c-002",
-                constraint_type=ConstraintType.DATA_SCOPE,
+                constraint_type=ConstraintType.DATA_ACCESS,
                 value="department_data_only",
                 source="cap-001",
             ),
@@ -161,13 +161,13 @@ def _make_constraint_envelope_without_reasoning_required(
         active_constraints=[
             Constraint(
                 id="c-001",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.FINANCIAL,
                 value="max_api_calls:100",
                 source="cap-001",
             ),
             Constraint(
                 id="c-002",
-                constraint_type=ConstraintType.DATA_SCOPE,
+                constraint_type=ConstraintType.DATA_ACCESS,
                 value="department_data_only",
                 source="cap-001",
             ),

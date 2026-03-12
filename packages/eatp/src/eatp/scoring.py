@@ -47,11 +47,11 @@ SCORING_WEIGHTS: Dict[str, int] = {
 final trust score.  The values MUST sum to 100."""
 
 POSTURE_SCORE_MAP: Dict[TrustPosture, int] = {
-    TrustPosture.FULL_AUTONOMY: 20,
-    TrustPosture.ASSISTED: 40,
-    TrustPosture.SUPERVISED: 80,
-    TrustPosture.HUMAN_DECIDES: 100,
-    TrustPosture.BLOCKED: 0,
+    TrustPosture.DELEGATED: 20,
+    TrustPosture.CONTINUOUS_INSIGHT: 40,
+    TrustPosture.SHARED_PLANNING: 80,
+    TrustPosture.SUPERVISED: 100,
+    TrustPosture.PSEUDO_AGENT: 0,
 }
 """Maps each posture to a 0-100 factor score.  Stricter postures
 (more human oversight) yield higher trust factor scores because they
@@ -252,7 +252,7 @@ def _compute_posture_factor(
     Uses the posture score map to convert the agent's current posture into
     a normalised factor.  Stricter postures score higher.
 
-    When ``posture_machine`` is None a default of SUPERVISED is assumed
+    When ``posture_machine`` is None a default of SHARED_PLANNING is assumed
     (moderate trust).
 
     Args:
@@ -263,8 +263,8 @@ def _compute_posture_factor(
         Float between 0.0 and 1.0.
     """
     if posture_machine is None:
-        # Default to SUPERVISED (moderate trust, autonomy_level=3)
-        posture = TrustPosture.SUPERVISED
+        # Default to SHARED_PLANNING (moderate trust, autonomy_level=3)
+        posture = TrustPosture.SHARED_PLANNING
     else:
         posture = posture_machine.get_posture(agent_id)
 
@@ -416,15 +416,15 @@ async def compute_trust_score(
        (more delegation = more risk).
     3. **Constraint coverage** (25%) -- more constraints = higher score
        (well-constrained).
-    4. **Posture level** (20%) -- FULL_AUTONOMY=20, SUPERVISED=80,
-       HUMAN_DECIDES=100 (stricter = higher).
+    4. **Posture level** (20%) -- DELEGATED=20, SHARED_PLANNING=80,
+       SUPERVISED=100 (stricter = higher).
     5. **Chain recency** (10%) -- recent updates = higher score.
 
     Args:
         agent_id: The agent whose trust to score.
         store: Trust store to retrieve the agent's chain from.
         posture_machine: Optional posture state machine for posture factor.
-            When None, defaults to SUPERVISED posture.
+            When None, defaults to SHARED_PLANNING posture.
 
     Returns:
         A ``TrustScore`` with the overall score, per-factor breakdown,
@@ -589,16 +589,16 @@ async def generate_trust_report(
     # --- Analyse posture ---
     if posture_machine is not None:
         posture = posture_machine.get_posture(agent_id)
-        if posture == TrustPosture.FULL_AUTONOMY:
+        if posture == TrustPosture.DELEGATED:
             risk_indicators.append(
                 "Agent is running with full autonomy; no human oversight on actions"
             )
             recommendations.append(
-                "Consider transitioning to SUPERVISED or ASSISTED posture "
+                "Consider transitioning to SHARED_PLANNING or CONTINUOUS_INSIGHT posture "
                 "to add oversight"
             )
-        elif posture == TrustPosture.BLOCKED:
-            risk_indicators.append("Agent is BLOCKED; it cannot perform any actions")
+        elif posture == TrustPosture.PSEUDO_AGENT:
+            risk_indicators.append("Agent is PSEUDO_AGENT; it cannot perform any actions")
             recommendations.append(
                 "Review blocking reason and consider upgrading posture "
                 "if the issue has been resolved"

@@ -21,11 +21,11 @@ from eatp.postures import TrustPosture
 
 # Autonomy level mapping for average calculation
 POSTURE_LEVEL_MAP: Dict[TrustPosture, int] = {
-    TrustPosture.FULL_AUTONOMY: 5,
-    TrustPosture.ASSISTED: 4,
-    TrustPosture.SUPERVISED: 3,
-    TrustPosture.HUMAN_DECIDES: 2,
-    TrustPosture.BLOCKED: 1,
+    TrustPosture.DELEGATED: 5,
+    TrustPosture.CONTINUOUS_INSIGHT: 4,
+    TrustPosture.SHARED_PLANNING: 3,
+    TrustPosture.SUPERVISED: 2,
+    TrustPosture.PSEUDO_AGENT: 1,
 }
 
 
@@ -101,7 +101,7 @@ class TrustMetricsCollector:
 
     Example:
         >>> collector = TrustMetricsCollector()
-        >>> collector.record_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        >>> collector.record_posture("agent-001", TrustPosture.DELEGATED)
         >>> collector.record_transition("upgrade")
         >>> collector.record_constraint_evaluation(
         ...     passed=True,

@@ -6,9 +6,9 @@ EATP Trust Lineage Chain Data Structures.
 
 Defines the core data structures for the Enterprise Agent Trust Protocol:
 - GenesisRecord: Who authorized this agent to exist?
-- CapabilityAttestation: What can this agent do?
 - DelegationRecord: Who delegated work to this agent?
 - ConstraintEnvelope: What limits apply?
+- CapabilityAttestation: What can this agent do?
 - AuditAnchor: What has this agent done?
 - TrustLineageChain: Complete trust chain for an agent
 """
@@ -57,14 +57,19 @@ class ActionResult(Enum):
 
 
 class ConstraintType(Enum):
-    """Type of constraint on agent behavior."""
+    """Type of constraint on agent behavior.
 
-    RESOURCE_LIMIT = "resource_limit"  # e.g., max_api_calls
-    TIME_WINDOW = "time_window"  # e.g., business_hours_only
-    DATA_SCOPE = "data_scope"  # e.g., department_data_only
-    ACTION_RESTRICTION = "action_restriction"  # e.g., read_only
-    AUDIT_REQUIREMENT = "audit_requirement"  # e.g., log_all_actions
-    REASONING_REQUIRED = "reasoning_required"  # e.g., must include reasoning trace
+    Maps to EATP's five canonical constraint dimensions plus
+    the v2.2 reasoning trace extension.
+    """
+
+    FINANCIAL = "financial"  # cost/budget limits
+    OPERATIONAL = "operational"  # action restrictions, resource limits
+    TEMPORAL = "temporal"  # time windows
+    DATA_ACCESS = "data_access"  # data classification, PII scope
+    COMMUNICATION = "communication"  # external communication controls
+    AUDIT_REQUIREMENT = "audit_requirement"  # cross-cutting: log_all_actions
+    REASONING_REQUIRED = "reasoning_required"  # v2.2: must include reasoning trace
 
 
 @dataclass

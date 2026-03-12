@@ -97,13 +97,13 @@ def constraint_envelope():
         active_constraints=[
             Constraint(
                 id="c-001",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.FINANCIAL,
                 value="max_api_calls:100",
                 source="cap-001",
             ),
             Constraint(
                 id="c-002",
-                constraint_type=ConstraintType.DATA_SCOPE,
+                constraint_type=ConstraintType.DATA_ACCESS,
                 value="department_data_only",
                 source="cap-001",
             ),
@@ -338,9 +338,9 @@ class TestScoringConstants:
 
     def test_posture_score_map_values(self):
         """Posture score map must map postures to expected trust scores."""
-        assert POSTURE_SCORE_MAP[TrustPosture.FULL_AUTONOMY] == 20
-        assert POSTURE_SCORE_MAP[TrustPosture.SUPERVISED] == 80
-        assert POSTURE_SCORE_MAP[TrustPosture.HUMAN_DECIDES] == 100
+        assert POSTURE_SCORE_MAP[TrustPosture.DELEGATED] == 20
+        assert POSTURE_SCORE_MAP[TrustPosture.SHARED_PLANNING] == 80
+        assert POSTURE_SCORE_MAP[TrustPosture.SUPERVISED] == 100
 
     def test_posture_score_map_completeness(self):
         """Posture score map must include all TrustPosture values."""
@@ -457,8 +457,8 @@ class TestComputeTrustScore:
         """Score should incorporate posture level when posture_machine is provided."""
         await store.store_chain(full_chain)
 
-        # Set posture to SUPERVISED (high trust score for posture)
-        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
+        # Set posture to SHARED_PLANNING (high trust score for posture)
+        posture_machine.set_posture("agent-001", TrustPosture.SHARED_PLANNING)
 
         score_with_posture = await compute_trust_score(
             "agent-001", store, posture_machine=posture_machine
@@ -468,18 +468,18 @@ class TestComputeTrustScore:
         assert score_with_posture.breakdown["posture_level"] > 0
 
     @pytest.mark.asyncio
-    async def test_posture_full_autonomy_scores_low_on_posture_factor(
+    async def test_posture_delegated_scores_low_on_posture_factor(
         self, store, full_chain, posture_machine
     ):
-        """FULL_AUTONOMY posture should give a low posture factor score (less oversight = less trust)."""
+        """DELEGATED posture should give a low posture factor score (less oversight = less trust)."""
         await store.store_chain(full_chain)
 
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.DELEGATED)
         score_autonomy = await compute_trust_score(
             "agent-001", store, posture_machine=posture_machine
         )
 
-        posture_machine.set_posture("agent-001", TrustPosture.HUMAN_DECIDES)
+        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
         score_human = await compute_trust_score(
             "agent-001", store, posture_machine=posture_machine
         )
@@ -565,7 +565,7 @@ class TestComputeTrustScore:
         many_constraints = [
             Constraint(
                 id=f"c-{i:03d}",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.FINANCIAL,
                 value=f"limit_{i}",
                 source="cap-001",
             )
@@ -729,7 +729,7 @@ class TestGenerateTrustReport:
     ):
         """Report should work with posture_machine parameter."""
         await store.store_chain(full_chain)
-        posture_machine.set_posture("agent-001", TrustPosture.SUPERVISED)
+        posture_machine.set_posture("agent-001", TrustPosture.SHARED_PLANNING)
 
         report = await generate_trust_report(
             "agent-001", store, posture_machine=posture_machine
@@ -739,12 +739,12 @@ class TestGenerateTrustReport:
         assert report.score.breakdown["posture_level"] > 0
 
     @pytest.mark.asyncio
-    async def test_full_autonomy_generates_risk_indicator(
+    async def test_delegated_generates_risk_indicator(
         self, store, full_chain, posture_machine
     ):
-        """FULL_AUTONOMY posture should generate a risk indicator."""
+        """DELEGATED posture should generate a risk indicator."""
         await store.store_chain(full_chain)
-        posture_machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        posture_machine.set_posture("agent-001", TrustPosture.DELEGATED)
 
         report = await generate_trust_report(
             "agent-001", store, posture_machine=posture_machine

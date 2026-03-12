@@ -93,7 +93,7 @@ class CircuitBreakerConfig:
             "critical": 5.0,
         }
     )
-    downgrade_on_open: str = "human_decides"
+    downgrade_on_open: str = "supervised"
 
     def __post_init__(self):
         """Validate configuration."""
@@ -127,7 +127,7 @@ class PostureCircuitBreaker:
         >>> from eatp.circuit_breaker import PostureCircuitBreaker
         >>>
         >>> machine = PostureStateMachine()
-        >>> machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        >>> machine.set_posture("agent-001", TrustPosture.DELEGATED)
         >>> breaker = PostureCircuitBreaker(machine)
         >>>
         >>> # Record failures

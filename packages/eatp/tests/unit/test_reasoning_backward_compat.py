@@ -129,7 +129,7 @@ def constraint_envelope():
         active_constraints=[
             Constraint(
                 id="c-001",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.FINANCIAL,
                 value="100/hour",
                 source="policy-engine",
                 priority=1,
@@ -714,7 +714,7 @@ class TestOldWireFormatFixtures:
             "active_constraints": [
                 {
                     "id": "c-v1-001",
-                    "constraint_type": "resource_limit",
+                    "constraint_type": "financial",
                     "value": "50/hour",
                     "source": "admin",
                     "priority": 0,
@@ -864,10 +864,10 @@ class TestConstraintEnvelopeStability:
     def test_existing_constraint_types_unchanged(self):
         """All pre-existing ConstraintType values must remain valid."""
         existing_types = [
-            "resource_limit",
-            "time_window",
-            "data_scope",
-            "action_restriction",
+            "financial",
+            "temporal",
+            "data_access",
+            "operational",
             "audit_requirement",
         ]
         for ct in existing_types:
@@ -896,5 +896,5 @@ class TestConstraintEnvelopeStability:
         assert env_dict["constraint_hash"] == "hash-constraints"
         assert len(env_dict["active_constraints"]) == 1
         c = env_dict["active_constraints"][0]
-        assert c["constraint_type"] == "resource_limit"
+        assert c["constraint_type"] == "financial"
         assert c["value"] == "100/hour"

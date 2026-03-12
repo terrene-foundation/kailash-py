@@ -1,11 +1,9 @@
 # Copyright 2026 Terrene Foundation
 # SPDX-License-Identifier: Apache-2.0
 
-"""Trust posture mapping for Enterprise-App integration.
+"""EATP Trust Posture state machine and mapping.
 
-Maps Kaizen trust verification results to Enterprise-App trust postures.
-
-See: TODO-204 Enterprise-App Streaming Integration
+Maps trust verification results to EATP trust postures.
 """
 
 from __future__ import annotations
@@ -17,31 +15,31 @@ from typing import Any, Callable, Dict, List, Optional
 
 
 class TrustPosture(str, Enum):
-    """Trust posture levels for Enterprise-App.
+    """Trust posture levels matching EATP specification.
 
-    Determines how an agent's actions are handled:
-    - FULL_AUTONOMY: Agent can act freely without approval (autonomy_level=5)
-    - ASSISTED: Agent acts with AI assistance but minimal oversight (autonomy_level=4)
-    - SUPERVISED: Agent actions are logged but not blocked (autonomy_level=3)
-    - HUMAN_DECIDES: Each action requires human approval (autonomy_level=2)
-    - BLOCKED: Action is denied (autonomy_level=1)
+    Five graduated trust postures for agent autonomy:
+    - DELEGATED: Agent operates with full autonomy; remote monitoring (autonomy_level=5)
+    - CONTINUOUS_INSIGHT: Agent executes, human monitors in real-time (autonomy_level=4)
+    - SHARED_PLANNING: Human and agent co-plan; agent executes approved plans (autonomy_level=3)
+    - SUPERVISED: Agent proposes actions, human approves each one (autonomy_level=2)
+    - PSEUDO_AGENT: Agent is interface only; human performs all reasoning (autonomy_level=1)
     """
 
-    FULL_AUTONOMY = "full_autonomy"
-    ASSISTED = "assisted"
+    DELEGATED = "delegated"
+    CONTINUOUS_INSIGHT = "continuous_insight"
+    SHARED_PLANNING = "shared_planning"
     SUPERVISED = "supervised"
-    HUMAN_DECIDES = "human_decides"
-    BLOCKED = "blocked"
+    PSEUDO_AGENT = "pseudo_agent"
 
     @property
     def autonomy_level(self) -> int:
         """Return the autonomy level for this posture (5=highest, 1=lowest)."""
         levels = {
-            TrustPosture.FULL_AUTONOMY: 5,
-            TrustPosture.ASSISTED: 4,
-            TrustPosture.SUPERVISED: 3,
-            TrustPosture.HUMAN_DECIDES: 2,
-            TrustPosture.BLOCKED: 1,
+            TrustPosture.DELEGATED: 5,
+            TrustPosture.CONTINUOUS_INSIGHT: 4,
+            TrustPosture.SHARED_PLANNING: 3,
+            TrustPosture.SUPERVISED: 2,
+            TrustPosture.PSEUDO_AGENT: 1,
         }
         return levels[self]
 
@@ -178,12 +176,12 @@ class PostureStateMachine:
 
     Example:
         >>> machine = PostureStateMachine()
-        >>> machine.set_posture("agent-001", TrustPosture.SUPERVISED)
+        >>> machine.set_posture("agent-001", TrustPosture.SHARED_PLANNING)
         >>> result = machine.transition(
         ...     PostureTransitionRequest(
         ...         agent_id="agent-001",
-        ...         from_posture=TrustPosture.SUPERVISED,
-        ...         to_posture=TrustPosture.FULL_AUTONOMY,
+        ...         from_posture=TrustPosture.SHARED_PLANNING,
+        ...         to_posture=TrustPosture.DELEGATED,
         ...         reason="Agent has proven reliable",
         ...         requester_id="admin-001"
         ...     )
@@ -195,7 +193,7 @@ class PostureStateMachine:
 
     def __init__(
         self,
-        default_posture: TrustPosture = TrustPosture.SUPERVISED,
+        default_posture: TrustPosture = TrustPosture.SHARED_PLANNING,
         require_upgrade_approval: bool = True,
     ):
         """Initialize the posture state machine.
@@ -303,7 +301,7 @@ class PostureStateMachine:
         reason: str = "Emergency downgrade",
         requester_id: Optional[str] = None,
     ) -> TransitionResult:
-        """Emergency downgrade an agent to BLOCKED.
+        """Emergency downgrade an agent to PSEUDO_AGENT.
 
         Bypasses all guards for immediate security response.
 
@@ -316,7 +314,7 @@ class PostureStateMachine:
             TransitionResult
         """
         current = self.get_posture(agent_id)
-        self._agent_postures[agent_id] = TrustPosture.BLOCKED
+        self._agent_postures[agent_id] = TrustPosture.PSEUDO_AGENT
 
         emergency_metadata = {"agent_id": agent_id}
         if requester_id:
@@ -324,7 +322,7 @@ class PostureStateMachine:
         result = TransitionResult(
             success=True,
             from_posture=current,
-            to_posture=TrustPosture.BLOCKED,
+            to_posture=TrustPosture.PSEUDO_AGENT,
             transition_type=PostureTransition.EMERGENCY_DOWNGRADE,
             reason=reason,
             metadata=emergency_metadata,
@@ -428,20 +426,20 @@ class PostureResult:
 
 class TrustPostureMapper:
     """
-    Maps Kaizen trust verification results to Enterprise-App trust postures.
+    Maps trust verification results to EATP trust postures.
 
-    Provides the bridge between Kaizen's VerificationResult and
-    Enterprise-App's trust posture system.
+    Provides the bridge between verification results and
+    the EATP trust posture system.
 
     Example:
         >>> mapper = TrustPostureMapper()
         >>> posture_result = mapper.map_verification_result(verification)
-        >>> print(posture_result.posture)  # TrustPosture.FULL_AUTONOMY
+        >>> print(posture_result.posture)  # TrustPosture.DELEGATED
     """
 
     def __init__(
         self,
-        default_posture: TrustPosture = TrustPosture.SUPERVISED,
+        default_posture: TrustPosture = TrustPosture.SHARED_PLANNING,
         sensitive_capabilities: Optional[List[str]] = None,
         high_risk_tools: Optional[List[str]] = None,
     ):
@@ -490,7 +488,7 @@ class TrustPostureMapper:
         # Handle None or invalid result
         if verification_result is None:
             return PostureResult(
-                posture=TrustPosture.BLOCKED,
+                posture=TrustPosture.PSEUDO_AGENT,
                 reason="No verification result provided",
             )
 
@@ -498,7 +496,7 @@ class TrustPostureMapper:
         is_valid = getattr(verification_result, "valid", False)
         if not is_valid:
             return PostureResult(
-                posture=TrustPosture.BLOCKED,
+                posture=TrustPosture.PSEUDO_AGENT,
                 reason=getattr(verification_result, "reason", "Verification failed"),
                 verification_details=self._extract_details(verification_result),
             )
@@ -517,27 +515,27 @@ class TrustPostureMapper:
 
         # Determine posture
         if approval_required or human_in_loop:
-            posture = TrustPosture.HUMAN_DECIDES
+            posture = TrustPosture.SUPERVISED
             reason = "Human approval required"
         elif is_sensitive or is_high_risk_tool:
-            posture = TrustPosture.SUPERVISED
+            posture = TrustPosture.SHARED_PLANNING
             reason = "Sensitive capability or high-risk tool"
             audit_required = True
         elif audit_required:
-            # Use ASSISTED when audit is required but no approval needed
+            # Use CONTINUOUS_INSIGHT when audit is required but no approval needed
             # and trust level is normal or higher
             trust_level = constraints_dict.get("trust_level", "normal")
             if trust_level in ("normal", "high", "full"):
-                posture = TrustPosture.ASSISTED
-                reason = "Assisted mode with audit logging"
+                posture = TrustPosture.CONTINUOUS_INSIGHT
+                reason = "Continuous insight mode with audit logging"
             else:
-                posture = TrustPosture.SUPERVISED
+                posture = TrustPosture.SHARED_PLANNING
                 reason = "Audit logging required"
         else:
             # Check trust level if available
             trust_level = constraints_dict.get("trust_level", "normal")
             if trust_level == "high" or trust_level == "full":
-                posture = TrustPosture.FULL_AUTONOMY
+                posture = TrustPosture.DELEGATED
                 reason = "High trust level"
             else:
                 posture = self._default_posture
@@ -584,13 +582,13 @@ class TrustPostureMapper:
         """
         if not is_valid:
             return PostureResult(
-                posture=TrustPosture.BLOCKED,
+                posture=TrustPosture.PSEUDO_AGENT,
                 reason=reason or "Access denied",
             )
 
         if approval_required:
             return PostureResult(
-                posture=TrustPosture.HUMAN_DECIDES,
+                posture=TrustPosture.SUPERVISED,
                 constraints=PostureConstraints(
                     approval_required=True,
                     audit_required=True,
@@ -600,7 +598,7 @@ class TrustPostureMapper:
 
         if trust_level in ("none", "low"):
             return PostureResult(
-                posture=TrustPosture.SUPERVISED,
+                posture=TrustPosture.SHARED_PLANNING,
                 constraints=PostureConstraints(
                     audit_required=True,
                 ),
@@ -608,18 +606,18 @@ class TrustPostureMapper:
             )
 
         if audit_required:
-            # Use ASSISTED when audit required but trust is normal or higher
+            # Use CONTINUOUS_INSIGHT when audit required but trust is normal or higher
             if trust_level in ("normal", "high", "full"):
                 return PostureResult(
-                    posture=TrustPosture.ASSISTED,
+                    posture=TrustPosture.CONTINUOUS_INSIGHT,
                     constraints=PostureConstraints(
                         audit_required=True,
                     ),
-                    reason=reason or "Assisted mode with audit logging",
+                    reason=reason or "Continuous insight mode with audit logging",
                 )
             else:
                 return PostureResult(
-                    posture=TrustPosture.SUPERVISED,
+                    posture=TrustPosture.SHARED_PLANNING,
                     constraints=PostureConstraints(
                         audit_required=True,
                     ),
@@ -628,7 +626,7 @@ class TrustPostureMapper:
 
         if trust_level in ("high", "full"):
             return PostureResult(
-                posture=TrustPosture.FULL_AUTONOMY,
+                posture=TrustPosture.DELEGATED,
                 reason=reason or "High trust level",
             )
 
@@ -707,12 +705,12 @@ def get_posture_for_action(
         TrustPosture enum value
     """
     if not is_allowed:
-        return TrustPosture.BLOCKED
+        return TrustPosture.PSEUDO_AGENT
     if requires_approval:
-        return TrustPosture.HUMAN_DECIDES
+        return TrustPosture.SUPERVISED
     if requires_audit:
-        return TrustPosture.ASSISTED
-    return TrustPosture.FULL_AUTONOMY
+        return TrustPosture.CONTINUOUS_INSIGHT
+    return TrustPosture.DELEGATED
 
 
 __all__ = [

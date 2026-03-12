@@ -10,8 +10,8 @@ during trust delegation and audit operations. This extension enables:
 - **Decision transparency**: Every delegation/audit can explain its rationale
 - **Confidentiality classification**: Reasoning traces carry enterprise
   classification levels (PUBLIC through TOP_SECRET)
-- **Separate signing**: Reasoning traces have their own signing payload,
-  independent of the parent record's signature (backward compatible)
+- **Dual-binding**: Reasoning trace hash is included in the parent record's
+  signing payload, cryptographically binding the trace to the delegation
 - **Evidence linking**: Traces can reference evidence and methodology
 
 Key design decisions:
