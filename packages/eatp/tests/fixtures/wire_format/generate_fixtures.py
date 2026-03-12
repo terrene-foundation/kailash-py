@@ -151,21 +151,21 @@ def generate_constraint_envelope() -> dict:
         active_constraints=[
             Constraint(
                 id="c-001",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.FINANCIAL,
                 value="max_api_calls:1000",
                 source="cap-001",
                 priority=1,
             ),
             Constraint(
                 id="c-002",
-                constraint_type=ConstraintType.TIME_WINDOW,
+                constraint_type=ConstraintType.TEMPORAL,
                 value="business_hours_only",
                 source="cap-001",
                 priority=2,
             ),
             Constraint(
                 id="c-003",
-                constraint_type=ConstraintType.DATA_SCOPE,
+                constraint_type=ConstraintType.DATA_ACCESS,
                 value="department_data_only",
                 source="del-001",
                 priority=1,

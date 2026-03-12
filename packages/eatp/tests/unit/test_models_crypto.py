@@ -189,10 +189,10 @@ class TestEnums:
         assert ActionResult.PARTIAL.value == "partial"
 
     def test_constraint_type_values(self):
-        assert ConstraintType.RESOURCE_LIMIT.value == "resource_limit"
-        assert ConstraintType.TIME_WINDOW.value == "time_window"
-        assert ConstraintType.DATA_SCOPE.value == "data_scope"
-        assert ConstraintType.ACTION_RESTRICTION.value == "action_restriction"
+        assert ConstraintType.FINANCIAL.value == "financial"
+        assert ConstraintType.TEMPORAL.value == "temporal"
+        assert ConstraintType.DATA_ACCESS.value == "data_access"
+        assert ConstraintType.OPERATIONAL.value == "operational"
         assert ConstraintType.AUDIT_REQUIREMENT.value == "audit_requirement"
 
     def test_verification_level_values(self):
@@ -465,13 +465,13 @@ class TestConstraint:
     def test_creation(self):
         c = Constraint(
             id="c-001",
-            constraint_type=ConstraintType.RESOURCE_LIMIT,
+            constraint_type=ConstraintType.FINANCIAL,
             value=100,
             source="cap-001",
             priority=5,
         )
         assert c.id == "c-001"
-        assert c.constraint_type == ConstraintType.RESOURCE_LIMIT
+        assert c.constraint_type == ConstraintType.FINANCIAL
         assert c.value == 100
         assert c.source == "cap-001"
         assert c.priority == 5
@@ -479,7 +479,7 @@ class TestConstraint:
     def test_default_priority(self):
         c = Constraint(
             id="c-002",
-            constraint_type=ConstraintType.DATA_SCOPE,
+            constraint_type=ConstraintType.DATA_ACCESS,
             value="department_only",
             source="cap-002",
         )
@@ -498,7 +498,7 @@ class TestConstraintEnvelope:
         constraints = [
             Constraint(
                 id="c-1",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.FINANCIAL,
                 value=100,
                 source="cap-001",
             ),
@@ -514,19 +514,19 @@ class TestConstraintEnvelope:
         constraints = [
             Constraint(
                 id="c-1",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.FINANCIAL,
                 value=100,
                 source="s",
             ),
             Constraint(
                 id="c-2",
-                constraint_type=ConstraintType.DATA_SCOPE,
+                constraint_type=ConstraintType.DATA_ACCESS,
                 value="dept",
                 source="s",
             ),
             Constraint(
                 id="c-3",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.FINANCIAL,
                 value=50,
                 source="s",
             ),
@@ -534,7 +534,7 @@ class TestConstraintEnvelope:
         env = ConstraintEnvelope(
             id="env-003", agent_id="a", active_constraints=constraints
         )
-        resource_limits = env.get_constraints_by_type(ConstraintType.RESOURCE_LIMIT)
+        resource_limits = env.get_constraints_by_type(ConstraintType.FINANCIAL)
         assert len(resource_limits) == 2
 
     def test_is_valid_no_expiry(self):
@@ -553,13 +553,13 @@ class TestConstraintEnvelope:
         constraints = [
             Constraint(
                 id="c-1",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.FINANCIAL,
                 value=100,
                 source="s",
             ),
             Constraint(
                 id="c-2",
-                constraint_type=ConstraintType.DATA_SCOPE,
+                constraint_type=ConstraintType.DATA_ACCESS,
                 value="dept",
                 source="s",
             ),
@@ -1665,7 +1665,7 @@ class TestSerializationRoundTrips:
         )
         constraint = Constraint(
             id="c-1",
-            constraint_type=ConstraintType.RESOURCE_LIMIT,
+            constraint_type=ConstraintType.FINANCIAL,
             value=100,
             source="cap-001",
             priority=5,
@@ -1684,7 +1684,7 @@ class TestSerializationRoundTrips:
         assert len(restored.constraint_envelope.active_constraints) == 1
         rc = restored.constraint_envelope.active_constraints[0]
         assert rc.id == "c-1"
-        assert rc.constraint_type == ConstraintType.RESOURCE_LIMIT
+        assert rc.constraint_type == ConstraintType.FINANCIAL
         assert rc.priority == 5
 
     def test_serialize_for_signing_used_in_sign_verify(self, keypair):
@@ -1701,13 +1701,13 @@ class TestSerializationRoundTrips:
         constraints = [
             Constraint(
                 id="c-1",
-                constraint_type=ConstraintType.RESOURCE_LIMIT,
+                constraint_type=ConstraintType.FINANCIAL,
                 value=100,
                 source="s",
             ),
             Constraint(
                 id="c-2",
-                constraint_type=ConstraintType.DATA_SCOPE,
+                constraint_type=ConstraintType.DATA_ACCESS,
                 value="dept",
                 source="s",
             ),

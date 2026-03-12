@@ -4,8 +4,8 @@
 """Posture-aware agent wrapper for trust-based execution control.
 
 Provides posture-based behavior wrapping for any Kaizen agent,
-enforcing trust postures (FULL_AUTONOMY, ASSISTED, SUPERVISED,
-HUMAN_DECIDES, BLOCKED) on agent execution.
+enforcing trust postures (DELEGATED, CONTINUOUS_INSIGHT, SHARED_PLANNING,
+SUPERVISED, PSEUDO_AGENT) on agent execution.
 
 Part of CARE-029 implementation.
 """
@@ -98,18 +98,18 @@ class PostureAwareAgent:
     """Wrapper that adds posture-based behavior to any Kaizen agent.
 
     Enforces trust postures on agent execution:
-    - FULL_AUTONOMY: Execute directly without restrictions
-    - ASSISTED: Notify, wait for cancel window, then execute with audit
-    - SUPERVISED: Execute with audit logging
-    - HUMAN_DECIDES: Require approval before execution
-    - BLOCKED: Deny execution
+    - DELEGATED: Execute directly without restrictions
+    - CONTINUOUS_INSIGHT: Notify, wait for cancel window, then execute with audit
+    - SHARED_PLANNING: Execute with audit logging
+    - SUPERVISED: Require approval before execution
+    - PSEUDO_AGENT: Deny execution
 
     Example:
         >>> from eatp.postures import PostureStateMachine, TrustPosture
         >>> # PostureAgent wraps any agent with trust posture management
         >>>
         >>> machine = PostureStateMachine()
-        >>> machine.set_posture("agent-001", TrustPosture.FULL_AUTONOMY)
+        >>> machine.set_posture("agent-001", TrustPosture.DELEGATED)
         >>>
         >>> base_agent = MyAgent(config)
         >>> agent = PostureAwareAgent(
@@ -137,9 +137,9 @@ class PostureAwareAgent:
             agent_id: Unique identifier for this agent
             posture_machine: PostureStateMachine for posture management
             circuit_breaker: Optional circuit breaker for failure protection
-            approval_handler: Handler for HUMAN_DECIDES approval requests
-            notification_handler: Handler for ASSISTED mode notifications
-            assisted_delay_seconds: Delay in seconds for ASSISTED mode cancel window
+            approval_handler: Handler for SUPERVISED approval requests
+            notification_handler: Handler for CONTINUOUS_INSIGHT mode notifications
+            assisted_delay_seconds: Delay in seconds for CONTINUOUS_INSIGHT mode cancel window
         """
         self._base_agent = base_agent
         self._agent_id = agent_id
@@ -176,8 +176,8 @@ class PostureAwareAgent:
             Result from the base agent execution
 
         Raises:
-            PermissionError: If posture is BLOCKED or circuit breaker is open
-            ValueError: If HUMAN_DECIDES without approval_handler
+            PermissionError: If posture is PSEUDO_AGENT or circuit breaker is open
+            ValueError: If SUPERVISED without approval_handler
         """
         # Check circuit breaker first if configured
         if self._circuit_breaker is not None and self._circuit_breaker.is_open():
@@ -189,20 +189,20 @@ class PostureAwareAgent:
         posture = self.posture
 
         # Execute based on posture
-        if posture == TrustPosture.BLOCKED:
-            logger.warning(f"Agent {self._agent_id} is BLOCKED, execution denied")
+        if posture == TrustPosture.PSEUDO_AGENT:
+            logger.warning(f"Agent {self._agent_id} is PSEUDO_AGENT, execution denied")
             raise PermissionError(f"Agent {self._agent_id} is blocked from execution")
 
-        if posture == TrustPosture.HUMAN_DECIDES:
+        if posture == TrustPosture.SUPERVISED:
             return await self._execute_with_approval(kwargs)
 
-        if posture == TrustPosture.SUPERVISED:
+        if posture == TrustPosture.SHARED_PLANNING:
             return await self._execute_with_audit(kwargs)
 
-        if posture == TrustPosture.ASSISTED:
+        if posture == TrustPosture.CONTINUOUS_INSIGHT:
             return await self._execute_with_delay(kwargs)
 
-        # FULL_AUTONOMY
+        # DELEGATED
         return await self._execute_direct(kwargs)
 
     async def _execute_direct(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
@@ -273,7 +273,7 @@ class PostureAwareAgent:
             )
 
         logger.info(
-            f"Agent {self._agent_id} in ASSISTED mode, "
+            f"Agent {self._agent_id} in CONTINUOUS_INSIGHT mode, "
             f"waiting {self._assisted_delay_seconds}s for cancel"
         )
 
@@ -286,7 +286,7 @@ class PostureAwareAgent:
             if cancelled:
                 logger.info(
                     f"Agent {self._agent_id} execution cancelled during "
-                    "ASSISTED delay"
+                    "CONTINUOUS_INSIGHT delay"
                 )
                 raise PermissionError(f"Agent {self._agent_id} execution was cancelled")
 
@@ -311,7 +311,7 @@ class PostureAwareAgent:
             return False  # Timeout reached without cancel
 
     def cancel_pending(self) -> bool:
-        """Cancel a pending ASSISTED mode execution.
+        """Cancel a pending CONTINUOUS_INSIGHT mode execution.
 
         Returns:
             True if there was a pending execution to cancel
@@ -326,7 +326,7 @@ class PostureAwareAgent:
         if self._approval_handler is None:
             raise ValueError(
                 f"Agent {self._agent_id} requires approval_handler for "
-                "HUMAN_DECIDES posture"
+                "SUPERVISED posture"
             )
 
         logger.info(f"Agent {self._agent_id} requesting approval for execution")

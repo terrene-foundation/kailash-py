@@ -41,9 +41,9 @@ def _make_envelope(
             Constraint(
                 id=f"con-{i:03d}",
                 constraint_type=(
-                    ConstraintType.RESOURCE_LIMIT
+                    ConstraintType.FINANCIAL
                     if i % 2 == 0
-                    else ConstraintType.DATA_SCOPE
+                    else ConstraintType.DATA_ACCESS
                 ),
                 value=100 * (i + 1) if i % 2 == 0 else f"scope_{i}",
                 source=f"cap-{i:03d}",
@@ -566,7 +566,7 @@ class TestEdgeCases:
         envelope.active_constraints.append(
             Constraint(
                 id="con-complex",
-                constraint_type=ConstraintType.DATA_SCOPE,
+                constraint_type=ConstraintType.DATA_ACCESS,
                 value={"tables": ["users", "orders"], "max_rows": 1000},
                 source="cap-complex",
                 priority=5,

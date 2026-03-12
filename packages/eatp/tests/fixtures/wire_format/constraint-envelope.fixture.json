@@ -5,21 +5,21 @@
   "active_constraints": [
     {
       "id": "c-001",
-      "constraint_type": "resource_limit",
+      "constraint_type": "financial",
       "value": "max_api_calls:1000",
       "source": "cap-001",
       "priority": 1
     },
     {
       "id": "c-002",
-      "constraint_type": "time_window",
+      "constraint_type": "temporal",
       "value": "business_hours_only",
       "source": "cap-001",
       "priority": 2
     },
     {
       "id": "c-003",
-      "constraint_type": "data_scope",
+      "constraint_type": "data_access",
       "value": "department_data_only",
       "source": "del-001",
       "priority": 1

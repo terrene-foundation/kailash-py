@@ -447,7 +447,7 @@ class TrustOperations:
             constraints.append(
                 Constraint(
                     id=f"con-{uuid4()}",
-                    constraint_type=ConstraintType.RESOURCE_LIMIT,  # Default type
+                    constraint_type=ConstraintType.FINANCIAL,  # Default type
                     value=name,
                     source="genesis",
                 )
@@ -459,7 +459,7 @@ class TrustOperations:
                 constraints.append(
                     Constraint(
                         id=f"con-{uuid4()}",
-                        constraint_type=ConstraintType.ACTION_RESTRICTION,
+                        constraint_type=ConstraintType.OPERATIONAL,
                         value=name,
                         source=f"capability:{cap.id}",
                     )
@@ -471,7 +471,7 @@ class TrustOperations:
                 constraints.append(
                     Constraint(
                         id=f"con-{uuid4()}",
-                        constraint_type=ConstraintType.DATA_SCOPE,
+                        constraint_type=ConstraintType.DATA_ACCESS,
                         value=name,
                         source=f"delegation:{delegation.id}",
                     )

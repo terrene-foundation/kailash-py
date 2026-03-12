@@ -6,11 +6,11 @@ Trust postures map verification results to autonomy levels, determining how an a
 
 | Posture | Level | Behavior |
 |---------|-------|----------|
-| **FULL_AUTONOMY** | 5 | Agent acts freely |
-| **ASSISTED** | 4 | AI-assisted with minimal oversight |
-| **SUPERVISED** | 3 | Actions logged but not blocked |
-| **HUMAN_DECIDES** | 2 | Each action requires human approval |
-| **BLOCKED** | 1 | All actions denied |
+| **DELEGATED** | 5 | Agent operates with full autonomy; remote monitoring |
+| **CONTINUOUS_INSIGHT** | 4 | Agent executes, human monitors in real-time |
+| **SHARED_PLANNING** | 3 | Human and agent co-plan; agent executes approved plans |
+| **SUPERVISED** | 2 | Agent proposes actions, human approves each one |
+| **PSEUDO_AGENT** | 1 | Agent is interface only; human performs all reasoning |
 
 ## Posture State Machine
 
@@ -19,13 +19,13 @@ The `PostureStateMachine` manages transitions between postures with configurable
 ```python
 from eatp.postures import PostureStateMachine, TrustPosture
 
-machine = PostureStateMachine(initial_posture=TrustPosture.SUPERVISED)
+machine = PostureStateMachine(initial_posture=TrustPosture.SHARED_PLANNING)
 
 # Upgrade requires meeting guard conditions
-machine.request_transition(TrustPosture.ASSISTED)
+machine.request_transition(TrustPosture.CONTINUOUS_INSIGHT)
 
 # Emergency downgrade is always allowed
-machine.emergency_downgrade(TrustPosture.BLOCKED)
+machine.emergency_downgrade(TrustPosture.PSEUDO_AGENT)
 ```
 
 ## Comparison Operators
@@ -35,9 +35,9 @@ Postures support comparison based on autonomy level:
 ```python
 from eatp.postures import TrustPosture
 
-assert TrustPosture.FULL_AUTONOMY > TrustPosture.SUPERVISED
-assert TrustPosture.BLOCKED < TrustPosture.HUMAN_DECIDES
-assert TrustPosture.SUPERVISED.autonomy_level == 3
+assert TrustPosture.DELEGATED > TrustPosture.SHARED_PLANNING
+assert TrustPosture.PSEUDO_AGENT < TrustPosture.SUPERVISED
+assert TrustPosture.SHARED_PLANNING.autonomy_level == 3
 ```
 
 ## Integration with Verification

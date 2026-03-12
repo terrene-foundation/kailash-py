@@ -140,7 +140,7 @@ Every action is recorded in a signed, hash-linked audit trail. Each audit anchor
 
 - **Ed25519 cryptography** via PyNaCl -- signing, verification, key generation
 - **Trust Lineage Chains** -- 5-element structure (genesis, capabilities, delegations, constraints, audit anchors)
-- **Trust postures** -- 5-level state machine (FULL_AUTONOMY, ASSISTED, SUPERVISED, HUMAN_DECIDES, BLOCKED)
+- **Trust postures** -- 5-level state machine (DELEGATED, CONTINUOUS_INSIGHT, SHARED_PLANNING, SUPERVISED, PSEUDO_AGENT)
 - **Trust scoring** -- Composite 0-100 score across chain completeness, delegation depth, constraint coverage, posture, recency
 
 ### Constraint System

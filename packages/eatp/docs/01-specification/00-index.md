@@ -48,7 +48,7 @@ Four operations manipulate and query trust chains:
 | 2   | Operations                  | [operations.md](../spec/operations.md)                       | ESTABLISH, DELEGATE, VERIFY, AUDIT lifecycle and semantics                                                 |
 | 3   | Constraints                 | [constraints.md](../spec/constraints.md)                     | Tightening invariant, constraint types, ConstraintValidator                                                |
 | 4   | Enforcement Modes           | [enforcement.md](../spec/enforcement.md)                     | StrictEnforcer, ShadowEnforcer, ChallengeProtocol, decorators                                              |
-| 5   | Trust Postures              | [postures.md](../spec/postures.md)                           | FULL_AUTONOMY, ASSISTED, SUPERVISED, HUMAN_DECIDES, BLOCKED                                                |
+| 5   | Trust Postures              | [postures.md](../spec/postures.md)                           | DELEGATED, CONTINUOUS_INSIGHT, SHARED_PLANNING, SUPERVISED, PSEUDO_AGENT                                   |
 | 6   | Wire Format & Schemas       | [wire-format.md](../spec/wire-format.md)                     | JSON serialization, canonical form for signing                                                             |
 | 7   | JSON Schemas                | [schemas.md](../spec/schemas.md)                             | JSON Schema definitions for all chain element types                                                        |
 | 8   | Responsibility Matrix       | [responsibility-matrix.md](../spec/responsibility-matrix.md) | RACI matrix for trust operations across roles                                                              |
