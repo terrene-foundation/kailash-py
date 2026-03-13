@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  The core engine for building trust-verified workflows with 140+ production-ready nodes, sync and async runtimes, cyclic workflow support, and the CARE/EATP cryptographic trust framework. Three application frameworks -- <a href="https://github.com/terrene-foundation/kailash-kaizen">Kaizen</a> (AI agents), <a href="https://github.com/terrene-foundation/kailash-nexus">Nexus</a> (multi-channel platform), and <a href="https://github.com/terrene-foundation/kailash-dataflow">DataFlow</a> (database operations) -- are built on this foundation.
+  The core engine for building trust-verified workflows with 140+ production-ready nodes, sync and async runtimes, cyclic workflow support, and the CARE/EATP cryptographic trust framework. Three application frameworks -- <a href="https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen">Kaizen</a> (AI agents), <a href="https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus">Nexus</a> (multi-channel platform), and <a href="https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow">DataFlow</a> (database operations) -- are built on this foundation.
 </p>
 
 ---
@@ -24,7 +24,7 @@
 - **140+ production-ready workflow nodes** -- AI, API, code execution, data, database, file, logic, monitoring, and transform nodes out of the box.
 - **Embeddable runtime with no external dependencies** -- `LocalRuntime` runs entirely in-process. No server cluster, no external database, no message broker. Works in CLI tools, serverless functions, and embedded applications.
 - **Sync and async runtime parity** -- `LocalRuntime` and `AsyncLocalRuntime` share the same API and return identical `(results, run_id)` structures. Use sync for scripts, async for Docker/FastAPI.
-- **Foundation for three application frameworks** -- [Kaizen](https://github.com/terrene-foundation/kailash-kaizen) (AI agents with trust), [Nexus](https://github.com/terrene-foundation/kailash-nexus) (multi-channel deploy), and [DataFlow](https://github.com/terrene-foundation/kailash-dataflow) (zero-config database) are all built on this Core SDK.
+- **Foundation for three application frameworks** -- [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen) (AI agents with trust), [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus) (multi-channel deploy), and [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) (zero-config database) are all built on this Core SDK.
 
 ---
 
@@ -135,7 +135,7 @@ node_ctx = ctx.with_node("data_processor")  # Tracks execution path
 
 ## Ecosystem Frameworks
 
-Three application frameworks are built on Core SDK, each in its own repository:
+Three application frameworks are built on Core SDK, each in its own package within this monorepo:
 
 ### Kaizen: AI Agents with Cryptographic Trust
 
@@ -156,7 +156,7 @@ async def main():
 asyncio.run(main())
 ```
 
-`pip install kailash-kaizen` | [Repository](https://github.com/terrene-foundation/kailash-kaizen) | [Documentation](https://github.com/terrene-foundation/kailash-kaizen#readme)
+`pip install kailash-kaizen` | [Repository](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen) | [Documentation](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen#readme)
 
 ### Nexus: Multi-Channel Platform
 
@@ -177,7 +177,7 @@ app.start()
 # MCP:       AI agents can call the 'analyze' tool directly
 ```
 
-`pip install kailash-nexus` | [Repository](https://github.com/terrene-foundation/kailash-nexus) | [Documentation](https://github.com/terrene-foundation/kailash-nexus#readme)
+`pip install kailash-nexus` | [Repository](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus) | [Documentation](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus#readme)
 
 ### DataFlow: Zero-Config Database
 
@@ -200,7 +200,7 @@ class User:
 # UserBulkCreateNode, UserBulkUpdateNode, UserBulkDeleteNode, UserBulkUpsertNode
 ```
 
-`pip install kailash-dataflow` | [Repository](https://github.com/terrene-foundation/kailash-dataflow) | [Documentation](https://github.com/terrene-foundation/kailash-dataflow#readme)
+`pip install kailash-dataflow` | [Repository](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) | [Documentation](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow#readme)
 
 ---
 
@@ -285,9 +285,9 @@ Kailash occupies a unique position: it is both an embeddable workflow engine (no
 
 | Framework                                                       | Version | Key Capabilities                                                                                   |
 | --------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
-| [Kaizen](https://github.com/terrene-foundation/kailash-kaizen)     | v1.2.1  | Signature-based AI agents, multi-agent coordination, CARE/EATP trust, FallbackRouter, MCP sessions |
-| [Nexus](https://github.com/terrene-foundation/kailash-nexus)       | v1.4.1  | Multi-channel deploy (API+CLI+MCP), handler pattern, NexusAuthPlugin, presets, middleware API      |
-| [DataFlow](https://github.com/terrene-foundation/kailash-dataflow) | v0.12.1 | 11 nodes per model, PostgreSQL/MySQL/SQLite parity, auto-wired multi-tenancy, async transactions   |
+| [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen)     | v1.2.1  | Signature-based AI agents, multi-agent coordination, CARE/EATP trust, FallbackRouter, MCP sessions |
+| [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus)       | v1.4.1  | Multi-channel deploy (API+CLI+MCP), handler pattern, NexusAuthPlugin, presets, middleware API      |
+| [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) | v0.12.1 | 11 nodes per model, PostgreSQL/MySQL/SQLite parity, auto-wired multi-tenancy, async transactions   |
 
 ---
 
@@ -316,9 +316,9 @@ pytest tests/e2e/ --timeout=10
 | Resource                                                                     | Description                                         |
 | ---------------------------------------------------------------------------- | --------------------------------------------------- |
 | [SDK Users Guide](sdk-users/)                                                | Complete workflow development guide                 |
-| [Kaizen Guide](https://github.com/terrene-foundation/kailash-kaizen#readme)     | AI agents, signatures, multi-modal, CARE/EATP trust |
-| [Nexus Guide](https://github.com/terrene-foundation/kailash-nexus#readme)       | Multi-channel platform, auth, middleware, handlers  |
-| [DataFlow Guide](https://github.com/terrene-foundation/kailash-dataflow#readme) | Database operations, models, queries, multi-tenancy |
+| [Kaizen Guide](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen#readme)     | AI agents, signatures, multi-modal, CARE/EATP trust |
+| [Nexus Guide](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus#readme)       | Multi-channel platform, auth, middleware, handlers  |
+| [DataFlow Guide](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow#readme) | Database operations, models, queries, multi-tenancy |
 | [Enterprise Patterns](sdk-users/5-enterprise/)                               | Production deployment patterns                      |
 | [API Reference](https://terrene-foundation.github.io/kailash_sdk)               | Sphinx-generated API documentation                  |
 
