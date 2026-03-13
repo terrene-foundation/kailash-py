@@ -16,9 +16,7 @@ recursive-include src py.typed
 # Exclude all non-essential directories
 prune tests
 prune docs
-prune examples
 prune guide
-prune data
 prune outputs
 prune workflow_executions
 
@@ -58,12 +56,5 @@ prune .ruff_cache
 prune .mypy_cache
 
 # Exclude temporary files
-prune data/tasks
-prune data/task_storage
-prune examples/data/*/tracking
-prune examples/data/*/metrics
-prune examples/data/*/runs
-prune examples/data/*/tasks
-prune examples/outputs
 prune outputs
 prune workflow_executions

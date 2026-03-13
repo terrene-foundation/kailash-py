@@ -3,7 +3,7 @@
 
 .PHONY: help install install-dev test test-unit test-integration test-all
 .PHONY: format lint type-check quality security pre-commit clean docs
-.PHONY: build publish pre-release examples
+.PHONY: build publish pre-release
 
 # Default target
 help:
@@ -26,8 +26,7 @@ help:
 	@echo "  test            Run all tests"
 	@echo "  test-unit       Run unit tests only"
 	@echo "  test-integration Run integration tests only"
-	@echo "  test-examples   Test all examples"
-	@echo "  test-fast       Run fast tests (unit + examples)"
+	@echo "  test-fast       Run fast tests (unit only)"
 	@echo ""
 	@echo "Documentation Commands:"
 	@echo "  docs            Build Sphinx documentation"
@@ -59,13 +58,13 @@ install-hooks:
 # Code quality commands
 format:
 	@echo "Formatting code with Black..."
-	black src/ tests/ examples/ docs/
+	black src/ tests/ docs/
 	@echo "Sorting imports with isort..."
-	isort src/ tests/ examples/ docs/
+	isort src/ tests/ docs/
 
 lint:
 	@echo "Running Ruff linter..."
-	ruff check src/ tests/ examples/ --fix
+	ruff check src/ tests/ --fix
 
 type-check:
 	@echo "Running mypy type checking..."
@@ -97,11 +96,7 @@ test-integration:
 	@echo "Running integration tests..."
 	pytest tests/integration/ -v --tb=short
 
-test-examples:
-	@echo "Testing all examples..."
-	cd examples && python utils/test_runner.py
-
-test-fast: test-unit test-examples
+test-fast: test-unit
 	@echo "Fast tests completed"
 
 # Documentation commands

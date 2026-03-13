@@ -122,8 +122,6 @@ select = ["E", "F"]
 ignore = ["E203", "E501", "E722", "F401", "F841"]
 
 [tool.ruff.lint.per-file-ignores]
-"examples/feature_examples/workflows/cyclic/*.py" = ["E722"]
-"examples/feature_examples/workflows/parallel/*.py" = ["E722"]
 "scripts/refactor-pythoncode-to-functions.py" = ["E722"]
 "src/kailash/nodes/api/security.py" = ["E722"]
 "tests/conftest_sdk_dev.py" = ["E722"]
@@ -133,8 +131,6 @@ ignore = ["E203", "E501", "E722", "F401", "F841"]
 "tests/**/*.py" = ["F821", "F811", "E721"]
 # Allow late imports in performance test files
 "tests/unit/performance_benchmarks/*.py" = ["E402"]
-# Examples may have late imports and mocks
-"examples/**/*.py" = ["E402", "F821"]
 # Scripts may need to modify sys.path before imports
 "scripts/**/*.py" = ["E402", "F821", "E721"]
 # Specific test files with import order issues after skip markers
