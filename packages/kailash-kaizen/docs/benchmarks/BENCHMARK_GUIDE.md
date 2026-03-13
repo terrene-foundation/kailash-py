@@ -575,7 +575,6 @@ Automated tracking:
 ## Additional Resources
 
 - **Framework Documentation**: [benchmarks/framework.py](../benchmarks/framework.py)
-- **Claude Comparison**: [CLAUDE_COMPARISON.md](CLAUDE_COMPARISON.md)
 - **Optimization Roadmap**: [OPTIMIZATION_ROADMAP.md](OPTIMIZATION_ROADMAP.md)
 - **E2E Tests**: [tests/e2e/autonomy/](../../tests/e2e/autonomy/)
 
