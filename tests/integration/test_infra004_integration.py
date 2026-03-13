@@ -53,7 +53,7 @@ class TestDockerInfrastructureSetup:
         """Docker test environment must be available for integration testing."""
         with PerformanceTracker("docker_environment_check", threshold=30.0) as tracker:
             # Check if test-env infrastructure is running
-            utils_dir = "./repos/projects/kailash_python_sdk/tests/utils"
+            utils_dir = ""
             if not os.path.exists(utils_dir):
                 pytest.skip("Test utils directory not found")
 
@@ -628,7 +628,7 @@ def setup_integration_infrastructure():
 
     # Track setup performance
     with PerformanceTracker("integration_setup", threshold=120.0) as setup_tracker:
-        utils_dir = "./repos/projects/kailash_python_sdk/tests/utils"
+        utils_dir = ""
 
         if not os.path.exists(utils_dir):
             pytest.skip("Test utils directory not found")

@@ -39,7 +39,7 @@ The `test_not_null_column_addition_integration.py` file provides comprehensive i
 
 ```bash
 # Navigate to DataFlow root
-cd ./repos/projects/kailash_python_sdk/packages/kailash-dataflow
+cd 
 
 # Start test environment (requires Docker daemon running)
 ./tests/utils/test_env up

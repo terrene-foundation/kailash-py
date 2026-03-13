@@ -192,7 +192,7 @@ tests/benchmarks/
 
 ### 1. Run Benchmarks
 ```bash
-cd ./repos/dev/kailash_kaizen/packages/kailash-kaizen
+cd 
 pytest tests/benchmarks/trust/benchmark_trust_operations.py -v --benchmark-only
 ```
 

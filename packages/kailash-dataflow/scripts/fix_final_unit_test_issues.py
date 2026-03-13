@@ -49,7 +49,7 @@ def apply_fixes():
 
     # Fix test_migration_trigger_system.py
     trigger_file = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/unit/test_migration_trigger_system.py"
+        ""
     )
     if trigger_file.exists():
         with open(trigger_file, "r") as f:
@@ -72,7 +72,7 @@ def apply_fixes():
 
     # Fix test_migration_history_manager.py
     history_file = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/unit/test_migration_history_manager.py"
+        ""
     )
     if history_file.exists():
         with open(history_file, "r") as f:
@@ -98,7 +98,7 @@ def apply_fixes():
 
     # Fix test_batched_migration_executor_integration.py
     executor_file = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/unit/test_batched_migration_executor_integration.py"
+        ""
     )
     if executor_file.exists():
         with open(executor_file, "r") as f:

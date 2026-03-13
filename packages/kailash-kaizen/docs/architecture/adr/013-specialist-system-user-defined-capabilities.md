@@ -651,8 +651,8 @@ async def test_invoke_filesystem_specialist_with_ollama():
 
 ## References
 
-1. **Claude Agent SDK Investigation**: `./repos/dev/kailash_kaizen/CLAUDE_AGENT_SDK_INVESTIGATION.md`
-2. **Claude SDK Architecture Summary**: `./repos/dev/kailash_kaizen/CLAUDE_SDK_ARCHITECTURE_SUMMARY.md`
+1. **Claude Agent SDK Investigation**: `
+2. **Claude SDK Architecture Summary**: `
 3. **Gap Analysis**: `.claude/improvements/CLAUDE_AGENT_SDK_KAIZEN_GAP_ANALYSIS.md`
 4. **Implementation Proposal**: `.claude/improvements/KAIZEN_AUTONOMOUS_AGENT_ENHANCEMENT_PROPOSAL.md`
 

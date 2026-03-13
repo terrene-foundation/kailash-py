@@ -9,7 +9,7 @@ Demonstrates:
 4. MCP + Custom Tool Integration
 
 Requirements:
-- OPENAI_API_KEY in ./.env
+- OPENAI_API_KEY in .env
 - Uses GPT-3.5-turbo for real inference
 - Real file system operations
 - No mocks, simulations, or hardcoding
@@ -39,7 +39,7 @@ def main():
     print()
 
     # Load API key from parent SDK repository
-    env_path = Path("./.env")
+    env_path = Path(".env")
     if not env_path.exists():
         print(f"❌ ERROR: .env file not found at {env_path}")
         print("   Please ensure OPENAI_API_KEY is configured")

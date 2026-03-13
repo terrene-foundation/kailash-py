@@ -18,7 +18,7 @@ Kailash SDK has a **complete, production-ready MCP implementation** in `src/kail
 ### Core Components Location
 
 ```
-./repos/projects/kailash_python_sdk/src/kailash/mcp_server/
+
 ├── __init__.py          # Main exports and public API
 ├── client.py            # MCPClient - Enhanced client with auth, retry, pooling
 ├── server.py            # MCPServer, MCPServerBase, SimpleMCPServer
@@ -62,7 +62,7 @@ client = MCPClient(
 )
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/client.py` (lines 26-98)
+**File**: `
 
 ### 2.2 Tool Discovery Pattern
 
@@ -89,7 +89,7 @@ for tool in tools:
     print(f"  Parameters: {tool['parameters']}")
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/client.py` (lines 119-178)
+**File**: `
 
 ### 2.3 Tool Execution Pattern
 
@@ -109,7 +109,7 @@ else:
     print(f"Error: {result['error']}")
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/client.py` (lines 380-451)
+**File**: `
 
 ### 2.4 Multi-Transport Support
 
@@ -145,7 +145,7 @@ tools = await client.discover_tools(stdio_config)
 result = await client.call_tool(http_config, "search", {"q": "test"})
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/client.py` (lines 726-751)
+**File**: `
 
 ### 2.5 Authentication Patterns
 
@@ -168,7 +168,7 @@ def _extract_credentials(self, server_config):
     return {}
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/client.py` (lines 779-797)
+**File**: `
 
 ### 2.6 WebSocket Connection Pooling
 
@@ -196,7 +196,7 @@ async with client:
     print(f"Pool misses: {metrics['websocket_pool_misses']}")
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/client.py` (lines 864-1078)
+**File**: `
 
 ---
 
@@ -229,7 +229,7 @@ if __name__ == "__main__":
     server.run()
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/sdk-users/1-quickstart/mcp-quickstart.md` (lines 145-171)
+**File**: `
 
 ### 3.2 Production Server with Features
 
@@ -263,7 +263,7 @@ if __name__ == "__main__":
     server.run()
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/sdk-users/1-quickstart/mcp-quickstart.md` (lines 173-205)
+**File**: `
 
 ### 3.3 Server Base Class Pattern
 
@@ -296,7 +296,7 @@ server = MyCustomServer("my-server", port=8080)
 server.start()
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/server.py` (lines 87-280)
+**File**: `
 
 ### 3.4 WebSocket Server Transport
 
@@ -324,7 +324,7 @@ if __name__ == "__main__":
     server.run()
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/server.py` (lines 346-426)
+**File**: `
 
 ---
 
@@ -350,7 +350,7 @@ server_info = ServerInfo(
 await registry.register_server(server_info)
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/discovery.py` (lines 57-219)
+**File**: `
 
 ### 4.2 Server Discovery
 
@@ -365,7 +365,7 @@ for server in servers:
     print(f"  Health: {server.health_status}")
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/discovery.py` (lines 1-37)
+**File**: `
 
 ### 4.3 Auto-Discovery with Registration
 
@@ -391,7 +391,7 @@ registrar = enable_auto_discovery(
 registrar.start_with_registration()
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/sdk-users/1-quickstart/mcp-quickstart.md` (lines 66-67)
+**File**: `
 
 ### 4.4 Health Checking
 
@@ -438,7 +438,7 @@ server = MCPServer("secure-server", auth_provider=auth)
 client = MCPClient(auth_provider=auth)
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/auth.py` (lines 106-202)
+**File**: `
 
 ### 5.2 JWT Authentication
 
@@ -462,7 +462,7 @@ token = auth.create_token({
 client = MCPClient(auth_provider=auth)
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/auth.py` (lines 341-400)
+**File**: `
 
 ### 5.3 Bearer Token Authentication
 
@@ -486,7 +486,7 @@ auth = BearerTokenAuth(
 )
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/auth.py` (lines 205-338)
+**File**: `
 
 ### 5.4 Permission Management
 
@@ -646,7 +646,7 @@ tool_discovery_config = {
 }
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/sdk-users/2-core-concepts/cheatsheet/025-mcp-integration.md` (lines 224-241)
+**File**: `
 
 ---
 
@@ -679,7 +679,7 @@ MCPErrorCode.RESOURCE_NOT_FOUND
 MCPErrorCode.TRANSPORT_ERROR
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/errors.py`
+**File**: `
 
 ### 7.2 Retry Strategies
 
@@ -712,7 +712,7 @@ operation = RetryableOperation(retry_strategy)
 result = await operation.execute(async_function)
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/client.py` (lines 83-97)
+**File**: `
 
 ### 7.3 Error Aggregation
 
@@ -782,7 +782,7 @@ async def test_tool_discovery():
     # Real server tests are in integration tests
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/tests/unit/mcp_server/test_client.py` (lines 1-186)
+**File**: `
 
 ### 8.2 Integration Test Pattern (Tier 2)
 
@@ -825,7 +825,7 @@ async def test_real_mcp_server_communication():
     assert result["result"]["result"] == 8
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/tests/integration/mcp_server/test_client.py`
+**File**: `
 
 ### 8.3 E2E Test Pattern (Tier 3)
 
@@ -932,7 +932,7 @@ if __name__ == "__main__":
     server.run()
 ```
 
-**File**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/server.py` (lines 346-414)
+**File**: `
 
 ### 9.2 Client Configuration
 
@@ -1170,18 +1170,18 @@ See [Kailash MCP Quick Start](../../kailash_python_sdk/sdk-users/1-quickstart/mc
 
 ### Documentation
 
-- **Quick Start**: `./repos/projects/kailash_python_sdk/sdk-users/1-quickstart/mcp-quickstart.md`
-- **Integration Guide**: `./repos/projects/kailash_python_sdk/sdk-users/2-core-concepts/cheatsheet/025-mcp-integration.md`
-- **Development Guide**: `./repos/projects/kailash_python_sdk/sdk-users/3-development/17-mcp-development-guide.md`
-- **Enterprise Patterns**: `./repos/projects/kailash_python_sdk/sdk-users/5-enterprise/patterns/12-mcp-patterns.md`
+- **Quick Start**: `
+- **Integration Guide**: `
+- **Development Guide**: `
+- **Enterprise Patterns**: `
 
 ### Source Code
 
-- **Client**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/client.py`
-- **Server**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/server.py`
-- **Discovery**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/discovery.py`
-- **Auth**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/auth.py`
-- **Errors**: `./repos/projects/kailash_python_sdk/src/kailash/mcp_server/errors.py`
+- **Client**: `
+- **Server**: `
+- **Discovery**: `
+- **Auth**: `
+- **Errors**: `
 
 ### Examples
 
@@ -1190,9 +1190,9 @@ See [Kailash MCP Quick Start](../../kailash_python_sdk/sdk-users/1-quickstart/mc
 
 ### Tests
 
-- **Unit Tests**: `./repos/projects/kailash_python_sdk/tests/unit/mcp_server/`
-- **Integration Tests**: `./repos/projects/kailash_python_sdk/tests/integration/mcp_server/`
-- **E2E Tests**: `./repos/projects/kailash_python_sdk/tests/e2e/mcp_server/`
+- **Unit Tests**: `
+- **Integration Tests**: `
+- **E2E Tests**: `
 
 ---
 

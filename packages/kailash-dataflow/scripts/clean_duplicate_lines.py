@@ -54,7 +54,7 @@ def clean_duplicates(file_path):
 def main():
     """Clean duplicate lines from test files."""
     history_file = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/unit/test_migration_history_manager.py"
+        ""
     )
 
     removed = clean_duplicates(history_file)

@@ -340,7 +340,7 @@ The test suite provides excellent coverage of the schema cache system and will s
 
 ### Run All Tests
 ```bash
-cd ./repos/dev/kailash_dataflow/packages/kailash-dataflow
+cd 
 pytest tests/integration/core/test_dataflow_schema_cache.py -v
 ```
 

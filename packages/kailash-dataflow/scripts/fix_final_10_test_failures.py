@@ -18,7 +18,7 @@ from pathlib import Path
 def fix_migration_trigger_async_issues():
     """Fix async execution issues in migration trigger tests."""
     file_path = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/unit/test_migration_trigger_system.py"
+        ""
     )
 
     with open(file_path, "r") as f:
@@ -86,7 +86,7 @@ def fix_migration_trigger_async_issues():
 def fix_migration_history_manager_issues():
     """Fix MigrationStatus enum and JSON parsing issues."""
     file_path = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/unit/test_migration_history_manager.py"
+        ""
     )
 
     with open(file_path, "r") as f:
@@ -121,7 +121,7 @@ def fix_migration_history_manager_issues():
 def fix_web_migration_api_session_test():
     """Fix session cleanup test issues."""
     file_path = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/unit/web/test_web_migration_api.py"
+        ""
     )
 
     with open(file_path, "r") as f:
@@ -157,7 +157,7 @@ def fix_web_migration_api_session_test():
 def fix_batched_executor_integration_tests():
     """Fix batched migration executor integration test issues."""
     file_path = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/unit/test_batched_migration_executor_integration.py"
+        ""
     )
 
     with open(file_path, "r") as f:

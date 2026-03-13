@@ -51,7 +51,7 @@ def fix_asyncmock_import(file_path):
 
 def main():
     test_dir = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/unit"
+        ""
     )
 
     fixed_files = []

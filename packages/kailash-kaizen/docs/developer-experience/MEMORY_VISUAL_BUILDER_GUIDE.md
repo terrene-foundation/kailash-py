@@ -630,7 +630,7 @@ if __name__ == "__main__":
 
 **Test These Examples**:
 ```bash
-cd ./repos/projects/kailash_python_sdk/packages/kailash-kaizen
+cd 
 python docs/developer-experience/memory_example_1_node_local.py
 python docs/developer-experience/memory_example_2_workflow_global.py
 python docs/developer-experience/memory_example_3_shared_pool.py

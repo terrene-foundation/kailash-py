@@ -308,7 +308,7 @@ async def main():
     )  # Production validation with outlier detection
 
     # Save results
-    results_file = "./repos/dev/kailash_kaizen/packages/kailash-kaizen/benchmarks/PRODUCTION_OVERHEAD_RESULTS.md"
+    results_file = ""
     with open(results_file, "w") as f:
         f.write("# Production Overhead Validation Results\n\n")
         f.write(f"**Date**: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")

@@ -435,6 +435,6 @@ class SignatureAgent(BaseAgent):
 
 **Test This Example**:
 ```bash
-cd ./repos/projects/kailash_python_sdk/packages/kailash-kaizen
+cd 
 python docs/developer-experience/signature_to_node_example.py
 ```

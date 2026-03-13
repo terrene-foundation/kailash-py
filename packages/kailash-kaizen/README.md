@@ -793,7 +793,7 @@ examples/
 └── README.md              # Examples overview
 ```
 
-**Location**: `./repos/projects/kailash_python_sdk/packages/kailash-kaizen/examples/`
+**Location**: `
 
 ## ⚠️ Common Mistakes
 

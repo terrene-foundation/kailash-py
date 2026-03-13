@@ -464,10 +464,10 @@ Workflow Editor (/workflows/:id/edit)
 ## Related Documents
 
 ### Requirements
-- [Version History UI Requirements](./repos/projects/kailash_python_sdk/docs/requirements/version-history-ui-requirements.md)
+- [Version History UI Requirements](
 
 ### Architecture
-- [ADR-0050: Kailash Studio Platform Architecture](./repos/projects/kailash_python_sdk/docs/adr/0050-kailash-studio-visual-workflow-platform.md)
+- [ADR-0050: Kailash Studio Platform Architecture](
 
 ### Implementation
 - Backend Model: `/apps/kailash-studio/backend/src/kailash_studio/models.py:387-427`

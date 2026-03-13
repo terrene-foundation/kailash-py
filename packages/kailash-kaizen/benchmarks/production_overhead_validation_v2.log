@@ -14,25 +14,25 @@ Provider: openai, Model: gpt-3.5-turbo
 
 Request 1/10: What is AI?...
 Traceback (most recent call last):
-  File "./repos/dev/kailash_kaizen/packages/kailash-kaizen/benchmarks/production_overhead_validation.py", line 280, in <module>
+  File "", line 280, in <module>
     exit_code = asyncio.run(main())
                 ^^^^^^^^^^^^^^^^^^^
-  File "./.pyenv/versions/3.12.9/lib/python3.12/asyncio/runners.py", line 195, in run
+  File "", line 195, in run
     return runner.run(main)
            ^^^^^^^^^^^^^^^^
-  File "./.pyenv/versions/3.12.9/lib/python3.12/asyncio/runners.py", line 118, in run
+  File "", line 118, in run
     return self._loop.run_until_complete(task)
            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "./.pyenv/versions/3.12.9/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+  File "", line 691, in run_until_complete
     return future.result()
            ^^^^^^^^^^^^^^^
-  File "./repos/dev/kailash_kaizen/packages/kailash-kaizen/benchmarks/production_overhead_validation.py", line 247, in main
+  File "", line 247, in main
     result = await validator.validate(num_requests=10)  # Start with 10 to validate approach
              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "./repos/dev/kailash_kaizen/packages/kailash-kaizen/benchmarks/production_overhead_validation.py", line 197, in validate
+  File "", line 197, in validate
     baseline_latencies = await self.run_baseline_test(num_requests)
                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "./repos/dev/kailash_kaizen/packages/kailash-kaizen/benchmarks/production_overhead_validation.py", line 81, in run_baseline_test
+  File "", line 81, in run_baseline_test
     result = await agent.run_async(question=question)
                    ^^^^^^^^^^^^^^^
 AttributeError: 'BaseAgent' object has no attribute 'run_async'

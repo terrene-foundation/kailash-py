@@ -10,7 +10,7 @@ set -e
 
 # Repository configuration
 REPO="terrene-foundation/kailash-py"
-REPO_PATH="./repos/projects/kailash_python_sdk"
+REPO_PATH=""
 
 # Week offset (0 = this week, 1 = last week, etc.)
 WEEK_OFFSET=${1:-0}

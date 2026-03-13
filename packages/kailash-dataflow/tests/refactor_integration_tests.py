@@ -103,7 +103,7 @@ def suggest_refactoring(file_content: str) -> str:
 
 def main():
     """Main function to run the refactoring analysis."""
-    base_path = "./repos/projects/kailash_python_sdk/packages/kailash-dataflow"
+    base_path = ""
 
     print("🔍 Analyzing integration tests for refactoring needs...")
     print("=" * 60)

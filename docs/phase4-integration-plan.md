@@ -22,7 +22,7 @@ Phase 4 integrates four specialized mixins (2,454 lines, 27 methods) into LocalR
 
 ### 1.1 Current Structure
 
-**File**: `./repos/dev/kailash_dataflow/src/kailash/runtime/local.py`
+**File**: `
 
 **Statistics**:
 - Total Lines: 4,806
@@ -216,7 +216,7 @@ Create four mixin files with proper structure:
 
 ```bash
 # Create mixin directory if not exists
-mkdir -p ./repos/dev/kailash_dataflow/src/kailash/runtime/mixins
+mkdir -p 
 
 # Create skeleton files
 touch src/kailash/runtime/mixins/__init__.py
@@ -1428,10 +1428,10 @@ cd /tmp
 git clone <repo-url> kailash_fresh
 
 # 2. Copy over any needed files
-cp kailash_fresh/src/kailash/runtime/local.py ./repos/dev/kailash_dataflow/src/kailash/runtime/
+cp kailash_fresh/src/kailash/runtime/local.py 
 
 # 3. Verify restoration
-cd ./repos/dev/kailash_dataflow
+cd 
 pytest tests/runtime/ -v
 ```
 

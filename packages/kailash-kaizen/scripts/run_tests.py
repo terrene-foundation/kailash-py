@@ -6,7 +6,7 @@ import sys
 
 # Add kaizen source to path
 sys.path.insert(
-    0, "./repos/projects/kailash_python_sdk/packages/kailash-kaizen/src"
+    0, ""
 )
 
 
@@ -15,7 +15,7 @@ def run_implementation_test():
     print("🚀 Running MCP Implementation Test...")
     result = subprocess.run(
         [sys.executable, "test_mcp_implementation.py"],
-        cwd="./repos/projects/kailash_python_sdk/packages/kailash-kaizen",
+        cwd="",
         capture_output=True,
         text=True,
     )
@@ -34,7 +34,7 @@ def run_error_handling_test():
     print("\n🛡️ Running MCP Error Handling Test...")
     result = subprocess.run(
         [sys.executable, "test_mcp_error_handling.py"],
-        cwd="./repos/projects/kailash_python_sdk/packages/kailash-kaizen",
+        cwd="",
         capture_output=True,
         text=True,
     )
@@ -53,7 +53,7 @@ def run_comprehensive_test():
     print("\n🎯 Running Comprehensive MCP Integration Test...")
     result = subprocess.run(
         [sys.executable, "test_mcp_integration_comprehensive.py"],
-        cwd="./repos/projects/kailash_python_sdk/packages/kailash-kaizen",
+        cwd="",
         capture_output=True,
         text=True,
     )
@@ -103,7 +103,7 @@ def run_original_failing_tests():
         print(f"\n📝 Running Test {i}/{total_tests}...")
         result = subprocess.run(
             cmd,
-            cwd="./repos/projects/kailash_python_sdk/packages/kailash-kaizen",
+            cwd="",
             capture_output=True,
             text=True,
         )

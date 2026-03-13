@@ -336,7 +336,7 @@ class FixtureValidator:
                 try:
                     # Try to import docker_config from parent SDK
                     docker_config_path = Path(
-                        "./repos/projects/kailash_python_sdk/tests/utils/docker_config.py"
+                        ""
                     )
                     if docker_config_path.exists():
                         spec = importlib.util.spec_from_file_location(

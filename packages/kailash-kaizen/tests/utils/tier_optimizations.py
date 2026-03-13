@@ -22,7 +22,7 @@ import pytest
 try:
     import sys
 
-    sys.path.append("./repos/projects/kailash_python_sdk/tests/utils")
+    sys.path.append("")
     from docker_config import (
         is_ollama_available,
         is_postgres_available,

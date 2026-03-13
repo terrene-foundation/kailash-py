@@ -436,7 +436,7 @@ def main():
     """Run comprehensive autonomous multi-agent demo."""
 
     # Load API key
-    env_path = Path("./.env")
+    env_path = Path(".env")
     if not env_path.exists():
         print(f"❌ ERROR: .env file not found at {env_path}")
         print("   Please ensure OPENAI_API_KEY is configured")

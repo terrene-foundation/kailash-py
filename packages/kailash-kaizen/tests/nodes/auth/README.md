@@ -6,10 +6,10 @@
 
 ```bash
 # 1. Ensure OpenAI API key is set in .env
-echo "OPENAI_API_KEY=your-api-key-here" >> ./repos/dev/kailash_kaizen/packages/kailash-kaizen/.env
+echo "OPENAI_API_KEY=your-api-key-here" >> 
 
 # 2. Navigate to test directory
-cd ./repos/dev/kailash_kaizen/packages/kailash-kaizen
+cd 
 ```
 
 ### Run All Tests
@@ -185,16 +185,16 @@ Using OpenAI gpt-4o-mini:
 
 ## Implementation Files Tested
 
-1. `./repos/dev/kailash_kaizen/packages/kailash-kaizen/src/kaizen/nodes/auth/sso.py` (329 lines)
-2. `./repos/dev/kailash_kaizen/packages/kailash-kaizen/src/kaizen/nodes/auth/enterprise_auth_provider.py` (210 lines)
-3. `./repos/dev/kailash_kaizen/packages/kailash-kaizen/src/kaizen/nodes/auth/directory_integration.py` (430 lines)
+1. ` (329 lines)
+2. ` (210 lines)
+3. ` (430 lines)
 
 ## Troubleshooting
 
 ### "OPENAI_API_KEY not set" error
 ```bash
 # Add to .env file in app directory
-echo "OPENAI_API_KEY=your-key-here" >> ./repos/dev/kailash_kaizen/packages/kailash-kaizen/.env
+echo "OPENAI_API_KEY=your-key-here" >> 
 
 # Or export directly
 export OPENAI_API_KEY=your-key-here
@@ -248,6 +248,6 @@ When adding new tests:
 
 ## References
 
-- [3-Tier Testing Strategy](./repos/dev/kailash_kaizen/sdk-users/3-development/testing/regression-testing-strategy.md)
-- [NO MOCKING Policy](./repos/dev/kailash_kaizen/sdk-users/7-gold-standards/mock-directives-for-testing.md)
-- [Test Organization](./repos/dev/kailash_kaizen/sdk-users/3-development/testing/test-organization-policy.md)
+- [3-Tier Testing Strategy](
+- [NO MOCKING Policy](
+- [Test Organization](

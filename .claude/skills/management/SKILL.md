@@ -39,7 +39,7 @@ packages/kailash-nexus/src/                   # Internal Nexus source
 ## Critical Gotchas
 
 - NEVER sync internal source paths (`src/kailash/`, `apps/kailash-*/src/`)
-- NEVER sync absolute paths (`./repos/...`)
+- NEVER sync absolute paths (`
 - NEVER sync learning data or auto-generated instincts
 - Always preserve user-facing imports (`from kailash.workflow.builder import WorkflowBuilder`)
 

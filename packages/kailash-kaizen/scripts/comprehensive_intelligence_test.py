@@ -6,9 +6,9 @@ Comprehensive test of intelligent responses across various question types
 import sys
 
 sys.path.insert(
-    0, "./repos/projects/kailash_python_sdk/packages/kailash-kaizen/src"
+    0, ""
 )
-sys.path.insert(0, "./repos/projects/kailash_python_sdk/src")
+sys.path.insert(0, "")
 
 
 def test_comprehensive_intelligence():

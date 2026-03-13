@@ -313,7 +313,7 @@ pytest tests/unit/examples/test_agent_as_client.py \
 ### Deprecation Warning: max_tokens
 
 ```
-./repos/projects/kailash_python_sdk/src/kailash/nodes/ai/llm_agent.py:679:
+
 DeprecationWarning: 'max_tokens' is deprecated and will be removed in v0.5.0.
 Please use 'max_completion_tokens' instead.
 ```

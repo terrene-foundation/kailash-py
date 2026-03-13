@@ -4,7 +4,7 @@
 import sys
 
 sys.path.insert(
-    0, "./repos/projects/kailash_python_sdk/packages/kailash-kaizen/src"
+    0, ""
 )
 
 from kaizen import Kaizen

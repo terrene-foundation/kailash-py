@@ -146,7 +146,7 @@ check_infrastructure() {
         echo -e "${YELLOW}Checking for Core SDK infrastructure...${NC}"
 
         # Check parent SDK infrastructure
-        PARENT_UTILS="./repos/projects/kailash_python_sdk/tests/utils"
+        PARENT_UTILS=""
         if [[ -f "$PARENT_UTILS/test-env" ]]; then
             cd "$PARENT_UTILS"
             if ./test-env status; then
@@ -173,7 +173,7 @@ setup_infrastructure() {
         ./test-env up
     else
         # Fall back to parent SDK infrastructure
-        PARENT_UTILS="./repos/projects/kailash_python_sdk/tests/utils"
+        PARENT_UTILS=""
         if [[ -f "$PARENT_UTILS/test-env" ]]; then
             cd "$PARENT_UTILS"
             ./test-env up
@@ -205,7 +205,7 @@ cleanup_infrastructure() {
         ./test-env down
     else
         # Fall back to parent SDK infrastructure
-        PARENT_UTILS="./repos/projects/kailash_python_sdk/tests/utils"
+        PARENT_UTILS=""
         if [[ -f "$PARENT_UTILS/test-env" ]]; then
             cd "$PARENT_UTILS"
             ./test-env down
@@ -353,7 +353,7 @@ else
         echo -e "  ${BLUE}cd $UTILS_DIR && ./test-env status${NC}"
         echo -e "  ${BLUE}cd $UTILS_DIR && ./test-env logs${NC}"
     else
-        PARENT_UTILS="./repos/projects/kailash_python_sdk/tests/utils"
+        PARENT_UTILS=""
         echo -e "  ${BLUE}cd $PARENT_UTILS && ./test-env status${NC}"
         echo -e "  ${BLUE}cd $PARENT_UTILS && ./test-env logs${NC}"
     fi

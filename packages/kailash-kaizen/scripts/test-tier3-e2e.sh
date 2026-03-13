@@ -147,7 +147,7 @@ check_full_infrastructure() {
         test_env_script="$UTILS_DIR/test-env"
     else
         # Fall back to parent SDK infrastructure
-        PARENT_UTILS="./repos/projects/kailash_python_sdk/tests/utils"
+        PARENT_UTILS=""
         if [[ -f "$PARENT_UTILS/test-env" ]]; then
             test_env_script="$PARENT_UTILS/test-env"
         fi
@@ -184,7 +184,7 @@ check_full_infrastructure() {
         echo -e "${RED}✗ No infrastructure setup found${NC}"
         echo -e "${RED}Expected locations:${NC}"
         echo -e "${RED}  - $UTILS_DIR/test-env${NC}"
-        echo -e "${RED}  - ./repos/projects/kailash_python_sdk/tests/utils/test-env${NC}"
+        echo -e "${RED}  - "
         return 1
     fi
 }
@@ -199,7 +199,7 @@ setup_full_stack() {
     if [[ -f "$UTILS_DIR/test-env" ]]; then
         test_env_script="$UTILS_DIR/test-env"
     else
-        PARENT_UTILS="./repos/projects/kailash_python_sdk/tests/utils"
+        PARENT_UTILS=""
         if [[ -f "$PARENT_UTILS/test-env" ]]; then
             test_env_script="$PARENT_UTILS/test-env"
         fi
@@ -409,7 +409,7 @@ else
         echo -e "  ${BLUE}cd $UTILS_DIR && ./test-env status${NC}"
         echo -e "  ${BLUE}cd $UTILS_DIR && ./test-env logs${NC}"
     else
-        PARENT_UTILS="./repos/projects/kailash_python_SDK/tests/utils"
+        PARENT_UTILS=""
         echo -e "  ${BLUE}cd $PARENT_UTILS && ./test-env status${NC}"
         echo -e "  ${BLUE}cd $PARENT_UTILS && ./test-env logs${NC}"
     fi
