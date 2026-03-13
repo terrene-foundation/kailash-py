@@ -526,7 +526,5 @@ GET /health
 
 ## Related Documentation
 
-- [Agent-UI Communication Guide](../../sdk-users/4-features/middleware/agent-ui-communication.md)
-- [Real-time Communication](../../sdk-users/4-features/middleware/real-time-communication.md)
-- [Authentication & Security](../../sdk-users/4-features/middleware/authentication-security.md)
-- [Middleware Examples](../../examples/feature_examples/middleware/)
+- [Kailash Documentation](../index.rst) - Full SDK documentation
+- [Enterprise Security](../enterprise/security.rst) - Security and authentication guides

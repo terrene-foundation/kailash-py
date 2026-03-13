@@ -34,12 +34,12 @@
 +------------------------------------------------------------------+
 |                    Application Frameworks                         |
 |                                                                   |
-|   Kaizen v1.2.1          Nexus v1.4.1        DataFlow v0.12.1    |
+|   Kaizen v1.2.5          Nexus v1.4.2        DataFlow v0.12.4    |
 |   AI Agents              Multi-Channel        Zero-Config DB      |
 |   CARE/EATP Trust        API + CLI + MCP      @db.model           |
 |   Multi-Agent Coord.     Auth + RBAC          11 Nodes/Model      |
 +------------------------------------------------------------------+
-|                    Core SDK v0.12.0                                |
+|                    Core SDK v0.12.5                                |
 |                                                                   |
 |   140+ Nodes    |  WorkflowBuilder   |  Runtime (Sync + Async)   |
 |   MCP Server    |  Cyclic Workflows  |  CARE Trust Layer          |
@@ -239,38 +239,9 @@ if result.allowed:
 
 ---
 
-## Competitive Positioning
-
-Kailash occupies a unique position: it is both an embeddable workflow engine (no external services required) and a full AI agent platform with enterprise trust. No other tool combines these capabilities.
-
-| Capability                             | Kailash        | Temporal | Airflow         | LangChain  | CrewAI     | Prefect      |
-| -------------------------------------- | -------------- | -------- | --------------- | ---------- | ---------- | ------------ |
-| **Cryptographic trust (CARE/EATP)**    | Yes            | No       | No              | No         | No         | No           |
-| **AI agent framework**                 | Yes (Kaizen)   | No       | No              | Yes        | Yes        | No           |
-| **Multi-channel deploy (API+CLI+MCP)** | Yes (Nexus)    | No       | No              | No         | No         | No           |
-| **Embeddable (no server required)**    | Yes            | No       | No              | Yes        | Yes        | No           |
-| **Auto-generated DB nodes**            | Yes (DataFlow) | No       | No              | No         | No         | No           |
-| **Multi-agent coordination**           | Yes            | No       | No              | Partial    | Yes        | No           |
-| **Enterprise auth (JWT/RBAC/SSO)**     | Built-in       | No       | Limited         | No         | No         | Cloud only   |
-| **Multi-tenancy**                      | Built-in       | Limited  | Limited         | No         | No         | Cloud only   |
-| **Audit trails**                       | EATP-compliant | No       | Limited         | LangSmith  | No         | Cloud only   |
-| **DAG + cyclic workflows**             | Yes            | DAG only | DAG only        | Yes        | No         | DAG only     |
-| **140+ built-in nodes**                | Yes            | No       | 2000+ operators | AI-focused | AI-focused | Task-focused |
-
-> **Note:** Kailash and Temporal solve different problems. Temporal provides durable execution for long-running workflows that must survive process crashes. Kailash provides trust-aware orchestration for AI agent workflows. They are complementary, not competitive.
-
-**Where each tool wins:**
-
-- **Temporal** wins at durable execution with exactly-once semantics at massive scale (Uber, Netflix, Stripe). Choose Temporal for microservice orchestration where crash recovery is paramount.
-- **Airflow** wins at batch ETL with its 2000+ community operators and managed cloud offerings (MWAA, Cloud Composer). Choose Airflow for scheduled data pipelines.
-- **LangChain** wins at rapid AI prototyping with deep integrations across every LLM provider and vector database. Choose LangChain for quick AI experiments.
-- **Kailash** wins at enterprise AI agents that require trust verification, compliance audit trails, and multi-channel deployment -- backed by a real workflow engine, not just prompt chains. Choose Kailash when your AI agents need to be auditable, trustworthy, and production-grade.
-
----
-
 ## Key Features
 
-### Core SDK (v0.12.0)
+### Core SDK (v0.12.5)
 
 - **140+ production nodes**: AI, API, code execution, data, database, file, logic, monitoring, transform
 - **Runtime parity**: `LocalRuntime` (sync) and `AsyncLocalRuntime` (async) with identical return structures
@@ -285,9 +256,9 @@ Kailash occupies a unique position: it is both an embeddable workflow engine (no
 
 | Framework                                                       | Version | Key Capabilities                                                                                   |
 | --------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
-| [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen)     | v1.2.1  | Signature-based AI agents, multi-agent coordination, CARE/EATP trust, FallbackRouter, MCP sessions |
-| [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus)       | v1.4.1  | Multi-channel deploy (API+CLI+MCP), handler pattern, NexusAuthPlugin, presets, middleware API      |
-| [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) | v0.12.1 | 11 nodes per model, PostgreSQL/MySQL/SQLite parity, auto-wired multi-tenancy, async transactions   |
+| [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen)     | v1.2.5  | Signature-based AI agents, multi-agent coordination, CARE/EATP trust, FallbackRouter, MCP sessions |
+| [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus)       | v1.4.2  | Multi-channel deploy (API+CLI+MCP), handler pattern, NexusAuthPlugin, presets, middleware API      |
+| [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) | v0.12.4 | 11 nodes per model, PostgreSQL/MySQL/SQLite parity, auto-wired multi-tenancy, async transactions   |
 
 ---
 
@@ -315,12 +286,10 @@ pytest tests/e2e/ --timeout=10
 
 | Resource                                                                     | Description                                         |
 | ---------------------------------------------------------------------------- | --------------------------------------------------- |
-| [SDK Users Guide](sdk-users/)                                                | Complete workflow development guide                 |
 | [Kaizen Guide](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen#readme)     | AI agents, signatures, multi-modal, CARE/EATP trust |
 | [Nexus Guide](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus#readme)       | Multi-channel platform, auth, middleware, handlers  |
 | [DataFlow Guide](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow#readme) | Database operations, models, queries, multi-tenancy |
-| [Enterprise Patterns](sdk-users/5-enterprise/)                               | Production deployment patterns                      |
-| [API Reference](https://terrene-foundation.github.io/kailash_sdk)               | Sphinx-generated API documentation                  |
+| [Sphinx Docs](docs/)                                                         | Full API reference and guides                       |
 
 ---
 
@@ -329,7 +298,7 @@ pytest tests/e2e/ --timeout=10
 ```bash
 # Clone and setup
 git clone https://github.com/terrene-foundation/kailash-py.git
-cd kailash_sdk
+cd kailash-py
 uv sync
 
 # Run tests
@@ -357,6 +326,6 @@ The Kailash SDK is the subject of patent applications owned by Terrene Foundatio
 
 <p align="center">
   <a href="https://pypi.org/project/kailash/">Install from PyPI</a> |
-  <a href="sdk-users/README.md">Documentation</a> |
+  <a href="docs/">Documentation</a> |
   <a href="https://github.com/terrene-foundation/kailash-py">GitHub</a>
 </p>

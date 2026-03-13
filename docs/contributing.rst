@@ -18,8 +18,8 @@ Getting Started
 
    .. code-block:: bash
 
-      git clone https://github.com/YOUR_USERNAME/kailash_python_sdk.git
-      cd kailash_python_sdk
+      git clone https://github.com/YOUR_USERNAME/kailash-py.git
+      cd kailash-py
 
 3. **Set Up Development Environment**
 

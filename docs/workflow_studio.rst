@@ -112,7 +112,7 @@ For local development and testing:
 
    # Clone the repository
    git clone https://github.com/terrene-foundation/kailash-py.git
-   cd kailash_python_sdk
+   cd kailash-py
 
    # Note: Workflow Studio has been moved to the enterprise-app repository.
    # See https://github.com/terrene-foundation/enterprise-app for setup instructions.
@@ -127,7 +127,7 @@ Deploy a new tenant in production:
    # Deploy tenant with custom domain
    ./studio/deploy-tenant.sh \
      --tenant-id acme \
-     --domain acme.studio.kailash.ai
+     --domain acme.studio.example.com
 
    # This creates:
    # - Isolated Docker container
@@ -253,14 +253,14 @@ REST API
 
    # Get workflow details
    response = requests.get(
-       "https://studio.kailash.ai/api/workflows/wf-123",
+       "https://studio.example.com/api/workflows/wf-123",
        headers={"Authorization": f"Bearer {token}"}
    )
    workflow = response.json()
 
    # Execute workflow
    response = requests.post(
-       "https://studio.kailash.ai/api/workflows/wf-123/execute",
+       "https://studio.example.com/api/workflows/wf-123/execute",
        json={"inputs": {"data": "value"}},
        headers={"Authorization": f"Bearer {token}"}
    )
@@ -271,7 +271,7 @@ WebSocket Updates
 
 .. code-block:: javascript
 
-   const ws = new WebSocket('wss://studio.kailash.ai/ws/executions/exec-123');
+   const ws = new WebSocket('wss://studio.example.com/ws/executions/exec-123');
 
    ws.onmessage = (event) => {
      const update = JSON.parse(event.data);
@@ -288,7 +288,7 @@ SDK Integration
 
    # Initialize client
    client = StudioClient(
-       base_url="https://studio.kailash.ai",
+       base_url="https://studio.example.com",
        api_key="your-api-key"
    )
 
@@ -327,8 +327,8 @@ References
 - **Architecture Decision**: See ADR-0033 for multi-tenant architecture details
 - **Frontend Guidelines**: ``shared/frontend/``
 - **API Documentation**: :doc:`/api/workflow_api`
-- **Node Catalog**: ``sdk-users/2-core-concepts/nodes/comprehensive-node-catalog.md``
+- **Node Catalog**: See :doc:`/api/nodes`
 
 .. note::
    For the latest updates on Workflow Studio development, check the
-   project's GitHub issues and the ``# contrib (removed)/project/todos/000-master.md`` file.
+   project's `GitHub issues <https://github.com/terrene-foundation/kailash-py/issues>`_.

@@ -196,7 +196,7 @@ Data Nodes
    - **ParquetReader/ParquetWriter**: For Apache Parquet columnar storage
    - **ExcelReader/ExcelWriter**: For Microsoft Excel files
 
-   Track implementation progress in the `GitHub issues <https://github.com/your-org/kailash-sdk/issues>`_.
+   Track implementation progress in the `GitHub issues <https://github.com/terrene-foundation/kailash-py/issues>`_.
 
 
 Data nodes handle input/output operations for various file formats and data
