@@ -154,13 +154,7 @@ suite.export_results("results.json")
    - Performance targets
    - Troubleshooting
 
-2. **[CLAUDE_COMPARISON.md](../docs/benchmarks/CLAUDE_COMPARISON.md)** (200+ lines)
-   - Feature parity matrix (Kaizen vs Claude SDK)
-   - Architecture differences
-   - Performance comparison
-   - Cost analysis
-   - Use case recommendations
-   - Migration path
+2. **BENCHMARK_GUIDE.md** — Detailed methodology and interpretation
 
 3. **[OPTIMIZATION_ROADMAP.md](../docs/benchmarks/OPTIMIZATION_ROADMAP.md)** (300+ lines)
    - Top 10 bottlenecks
@@ -374,7 +368,6 @@ A: Ollama llama3.1:8b-instruct-q8_0 has ~800ms inference latency. This is expect
 3. ✅ Review results in `results/` directory
 4. ✅ Read [BENCHMARK_GUIDE.md](../docs/benchmarks/BENCHMARK_GUIDE.md) for interpretation
 5. ✅ Check [OPTIMIZATION_ROADMAP.md](../docs/benchmarks/OPTIMIZATION_ROADMAP.md) for improvements
-6. ✅ Compare with Claude SDK via [CLAUDE_COMPARISON.md](../docs/benchmarks/CLAUDE_COMPARISON.md)
 
 ---
 
