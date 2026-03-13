@@ -16,7 +16,7 @@ from pathlib import Path
 def fix_operations_json_parsing():
     """Fix JSON parsing issue in schema_state_manager.py."""
     file_path = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/src/dataflow/migrations/schema_state_manager.py"
+        ""
     )
 
     with open(file_path, "r") as f:
@@ -46,7 +46,7 @@ def fix_operations_json_parsing():
 def fix_batched_executor_test():
     """Fix the batched executor integration test."""
     file_path = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/unit/test_batched_migration_executor_integration.py"
+        ""
     )
 
     with open(file_path, "r") as f:
@@ -100,7 +100,7 @@ def fix_batched_executor_test():
 def fix_session_cleanup_test():
     """Fix the session cleanup expired test."""
     file_path = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/unit/web/test_web_migration_api.py"
+        ""
     )
 
     with open(file_path, "r") as f:

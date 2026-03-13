@@ -560,6 +560,6 @@ To migrate other MCP examples to production MCP:
 
 ## References
 
-- **Kailash MCP Documentation**: `./repos/projects/kailash_python_sdk/packages/kailash-kaizen/docs/integrations/mcp/implementation-guide.md`
-- **BaseAgent MCP Helpers**: `./repos/projects/kailash_python_sdk/packages/kailash-kaizen/src/kaizen/core/base_agent.py` (lines 1084-1270)
+- **Kailash MCP Documentation**: `
+- **BaseAgent MCP Helpers**: `
 - **MCP Specification**: https://modelcontextprotocol.io/docs

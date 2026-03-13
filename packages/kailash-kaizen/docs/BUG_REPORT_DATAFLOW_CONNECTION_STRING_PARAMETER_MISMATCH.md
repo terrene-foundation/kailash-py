@@ -38,7 +38,7 @@ self.db = DataFlow(
 
 **Problem**: DataFlow.__init__() does NOT accept `connection_string` parameter.
 
-**DataFlow.__init__ signature** (from `./packages/kailash-dataflow/src/dataflow/core/engine.py:60`):
+**DataFlow.__init__ signature** (from `packages/kailash-dataflow/src/dataflow/core/engine.py:60`):
 
 ```python
 def __init__(
@@ -61,7 +61,7 @@ def __init__(
 
 ### Connection String Resolution in DataFlow Nodes
 
-**File**: `./packages/kailash-dataflow/src/dataflow/core/nodes.py:1162-1166`
+**File**: `packages/kailash-dataflow/src/dataflow/core/nodes.py:1162-1166`
 
 ```python
 # Get connection string - prioritize parameter over instance config
@@ -187,16 +187,16 @@ pytest tests/integration/orchestration/test_state_manager_integration.py -xvs
 ## Related Code Locations
 
 1. **OrchestrationStateManager.__init__**
-   `./repos/dev/kailash_kaizen/packages/kailash-kaizen/src/kaizen/orchestration/state_manager.py:138-209`
+   `
 
 2. **DataFlow.__init__**
-   `./packages/kailash-dataflow/src/dataflow/core/engine.py:60-95`
+   `packages/kailash-dataflow/src/dataflow/core/engine.py:60-95`
 
 3. **DataFlow node connection resolution**
-   `./packages/kailash-dataflow/src/dataflow/core/nodes.py:1162-1166`
+   `packages/kailash-dataflow/src/dataflow/core/nodes.py:1162-1166`
 
 4. **Integration test fixture**
-   `./repos/dev/kailash_kaizen/packages/kailash-kaizen/tests/integration/orchestration/conftest.py:17-31`
+   `
 
 ---
 

@@ -227,7 +227,7 @@ if __name__ == "__main__":
     print("=" * 50)
 
     # Ensure we're in the right directory
-    kaizen_dir = "./repos/projects/kailash_python_sdk/packages/kailash-kaizen"
+    kaizen_dir = ""
     if os.path.exists(kaizen_dir):
         os.chdir(kaizen_dir)
         sys.path.insert(0, os.path.join(kaizen_dir, "src"))

@@ -45,7 +45,7 @@ def setup_full_infrastructure():
             ["./tests/utils/test-env", "status"],
             capture_output=True,
             text=True,
-            cwd="./repos/projects/kailash_python_sdk",
+            cwd="",
         )
         if result.returncode != 0:
             pytest.skip("Complete Docker infrastructure not available")

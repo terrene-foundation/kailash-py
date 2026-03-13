@@ -246,7 +246,7 @@ class TestMain:
             capture_output=True,
             text=True,
             timeout=30,
-            cwd="./packages/eatp",
+            cwd="packages/eatp",
         )
         assert result.returncode == 0, (
             f"Module execution failed with returncode {result.returncode}.\n"

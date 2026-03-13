@@ -161,7 +161,7 @@ Tests danger-level escalation and budget enforcement with mixed LLMs.
 
 3. **Environment Setup**:
    ```bash
-   cd ./repos/dev/kailash_kaizen/packages/kailash-kaizen
+   cd 
    pip install -e .
    pip install pytest pytest-asyncio
    ```

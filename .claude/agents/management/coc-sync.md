@@ -121,7 +121,7 @@ packages/kailash-nexus/src/
 tests/utils/test-env
 
 # Absolute paths (break on any other machine)
-./
+
 ```
 
 **Internal class names to REMOVE** (references, not import statements):
@@ -215,7 +215,7 @@ echo "=== Builder Contamination Check ==="
 echo -n "src/kailash/ refs: "; grep -rl "src/kailash/" .claude/ 2>/dev/null | wc -l
 echo -n "apps/kailash-* refs: "; grep -rl "apps/kailash-" .claude/ 2>/dev/null | wc -l
 echo -n "# contrib (removed)/ refs: "; grep -rl "# contrib (removed)/" .claude/ 2>/dev/null | wc -l
-echo -n "Absolute paths: "; grep -rl "./repos/dev/" .claude/ 2>/dev/null | wc -l
+echo -n "Absolute paths: "; grep -rl "" .claude/ 2>/dev/null | wc -l
 echo -n "Sync infra leaked: "; ls .claude/skills/management/ .claude/agents/management/coc-sync.md 2>/dev/null | wc -l
 echo -n "learned-instincts: "; diff -q .claude/rules/learned-instincts.md ../kailash_python_sdk/.claude/rules/learned-instincts.md 2>/dev/null && echo "LEAKED (identical to BUILD)" || echo "OK (per-repo)"
 ```

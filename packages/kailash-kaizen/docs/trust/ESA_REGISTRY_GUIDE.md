@@ -410,7 +410,7 @@ ESARegistry(
 
 ## Examples
 
-See `./repos/dev/kailash_kaizen/packages/kailash-kaizen/examples/trust/esa_registry_example.py` for complete working examples demonstrating:
+See ` for complete working examples demonstrating:
 1. Basic registration and retrieval
 2. Multiple ESAs with type-based filtering
 3. Health monitoring

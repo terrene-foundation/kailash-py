@@ -738,7 +738,7 @@ class TestIntegrationTestPassRateValidation:
             ],
             capture_output=True,
             text=True,
-            cwd="./repos/projects/kailash_python_sdk/packages/kailash-kaizen",
+            cwd="",
         )
 
         # Parse results

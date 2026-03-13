@@ -8,7 +8,7 @@ set -e
 
 # Repository configuration
 REPO="terrene-foundation/kailash-py"
-REPO_PATH="./repos/projects/kailash_python_sdk"
+REPO_PATH=""
 
 # Color codes
 GREEN='\033[0;32m'

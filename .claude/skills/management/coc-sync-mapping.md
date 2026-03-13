@@ -101,7 +101,7 @@ Files with hardcoded absolute paths that must become relative.
 
 | File/Directory | Pattern                                        | Replace With      |
 | -------------- | ---------------------------------------------- | ----------------- |
-| Any file       | `./` | (remove entirely) |
+| Any file       | `` | (remove entirely) |
 
 ### Category 4: Rule Softening
 
@@ -153,7 +153,7 @@ packages/kailash-kaizen/src/                  # Internal Kaizen source
 packages/kailash-nexus/src/                   # Internal Nexus source
 # contrib (removed)/                         # Builder-only docs
 tests/utils/test-env                      # Internal test infrastructure
-./  # Absolute paths
+  # Absolute paths
 ```
 
 ### Always Remove (Internal Class Names)
@@ -185,7 +185,7 @@ As of 2026-03-07 audit, all builder contamination has been cleaned:
 
 | Pattern                                    | Before | After | Fix Applied                            |
 | ------------------------------------------ | ------ | ----- | -------------------------------------- |
-| Absolute paths `./repos/...`  | 44     | 0     | Stripped or converted to relative      |
+| Absolute paths `  | 44     | 0     | Stripped or converted to relative      |
 | `apps/kailash-*/` internal app paths       | 96     | 0     | Stripped `apps/` prefix or genericized |
 | `src/kailash/` internal source paths       | 24     | 0     | Converted to `kailash/` package path   |
 | `# contrib (removed)/` references             | 5      | 0     | Replaced with prose references         |

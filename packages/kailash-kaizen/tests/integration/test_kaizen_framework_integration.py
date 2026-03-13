@@ -216,7 +216,7 @@ def setup_test_environment():
     import subprocess
 
     # Change to tests/utils directory
-    utils_dir = "./repos/projects/kailash_python_sdk/tests/utils"
+    utils_dir = ""
 
     if os.path.exists(utils_dir):
         os.chdir(utils_dir)

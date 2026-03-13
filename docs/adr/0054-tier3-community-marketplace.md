@@ -565,6 +565,6 @@ The Community Marketplace transforms Kailash Studio from an isolated workflow to
 
 The hybrid moderation model balances quality control with scalability, while the reputation system incentivizes high-quality contributions. Multi-tier licensing support prepares for future monetization while respecting creator rights.
 
-This feature is the highest-value Tier 3 addition ($24K business value, 12h effort) and creates a sustainable competitive advantage through community-driven content. The marketplace becomes a moat—the more workflows published, the more valuable the platform becomes, creating a virtuous cycle of growth.
+This feature enables community-driven content sharing. The more workflows published, the more valuable the platform becomes, creating a virtuous cycle of growth.
 
 With 12 hours of development effort, we deliver a complete marketplace experience that positions Kailash Studio as a community-first platform for workflow automation.

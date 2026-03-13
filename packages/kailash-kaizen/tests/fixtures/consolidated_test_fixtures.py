@@ -37,7 +37,7 @@ except ImportError:
 try:
     import sys
 
-    sys.path.append("./repos/projects/kailash_python_sdk/tests/utils")
+    sys.path.append("")
     from docker_config import (
         DATABASE_CONFIG,
         MYSQL_CONFIG,

@@ -307,7 +307,7 @@ async def get_prompt(name: str, args: Dict) -> Dict[str, Any]:
 **Verification**:
 ```bash
 # Check official SDK usage
-grep -r "from mcp import" ./repos/projects/kailash_python_sdk/src/kailash/mcp_server/
+grep -r "from mcp import" 
 
 # Output:
 # client.py:from mcp import ClientSession, StdioServerParameters

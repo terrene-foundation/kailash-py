@@ -74,17 +74,17 @@ asyncpg.conn.fetch(query, *params)
 ### Key Code Locations
 
 1. **DataFlow CreateNode** - Passes list parameters
-   - File: `./repos/projects/kailash_dataflow_fixes/packages/kailash-dataflow/src/dataflow/core/nodes.py`
+   - File: `
    - Line: 842 - `params=values` (passes list to AsyncSQLDatabaseNode)
 
 2. **Parameter Conversion** - Converts list to named dict
-   - File: `./repos/projects/kailash_dataflow_fixes/src/kailash/nodes/data/async_sql.py`
+   - File: `
    - Line: 3447-3449 - Detects list and calls `_convert_to_named_parameters()`
    - Line: 4397-4436 - `_convert_to_named_parameters()` implementation
    - Line: 4400 - **Stores values AS-IS**: `param_dict[f"p{i}"] = value`
 
 3. **JSON Serialization** - PostgreSQL adapter serializes dicts
-   - File: `./repos/projects/kailash_dataflow_fixes/src/kailash/nodes/data/async_sql.py`
+   - File: `
    - Line: 1041 - Checks `if isinstance(params, dict)`
    - Line: 1056-1061 - **JSON serialization**: `value = json.dumps(value)`
    - Line: 1068 - Appends JSON string to query_params
@@ -99,7 +99,7 @@ asyncpg.conn.fetch(query, *params)
 
 ### Test: `test_direct_asyncpg_bypass`
 
-**Location**: `./repos/projects/kailash_dataflow_fixes/packages/kailash-dataflow/tests/integration/test_jsonb_bug_reproduction.py:293`
+**Location**: `
 
 **Test Strategy**:
 - Direct AsyncSQLDatabaseNode usage (bypassing DataFlow models)
@@ -230,7 +230,7 @@ Since our investigation confirms the serialization works correctly, the producti
 ## Test Coverage
 
 ### Reproduction Test File
-**Location**: `./repos/projects/kailash_dataflow_fixes/packages/kailash-dataflow/tests/integration/test_jsonb_bug_reproduction.py`
+**Location**: `
 
 **Tests Included**:
 1. ✅ Simple dict in JSONB field

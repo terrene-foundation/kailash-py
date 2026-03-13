@@ -31,7 +31,7 @@ The original audit report (item #17) recommended adding error handling for shutd
 
 ### Code Changes
 
-**File**: `./repos/dev/kailash_nexus/packages/kailash-nexus/src/nexus/core.py`
+**File**: `
 
 **Before** (lines 1016-1020):
 ```python
@@ -53,7 +53,7 @@ if self._gateway:
 
 ### Test Updates
 
-**File**: `./repos/dev/kailash_nexus/packages/kailash-nexus/tests/unit/test_core_comprehensive.py`
+**File**: `
 
 Updated `test_stop_method()` to reflect the new behavior:
 - Removed assertion that `.stop()` is called on the gateway

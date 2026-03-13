@@ -986,9 +986,9 @@ packages/kailash-dataflow/docs/testing/
 ## References
 
 ### Internal Documents
-- `./src/kailash/nodes/data/async_sql.py` (lines 519-526: test mode detection)
-- `./packages/kailash-dataflow/src/dataflow/testing/dataflow_test_utils.py`
-- `./packages/kailash-dataflow/adr/ADR-001-dataflow-migration-system-redesign.md`
+- `src/kailash/nodes/data/async_sql.py` (lines 519-526: test mode detection)
+- `packages/kailash-dataflow/src/dataflow/testing/dataflow_test_utils.py`
+- `packages/kailash-dataflow/adr/ADR-001-dataflow-migration-system-redesign.md`
 
 ### External References
 - [pytest fixtures documentation](https://docs.pytest.org/en/stable/fixture.html)

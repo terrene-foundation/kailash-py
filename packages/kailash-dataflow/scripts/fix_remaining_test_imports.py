@@ -13,7 +13,7 @@ from pathlib import Path
 def fix_batched_executor_integration_test():
     """Fix import syntax error in batched_migration_executor_integration test."""
     filepath = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/integration/test_batched_migration_executor_integration.py"
+        ""
     )
 
     if filepath.exists():
@@ -46,7 +46,7 @@ from tests.utils.real_infrastructure import real_infra"""
 def add_missing_methods_to_real_infrastructure():
     """Add missing methods to real_infrastructure module."""
     filepath = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/utils/real_infrastructure.py"
+        ""
     )
 
     if filepath.exists():
@@ -92,7 +92,7 @@ def add_missing_methods_to_real_infrastructure():
 def fix_all_integration_tests():
     """Fix common import issues in all integration tests."""
     integration_dir = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/integration"
+        ""
     )
 
     problem_files = [
@@ -137,7 +137,7 @@ def fix_all_integration_tests():
 def fix_monitoring_tests():
     """Fix monitoring test imports."""
     monitoring_dir = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/integration/monitoring"
+        ""
     )
 
     if monitoring_dir.exists():
@@ -171,7 +171,7 @@ def fix_monitoring_tests():
 def fix_dataflow_integration_tests():
     """Fix dataflow subdirectory integration tests."""
     dataflow_dir = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/integration/dataflow"
+        ""
     )
 
     if dataflow_dir.exists():

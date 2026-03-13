@@ -142,7 +142,7 @@ def fix_undefined_variables(file_path):
 def main():
     """Main function to fix all unit test issues."""
     test_dir = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/unit"
+        ""
     )
 
     if not test_dir.exists():
@@ -166,7 +166,7 @@ def main():
 
     # Run unit tests to verify fixes
     print("\nRunning unit tests to verify fixes...")
-    os.chdir("./repos/projects/kailash_python_sdk/packages/kailash-dataflow")
+    os.chdir("")
     result = os.system("python -m pytest tests/unit/ -x --tb=short --quiet")
 
     if result == 0:

@@ -17,7 +17,7 @@ from pathlib import Path
 def add_test_database_config_to_conftest():
     """Add TEST_DATABASE_CONFIG to conftest.py."""
     conftest_path = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/conftest.py"
+        ""
     )
 
     with open(conftest_path, "r") as f:
@@ -75,7 +75,7 @@ TEST_DATABASE_CONFIG = {
 def create_real_infrastructure_module():
     """Create the missing real_infrastructure test utility module."""
     utils_dir = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/utils"
+        ""
     )
     utils_dir.mkdir(exist_ok=True)
 
@@ -227,7 +227,7 @@ def postgres_url(postgres_container):
 def fix_field_import_in_schema():
     """Add Field class to dataflow.core.schema if missing."""
     schema_path = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/src/dataflow/core/schema.py"
+        ""
     )
 
     if not schema_path.exists():
@@ -346,7 +346,7 @@ class Field:
 def fix_cli_test_imports():
     """Fix imports in CLI test file."""
     cli_test_path = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/integration/test_cli.py"
+        ""
     )
 
     if cli_test_path.exists():
@@ -377,7 +377,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../src"))
 def fix_e2e_test_skips():
     """Add skip markers to problematic E2E tests."""
     e2e_dir = Path(
-        "./repos/projects/kailash_python_sdk/packages/kailash-dataflow/tests/e2e"
+        ""
     )
 
     # Files that need skip markers

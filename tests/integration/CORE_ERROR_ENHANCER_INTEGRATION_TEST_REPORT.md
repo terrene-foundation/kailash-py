@@ -401,7 +401,7 @@ assert enhanced.context["actual_type"] == "str"
 ## Test File Location
 
 ```
-File: ./repos/dev/kailash_dataflow/tests/integration/test_core_error_enhancer_integration.py
+File: 
 Lines: 817 (comprehensive test coverage)
 Classes: 3 (TestCoreErrorEnhancerIntegration, TestErrorSiteIntegration, TestErrorEnhancementPerformance)
 Test Methods: 27

@@ -1,5 +1,5 @@
 ERROR:kaizen.core.base_agent:Error during execution: This event loop is already running
-./repos/dev/kailash_kaizen/packages/kailash-kaizen/src/kaizen/core/base_agent.py:569: RuntimeWarning: coroutine 'AsyncSingleShotStrategy.execute' was never awaited
+ RuntimeWarning: coroutine 'AsyncSingleShotStrategy.execute' was never awaited
   return self._handle_error(error, {"inputs": inputs})
 RuntimeWarning: Enable tracemalloc to get the object allocation traceback
 ERROR:kaizen.core.base_agent:Error during execution: This event loop is already running
@@ -52,7 +52,7 @@ ERROR:kaizen.core.base_agent:Error during execution: This event loop is already 
 ERROR:kaizen.core.base_agent:Error during execution: This event loop is already running
 ERROR:kaizen.core.base_agent:Error during execution: This event loop is already running
 ERROR:kaizen.core.base_agent:Error during execution: This event loop is already running
-./repos/dev/kailash_kaizen/packages/kailash-kaizen/src/kaizen/core/base_agent.py:569: RuntimeWarning: coroutine 'AsyncSingleShotStrategy.execute' was never awaited
+ RuntimeWarning: coroutine 'AsyncSingleShotStrategy.execute' was never awaited
   return self._handle_error(error, {"inputs": inputs})
 RuntimeWarning: Enable tracemalloc to get the object allocation traceback
 ERROR:kaizen.core.base_agent:Error during execution: This event loop is already running
@@ -351,4 +351,4 @@ Sample Size:                50 requests per test
 
 ❌ FAIL: Overhead 11.94% > 10.0% target
 
-Results saved to: ./repos/dev/kailash_kaizen/packages/kailash-kaizen/benchmarks/PRODUCTION_OVERHEAD_RESULTS.md
+Results saved to: 

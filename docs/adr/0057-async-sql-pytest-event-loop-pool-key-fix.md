@@ -12,7 +12,7 @@ AsyncSQLDatabaseNode fails in pytest-asyncio environments due to stale connectio
 - Root cause: `_generate_pool_key()` includes event loop IDs, but pytest-asyncio creates new event loops for each test
 
 ### Current Implementation
-**Location**: `./src/kailash/nodes/data/async_sql.py:3256-3280`
+**Location**: `src/kailash/nodes/data/async_sql.py:3256-3280`
 
 ```python
 def _generate_pool_key(self) -> str:
@@ -304,13 +304,13 @@ def _is_test_environment(self) -> bool:
 
 #### Tasks:
 1. **Implement `_is_test_environment()` method**
-   - Location: `./src/kailash/nodes/data/async_sql.py`
+   - Location: `src/kailash/nodes/data/async_sql.py`
    - Line: Insert after `_generate_pool_key()` (line ~3281)
    - Detection logic: pytest → unittest → env vars
    - Return: bool (True if test environment)
 
 2. **Modify `_generate_pool_key()` method**
-   - Location: `./src/kailash/nodes/data/async_sql.py:3256-3280`
+   - Location: `src/kailash/nodes/data/async_sql.py:3256-3280`
    - Change: Call `_is_test_environment()` to determine loop_id
    - Test mode: `loop_id = "test"`
    - Production mode: `loop_id = str(id(loop))` (existing behavior)
@@ -322,7 +322,7 @@ def _is_test_environment(self) -> bool:
    - Format: `"Production environment: using event-loop-isolated pool keys"`
 
 4. **Update class docstring**
-   - Location: `./src/kailash/nodes/data/async_sql.py:2292-2366`
+   - Location: `src/kailash/nodes/data/async_sql.py:2292-2366`
    - Add section: "Testing Behavior"
    - Explain: Automatic pytest-asyncio detection
    - Document: Environment variable override
@@ -338,7 +338,7 @@ def _is_test_environment(self) -> bool:
 ### Phase 2: Unit Tests (Day 1)
 **Goal**: Test detection logic and pool key generation in isolation
 
-#### Test File: `./tests/unit/nodes/test_async_sql_pytest_pool_key_unit.py`
+#### Test File: `tests/unit/nodes/test_async_sql_pytest_pool_key_unit.py`
 
 #### Test Cases:
 1. **Test detection with pytest module present**
@@ -390,7 +390,7 @@ def _is_test_environment(self) -> bool:
 ### Phase 3: Integration Tests (Day 2)
 **Goal**: Test actual pool reuse in pytest-asyncio environment
 
-#### Test File: `./tests/integration/nodes/test_async_sql_pytest_pool_reuse_integration.py`
+#### Test File: `tests/integration/nodes/test_async_sql_pytest_pool_reuse_integration.py`
 
 #### Test Cases:
 1. **Test sequential workflows reuse pools (PostgreSQL)**
@@ -451,7 +451,7 @@ def _is_test_environment(self) -> bool:
 ### Phase 4: E2E Tests (Day 2)
 **Goal**: Validate production behavior and backward compatibility
 
-#### Test File: `./tests/e2e/test_async_sql_production_pool_isolation_e2e.py`
+#### Test File: `tests/e2e/test_async_sql_production_pool_isolation_e2e.py`
 
 #### Test Cases:
 1. **Test production mode in Docker/FastAPI deployment**
@@ -514,13 +514,13 @@ def _is_test_environment(self) -> bool:
 
 #### Documentation Updates:
 1. **Update AsyncSQLDatabaseNode docstring**
-   - File: `./src/kailash/nodes/data/async_sql.py:2292-2366`
+   - File: `src/kailash/nodes/data/async_sql.py:2292-2366`
    - Add: "Testing Behavior" section
    - Explain: Automatic pytest detection and pool reuse
    - Document: Environment variable overrides
 
 2. **Create testing best practices guide**
-   - File: `./docs/testing/async-sql-testing-guide.md`
+   - File: `docs/testing/async-sql-testing-guide.md`
    - Sections: Pytest patterns, cleanup fixtures, pool monitoring
    - Examples: Sequential tests, concurrent tests, cleanup
 
@@ -530,12 +530,12 @@ def _is_test_environment(self) -> bool:
    - Add: Metrics from production validation
 
 4. **Update CHANGELOG**
-   - File: `./CHANGELOG.md`
+   - File: `CHANGELOG.md`
    - Section: `## [Unreleased]`
    - Entry: `### Fixed - AsyncSQLDatabaseNode: Fixed pytest-asyncio event loop pool key incompatibility (#<PR_NUMBER>)`
 
 5. **Create troubleshooting guide**
-   - File: `./docs/troubleshooting/async-sql-pool-issues.md`
+   - File: `docs/troubleshooting/async-sql-pool-issues.md`
    - Sections: Common errors, detection issues, environment variables
    - Examples: 404 errors, pool exhaustion, cleanup patterns
 
@@ -664,26 +664,26 @@ def _is_test_environment(self) -> bool:
 ## Implementation Notes
 
 ### Files Modified
-1. **`./src/kailash/nodes/data/async_sql.py`**
+1. **`src/kailash/nodes/data/async_sql.py`**
    - Add `_is_test_environment()` method (~30 lines)
    - Modify `_generate_pool_key()` method (~5 line change)
    - Update class docstring (~20 lines)
    - Total: ~55 lines of code changes
 
 ### Files Created
-1. **`./tests/unit/nodes/test_async_sql_pytest_pool_key_unit.py`**
+1. **`tests/unit/nodes/test_async_sql_pytest_pool_key_unit.py`**
    - New file: Unit tests for detection logic (~200 lines)
 
-2. **`./tests/integration/nodes/test_async_sql_pytest_pool_reuse_integration.py`**
+2. **`tests/integration/nodes/test_async_sql_pytest_pool_reuse_integration.py`**
    - New file: Integration tests with real databases (~300 lines)
 
-3. **`./tests/e2e/test_async_sql_production_pool_isolation_e2e.py`**
+3. **`tests/e2e/test_async_sql_production_pool_isolation_e2e.py`**
    - New file: E2E tests for production validation (~400 lines)
 
-4. **`./docs/testing/async-sql-testing-guide.md`**
+4. **`docs/testing/async-sql-testing-guide.md`**
    - New file: Testing best practices guide (~100 lines)
 
-5. **`./docs/troubleshooting/async-sql-pool-issues.md`**
+5. **`docs/troubleshooting/async-sql-pool-issues.md`**
    - New file: Troubleshooting guide (~100 lines)
 
 ### Total Code Impact
