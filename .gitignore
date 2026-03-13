@@ -59,6 +59,29 @@ default.db
 # Kaizen checkpoints (local agent state)
 .kaizen/
 
+# Claude Code session data (keep agents/skills/rules, ignore session artifacts)
+.claude/learning/
+.claude/settings.local.json
+**/.claude/learning/
+
+# Coverage artifacts
+.coverage
+**/.coverage
+
+# Hypothesis test cache
+.hypothesis/
+**/.hypothesis/
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
+# Benchmarks
+.benchmarks/
+
+# Mypy / Ruff caches
+.mypy_cache/
+.ruff_cache/
+
 # Housekeeping
 .temp_cleanup/
 
@@ -102,9 +125,13 @@ examples/output/
 .env.development.local
 .env.test.local
 .env.production.local
-.claude/settings.local.json
+.env.test
 docs/build_output.txt
 output.txt
 
-# Prevent root-level data files (already covered above)
+# Build/release artifacts
 test-release/
+dist/
+
+# Secrets baseline (local security scanning)
+.secrets.baseline
