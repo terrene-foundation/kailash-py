@@ -34,8 +34,6 @@ This directory contains comprehensive documentation for the Model Context Protoc
 - [Monitoring](monitoring.md) - Observability and metrics
 
 ### For Migration
-- [MCP Migration Guide](/sdk-users/6-reference/migration-guides/specialized/mcp-comprehensive-migration.md) - Comprehensive MCP migration
-- [All Migration Guides](/sdk-users/6-reference/migration-guides/) - Version, architectural, and specialized migrations
 - [Examples](examples.md#migration-examples) - Migration patterns
 
 ## Documentation Overview
@@ -75,10 +73,8 @@ The MCP documentation will be available under the "MCP" section.
 
 ## Related Resources
 
-- [MCP Patterns Guide](/sdk-users/5-enterprise/patterns/12-mcp-patterns.md)
-- [MCP Development Guide](/sdk-users/3-development/22-mcp-development-guide.md)
-- [MCP Cheatsheet](/sdk-users/2-core-concepts/cheatsheet/025-mcp-integration.md)
-- [Example MCP Application](/apps/mcp_tools_server/)
+- [MCP Documentation](index.rst) - Full MCP documentation
+- [Architecture Guide](architecture.md) - MCP architecture and design
 
 ## Test Coverage
 

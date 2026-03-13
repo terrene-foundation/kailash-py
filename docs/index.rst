@@ -7,7 +7,7 @@ Kailash SDK Documentation
    :target: https://www.python.org/downloads/
    :alt: Python Version
 
-.. image:: https://img.shields.io/badge/version-0.12.0-green.svg
+.. image:: https://img.shields.io/badge/version-0.12.5-green.svg
    :alt: SDK Version
 
 .. image:: https://img.shields.io/badge/trust-CARE%20%2F%20EATP-blueviolet.svg
@@ -20,7 +20,7 @@ workflows with cryptographic trust chains, multi-channel deployment, and zero-co
 database operations. From a single workflow to orchestrated multi-agent systems, Kailash
 provides the foundation for verifiable, auditable AI applications.
 
-**Current Release: v0.12.0** (Core SDK) | DataFlow v0.12.1 | Nexus v1.4.1 | Kaizen v1.2.1
+**Current Release: v0.12.5** (Core SDK) | DataFlow v0.12.4 | Nexus v1.4.2 | Kaizen v1.2.5
 
 Quick Links
 -----------
@@ -34,9 +34,9 @@ Quick Links
    :doc:`CARE trust chains <core/trust>`.
 
 **Frameworks**
-   - **Kaizen** (v1.2.1): :doc:`AI agents <frameworks/kaizen>` with signatures, multi-agent coordination, and CARE trust
-   - **Nexus** (v1.4.1): :doc:`Multi-channel platform <frameworks/nexus>` -- API + CLI + MCP from one codebase
-   - **DataFlow** (v0.12.1): :doc:`Zero-config database <frameworks/dataflow>` with 11 auto-generated nodes per model
+   - **Kaizen** (v1.2.5): :doc:`AI agents <frameworks/kaizen>` with signatures, multi-agent coordination, and CARE trust
+   - **Nexus** (v1.4.2): :doc:`Multi-channel platform <frameworks/nexus>` -- API + CLI + MCP from one codebase
+   - **DataFlow** (v0.12.4): :doc:`Zero-config database <frameworks/dataflow>` with 11 auto-generated nodes per model
 
 **Enterprise**
    :doc:`Security <enterprise/security>`, :doc:`compliance <enterprise/compliance>`,

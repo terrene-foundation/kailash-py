@@ -56,7 +56,7 @@ For development or to get the latest features:
 .. code-block:: bash
 
    git clone https://github.com/terrene-foundation/kailash-py.git
-   cd kailash_python_sdk
+   cd kailash-py
    uv sync
 
 .. note::
@@ -189,7 +189,7 @@ For contributing to the SDK:
 
    # Clone the repository
    git clone https://github.com/terrene-foundation/kailash-py.git
-   cd kailash_python_sdk
+   cd kailash-py
 
    # Install with uv
    uv sync
