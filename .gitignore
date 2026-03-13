@@ -59,6 +59,10 @@ default.db
 # Kaizen checkpoints (local agent state)
 .kaizen/
 
+# Internal task tracking
+todos/
+**/todos/
+
 # Claude Code session data (keep agents/skills/rules, ignore session artifacts)
 .claude/learning/
 .claude/settings.local.json
