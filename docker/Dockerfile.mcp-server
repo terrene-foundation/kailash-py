@@ -18,7 +18,8 @@ RUN pip install --no-cache-dir -e . && \
 
 # Copy source code and required files
 COPY src/ ./src/
-COPY # contrib (removed)/research/combined_ai_registry.json ./research/
+# Copy research data if available
+# COPY research/combined_ai_registry.json ./research/
 
 # Create health check script
 RUN echo '#!/usr/bin/env python3\n\

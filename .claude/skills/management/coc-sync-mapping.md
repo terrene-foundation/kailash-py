@@ -11,7 +11,7 @@ This BUILD repo (`kailash_python_sdk`) has ONE set of agents, skills, rules, and
 
 ## Architecture Rules
 
-1. **This is the pure Python SDK BUILD repo** — independent from the Rust SDK BUILD repo (`~/repos/dev/kailash/`). Each has its own coc-sync that manages its own COC template.
+1. **This is the pure Python SDK BUILD repo** — independent from the Rust SDK BUILD repo (`kailash-rs/`). Each has its own coc-sync that manages its own COC template.
 2. **NEVER delete COC-only files** — The COC template may have files not in this BUILD repo. These are legitimate template content.
 3. **NEVER rsync --delete** — Sync is additive and update-only. Files in COC but not in BUILD are COC-only content, not stale.
 4. **Fix in place** — COC-only files with content errors should be fixed using Edit, not deleted and recreated.

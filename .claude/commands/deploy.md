@@ -177,12 +177,12 @@ For each: upload wheels, verify production install in clean venv, create GitHub 
 
 1. **Update COC template repo** (MANDATORY)
 
-   The USE repo (`~/repos/kailash/kailash-coc-claude-py`) is the COC template users clone for new projects. Its dependency pins MUST be updated to match the just-published versions, otherwise new projects start with stale SDK versions.
+   The USE repo (`kailash-coc-claude-py`) is the COC template users clone for new projects. Its dependency pins MUST be updated to match the just-published versions, otherwise new projects start with stale SDK versions.
 
    Update `pyproject.toml` in the USE repo:
 
    ```
-   ~/repos/kailash/kailash-coc-claude-py/pyproject.toml
+   kailash-coc-claude-py/pyproject.toml
    ```
 
    Dependency pins to update:
@@ -236,7 +236,7 @@ Quick reference for all version locations in this monorepo:
 - ALWAYS verify the published package installs correctly in a clean venv
 - ALWAYS publish in dependency order: core SDK first, then frameworks
 - ALWAYS document releases in `deploy/deployments/`
-- ALWAYS update the COC template repo (`~/repos/kailash/kailash-coc-claude-py/pyproject.toml`) dependency pins after publishing
+- ALWAYS update the COC template repo (`kailash-coc-claude-py/pyproject.toml`) dependency pins after publishing
 - Research current tool syntax — do not assume stale knowledge is correct
 
 **Automated enforcement**: `validate-deployment.js` hook automatically blocks commits containing credentials (AWS keys, Azure secrets, GCP service account JSON, private keys, GitHub/PyPI/Docker tokens) in deployment files.

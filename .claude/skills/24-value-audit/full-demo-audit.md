@@ -32,7 +32,7 @@ For each page in the demo flow, verify:
 5. No JavaScript errors in console
 
 Demo flow pages (in order):
-- /login → /enterprise-app (home)
+- /login → /dashboard (home)
 - /organization-builder
 - /shadow-agents → click View Details on an agent
 - /trust → click "Establish Trust" → verify navigation → back → click "View Audit Trail" → verify navigation

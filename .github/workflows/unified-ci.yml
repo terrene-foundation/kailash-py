@@ -338,7 +338,7 @@ jobs:
       needs.check-duplicate.outputs.should-skip != 'true' &&
       needs.determine-context.result == 'success' &&
       (needs.setup-docker-infrastructure.result == 'success' || needs.setup-docker-infrastructure.result == 'skipped') &&
-      (contains(needs.determine-context.outputs.runner-label, 'self-hosted') || contains(needs.determine-context.outputs.runner-label, 'self-hosted'))
+      contains(needs.determine-context.outputs.runner-label, 'self-hosted')
     runs-on: ${{ needs.determine-context.outputs.runner-label }}
     steps:
       - uses: actions/checkout@v4

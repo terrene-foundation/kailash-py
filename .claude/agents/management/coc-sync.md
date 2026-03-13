@@ -15,13 +15,12 @@ There are TWO independent Kailash SDK implementations with separate BUILD repos 
 
 | SDK              | BUILD Repo                        | COC Template            | Install                          |
 | ---------------- | --------------------------------- | ----------------------- | -------------------------------- |
-| **Python SDK**   | `~/repos/dev/kailash_python_sdk/` | `kailash-coc-claude-py` | `pip install kailash`            |
-| **Rust binding** | `~/repos/dev/kailash/`            | `kailash-coc-claude-rs` | `pip install terrene-foundation` |
+| **Python SDK**   | This repo                         | `kailash-coc-claude-py` | `pip install kailash`            |
 
 **Critical distinctions**:
 
 - This BUILD repo manages the **pure Python SDK** — an independent implementation with its own codebase, class hierarchy, and API patterns (`LocalRuntime`, `AsyncLocalRuntime`, `from kailash.x.y import Z`, separate framework packages).
-- The Rust BUILD repo (`~/repos/dev/kailash/`) is a **completely separate implementation** — it has its own coc-sync that manages `kailash-coc-claude-rs`. Neither repo is derived from the other.
+- Other SDK implementations are separate repos with their own COC templates.
 - **Feature parity, not code parity** — Both SDKs aim to offer comparable features (workflows, DataFlow, Nexus, Kaizen) but through completely different implementations.
 - This agent ONLY syncs to `kailash-coc-claude-py`. It NEVER touches `kailash-coc-claude-rs`.
 
@@ -48,12 +47,12 @@ Before modifying any COC file, verify the correction against the actual Python S
 
 | Template   | Path                                     | Users install                                                                |
 | ---------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
-| **py COC** | `~/repos/kailash/kailash-coc-claude-py/` | `pip install kailash`, `kailash-dataflow`, `kailash-nexus`, `kailash-kaizen` |
+| **py COC** | `kailash-coc-claude-py/` | `pip install kailash`, `kailash-dataflow`, `kailash-nexus`, `kailash-kaizen` |
 
 ## Step 1: Verify COC Repo Exists
 
 ```bash
-ls ~/repos/kailash/kailash-coc-claude-py/.claude/ 2>/dev/null && echo "py COC: FOUND" || echo "py COC: NOT FOUND — ABORTING"
+ls kailash-coc-claude-py/.claude/ 2>/dev/null && echo "py COC: FOUND" || echo "py COC: NOT FOUND — ABORTING"
 ```
 
 If not found, report and abort. Do not create it.
@@ -73,7 +72,7 @@ cd .claude && find . -type f -name "*.md" -print0 | sort -z | while IFS= read -r
     case "$f" in
         ./skills/management/*|./agents/management/coc-sync.md|./rules/learned-instincts.md|./learning/*) continue ;;
     esac
-    target=~/repos/kailash/kailash-coc-claude-py/.claude/"$f"
+    target=kailash-coc-claude-py/.claude/"$f"
     if [ -f "$target" ]; then
         if ! diff -q "$f" "$target" >/dev/null 2>&1; then
             echo "CHANGED: $f"
@@ -210,7 +209,7 @@ If the API doesn't exist in source, it's fabricated — remove the reference ent
 After sync, run contamination check:
 
 ```bash
-cd ~/repos/kailash/kailash-coc-claude-py
+cd kailash-coc-claude-py
 echo "=== Builder Contamination Check ==="
 echo -n "src/kailash/ refs: "; grep -rl "src/kailash/" .claude/ 2>/dev/null | wc -l
 echo -n "apps/kailash-* refs: "; grep -rl "apps/kailash-" .claude/ 2>/dev/null | wc -l
@@ -227,7 +226,7 @@ All contamination counts should be **0**.
 ```
 ## COC Sync Report
 
-### Template: ~/repos/kailash/kailash-coc-claude-py/
+### Template: kailash-coc-claude-py/
 - SYNCED: agents/frameworks/dataflow-specialist.md (transformed: stripped internal refs)
 - SYNCED: rules/agents.md (transformed: mandatory → recommended)
 - SYNCED: agents/frontend/react-specialist.md (as-is)
