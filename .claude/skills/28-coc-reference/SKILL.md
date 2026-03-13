@@ -11,21 +11,9 @@ allowed-tools:
 
 This skill provides the reference for the COC (Cognitive Orchestration for Codegen) framework - the five-layer architecture for disciplined AI-assisted development.
 
-## Authoritative Sources
+## Knowledge Sources
 
-### PRIMARY: White Paper
-
-- `docs/02-standards/publications/COC-Core-Thesis.md` - Definitive thesis by Dr. Jack Hong
-
-### PRIMARY: Anchor Documents
-
-- `docs/00-anchor/00-first-principles.md` - Core mission and principles
-- `docs/00-anchor/01-core-entities.md` - What Foundation provides (including Kailash)
-
-### SECONDARY: Technical Documentation
-
-- `docs/03-technology/kailash/04-vibe-coding.md` - Vibe coding methodology
-- `docs/presentations/sg-claude-code-community-vibe-coding-session.md` - Vibe coding presentation
+This skill is self-contained — all essential COC knowledge is distilled below from the COC Core Thesis by Dr. Jack Hong. If Foundation source docs exist in this repo, read them for additional depth.
 
 ## What is COC?
 
@@ -162,10 +150,4 @@ The Kailash COC Implementation:
 
 ## For Detailed Information
 
-Read these source documents:
-
-- `docs/02-standards/publications/COC-Core-Thesis.md` - The thesis paper
-- `docs/03-technology/kailash/04-vibe-coding.md` - Vibe coding methodology
-- `docs/presentations/sg-claude-code-community-vibe-coding-session.md` - Presentation
-
-For comprehensive analysis, invoke the **coc-expert** agent.
+If Foundation source docs exist in this repo, read the COC Core Thesis for additional depth. For comprehensive analysis, invoke the **coc-expert** agent.

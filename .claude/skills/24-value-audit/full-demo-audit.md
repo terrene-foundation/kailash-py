@@ -32,7 +32,7 @@ For each page in the demo flow, verify:
 5. No JavaScript errors in console
 
 Demo flow pages (in order):
-- /login → /dashboard (home)
+- /login → /enterprise-app (home)
 - /organization-builder
 - /shadow-agents → click View Details on an agent
 - /trust → click "Establish Trust" → verify navigation → back → click "View Audit Trail" → verify navigation
@@ -153,7 +153,7 @@ After both phases complete, synthesize into a single demo readiness verdict.
 ### Full audit (both phases):
 
 ```
-Run a full demo audit on aegis.kailash.ai.
+Run a full demo audit on app.example.com.
 Phase 1: Technical sweep with e2e-runner (all 26 pages, console errors, navigation).
 Phase 2: Value audit with value-auditor (Five Questions, value flows, narrative coherence).
 Login: ceo@tpc-test.com / [password]
@@ -163,7 +163,7 @@ Output reports to workspaces/axis/04-storyboard-audit/
 ### Value-only audit (skip technical):
 
 ```
-Run a value audit on aegis.kailash.ai using the value-auditor methodology.
+Run a value audit on app.example.com using the value-auditor methodology.
 Assume technical QA already passed.
 Login: ceo@tpc-test.com / [password]
 ```
@@ -171,7 +171,7 @@ Login: ceo@tpc-test.com / [password]
 ### Technical-only audit (skip value):
 
 ```
-Run a technical QA sweep of aegis.kailash.ai.
+Run a technical QA sweep of app.example.com.
 Check all 26 pages for console errors, broken links, and data loading.
 Login: ceo@tpc-test.com / [password]
 ```
@@ -180,6 +180,6 @@ Login: ceo@tpc-test.com / [password]
 
 ```
 Run the demo readiness checklist from .claude/skills/24-value-audit/demo-readiness-checklist.md
-against aegis.kailash.ai. Pass/fail only, no detailed audit.
+against app.example.com. Pass/fail only, no detailed audit.
 Login: ceo@tpc-test.com / [password]
 ```

@@ -681,7 +681,7 @@ Kaizen adds `PostgresTrustStore` (DataFlow-backed) which is NOT in the standalon
 
 - **Canonical Source**: `packages/eatp/src/eatp/` (standalone SDK)
 - **Kaizen Shims**: `packages/kailash-kaizen/src/kaizen/trust/`
-- **EATP Tests**: `packages/eatp/tests/` (1177 tests)
+- **EATP Tests**: `packages/eatp/tests/` (1324 tests)
 - **Kaizen Trust Tests**: `packages/kailash-kaizen/tests/unit/trust/` (1623 tests, exercises same code via shims)
 - **Security Tests**: `packages/kailash-kaizen/tests/security/`
 - **Examples**: `packages/eatp/examples/` (standalone), `examples/trust/` (Kaizen integration)
