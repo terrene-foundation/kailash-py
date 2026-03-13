@@ -3,9 +3,9 @@
 Defines the interface that all SSO providers must implement.
 
 Evidence:
-    - example-app: utils/azure_jwt.py, utils/apple_jwt.py
-    - example-project: auth_platform.py
-    - enterprise-app: config/sso.py
+    - production SSO implementation references
+    - production SSO implementation reference
+    - production SSO implementation reference
 """
 
 from __future__ import annotations

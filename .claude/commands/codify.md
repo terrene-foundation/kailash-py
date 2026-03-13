@@ -75,4 +75,4 @@ Deploy these agents as a team for codification:
 
 **COC template sync (after codification completes):**
 
-- **coc-sync** — Transform and sync all agents, skills, rules, and commands to the COC template repository (`kailash-coc-claude-py`), stripping builder-specific content. Only runs if the repo exists at `~/repos/kailash/kailash-coc-claude-py/`. See `.claude/skills/management/coc-sync-mapping.md` for transform rules.
+- **coc-sync** — Transform and sync all agents, skills, rules, and commands to the COC template repository (`kailash-coc-claude-py`), stripping builder-specific content. Only runs if the repo exists at `kailash-coc-claude-py/`. See `.claude/skills/management/coc-sync-mapping.md` for transform rules.

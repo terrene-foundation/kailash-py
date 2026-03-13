@@ -17,7 +17,7 @@ import os
 import sys
 
 # Add SDK to path if needed
-SDK_PATH = os.path.expanduser("~/repos/dev/kailash_python_sdk")
+SDK_PATH = os.path.join(os.path.dirname(__file__), "..", "..")
 if os.path.exists(SDK_PATH):
     sys.path.insert(0, os.path.join(SDK_PATH, "src"))
 

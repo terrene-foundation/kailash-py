@@ -9,7 +9,7 @@ Apple Sign-In has unique characteristics:
     - Email relay service for privacy
 
 Evidence:
-    - example-app: utils/apple_jwt.py (276 lines)
+    - production SSO implementation reference
 """
 
 from __future__ import annotations

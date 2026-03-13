@@ -3,7 +3,7 @@
 Provides OAuth2/OIDC authentication with Google.
 
 Evidence:
-    - example-project: auth_platform.py Google OAuth flow
+    - production SSO implementation reference
 """
 
 from __future__ import annotations

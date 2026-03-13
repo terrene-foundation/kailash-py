@@ -8,7 +8,7 @@ Supports:
     - User info from Microsoft Graph API
 
 Evidence:
-    - example-app: utils/azure_jwt.py (301 lines)
+    - production SSO implementation reference
 """
 
 from __future__ import annotations

@@ -190,7 +190,7 @@ services:
       - "8765:8765"
     volumes:
       - ../src:/app/src
-      - ../# contrib (removed)/research/combined_ai_registry.json:/app/research/combined_ai_registry.json
+      # - ../research/combined_ai_registry.json:/app/research/combined_ai_registry.json
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8765/health"]
       interval: 10s
