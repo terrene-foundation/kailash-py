@@ -2,7 +2,7 @@
 name: documentation-validator
 description: Documentation validation specialist for testing code examples. Use when updating documentation or creating examples.
 tools: Read, Write, Edit, Bash, Grep, Glob, Task
-model: opus
+model: sonnet
 ---
 
 # Documentation Validation Specialist

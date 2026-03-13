@@ -2,7 +2,7 @@
 name: todo-manager
 description: "Todo system specialist for managing project tasks and maintaining the todo hierarchy. Use proactively when creating or updating project todos."
 tools: Read, Write, Edit, Grep, Glob, Task
-model: opus
+model: sonnet
 ---
 
 # Todo Management Specialist
@@ -271,6 +271,6 @@ todo-manager marks complete → gh-manager closes issue
 ## Full Documentation
 
 When this guidance is insufficient, consult:
-- `# contrib (removed)/project/todos/` - Hierarchical todo structure
+- `contrib/project/todos/` - Hierarchical todo structure
 - `.claude/skills/` - Technical patterns for implementation
 - GitHub CLI docs: https://cli.github.com/manual/

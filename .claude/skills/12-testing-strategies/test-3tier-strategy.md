@@ -92,6 +92,6 @@ def test_workflow_execution(runtime_class):
 
 ## Documentation
 
-- **Testing Guide**: [`# contrib (removed)/5-testing/01-testing-strategy.md`](../../../../# contrib (removed)/5-testing/01-testing-strategy.md)
+- **Testing Guide**: [`contrib/5-testing/01-testing-strategy.md`](../../../../contrib/5-testing/01-testing-strategy.md)
 
 <!-- Trigger Keywords: 3-tier testing, testing strategy, test tiers, testing pyramid, unit tests, integration tests -->

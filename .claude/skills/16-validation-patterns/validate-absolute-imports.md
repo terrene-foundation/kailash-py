@@ -42,6 +42,6 @@ grep -r "from \." kailash/ --include="*.py" | grep -v "# type:"
 
 ## Documentation
 
-- **Import Standards**: [`# contrib (removed)/4-gold-standards/01-code-standards.md#imports`](../../../../# contrib (removed)/4-gold-standards/01-code-standards.md)
+- **Import Standards**: [`contrib/4-gold-standards/01-code-standards.md#imports`](../../../../contrib/4-gold-standards/01-code-standards.md)
 
 <!-- Trigger Keywords: check imports, import validation, absolute imports, relative imports -->

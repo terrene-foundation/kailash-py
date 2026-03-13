@@ -1346,7 +1346,7 @@ agent = Agent(
     ),
 
     tools="all"  # Enable tools via MCP
-        service_discovery="consul.internal",
+        service_discovery="consul.example.com",
         dynamic_loading=True
     ),
 
@@ -1506,11 +1506,11 @@ A **unified Agent API** that makes Kaizen the **simplest AI agent framework** wh
 **Status**: READY FOR REVIEW
 
 **Files Referenced**:
-- `
-- `
-- `
-- `
-- `
-- `
-- `
+- `./repos/dev/kailash_kaizen/packages/kailash-kaizen/src/kaizen/__init__.py`
+- `./repos/dev/kailash_kaizen/packages/kailash-kaizen/src/kaizen/core/base_agent.py`
+- `./repos/dev/kailash_kaizen/packages/kailash-kaizen/src/kaizen/agents/__init__.py`
+- `./repos/dev/kailash_kaizen/packages/kailash-kaizen/src/kaizen/strategies/__init__.py`
+- `./repos/dev/kailash_kaizen/packages/kailash-kaizen/src/kaizen/tools/__init__.py`
+- `./repos/dev/kailash_kaizen/packages/kailash-kaizen/src/kaizen/memory/__init__.py`
+- `./repos/dev/kailash_kaizen/.claude/skills/04-kaizen/README.md`
 - All 30+ skill files in `.claude/skills/04-kaizen/`
