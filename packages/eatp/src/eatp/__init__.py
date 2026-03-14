@@ -107,6 +107,24 @@ from eatp.hooks import (
     HookType,
 )
 
+# Roles
+from eatp.roles import (
+    ROLE_PERMISSIONS,
+    TrustRole,
+    check_permission,
+    require_permission,
+)
+
+# Vocabulary
+from eatp.vocabulary import (
+    CONSTRAINT_VOCABULARY,
+    POSTURE_VOCABULARY,
+    constraint_from_eatp,
+    constraint_to_eatp,
+    posture_from_eatp,
+    posture_to_eatp,
+)
+
 # Exceptions
 from eatp.exceptions import (
     TrustError,
@@ -161,6 +179,18 @@ __all__ = [
     "HookResult",
     "EATPHook",
     "HookRegistry",
+    # Roles
+    "TrustRole",
+    "ROLE_PERMISSIONS",
+    "check_permission",
+    "require_permission",
+    # Vocabulary
+    "POSTURE_VOCABULARY",
+    "CONSTRAINT_VOCABULARY",
+    "posture_to_eatp",
+    "posture_from_eatp",
+    "constraint_to_eatp",
+    "constraint_from_eatp",
     # Exceptions
     "TrustError",
     "TrustChainNotFoundError",
