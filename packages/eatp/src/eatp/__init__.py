@@ -65,7 +65,12 @@ from eatp.operations import (
 )
 
 # Reasoning traces
-from eatp.reasoning import ConfidentialityLevel, ReasoningTrace
+from eatp.reasoning import (
+    ConfidentialityLevel,
+    EvidenceReference,
+    ReasoningTrace,
+    reasoning_completeness_score,
+)
 
 # Stores
 from eatp.store import TrustStore
@@ -121,6 +126,8 @@ __all__ = [
     # Reasoning traces
     "ConfidentialityLevel",
     "ReasoningTrace",
+    "EvidenceReference",
+    "reasoning_completeness_score",
     # Stores
     "TrustStore",
     "InMemoryTrustStore",

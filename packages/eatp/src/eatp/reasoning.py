@@ -21,11 +21,13 @@ Key design decisions:
 - to_signing_payload() returns deterministic sorted dict for signing
 """
 
+import hashlib
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -256,3 +258,151 @@ class ReasoningTrace:
                 }.items()
             )
         )
+
+    def content_hash(self) -> bytes:
+        """Compute SHA-256 hash of this trace's signing payload.
+
+        Uses ``to_signing_payload()`` for deterministic ordering so the
+        same trace always produces the same hash regardless of field
+        insertion order.
+
+        Returns:
+            Raw SHA-256 digest (32 bytes).
+        """
+        payload = self.to_signing_payload()
+        serialized = json.dumps(payload, sort_keys=True, default=str)
+        return hashlib.sha256(serialized.encode("utf-8")).digest()
+
+    def content_hash_hex(self) -> str:
+        """Compute hex-encoded SHA-256 hash of this trace.
+
+        Returns:
+            Hex string of the SHA-256 digest (64 characters).
+        """
+        return self.content_hash().hex()
+
+    def redact(self) -> Tuple["ReasoningTrace", str]:
+        """Create a redacted copy of this trace.
+
+        Replaces sensitive content fields with the ``"[REDACTED]"`` sentinel
+        while retaining timestamp and confidentiality level. Returns the
+        original trace's content hash so the redacted version can be linked
+        back to the original.
+
+        Returns:
+            Tuple of (redacted_trace, original_content_hash_hex).
+        """
+        original_hash = self.content_hash_hex()
+        redacted = ReasoningTrace(
+            decision="[REDACTED]",
+            rationale="[REDACTED]",
+            confidentiality=self.confidentiality,
+            timestamp=self.timestamp,
+            alternatives_considered=["[REDACTED]"],
+            evidence=[{"redacted": True}],
+            methodology="[REDACTED]",
+            confidence=None,
+        )
+        return redacted, original_hash
+
+    def is_redacted(self) -> bool:
+        """Check whether this trace has been redacted.
+
+        Returns:
+            True if the decision field contains the ``"[REDACTED]"`` sentinel.
+        """
+        return self.decision == "[REDACTED]"
+
+
+_REDACTED_SENTINEL = "[REDACTED]"
+"""Sentinel value used for redacted fields (matches Rust SDK)."""
+
+
+@dataclass
+class EvidenceReference:
+    """Structured evidence reference for reasoning traces.
+
+    Provides a typed alternative to raw ``Dict[str, Any]`` evidence entries.
+    Both ``EvidenceReference`` objects and raw dicts are accepted in
+    ``ReasoningTrace.evidence`` for backward compatibility.
+
+    Attributes:
+        evidence_type: Category of evidence (e.g., "document", "metric",
+            "audit_log", "external_api").
+        reference: Pointer to the evidence (e.g., URL, document ID, path).
+        summary: Optional human-readable summary of the evidence.
+    """
+
+    evidence_type: str
+    reference: str
+    summary: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to dictionary."""
+        result: Dict[str, Any] = {
+            "evidence_type": self.evidence_type,
+            "reference": self.reference,
+        }
+        if self.summary is not None:
+            result["summary"] = self.summary
+        return result
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "EvidenceReference":
+        """Deserialize from dictionary.
+
+        Args:
+            data: Dict with evidence_type, reference, and optional summary.
+
+        Returns:
+            EvidenceReference instance.
+        """
+        return cls(
+            evidence_type=data["evidence_type"],
+            reference=data["reference"],
+            summary=data.get("summary"),
+        )
+
+
+def reasoning_completeness_score(
+    trace: Optional[ReasoningTrace],
+    signature_verified: bool = False,
+) -> int:
+    """Score the completeness of a reasoning trace (0-100).
+
+    Factors (cross-SDK aligned with Rust ``reasoning_completeness_score()``):
+    - Trace present: 30 pts
+    - alternatives_considered not empty: 20 pts
+    - evidence not empty: 15 pts
+    - methodology present: 15 pts
+    - confidence between 0 and 1.0, calibrated: 10 pts
+    - signature verified: 10 pts
+
+    Args:
+        trace: The reasoning trace to score. None → 0.
+        signature_verified: Whether the trace's signature has been verified.
+
+    Returns:
+        Integer score 0-100.
+    """
+    if trace is None:
+        return 0
+
+    score = 30  # Trace is present
+
+    if trace.alternatives_considered:
+        score += 20
+
+    if trace.evidence:
+        score += 15
+
+    if trace.methodology is not None and trace.methodology != "":
+        score += 15
+
+    if trace.confidence is not None and 0.0 <= trace.confidence <= 1.0:
+        score += 10
+
+    if signature_verified:
+        score += 10
+
+    return max(0, min(100, score))

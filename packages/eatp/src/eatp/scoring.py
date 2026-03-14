@@ -7,12 +7,22 @@ Computes deterministic trust scores (0-100) for agents based on their
 trust lineage chain completeness, delegation depth, constraint coverage,
 posture level, and chain recency.
 
-Scoring Factors (weights sum to 100):
+Structural Scoring Factors (weights sum to 100):
     - Chain Completeness (30%): Has genesis, capabilities, constraint envelope
     - Delegation Depth (15%): Deeper chains = lower score (more risk)
     - Constraint Coverage (25%): More constraints = higher score (well-constrained)
     - Posture Level (20%): Stricter posture = higher score
     - Chain Recency (10%): Recent updates = higher score
+
+Behavioral Scoring Factors (weights sum to 100, cross-SDK aligned D1):
+    - Approval Rate (30): approved_actions / total_actions
+    - Error Rate (25): inverse of error_count / total_actions
+    - Posture Stability (20): inverse of posture_transitions / observation_window
+    - Time at Posture (15): time_at_current_posture normalized
+    - Interaction Volume (10): log-scaled total_actions
+
+Combined scoring blends structural (60%) and behavioral (40%) by default.
+Behavioral is complementary — it never overrides structural.
 
 Grade Mapping:
     A = 90-100, B = 80-89, C = 70-79, D = 60-69, F = 0-59
@@ -598,7 +608,9 @@ async def generate_trust_report(
                 "to add oversight"
             )
         elif posture == TrustPosture.PSEUDO_AGENT:
-            risk_indicators.append("Agent is PSEUDO_AGENT; it cannot perform any actions")
+            risk_indicators.append(
+                "Agent is PSEUDO_AGENT; it cannot perform any actions"
+            )
             recommendations.append(
                 "Review blocking reason and consider upgrading posture "
                 "if the issue has been resolved"
@@ -664,6 +676,293 @@ async def generate_trust_report(
     )
 
 
+# ---------------------------------------------------------------------------
+# Behavioral scoring (Phase 4 — cross-SDK aligned with D1)
+# ---------------------------------------------------------------------------
+
+BEHAVIORAL_WEIGHTS: Dict[str, int] = {
+    "approval_rate": 30,
+    "error_rate": 25,
+    "posture_stability": 20,
+    "time_at_posture": 15,
+    "interaction_volume": 10,
+}
+"""Behavioral scoring factor weights (must sum to 100)."""
+
+# Normalization constants for behavioral factors
+_TIME_AT_POSTURE_FULL_SCORE_HOURS: float = 720.0  # 30 days
+_INTERACTION_VOLUME_MIN_FOR_FULL: int = 10000
+_POSTURE_STABILITY_WINDOW_HOURS: float = 168.0  # 1 week
+
+
+@dataclass
+class BehavioralData:
+    """Caller-provided behavioral data for an agent.
+
+    Callers are responsible for populating these counters from their
+    enforcement pipeline. The SDK does not collect this data automatically.
+
+    All fields default to zero. Zero-data produces score 0, grade F
+    (fail-safe: unknown agents are not trusted).
+
+    Attributes:
+        total_actions: Total number of actions the agent has attempted.
+        approved_actions: Number of actions that were approved.
+        denied_actions: Number of actions that were denied.
+        error_count: Number of actions that resulted in errors.
+        posture_transitions: Number of posture changes in the observation window.
+        time_at_current_posture_hours: Hours spent at the current posture.
+        observation_window_hours: Total observation window in hours.
+    """
+
+    total_actions: int = 0
+    approved_actions: int = 0
+    denied_actions: int = 0
+    error_count: int = 0
+    posture_transitions: int = 0
+    time_at_current_posture_hours: float = 0.0
+    observation_window_hours: float = 0.0
+
+    def __post_init__(self) -> None:
+        """Validate fields after dataclass initialization."""
+        # Non-negative checks
+        for field_name in (
+            "total_actions",
+            "approved_actions",
+            "denied_actions",
+            "error_count",
+            "posture_transitions",
+        ):
+            value = getattr(self, field_name)
+            if value < 0:
+                raise ValueError(f"{field_name} must be non-negative, got {value}")
+        if self.time_at_current_posture_hours < 0:
+            raise ValueError(
+                f"time_at_current_posture_hours must be non-negative, "
+                f"got {self.time_at_current_posture_hours}"
+            )
+        if self.observation_window_hours < 0:
+            raise ValueError(
+                f"observation_window_hours must be non-negative, "
+                f"got {self.observation_window_hours}"
+            )
+        # Logical consistency: approved + denied <= total
+        if self.approved_actions + self.denied_actions > self.total_actions:
+            raise ValueError(
+                f"approved_actions ({self.approved_actions}) + "
+                f"denied_actions ({self.denied_actions}) exceeds "
+                f"total_actions ({self.total_actions})"
+            )
+        # error_count <= total_actions
+        if self.error_count > self.total_actions:
+            raise ValueError(
+                f"error_count ({self.error_count}) exceeds "
+                f"total_actions ({self.total_actions})"
+            )
+
+
+@dataclass
+class BehavioralScore:
+    """Computed behavioral trust score for an agent.
+
+    Attributes:
+        score: Overall behavioral score (0-100, integer).
+        breakdown: Per-factor weighted contributions.
+        grade: Letter grade (A/B/C/D/F).
+        computed_at: UTC timestamp.
+        agent_id: The agent this score belongs to.
+    """
+
+    score: int
+    breakdown: Dict[str, float]
+    grade: str
+    computed_at: datetime
+    agent_id: str
+
+
+@dataclass
+class CombinedTrustScore:
+    """Combined structural + behavioral trust score.
+
+    Attributes:
+        structural_score: The structural trust score (chain-based).
+        behavioral_score: The behavioral trust score (action-based).
+            None if no behavioral data was provided.
+        combined_score: Blended score (0-100, integer).
+        breakdown: Blending details including weights used.
+    """
+
+    structural_score: TrustScore
+    behavioral_score: Optional[BehavioralScore]
+    combined_score: int
+    breakdown: Dict[str, Any]
+
+
+def compute_behavioral_score(
+    agent_id: str,
+    data: BehavioralData,
+) -> BehavioralScore:
+    """Compute a behavioral trust score for an agent.
+
+    Uses 5 weighted factors (cross-SDK aligned with D1 decision):
+    - approval_rate (30): approved / total
+    - error_rate (25): inverse of errors / total
+    - posture_stability (20): inverse of transitions / window
+    - time_at_posture (15): time normalized to 30-day max
+    - interaction_volume (10): log10-scaled total actions
+
+    Zero-data agents receive score 0, grade F (fail-safe).
+
+    Args:
+        agent_id: The agent identifier.
+        data: Behavioral data collected by the caller.
+
+    Returns:
+        BehavioralScore with breakdown and grade.
+    """
+    # Fail-safe: zero data = score 0
+    if data.total_actions == 0:
+        return BehavioralScore(
+            score=0,
+            breakdown={k: 0.0 for k in BEHAVIORAL_WEIGHTS},
+            grade="F",
+            computed_at=datetime.now(timezone.utc),
+            agent_id=agent_id,
+        )
+
+    # Factor 1: approval_rate (0.0-1.0)
+    approval_raw = data.approved_actions / data.total_actions
+
+    # Factor 2: error_rate — inverse (fewer errors = higher score)
+    error_ratio = data.error_count / data.total_actions
+    error_raw = max(0.0, 1.0 - error_ratio)
+
+    # Factor 3: posture_stability — inverse of transition frequency
+    if data.observation_window_hours > 0:
+        transitions_per_hour = data.posture_transitions / data.observation_window_hours
+        # Normalize: 0 transitions = 1.0, >1 per hour = ~0.0
+        stability_raw = max(
+            0.0, 1.0 - (transitions_per_hour * _POSTURE_STABILITY_WINDOW_HOURS / 10.0)
+        )
+    else:
+        stability_raw = 0.0  # No observation window = unknown
+
+    # Factor 4: time_at_posture — normalized to max
+    time_raw = min(
+        1.0, data.time_at_current_posture_hours / _TIME_AT_POSTURE_FULL_SCORE_HOURS
+    )
+
+    # Factor 5: interaction_volume — log10 scaled
+    if data.total_actions > 0:
+        log_actions = math.log10(data.total_actions)
+        log_max = math.log10(_INTERACTION_VOLUME_MIN_FOR_FULL)
+        volume_raw = min(1.0, log_actions / log_max)
+    else:
+        volume_raw = 0.0
+
+    # Compute weighted breakdown
+    breakdown = {
+        "approval_rate": round(approval_raw * BEHAVIORAL_WEIGHTS["approval_rate"], 2),
+        "error_rate": round(error_raw * BEHAVIORAL_WEIGHTS["error_rate"], 2),
+        "posture_stability": round(
+            stability_raw * BEHAVIORAL_WEIGHTS["posture_stability"], 2
+        ),
+        "time_at_posture": round(time_raw * BEHAVIORAL_WEIGHTS["time_at_posture"], 2),
+        "interaction_volume": round(
+            volume_raw * BEHAVIORAL_WEIGHTS["interaction_volume"], 2
+        ),
+    }
+
+    total = max(0, min(100, int(round(sum(breakdown.values())))))
+    grade = score_to_grade(total)
+
+    logger.debug(
+        "Behavioral score for agent %s: %d (%s), breakdown=%s",
+        agent_id,
+        total,
+        grade,
+        breakdown,
+    )
+
+    return BehavioralScore(
+        score=total,
+        breakdown=breakdown,
+        grade=grade,
+        computed_at=datetime.now(timezone.utc),
+        agent_id=agent_id,
+    )
+
+
+async def compute_combined_trust_score(
+    agent_id: str,
+    store: TrustStore,
+    behavioral_data: Optional[BehavioralData] = None,
+    posture_machine: Optional[PostureStateMachine] = None,
+    structural_weight: float = 0.6,
+    behavioral_weight: float = 0.4,
+) -> CombinedTrustScore:
+    """Compute a combined structural + behavioral trust score.
+
+    Behavioral is complementary — it never overrides structural. If no
+    behavioral data is provided, the combined score equals the structural
+    score (backward compatible).
+
+    Args:
+        agent_id: The agent identifier.
+        store: TrustStore for structural scoring.
+        behavioral_data: Optional behavioral data. If None, combined = structural.
+        posture_machine: Optional PostureStateMachine for posture factor.
+        structural_weight: Weight for structural score (default 0.6).
+        behavioral_weight: Weight for behavioral score (default 0.4).
+
+    Returns:
+        CombinedTrustScore with both scores and blended result.
+    """
+    # Validate weight sum (must be approximately 1.0)
+    weight_sum = structural_weight + behavioral_weight
+    if abs(weight_sum - 1.0) > 0.01:
+        raise ValueError(
+            f"structural_weight ({structural_weight}) + behavioral_weight "
+            f"({behavioral_weight}) must sum to 1.0, got {weight_sum}"
+        )
+
+    # Always compute structural
+    structural = await compute_trust_score(agent_id, store, posture_machine)
+
+    if behavioral_data is None:
+        return CombinedTrustScore(
+            structural_score=structural,
+            behavioral_score=None,
+            combined_score=structural.score,
+            breakdown={
+                "structural_weight": 1.0,
+                "behavioral_weight": 0.0,
+                "structural_contribution": structural.score,
+                "behavioral_contribution": 0,
+            },
+        )
+
+    behavioral = compute_behavioral_score(agent_id, behavioral_data)
+
+    # Blend scores
+    raw_combined = (
+        structural.score * structural_weight + behavioral.score * behavioral_weight
+    )
+    combined = max(0, min(100, int(round(raw_combined))))
+
+    return CombinedTrustScore(
+        structural_score=structural,
+        behavioral_score=behavioral,
+        combined_score=combined,
+        breakdown={
+            "structural_weight": structural_weight,
+            "behavioral_weight": behavioral_weight,
+            "structural_contribution": round(structural.score * structural_weight, 2),
+            "behavioral_contribution": round(behavioral.score * behavioral_weight, 2),
+        },
+    )
+
+
 __all__ = [
     "TrustScore",
     "TrustReport",
@@ -673,4 +972,11 @@ __all__ = [
     "SCORING_WEIGHTS",
     "POSTURE_SCORE_MAP",
     "GRADE_THRESHOLDS",
+    # Behavioral scoring (Phase 4)
+    "BEHAVIORAL_WEIGHTS",
+    "BehavioralData",
+    "BehavioralScore",
+    "CombinedTrustScore",
+    "compute_behavioral_score",
+    "compute_combined_trust_score",
 ]
