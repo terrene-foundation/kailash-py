@@ -12,7 +12,7 @@ import base64
 import hashlib
 import json
 import secrets
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple, Union
@@ -485,3 +485,162 @@ def verify_reasoning_signature(
     if context_id is not None:
         payload = {"parent_record_id": context_id, "reasoning": payload}
     return verify_signature(payload, signature, public_key)
+
+
+# ---------------------------------------------------------------------------
+# Dual Signature System (Phase 5 G6)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class DualSignature:
+    """Dual signature: Ed25519 (mandatory) + optional HMAC-SHA256.
+
+    Ed25519 is the primary signature for external/compliance verification.
+    HMAC is an optional fast-path for internal verification between trusted
+    services sharing a symmetric key.
+
+    HMAC is never sufficient alone for external verification. Document this clearly.
+    """
+
+    ed25519_signature: str  # Base64-encoded Ed25519 signature (always present)
+    hmac_signature: Optional[str] = None  # Base64-encoded HMAC-SHA256 (optional)
+    hmac_algorithm: str = "sha256"
+
+    @property
+    def has_hmac(self) -> bool:
+        """Return True if an HMAC signature is present."""
+        return self.hmac_signature is not None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to dict. Omits hmac_signature when None."""
+        result: Dict[str, Any] = {
+            "ed25519_signature": self.ed25519_signature,
+            "hmac_algorithm": self.hmac_algorithm,
+        }
+        if self.hmac_signature is not None:
+            result["hmac_signature"] = self.hmac_signature
+        return result
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "DualSignature":
+        """Reconstruct from dict. Raises KeyError if ed25519_signature is missing."""
+        return cls(
+            ed25519_signature=data["ed25519_signature"],
+            hmac_signature=data.get("hmac_signature"),
+            hmac_algorithm=data.get("hmac_algorithm", "sha256"),
+        )
+
+
+def hmac_sign(payload: Union[bytes, str, dict], hmac_key: bytes) -> str:
+    """
+    Compute HMAC-SHA256 of payload.
+
+    Args:
+        payload: Data to sign (bytes, string, or dict).
+            Dicts are canonicalized via serialize_for_signing before hashing.
+        hmac_key: Symmetric key for HMAC computation.
+
+    Returns:
+        Base64-encoded HMAC-SHA256 digest (32 bytes decoded).
+    """
+    import hmac as hmac_mod
+
+    if isinstance(payload, dict):
+        payload_bytes = serialize_for_signing(payload).encode("utf-8")
+    elif isinstance(payload, str):
+        payload_bytes = payload.encode("utf-8")
+    else:
+        payload_bytes = payload
+    mac = hmac_mod.new(hmac_key, payload_bytes, hashlib.sha256)
+    return base64.b64encode(mac.digest()).decode("utf-8")
+
+
+def hmac_verify(
+    payload: Union[bytes, str, dict], hmac_signature: str, hmac_key: bytes
+) -> bool:
+    """
+    Verify HMAC-SHA256 signature.
+
+    Uses constant-time comparison (hmac.compare_digest) to prevent
+    timing side-channel attacks. NEVER uses == for comparison.
+
+    Args:
+        payload: Original data that was signed.
+        hmac_signature: Base64-encoded HMAC-SHA256 to verify against.
+        hmac_key: Symmetric key used for HMAC computation.
+
+    Returns:
+        True if the HMAC is valid, False otherwise.
+    """
+    import hmac as hmac_mod
+
+    expected = hmac_sign(payload, hmac_key)
+    return hmac_mod.compare_digest(expected, hmac_signature)
+
+
+def dual_sign(
+    payload: Union[bytes, str, dict],
+    private_key: str,
+    hmac_key: Optional[bytes] = None,
+) -> DualSignature:
+    """
+    Sign with Ed25519 and optionally HMAC-SHA256.
+
+    Ed25519 signing is always performed. HMAC-SHA256 is computed only
+    when hmac_key is provided.
+
+    Args:
+        payload: Data to sign (bytes, string, or dict).
+        private_key: Base64-encoded Ed25519 private key.
+        hmac_key: Optional symmetric key for HMAC-SHA256.
+
+    Returns:
+        DualSignature with Ed25519 signature (always) and HMAC (if key provided).
+
+    Raises:
+        ImportError: If PyNaCl is not installed.
+        ValueError: If private key is invalid.
+    """
+    ed25519_sig = sign(payload, private_key)
+    hmac_sig = hmac_sign(payload, hmac_key) if hmac_key is not None else None
+    return DualSignature(ed25519_signature=ed25519_sig, hmac_signature=hmac_sig)
+
+
+def dual_verify(
+    payload: Union[bytes, str, dict],
+    dual_sig: DualSignature,
+    public_key: str,
+    hmac_key: Optional[bytes] = None,
+) -> bool:
+    """
+    Verify dual signature. Ed25519 always checked. HMAC checked if present and key provided.
+
+    Ed25519 verification is mandatory and always performed first. If it fails,
+    the function returns False immediately without checking HMAC.
+
+    HMAC verification is performed only when BOTH:
+    1. The DualSignature contains an HMAC signature (has_hmac is True)
+    2. An hmac_key is provided to this function
+
+    Args:
+        payload: Original data that was signed.
+        dual_sig: DualSignature to verify.
+        public_key: Base64-encoded Ed25519 public key.
+        hmac_key: Optional symmetric key for HMAC verification.
+
+    Returns:
+        True if all applicable verifications pass, False otherwise.
+
+    Raises:
+        ImportError: If PyNaCl is not installed.
+        InvalidSignatureError: If Ed25519 verification encounters an unexpected error.
+    """
+    # Ed25519 is mandatory
+    if not verify_signature(payload, dual_sig.ed25519_signature, public_key):
+        return False
+    # HMAC verification (if present and key available)
+    if dual_sig.has_hmac and hmac_key is not None:
+        if not hmac_verify(payload, dual_sig.hmac_signature, hmac_key):
+            return False
+    return True

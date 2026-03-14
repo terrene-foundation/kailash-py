@@ -77,7 +77,16 @@ from eatp.store import TrustStore
 from eatp.store.memory import InMemoryTrustStore
 
 # Crypto
-from eatp.crypto import generate_keypair, sign, verify_signature
+from eatp.crypto import (
+    DualSignature,
+    dual_sign,
+    dual_verify,
+    generate_keypair,
+    hmac_sign,
+    hmac_verify,
+    sign,
+    verify_signature,
+)
 
 # Authority
 from eatp.authority import (
@@ -132,7 +141,12 @@ __all__ = [
     "TrustStore",
     "InMemoryTrustStore",
     # Crypto
+    "DualSignature",
+    "dual_sign",
+    "dual_verify",
     "generate_keypair",
+    "hmac_sign",
+    "hmac_verify",
     "sign",
     "verify_signature",
     # Authority
