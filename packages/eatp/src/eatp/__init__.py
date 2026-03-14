@@ -127,8 +127,15 @@ from eatp.vocabulary import (
 
 # Exceptions
 from eatp.exceptions import (
-    TrustError,
+    BehavioralScoringError,
+    HookError,
+    HookTimeoutError,
+    KMSConnectionError,
+    PathTraversalError,
+    ProximityError,
+    RevocationError,
     TrustChainNotFoundError,
+    TrustError,
 )
 
 __all__ = [
@@ -194,4 +201,11 @@ __all__ = [
     # Exceptions
     "TrustError",
     "TrustChainNotFoundError",
+    "HookError",
+    "HookTimeoutError",
+    "ProximityError",
+    "BehavioralScoringError",
+    "KMSConnectionError",
+    "RevocationError",
+    "PathTraversalError",
 ]

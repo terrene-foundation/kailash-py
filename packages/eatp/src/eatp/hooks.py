@@ -89,6 +89,27 @@ class HookContext:
     metadata: Dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to a JSON-friendly dict."""
+        return {
+            "agent_id": self.agent_id,
+            "action": self.action,
+            "hook_type": self.hook_type.value,
+            "metadata": dict(self.metadata),
+            "timestamp": self.timestamp.isoformat(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> HookContext:
+        """Reconstruct from a dict."""
+        return cls(
+            agent_id=data["agent_id"],
+            action=data["action"],
+            hook_type=HookType(data["hook_type"]),
+            metadata=data.get("metadata", {}),
+            timestamp=datetime.fromisoformat(data["timestamp"]),
+        )
+
 
 @dataclass
 class HookResult:
@@ -106,6 +127,23 @@ class HookResult:
     allow: bool
     reason: Optional[str] = None
     modified_context: Optional[Dict[str, Any]] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to a JSON-friendly dict."""
+        return {
+            "allow": self.allow,
+            "reason": self.reason,
+            "modified_context": self.modified_context,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> HookResult:
+        """Reconstruct from a dict."""
+        return cls(
+            allow=data["allow"],
+            reason=data.get("reason"),
+            modified_context=data.get("modified_context"),
+        )
 
 
 class EATPHook(ABC):

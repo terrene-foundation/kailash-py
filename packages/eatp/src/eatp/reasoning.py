@@ -21,6 +21,8 @@ Key design decisions:
 - to_signing_payload() returns deterministic sorted dict for signing
 """
 
+from __future__ import annotations
+
 import hashlib
 import json
 import logging
@@ -406,3 +408,11 @@ def reasoning_completeness_score(
         score += 10
 
     return max(0, min(100, score))
+
+
+__all__ = [
+    "ConfidentialityLevel",
+    "ReasoningTrace",
+    "EvidenceReference",
+    "reasoning_completeness_score",
+]

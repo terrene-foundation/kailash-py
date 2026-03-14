@@ -53,7 +53,13 @@ postgres = [
     "asyncpg>=0.29",
     "sqlalchemy[asyncio]>=2.0",
 ]
-all = ["eatp[postgres]"]
+aws-kms = [
+    "boto3>=1.34",
+]
+observability = [
+    "opentelemetry-api>=1.20",
+]
+all = ["eatp[postgres]", "eatp[aws-kms]", "eatp[observability]"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/eatp"]
@@ -98,21 +104,17 @@ omit = [
     "*/knowledge/*",
     "*/orchestration/*",
     "*posture_agent*",
-    "*circuit_breaker*",
     "*audit_service*",
     "*graph_validator*",
     "*rotation*",
     "*crl*",
-    "*metrics*",
     "*security*",
     "*pseudo_agent*",
     "*cache*",
-    "*key_manager*",
     "*timestamping*",
     "*trusted_agent*",
     "*multi_sig*",
     "*execution_context*",
-    "*/revocation/*",
 ]
 
 [tool.coverage.report]

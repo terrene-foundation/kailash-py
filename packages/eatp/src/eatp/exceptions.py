@@ -242,3 +242,96 @@ class TrustStoreDatabaseError(TrustStoreError):
     def __init__(self, message: str, operation: Optional[str] = None):
         super().__init__(message, details={"operation": operation})
         self.operation = operation
+
+
+# ---------------------------------------------------------------------------
+# Phase 8 — Domain-specific exceptions (8.7)
+# ---------------------------------------------------------------------------
+
+
+class HookError(TrustError):
+    """Base exception for hook-related failures."""
+
+    pass
+
+
+class HookTimeoutError(HookError):
+    """Raised when a hook exceeds its configured timeout."""
+
+    def __init__(self, hook_name: str, timeout_seconds: float):
+        self.hook_name = hook_name
+        self.timeout_seconds = timeout_seconds
+        super().__init__(
+            f"Hook '{hook_name}' timed out after {timeout_seconds}s",
+            details={
+                "hook_name": hook_name,
+                "timeout_seconds": timeout_seconds,
+            },
+        )
+
+
+class ProximityError(TrustError):
+    """Raised for proximity computation failures."""
+
+    pass
+
+
+class BehavioralScoringError(TrustError):
+    """Raised for behavioral scoring computation failures."""
+
+    pass
+
+
+class KMSConnectionError(TrustError):
+    """Raised when a KMS endpoint is unreachable."""
+
+    pass
+
+
+class RevocationError(TrustError):
+    """Raised for revocation operation failures."""
+
+    pass
+
+
+class PathTraversalError(TrustError):
+    """Raised when an ID contains path traversal characters."""
+
+    def __init__(self, invalid_id: str, context: str):
+        self.invalid_id = invalid_id
+        self.context = context
+        super().__init__(
+            f"Invalid {context}: contains path traversal characters",
+            details={
+                "invalid_id": invalid_id,
+                "context": context,
+            },
+        )
+
+
+__all__ = [
+    "TrustError",
+    "AuthorityNotFoundError",
+    "AuthorityInactiveError",
+    "TrustChainNotFoundError",
+    "InvalidTrustChainError",
+    "CapabilityNotFoundError",
+    "ConstraintViolationError",
+    "DelegationError",
+    "DelegationCycleError",
+    "DelegationExpiredError",
+    "InvalidSignatureError",
+    "VerificationFailedError",
+    "AgentAlreadyEstablishedError",
+    "TrustStoreError",
+    "TrustChainInvalidError",
+    "TrustStoreDatabaseError",
+    # Phase 8 (8.7)
+    "HookError",
+    "HookTimeoutError",
+    "ProximityError",
+    "BehavioralScoringError",
+    "KMSConnectionError",
+    "RevocationError",
+    "PathTraversalError",
+]

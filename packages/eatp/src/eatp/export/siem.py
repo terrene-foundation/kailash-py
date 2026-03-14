@@ -536,3 +536,15 @@ def from_audit_anchor(
         chain_hash=anchor.trust_chain_hash,
         metadata={"context": anchor.context} if anchor.context else {},
     )
+
+
+__all__ = [
+    "SIEMEvent",
+    "EstablishEvent",
+    "DelegateEvent",
+    "VerifyEvent",
+    "AuditEvent",
+    "serialize_cef",
+    "serialize_ocsf",
+    "from_audit_anchor",
+]

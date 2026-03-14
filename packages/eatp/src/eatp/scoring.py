@@ -116,6 +116,27 @@ class TrustScore:
     computed_at: datetime
     agent_id: str
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to a JSON-friendly dict."""
+        return {
+            "score": self.score,
+            "breakdown": dict(self.breakdown),
+            "grade": self.grade,
+            "computed_at": self.computed_at.isoformat(),
+            "agent_id": self.agent_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> TrustScore:
+        """Reconstruct from a dict."""
+        return cls(
+            score=data["score"],
+            breakdown=data["breakdown"],
+            grade=data["grade"],
+            computed_at=datetime.fromisoformat(data["computed_at"]),
+            agent_id=data["agent_id"],
+        )
+
 
 @dataclass
 class TrustReport:
@@ -130,6 +151,23 @@ class TrustReport:
     score: TrustScore
     risk_indicators: List[str]
     recommendations: List[str]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to a JSON-friendly dict."""
+        return {
+            "score": self.score.to_dict(),
+            "risk_indicators": list(self.risk_indicators),
+            "recommendations": list(self.recommendations),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> TrustReport:
+        """Reconstruct from a dict."""
+        return cls(
+            score=TrustScore.from_dict(data["score"]),
+            risk_indicators=data["risk_indicators"],
+            recommendations=data["recommendations"],
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -760,6 +798,31 @@ class BehavioralData:
                 f"total_actions ({self.total_actions})"
             )
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to a JSON-friendly dict."""
+        return {
+            "total_actions": self.total_actions,
+            "approved_actions": self.approved_actions,
+            "denied_actions": self.denied_actions,
+            "error_count": self.error_count,
+            "posture_transitions": self.posture_transitions,
+            "time_at_current_posture_hours": self.time_at_current_posture_hours,
+            "observation_window_hours": self.observation_window_hours,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> BehavioralData:
+        """Reconstruct from a dict."""
+        return cls(
+            total_actions=data["total_actions"],
+            approved_actions=data["approved_actions"],
+            denied_actions=data["denied_actions"],
+            error_count=data["error_count"],
+            posture_transitions=data["posture_transitions"],
+            time_at_current_posture_hours=data["time_at_current_posture_hours"],
+            observation_window_hours=data["observation_window_hours"],
+        )
+
 
 @dataclass
 class BehavioralScore:
@@ -779,6 +842,27 @@ class BehavioralScore:
     computed_at: datetime
     agent_id: str
 
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to a JSON-friendly dict."""
+        return {
+            "score": self.score,
+            "breakdown": dict(self.breakdown),
+            "grade": self.grade,
+            "computed_at": self.computed_at.isoformat(),
+            "agent_id": self.agent_id,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> BehavioralScore:
+        """Reconstruct from a dict."""
+        return cls(
+            score=data["score"],
+            breakdown=data["breakdown"],
+            grade=data["grade"],
+            computed_at=datetime.fromisoformat(data["computed_at"]),
+            agent_id=data["agent_id"],
+        )
+
 
 @dataclass
 class CombinedTrustScore:
@@ -796,6 +880,33 @@ class CombinedTrustScore:
     behavioral_score: Optional[BehavioralScore]
     combined_score: int
     breakdown: Dict[str, Any]
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to a JSON-friendly dict."""
+        return {
+            "structural_score": self.structural_score.to_dict(),
+            "behavioral_score": (
+                self.behavioral_score.to_dict()
+                if self.behavioral_score is not None
+                else None
+            ),
+            "combined_score": self.combined_score,
+            "breakdown": dict(self.breakdown),
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> CombinedTrustScore:
+        """Reconstruct from a dict."""
+        return cls(
+            structural_score=TrustScore.from_dict(data["structural_score"]),
+            behavioral_score=(
+                BehavioralScore.from_dict(data["behavioral_score"])
+                if data["behavioral_score"] is not None
+                else None
+            ),
+            combined_score=data["combined_score"],
+            breakdown=data["breakdown"],
+        )
 
 
 def compute_behavioral_score(
