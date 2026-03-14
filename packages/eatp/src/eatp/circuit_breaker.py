@@ -521,9 +521,151 @@ class PostureCircuitBreaker:
         return metrics
 
 
+class CircuitBreakerRegistry:
+    """Registry for per-agent circuit breakers.
+
+    Provides lazy creation, bulk status queries, and lifecycle management
+    for PostureCircuitBreaker instances.
+
+    Boundary note:
+        Circuit breaker is an orchestration concern retained in the EATP SDK
+        for ``pip install`` ergonomics. The canonical placement for circuit
+        breaker orchestration is ``kailash-kaizen`` (D2 decision). This module
+        provides the primitive; kaizen provides the orchestration.
+
+    Example:
+        >>> from eatp.circuit_breaker import CircuitBreakerRegistry
+        >>> from eatp.postures import PostureStateMachine
+        >>>
+        >>> machine = PostureStateMachine()
+        >>> registry = CircuitBreakerRegistry(posture_machine=machine)
+        >>> breaker = registry.get_or_create("agent-001")
+        >>> await breaker.record_failure("agent-001", "Error", "msg", "act")
+    """
+
+    def __init__(
+        self,
+        posture_machine: PostureStateMachine,
+        default_config: Optional[CircuitBreakerConfig] = None,
+    ):
+        """Initialize the circuit breaker registry.
+
+        Args:
+            posture_machine: Shared PostureStateMachine for all breakers.
+            default_config: Default config for newly created breakers.
+                Uses CircuitBreakerConfig() defaults if not provided.
+        """
+        self._posture_machine = posture_machine
+        self._default_config = default_config or CircuitBreakerConfig()
+        self._breakers: Dict[str, PostureCircuitBreaker] = {}
+        self._lock = asyncio.Lock()
+
+    def get_or_create(
+        self,
+        agent_id: str,
+        config: Optional[CircuitBreakerConfig] = None,
+    ) -> PostureCircuitBreaker:
+        """Get or lazily create a circuit breaker for an agent.
+
+        Args:
+            agent_id: The agent ID.
+            config: Optional per-agent config override. If not provided,
+                uses the registry's default config.
+
+        Returns:
+            The PostureCircuitBreaker for this agent.
+        """
+        if agent_id not in self._breakers:
+            effective_config = config or self._default_config
+            self._breakers[agent_id] = PostureCircuitBreaker(
+                posture_machine=self._posture_machine,
+                config=effective_config,
+            )
+            logger.debug(f"Created circuit breaker for agent {agent_id}")
+        elif config is not None:
+            logger.warning(
+                f"Circuit breaker for agent {agent_id} already exists; "
+                f"ignoring provided config override. Use reset_agent() first "
+                f"to apply a new config."
+            )
+        return self._breakers[agent_id]
+
+    def has(self, agent_id: str) -> bool:
+        """Check if a breaker exists for an agent.
+
+        Args:
+            agent_id: The agent ID.
+
+        Returns:
+            True if a breaker has been created for this agent.
+        """
+        return agent_id in self._breakers
+
+    def get_all_open(self) -> Dict[str, PostureCircuitBreaker]:
+        """Get all breakers in OPEN state.
+
+        Returns:
+            Dict mapping agent IDs to their breakers for agents in OPEN state.
+        """
+        return {
+            agent_id: breaker
+            for agent_id, breaker in self._breakers.items()
+            if breaker.get_state(agent_id) == CircuitState.OPEN
+        }
+
+    def get_all_half_open(self) -> Dict[str, PostureCircuitBreaker]:
+        """Get all breakers in HALF_OPEN state.
+
+        Returns:
+            Dict mapping agent IDs to their breakers for agents in HALF_OPEN state.
+        """
+        return {
+            agent_id: breaker
+            for agent_id, breaker in self._breakers.items()
+            if breaker.get_state(agent_id) == CircuitState.HALF_OPEN
+        }
+
+    def get_status_summary(self) -> Dict[str, int]:
+        """Get a summary of circuit breaker states across all agents.
+
+        Returns:
+            Dict with keys: "closed", "open", "half_open", "total".
+        """
+        counts = {"closed": 0, "open": 0, "half_open": 0, "total": 0}
+        for agent_id, breaker in self._breakers.items():
+            state = breaker.get_state(agent_id)
+            counts[state.value] += 1
+            counts["total"] += 1
+        return counts
+
+    def remove_agent(self, agent_id: str) -> None:
+        """Remove a breaker for an agent.
+
+        No-op if the agent has no breaker.
+
+        Args:
+            agent_id: The agent ID to remove.
+        """
+        if agent_id in self._breakers:
+            del self._breakers[agent_id]
+            logger.debug(f"Removed circuit breaker for agent {agent_id}")
+
+    def reset_agent(self, agent_id: str) -> None:
+        """Reset a breaker for an agent by removing and re-creating.
+
+        Creates a fresh breaker with the default config on next access.
+
+        Args:
+            agent_id: The agent ID to reset.
+        """
+        self.remove_agent(agent_id)
+        logger.debug(f"Reset circuit breaker for agent {agent_id}")
+
+
 __all__ = [
     "CircuitState",
     "FailureEvent",
     "CircuitBreakerConfig",
     "PostureCircuitBreaker",
+    "CircuitBreakerRegistry",
 ]

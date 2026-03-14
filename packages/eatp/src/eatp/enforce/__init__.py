@@ -25,6 +25,12 @@ from eatp.enforce.challenge import (
     ChallengeResponse,
 )
 from eatp.enforce.decorators import audited, shadow, verified
+from eatp.enforce.proximity import (
+    CONSERVATIVE_PROXIMITY,
+    ProximityAlert,
+    ProximityConfig,
+    ProximityScanner,
+)
 from eatp.enforce.shadow import ShadowEnforcer, ShadowMetrics
 from eatp.enforce.strict import (
     EATPBlockedError,
@@ -51,6 +57,11 @@ __all__ = [
     "ChallengeRequest",
     "ChallengeResponse",
     "ChallengeError",
+    # Proximity scanning
+    "ProximityScanner",
+    "ProximityConfig",
+    "ProximityAlert",
+    "CONSERVATIVE_PROXIMITY",
     # Decorators
     "verified",
     "audited",
