@@ -33,6 +33,14 @@
 | `eatp.interop.sd_jwt`     | SD-JWT selective disclosure                                   |
 | `eatp.interop.biscuit`    | Biscuit authorization tokens                                  |
 | `eatp.reasoning`          | ReasoningTrace dataclass, ConfidentialityLevel enum           |
+| `eatp.hooks`              | Hook system (PRE/POST_DELEGATION, PRE/POST_VERIFICATION)      |
+| `eatp.roles`              | TrustRole RBAC (ADMIN, OPERATOR, OBSERVER, AUDITOR)           |
+| `eatp.vocabulary`         | Machine-readable posture/constraint vocabularies              |
+| `eatp.export.siem`        | CEF and OCSF serializers for SIEM integration                 |
+| `eatp.export.compliance`  | SOC 2 evidence generation                                     |
+| `eatp.metrics`            | Prometheus export, OpenTelemetry adapter                      |
+| `eatp.revocation.cascade` | Cascade revocation with BFS traversal                         |
+| `eatp.key_manager`        | KeyManagerInterface + AWS KMS implementation                  |
 | `eatp.cli`                | CLI commands (eatp init, establish, verify, etc.)             |
 | `eatp.mcp`                | MCP server (5 tools, 4 resources)                             |
 
@@ -71,11 +79,54 @@ verdict = enforcer.classify(result)  # Returns Verdict enum
 - Crypto: `hash_reasoning_trace()`, `sign_reasoning_trace()`, `verify_reasoning_signature()` in `eatp.crypto`
 - REASONING_REQUIRED constraint type on `ConstraintType` enum
 
+## DualSignature (Crypto)
+
+```python
+from eatp.crypto import dual_sign, dual_verify
+
+# Ed25519 always + optional HMAC overlay
+sig = dual_sign(payload, private_key, hmac_key=b"secret")
+valid = dual_verify(payload, sig, public_key, hmac_key=b"secret")
+# HMAC alone is NEVER sufficient for external verification
+```
+
+## Hooks
+
+```python
+from eatp.hooks import HookRegistry, HookType, HookContext, EATPHook
+
+registry = HookRegistry(timeout_seconds=5.0)
+registry.register(my_hook)  # EATPHook subclass
+result = await registry.execute(HookType.PRE_VERIFICATION, context)
+# Fail-closed: crash/timeout → allow=False
+```
+
+## Roles (RBAC)
+
+```python
+from eatp.roles import TrustRole, require_permission
+
+require_permission(TrustRole.OPERATOR, "delegate")  # OK
+require_permission(TrustRole.OBSERVER, "establish")  # raises PermissionError
+# None role = all-access (backward compatible)
+```
+
+## Behavioral Scoring
+
+```python
+from eatp.scoring import BehavioralData, compute_behavioral_score, compute_combined_trust_score
+
+data = BehavioralData(total_actions=100, approved_actions=90, ...)
+score = compute_behavioral_score("agent-001", data)
+combined = await compute_combined_trust_score("agent-001", store, behavioral_data=data)
+# 60% structural + 40% behavioral by default
+```
+
 ## Testing
 
 ```bash
 cd packages/eatp
-python -m pytest tests/ -v           # Run all 1557 tests
+python -m pytest tests/ -v           # Run all 2436 tests
 python -m pytest tests/ --cov=eatp   # With coverage
 ```
 
@@ -85,3 +136,7 @@ python -m pytest tests/ --cov=eatp   # With coverage
 - No mocking in integration tests — use real InMemoryTrustStore
 - All async operations use asyncio (project uses asyncio_mode=auto)
 - Signatures use Ed25519 via PyNaCl
+- HMAC comparison: always `hmac.compare_digest()`, NEVER `==`
+- ROLE_PERMISSIONS is frozen (MappingProxyType + frozenset)
+- All errors inherit from TrustError with .details dict
+- All @dataclass types must have to_dict()/from_dict()
