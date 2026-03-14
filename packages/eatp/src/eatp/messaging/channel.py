@@ -328,7 +328,7 @@ class SecureChannel:
         )
 
         # Create future for reply
-        reply_future: asyncio.Future = asyncio.get_event_loop().create_future()
+        reply_future: asyncio.Future = asyncio.get_running_loop().create_future()
 
         async with self._lock:
             self._pending_replies[request.message_id] = reply_future

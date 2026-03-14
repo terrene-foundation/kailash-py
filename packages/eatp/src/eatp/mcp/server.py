@@ -1528,19 +1528,16 @@ class EATPMCPServer:
         """
         reader = asyncio.StreamReader()
         protocol = asyncio.StreamReaderProtocol(reader)
-        await asyncio.get_event_loop().connect_read_pipe(
-            lambda: protocol, sys.stdin.buffer
-        )
+        loop = asyncio.get_running_loop()
+        await loop.connect_read_pipe(lambda: protocol, sys.stdin.buffer)
 
         (
             writer_transport,
             writer_protocol,
-        ) = await asyncio.get_event_loop().connect_write_pipe(
+        ) = await loop.connect_write_pipe(
             asyncio.streams.FlowControlMixin, sys.stdout.buffer
         )
-        writer = asyncio.StreamWriter(
-            writer_transport, writer_protocol, None, asyncio.get_event_loop()
-        )
+        writer = asyncio.StreamWriter(writer_transport, writer_protocol, None, loop)
 
         logger.info("EATP MCP Server started on stdio")
 

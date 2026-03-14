@@ -37,6 +37,27 @@ logger = logging.getLogger(__name__)
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+def _run_coroutine_sync(coro: Any) -> Any:
+    """Run a coroutine from a synchronous context.
+
+    Handles the case where an event loop is already running (e.g., Jupyter,
+    ASGI frameworks) by executing in a separate thread. Falls back to
+    ``asyncio.run()`` when no loop is running.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # No running loop — safe to use asyncio.run()
+        return asyncio.run(coro)
+    else:
+        # Already inside a running loop — run in a thread to avoid
+        # "cannot be called from a running event loop" error
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+
+
 def verified(
     agent_id: str,
     action: str,
@@ -91,8 +112,7 @@ def verified(
                     "or call set_ops() on the decorated function."
                 )
 
-            loop = asyncio.get_event_loop()
-            result = loop.run_until_complete(
+            result = _run_coroutine_sync(
                 _ops.verify(agent_id=agent_id, action=action, level=level)
             )
             enforcer.enforce(agent_id=agent_id, action=action, result=result)
@@ -179,8 +199,7 @@ def audited(
             args_hash = _hash_args(args, kwargs)
             result_hash = _hash_result(result)
 
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(
+            _run_coroutine_sync(
                 _ops.audit(
                     agent_id=agent_id,
                     action=action,
@@ -259,8 +278,7 @@ def shadow(
             nonlocal _ops
             if _ops is not None:
                 try:
-                    loop = asyncio.get_event_loop()
-                    result = loop.run_until_complete(
+                    result = _run_coroutine_sync(
                         _ops.verify(agent_id=agent_id, action=action, level=level)
                     )
                     _shadow.check(agent_id=agent_id, action=action, result=result)

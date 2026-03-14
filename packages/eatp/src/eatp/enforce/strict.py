@@ -105,6 +105,7 @@ class StrictEnforcer:
         on_held: HeldBehavior = HeldBehavior.RAISE,
         held_callback: Optional[Callable[[str, str, VerificationResult], bool]] = None,
         flag_threshold: int = 1,
+        maxlen: int = 10_000,
     ):
         """Initialize strict enforcer.
 
@@ -113,12 +114,14 @@ class StrictEnforcer:
             held_callback: Callback for CALLBACK held behavior.
                 Receives (agent_id, action, result) and returns True to allow.
             flag_threshold: Number of violations that upgrades FLAGGED to HELD
+            maxlen: Maximum number of records to retain (oldest 10% trimmed on overflow)
         """
         self._on_held = on_held
         self._held_callback = held_callback
         self._flag_threshold = flag_threshold
         self._records: List[EnforcementRecord] = []
         self._review_queue: List[EnforcementRecord] = []
+        self._max_records = maxlen
 
         if on_held == HeldBehavior.CALLBACK and held_callback is None:
             raise ValueError("held_callback required when on_held is CALLBACK")
@@ -187,6 +190,11 @@ class StrictEnforcer:
         )
         self._records.append(record)
 
+        # Bounded memory: trim oldest 10% when exceeding maxlen
+        if len(self._records) > self._max_records:
+            trim_count = self._max_records // 10
+            self._records = self._records[trim_count:]
+
         if verdict == Verdict.BLOCKED:
             reason = result.reason or "Verification failed"
             # Include reasoning violation details in log when present
@@ -246,6 +254,10 @@ class StrictEnforcer:
                 f"[ENFORCE] HELD: agent={agent_id} action={action} — queued for review"
             )
             self._review_queue.append(record)
+            # Bounded memory for review queue
+            if len(self._review_queue) > self._max_records:
+                trim_count = self._max_records // 10
+                self._review_queue = self._review_queue[trim_count:]
             raise EATPHeldError(
                 agent_id=agent_id,
                 action=action,

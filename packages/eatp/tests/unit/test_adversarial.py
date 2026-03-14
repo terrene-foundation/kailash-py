@@ -746,7 +746,7 @@ class TestPathTraversalOnFilesystemStore:
     """Verify that FilesystemStore sanitizes agent_ids to prevent traversal."""
 
     async def test_path_traversal_with_slashes(self, tmp_path):
-        """Agent IDs containing '../' must be safely handled, not traverse."""
+        """Agent IDs containing '../' must be rejected with ValueError."""
         store = FilesystemStore(base_dir=str(tmp_path / "chains"))
         await store.initialize()
 
@@ -763,16 +763,9 @@ class TestPathTraversalOnFilesystemStore:
             )
         )
 
-        await store.store_chain(chain)
-
-        # The file MUST be inside the chains directory, NOT outside
-        chains_dir = tmp_path / "chains"
-        for fpath in chains_dir.rglob("*.json"):
-            # Resolve to absolute and verify it is under chains_dir
-            resolved = fpath.resolve()
-            assert str(resolved).startswith(
-                str(chains_dir.resolve())
-            ), f"File {resolved} escaped the chains directory"
+        # Path traversal IDs must be rejected at validation
+        with pytest.raises(ValueError, match="path traversal"):
+            await store.store_chain(chain)
 
         # Verify no file was created outside the chains directory
         etc_path = tmp_path / "etc" / "passwd.json"
@@ -780,12 +773,8 @@ class TestPathTraversalOnFilesystemStore:
             not etc_path.exists()
         ), "Path traversal must NOT create files outside the store directory"
 
-        # Retrieval must work with the same agent_id
-        retrieved = await store.get_chain(traversal_id)
-        assert retrieved.genesis.agent_id == traversal_id
-
     async def test_path_traversal_with_backslash(self, tmp_path):
-        """Agent IDs with backslashes must be safely handled."""
+        """Agent IDs with backslashes must be rejected with ValueError."""
         store = FilesystemStore(base_dir=str(tmp_path / "chains"))
         await store.initialize()
 
@@ -801,23 +790,19 @@ class TestPathTraversalOnFilesystemStore:
             )
         )
 
-        await store.store_chain(chain)
-
-        # No file should escape
-        chains_dir = tmp_path / "chains"
-        for fpath in chains_dir.rglob("*.json"):
-            resolved = fpath.resolve()
-            assert str(resolved).startswith(str(chains_dir.resolve()))
+        # Path traversal IDs must be rejected at validation
+        with pytest.raises(ValueError, match="path traversal"):
+            await store.store_chain(chain)
 
     async def test_null_byte_in_agent_id(self, tmp_path):
-        """Agent IDs with null bytes must be safely handled."""
+        """Agent IDs with null bytes must be rejected with ValueError."""
         store = FilesystemStore(base_dir=str(tmp_path / "chains"))
         await store.initialize()
 
         null_id = "agent\x00../../evil"
         chain = TrustLineageChain(
             genesis=GenesisRecord(
-                id=f"gen-null",
+                id="gen-null",
                 agent_id=null_id,
                 authority_id="org-acme",
                 authority_type=AuthorityType.ORGANIZATION,
@@ -826,13 +811,9 @@ class TestPathTraversalOnFilesystemStore:
             )
         )
 
-        await store.store_chain(chain)
-
-        # Verify the file stayed in the chains directory
-        chains_dir = tmp_path / "chains"
-        for fpath in chains_dir.rglob("*.json"):
-            resolved = fpath.resolve()
-            assert str(resolved).startswith(str(chains_dir.resolve()))
+        # Null byte IDs must be rejected at validation
+        with pytest.raises(ValueError, match="null"):
+            await store.store_chain(chain)
 
 
 # ===========================================================================

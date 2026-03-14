@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """
-EATP Trust Store — ABC and TransactionContext.
+EATP Trust Store — ABC, TransactionContext, and filesystem utilities.
 
 Provides the abstract interface for trust chain storage and
 transactional context for atomic operations.
@@ -11,6 +11,10 @@ Architecture:
 - TrustStore ABC defines the contract for all store implementations
 - TransactionContext enables atomic multi-chain updates (CARE-008)
 - Concrete implementations live in submodules (memory, filesystem, etc.)
+
+Public utilities available via ``from eatp.store.filesystem import ...``:
+- ``file_lock``: Cross-process file lock context manager (fcntl.flock)
+- ``validate_id``: Path-traversal-safe identifier validation
 """
 
 import copy

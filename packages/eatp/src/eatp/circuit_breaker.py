@@ -7,6 +7,23 @@ Implements the circuit breaker pattern to automatically downgrade agent
 postures when failures exceed thresholds, protecting the system from
 cascading failures.
 
+Concurrency Model:
+    This module uses ``asyncio.Lock`` for coroutine-safe access, NOT
+    ``threading.Lock``. This means:
+
+    - Safe: Multiple coroutines in a single-threaded asyncio event loop
+    - NOT safe: Multiple OS threads calling these methods concurrently
+    - NOT safe: Multiple processes (use file locking for cross-process)
+
+    If thread-safety is required, callers must provide external
+    synchronization. A ``threading_mode`` parameter is reserved as a
+    future extension point for native thread-safe operation.
+
+    The same ``asyncio.Lock`` pattern is used across 10+ modules in the
+    EATP SDK including cache.py, rotation.py, security.py,
+    replay_protection.py, channel.py, esa/api.py, and
+    revocation/broadcaster.py. All share this concurrency model.
+
 Part of CARE-028: PostureCircuitBreaker implementation.
 """
 

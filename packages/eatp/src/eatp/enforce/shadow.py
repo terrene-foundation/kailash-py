@@ -38,6 +38,22 @@ class ShadowMetrics:
     reasoning_absent_count: int = 0
     reasoning_verification_failed_count: int = 0
 
+    # Verdict change tracking
+    verdict_changes: int = 0
+    last_verdict: Optional[str] = None
+
+    @property
+    def change_rate(self) -> float:
+        """Rate of verdict changes between consecutive checks.
+
+        Returns 0.0 if fewer than 2 checks. Otherwise returns the ratio
+        of verdict transitions to possible transitions (total_checks - 1).
+        """
+        possible_transitions = self.total_checks - 1
+        if possible_transitions <= 0:
+            return 0.0
+        return self.verdict_changes / possible_transitions
+
     @property
     def block_rate(self) -> float:
         """Percentage of checks that would have been blocked."""
@@ -77,15 +93,17 @@ class ShadowEnforcer:
         >>> print(shadow.report())
     """
 
-    def __init__(self, flag_threshold: int = 1):
+    def __init__(self, flag_threshold: int = 1, maxlen: int = 10_000):
         """Initialize shadow enforcer.
 
         Args:
             flag_threshold: Violation count that would trigger HELD in strict mode
+            maxlen: Maximum number of records to retain (oldest 10% trimmed on overflow)
         """
         self._classifier = StrictEnforcer(flag_threshold=flag_threshold)
         self._metrics = ShadowMetrics()
         self._records: List[EnforcementRecord] = []
+        self._max_records = maxlen
 
     def check(
         self,
@@ -108,8 +126,20 @@ class ShadowEnforcer:
         Returns:
             The verdict that WOULD have been enforced
         """
-        verdict = self._classifier.classify(result)
         now = datetime.now(timezone.utc)
+        self._metrics.total_checks += 1
+        if self._metrics.first_check is None:
+            self._metrics.first_check = now
+        self._metrics.last_check = now
+
+        try:
+            verdict = self._classifier.classify(result)
+        except Exception:
+            logger.exception(
+                f"[SHADOW] Classification failed for agent={agent_id} action={action} — "
+                "returning BLOCKED as fail-safe"
+            )
+            verdict = Verdict.BLOCKED
 
         record = EnforcementRecord(
             agent_id=agent_id,
@@ -121,11 +151,19 @@ class ShadowEnforcer:
         )
         self._records.append(record)
 
-        # Update metrics
-        self._metrics.total_checks += 1
-        if self._metrics.first_check is None:
-            self._metrics.first_check = now
-        self._metrics.last_check = now
+        # Bounded memory: trim oldest 10% when exceeding maxlen
+        if len(self._records) > self._max_records:
+            trim_count = self._max_records // 10
+            self._records = self._records[trim_count:]
+
+        # Track verdict changes
+        verdict_value = verdict.value
+        if (
+            self._metrics.last_verdict is not None
+            and verdict_value != self._metrics.last_verdict
+        ):
+            self._metrics.verdict_changes += 1
+        self._metrics.last_verdict = verdict_value
 
         if verdict == Verdict.AUTO_APPROVED:
             self._metrics.auto_approved_count += 1

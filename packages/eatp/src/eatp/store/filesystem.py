@@ -16,21 +16,111 @@ Features:
 - Configurable directory (default: ~/.eatp/chains/)
 """
 
+import fcntl
 import hashlib
 import json
 import logging
 import os
 import tempfile
 import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 from eatp.chain import TrustLineageChain
 from eatp.exceptions import TrustChainNotFoundError
 from eatp.store import TrustStore
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def file_lock(path: str, exclusive: bool = True) -> Generator[None, None, None]:
+    """
+    Cross-process file lock using ``fcntl.flock``.
+
+    Acquires a file lock on a ``.lock`` sidecar file next to the target
+    path. The lock is automatically released when the context exits or
+    the process crashes (``flock`` releases on file descriptor close).
+
+    Args:
+        path: Path to the file being protected. A ``.lock`` sidecar is
+            created next to it.
+        exclusive: If True (default), acquire an exclusive (write) lock.
+            If False, acquire a shared (read) lock.
+
+    Yields:
+        None — the lock is held for the duration of the context.
+
+    Note:
+        Uses ``fcntl.flock`` which is Unix-only. On platforms without
+        ``fcntl`` (e.g. Windows), this will raise ``ImportError`` at
+        module load time.
+    """
+    lock_path = f"{path}.lock"
+    mode = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
+    lock_fd = open(lock_path, "w")
+    try:
+        fcntl.flock(lock_fd.fileno(), mode)
+        yield
+    finally:
+        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
+        lock_fd.close()
+        try:
+            os.unlink(lock_path)
+        except OSError:
+            pass  # Another process may have already removed it
+
+
+def validate_id(id_value: str, id_name: str = "id") -> str:
+    """
+    Validate an identifier to prevent path traversal attacks.
+
+    Rejects IDs that could be used for directory traversal, null byte
+    injection, or absolute path manipulation. IDs with special characters
+    (colons, dots) are allowed here — ``_safe_filename()`` handles the
+    filesystem-safe encoding separately.
+
+    Args:
+        id_value: The raw identifier to validate.
+        id_name: Human-readable name for error messages (default: "id").
+
+    Returns:
+        The stripped, validated identifier.
+
+    Raises:
+        ValueError: If the ID is empty, contains null bytes, or contains
+            path traversal components.
+    """
+    stripped = id_value.strip()
+    if not stripped:
+        raise ValueError(f"Invalid {id_name}: must not be empty")
+
+    if len(stripped) > 1024:
+        raise ValueError(
+            f"Invalid {id_name}: exceeds maximum length of 1024 characters "
+            f"(got {len(stripped)})"
+        )
+
+    if "\x00" in stripped:
+        raise ValueError(
+            f"Invalid {id_name}: must not contain null bytes, got: {id_value!r}"
+        )
+
+    # Check for path traversal components by splitting on path separators
+    parts = stripped.replace("\\", "/").split("/")
+    for part in parts:
+        if part in (".", ".."):
+            raise ValueError(
+                f"Invalid {id_name}: path traversal detected in {id_value!r}"
+            )
+
+    # Reject absolute paths
+    if stripped.startswith("/") or (len(stripped) >= 2 and stripped[1] == ":"):
+        raise ValueError(f"Invalid {id_name}: path traversal detected in {id_value!r}")
+
+    return stripped
 
 
 def _safe_filename(agent_id: str) -> str:
@@ -111,8 +201,13 @@ class FilesystemStore(TrustStore):
             )
 
     def _chain_path(self, agent_id: str) -> Path:
-        """Return the filesystem path for a given agent_id."""
-        filename = _safe_filename(agent_id) + ".json"
+        """Return the filesystem path for a given agent_id.
+
+        Validates the agent_id against path traversal before computing
+        the filesystem path.
+        """
+        validated = validate_id(agent_id, id_name="agent_id")
+        filename = _safe_filename(validated) + ".json"
         return self._base_dir / filename
 
     def _serialize_chain(self, chain: TrustLineageChain) -> Dict[str, Any]:
@@ -290,8 +385,10 @@ class FilesystemStore(TrustStore):
             "chain": self._serialize_chain(chain),
         }
 
-        with self._lock:
-            self._write_envelope(agent_id, envelope)
+        target = self._chain_path(agent_id)
+        with file_lock(str(target)):
+            with self._lock:
+                self._write_envelope(agent_id, envelope)
 
         logger.debug("Stored chain for agent %s", agent_id)
         return agent_id
@@ -318,8 +415,10 @@ class FilesystemStore(TrustStore):
         """
         self._require_initialized()
 
-        with self._lock:
-            envelope = self._read_envelope(agent_id)
+        target = self._chain_path(agent_id)
+        with file_lock(str(target), exclusive=False):
+            with self._lock:
+                envelope = self._read_envelope(agent_id)
 
         if not envelope.get("active", True) and not include_inactive:
             raise TrustChainNotFoundError(agent_id)
@@ -346,14 +445,16 @@ class FilesystemStore(TrustStore):
         """
         self._require_initialized()
 
-        with self._lock:
-            # Read existing envelope (raises TrustChainNotFoundError if missing)
-            existing = self._read_envelope(agent_id)
+        target = self._chain_path(agent_id)
+        with file_lock(str(target)):
+            with self._lock:
+                # Read existing envelope (raises TrustChainNotFoundError if missing)
+                existing = self._read_envelope(agent_id)
 
-            existing["chain"] = self._serialize_chain(chain)
-            existing["updated_at"] = datetime.now(timezone.utc).isoformat()
+                existing["chain"] = self._serialize_chain(chain)
+                existing["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-            self._write_envelope(agent_id, existing)
+                self._write_envelope(agent_id, existing)
 
         logger.debug("Updated chain for agent %s", agent_id)
 
@@ -378,19 +479,21 @@ class FilesystemStore(TrustStore):
         """
         self._require_initialized()
 
-        with self._lock:
-            if soft_delete:
-                envelope = self._read_envelope(agent_id)
-                envelope["active"] = False
-                envelope["deleted_at"] = datetime.now(timezone.utc).isoformat()
-                self._write_envelope(agent_id, envelope)
-                logger.debug("Soft-deleted chain for agent %s", agent_id)
-            else:
-                path = self._chain_path(agent_id)
-                if not path.exists():
-                    raise TrustChainNotFoundError(agent_id)
-                path.unlink()
-                logger.debug("Hard-deleted chain for agent %s", agent_id)
+        target = self._chain_path(agent_id)
+        with file_lock(str(target)):
+            with self._lock:
+                if soft_delete:
+                    envelope = self._read_envelope(agent_id)
+                    envelope["active"] = False
+                    envelope["deleted_at"] = datetime.now(timezone.utc).isoformat()
+                    self._write_envelope(agent_id, envelope)
+                    logger.debug("Soft-deleted chain for agent %s", agent_id)
+                else:
+                    path = self._chain_path(agent_id)
+                    if not path.exists():
+                        raise TrustChainNotFoundError(agent_id)
+                    path.unlink()
+                    logger.debug("Hard-deleted chain for agent %s", agent_id)
 
     async def list_chains(
         self,
@@ -504,3 +607,10 @@ class FilesystemStore(TrustStore):
         """
         self._initialized = False
         logger.info("FilesystemStore closed")
+
+
+__all__ = [
+    "FilesystemStore",
+    "file_lock",
+    "validate_id",
+]

@@ -361,10 +361,8 @@ class ConstraintDimensionRegistry:
         "time_window",
         "resources",
         "rate_limit",
-        "geo_restrictions",
-        "budget_limit",
-        "max_delegation_depth",
-        "allowed_actions",
+        "data_access",
+        "communication",
     }
 
     def __init__(self, allow_unreviewed: bool = False):
