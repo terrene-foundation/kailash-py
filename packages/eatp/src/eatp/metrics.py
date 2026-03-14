@@ -291,9 +291,204 @@ class TrustMetricsCollector:
             self._evaluation_times.clear()
 
 
+# ============================================================================
+# Prometheus Text Format Exporter
+# ============================================================================
+
+
+def export_prometheus(collector: TrustMetricsCollector) -> str:
+    """Export metrics in Prometheus text exposition format.
+
+    Generates a multi-line string conforming to the Prometheus text format
+    specification (https://prometheus.io/docs/instrumenting/exposition_formats/).
+
+    No external dependencies are required -- this is pure string formatting.
+
+    Metrics exported:
+        - eatp_trust_score{agent_id="..."} -- posture autonomy level per agent (gauge)
+        - eatp_verification_total -- total constraint evaluations (counter)
+        - eatp_posture_distribution{posture="..."} -- agent count per posture (gauge)
+        - eatp_constraint_utilization -- constraint pass rate 0.0-1.0 (gauge)
+        - eatp_circuit_breaker_opens_total -- circuit breaker open events (counter)
+
+    Args:
+        collector: A TrustMetricsCollector instance to read metrics from.
+
+    Returns:
+        Multi-line string in Prometheus text exposition format.
+    """
+    lines: list[str] = []
+
+    posture_metrics = collector.get_posture_metrics()
+    constraint_metrics = collector.get_constraint_metrics()
+
+    # --- eatp_trust_score (gauge): per-agent posture autonomy level ---
+    lines.append("# HELP eatp_trust_score Trust posture autonomy level per agent (1-5)")
+    lines.append("# TYPE eatp_trust_score gauge")
+    # Access collector internals under lock for per-agent data
+    with collector._lock:
+        for agent_id, posture in collector._agent_postures.items():
+            level = POSTURE_LEVEL_MAP.get(posture, 0)
+            lines.append(f'eatp_trust_score{{agent_id="{agent_id}"}} {level}')
+
+    # --- eatp_verification_total (counter): total constraint evaluations ---
+    lines.append(
+        "# HELP eatp_verification_total Total constraint evaluations performed"
+    )
+    lines.append("# TYPE eatp_verification_total counter")
+    lines.append(f"eatp_verification_total {constraint_metrics.evaluations_total}")
+
+    # --- eatp_posture_distribution (gauge): agent count per posture ---
+    lines.append(
+        "# HELP eatp_posture_distribution Number of agents at each trust posture level"
+    )
+    lines.append("# TYPE eatp_posture_distribution gauge")
+    for posture_name, count in posture_metrics.posture_distribution.items():
+        lines.append(f'eatp_posture_distribution{{posture="{posture_name}"}} {count}')
+
+    # --- eatp_constraint_utilization (gauge): pass rate ---
+    lines.append(
+        "# HELP eatp_constraint_utilization Constraint evaluation pass rate (0.0-1.0)"
+    )
+    lines.append("# TYPE eatp_constraint_utilization gauge")
+    if constraint_metrics.evaluations_total > 0:
+        utilization = (
+            constraint_metrics.evaluations_passed / constraint_metrics.evaluations_total
+        )
+    else:
+        utilization = 0.0
+    lines.append(f"eatp_constraint_utilization {utilization:.6f}")
+
+    # --- eatp_circuit_breaker_opens_total (counter) ---
+    lines.append(
+        "# HELP eatp_circuit_breaker_opens_total Total circuit breaker open events"
+    )
+    lines.append("# TYPE eatp_circuit_breaker_opens_total counter")
+    lines.append(
+        f"eatp_circuit_breaker_opens_total {posture_metrics.circuit_breaker_opens}"
+    )
+
+    return "\n".join(lines) + "\n"
+
+
+# ============================================================================
+# OpenTelemetry Adapter (Optional Dependency)
+# ============================================================================
+
+
+class OTelMetricsAdapter:
+    """OpenTelemetry metrics adapter for EATP trust health metrics.
+
+    Optional: requires ``opentelemetry-api``. Raises ``ImportError`` at
+    instantiation time if the package is not installed.
+
+    Uses EATP OTel naming convention with dotted metric names:
+        - eatp.trust_score
+        - eatp.verification.count
+        - eatp.posture
+
+    Example::
+
+        adapter = OTelMetricsAdapter(meter_name="eatp")
+        adapter.record_trust_score("agent-001", 5)
+        adapter.record_verification("agent-001", "passed")
+        adapter.record_posture("agent-001", "delegated")
+
+    Args:
+        meter_name: Name of the OTel meter. Defaults to ``"eatp"``.
+
+    Raises:
+        ImportError: If ``opentelemetry-api`` is not installed.
+    """
+
+    def __init__(self, meter_name: str = "eatp") -> None:
+        """Initialize the OpenTelemetry adapter.
+
+        Args:
+            meter_name: Name of the OTel meter. Defaults to ``"eatp"``.
+
+        Raises:
+            ImportError: If ``opentelemetry-api`` is not installed.
+        """
+        try:
+            from opentelemetry import metrics as otel_metrics
+        except ImportError:
+            raise ImportError(
+                "opentelemetry-api is required for OTelMetricsAdapter. "
+                "Install with: pip install opentelemetry-api"
+            )
+
+        self._meter_name = meter_name
+        self._meter = otel_metrics.get_meter(meter_name)
+
+        # Create instruments
+        self._trust_score_gauge = self._meter.create_gauge(
+            name="eatp.trust_score",
+            description="Trust posture autonomy level per agent (1-5)",
+            unit="level",
+        )
+        self._verification_counter = self._meter.create_counter(
+            name="eatp.verification.count",
+            description="Total verification/constraint evaluations",
+            unit="1",
+        )
+        self._posture_gauge = self._meter.create_gauge(
+            name="eatp.posture",
+            description="Current trust posture for an agent",
+            unit="1",
+        )
+
+    def record_trust_score(self, agent_id: str, score: int) -> None:
+        """Record a trust score for an agent.
+
+        Args:
+            agent_id: The agent identifier.
+            score: The trust score value (typically 1-5 for posture levels).
+        """
+        self._trust_score_gauge.set(score, attributes={"agent_id": agent_id})
+
+    def record_verification(self, agent_id: str, result: str) -> None:
+        """Record a verification event.
+
+        Args:
+            agent_id: The agent identifier.
+            result: The verification result (e.g., "passed", "failed").
+        """
+        self._verification_counter.add(
+            1, attributes={"agent_id": agent_id, "result": result}
+        )
+
+    def record_posture(self, agent_id: str, posture: str) -> None:
+        """Record the current posture for an agent.
+
+        Args:
+            agent_id: The agent identifier.
+            posture: The posture name (e.g., "delegated", "supervised").
+        """
+        # Map posture name to numeric level for gauge
+        posture_levels = {
+            "delegated": 5,
+            "continuous_insight": 4,
+            "shared_planning": 3,
+            "supervised": 2,
+            "pseudo_agent": 1,
+        }
+        level = posture_levels.get(posture)
+        if level is None:
+            raise ValueError(
+                f"Unknown posture '{posture}'. Valid postures: "
+                f"{list(posture_levels.keys())}"
+            )
+        self._posture_gauge.set(
+            level, attributes={"agent_id": agent_id, "posture": posture}
+        )
+
+
 __all__ = [
     "TrustMetricsCollector",
     "PostureMetrics",
     "ConstraintMetrics",
     "POSTURE_LEVEL_MAP",
+    "export_prometheus",
+    "OTelMetricsAdapter",
 ]
