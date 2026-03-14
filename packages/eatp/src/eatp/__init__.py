@@ -84,6 +84,15 @@ from eatp.authority import (
 # Postures
 from eatp.postures import PostureStateMachine, TrustPosture
 
+# Hooks
+from eatp.hooks import (
+    EATPHook,
+    HookContext,
+    HookRegistry,
+    HookResult,
+    HookType,
+)
+
 # Exceptions
 from eatp.exceptions import (
     TrustError,
@@ -125,6 +134,12 @@ __all__ = [
     # Postures
     "TrustPosture",
     "PostureStateMachine",
+    # Hooks
+    "HookType",
+    "HookContext",
+    "HookResult",
+    "EATPHook",
+    "HookRegistry",
     # Exceptions
     "TrustError",
     "TrustChainNotFoundError",

@@ -14,9 +14,12 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from eatp.chain import VerificationLevel, VerificationResult
+
+if TYPE_CHECKING:
+    from eatp.hooks import HookRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +109,7 @@ class StrictEnforcer:
         held_callback: Optional[Callable[[str, str, VerificationResult], bool]] = None,
         flag_threshold: int = 1,
         maxlen: int = 10_000,
+        hook_registry: Optional[HookRegistry] = None,
     ):
         """Initialize strict enforcer.
 
@@ -115,6 +119,10 @@ class StrictEnforcer:
                 Receives (agent_id, action, result) and returns True to allow.
             flag_threshold: Number of violations that upgrades FLAGGED to HELD
             maxlen: Maximum number of records to retain (oldest 10% trimmed on overflow)
+            hook_registry: Optional hook registry for lifecycle event interception.
+                If provided, PRE_VERIFICATION and POST_VERIFICATION hooks are
+                executed during enforce(). If None, enforce() behaves identically
+                to pre-hook versions (backward compatible).
         """
         self._on_held = on_held
         self._held_callback = held_callback
@@ -122,6 +130,7 @@ class StrictEnforcer:
         self._records: List[EnforcementRecord] = []
         self._review_queue: List[EnforcementRecord] = []
         self._max_records = maxlen
+        self._hook_registry = hook_registry
 
         if on_held == HeldBehavior.CALLBACK and held_callback is None:
             raise ValueError("held_callback required when on_held is CALLBACK")
@@ -148,6 +157,11 @@ class StrictEnforcer:
 
         return Verdict.AUTO_APPROVED
 
+    @property
+    def hook_registry(self) -> Optional[HookRegistry]:
+        """Get the attached hook registry, if any."""
+        return self._hook_registry
+
     def enforce(
         self,
         agent_id: str,
@@ -156,6 +170,10 @@ class StrictEnforcer:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> Verdict:
         """Enforce a verification result.
+
+        If a hook_registry is attached, PRE_VERIFICATION hooks run before
+        classification, and POST_VERIFICATION hooks run after. A hook
+        returning ``allow=False`` in PRE_VERIFICATION results in BLOCKED.
 
         Args:
             agent_id: The agent being verified
@@ -170,7 +188,63 @@ class StrictEnforcer:
             EATPBlockedError: If the action is blocked
             EATPHeldError: If the action is held (when on_held=RAISE)
         """
+        # Run PRE_VERIFICATION hooks (if registry attached)
+        if self._hook_registry is not None:
+            from eatp.hooks import HookContext, HookType
+
+            pre_context = HookContext(
+                agent_id=agent_id,
+                action=action,
+                hook_type=HookType.PRE_VERIFICATION,
+                metadata=dict(metadata) if metadata else {},
+            )
+            hook_result = self._hook_registry.execute_sync(
+                HookType.PRE_VERIFICATION, pre_context
+            )
+            if not hook_result.allow:
+                logger.warning(
+                    f"[ENFORCE] BLOCKED by PRE_VERIFICATION hook: "
+                    f"agent={agent_id} action={action} reason={hook_result.reason}"
+                )
+                raise EATPBlockedError(
+                    agent_id=agent_id,
+                    action=action,
+                    reason=f"Blocked by hook: {hook_result.reason}",
+                )
+
         verdict = self.classify(result)
+
+        # Run POST_VERIFICATION hooks (if registry attached).
+        # Invariant: POST hooks can only deny (add a BLOCKED), never upgrade
+        # a verdict. The verdict local variable is set by classify() above
+        # and is NOT read back from hook metadata.
+        if self._hook_registry is not None:
+            from eatp.hooks import HookContext, HookType
+
+            post_context = HookContext(
+                agent_id=agent_id,
+                action=action,
+                hook_type=HookType.POST_VERIFICATION,
+                metadata={
+                    "verdict": verdict.value,
+                    "valid": result.valid,
+                    "violations": len(result.violations),
+                    **(metadata or {}),
+                },
+            )
+            hook_result = self._hook_registry.execute_sync(
+                HookType.POST_VERIFICATION, post_context
+            )
+            if not hook_result.allow:
+                logger.warning(
+                    f"[ENFORCE] BLOCKED by POST_VERIFICATION hook: "
+                    f"agent={agent_id} action={action} reason={hook_result.reason}"
+                )
+                raise EATPBlockedError(
+                    agent_id=agent_id,
+                    action=action,
+                    reason=f"Blocked by hook: {hook_result.reason}",
+                )
 
         record_metadata = dict(metadata) if metadata else {}
 

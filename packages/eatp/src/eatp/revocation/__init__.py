@@ -72,12 +72,14 @@ from eatp.revocation.broadcaster import (
     RevocationType,
     TrustRevocationList,
 )
+from eatp.revocation.cascade import RevocationResult, cascade_revoke
 
 __all__ = [
     # Enums
     "RevocationType",
     # Data structures
     "RevocationEvent",
+    "RevocationResult",
     "DeadLetterEntry",
     # Broadcaster
     "RevocationBroadcaster",
@@ -87,6 +89,8 @@ __all__ = [
     "InMemoryDelegationRegistry",
     # Cascade Manager
     "CascadeRevocationManager",
+    # Cascade with TrustStore
+    "cascade_revoke",
     # Trust Revocation List
     "TrustRevocationList",
 ]
