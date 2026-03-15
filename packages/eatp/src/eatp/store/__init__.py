@@ -65,6 +65,8 @@ class TrustStore(ABC):
 
     Implementations:
     - InMemoryTrustStore: Fast in-memory storage for testing/development
+    - FilesystemStore: Persistent JSON-file storage (``eatp.store.filesystem``)
+    - SqliteTrustStore: Persistent SQLite storage (``eatp.store.sqlite``)
     - PostgresTrustStore: Production storage using DataFlow (in kailash-kaizen)
     """
 

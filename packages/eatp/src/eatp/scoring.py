@@ -128,11 +128,22 @@ class TrustScore:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> TrustScore:
-        """Reconstruct from a dict."""
+        """Reconstruct from a dict.
+
+        Raises:
+            ValueError: If ``score`` is not an integer in [0, 100] or
+                ``grade`` is not one of A/B/C/D/F.
+        """
+        score = data["score"]
+        if not isinstance(score, int) or not (0 <= score <= 100):
+            raise ValueError(f"score must be integer 0-100, got {score}")
+        grade = data["grade"]
+        if grade not in {"A", "B", "C", "D", "F"}:
+            raise ValueError(f"grade must be A/B/C/D/F, got {grade}")
         return cls(
-            score=data["score"],
+            score=score,
             breakdown=data["breakdown"],
-            grade=data["grade"],
+            grade=grade,
             computed_at=datetime.fromisoformat(data["computed_at"]),
             agent_id=data["agent_id"],
         )
@@ -731,6 +742,7 @@ BEHAVIORAL_WEIGHTS: Dict[str, int] = {
 _TIME_AT_POSTURE_FULL_SCORE_HOURS: float = 720.0  # 30 days
 _INTERACTION_VOLUME_MIN_FOR_FULL: int = 10000
 _POSTURE_STABILITY_WINDOW_HOURS: float = 168.0  # 1 week
+MIN_RELIABLE_SAMPLE: int = 10  # Minimum actions for reliable error rate (F-10)
 
 
 @dataclass
@@ -896,7 +908,16 @@ class CombinedTrustScore:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> CombinedTrustScore:
-        """Reconstruct from a dict."""
+        """Reconstruct from a dict.
+
+        Raises:
+            ValueError: If ``combined_score`` is not an integer in [0, 100].
+        """
+        combined_score = data["combined_score"]
+        if not isinstance(combined_score, int) or not (0 <= combined_score <= 100):
+            raise ValueError(
+                f"combined_score must be integer 0-100, got {combined_score}"
+            )
         return cls(
             structural_score=TrustScore.from_dict(data["structural_score"]),
             behavioral_score=(
@@ -904,7 +925,7 @@ class CombinedTrustScore:
                 if data["behavioral_score"] is not None
                 else None
             ),
-            combined_score=data["combined_score"],
+            combined_score=combined_score,
             breakdown=data["breakdown"],
         )
 
@@ -945,8 +966,14 @@ def compute_behavioral_score(
     approval_raw = data.approved_actions / data.total_actions
 
     # Factor 2: error_rate — inverse (fewer errors = higher score)
-    error_ratio = data.error_count / data.total_actions
-    error_raw = max(0.0, 1.0 - error_ratio)
+    # F-10: Anti-gaming — below MIN_RELIABLE_SAMPLE, use pessimistic default
+    # to prevent both false positives (1 error / 2 actions = 50% penalty)
+    # and gaming (few perfect actions to inflate score)
+    if data.total_actions < MIN_RELIABLE_SAMPLE:
+        error_raw = 0.5  # Pessimistic default for insufficient data
+    else:
+        error_ratio = data.error_count / data.total_actions
+        error_raw = max(0.0, 1.0 - error_ratio)
 
     # Factor 3: posture_stability — inverse of transition frequency
     if data.observation_window_hours > 0:
@@ -1090,4 +1117,5 @@ __all__ = [
     "CombinedTrustScore",
     "compute_behavioral_score",
     "compute_combined_trust_score",
+    "MIN_RELIABLE_SAMPLE",
 ]

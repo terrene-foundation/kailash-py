@@ -20,6 +20,7 @@ CARE-010: Append-Only Audit Constraints
 """
 
 import hashlib
+import hmac as hmac_mod
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -133,7 +134,7 @@ class AuditRecord:
             True if integrity hash is valid, False otherwise
         """
         computed = self._compute_integrity_hash()
-        return computed == self.integrity_hash
+        return hmac_mod.compare_digest(computed, self.integrity_hash)
 
 
 @dataclass

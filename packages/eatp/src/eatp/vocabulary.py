@@ -199,7 +199,7 @@ CONSTRAINT_VOCABULARY: Dict[str, Dict[str, Any]] = {
         "description": (
             "EATP v2.2 reasoning trace extension. When active, agents "
             "must include a cryptographically signed reasoning trace with "
-            "every action for transparency and accountability."
+            "every action for transparency and traceability."
         ),
     },
 }

@@ -1,0 +1,100 @@
+name: TrustPlane Verify
+description: Verify trust chain integrity for AI-assisted projects
+author: Terrene Foundation
+
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  project-dir:
+    description: Directory containing .trust-plane/
+    default: "."
+  fail-on-violation:
+    description: Fail the CI job if verification fails
+    default: "true"
+  python-version:
+    description: Python version to use
+    default: "3.11"
+  post-comment:
+    description: Post verification results as PR comment
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install trust-plane
+      shell: bash
+      run: pip install trust-plane
+
+    - name: Check for trust-plane project
+      id: check
+      shell: bash
+      working-directory: ${{ inputs.project-dir }}
+      run: |
+        if [ ! -d ".trust-plane" ] && [ ! -f "trust-plane/manifest.json" ]; then
+          echo "has_project=false" >> $GITHUB_OUTPUT
+          echo "::warning::No .trust-plane/ directory found. Skipping verification."
+        else
+          echo "has_project=true" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Verify trust chain
+      if: steps.check.outputs.has_project == 'true'
+      id: verify
+      shell: bash
+      working-directory: ${{ inputs.project-dir }}
+      run: |
+        set +e
+        attest verify 2>&1 | tee /tmp/verify-result.txt
+        VERIFY_EXIT=$?
+        set -e
+        echo "exit_code=$VERIFY_EXIT" >> $GITHUB_OUTPUT
+        if [ $VERIFY_EXIT -eq 0 ]; then
+          echo "status=PASSED" >> $GITHUB_OUTPUT
+        else
+          echo "status=FAILED" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Post PR comment
+      if: >-
+        steps.check.outputs.has_project == 'true'
+        && inputs.post-comment == 'true'
+        && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const result = fs.readFileSync('/tmp/verify-result.txt', 'utf8');
+          const status = '${{ steps.verify.outputs.status }}';
+          const icon = status === 'PASSED' ? '✅' : '❌';
+
+          const body = `## ${icon} TrustPlane Verification: ${status}
+
+          \`\`\`
+          ${result.substring(0, 3000)}
+          \`\`\`
+
+          <sub>Verified by [TrustPlane](https://github.com/terrene/trust-plane)</sub>`;
+
+          await github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });
+
+    - name: Fail on violation
+      if: >-
+        steps.check.outputs.has_project == 'true'
+        && inputs.fail-on-violation == 'true'
+        && steps.verify.outputs.exit_code != '0'
+      shell: bash
+      run: |
+        echo "::error::TrustPlane verification failed. See verification output above."
+        exit 1

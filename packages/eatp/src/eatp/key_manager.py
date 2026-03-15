@@ -292,6 +292,8 @@ class InMemoryKeyManager(KeyManagerInterface):
         self._rotated_to: Dict[str, str] = {}
         # Revoked keys kept for verification grace period
         self._revoked_keys: Dict[str, str] = {}
+        # Permanently revoked key_ids -- prevents re-registration (C3 fix)
+        self._revoked_key_ids: set = set()
 
     async def generate_keypair(self, key_id: str) -> Tuple[str, str]:
         """
@@ -304,8 +306,16 @@ class InMemoryKeyManager(KeyManagerInterface):
             Tuple of (private_key, public_key) both base64-encoded
 
         Raises:
-            KeyManagerError: If key_id already exists
+            KeyManagerError: If key_id already exists or was revoked
         """
+        # C3: Fail-closed -- refuse to generate a keypair for a revoked key_id
+        if key_id in self._revoked_key_ids:
+            raise KeyManagerError(
+                f"Key was revoked and cannot be re-created: {key_id}",
+                key_id=key_id,
+                operation="generate_keypair",
+            )
+
         if key_id in self._keys:
             raise KeyManagerError(
                 f"Key already exists: {key_id}",
@@ -432,6 +442,8 @@ class InMemoryKeyManager(KeyManagerInterface):
         Revoke a key, preventing further signing operations.
 
         The key is kept for potential verification of historical signatures.
+        The key_id is permanently added to _revoked_key_ids to prevent
+        re-registration (C3 fix).
 
         Args:
             key_id: Key identifier to revoke
@@ -445,6 +457,14 @@ class InMemoryKeyManager(KeyManagerInterface):
                 key_id=key_id,
                 operation="revoke_key",
             )
+
+        # C3: Track permanently revoked key_ids to prevent re-registration
+        self._revoked_key_ids.add(key_id)
+
+        # F4: Remove key material from memory after revocation.
+        # The key_id remains in _keys as a tombstone (empty string) so
+        # has_key() still returns True and sign_with_key() fails cleanly.
+        self._keys[key_id] = ""
 
         # Update metadata to mark as revoked
         metadata = self._metadata.get(key_id)
@@ -500,7 +520,22 @@ class InMemoryKeyManager(KeyManagerInterface):
         Args:
             key_id: Identifier for the key
             private_key: Base64-encoded private key
+
+        Raises:
+            KeyManagerError: If key_id was previously revoked (C3 fix)
         """
+        # C3: Fail-closed -- refuse to register a revoked key_id
+        if key_id in self._revoked_key_ids:
+            logger.warning(
+                "Attempted to re-register revoked key_id=%s -- blocked",
+                key_id,
+            )
+            raise KeyManagerError(
+                f"Key was revoked and cannot be re-registered: {key_id}",
+                key_id=key_id,
+                operation="register_key",
+            )
+
         self._keys[key_id] = private_key
         self._metadata[key_id] = KeyMetadata(
             key_id=key_id,
@@ -508,9 +543,13 @@ class InMemoryKeyManager(KeyManagerInterface):
             created_at=datetime.now(timezone.utc),
         )
 
-    def get_key(self, key_id: str) -> Optional[str]:
+    def _get_key(self, key_id: str) -> Optional[str]:
         """
-        Get a private key by ID (for backward compatibility).
+        Get a private key by ID (internal use only).
+
+        SECURITY: This method is private to prevent accidental exposure of
+        raw private key material. External callers should use has_key() to
+        check existence or sign_with_key() to sign without exposure.
 
         Args:
             key_id: Identifier for the key
@@ -519,6 +558,55 @@ class InMemoryKeyManager(KeyManagerInterface):
             The private key or None if not found
         """
         return self._keys.get(key_id)
+
+    def has_key(self, key_id: str) -> bool:
+        """
+        Check whether a key exists in the key manager.
+
+        Safe alternative to get_key() that does not expose key material.
+
+        Args:
+            key_id: Identifier for the key
+
+        Returns:
+            True if the key exists, False otherwise
+        """
+        return key_id in self._keys
+
+    def sign_with_key(self, key_id: str, payload: str) -> str:
+        """
+        Sign a payload using the specified key without exposing key material.
+
+        Synchronous convenience method for callers that need to sign data
+        without going through the async sign() interface.
+
+        Args:
+            key_id: Key identifier to use for signing
+            payload: Data to sign
+
+        Returns:
+            Base64-encoded signature
+
+        Raises:
+            KeyManagerError: If key not found or key is revoked
+        """
+        if key_id not in self._keys:
+            raise KeyManagerError(
+                f"Key not found: {key_id}",
+                key_id=key_id,
+                operation="sign_with_key",
+            )
+
+        metadata = self._metadata.get(key_id)
+        if metadata and metadata.is_revoked:
+            raise KeyManagerError(
+                f"Key is revoked: {key_id}",
+                key_id=key_id,
+                operation="sign_with_key",
+            )
+
+        private_key = self._keys[key_id]
+        return sign(payload, private_key)
 
     def get_public_key(self, key_id: str) -> Optional[str]:
         """
@@ -837,7 +925,13 @@ class AWSKMSKeyManager(KeyManagerInterface):
 
             return arn, public_key_b64
 
-        except (ClientError, BotoCoreError) as e:
+        except (
+            ClientError,
+            BotoCoreError,
+            ConnectionError,
+            OSError,
+            TimeoutError,
+        ) as e:
             raise self._handle_kms_error(e, "generate_keypair", key_id) from e
 
     async def sign(self, payload: Union[str, dict, bytes], key_id: str) -> str:
@@ -892,7 +986,13 @@ class AWSKMSKeyManager(KeyManagerInterface):
             signature_bytes = response["Signature"]
             return base64.b64encode(signature_bytes).decode("utf-8")
 
-        except (ClientError, BotoCoreError) as e:
+        except (
+            ClientError,
+            BotoCoreError,
+            ConnectionError,
+            OSError,
+            TimeoutError,
+        ) as e:
             raise self._handle_kms_error(e, "sign", key_id) from e
 
     async def verify(
@@ -901,10 +1001,9 @@ class AWSKMSKeyManager(KeyManagerInterface):
         """
         Verify an ECDSA P-256 signature using AWS KMS Verify API.
 
-        Uses the KMS Verify API with the first available key ARN. The
-        public_key parameter is used to look up the corresponding KMS key
-        ARN. If no matching ARN is found, the first registered key ARN
-        is used (KMS will reject if the signature doesn't match).
+        Uses the KMS Verify API with the ARN that matches the provided
+        public_key. If no matching ARN is found, raises KeyManagerError
+        immediately (fail-closed -- never falls back to an unrelated key).
 
         Note: This verifies ECDSA P-256 signatures only. Ed25519 signatures
         from eatp.crypto.sign() cannot be verified here.
@@ -918,8 +1017,8 @@ class AWSKMSKeyManager(KeyManagerInterface):
             True if the signature is valid, False otherwise.
 
         Raises:
-            KeyManagerError: If KMS operation fails (not for invalid
-                signatures, which return False).
+            KeyManagerError: If no matching key is found or KMS operation
+                fails. Never falls back to an unrelated key.
         """
         payload_bytes = self._payload_to_bytes(payload)
         signature_bytes = base64.b64decode(signature)
@@ -931,14 +1030,12 @@ class AWSKMSKeyManager(KeyManagerInterface):
                 arn = self._key_arns.get(kid)
                 break
 
-        # Fall back to first available ARN if no public key match
-        if arn is None and self._key_arns:
-            arn = next(iter(self._key_arns.values()))
-
+        # H7 fix: Fail-closed -- no fallback to unrelated key
         if arn is None:
             raise KeyManagerError(
-                message="No KMS key ARN available for verification. "
-                "Generate or register a key first.",
+                message="No matching KMS key ARN found for the provided public key. "
+                "Verification requires an exact public key match -- "
+                "will not fall back to an unrelated key.",
                 operation="verify",
             )
 
@@ -953,7 +1050,13 @@ class AWSKMSKeyManager(KeyManagerInterface):
 
             return response.get("SignatureValid", False)
 
-        except (ClientError, BotoCoreError) as e:
+        except (
+            ClientError,
+            BotoCoreError,
+            ConnectionError,
+            OSError,
+            TimeoutError,
+        ) as e:
             raise self._handle_kms_error(e, "verify") from e
 
     async def rotate_key(self, key_id: str) -> Tuple[str, str]:
@@ -1010,7 +1113,13 @@ class AWSKMSKeyManager(KeyManagerInterface):
                     old_arn,
                     self._pending_deletion_days,
                 )
-            except (ClientError, BotoCoreError) as e:
+            except (
+                ClientError,
+                BotoCoreError,
+                ConnectionError,
+                OSError,
+                TimeoutError,
+            ) as e:
                 # Log but don't fail rotation -- the new key is already active
                 logger.warning(
                     "Failed to schedule deletion of old KMS key %s: %s",
@@ -1055,7 +1164,13 @@ class AWSKMSKeyManager(KeyManagerInterface):
                 KeyId=arn,
                 PendingWindowInDays=self._pending_deletion_days,
             )
-        except (ClientError, BotoCoreError) as e:
+        except (
+            ClientError,
+            BotoCoreError,
+            ConnectionError,
+            OSError,
+            TimeoutError,
+        ) as e:
             raise self._handle_kms_error(e, "revoke_key", key_id) from e
 
         # Update local metadata
@@ -1125,7 +1240,13 @@ class AWSKMSKeyManager(KeyManagerInterface):
 
             return metadata
 
-        except (ClientError, BotoCoreError) as e:
+        except (
+            ClientError,
+            BotoCoreError,
+            ConnectionError,
+            OSError,
+            TimeoutError,
+        ) as e:
             logger.warning(
                 "Failed to describe KMS key %s (arn=%s): %s",
                 key_id,

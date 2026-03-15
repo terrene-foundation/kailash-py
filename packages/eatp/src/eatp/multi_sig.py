@@ -153,7 +153,7 @@ class OperationNotFoundError(MultiSigError):
         self.operation_id = operation_id
 
 
-@dataclass
+@dataclass(frozen=True)
 class MultiSigPolicy:
     """
     Policy defining M-of-N multi-signature requirements.

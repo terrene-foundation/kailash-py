@@ -27,6 +27,7 @@ Example:
 """
 
 import hashlib
+import hmac as hmac_mod
 import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
@@ -390,7 +391,7 @@ class MerkleTree:
         # Then verify the proof's root matches the tree's current root
         # This catches the case where the tree has been modified since
         # the proof was generated
-        return proof.root_hash == self.root_hash
+        return hmac_mod.compare_digest(proof.root_hash, self.root_hash)
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -471,8 +472,8 @@ def verify_merkle_proof(leaf_hash: str, proof: MerkleProof) -> bool:
 
         current_hash = hashlib.sha256(combined).hexdigest()
 
-    # Compare computed root with proof's root hash
-    return current_hash == proof.root_hash
+    # Compare computed root with proof's root hash (constant-time)
+    return hmac_mod.compare_digest(current_hash, proof.root_hash)
 
 
 def compute_merkle_root(hashes: List[str]) -> Optional[str]:

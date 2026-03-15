@@ -74,7 +74,7 @@ logger = logging.getLogger(__name__)
 
 # Maximum allowed delegation depth from human origin (CARE-004)
 # This prevents DoS attacks through deep delegation chains and
-# ensures accountability can be traced back to human origin.
+# ensures traceability can be maintained back to human origin.
 MAX_DELEGATION_DEPTH = 10
 
 
@@ -567,7 +567,7 @@ class TrustOperations:
                 level=level,
             )
 
-        # Reasoning trace verification (TODO-012)
+        # Reasoning trace verification (implemented in Phase 4)
         # Check if REASONING_REQUIRED constraint is active
         reasoning_required = any(
             c.constraint_type == ConstraintType.REASONING_REQUIRED
@@ -1169,7 +1169,7 @@ class TrustOperations:
         each delegation signature cryptographically. This ensures:
         - All delegations in the chain are authentic
         - No delegations have been tampered with
-        - The chain of trust is unbroken from human origin
+        - The trust chain is unbroken from human origin
 
         Args:
             agent_id: The agent whose delegation chain to verify
@@ -1409,7 +1409,7 @@ class TrustOperations:
 
         # 4b. CARE-004: Enforce maximum delegation depth
         # Prevents DoS attacks through deep delegation chains and
-        # ensures accountability can be traced back to human origin.
+        # ensures traceability can be maintained back to human origin.
         current_depth = self._calculate_delegation_depth(delegator_chain)
         new_depth = current_depth + 1
         if new_depth > self.max_delegation_depth:

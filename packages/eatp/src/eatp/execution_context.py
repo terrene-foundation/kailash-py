@@ -22,12 +22,17 @@ Author: Kaizen Framework Team
 Created: 2026-01-02
 """
 
+import logging
 import uuid
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+from eatp.exceptions import ConstraintViolationError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -151,6 +156,79 @@ class ExecutionContext:
     constraints: Dict[str, Any] = field(default_factory=dict)
     trace_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
+    def _validate_constraint_tightening(
+        self, additional_constraints: Dict[str, Any]
+    ) -> None:
+        """
+        Validate that additional constraints only tighten, never loosen.
+
+        Monotonic escalation rule (EATP trust model):
+        - Numeric (int/float): child value must be <= parent value
+        - List: child must be a subset of parent
+        - String: child must equal parent (no loosening)
+        - New keys not in parent: allowed (adding constraints = tightening)
+
+        Args:
+            additional_constraints: Constraints the child wants to set
+
+        Raises:
+            ConstraintViolationError: If child tries to loosen any existing
+                constraint
+        """
+        for key, new_value in additional_constraints.items():
+            if key not in self.constraints:
+                # New constraint key = tightening, always allowed
+                continue
+
+            old_value = self.constraints[key]
+
+            if isinstance(old_value, (int, float)) and isinstance(
+                new_value, (int, float)
+            ):
+                if new_value > old_value:
+                    raise ConstraintViolationError(
+                        f"Cannot loosen numeric constraint '{key}': "
+                        f"child value {new_value} exceeds parent value {old_value}",
+                        violations=[
+                            {
+                                "constraint": key,
+                                "parent_value": old_value,
+                                "child_value": new_value,
+                                "rule": "numeric: child must be <= parent",
+                            }
+                        ],
+                    )
+            elif isinstance(old_value, list) and isinstance(new_value, list):
+                if not set(new_value).issubset(set(old_value)):
+                    extra = set(new_value) - set(old_value)
+                    raise ConstraintViolationError(
+                        f"Cannot loosen list constraint '{key}': "
+                        f"child contains items not in parent: {extra}",
+                        violations=[
+                            {
+                                "constraint": key,
+                                "parent_value": old_value,
+                                "child_value": new_value,
+                                "extra_items": sorted(str(x) for x in extra),
+                                "rule": "list: child must be subset of parent",
+                            }
+                        ],
+                    )
+            elif isinstance(old_value, str) and isinstance(new_value, str):
+                if new_value != old_value:
+                    raise ConstraintViolationError(
+                        f"Cannot change string constraint '{key}': "
+                        f"child value '{new_value}' differs from parent value '{old_value}'",
+                        violations=[
+                            {
+                                "constraint": key,
+                                "parent_value": old_value,
+                                "child_value": new_value,
+                                "rule": "string: child must equal parent",
+                            }
+                        ],
+                    )
+
     def with_delegation(
         self,
         delegatee_id: str,
@@ -160,18 +238,29 @@ class ExecutionContext:
         Create new context for a delegated agent.
 
         IMPORTANT: human_origin is PRESERVED (never changes).
-        Constraints are MERGED (can only tighten).
+        Constraints are MERGED (can only tighten, never loosen).
 
         This method creates a new ExecutionContext suitable for passing
         to a delegated agent. The human_origin reference is preserved
         exactly (same object), ensuring traceability.
 
+        Constraint tightening rules:
+        - Numeric (int/float): child value must be <= parent value
+        - List: child must be a subset of parent
+        - String: child must equal parent
+        - New keys: always allowed (adding constraints = tightening)
+
         Args:
             delegatee_id: ID of the agent receiving delegation
-            additional_constraints: New constraints to add (must be tighter)
+            additional_constraints: New constraints to add (must be tighter
+                or equal to existing constraints)
 
         Returns:
             New ExecutionContext for the delegated agent
+
+        Raises:
+            ConstraintViolationError: If additional_constraints would loosen
+                any existing constraint
 
         Example:
             >>> parent_ctx = ExecutionContext(human_origin=origin, ...)
@@ -185,6 +274,7 @@ class ExecutionContext:
         new_chain = self.delegation_chain + [delegatee_id]
         merged_constraints = {**self.constraints}
         if additional_constraints:
+            self._validate_constraint_tightening(additional_constraints)
             merged_constraints.update(additional_constraints)
 
         return ExecutionContext(

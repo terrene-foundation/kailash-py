@@ -8,11 +8,11 @@ Provides a high-level ``cascade_revoke()`` function that wires the existing
 chain invalidation with audit trail.
 
 Atomicity:
-    The function collects all revocation events first, then soft-deletes
-    affected chains in the TrustStore. If a chain deletion fails (e.g.,
-    chain not found), the error is recorded but does not abort the cascade
-    — partial revocation is safer than no revocation. All events are
-    broadcast regardless.
+    The function uses the TrustStore's transaction support when available
+    for atomic chain invalidation. If any chain deletion fails, all
+    previously deleted chains are restored (rolled back) to maintain
+    consistency. On partial failure, success=False is returned with
+    all chains restored and errors reported.
 
 Idempotency:
     Revoking an already-revoked agent is a no-op: the function returns
@@ -23,10 +23,12 @@ Idempotency:
 
 from __future__ import annotations
 
+import copy
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from eatp.chain import TrustLineageChain
 from eatp.exceptions import TrustChainNotFoundError
 from eatp.revocation.broadcaster import (
     CascadeRevocationManager,
@@ -71,6 +73,60 @@ class RevocationResult:
         }
 
 
+async def _snapshot_chains(
+    store: TrustStore, agent_ids: set[str]
+) -> Dict[str, TrustLineageChain]:
+    """Take deep-copy snapshots of chains for rollback support.
+
+    Args:
+        store: TrustStore to read chains from.
+        agent_ids: Set of agent IDs to snapshot.
+
+    Returns:
+        Dict mapping agent_id to a deep copy of its TrustLineageChain.
+        Agents without chains (TrustChainNotFoundError) are silently skipped.
+    """
+    snapshots: Dict[str, TrustLineageChain] = {}
+    for aid in agent_ids:
+        try:
+            chain = await store.get_chain(aid, include_inactive=False)
+            snapshots[aid] = copy.deepcopy(chain)
+        except TrustChainNotFoundError:
+            pass
+    return snapshots
+
+
+async def _rollback_chains(
+    store: TrustStore,
+    snapshots: Dict[str, TrustLineageChain],
+    deleted_agents: List[str],
+) -> None:
+    """Attempt to restore previously deleted chains from snapshots.
+
+    Best-effort rollback: logs errors but does not raise.
+
+    Args:
+        store: TrustStore to restore chains into.
+        snapshots: Pre-deletion snapshots.
+        deleted_agents: List of agent IDs that were successfully deleted
+            and need to be restored.
+    """
+    for aid in deleted_agents:
+        if aid not in snapshots:
+            logger.warning(
+                f"[REVOKE-ROLLBACK] No snapshot for agent '{aid}', cannot restore"
+            )
+            continue
+        try:
+            await store.store_chain(snapshots[aid])
+            logger.debug(f"[REVOKE-ROLLBACK] Restored chain for agent '{aid}'")
+        except Exception as restore_exc:
+            logger.error(
+                f"[REVOKE-ROLLBACK] Failed to restore chain for agent "
+                f"'{aid}': {type(restore_exc).__name__}: {restore_exc}"
+            )
+
+
 async def cascade_revoke(
     agent_id: str,
     store: TrustStore,
@@ -83,10 +139,18 @@ async def cascade_revoke(
 
     This is the primary entry point for cascade revocation. It:
 
-    1. Checks idempotency (already-revoked → no-op)
+    1. Checks idempotency (already-revoked -> no-op)
     2. Runs BFS cascade via ``CascadeRevocationManager``
-    3. Soft-deletes all affected chains in the ``TrustStore``
-    4. Returns a complete audit trail
+    3. Snapshots all affected chains for rollback support
+    4. Soft-deletes all affected chains in the ``TrustStore``
+    5. On partial failure: rolls back all deletions for consistency
+    6. Returns a complete audit trail
+
+    Atomicity:
+        All chain deletions are treated as an atomic unit. If any deletion
+        fails, all previously successful deletions are rolled back (chains
+        restored from snapshots). This prevents inconsistent state where
+        some chains are deleted and others are not.
 
     Args:
         agent_id: The agent to revoke.
@@ -95,7 +159,7 @@ async def cascade_revoke(
         revoked_by: ID of the entity performing the revocation.
         broadcaster: Optional broadcaster. Defaults to InMemoryRevocationBroadcaster.
         delegation_registry: Optional delegation registry. Defaults to
-            InMemoryDelegationRegistry (empty — no cascades beyond target).
+            InMemoryDelegationRegistry (empty -- no cascades beyond target).
 
     Returns:
         RevocationResult with events, revoked agents, and any errors.
@@ -124,10 +188,13 @@ async def cascade_revoke(
     )
 
     # Collect all affected agent IDs
-    all_agents = set()
+    all_agents: set[str] = set()
     for event in events:
         all_agents.add(event.target_id)
         all_agents.update(event.affected_agents)
+
+    # Snapshot chains before deletion for rollback support
+    snapshots = await _snapshot_chains(store, all_agents)
 
     # Soft-delete chains in TrustStore for each affected agent
     revoked_agents: List[str] = []
@@ -139,7 +206,7 @@ async def cascade_revoke(
             revoked_agents.append(affected_id)
             logger.debug(f"[REVOKE] Soft-deleted chain for agent '{affected_id}'")
         except TrustChainNotFoundError:
-            # Chain doesn't exist or already deleted — not an error
+            # Chain doesn't exist or already deleted -- not an error
             logger.debug(
                 f"[REVOKE] Chain for agent '{affected_id}' not found "
                 f"(may not have a chain or already revoked)"
@@ -151,6 +218,16 @@ async def cascade_revoke(
                 f"[REVOKE] Failed to soft-delete chain for agent "
                 f"'{affected_id}': {error_msg}"
             )
+
+    # If any errors occurred, roll back all successful deletions
+    if errors:
+        logger.warning(
+            f"[REVOKE] Partial failure during cascade revocation for '{agent_id}': "
+            f"{len(errors)} error(s). Rolling back {len(revoked_agents)} "
+            f"successful deletion(s) for consistency."
+        )
+        await _rollback_chains(store, snapshots, revoked_agents)
+        revoked_agents = []  # No agents were ultimately revoked
 
     success = len(errors) == 0
 

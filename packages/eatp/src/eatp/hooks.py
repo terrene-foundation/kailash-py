@@ -54,6 +54,15 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+_RESERVED_METADATA_KEYS = frozenset(
+    {"agent_id", "authority_id", "action", "resource", "hook_type", "trace_id"}
+)
+"""Metadata keys that hooks must not overwrite via modified_context.
+
+These keys carry trust-critical provenance and must be set only by the
+enforcement pipeline, never by user-supplied hooks.
+"""
+
 
 class HookType(str, Enum):
     """Trust-native lifecycle events for hook interception.
@@ -138,9 +147,18 @@ class HookResult:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> HookResult:
-        """Reconstruct from a dict."""
+        """Reconstruct from a dict.
+
+        Raises:
+            TypeError: If ``allow`` is not a strict bool.
+        """
+        allow = data["allow"]
+        if not isinstance(allow, bool):
+            raise TypeError(
+                f"HookResult.allow must be bool, got {type(allow).__name__}: {allow!r}"
+            )
         return cls(
-            allow=data["allow"],
+            allow=allow,
             reason=data.get("reason"),
             modified_context=data.get("modified_context"),
         )
@@ -330,13 +348,27 @@ class HookRegistry:
 
             # Merge modified context for subsequent hooks
             if result.modified_context:
-                for key in result.modified_context:
+                modified = result.modified_context
+                if len(modified) > 100:
+                    logger.warning(
+                        f"[HOOK] Hook '{hook.name}' modified_context "
+                        f"exceeds 100 keys, truncating"
+                    )
+                    modified = dict(list(modified.items())[:100])
+
+                for key in modified:
+                    if key in _RESERVED_METADATA_KEYS:
+                        logger.warning(
+                            f"[HOOK] Hook '{hook.name}' attempted to "
+                            f"overwrite reserved key '{key}' — skipped"
+                        )
+                        continue
                     if key in context.metadata:
                         logger.debug(
                             f"[HOOK] Hook '{hook.name}' overwrites "
                             f"metadata key '{key}'"
                         )
-                context.metadata.update(result.modified_context)
+                    context.metadata[key] = modified[key]
 
         return HookResult(allow=True)
 
@@ -365,9 +397,11 @@ class HookRegistry:
             return asyncio.run(coro)
         else:
             import concurrent.futures
+            from contextvars import copy_context
 
+            ctx = copy_context()
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                return pool.submit(asyncio.run, coro).result()
+                return pool.submit(ctx.run, asyncio.run, coro).result()
 
     def list_hooks(self, hook_type: Optional[HookType] = None) -> List[EATPHook]:
         """List registered hooks, optionally filtered by event type.

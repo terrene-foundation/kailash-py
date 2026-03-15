@@ -10,6 +10,7 @@ for atomic chain re-signing (CARE-008).
 
 Features:
 - Fast in-memory storage
+- Soft-delete support (moves chains to _inactive instead of removing)
 - Transaction support with rollback
 - Compatible with TrustStore ABC interface
 - No external dependencies
@@ -53,6 +54,7 @@ class InMemoryTrustStore(TrustStore):
     def __init__(self):
         """Initialize the in-memory trust store."""
         self._chains: Dict[str, TrustLineageChain] = {}
+        self._inactive: Dict[str, TrustLineageChain] = {}
         self._initialized = False
 
     async def initialize(self) -> None:
@@ -88,18 +90,25 @@ class InMemoryTrustStore(TrustStore):
 
         Args:
             agent_id: The agent ID to retrieve
-            include_inactive: Include inactive chains (not used in memory store)
+            include_inactive: If True, also search inactive (soft-deleted) chains
 
         Returns:
             The TrustLineageChain for the agent
 
         Raises:
-            TrustChainNotFoundError: If chain not found
+            TrustChainNotFoundError: If chain not found in active chains
+                (and not in inactive chains when include_inactive=True)
         """
         chain = self._chains.get(agent_id)
-        if chain is None:
-            raise TrustChainNotFoundError(agent_id)
-        return chain
+        if chain is not None:
+            return chain
+
+        if include_inactive:
+            chain = self._inactive.get(agent_id)
+            if chain is not None:
+                return chain
+
+        raise TrustChainNotFoundError(agent_id)
 
     async def update_chain(
         self,
@@ -128,16 +137,39 @@ class InMemoryTrustStore(TrustStore):
         """
         Delete a trust lineage chain.
 
+        If soft_delete=True (default), moves the chain from _chains to
+        _inactive, preserving the data for later retrieval with
+        include_inactive=True.
+
+        If soft_delete=False, permanently removes the chain from both
+        _chains and _inactive.
+
         Args:
             agent_id: The agent ID to delete
-            soft_delete: Not used in memory store (always hard delete)
+            soft_delete: If True, move to _inactive; if False, hard-delete
+                from both _chains and _inactive
 
         Raises:
-            TrustChainNotFoundError: If chain not found
+            TrustChainNotFoundError: If chain not found in _chains
+                (for soft_delete=True) or in both _chains and _inactive
+                (for soft_delete=False)
         """
-        if agent_id not in self._chains:
-            raise TrustChainNotFoundError(agent_id)
-        del self._chains[agent_id]
+        if soft_delete:
+            if agent_id not in self._chains:
+                raise TrustChainNotFoundError(agent_id)
+            chain = self._chains.pop(agent_id)
+            self._inactive[agent_id] = chain
+        else:
+            # Hard delete: remove from both _chains and _inactive
+            found = False
+            if agent_id in self._chains:
+                del self._chains[agent_id]
+                found = True
+            if agent_id in self._inactive:
+                del self._inactive[agent_id]
+                found = True
+            if not found:
+                raise TrustChainNotFoundError(agent_id)
 
     async def list_chains(
         self,
@@ -151,7 +183,8 @@ class InMemoryTrustStore(TrustStore):
 
         Args:
             authority_id: Filter by authority ID (optional)
-            active_only: Include only active chains (not used in memory store)
+            active_only: If True (default), only return active chains.
+                If False, include inactive (soft-deleted) chains too.
             limit: Maximum number of results
             offset: Offset for pagination
 
@@ -159,6 +192,9 @@ class InMemoryTrustStore(TrustStore):
             List of TrustLineageChain objects
         """
         chains = list(self._chains.values())
+
+        if not active_only:
+            chains = chains + list(self._inactive.values())
 
         # Filter by authority if specified
         if authority_id is not None:
@@ -177,20 +213,21 @@ class InMemoryTrustStore(TrustStore):
 
         Args:
             authority_id: Filter by authority ID (optional)
-            active_only: Include only active chains (not used in memory store)
+            active_only: If True (default), only count active chains.
+                If False, include inactive (soft-deleted) chains too.
 
         Returns:
             Number of matching chains
         """
+        all_chains = list(self._chains.values())
+        if not active_only:
+            all_chains = all_chains + list(self._inactive.values())
+
         if authority_id is not None:
             return len(
-                [
-                    c
-                    for c in self._chains.values()
-                    if c.genesis.authority_id == authority_id
-                ]
+                [c for c in all_chains if c.genesis.authority_id == authority_id]
             )
-        return len(self._chains)
+        return len(all_chains)
 
     def transaction(self) -> TransactionContext:
         """
@@ -235,3 +272,4 @@ class InMemoryTrustStore(TrustStore):
     async def close(self) -> None:
         """Close and cleanup resources."""
         self._chains.clear()
+        self._inactive.clear()

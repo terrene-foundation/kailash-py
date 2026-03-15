@@ -16,7 +16,6 @@ Features:
 - Configurable directory (default: ~/.eatp/chains/)
 """
 
-import fcntl
 import hashlib
 import json
 import logging
@@ -28,6 +27,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional
 
+from filelock import FileLock
+
 from eatp.chain import TrustLineageChain
 from eatp.exceptions import TrustChainNotFoundError
 from eatp.store import TrustStore
@@ -38,39 +39,25 @@ logger = logging.getLogger(__name__)
 @contextmanager
 def file_lock(path: str, exclusive: bool = True) -> Generator[None, None, None]:
     """
-    Cross-process file lock using ``fcntl.flock``.
+    Cross-platform file lock using ``filelock.FileLock``.
 
     Acquires a file lock on a ``.lock`` sidecar file next to the target
-    path. The lock is automatically released when the context exits or
-    the process crashes (``flock`` releases on file descriptor close).
+    path. The lock is automatically released when the context exits.
 
     Args:
         path: Path to the file being protected. A ``.lock`` sidecar is
             created next to it.
-        exclusive: If True (default), acquire an exclusive (write) lock.
-            If False, acquire a shared (read) lock.
+        exclusive: If True (default), acquire an exclusive lock.
+            If False, also acquires an exclusive lock (filelock does not
+            support shared locks; read safety comes from atomic writes).
 
     Yields:
         None — the lock is held for the duration of the context.
-
-    Note:
-        Uses ``fcntl.flock`` which is Unix-only. On platforms without
-        ``fcntl`` (e.g. Windows), this will raise ``ImportError`` at
-        module load time.
     """
     lock_path = f"{path}.lock"
-    mode = fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH
-    lock_fd = open(lock_path, "w")
-    try:
-        fcntl.flock(lock_fd.fileno(), mode)
+    lock = FileLock(lock_path)
+    with lock:
         yield
-    finally:
-        fcntl.flock(lock_fd.fileno(), fcntl.LOCK_UN)
-        lock_fd.close()
-        try:
-            os.unlink(lock_path)
-        except OSError:
-            pass  # Another process may have already removed it
 
 
 def validate_id(id_value: str, id_name: str = "id") -> str:

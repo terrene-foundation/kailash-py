@@ -642,7 +642,8 @@ class TestGamingResistance:
 
     def test_gaming_scenario_low_volume_high_approval_no_errors(self):
         """Gaming scenario: perfect behavior with only 5 actions.
-        Volume factor should substantially penalize the total."""
+        Volume factor should substantially penalize the total.
+        F-10: Below MIN_RELIABLE_SAMPLE, error_rate uses pessimistic default."""
         data = BehavioralData(
             total_actions=5,
             approved_actions=5,
@@ -653,11 +654,10 @@ class TestGamingResistance:
             observation_window_hours=168.0,
         )
         result = compute_behavioral_score("agent-001", data)
-        # All factors at max except volume
-        # volume_raw = log10(5)/log10(10000) = 0.6990/4 = 0.1748
-        # volume_contribution = round(0.1748 * 10, 2) = 1.75
+        # F-10: Below threshold (5 < 10), error_raw = 0.5 (pessimistic)
+        # error_rate = round(0.5 * 25, 2) = 12.5
         assert result.breakdown["approval_rate"] == 30.0
-        assert result.breakdown["error_rate"] == 25.0
+        assert result.breakdown["error_rate"] == 12.5
         assert result.breakdown["posture_stability"] == 20.0
         assert result.breakdown["time_at_posture"] == 15.0
         assert result.breakdown["interaction_volume"] < 2.0

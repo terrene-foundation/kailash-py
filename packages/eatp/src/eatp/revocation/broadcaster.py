@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import threading
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -23,6 +24,19 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Protocol, Set, Union
 
 logger = logging.getLogger(__name__)
+
+_MAX_HISTORY = 10000
+"""Maximum number of events stored in InMemoryRevocationBroadcaster history.
+When capacity is reached, the oldest 10% is trimmed (bounded collections,
+EATP convention)."""
+
+_MAX_DEAD_LETTERS = 1000
+"""Maximum number of dead letter entries stored in InMemoryRevocationBroadcaster.
+When capacity is reached, the oldest 10% is trimmed."""
+
+MAX_CASCADE_DEPTH: int = 100
+"""Maximum BFS depth for cascade revocation.  Prevents unbounded traversal
+in deep or maliciously-constructed delegation trees."""
 
 
 class RevocationType(str, Enum):
@@ -211,7 +225,7 @@ class InMemoryRevocationBroadcaster(RevocationBroadcaster):
         self._filters: Dict[str, Optional[List[RevocationType]]] = {}
         self._history: List[RevocationEvent] = []
         self._dead_letters: List[DeadLetterEntry] = []
-        self._lock = asyncio.Lock()
+        self._lock = threading.Lock()
 
     def broadcast(self, event: RevocationEvent) -> None:
         """Broadcast a revocation event to all subscribers.
@@ -223,13 +237,26 @@ class InMemoryRevocationBroadcaster(RevocationBroadcaster):
         Args:
             event: The revocation event to broadcast
         """
-        # Store in history
-        self._history.append(event)
+        with self._lock:
+            # Trim history if at capacity (bounded collection, EATP convention)
+            if len(self._history) >= _MAX_HISTORY:
+                trim_count = _MAX_HISTORY // 10  # Remove oldest 10%
+                self._history = self._history[trim_count:]
+                logger.debug(
+                    f"[BROADCASTER] Trimmed {trim_count} oldest events from history"
+                )
 
-        # Deliver to each subscriber
-        for sub_id, callback in list(self._subscribers.items()):
+            # Store in history
+            self._history.append(event)
+
+            # Copy subscribers for iteration outside the lock
+            subscribers = list(self._subscribers.items())
+            filters = dict(self._filters)
+
+        # Deliver outside lock to prevent deadlocks
+        for sub_id, callback in subscribers:
             # Apply filter if present
-            filter_types = self._filters.get(sub_id)
+            filter_types = filters.get(sub_id)
             if filter_types is not None and event.revocation_type not in filter_types:
                 continue
 
@@ -252,14 +279,24 @@ class InMemoryRevocationBroadcaster(RevocationBroadcaster):
                     f"Error broadcasting revocation event {event.event_id} "
                     f"to subscriber {sub_id}: {e}"
                 )
-                # Track in dead letter queue
-                self._dead_letters.append(
-                    DeadLetterEntry(
-                        event=event,
-                        subscription_id=sub_id,
-                        error=str(e),
+                with self._lock:
+                    # Trim dead letters if at capacity (bounded collection)
+                    if len(self._dead_letters) >= _MAX_DEAD_LETTERS:
+                        trim_count = _MAX_DEAD_LETTERS // 10
+                        self._dead_letters = self._dead_letters[trim_count:]
+                        logger.debug(
+                            f"[BROADCASTER] Trimmed {trim_count} oldest "
+                            f"dead letter entries"
+                        )
+
+                    # Track in dead letter queue
+                    self._dead_letters.append(
+                        DeadLetterEntry(
+                            event=event,
+                            subscription_id=sub_id,
+                            error=str(e),
+                        )
                     )
-                )
 
         logger.debug(
             f"Broadcast revocation event {event.event_id} "
@@ -282,8 +319,9 @@ class InMemoryRevocationBroadcaster(RevocationBroadcaster):
             Subscription ID for later unsubscription
         """
         subscription_id = f"sub-{uuid.uuid4()}"
-        self._subscribers[subscription_id] = callback
-        self._filters[subscription_id] = filter_types
+        with self._lock:
+            self._subscribers[subscription_id] = callback
+            self._filters[subscription_id] = filter_types
 
         logger.debug(f"New subscription {subscription_id} with filter: {filter_types}")
 
@@ -295,10 +333,11 @@ class InMemoryRevocationBroadcaster(RevocationBroadcaster):
         Args:
             subscription_id: The subscription ID returned from subscribe()
         """
-        if subscription_id in self._subscribers:
-            del self._subscribers[subscription_id]
-        if subscription_id in self._filters:
-            del self._filters[subscription_id]
+        with self._lock:
+            if subscription_id in self._subscribers:
+                del self._subscribers[subscription_id]
+            if subscription_id in self._filters:
+                del self._filters[subscription_id]
 
         logger.debug(f"Unsubscribed {subscription_id}")
 
@@ -308,7 +347,8 @@ class InMemoryRevocationBroadcaster(RevocationBroadcaster):
         Returns:
             List of all RevocationEvents in broadcast order
         """
-        return list(self._history)
+        with self._lock:
+            return list(self._history)
 
     def get_dead_letters(self) -> List[DeadLetterEntry]:
         """Get the dead letter queue for failed broadcasts.
@@ -451,6 +491,7 @@ class CascadeRevocationManager:
         revoked_by: str,
         reason: str,
         revocation_type: RevocationType = RevocationType.AGENT_REVOKED,
+        max_depth: int = MAX_CASCADE_DEPTH,
     ) -> List[RevocationEvent]:
         """Revoke an agent and cascade to all its delegates.
 
@@ -463,6 +504,9 @@ class CascadeRevocationManager:
             revoked_by: Who is performing the revocation
             reason: Reason for the revocation
             revocation_type: Type of the initial revocation
+            max_depth: Maximum BFS depth for cascade traversal.
+                Defaults to MAX_CASCADE_DEPTH (100). Set to 0 to
+                revoke only the target with no cascade.
 
         Returns:
             List of all RevocationEvents created (initial + cascades)
@@ -488,11 +532,19 @@ class CascadeRevocationManager:
         all_events.append(initial_event)
         visited.add(target_id)
 
-        # Process cascade revocations using BFS
-        queue: List[tuple] = [(target_id, initial_event.event_id)]
+        # Process cascade revocations using BFS with depth tracking
+        queue: List[tuple] = [(target_id, initial_event.event_id, 0)]
 
         while queue:
-            parent_id, parent_event_id = queue.pop(0)
+            parent_id, parent_event_id, depth = queue.pop(0)
+
+            if depth >= max_depth:
+                logger.warning(
+                    f"Cascade depth limit ({max_depth}) reached for "
+                    f"'{parent_id}' at depth {depth}"
+                )
+                continue
+
             delegates = self._delegation_registry.get_delegates(parent_id)
 
             for delegate_id in delegates:
@@ -525,7 +577,7 @@ class CascadeRevocationManager:
                 all_events.append(cascade_event)
 
                 # Add to queue for further processing
-                queue.append((delegate_id, cascade_event.event_id))
+                queue.append((delegate_id, cascade_event.event_id, depth + 1))
 
         logger.info(
             f"Cascade revocation complete for {target_id}. "
@@ -711,4 +763,5 @@ __all__ = [
     "CascadeRevocationManager",
     "TrustRevocationList",
     "DeadLetterEntry",
+    "MAX_CASCADE_DEPTH",
 ]

@@ -576,41 +576,39 @@ class TrustedAgent:
         except TrustChainNotFoundError:
             return  # No constraints to enforce
 
-        # Check for read_only constraint
-        write_tools = ["file_write", "bash", "database_write", "delete"]
+        # Check for read_only constraint — exact match (not substring)
+        write_tools = {"file_write", "bash", "database_write", "delete"}
         if "read_only" in constraints:
-            for write_tool in write_tools:
-                if write_tool in tool_name.lower():
-                    raise ConstraintViolationError(
-                        message=f"Tool {tool_name} not permitted under read_only constraint",
-                        violations=[
-                            {
-                                "constraint": "read_only",
-                                "tool": tool_name,
-                                "reason": f"Tool {tool_name} violates read_only constraint",
-                            }
-                        ],
-                        agent_id=self._config.agent_id,
-                        action=f"use_tool:{tool_name}",
-                    )
+            if tool_name.lower() in write_tools:
+                raise ConstraintViolationError(
+                    message=f"Tool {tool_name} not permitted under read_only constraint",
+                    violations=[
+                        {
+                            "constraint": "read_only",
+                            "tool": tool_name,
+                            "reason": f"Tool {tool_name} violates read_only constraint",
+                        }
+                    ],
+                    agent_id=self._config.agent_id,
+                    action=f"use_tool:{tool_name}",
+                )
 
-        # Check for no_network constraint
+        # Check for no_network constraint — exact match (not substring)
         if "no_network" in constraints:
-            network_tools = ["http", "fetch", "request", "api"]
-            for network_tool in network_tools:
-                if network_tool in tool_name.lower():
-                    raise ConstraintViolationError(
-                        message=f"Tool {tool_name} not permitted under no_network constraint",
-                        violations=[
-                            {
-                                "constraint": "no_network",
-                                "tool": tool_name,
-                                "reason": f"Tool {tool_name} violates no_network constraint",
-                            }
-                        ],
-                        agent_id=self._config.agent_id,
-                        action=f"use_tool:{tool_name}",
-                    )
+            network_tools = {"http", "fetch", "request", "api"}
+            if tool_name.lower() in network_tools:
+                raise ConstraintViolationError(
+                    message=f"Tool {tool_name} not permitted under no_network constraint",
+                    violations=[
+                        {
+                            "constraint": "no_network",
+                            "tool": tool_name,
+                            "reason": f"Tool {tool_name} violates no_network constraint",
+                        }
+                    ],
+                    agent_id=self._config.agent_id,
+                    action=f"use_tool:{tool_name}",
+                )
 
     async def _auto_establish_trust(self) -> None:
         """

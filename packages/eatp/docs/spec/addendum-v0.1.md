@@ -110,7 +110,7 @@ SIEMEvent {
     timestamp: datetime,    // UTC ISO 8601
     agent_id: string,
     operation: string,      // ESTABLISH | DELEGATE | VERIFY | AUDIT
-    result: string,         // SUCCESS | FAILURE | DENIED | FLAGGED
+    result: string,         // SUCCESS | FAILURE | DENIED | PARTIAL
     severity: int,          // 0-10 (OCSF scale)
     authority_id: Optional<string>,
     metadata: Dict<string, any>,
@@ -126,13 +126,13 @@ SIEMEvent {
 
 ### CEF Format
 
-CEF:0|Terrene|EATP|0.1.0|{operation}|{operation} {result}|{severity}|{extensions}
+CEF:0|Terrene Foundation|EATP|1.0|{operation}|{operation} {result}|{severity}|{extensions}
 
 Escaping: pipes (`|`) in header values escaped as `\|`, backslashes as `\\`, newlines as `\n` in extensions.
 
 ### OCSF Format
 
-OCSF 1.1 JSON with `class_uid: 6003` (API Activity), severity mapping: 0-3=Informational, 4-6=Low, 7-8=Medium, 9=High, 10=Critical.
+OCSF 1.1 JSON with `class_uid: 3002` (Authentication / Identity & Access), severity mapping: 0-3=Informational, 4-6=Low, 7-8=Medium, 9=High, 10=Critical.
 
 ---
 
@@ -189,7 +189,7 @@ Optional adapter (`opentelemetry-api>=1.20`) wrapping the same metrics as OTel g
 {
   "decision": "string",
   "rationale": "string",
-  "confidentiality": "string", // UNRESTRICTED | RESTRICTED | SECRET | TOP_SECRET
+  "confidentiality": "string", // PUBLIC | RESTRICTED | CONFIDENTIAL | SECRET | TOP_SECRET
   "timestamp": "string" // ISO 8601 UTC
 }
 ```

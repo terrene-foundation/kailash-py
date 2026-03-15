@@ -116,14 +116,22 @@ class TrustMetricsCollector:
     # Maximum number of evaluation times to keep for rolling average
     MAX_EVALUATION_TIMES = 1000
 
-    def __init__(self) -> None:
-        """Initialize the metrics collector."""
-        self._lock = Lock()
+    def __init__(self, max_agents: int = 10_000) -> None:
+        """Initialize the metrics collector.
 
-        # Posture tracking per agent
+        Args:
+            max_agents: Maximum number of entries in per-agent/per-key dicts.
+                When exceeded, oldest 10% of entries are trimmed. Default 10,000.
+                Applies to _agent_postures, _transitions, _dimension_failures,
+                and _anti_gaming_flags.
+        """
+        self._lock = Lock()
+        self._max_agents = max_agents
+
+        # Posture tracking per agent (bounded by _max_agents)
         self._agent_postures: Dict[str, TrustPosture] = {}
 
-        # Transition counts by type
+        # Transition counts by type (bounded by _max_agents)
         self._transitions: Dict[str, int] = {}
 
         # Circuit breaker and emergency downgrade counts
@@ -134,11 +142,24 @@ class TrustMetricsCollector:
         self._evaluations_total: int = 0
         self._evaluations_passed: int = 0
         self._evaluations_failed: int = 0
-        self._dimension_failures: Dict[str, int] = {}
-        self._anti_gaming_flags: Dict[str, int] = {}
+        self._dimension_failures: Dict[str, int] = {}  # bounded by _max_agents
+        self._anti_gaming_flags: Dict[str, int] = {}  # bounded by _max_agents
 
         # Rolling window for evaluation times
         self._evaluation_times: Deque[float] = deque(maxlen=self.MAX_EVALUATION_TIMES)
+
+    def _trim_bounded_dict(self, d: Dict, name: str) -> None:
+        """Trim oldest 10% of entries if dict exceeds _max_agents.
+
+        Args:
+            d: The dict to potentially trim.
+            name: Name of the dict for logging.
+        """
+        if len(d) > self._max_agents:
+            trim_count = self._max_agents // 10
+            keys_to_remove = list(d.keys())[:trim_count]
+            for key in keys_to_remove:
+                del d[key]
 
     def record_posture(self, agent_id: str, posture: TrustPosture) -> None:
         """Record the current posture for an agent.
@@ -149,6 +170,7 @@ class TrustMetricsCollector:
         """
         with self._lock:
             self._agent_postures[agent_id] = posture
+            self._trim_bounded_dict(self._agent_postures, "_agent_postures")
 
     def record_transition(self, transition_type: str) -> None:
         """Record a posture transition.
@@ -160,6 +182,7 @@ class TrustMetricsCollector:
             self._transitions[transition_type] = (
                 self._transitions.get(transition_type, 0) + 1
             )
+            self._trim_bounded_dict(self._transitions, "_transitions")
 
     def record_circuit_breaker_open(self) -> None:
         """Record a circuit breaker open event."""
@@ -202,10 +225,12 @@ class TrustMetricsCollector:
                 self._dimension_failures[dimension] = (
                     self._dimension_failures.get(dimension, 0) + 1
                 )
+            self._trim_bounded_dict(self._dimension_failures, "_dimension_failures")
 
             # Track anti-gaming flags
             for flag in gaming_flags:
                 self._anti_gaming_flags[flag] = self._anti_gaming_flags.get(flag, 0) + 1
+            self._trim_bounded_dict(self._anti_gaming_flags, "_anti_gaming_flags")
 
             # Add to rolling window
             self._evaluation_times.append(duration_ms)

@@ -6,6 +6,10 @@ This repository is the **COC (Cognitive Orchestration for Codegen) setup** for C
 
 These override ALL other instructions. They govern behavior before any rule file is consulted.
 
+### 0. Foundation Independence — No Commercial Coupling
+
+Kailash Python SDK is a **Terrene Foundation project**. It is fully independent. There is NO relationship between Kailash Python SDK and any commercial product, proprietary codebase, or commercial entity. Do not reference, compare with, or design against any proprietary product. Do not use language like "open-source version of X" or "Python port of Y." Kailash Python SDK IS the product — not a derivative of anything. See `rules/independence.md` for full policy.
+
 ### 1. Framework-First
 
 Never write code from scratch before checking whether the Kailash frameworks already handle it.
@@ -56,6 +60,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 
 | Concern                               | Rule File                    | Scope                                               |
 | ------------------------------------- | ---------------------------- | --------------------------------------------------- |
+| **Foundation independence**           | `rules/independence.md`      | **Global — overrides all**                          |
 | Agent orchestration & review mandates | `rules/agents.md`            | Global                                              |
 | SDK release & PyPI publishing         | `rules/deployment.md`        | `deploy/**`, `.github/workflows/**`, `pyproject.toml`, `CHANGELOG.md` |
 | E2E god-mode testing                  | `rules/e2e-god-mode.md`      | `tests/e2e/**`, `**/*e2e*`, `**/*playwright*`       |

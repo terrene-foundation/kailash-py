@@ -7,7 +7,7 @@ CARE-036/037/038: Trust Knowledge Ledger - Knowledge Module.
 This module provides knowledge entry structures, W3C PROV-DM compatible
 provenance tracking, and trust chain integration for the Trust Knowledge
 Ledger, enabling agents to contribute and reference verified knowledge with
-full trust chain accountability and complete lineage tracking.
+full trust chain traceability and complete lineage tracking.
 
 Key Components:
 - KnowledgeType: Enum categorizing knowledge types

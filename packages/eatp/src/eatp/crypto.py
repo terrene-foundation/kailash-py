@@ -524,11 +524,25 @@ class DualSignature:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "DualSignature":
-        """Reconstruct from dict. Raises KeyError if ed25519_signature is missing."""
+        """Reconstruct from dict.
+
+        Raises:
+            KeyError: If ``ed25519_signature`` key is missing.
+            ValueError: If ``ed25519_signature`` is not a non-empty string,
+                or ``hmac_algorithm`` is not in the allowed set.
+        """
+        ed25519_sig = data["ed25519_signature"]
+        if not isinstance(ed25519_sig, str) or not ed25519_sig:
+            raise ValueError("ed25519_signature must be a non-empty string")
+
+        hmac_algo = data.get("hmac_algorithm", "sha256")
+        if hmac_algo not in {"sha256", "sha384", "sha512"}:
+            raise ValueError(f"Unsupported hmac_algorithm: {hmac_algo}")
+
         return cls(
-            ed25519_signature=data["ed25519_signature"],
+            ed25519_signature=ed25519_sig,
             hmac_signature=data.get("hmac_signature"),
-            hmac_algorithm=data.get("hmac_algorithm", "sha256"),
+            hmac_algorithm=hmac_algo,
         )
 
 
@@ -644,3 +658,32 @@ def dual_verify(
         if not hmac_verify(payload, dual_sig.hmac_signature, hmac_key):
             return False
     return True
+
+
+__all__ = [
+    # Constants
+    "NACL_AVAILABLE",
+    "SALT_LENGTH",
+    # Key generation
+    "generate_keypair",
+    "generate_salt",
+    "derive_key_with_salt",
+    # Ed25519 signing and verification
+    "sign",
+    "verify_signature",
+    # Serialization and hashing
+    "serialize_for_signing",
+    "hash_chain",
+    "hash_trust_chain_state",
+    "hash_trust_chain_state_salted",
+    # Reasoning trace crypto
+    "hash_reasoning_trace",
+    "sign_reasoning_trace",
+    "verify_reasoning_signature",
+    # Dual signature system (Phase 5 G6)
+    "DualSignature",
+    "hmac_sign",
+    "hmac_verify",
+    "dual_sign",
+    "dual_verify",
+]

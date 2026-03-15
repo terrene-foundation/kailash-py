@@ -155,3 +155,11 @@ class AuthorityRegistryProtocol(Protocol):
 # Backwards-compatible alias so existing ``from eatp.authority import
 # OrganizationalAuthorityRegistry`` continues to resolve.
 OrganizationalAuthorityRegistry = AuthorityRegistryProtocol
+
+
+__all__ = [
+    "AuthorityPermission",
+    "OrganizationalAuthority",
+    "AuthorityRegistryProtocol",
+    "OrganizationalAuthorityRegistry",
+]

@@ -11,6 +11,7 @@ without seeing all audit data.
 from __future__ import annotations
 
 import hashlib
+import hmac as hmac_mod
 import json
 import logging
 from dataclasses import dataclass, field
@@ -376,7 +377,10 @@ def verify_witness_export(
 
     # 2. Verify hash chain
     recomputed_hashes = _compute_chain_hash([r.data for r in export.records])
-    chain_valid = recomputed_hashes == export.chain_hashes
+    chain_valid = hmac_mod.compare_digest(
+        json.dumps(recomputed_hashes, sort_keys=True),
+        json.dumps(export.chain_hashes, sort_keys=True),
+    )
     if not chain_valid:
         errors.append(
             "Hash chain integrity check failed — records may have been tampered with"

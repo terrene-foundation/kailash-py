@@ -133,39 +133,21 @@ class TestFileLockCrossProcess:
             lines = f.read().strip().split("\n")
         assert lines == ["parent", "child"]
 
-    def test_shared_locks_allow_concurrent_reads(self, tmp_path):
-        """Multiple shared locks on the same file should not block."""
-        target = str(tmp_path / "data.json")
-        result = str(tmp_path / "result.txt")
+    def test_exclusive_parameter_accepted(self, tmp_path):
+        """The exclusive parameter is accepted for backward compatibility.
 
-        child_script = textwrap.dedent(
-            f"""\
-            import sys
-            sys.path.insert(0, {repr(str(os.path.join(os.path.dirname(__file__), '..', '..', '..', 'src')))})
-            from eatp.store.filesystem import file_lock
-            with file_lock({repr(target)}, exclusive=False):
-                with open({repr(result)}, "w") as f:
-                    f.write("ok")
+        Note: filelock does not support shared locks. Both exclusive=True
+        and exclusive=False acquire an exclusive lock. Read safety comes
+        from the atomic write-then-replace pattern, not from shared locking.
         """
-        )
+        target = str(tmp_path / "data.json")
 
-        # Parent holds shared lock
+        # Both modes should work without error
+        with file_lock(target, exclusive=True):
+            pass
+
         with file_lock(target, exclusive=False):
-            child = subprocess.Popen(
-                [sys.executable, "-c", child_script],
-                env={
-                    **os.environ,
-                    "PYTHONPATH": os.path.join(
-                        os.path.dirname(__file__), "..", "..", "..", "src"
-                    ),
-                },
-            )
-            # Child should complete even though parent holds shared lock
-            child.wait(timeout=10)
-            assert child.returncode == 0
-
-        with open(result) as f:
-            assert f.read() == "ok"
+            pass
 
 
 class TestFileLockPublicAPI:

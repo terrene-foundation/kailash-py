@@ -426,10 +426,9 @@ class TestAWSKMSVerify:
             "SigningAlgorithm": "ECDSA_SHA_256",
         }
         manager = AWSKMSKeyManager(kms_client=mock_client)
-        await manager.generate_keypair("agent-001")
+        _arn, pub_key = await manager.generate_keypair("agent-001")
 
         sig = base64.b64encode(b"fake-sig").decode("utf-8")
-        pub_key = base64.b64encode(b"fake-pub").decode("utf-8")
         result = await manager.verify("test payload", sig, pub_key)
 
         assert result is True
@@ -443,10 +442,9 @@ class TestAWSKMSVerify:
             "SigningAlgorithm": "ECDSA_SHA_256",
         }
         manager = AWSKMSKeyManager(kms_client=mock_client)
-        await manager.generate_keypair("agent-001")
+        _arn, pub_key = await manager.generate_keypair("agent-001")
 
         sig = base64.b64encode(b"bad-sig").decode("utf-8")
-        pub_key = base64.b64encode(b"fake-pub").decode("utf-8")
         result = await manager.verify("test payload", sig, pub_key)
 
         assert result is False
@@ -456,11 +454,10 @@ class TestAWSKMSVerify:
         """KMS verify called with proper algorithm and message type."""
         mock_client = _make_mock_kms_client()
         manager = AWSKMSKeyManager(kms_client=mock_client)
-        await manager.generate_keypair("agent-001")
+        _arn, pub_key = await manager.generate_keypair("agent-001")
 
         sig_bytes = b"test-signature"
         sig = base64.b64encode(sig_bytes).decode("utf-8")
-        pub_key = base64.b64encode(b"fake-pub").decode("utf-8")
         await manager.verify("payload text", sig, pub_key)
 
         mock_client.verify.assert_called_once()
@@ -475,14 +472,13 @@ class TestAWSKMSVerify:
         """KMS ClientError during verify is wrapped in KeyManagerError."""
         mock_client = _make_mock_kms_client()
         manager = AWSKMSKeyManager(kms_client=mock_client)
-        await manager.generate_keypair("agent-001")
+        _arn, pub_key = await manager.generate_keypair("agent-001")
 
         mock_client.verify.side_effect = _make_client_error(
             "KMSInternalException", "KMS internal error"
         )
 
         sig = base64.b64encode(b"sig").decode("utf-8")
-        pub_key = base64.b64encode(b"pub").decode("utf-8")
         with pytest.raises(KeyManagerError, match="KMS"):
             await manager.verify("test", sig, pub_key)
 

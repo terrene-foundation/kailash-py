@@ -78,7 +78,7 @@ class DelegationLimits:
     Configuration for delegation chain limits.
 
     CARE-004: Enforces maximum delegation depth to prevent DoS and
-    accountability loss in deep delegation chains.
+    traceability loss in deep delegation chains.
 
     Attributes:
         max_depth: Maximum delegation chain depth from human origin
@@ -212,7 +212,7 @@ class DelegationRecord:
     """
     Record of trust delegation between agents.
 
-    Tracks the chain of trust when one agent delegates work to another.
+    Tracks the trust chain when one agent delegates work to another.
     Ensures constraints can only be tightened, never loosened.
 
     EATP Enhancement: Now includes human_origin to trace back to
@@ -607,7 +607,7 @@ class VerificationResult:
     effective_constraints: List[str] = field(default_factory=list)
     violations: List[Dict[str, str]] = field(default_factory=list)
 
-    # Reasoning trace verification fields (TODO-012)
+    # Reasoning trace verification fields (implemented in Phase 4)
     reasoning_verified: Optional[bool] = None  # Hash + signature verified (FULL level)
     reasoning_present: Optional[bool] = None  # Trace present on records (STANDARD+)
 
@@ -1346,3 +1346,26 @@ class LinkedHashChain:
             )
             chain._entries.append(entry)
         return chain
+
+
+__all__ = [
+    # Enums
+    "AuthorityType",
+    "CapabilityType",
+    "ActionResult",
+    "ConstraintType",
+    "VerificationLevel",
+    # Dataclasses
+    "DelegationLimits",
+    "GenesisRecord",
+    "CapabilityAttestation",
+    "DelegationRecord",
+    "Constraint",
+    "ConstraintEnvelope",
+    "AuditAnchor",
+    "VerificationResult",
+    "TrustLineageChain",
+    # Linked hash chain
+    "LinkedHashEntry",
+    "LinkedHashChain",
+]

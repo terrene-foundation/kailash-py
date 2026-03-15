@@ -301,8 +301,10 @@ class TimeDimension(ConstraintDimension):
         # If parent is overnight and child is not, valid if child fits in one part
         if parent_overnight and not child_overnight:
             # Child must fit entirely in either the evening part or morning part
-            fits_evening = child_start >= parent_start and child_end >= child_start
-            fits_morning = child_start <= parent_end and child_end <= parent_end
+            fits_evening = (
+                child_start >= parent_start
+            )  # Child starts in evening portion
+            fits_morning = child_end <= parent_end  # Child ends in morning portion
             return fits_evening or fits_morning
 
         # Both overnight: child must be subset

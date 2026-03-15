@@ -160,17 +160,21 @@ class PostureCircuitBreaker:
         self,
         posture_machine: PostureStateMachine,
         config: Optional[CircuitBreakerConfig] = None,
+        max_failures_per_agent: int = 10_000,
     ):
         """Initialize the circuit breaker.
 
         Args:
             posture_machine: The PostureStateMachine to use for transitions
             config: Configuration for the circuit breaker
+            max_failures_per_agent: Maximum failure events stored per agent.
+                When exceeded, oldest 10% are trimmed. Default 10,000.
         """
         self._posture_machine = posture_machine
         self._config = config or CircuitBreakerConfig()
+        self._max_failures_per_agent = max_failures_per_agent
 
-        # Per-agent state tracking
+        # Per-agent state tracking (bounded by _max_failures_per_agent)
         self._states: Dict[str, CircuitState] = {}
         self._failures: Dict[str, List[FailureEvent]] = {}
         self._last_failure: Dict[str, datetime] = {}
@@ -232,6 +236,15 @@ class PostureCircuitBreaker:
             # Add the failure
             self._failures[agent_id].append(event)
             self._last_failure[agent_id] = event.timestamp
+
+            # Enforce bounded collection: trim oldest 10% when capacity exceeded
+            if len(self._failures[agent_id]) > self._max_failures_per_agent:
+                trim_count = self._max_failures_per_agent // 10
+                self._failures[agent_id] = self._failures[agent_id][trim_count:]
+                logger.debug(
+                    f"Trimmed {trim_count} oldest failures for agent {agent_id} "
+                    f"(capacity {self._max_failures_per_agent} exceeded)"
+                )
 
             current_state = self.get_state(agent_id)
 
@@ -547,6 +560,7 @@ class CircuitBreakerRegistry:
         self,
         posture_machine: PostureStateMachine,
         default_config: Optional[CircuitBreakerConfig] = None,
+        max_breakers: int = 10_000,
     ):
         """Initialize the circuit breaker registry.
 
@@ -554,9 +568,12 @@ class CircuitBreakerRegistry:
             posture_machine: Shared PostureStateMachine for all breakers.
             default_config: Default config for newly created breakers.
                 Uses CircuitBreakerConfig() defaults if not provided.
+            max_breakers: Maximum number of breakers to track. When exceeded,
+                oldest 10% are removed. Default 10,000.
         """
         self._posture_machine = posture_machine
         self._default_config = default_config or CircuitBreakerConfig()
+        self._max_breakers = max_breakers
         self._breakers: Dict[str, PostureCircuitBreaker] = {}
         self._lock = asyncio.Lock()
 
@@ -576,6 +593,17 @@ class CircuitBreakerRegistry:
             The PostureCircuitBreaker for this agent.
         """
         if agent_id not in self._breakers:
+            # Enforce bounded collection: trim oldest 10% when capacity exceeded
+            if len(self._breakers) >= self._max_breakers:
+                trim_count = self._max_breakers // 10
+                keys_to_remove = list(self._breakers.keys())[:trim_count]
+                for key in keys_to_remove:
+                    del self._breakers[key]
+                logger.debug(
+                    f"Trimmed {trim_count} oldest breakers "
+                    f"(capacity {self._max_breakers} exceeded)"
+                )
+
             effective_config = config or self._default_config
             self._breakers[agent_id] = PostureCircuitBreaker(
                 posture_machine=self._posture_machine,
