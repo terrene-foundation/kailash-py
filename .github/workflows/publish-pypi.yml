@@ -8,6 +8,7 @@ on:
       - "kaizen-v*" # Kaizen: kaizen-v1.2.5
       - "nexus-v*" # Nexus: nexus-v1.4.3
       - "eatp-v*" # EATP: eatp-v0.1.0
+      - "trust-plane-v*" # TrustPlane: trust-plane-v0.2.0
   workflow_dispatch:
     inputs:
       package:
@@ -20,6 +21,7 @@ on:
           - kailash-kaizen
           - kailash-nexus
           - eatp
+          - trust-plane
       publish_to:
         description: "Target registry"
         required: true
@@ -50,6 +52,7 @@ jobs:
               kailash-kaizen)    echo "package_dir=packages/kailash-kaizen" >> $GITHUB_OUTPUT ;;
               kailash-nexus)     echo "package_dir=packages/kailash-nexus" >> $GITHUB_OUTPUT ;;
               eatp)              echo "package_dir=packages/eatp" >> $GITHUB_OUTPUT ;;
+              trust-plane)       echo "package_dir=packages/trust-plane" >> $GITHUB_OUTPUT ;;
             esac
             echo "package=$PACKAGE" >> $GITHUB_OUTPUT
             echo "version=manual" >> $GITHUB_OUTPUT
@@ -66,6 +69,10 @@ jobs:
             elif [[ "$TAG" =~ ^nexus-v(.+)$ ]]; then
               echo "package=kailash-nexus" >> $GITHUB_OUTPUT
               echo "package_dir=packages/kailash-nexus" >> $GITHUB_OUTPUT
+              VERSION="${BASH_REMATCH[1]}"
+            elif [[ "$TAG" =~ ^trust-plane-v(.+)$ ]]; then
+              echo "package=trust-plane" >> $GITHUB_OUTPUT
+              echo "package_dir=packages/trust-plane" >> $GITHUB_OUTPUT
               VERSION="${BASH_REMATCH[1]}"
             elif [[ "$TAG" =~ ^eatp-v(.+)$ ]]; then
               echo "package=eatp" >> $GITHUB_OUTPUT

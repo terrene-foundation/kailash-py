@@ -89,6 +89,24 @@ You MUST be invoked:
 - Nexus endpoints have authentication
 - Kaizen agent prompts don't leak sensitive info
 
+### 8. TrustPlane / EATP Security Patterns
+
+These checks are MANDATORY for any code touching `packages/trust-plane/` or `packages/eatp/`.
+
+- [ ] **P1 — validate_id() on external IDs**: Every record ID used in a filesystem path or SQL query MUST pass `validate_id()` first. **Violation**: bare `f"{record_id}.json"` without prior validation.
+- [ ] **P2 — O_NOFOLLOW via safe_read_json()/safe_read_text()**: All trust-sensitive file reads MUST use safe helpers. **Violation**: `open(path)` or `path.read_text()` on trust store files.
+- [ ] **P3 — atomic_write() for record writes**: All record persistence MUST use `atomic_write()`. **Violation**: `with open(path, 'w')` for trust records.
+- [ ] **P4 — safe_read_json() for JSON deserialization**: **Violation**: `json.loads(path.read_text())` — bypasses symlink protection.
+- [ ] **P5 — math.isfinite() on numeric constraints**: **Violation**: only checking `< 0` — NaN and Inf bypass silently.
+- [ ] **P6 — Bounded collections (deque(maxlen=))**: **Violation**: unbounded `list` in long-running processes.
+- [ ] **P7 — Monotonic escalation only**: Trust state only escalates: AUTO_APPROVED → FLAGGED → HELD → BLOCKED. **Violation**: any downgrade path.
+- [ ] **P8 — hmac.compare_digest() for hash/signature comparison**: **Violation**: `==` on hashes, tokens, or signatures.
+- [ ] **P9 — Key material zeroization**: `del private_key` after use. **Violation**: key variable persisting in scope.
+- [ ] **P10 — frozen=True on security-critical dataclasses**: **Violation**: mutable dataclass where mutation bypasses validation.
+- [ ] **P11 — from_dict() validates all fields**: **Violation**: `data.get("field", "")` — silent defaults on security fields.
+
+> These 11 patterns were hardened through 14 rounds of red teaming. See `packages/trust-plane/CLAUDE.md` for full details with code examples.
+
 ## Review Output Format
 
 Provide findings as:

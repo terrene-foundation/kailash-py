@@ -1,0 +1,8 @@
+- id: trustplane-verify
+  name: TrustPlane Verify
+  description: Verify trust chain integrity before commit
+  entry: attest verify --quiet
+  language: python
+  pass_filenames: false
+  always_run: false
+  stages: [pre-commit]

@@ -1,0 +1,89 @@
+name: Trust Plane CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/trust-plane/**"
+      - "packages/eatp/**"
+      - ".github/workflows/trust-plane.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/trust-plane/**"
+      - "packages/eatp/**"
+      - ".github/workflows/trust-plane.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install packages
+        run: pip install -e packages/eatp -e "packages/trust-plane[dev]"
+
+      - name: Run tests
+        run: pytest packages/trust-plane/tests/ -x -q --tb=short
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: reports/
+          retention-days: 14
+
+  smoke:
+    name: Smoke Test (entry points)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install packages
+        run: pip install -e packages/eatp -e "packages/trust-plane[dev]"
+
+      - name: Verify CLI entry point
+        run: attest --help
+
+      - name: Verify Python import
+        run: python -c "from trustplane import TrustProject; print('OK')"
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "## Smoke Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- attest --help: verified" >> $GITHUB_STEP_SUMMARY
+          echo "- TrustProject import: verified" >> $GITHUB_STEP_SUMMARY

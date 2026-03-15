@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://trustplane.dev/schemas/evidence-export-v1.json",
+  "title": "TrustPlane Evidence Export Schema",
+  "description": "JSON schema for TrustPlane SOC2/ISO 27001 evidence output. This schema describes the structure of the evidence JSON produced by generate_soc2_evidence() and generate_iso27001_evidence().",
+  "type": "object",
+  "required": ["framework", "framework_version", "generated_at", "period", "project", "summary", "controls"],
+  "properties": {
+    "framework": {
+      "type": "string",
+      "enum": ["SOC2", "ISO27001"],
+      "description": "The compliance framework this evidence maps to."
+    },
+    "framework_version": {
+      "type": "string",
+      "description": "The version of the compliance framework (e.g., '2017' for SOC2, '2022' for ISO 27001)."
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when this evidence was generated."
+    },
+    "period": {
+      "type": "object",
+      "description": "The time period this evidence covers.",
+      "properties": {
+        "start": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Period start (inclusive). Null if no start filter."
+        },
+        "end": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Period end (inclusive). Null if no end filter."
+        }
+      },
+      "required": ["start", "end"]
+    },
+    "project": {
+      "type": "object",
+      "description": "Project identity information.",
+      "required": ["name", "id", "genesis_id"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable project name."
+        },
+        "id": {
+          "type": "string",
+          "description": "Unique project identifier."
+        },
+        "genesis_id": {
+          "type": "string",
+          "description": "EATP Genesis Record ID (root of trust chain)."
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "description": "Aggregate evidence counts.",
+      "required": ["total_decisions", "total_milestones", "total_violations"],
+      "properties": {
+        "total_decisions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of decision records in this evidence period."
+        },
+        "total_milestones": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of milestone records in this evidence period."
+        },
+        "total_violations": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of HELD/BLOCKED violation records."
+        },
+        "total_delegates": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of delegation records (SOC2 only)."
+        }
+      }
+    },
+    "controls": {
+      "type": "object",
+      "description": "Control mappings keyed by control ID (e.g., 'CC6.7', 'A.9.2').",
+      "additionalProperties": {
+        "$ref": "#/$defs/control_evidence"
+      }
+    }
+  },
+  "$defs": {
+    "control_evidence": {
+      "type": "object",
+      "description": "Evidence for a single compliance control.",
+      "required": ["control_id", "title", "description", "record_type", "evidence_count", "evidence"],
+      "properties": {
+        "control_id": {
+          "type": "string",
+          "description": "The control identifier (e.g., 'CC6.7', 'A.9.2')."
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable control title."
+        },
+        "description": {
+          "type": "string",
+          "description": "How TrustPlane records satisfy this control."
+        },
+        "record_type": {
+          "type": "string",
+          "enum": ["genesis", "delegation", "decision", "execution", "milestone", "violation"],
+          "description": "The TrustPlane record type that provides evidence."
+        },
+        "evidence_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of evidence records for this control."
+        },
+        "evidence": {
+          "type": "array",
+          "description": "Array of evidence records (format varies by record_type).",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

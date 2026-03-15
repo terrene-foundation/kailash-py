@@ -1,0 +1,18 @@
+<div class="page-header">
+  <h2>Decisions</h2>
+  <p>${total_count} decision(s) recorded</p>
+</div>
+
+<div class="filter-bar">
+  <label for="type-filter">Type:</label>
+  <select id="type-filter" onchange="window.location='/decisions?type='+this.value+'&page=1'">
+    ${type_options}
+  </select>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    ${decisions_table}
+  </div>
+  ${pagination}
+</div>

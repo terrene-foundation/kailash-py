@@ -1,0 +1,38 @@
+<div class="page-header">
+  <h2>Trust Status Overview</h2>
+  <p>${project_name} &mdash; ${project_author}</p>
+</div>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-value">${trust_badge}</div>
+    <div class="stat-label">Trust Posture</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">${total_decisions}</div>
+    <div class="stat-label">Decisions</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">${total_milestones}</div>
+    <div class="stat-label">Milestones</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-value">${active_holds}</div>
+    <div class="stat-label">Active Holds</div>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Project Details</h3>
+  <table>
+    <tr><td style="width:140px;font-weight:600">Project ID</td><td><code>${project_id}</code></td></tr>
+    <tr><td style="font-weight:600">Genesis</td><td><code>${genesis_id}</code></td></tr>
+    <tr><td style="font-weight:600">Created</td><td>${created_at}</td></tr>
+    <tr><td style="font-weight:600">Chain Hash</td><td><code>${chain_hash}</code></td></tr>
+  </table>
+</div>
+
+<div class="card">
+  <h3>Recent Decisions</h3>
+  ${recent_decisions_table}
+</div>

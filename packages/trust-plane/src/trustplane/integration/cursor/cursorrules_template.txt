@@ -1,0 +1,94 @@
+# TrustPlane Trust Environment
+#
+# This project uses TrustPlane (EATP-powered trust gating) for AI operations.
+# Mode: $MODE | Trust dir: $TRUST_DIR
+#
+# $ENFORCEMENT_DESCRIPTION
+
+## Anti-Amnesia: TrustPlane Active
+
+This project has TrustPlane trust gating enabled. You MUST remember these
+rules across every turn, even after context compaction:
+
+1. Call `trust_status` at the start of every session to check posture.
+2. Call `trust_check` BEFORE modifying files, creating content, or making decisions.
+3. Call `trust_record` AFTER significant decisions to create an auditable record.
+4. NEVER modify the `$TRUST_DIR/` directory directly — use TrustPlane MCP tools.
+5. Re-read this section if you are unsure whether TrustPlane is active. It is.
+
+## Constraint Checking Protocol
+
+Before performing any gated action (file writes, content creation, decisions),
+you MUST call the `trust_check` MCP tool:
+
+```
+trust_check(action="<action>", resource="<file_or_resource>")
+```
+
+### Interpreting Verdicts
+
+- **AUTO_APPROVED**: Proceed normally. The action is within constraints.
+- **FLAGGED**: Proceed but inform the user that this action was flagged.
+  Explain which constraint boundary was approached.
+- $ON_HELD
+- $ON_BLOCKED
+
+### Gated Action Categories
+
+These action types require a `trust_check` call before execution:
+
+- `write_file` — Any file modification (Edit, Write tools)
+- `delete_file` — File deletion
+- `run_command` — Shell command execution (Bash tool)
+- `create_content` — Generating substantial content
+- `record_decision` — Recording a project decision
+- `publish` — Any external publication or communication
+- `modify_config` — Configuration file changes
+- `access_data` — Reading sensitive data paths
+
+## Recording Decisions
+
+After making a significant decision, record it for the audit trail:
+
+```
+trust_record(
+    decision="<what was decided>",
+    rationale="<why this was chosen>",
+    decision_type="scope|design|argument|evidence|methodology|technical|policy",
+    confidence=0.8
+)
+```
+
+Record decisions when you:
+- Choose one implementation approach over alternatives
+- Make scope decisions (include/exclude something)
+- Select a design pattern or architecture
+- Decide on methodology or process
+
+## Protected Paths
+
+Do NOT directly modify any files in the trust infrastructure:
+
+- `$TRUST_DIR/manifest.json`
+- `$TRUST_DIR/anchors/`
+- `$TRUST_DIR/chains/`
+- `$TRUST_DIR/keys/`
+- `$TRUST_DIR/holds/`
+- `$TRUST_DIR/trust.db`
+
+All trust state changes MUST go through TrustPlane MCP tools.
+
+## Trust Status Check
+
+At session start, call `trust_status` to understand:
+- Current trust posture (normal, elevated, restricted)
+- Active constraints from the constraint envelope
+- Session history and decision count
+
+## Enforcement Mode: $MODE
+
+$ENFORCEMENT_DESCRIPTION
+
+When the mode is "shadow", TrustPlane records all observations for later
+review via `attest shadow --report`. When the mode is "strict", constraint
+violations actively prevent actions from proceeding.

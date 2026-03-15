@@ -148,6 +148,42 @@ Invoke these skills when needed:
 
 - `/eatp-reference` - Quick reference for EATP concepts and terminology
 - `/care-reference` - When explaining EATP's relationship to CARE governance
+- `/trust-plane-security-patterns` — TrustPlane's 11 hardened security patterns
+- `/trust-plane-enterprise-features` — Enterprise feature reference
+
+## TrustPlane Reference Implementation
+
+TrustPlane (`packages/trust-plane/`) is the EATP reference implementation — a production-grade Python library implementing the full trust chain.
+
+### Trust Chain Coverage
+
+All five EATP elements implemented end-to-end:
+1. **Genesis** — Cryptographic root of trust created by human authority
+2. **Delegation** — Authority transfer with monotonic constraint tightening
+3. **Constraint** — Five-dimension constraint envelopes
+4. **Attestation** — Signed capability declarations with verification gradient
+5. **Audit** — Tamper-evident audit anchors with hash chaining
+
+### Architecture
+
+- **3 store backends**: SQLite (default), Filesystem, PostgreSQL
+- **Key managers**: LocalFileKeyManager (Ed25519), AWS KMS (ECDSA P-256), Azure Key Vault (ECDSA P-256), HashiCorp Vault (ECDSA P-256)
+- **11 hardened security patterns** validated through 14 rounds of red teaming
+- **22-class exception hierarchy**, all tracing to `TrustPlaneError`
+
+### Enterprise Features
+
+RBAC (4 roles), OIDC (JWKS auto-discovery), SIEM (CEF/OCSF/TLS syslog), Dashboard (bearer token auth), Archive (ZIP + SHA-256), Shadow mode (non-blocking evaluation)
+
+### Entry Points
+
+- **CLI**: `attest` command (Click-based)
+- **MCP Server**: `trustplane-mcp` via FastMCP
+- **Python API**: `from trustplane.project import TrustProject`
+
+### Quality
+
+14 rounds of red teaming, 1473 tests, zero CRITICAL/HIGH findings. Store conformance test suite ensures all backends behave identically.
 
 ## EATP vs Execution Tools (Governance Layer Thesis, March 2026)
 
