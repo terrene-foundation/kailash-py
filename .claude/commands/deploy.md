@@ -84,8 +84,8 @@ Each framework has 3 version locations PLUS the SDK dependency pin:
 
 **kailash-dataflow:**
 
-| File                                             | Field                              |
-| ------------------------------------------------ | ---------------------------------- |
+| File                                                 | Field                              |
+| ---------------------------------------------------- | ---------------------------------- |
 | `packages/kailash-dataflow/pyproject.toml`           | `version = "X.Y.Z"`                |
 | `packages/kailash-dataflow/setup.py`                 | `version="X.Y.Z"`                  |
 | `packages/kailash-dataflow/src/dataflow/__init__.py` | `__version__ = "X.Y.Z"`            |
@@ -94,8 +94,8 @@ Each framework has 3 version locations PLUS the SDK dependency pin:
 
 **kailash-kaizen:**
 
-| File                                         | Field                              |
-| -------------------------------------------- | ---------------------------------- |
+| File                                             | Field                              |
+| ------------------------------------------------ | ---------------------------------- |
 | `packages/kailash-kaizen/pyproject.toml`         | `version = "X.Y.Z"`                |
 | `packages/kailash-kaizen/setup.py`               | `version="X.Y.Z"`                  |
 | `packages/kailash-kaizen/src/kaizen/__init__.py` | `__version__ = "X.Y.Z"`            |
@@ -104,8 +104,8 @@ Each framework has 3 version locations PLUS the SDK dependency pin:
 
 **kailash-nexus:**
 
-| File                                       | Field                              |
-| ------------------------------------------ | ---------------------------------- |
+| File                                           | Field                              |
+| ---------------------------------------------- | ---------------------------------- |
 | `packages/kailash-nexus/pyproject.toml`        | `version = "X.Y.Z"`                |
 | `packages/kailash-nexus/setup.py`              | `version="X.Y.Z"`                  |
 | `packages/kailash-nexus/src/nexus/__init__.py` | `__version__ = "X.Y.Z"`            |
@@ -147,6 +147,16 @@ done
 2. Run linting and formatting checks (`black --check`, `ruff check`)
 3. Update CHANGELOG.md for each package being released
 4. Security review (MANDATORY)
+5. **Update README.md** (MANDATORY for minor/major releases)
+   - Verify "Why Kailash?" section reflects new capabilities
+   - Update architecture diagram version number
+   - Verify all feature claims match actual implementation (no overselling)
+   - Check that new entry points, CLI commands, or REST endpoints are documented
+6. **Verify Sphinx docs build** (MANDATORY)
+   - Run `cd docs && python build_docs.py` locally — must succeed
+   - Verify new module docstrings appear in API reference
+   - Check that docstrings updated during implementation (TODO-035 pattern) are accurate
+   - The `docs-deploy.yml` CI workflow auto-deploys on push to main when `docs/**`, `README.md`, or `CHANGELOG.md` change
 
 #### Step 4: Build and Validate
 
@@ -196,7 +206,11 @@ For each: upload wheels, verify production install in clean venv, create GitHub 
 
    Commit and push the change to the USE repo with message: `chore: bump SDK dependency pins to latest release`
 
-2. Deploy documentation (ReadTheDocs trigger or manual)
+2. **Verify documentation deployed** (MANDATORY)
+   - Check `gh run list --workflow=docs-deploy.yml --limit=1` — must be `completed success`
+   - If failed: check logs with `gh run view <id> --log-failed`, fix, and re-trigger
+   - Verify live docs at the GitHub Pages URL
+   - GitHub Pages must be configured: Settings → Pages → Source: "GitHub Actions"
 3. Document release in `deploy/deployments/YYYY-MM-DD-vX.Y.Z.md`
 4. Announce if applicable
 
@@ -210,9 +224,9 @@ For each: upload wheels, verify production install in clean venv, create GitHub 
 
 Quick reference for all version locations in this monorepo:
 
-| Package          | pyproject.toml                         | setup.py                         | **init**.py                                      | SDK Dep     |
-| ---------------- | -------------------------------------- | -------------------------------- | ------------------------------------------------ | ----------- |
-| kailash          | `pyproject.toml`                       | `setup.py`                       | `src/kailash/__init__.py`                        | —           |
+| Package          | pyproject.toml                             | setup.py                             | **init**.py                                          | SDK Dep     |
+| ---------------- | ------------------------------------------ | ------------------------------------ | ---------------------------------------------------- | ----------- |
+| kailash          | `pyproject.toml`                           | `setup.py`                           | `src/kailash/__init__.py`                            | —           |
 | kailash-dataflow | `packages/kailash-dataflow/pyproject.toml` | `packages/kailash-dataflow/setup.py` | `packages/kailash-dataflow/src/dataflow/__init__.py` | `kailash>=` |
 | kailash-kaizen   | `packages/kailash-kaizen/pyproject.toml`   | `packages/kailash-kaizen/setup.py`   | `packages/kailash-kaizen/src/kaizen/__init__.py`     | `kailash>=` |
 | kailash-nexus    | `packages/kailash-nexus/pyproject.toml`    | `packages/kailash-nexus/setup.py`    | `packages/kailash-nexus/src/nexus/__init__.py`       | `kailash>=` |
