@@ -5,6 +5,8 @@ WorkflowAPIGateway with clearer naming and better organization.
 """
 
 import logging
+import time
+from collections import defaultdict, deque
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import Any
@@ -14,9 +16,50 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from ..api.workflow_api import WorkflowAPI
+from ..runtime.shutdown import ShutdownCoordinator
 from ..workflow import Workflow
+from .connection_metrics_router import (
+    ConnectionMetricsProvider,
+    create_connection_metrics_router,
+)
 
 logger = logging.getLogger(__name__)
+
+_RATE_LIMIT_MAX_REQUESTS = 100  # per window
+_RATE_LIMIT_WINDOW_SECONDS = 60
+
+
+class _SignalQueryRateLimiter:
+    """Simple in-memory rate limiter: max requests per workflow_id per minute."""
+
+    _MAX_KEYS = 10000
+
+    def __init__(
+        self,
+        max_requests: int = _RATE_LIMIT_MAX_REQUESTS,
+        window_seconds: float = _RATE_LIMIT_WINDOW_SECONDS,
+    ) -> None:
+        self._max = max_requests
+        self._window = window_seconds
+        self._timestamps: dict = defaultdict(lambda: deque())
+        self._last_cleanup = time.monotonic()
+
+    def is_allowed(self, key: str) -> bool:
+        """Return True if the request is within the rate limit."""
+        now = time.monotonic()
+        window_start = now - self._window
+        dq = self._timestamps[key]
+        while dq and dq[0] < window_start:
+            dq.popleft()
+        if len(dq) >= self._max:
+            return False
+        dq.append(now)
+        if now - self._last_cleanup > 60.0 or len(self._timestamps) > self._MAX_KEYS:
+            stale = [k for k, d in self._timestamps.items() if not d]
+            for k in stale:
+                del self._timestamps[k]
+            self._last_cleanup = now
+        return True
 
 
 class WorkflowRegistration(BaseModel):
@@ -63,6 +106,7 @@ class WorkflowServer:
         version: str = "1.0.0",
         max_workers: int = 10,
         cors_origins: list[str] = None,
+        runtime: Any = None,
         **kwargs,
     ):
         """Initialize the workflow server.
@@ -73,10 +117,22 @@ class WorkflowServer:
             version: Server version
             max_workers: Maximum thread pool workers
             cors_origins: Allowed CORS origins
+            runtime: Optional LocalRuntime instance for signal/query support
         """
         self.workflows: dict[str, WorkflowRegistration] = {}
         self.mcp_servers: dict[str, Any] = {}
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
+        self.runtime = runtime
+        self._rate_limiter = _SignalQueryRateLimiter()
+
+        # Coordinated shutdown via ShutdownCoordinator
+        self.shutdown_coordinator = ShutdownCoordinator(
+            timeout=kwargs.pop("shutdown_timeout", 30.0)
+        )
+        # Register server's own executor shutdown at priority 0 (stop accepting)
+        self.shutdown_coordinator.register(
+            "executor", lambda: self.executor.shutdown(wait=True), priority=0
+        )
 
         # Create FastAPI app with lifespan
         @asynccontextmanager
@@ -84,9 +140,9 @@ class WorkflowServer:
             # Startup
             logger.info(f"Starting {title} v{version}")
             yield
-            # Shutdown
-            logger.info("Shutting down workflow server")
-            self.executor.shutdown(wait=True)
+            # Shutdown -- delegate to coordinator for sequenced cleanup
+            logger.info("Shutting down workflow server via ShutdownCoordinator")
+            await self.shutdown_coordinator.shutdown()
 
         self.app = FastAPI(
             title=title, description=description, version=version, lifespan=lifespan
@@ -104,8 +160,43 @@ class WorkflowServer:
                 allow_headers=["Authorization", "Content-Type", "X-Request-ID"],
             )
 
+        # Connection metrics
+        self._connection_metrics_provider = ConnectionMetricsProvider()
+        self._connection_metrics_router = create_connection_metrics_router(
+            self._connection_metrics_provider,
+        )
+        self.app.include_router(self._connection_metrics_router, prefix="/connections")
+
+        # Live dashboard endpoint
+        self._register_dashboard_endpoint()
+
         # Register root endpoints
         self._register_root_endpoints()
+
+        # Signal/query endpoints for running workflows
+        self._register_signal_query_endpoints()
+
+    def _register_dashboard_endpoint(self):
+        """Register a ``/dashboard`` endpoint serving the WebSocket live dashboard."""
+        from starlette.responses import HTMLResponse
+
+        from ..visualization.live_dashboard import LiveDashboard
+
+        @self.app.get("/dashboard", response_class=HTMLResponse)
+        async def live_dashboard():
+            """Serve the WebSocket-powered live monitoring dashboard."""
+            dash = LiveDashboard()
+            return HTMLResponse(
+                content=dash.render(),
+                headers={
+                    "Content-Security-Policy": (
+                        "default-src 'self'; "
+                        "script-src 'unsafe-inline'; "
+                        "style-src 'unsafe-inline'; "
+                        "connect-src 'self' ws: wss:"
+                    )
+                },
+            )
 
     def _register_root_endpoints(self):
         """Register server-level endpoints."""
@@ -188,8 +279,31 @@ class WorkflowServer:
 
             return health_status
 
-        # Note: Metrics and authentication endpoints are provided by EnterpriseWorkflowServer
-        # Basic WorkflowServer focuses on core workflow functionality
+        @self.app.get("/metrics")
+        async def prometheus_metrics():
+            """Prometheus metrics endpoint with connection pool metrics."""
+            from starlette.responses import Response
+
+            from ..monitoring.metrics import get_metrics_registry
+
+            registry = get_metrics_registry()
+            content = registry.export_metrics(format="prometheus")
+
+            # Merge connection pool metrics into Prometheus output
+            try:
+                pool_data = await self._connection_metrics_provider.collect()
+                conn_lines = self._connection_metrics_provider.get_prometheus_lines(
+                    pool_data
+                )
+                if conn_lines:
+                    content = content.rstrip("\n") + "\n" + "\n".join(conn_lines) + "\n"
+            except Exception as e:
+                logger.warning("Failed to collect connection metrics: %s", e)
+
+            return Response(
+                content=content,
+                media_type="text/plain; version=0.0.4; charset=utf-8",
+            )
 
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
@@ -204,6 +318,114 @@ class WorkflowServer:
                 logger.error(f"WebSocket error: {e}")
             finally:
                 await websocket.close()
+
+    def _register_signal_query_endpoints(self):
+        """Register signal and query REST endpoints.
+
+        These endpoints enable external HTTP clients to send signals to
+        and query the state of running workflows via the runtime's
+        signal/query system.
+        """
+
+        @self.app.post("/workflows/{workflow_id}/signals/{signal_name}")
+        async def send_signal(workflow_id: str, signal_name: str, request: Request):
+            """Send a signal to a running workflow.
+
+            The request body (JSON) is delivered as the signal data payload.
+            An empty body sends None as the data.
+
+            Args:
+                workflow_id: The run_id or workflow_id of the target workflow.
+                signal_name: Name of the signal to send.
+
+            Returns:
+                JSON confirmation with signal details.
+
+            Raises:
+                404: If no runtime is configured or no active workflow found.
+            """
+            from starlette.responses import JSONResponse
+
+            if not self._rate_limiter.is_allowed(workflow_id):
+                return JSONResponse(
+                    status_code=429,
+                    content={"error": "Rate limit exceeded"},
+                )
+
+            if self.runtime is None:
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "error": "No runtime configured on this server. "
+                        "Pass a LocalRuntime instance to WorkflowServer(runtime=...)."
+                    },
+                )
+
+            try:
+                body = await request.json()
+            except Exception:
+                body = None
+
+            try:
+                self.runtime.signal(workflow_id, signal_name, body)
+                return {
+                    "status": "signal_sent",
+                    "workflow_id": workflow_id,
+                    "signal_name": signal_name,
+                }
+            except KeyError as e:
+                logger.error("Signal error for workflow %s: %s", workflow_id, e)
+                return JSONResponse(
+                    status_code=404,
+                    content={"error": "Workflow not found"},
+                )
+
+        @self.app.get("/workflows/{workflow_id}/queries/{query_name}")
+        async def execute_query(workflow_id: str, query_name: str, request: Request):
+            """Execute a query on a running workflow.
+
+            Query parameters from the URL are passed as keyword arguments
+            to the registered query handler.
+
+            Args:
+                workflow_id: The run_id or workflow_id of the target workflow.
+                query_name: Name of the query to execute.
+
+            Returns:
+                JSON result from the query handler.
+
+            Raises:
+                404: If no runtime configured, no active workflow, or no handler.
+            """
+            from starlette.responses import JSONResponse
+
+            if not self._rate_limiter.is_allowed(workflow_id):
+                return JSONResponse(
+                    status_code=429,
+                    content={"error": "Rate limit exceeded"},
+                )
+
+            if self.runtime is None:
+                return JSONResponse(
+                    status_code=404,
+                    content={
+                        "error": "No runtime configured on this server. "
+                        "Pass a LocalRuntime instance to WorkflowServer(runtime=...)."
+                    },
+                )
+
+            # Convert query params to kwargs (exclude path params)
+            kwargs = dict(request.query_params)
+
+            try:
+                result = await self.runtime.query(workflow_id, query_name, **kwargs)
+                return {"status": "ok", "query_name": query_name, "result": result}
+            except KeyError as e:
+                logger.error("Query error for workflow %s: %s", workflow_id, e)
+                return JSONResponse(
+                    status_code=404,
+                    content={"error": "Workflow or query not found"},
+                )
 
     def register_workflow(
         self,
@@ -344,10 +566,25 @@ class WorkflowServer:
                     content = await resp.read()
                     from starlette.responses import Response as StarletteResponse
 
+                    _allowed_response_headers = frozenset(
+                        {
+                            "content-type",
+                            "content-length",
+                            "cache-control",
+                            "etag",
+                            "last-modified",
+                            "content-encoding",
+                        }
+                    )
+                    safe_headers = {
+                        k: v
+                        for k, v in resp.headers.items()
+                        if k.lower() in _allowed_response_headers
+                    }
                     return StarletteResponse(
                         content=content,
                         status_code=resp.status,
-                        headers=dict(resp.headers),
+                        headers=safe_headers,
                     )
 
         logger.info(f"Registered proxied workflow '{name}' -> {proxy_url}")

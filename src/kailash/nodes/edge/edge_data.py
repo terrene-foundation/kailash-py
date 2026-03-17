@@ -409,11 +409,12 @@ class EdgeDataNode(EdgeNode):
     async def _replicate_to_edge(
         self, edge_name: str, key: str, data: Any, version: int
     ) -> bool:
-        """Replicate data to specific edge."""
-        try:
-            # Simulate network replication
-            await asyncio.sleep(0.05)  # 50ms replication latency
+        """Replicate data to specific edge.
 
+        Note: This stores data in the local in-memory cache. In production,
+        a real transport layer would send data to the remote edge node.
+        """
+        try:
             # Store in edge data
             if edge_name not in self._edge_data:
                 self._edge_data[edge_name] = {}
@@ -436,10 +437,12 @@ class EdgeDataNode(EdgeNode):
     async def _prepare_replication(
         self, edge: EdgeLocation, key: str, data: Any, version: int
     ) -> bool:
-        """Prepare phase of 2PC replication."""
-        # Simulate prepare phase
-        await asyncio.sleep(0.02)
+        """Prepare phase of 2PC replication.
 
+        Checks whether the target edge can accept the write based on
+        storage utilization. In production, this would also involve an
+        RPC to the target edge to acquire a prepare lock.
+        """
         # Check if edge can accept the write
         if edge.metrics.storage_utilization > 0.95:  # 95% full
             return False
@@ -461,9 +464,12 @@ class EdgeDataNode(EdgeNode):
     async def _abort_replication(
         self, edge: EdgeLocation, key: str, version: int
     ) -> bool:
-        """Abort phase of 2PC replication."""
-        # Clean up any prepared state
-        await asyncio.sleep(0.01)
+        """Abort phase of 2PC replication.
+
+        In production, this would send an abort RPC to the target edge
+        to release any prepare locks.
+        """
+        # Clean up any prepared state (no-op for in-memory store)
         return True
 
     async def _replicate_causal(
@@ -551,14 +557,24 @@ class EdgeDataNode(EdgeNode):
         return winner_edge
 
     async def _ensure_latest_version(self, key: str):
-        """Ensure we have the latest version for strong consistency."""
-        # In production, this would check with other edges
-        await asyncio.sleep(0.01)  # Simulate version check
+        """Ensure we have the latest version for strong consistency.
+
+        Requires inter-edge communication to verify version across replicas.
+        """
+        raise NotImplementedError(
+            "Strong consistency version check requires inter-edge transport. "
+            "Provide a concrete _ensure_latest_version() in a subclass."
+        )
 
     async def _refresh_from_primary(self, key: str):
-        """Refresh data from primary edge for bounded staleness."""
-        # In production, this would fetch from primary
-        await asyncio.sleep(0.02)  # Simulate refresh
+        """Refresh data from primary edge for bounded staleness.
+
+        Requires inter-edge communication to fetch from primary.
+        """
+        raise NotImplementedError(
+            "Primary refresh requires inter-edge transport. "
+            "Provide a concrete _refresh_from_primary() in a subclass."
+        )
 
     def _get_causal_dependencies(self, key: str) -> List[str]:
         """Get causal dependencies for a key."""

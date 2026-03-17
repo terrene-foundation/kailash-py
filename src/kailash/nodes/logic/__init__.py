@@ -7,6 +7,7 @@ from kailash.nodes.logic.convergence import (
 )
 from kailash.nodes.logic.loop import LoopNode
 from kailash.nodes.logic.operations import MergeNode, SwitchNode
+from kailash.nodes.logic.signal_wait import SignalWaitNode
 from kailash.nodes.logic.workflow import WorkflowNode
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "LoopNode",
     "ConvergenceCheckerNode",
     "MultiCriteriaConvergenceNode",
+    "SignalWaitNode",
 ]

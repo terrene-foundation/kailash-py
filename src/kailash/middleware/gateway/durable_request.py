@@ -1,10 +1,19 @@
-"""Durable request implementation with state machine and checkpointing.
+"""Durable request with state machine, checkpointing, and resumable execution.
 
-This module provides request durability through:
-- State machine for request lifecycle
-- Automatic checkpointing at key points
-- Execution journal for audit trail
-- Resumable execution after failures
+This module provides :class:`DurableRequest` -- a request wrapper that
+persists execution progress via :class:`Checkpoint` objects and can be
+resumed from the last checkpoint after a failure or cancellation.
+
+Key capabilities:
+- State machine governing the request lifecycle (INITIALIZED through
+  COMPLETED / FAILED / CANCELLED)
+- Automatic checkpointing at validation, workflow creation, and
+  workflow completion boundaries
+- :class:`ExecutionJournal` for a full audit trail of events
+- Resumable execution: on resume the :class:`ExecutionTracker` replays
+  cached node outputs so already-completed nodes are skipped
+- Workflow construction from a JSON request body via
+  :class:`~kailash.workflow.builder.WorkflowBuilder`
 """
 
 import asyncio
@@ -21,11 +30,13 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional
 
 from kailash.runtime import LocalRuntime
+from kailash.runtime.cancellation import CancellationToken
+from kailash.runtime.execution_tracker import ExecutionTracker
 
 if TYPE_CHECKING:
     from .checkpoint_manager import CheckpointManager
 
-from kailash.sdk_exceptions import NodeExecutionError
+from kailash.sdk_exceptions import NodeExecutionError, WorkflowCancelledError
 from kailash.workflow import Workflow, WorkflowBuilder
 
 logger = logging.getLogger(__name__)
@@ -163,6 +174,11 @@ class DurableRequest:
 
         # Cancellation support
         self._cancel_event = asyncio.Event()
+        self._cancellation_token = CancellationToken()
+        self._execution_task: Optional[asyncio.Task] = None
+
+        # Checkpoint/restore execution tracker
+        self._execution_tracker: ExecutionTracker = ExecutionTracker()
 
     def _create_default_metadata(self) -> RequestMetadata:
         """Create default metadata."""
@@ -184,6 +200,12 @@ class DurableRequest:
 
     async def execute(self) -> Dict[str, Any]:
         """Execute request with automatic checkpointing."""
+        # Store current task so cancel() can await/force-cancel it
+        try:
+            self._execution_task = asyncio.current_task()
+        except RuntimeError:
+            self._execution_task = None
+
         try:
             self.start_time = time.time()
             await self.journal.record(
@@ -224,6 +246,10 @@ class DurableRequest:
                 "duration_ms": (self.end_time - self.start_time) * 1000,
                 "checkpoints": self.checkpoint_count,
             }
+
+        except WorkflowCancelledError:
+            await self._handle_cancellation()
+            raise
 
         except asyncio.CancelledError:
             await self._handle_cancellation()
@@ -267,20 +293,67 @@ class DurableRequest:
             await self._handle_error(e)
             raise
 
-    async def cancel(self):
-        """Cancel the request execution."""
+    async def cancel(
+        self, reason: str = "User requested cancellation", timeout: float = 30.0
+    ):
+        """Cancel the request execution.
+
+        Signals the cancellation token so the runtime stops between nodes,
+        then optionally force-cancels the execution task if it does not
+        stop within the grace period.
+
+        Args:
+            reason: Human-readable reason for cancellation.
+            timeout: Seconds to wait for graceful stop before force-cancelling
+                the asyncio task. Defaults to 30 seconds.
+        """
         self._cancel_event.set()
+        self._cancellation_token.cancel(reason=reason)
         self.state = RequestState.CANCELLED
         await self.journal.record(
             "request_cancelled",
             {
                 "request_id": self.id,
+                "reason": reason,
             },
         )
 
-        if self.workflow and self.runtime:
-            # TODO: Implement workflow cancellation
-            pass
+        if self.workflow and self.runtime and self._execution_task is not None:
+            # Wait for the current node to finish (grace period)
+            if not self._execution_task.done():
+                try:
+                    await asyncio.wait_for(
+                        asyncio.shield(self._execution_task),
+                        timeout=timeout,
+                    )
+                except asyncio.TimeoutError:
+                    # Grace period expired -- force-cancel the task
+                    self._execution_task.cancel()
+                    try:
+                        await self._execution_task
+                    except (asyncio.CancelledError, Exception):
+                        pass
+                    await self.journal.record(
+                        "request_force_cancelled",
+                        {
+                            "request_id": self.id,
+                            "reason": f"Force-cancelled after {timeout}s timeout",
+                        },
+                    )
+                except (asyncio.CancelledError, WorkflowCancelledError):
+                    # Expected -- workflow stopped cooperatively
+                    pass
+                except Exception:
+                    # Unexpected error during wait; already cancelled
+                    pass
+
+            await self.journal.record(
+                "cancellation_complete",
+                {
+                    "request_id": self.id,
+                    "completed_nodes": getattr(self, "_completed_nodes", []),
+                },
+            )
 
     async def checkpoint(self, name: str, data: Dict[str, Any] = None) -> str:
         """Create a checkpoint."""
@@ -335,22 +408,126 @@ class DurableRequest:
         )
 
     async def _create_workflow(self):
-        """Create workflow from request."""
-        # This is a simplified example - in practice, this would
-        # parse the request and create appropriate workflow
+        """Create workflow from request body configuration.
+
+        Parses the ``workflow`` key from the request body and constructs a
+        :class:`~kailash.workflow.graph.Workflow` via :class:`WorkflowBuilder`.
+
+        Expected schema::
+
+            {
+                "workflow": {
+                    "name": "MyWorkflow",
+                    "nodes": [
+                        {"type": "NodeType", "id": "node_id", "params": {...}}
+                    ],
+                    "connections": [
+                        {"from": "src_node.output", "to": "tgt_node.input"}
+                    ]
+                }
+            }
+
+        Connection strings use dot notation: ``"node_id.port_name"``.
+
+        Raises:
+            ValueError: If the request body is missing, the ``workflow`` key
+                is absent, no nodes are defined, a node type is unrecognised,
+                or a connection string is malformed.
+        """
         if not self.metadata.body:
             raise ValueError("Request body required for workflow creation")
 
-        workflow_config = self.metadata.body.get("workflow", {})
+        workflow_config = self.metadata.body.get("workflow")
+        if not workflow_config or not isinstance(workflow_config, dict):
+            raise ValueError(
+                "Request body must contain a 'workflow' key with "
+                "name, nodes, and connections"
+            )
 
-        # Create workflow based on configuration
-        self.workflow = Workflow(
+        nodes = workflow_config.get("nodes")
+        if not nodes or not isinstance(nodes, list):
+            raise ValueError("Workflow config must contain a non-empty 'nodes' list")
+
+        builder = WorkflowBuilder()
+
+        # ------------------------------------------------------------------
+        # Add nodes
+        # ------------------------------------------------------------------
+        for idx, node_spec in enumerate(nodes):
+            if not isinstance(node_spec, dict):
+                raise ValueError(
+                    f"Node at index {idx} must be a dict with "
+                    "'type', 'id', and optional 'params'"
+                )
+
+            node_type = node_spec.get("type")
+            node_id = node_spec.get("id")
+
+            if not node_type:
+                raise ValueError(f"Node at index {idx} is missing 'type'")
+            if not node_id:
+                raise ValueError(f"Node at index {idx} is missing 'id'")
+
+            params = node_spec.get("params") or {}
+            if not isinstance(params, dict):
+                raise ValueError(
+                    f"Node '{node_id}' params must be a dict, "
+                    f"got {type(params).__name__}"
+                )
+
+            try:
+                builder.add_node(node_type, node_id, params)
+            except Exception as e:
+                raise ValueError(
+                    f"Failed to add node '{node_id}' of type " f"'{node_type}': {e}"
+                ) from e
+
+        # ------------------------------------------------------------------
+        # Add connections
+        # ------------------------------------------------------------------
+        connections = workflow_config.get("connections") or []
+        if not isinstance(connections, list):
+            raise ValueError("Workflow 'connections' must be a list")
+
+        for idx, conn in enumerate(connections):
+            if not isinstance(conn, dict):
+                raise ValueError(
+                    f"Connection at index {idx} must be a dict "
+                    "with 'from' and 'to' keys"
+                )
+
+            from_str = conn.get("from", "")
+            to_str = conn.get("to", "")
+
+            if "." not in from_str:
+                raise ValueError(
+                    f"Connection at index {idx}: 'from' must use "
+                    f"dot notation 'node_id.output', got '{from_str}'"
+                )
+            if "." not in to_str:
+                raise ValueError(
+                    f"Connection at index {idx}: 'to' must use "
+                    f"dot notation 'node_id.input', got '{to_str}'"
+                )
+
+            src_node, src_output = from_str.split(".", 1)
+            tgt_node, tgt_input = to_str.split(".", 1)
+
+            try:
+                builder.add_connection(src_node, src_output, tgt_node, tgt_input)
+            except Exception as e:
+                raise ValueError(
+                    f"Failed to add connection {from_str} -> {to_str}: {e}"
+                ) from e
+
+        # ------------------------------------------------------------------
+        # Build the Workflow and store it
+        # ------------------------------------------------------------------
+        workflow_name = workflow_config.get("name", "DurableWorkflow")
+        self.workflow = builder.build(
             workflow_id=f"wf_{self.id}",
-            name=workflow_config.get("name", "DurableWorkflow"),
+            name=workflow_name,
         )
-
-        # TODO: Add nodes based on workflow config
-        # This would parse the request and build the workflow
 
         self.workflow_id = self.workflow.workflow_id
         self.state = RequestState.WORKFLOW_CREATED
@@ -364,14 +541,19 @@ class DurableRequest:
         )
 
     async def _execute_workflow(self) -> Dict[str, Any]:
-        """Execute workflow with checkpointing."""
+        """Execute workflow with checkpointing, cancellation, and resume support."""
         self.state = RequestState.EXECUTING
         self.runtime = LocalRuntime()
 
-        # Execute workflow
-        # TODO: Implement checkpoint-aware execution
-        # For now, standard execution
-        result, run_id = await self.runtime.execute(self.workflow)
+        # Execute workflow with cancellation token and execution tracker.
+        # The tracker enables checkpoint capture and resume-from-checkpoint:
+        # already-completed nodes (from a prior checkpoint) are skipped,
+        # and newly completed nodes are recorded for subsequent checkpoints.
+        result, run_id = await self.runtime.execute_async(
+            self.workflow,
+            cancellation_token=self._cancellation_token,
+            execution_tracker=self._execution_tracker,
+        )
 
         # Checkpoint final result
         await self.checkpoint(
@@ -385,21 +567,27 @@ class DurableRequest:
         return result
 
     async def _capture_workflow_state(self) -> Dict[str, Any]:
-        """Capture current workflow state."""
+        """Capture current workflow state from the execution tracker.
+
+        The tracker records per-node completion and outputs as the workflow
+        executes.  This method serialises the tracker state so that it can
+        be stored inside a ``Checkpoint.workflow_state`` dict and later
+        restored via ``_restore_workflow_state``.
+        """
         if not self.workflow:
             return {}
 
-        # TODO: Implement workflow state capture
-        # This would include:
-        # - Completed nodes
-        # - Node outputs
-        # - Workflow variables
-        # - Execution context
+        tracker = self._execution_tracker
+        if tracker is None:
+            return {
+                "workflow_id": self.workflow_id,
+                "completed_nodes": [],
+                "node_outputs": {},
+            }
 
         return {
             "workflow_id": self.workflow_id,
-            "completed_nodes": [],
-            "node_outputs": {},
+            **tracker.to_dict(),
         }
 
     async def _restore_checkpoint(self, checkpoint_id: str) -> Optional[Checkpoint]:
@@ -423,13 +611,13 @@ class DurableRequest:
         return self.checkpoints[-1] if self.checkpoints else None
 
     async def _restore_workflow_state(self, workflow_state: Dict[str, Any]):
-        """Restore workflow state from checkpoint."""
-        # TODO: Implement workflow state restoration
-        # This would restore:
-        # - Node execution state
-        # - Intermediate results
-        # - Workflow variables
-        pass
+        """Restore workflow state from a checkpoint.
+
+        Rebuilds the ``ExecutionTracker`` from the serialised dict so that
+        when ``_execute_workflow`` runs, the runtime skips already-completed
+        nodes and replays their cached outputs.
+        """
+        self._execution_tracker = ExecutionTracker.from_dict(workflow_state)
 
     async def _handle_cancellation(self):
         """Handle request cancellation."""

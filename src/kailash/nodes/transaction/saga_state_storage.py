@@ -6,9 +6,21 @@ in-memory, Redis, and database storage options.
 
 import json
 import logging
+import re
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
+
+_TABLE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _validate_table_name(name: str) -> None:
+    """Raise ValueError if name is not a safe SQL identifier."""
+    if not _TABLE_NAME_RE.match(name):
+        raise ValueError(
+            f"Invalid table name '{name}': must match ^[a-zA-Z_][a-zA-Z0-9_]*$"
+        )
+
 
 logger = logging.getLogger(__name__)
 
@@ -261,6 +273,7 @@ class DatabaseStateStorage(SagaStateStorage):
             db_pool: Database connection pool
             table_name: Name of the table for saga states
         """
+        _validate_table_name(table_name)
         self.db_pool = db_pool
         self.table_name = table_name
         self._ensure_table_exists()
@@ -361,6 +374,9 @@ class DatabaseStateStorage(SagaStateStorage):
                             params.append(value)
                         else:
                             # For other fields, use JSONB query
+                            # Validate key to prevent SQL injection
+                            if not _TABLE_NAME_RE.match(key):
+                                raise ValueError(f"Invalid filter key: {key!r}")
                             conditions.append(f"state_data->'{key}' = ${param_count}")
                             params.append(json.dumps(value))
 

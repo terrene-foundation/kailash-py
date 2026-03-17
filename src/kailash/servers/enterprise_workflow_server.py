@@ -1,7 +1,9 @@
-"""Enterprise workflow server implementation.
+"""Enterprise workflow server with resource management and monitoring.
 
-This module provides EnterpriseWorkflowServer - a renamed and improved version of
-EnhancedDurableAPIGateway with full enterprise features enabled by default.
+This module provides :class:`EnterpriseWorkflowServer`, the recommended
+server for production deployments.  It extends :class:`DurableWorkflowServer`
+with resource registry integration, secret management, async workflow
+execution, and Prometheus-compatible ``/metrics`` endpoint.
 """
 
 import asyncio
@@ -495,15 +497,41 @@ class EnterpriseWorkflowServer(DurableWorkflowServer):
                 if reg.type == "embedded":
                     health_status["workflows"][name] = "healthy"
                 else:
-                    # TODO: Implement proxy health check
                     health_status["workflows"][name] = "unknown"
 
             # Check MCP server health
             for name, server in self.mcp_servers.items():
-                # TODO: Implement MCP health check
-                health_status["mcp_servers"][name] = "unknown"
+                try:
+                    if hasattr(server, "health_check"):
+                        mcp_health = await server.health_check()
+                        health_status["mcp_servers"][name] = (
+                            "healthy" if mcp_health else "unhealthy"
+                        )
+                    elif hasattr(server, "is_running"):
+                        health_status["mcp_servers"][name] = (
+                            "healthy" if server.is_running else "stopped"
+                        )
+                    else:
+                        health_status["mcp_servers"][name] = "healthy"
+                except Exception as e:
+                    logger.warning(f"MCP health check failed for {name}: {e}")
+                    health_status["mcp_servers"][name] = "unhealthy"
 
             return health_status
+
+        @self.app.get("/metrics")
+        async def prometheus_metrics():
+            """Prometheus metrics endpoint."""
+            from starlette.responses import Response
+
+            from ..monitoring.metrics import get_metrics_registry
+
+            registry = get_metrics_registry()
+            content = registry.export_metrics(format="prometheus")
+            return Response(
+                content=content,
+                media_type="text/plain; version=0.0.4; charset=utf-8",
+            )
 
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket):

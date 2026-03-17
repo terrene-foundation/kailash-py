@@ -7,6 +7,11 @@ from .circuit_breaker import (
     CircuitState,
     ConnectionCircuitBreaker,
 )
+from .distributed_circuit_breaker import (
+    DistributedCircuitBreaker,
+    DistributedCircuitBreakerManager,
+    RedisCircuitBreakerBackend,
+)
 
 __all__ = [
     "CircuitBreakerConfig",
@@ -14,4 +19,7 @@ __all__ = [
     "CircuitBreakerManager",
     "CircuitState",
     "ConnectionCircuitBreaker",
+    "DistributedCircuitBreaker",
+    "DistributedCircuitBreakerManager",
+    "RedisCircuitBreakerBackend",
 ]

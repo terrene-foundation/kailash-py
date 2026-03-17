@@ -5,17 +5,26 @@ import logging
 from typing import Optional, Union
 
 from kailash.runtime.async_local import AsyncLocalRuntime
+from kailash.runtime.distributed import DistributedRuntime, TaskQueue, Worker
 from kailash.runtime.local import LocalRuntime
 from kailash.runtime.parallel_cyclic import ParallelCyclicRuntime
 from kailash.runtime.runner import WorkflowRunner
+from kailash.runtime.shutdown import ShutdownCoordinator
+from kailash.runtime.signals import QueryRegistry, SignalChannel
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "LocalRuntime",
     "AsyncLocalRuntime",
+    "DistributedRuntime",
     "ParallelCyclicRuntime",
+    "TaskQueue",
+    "Worker",
     "WorkflowRunner",
+    "ShutdownCoordinator",
+    "SignalChannel",
+    "QueryRegistry",
     "get_runtime",
 ]
 

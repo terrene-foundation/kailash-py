@@ -1835,11 +1835,10 @@ class MultiFactorAuthNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node):
         Returns:
             True if successful
         """
-        # Simulated SMS sending for tests
-        self.log_with_context(
-            "INFO", f"SMS sent to {phone[-4:] if len(phone) > 4 else phone}: {message}"
+        raise NotImplementedError(
+            "SMS sending requires an SMS gateway integration (e.g., Twilio, AWS SNS). "
+            "Provide a concrete _send_sms() implementation or configure an SMS provider."
         )
-        return True
 
     def _send_email_code(self, email: str, code: str, user_id: str) -> None:
         """Send email verification code.

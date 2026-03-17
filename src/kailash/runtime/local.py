@@ -61,6 +61,7 @@ from kailash.runtime.resource_manager import (
     MemoryLimitExceededError,
 )
 from kailash.runtime.secret_provider import EnvironmentSecretProvider, SecretProvider
+from kailash.runtime.signals import QueryRegistry, SignalChannel
 from kailash.runtime.validation.connection_context import ConnectionContext
 from kailash.runtime.validation.enhanced_error_formatter import EnhancedErrorFormatter
 from kailash.runtime.validation.error_categorizer import ErrorCategorizer
@@ -69,8 +70,12 @@ from kailash.runtime.validation.metrics import (
     get_metrics_collector,
 )
 from kailash.runtime.validation.suggestion_engine import ValidationSuggestionEngine
+from kailash.runtime.cancellation import CancellationToken
+from kailash.runtime.execution_tracker import ExecutionTracker
+from kailash.runtime.tracing import get_workflow_tracer
 from kailash.sdk_exceptions import (
     RuntimeExecutionError,
+    WorkflowCancelledError,
     WorkflowExecutionError,
     WorkflowValidationError,
 )
@@ -658,6 +663,9 @@ class LocalRuntime(
         self._is_context_managed = False  # Track if using context manager
         self._cleanup_registered = False  # Track if atexit cleanup registered
 
+        # === Coordinated Shutdown (v0.12.0, TODO-015) ===
+        self._shutdown_coordinator: Optional["ShutdownCoordinator"] = None
+
         # Enterprise execution context
         self._execution_context = {
             "security_enabled": enable_security,
@@ -667,6 +675,10 @@ class LocalRuntime(
             "resource_limits": self.resource_limits,
             "user_context": user_context,
         }
+
+        # === Signal/Query System (TODO-010) ===
+        # Maps run_id -> {"signal_channel": SignalChannel, "query_registry": QueryRegistry}
+        self._workflow_signals: Dict[str, Dict[str, Any]] = {}
 
     def _extract_secret_requirements(self, workflow: "Workflow") -> list:
         """Extract secret requirements from workflow nodes.
@@ -689,6 +701,7 @@ class LocalRuntime(
         workflow: Workflow,
         task_manager: TaskManager | None = None,
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> tuple[dict[str, Any], str | None]:
         """
         Execute a workflow synchronously.
@@ -790,10 +803,14 @@ class LocalRuntime(
                         workflow=workflow,
                         task_manager=task_manager,
                         parameters=parameters,
+                        cancellation_token=cancellation_token,
                     )
             else:
                 return self._execute_sync(
-                    workflow=workflow, task_manager=task_manager, parameters=parameters
+                    workflow=workflow,
+                    task_manager=task_manager,
+                    parameters=parameters,
+                    cancellation_token=cancellation_token,
                 )
         except RuntimeError:
             # No event loop running, use persistent loop
@@ -826,6 +843,7 @@ class LocalRuntime(
                             workflow=workflow,
                             task_manager=task_manager,
                             parameters=parameters,
+                            cancellation_token=cancellation_token,
                         )
                     )
             else:
@@ -835,6 +853,7 @@ class LocalRuntime(
                         workflow=workflow,
                         task_manager=task_manager,
                         parameters=parameters,
+                        cancellation_token=cancellation_token,
                     )
                 )
 
@@ -843,6 +862,8 @@ class LocalRuntime(
         workflow: Workflow,
         task_manager: TaskManager | None = None,
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
+        cancellation_token: CancellationToken | None = None,
+        execution_tracker: ExecutionTracker | None = None,
     ) -> tuple[dict[str, Any], str | None]:
         """Execute a workflow asynchronously (for AsyncLocalRuntime compatibility).
 
@@ -850,6 +871,11 @@ class LocalRuntime(
             workflow: Workflow to execute.
             task_manager: Optional task manager for tracking.
             parameters: Optional parameter overrides per node.
+            cancellation_token: Optional token to request cancellation.
+            execution_tracker: Optional tracker for checkpoint/restore.
+                When provided, completed nodes are skipped and their cached
+                outputs are replayed.  New completions are recorded into the
+                tracker for subsequent checkpoint captures.
 
         Returns:
             Tuple of (results dict, run_id).
@@ -857,11 +883,105 @@ class LocalRuntime(
         Raises:
             RuntimeExecutionError: If execution fails.
             WorkflowValidationError: If workflow is invalid.
+            WorkflowCancelledError: If cancellation is requested.
             PermissionError: If access control denies execution.
         """
         return await self._execute_async(
-            workflow=workflow, task_manager=task_manager, parameters=parameters
+            workflow=workflow,
+            task_manager=task_manager,
+            parameters=parameters,
+            cancellation_token=cancellation_token,
+            execution_tracker=execution_tracker,
         )
+
+    # === Signal/Query Public API (TODO-010) ===
+
+    def signal(self, workflow_id: str, signal_name: str, data: Any = None) -> None:
+        """Send a signal to a running workflow.
+
+        Delivers a named signal with optional data to a workflow identified
+        by its run_id (or workflow_id). If the workflow has a SignalWaitNode
+        waiting for this signal, it will receive the data and resume.
+
+        Args:
+            workflow_id: The run_id or workflow_id of the target workflow.
+            signal_name: Name of the signal to send.
+            data: Arbitrary data payload to deliver with the signal.
+
+        Raises:
+            KeyError: If no workflow with the given ID is currently active.
+
+        Example:
+            >>> runtime = LocalRuntime()
+            >>> # After starting a workflow with a SignalWaitNode:
+            >>> runtime.signal(run_id, "approval", {"approved": True})
+        """
+        entry = self._workflow_signals.get(workflow_id)
+        if entry is None:
+            raise KeyError(
+                f"No active workflow found with ID '{workflow_id}'. "
+                f"Active workflows: {list(self._workflow_signals.keys())}"
+            )
+        entry["signal_channel"].send(signal_name, data)
+        logger.debug("Signal '%s' sent to workflow '%s'", signal_name, workflow_id)
+
+    async def query(self, workflow_id: str, query_name: str, **kwargs: Any) -> Any:
+        """Query the state of a running workflow.
+
+        Executes a registered query handler on the target workflow. Query
+        handlers are registered by nodes or the runtime via the QueryRegistry.
+
+        Args:
+            workflow_id: The run_id or workflow_id of the target workflow.
+            query_name: Name of the query to execute.
+            **kwargs: Keyword arguments passed to the query handler.
+
+        Returns:
+            The return value of the query handler.
+
+        Raises:
+            KeyError: If no workflow with the given ID is active, or if no
+                handler is registered for the given query name.
+
+        Example:
+            >>> result = await runtime.query(run_id, "progress")
+            >>> print(result)  # {"completed": 5, "total": 10}
+        """
+        entry = self._workflow_signals.get(workflow_id)
+        if entry is None:
+            raise KeyError(
+                f"No active workflow found with ID '{workflow_id}'. "
+                f"Active workflows: {list(self._workflow_signals.keys())}"
+            )
+        return await entry["query_registry"].query(query_name, **kwargs)
+
+    def get_signal_channel(self, workflow_id: str) -> Optional[SignalChannel]:
+        """Get the SignalChannel for a running workflow.
+
+        Args:
+            workflow_id: The run_id or workflow_id of the target workflow.
+
+        Returns:
+            The SignalChannel instance, or None if no workflow is active.
+        """
+        entry = self._workflow_signals.get(workflow_id)
+        if entry is None:
+            return None
+        return entry["signal_channel"]
+
+    def get_query_registry(self, workflow_id: str) -> Optional[QueryRegistry]:
+        """Get the QueryRegistry for a running workflow.
+
+        Args:
+            workflow_id: The run_id or workflow_id of the target workflow.
+
+        Returns:
+            The QueryRegistry instance, or None if no workflow is active.
+        """
+        entry = self._workflow_signals.get(workflow_id)
+        if entry is None:
+            return None
+        return entry["query_registry"]
 
     def _ensure_event_loop(self) -> asyncio.AbstractEventLoop:
         """
@@ -1099,6 +1219,30 @@ class LocalRuntime(
                     f"Event loop cleanup complete for runtime {self._runtime_id}"
                 )
 
+    @property
+    def shutdown_coordinator(self) -> "ShutdownCoordinator":
+        """Get or lazily create the ShutdownCoordinator for this runtime.
+
+        The coordinator is created on first access and the runtime's own
+        cleanup is automatically registered at priority 1 (drain).
+
+        Returns:
+            ShutdownCoordinator instance associated with this runtime.
+
+        Example:
+            >>> runtime = LocalRuntime()
+            >>> runtime.shutdown_coordinator.register("db", pool.close, priority=3)
+            >>> await runtime.shutdown_coordinator.shutdown()
+        """
+        if self._shutdown_coordinator is None:
+            from kailash.runtime.shutdown import ShutdownCoordinator
+
+            self._shutdown_coordinator = ShutdownCoordinator(timeout=30.0)
+            self._shutdown_coordinator.register(
+                "runtime", self._cleanup_event_loop, priority=1
+            )
+        return self._shutdown_coordinator
+
     def close(self) -> None:
         """
         Explicitly close the runtime and clean up resources.
@@ -1156,6 +1300,7 @@ class LocalRuntime(
         if self.debug:
             logger.debug(f"Explicit close() called for runtime {self._runtime_id}")
 
+        self._workflow_signals.clear()
         self._cleanup_event_loop()
 
     def __enter__(self) -> "LocalRuntime":
@@ -1269,6 +1414,7 @@ class LocalRuntime(
         workflow: Workflow,
         task_manager: TaskManager | None = None,
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> tuple[dict[str, Any], str | None]:
         """Execute workflow synchronously when already in an event loop.
 
@@ -1280,6 +1426,7 @@ class LocalRuntime(
             workflow: Workflow to execute.
             task_manager: Optional task manager for tracking.
             parameters: Optional parameter overrides per node.
+            cancellation_token: Optional token to request cancellation.
 
         Returns:
             Tuple of (results dict, run_id).
@@ -1287,6 +1434,7 @@ class LocalRuntime(
         Raises:
             RuntimeExecutionError: If execution fails.
             WorkflowValidationError: If workflow is invalid.
+            WorkflowCancelledError: If cancellation is requested.
         """
         # Create new event loop for sync execution
         import threading
@@ -1306,6 +1454,7 @@ class LocalRuntime(
                         workflow=workflow,
                         task_manager=task_manager,
                         parameters=parameters,
+                        cancellation_token=cancellation_token,
                     )
                 )
                 result_container.append(result)
@@ -1347,6 +1496,8 @@ class LocalRuntime(
         workflow: Workflow,
         task_manager: TaskManager | None = None,
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
+        cancellation_token: CancellationToken | None = None,
+        execution_tracker: ExecutionTracker | None = None,
     ) -> tuple[dict[str, Any], str | None]:
         """Core async execution implementation with enterprise features.
 
@@ -1356,12 +1507,16 @@ class LocalRuntime(
         - Performance monitoring via TaskManager/MetricsCollector
         - Async node detection and execution
         - Resource limit enforcement
+        - Cancellation token checking between nodes
+        - Checkpoint/restore via ExecutionTracker
         - Error handling and recovery
 
         Args:
             workflow: Workflow to execute.
             task_manager: Optional task manager for tracking.
             parameters: Optional parameter overrides per node.
+            cancellation_token: Optional token to request cancellation.
+            execution_tracker: Optional tracker for checkpoint/restore.
 
         Returns:
             Tuple of (results dict, run_id).
@@ -1369,6 +1524,7 @@ class LocalRuntime(
         Raises:
             RuntimeExecutionError: If execution fails.
             WorkflowValidationError: If workflow is invalid.
+            WorkflowCancelledError: If cancellation is requested.
             PermissionError: If access control denies execution.
         """
         if not workflow:
@@ -1376,6 +1532,7 @@ class LocalRuntime(
 
         run_id = None
         _deferred_storage = None  # P0D-007: Initialize before try block
+        _signal_key = None  # TODO-010: Signal cleanup key
 
         try:
             # Resource Limit Enforcement: Check limits before execution (P0A-003: opt-in only)
@@ -1432,6 +1589,27 @@ class LocalRuntime(
             # Store workflow context for inspection/cleanup
             self._current_workflow_context = workflow_context
 
+            # === Signal/Query System (TODO-010) ===
+            # Create SignalChannel and QueryRegistry for this workflow execution.
+            # Injected into workflow_context so nodes access them via
+            # self.get_workflow_context("signal_channel").
+            _signal_channel = SignalChannel()
+            _query_registry = QueryRegistry()
+            workflow_context["signal_channel"] = _signal_channel
+            workflow_context["query_registry"] = _query_registry
+
+            # === Checkpoint/Restore (TODO-005/006) ===
+            # Create or reuse an ExecutionTracker for this workflow execution.
+            # The tracker records per-node completion and outputs so that
+            # checkpoints can capture workflow state and resume can skip
+            # already-completed nodes.
+            # Priority: explicit parameter > workflow_context > new instance
+            if execution_tracker is None:
+                execution_tracker = workflow_context.get("execution_tracker")
+            if execution_tracker is None:
+                execution_tracker = ExecutionTracker()
+            workflow_context["execution_tracker"] = execution_tracker
+
             # Transform workflow-level parameters if needed
             processed_parameters = self._process_workflow_parameters(
                 workflow, parameters
@@ -1477,6 +1655,17 @@ class LocalRuntime(
                     self.logger.warning(f"Failed to create task run: {e}")
                     # Continue without tracking
 
+            # === Signal/Query System (TODO-010) ===
+            # Register signal channel and query registry for external access.
+            # Use run_id as the key (falls back to workflow_id if run_id is None).
+            _signal_key = (
+                run_id or getattr(workflow, "workflow_id", None) or str(id(workflow))
+            )
+            self._workflow_signals[_signal_key] = {
+                "signal_channel": _signal_channel,
+                "query_registry": _query_registry,
+            }
+
             # Check for cyclic workflows and delegate to CycleExecutionMixin
             if self.enable_cycles and workflow.has_cycles():
                 # Delegate to CycleExecutionMixin (Phase 3 integration)
@@ -1507,6 +1696,8 @@ class LocalRuntime(
                                 run_id=run_id,
                                 parameters=processed_parameters or {},
                                 workflow_context=workflow_context,
+                                cancellation_token=cancellation_token,
+                                execution_tracker=execution_tracker,
                             )
                         else:
                             # Continue with conditional execution
@@ -1529,6 +1720,8 @@ class LocalRuntime(
                                     run_id=run_id,
                                     parameters=processed_parameters or {},
                                     workflow_context=workflow_context,
+                                    cancellation_token=cancellation_token,
+                                    execution_tracker=execution_tracker,
                                 )
                     else:
                         # No switch recommended, continue with current mode
@@ -1554,6 +1747,8 @@ class LocalRuntime(
                                 run_id=run_id,
                                 parameters=processed_parameters or {},
                                 workflow_context=workflow_context,
+                                cancellation_token=cancellation_token,
+                                execution_tracker=execution_tracker,
                             )
                 else:
                     # Performance monitoring disabled
@@ -1579,6 +1774,8 @@ class LocalRuntime(
                             run_id=run_id,
                             parameters=processed_parameters or {},
                             workflow_context=workflow_context,
+                            cancellation_token=cancellation_token,
+                            execution_tracker=execution_tracker,
                         )
             else:
                 # Execute standard DAG workflow with enterprise features
@@ -1596,6 +1793,8 @@ class LocalRuntime(
                     run_id=run_id,
                     parameters=processed_parameters or {},
                     workflow_context=workflow_context,
+                    cancellation_token=cancellation_token,
+                    execution_tracker=execution_tracker,
                 )
 
             # Enterprise Audit: Log successful completion
@@ -1634,6 +1833,9 @@ class LocalRuntime(
                             f"Error during final cleanup of node {node_id}: {cleanup_error}"
                         )
 
+            # === Signal/Query System Cleanup (TODO-010) ===
+            self._workflow_signals.pop(_signal_key, None)
+
             return results, run_id
 
         except WorkflowValidationError:
@@ -1659,6 +1861,8 @@ class LocalRuntime(
                 self._flush_deferred_storage_sqlite(
                     _deferred_storage, log_warning=False
                 )
+            if _signal_key:
+                self._workflow_signals.pop(_signal_key, None)
             raise
         except PermissionError as e:
             # Enterprise Audit: Log access denial
@@ -1682,6 +1886,31 @@ class LocalRuntime(
                 self._flush_deferred_storage_sqlite(
                     _deferred_storage, log_warning=False
                 )
+            if _signal_key:
+                self._workflow_signals.pop(_signal_key, None)
+            raise
+        except WorkflowCancelledError as e:
+            # Cancellation should propagate without wrapping
+            if self.enable_audit:
+                await self._log_audit_event_async(
+                    "workflow_execution_cancelled",
+                    {
+                        "workflow_id": workflow.workflow_id,
+                        "completed_nodes": e.completed_nodes,
+                        "cancelled_at_node": e.cancelled_at_node,
+                    },
+                )
+            if task_manager and run_id:
+                try:
+                    task_manager.update_run_status(run_id, "cancelled", error=str(e))
+                except Exception:
+                    pass
+            if _deferred_storage is not None:
+                self._flush_deferred_storage_sqlite(
+                    _deferred_storage, log_warning=False
+                )
+            if _signal_key:
+                self._workflow_signals.pop(_signal_key, None)
             raise
         except Exception as e:
             # Enterprise Audit: Log execution failure
@@ -1704,6 +1933,8 @@ class LocalRuntime(
                 self._flush_deferred_storage_sqlite(
                     _deferred_storage, log_warning=False
                 )
+            if _signal_key:
+                self._workflow_signals.pop(_signal_key, None)
 
             # Wrap other errors in RuntimeExecutionError
             raise RuntimeExecutionError(
@@ -1717,6 +1948,8 @@ class LocalRuntime(
         run_id: str | None,
         parameters: dict[str, dict[str, Any]],
         workflow_context: dict[str, Any] | None = None,
+        cancellation_token: CancellationToken | None = None,
+        execution_tracker: ExecutionTracker | None = None,
     ) -> dict[str, Any]:
         """Execute the workflow nodes in topological order.
 
@@ -1725,12 +1958,18 @@ class LocalRuntime(
             task_manager: Task manager for tracking.
             run_id: Run ID for tracking.
             parameters: Parameter overrides.
+            workflow_context: Optional workflow context dict.
+            cancellation_token: Optional token to request cancellation.
+            execution_tracker: Optional tracker for checkpoint/restore.
+                Already-completed nodes are skipped and their cached outputs
+                replayed.  Newly executed nodes are recorded into the tracker.
 
         Returns:
             Dictionary of node results.
 
         Raises:
             WorkflowExecutionError: If execution fails.
+            WorkflowCancelledError: If cancellation is requested between nodes.
         """
         # P0C-001: Use cached topological sort from Workflow
         try:
@@ -1746,6 +1985,14 @@ class LocalRuntime(
         results = {}
         node_outputs = {}
         failed_nodes = []
+
+        # OpenTelemetry tracing (TODO-014): Start workflow-level span.
+        # Zero overhead when opentelemetry is not installed.
+        _tracer = get_workflow_tracer()
+        _wf_span = _tracer.start_workflow_span(
+            workflow_id=getattr(workflow, "workflow_id", "") or "",
+            workflow_name=getattr(workflow, "name", "") or "",
+        )
 
         # Make results available to _should_skip_conditional_node for transitive dependency checking
         self._current_results = results
@@ -1782,8 +2029,39 @@ class LocalRuntime(
         )
         _trust_context = self._get_effective_trust_context() if _trust_enabled else None
 
+        # Track completed nodes for cancellation reporting
+        completed_nodes: list[str] = []
+
         # Execute each node
         for node_id in execution_order:
+            # Cancellation check: between node executions, check token
+            if cancellation_token is not None and cancellation_token.is_cancelled:
+                self.logger.info(
+                    "Workflow cancelled before node '%s' (completed: %s)",
+                    node_id,
+                    completed_nodes,
+                )
+                raise WorkflowCancelledError(
+                    message=f"Workflow cancelled: {cancellation_token.reason or 'no reason provided'}",
+                    completed_nodes=list(completed_nodes),
+                    cancelled_at_node=node_id,
+                )
+
+            # === Checkpoint/Restore (TODO-005/006) ===
+            # If the tracker already has this node, skip execution and replay
+            # the cached output.  This is the core resume-from-checkpoint logic.
+            if execution_tracker is not None and execution_tracker.is_completed(
+                node_id
+            ):
+                cached_output = execution_tracker.get_output(node_id)
+                results[node_id] = cached_output
+                node_outputs[node_id] = cached_output
+                completed_nodes.append(node_id)
+                self.logger.info(
+                    "Skipping node '%s' (restored from checkpoint)", node_id
+                )
+                continue
+
             # P0D-006: Use lazy % formatting (avoids string construction per node)
             self.logger.info("Executing node: %s", node_id)
 
@@ -1839,6 +2117,13 @@ class LocalRuntime(
                     self.logger.warning(
                         f"Failed to create task for node '{node_id}': {e}"
                     )
+
+            # OpenTelemetry tracing (TODO-014): per-node span
+            _node_span = _tracer.start_node_span(
+                node_id=node_id,
+                node_type=node_instance.__class__.__name__,
+                parent_span=_wf_span,
+            )
 
             try:
                 # Prepare inputs
@@ -1930,6 +2215,12 @@ class LocalRuntime(
                 # Store outputs
                 node_outputs[node_id] = outputs
                 results[node_id] = outputs
+                completed_nodes.append(node_id)
+
+                # === Checkpoint/Restore (TODO-005/006) ===
+                # Record completion so that checkpoint captures include this node.
+                if execution_tracker is not None:
+                    execution_tracker.record_completion(node_id, outputs)
 
                 if self.debug:
                     self.logger.debug(f"Node {node_id} outputs: {outputs}")
@@ -1993,6 +2284,12 @@ class LocalRuntime(
                     f"Node {node_id} completed successfully in {performance_metrics.duration:.3f}s"
                 )
 
+                # OpenTelemetry tracing (TODO-014): end node span on success
+                _tracer.set_attribute(
+                    _node_span, "node.duration_s", performance_metrics.duration
+                )
+                _tracer.end_span(_node_span, status="ok")
+
                 # Clean up async resources if the node has a cleanup method
                 if hasattr(node_instance, "cleanup"):
                     try:
@@ -2003,6 +2300,9 @@ class LocalRuntime(
                         )
 
             except Exception as e:
+                # OpenTelemetry tracing (TODO-014): end node span on error
+                _tracer.end_span(_node_span, status="error", error=e)
+
                 failed_nodes.append(node_id)
                 self.logger.error(f"Node {node_id} failed: {e}", exc_info=self.debug)
 
@@ -2050,6 +2350,16 @@ class LocalRuntime(
 
         # Clean up workflow context
         self._current_workflow_context = None
+
+        # OpenTelemetry tracing (TODO-014): end workflow span
+        if failed_nodes:
+            _tracer.set_attribute(
+                _wf_span, "workflow.failed_nodes", ",".join(failed_nodes)
+            )
+            _tracer.end_span(_wf_span, status="error")
+        else:
+            _tracer.set_attribute(_wf_span, "workflow.node_count", len(execution_order))
+            _tracer.end_span(_wf_span, status="ok")
 
         return results
 

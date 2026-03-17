@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kailash-config
+  labels:
+    app: kailash
+data:
+  # Runtime configuration
+  KAILASH_LOG_LEVEL: "INFO"
+  KAILASH_DEBUG: "false"
+  KAILASH_MAX_CONCURRENCY: "10"
+  KAILASH_ENABLE_MONITORING: "true"
+  KAILASH_ENABLE_CYCLES: "true"
+
+  # Redis configuration (URL should be in a Secret for production)
+  KAILASH_REDIS_URL: "redis://redis:6379/0"
+  CIRCUIT_BREAKER_REDIS_URL: "redis://redis:6379/1"
+
+  # Worker configuration
+  KAILASH_WORKER_CONCURRENCY: "4"
+  KAILASH_WORKER_HEARTBEAT_INTERVAL: "30"
+  KAILASH_WORKER_DEAD_TIMEOUT: "90"
+
+  # Enterprise features
+  KAILASH_ENABLE_ENTERPRISE_MONITORING: "false"
+  KAILASH_ENABLE_HEALTH_MONITORING: "true"
+  KAILASH_TRUST_VERIFICATION_MODE: "disabled"
+
+  # Prometheus metrics
+  PROMETHEUS_METRICS_ENABLED: "true"
+  PROMETHEUS_METRICS_PORT: "8000"

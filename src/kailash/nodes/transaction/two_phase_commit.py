@@ -37,14 +37,31 @@ Examples:
 import asyncio
 import json
 import logging
+import re
 import time
 import uuid
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
+_TABLE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _validate_table_name(name: str) -> None:
+    """Raise ValueError if name is not a safe SQL identifier."""
+    if not _TABLE_NAME_RE.match(name):
+        raise ValueError(
+            f"Invalid table name '{name}': must match ^[a-zA-Z_][a-zA-Z0-9_]*$"
+        )
+
+
 from kailash.nodes.base import NodeMetadata, NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
+from kailash.nodes.transaction.participant_transport import (
+    LocalNodeTransport,
+    ParticipantTransport,
+    TransportResult,
+)
 from kailash.sdk_exceptions import NodeConfigurationError, NodeExecutionError
 
 logger = logging.getLogger(__name__)
@@ -167,6 +184,7 @@ class TwoPhaseCommitCoordinatorNode(AsyncNode):
         max_retries: int = 3,
         state_storage: str = "memory",
         storage_config: Dict[str, Any] = None,
+        transport: Optional[ParticipantTransport] = None,
         **kwargs,
     ):
         """Initialize Two-Phase Commit coordinator.
@@ -181,6 +199,10 @@ class TwoPhaseCommitCoordinatorNode(AsyncNode):
             max_retries: Maximum retry attempts per participant
             state_storage: Storage backend ("memory", "redis", "database")
             storage_config: Configuration for state storage
+            transport: Transport layer for participant communication.
+                       Defaults to ``LocalNodeTransport()`` which provides
+                       backward-compatible always-succeed behaviour when no
+                       executor is configured.
             **kwargs: Additional node configuration
         """
         # Set node metadata
@@ -219,6 +241,9 @@ class TwoPhaseCommitCoordinatorNode(AsyncNode):
                     endpoint=f"http://{p_id}/2pc",  # Default endpoint
                     timeout=prepare_timeout,
                 )
+
+        # Participant transport
+        self._transport: ParticipantTransport = transport or LocalNodeTransport()
 
         # State persistence
         self.state_storage = state_storage
@@ -564,22 +589,28 @@ class TwoPhaseCommitCoordinatorNode(AsyncNode):
             return False
 
     async def _send_prepare_request(self, participant: TwoPhaseCommitParticipant):
-        """Send prepare request to a participant."""
+        """Send prepare request to a participant via the configured transport."""
         try:
-            # This is a mock implementation - in real usage, this would
-            # make HTTP/gRPC calls to actual participants
             logger.info(f"Sending PREPARE to {participant.participant_id}")
 
-            # Simulate network call and processing time
-            await asyncio.sleep(0.1)
+            result: TransportResult = await self._transport.prepare(
+                participant,
+                self.transaction_id,
+                self.context,
+            )
 
-            # Mock successful prepare vote (in real implementation, this would
-            # depend on the participant's actual response)
-            participant.vote = ParticipantVote.PREPARED
+            if result.success and result.vote == "prepared":
+                participant.vote = ParticipantVote.PREPARED
+            else:
+                participant.vote = ParticipantVote.ABORT
+
             participant.prepare_time = datetime.now(UTC)
             participant.last_contact = datetime.now(UTC)
 
-            logger.info(f"Participant {participant.participant_id} voted PREPARED")
+            logger.info(
+                f"Participant {participant.participant_id} voted "
+                f"{participant.vote.value}"
+            )
 
         except Exception as e:
             logger.error(f"Failed to send prepare to {participant.participant_id}: {e}")
@@ -587,13 +618,19 @@ class TwoPhaseCommitCoordinatorNode(AsyncNode):
             participant.last_contact = datetime.now(UTC)
 
     async def _send_commit_request(self, participant: TwoPhaseCommitParticipant):
-        """Send commit request to a participant."""
+        """Send commit request to a participant via the configured transport."""
         try:
-            # This is a mock implementation
             logger.info(f"Sending COMMIT to {participant.participant_id}")
 
-            # Simulate commit processing
-            await asyncio.sleep(0.1)
+            result: TransportResult = await self._transport.commit(
+                participant,
+                self.transaction_id,
+            )
+
+            if not result.success:
+                raise NodeExecutionError(
+                    f"Commit failed for {participant.participant_id}: {result.error}"
+                )
 
             participant.commit_time = datetime.now(UTC)
             participant.last_contact = datetime.now(UTC)
@@ -624,14 +661,22 @@ class TwoPhaseCommitCoordinatorNode(AsyncNode):
             logger.warning("Some abort requests timed out")
 
     async def _send_abort_request(self, participant: TwoPhaseCommitParticipant):
-        """Send abort request to a participant."""
+        """Send abort request to a participant via the configured transport."""
         try:
             logger.info(f"Sending ABORT to {participant.participant_id}")
 
-            # Simulate abort processing
-            await asyncio.sleep(0.05)
+            result: TransportResult = await self._transport.abort(
+                participant,
+                self.transaction_id,
+            )
 
             participant.last_contact = datetime.now(UTC)
+
+            if not result.success:
+                logger.warning(
+                    f"Abort returned failure for {participant.participant_id}: "
+                    f"{result.error}"
+                )
 
         except Exception as e:
             logger.warning(f"Failed to send abort to {participant.participant_id}: {e}")
@@ -868,6 +913,7 @@ class TwoPhaseDatabaseStorage:
     """Database storage for Two-Phase Commit states with correct column mapping."""
 
     def __init__(self, db_pool: Any, table_name: str = "two_phase_commit_states"):
+        _validate_table_name(table_name)
         self.db_pool = db_pool
         self.table_name = table_name
 
@@ -964,6 +1010,9 @@ class TwoPhaseDatabaseStorage:
                             params.append(value)
                         else:
                             # For other fields, use JSONB query
+                            # Validate key to prevent SQL injection
+                            if not _TABLE_NAME_RE.match(key):
+                                raise ValueError(f"Invalid filter key: {key!r}")
                             conditions.append(f"state_data->'{key}' = ${param_count}")
                             params.append(json.dumps(value))
 

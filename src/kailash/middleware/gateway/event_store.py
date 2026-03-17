@@ -10,12 +10,13 @@ This module provides:
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+from typing import Any, AsyncIterator, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -91,12 +92,26 @@ class EventStore:
 
     def __init__(
         self,
-        storage_backend: Optional[Any] = None,
+        storage_backend: Optional[Union[Any, str]] = None,
         batch_size: int = 100,
         flush_interval_seconds: float = 1.0,
     ):
-        """Initialize event store."""
-        self.storage_backend = storage_backend
+        """Initialize event store.
+
+        Args:
+            storage_backend: Storage backend instance, or the string ``"memory"``
+                to force in-memory storage. When ``None`` (default), the store
+                checks the ``KAILASH_EVENT_STORE_PATH`` environment variable:
+
+                - If the env var is set, a :class:`SqliteEventStoreBackend` is
+                  created automatically at that path.
+                - If the env var is not set, the store operates in-memory only
+                  (backward-compatible default).
+
+            batch_size: Number of events to buffer before flushing.
+            flush_interval_seconds: Periodic flush interval in seconds.
+        """
+        self.storage_backend = self._resolve_backend(storage_backend)
         self.batch_size = batch_size
         self.flush_interval = flush_interval_seconds
 
@@ -127,6 +142,41 @@ class EventStore:
             # If no event loop is running, defer task creation
             # Don't create the coroutine here as it will never be awaited
             self._flush_task = None
+
+    @staticmethod
+    def _resolve_backend(backend: Optional[Union[Any, str]]) -> Optional[Any]:
+        """Resolve the storage backend from the argument and environment.
+
+        Resolution order:
+        1. If *backend* is the string ``"memory"``, return ``None`` (in-memory).
+        2. If *backend* is any other non-None value, use it as-is (caller
+           provided a concrete backend instance).
+        3. If *backend* is ``None`` and the ``KAILASH_EVENT_STORE_PATH``
+           environment variable is set, auto-create a
+           :class:`SqliteEventStoreBackend` at that path.
+        4. Otherwise return ``None`` (in-memory, backward compatible).
+        """
+        if isinstance(backend, str) and backend == "memory":
+            logger.info("EventStore: explicit in-memory backend requested")
+            return None
+
+        if backend is not None:
+            return backend
+
+        env_path = os.environ.get("KAILASH_EVENT_STORE_PATH")
+        if env_path:
+            from kailash.middleware.gateway.event_store_sqlite import (
+                SqliteEventStoreBackend,
+            )
+
+            logger.info(
+                "EventStore: auto-creating SQLite backend at %s "
+                "(from KAILASH_EVENT_STORE_PATH)",
+                env_path,
+            )
+            return SqliteEventStoreBackend(db_path=env_path)
+
+        return None
 
     async def _ensure_flush_task(self):
         """Ensure the flush task is running."""

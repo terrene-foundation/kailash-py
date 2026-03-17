@@ -849,13 +849,13 @@ class ElicitationSystem:
             schema: Input schema
         """
         # In a real implementation, this would send the request to the MCP client
-        # For now, we'll just log it
+        # via the MCP protocol transport layer.
         logger.info(f"Elicitation request {request_id}: {prompt}")
 
-        # Simulate automatic response for testing
-        if prompt.lower().startswith("test"):
-            await asyncio.sleep(0.1)  # Simulate user thinking time
-            await self.provide_input(request_id, "test response")
+        raise NotImplementedError(
+            "Elicitation request sending requires MCP client transport integration. "
+            "Provide a concrete implementation that sends the request via the MCP protocol."
+        )
 
 
 class ProgressReporter:

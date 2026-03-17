@@ -3,7 +3,7 @@
 import asyncio
 import time
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -21,7 +21,14 @@ class TestConsistencyManagers:
     """Test suite for consistency managers."""
 
     @pytest.mark.asyncio
-    async def test_strong_consistency_all_success(self):
+    @patch.object(
+        StrongConsistencyManager,
+        "_prepare_write",
+        new_callable=AsyncMock,
+        return_value=True,
+    )
+    @patch.object(StrongConsistencyManager, "_abort_replica", new_callable=AsyncMock)
+    async def test_strong_consistency_all_success(self, mock_abort, mock_prepare):
         """Test strong consistency with all replicas succeeding."""
         write_callback = AsyncMock(return_value=True)
         read_callback = AsyncMock(

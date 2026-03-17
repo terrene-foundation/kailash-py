@@ -7,7 +7,7 @@ into validation effectiveness and potential performance bottlenecks.
 
 import logging
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
@@ -54,10 +54,12 @@ class ValidationMetricsCollector:
         Args:
             enable_detailed_logging: Whether to log detailed metrics to logger
         """
-        self.metrics: List[ValidationMetric] = []
-        self.node_validation_times: Dict[str, List[float]] = defaultdict(list)
+        self.metrics: deque = deque(maxlen=10000)
+        self.node_validation_times: Dict[str, deque] = defaultdict(
+            lambda: deque(maxlen=1000)
+        )
         self.error_counts: Dict[ErrorCategory, int] = defaultdict(int)
-        self.security_violations: List[ValidationMetric] = []
+        self.security_violations: deque = deque(maxlen=10000)
         self.enable_detailed_logging = enable_detailed_logging
         self.logger = logging.getLogger("kailash.validation.metrics")
 

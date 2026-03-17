@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from kailash.nodes.transaction import SagaCoordinatorNode, SagaStepNode
+from kailash.nodes.transaction.node_executor import MockNodeExecutor
 from kailash.nodes.transaction.saga_state_storage import InMemoryStateStorage
 from kailash.sdk_exceptions import NodeExecutionError
 
@@ -14,12 +15,18 @@ class TestSagaCoordinatorNode:
     """Test suite for SagaCoordinatorNode."""
 
     @pytest.fixture
-    def saga_coordinator(self):
+    def mock_executor(self):
+        """Create a MockNodeExecutor that succeeds for any node type."""
+        return MockNodeExecutor()
+
+    @pytest.fixture
+    def saga_coordinator(self, mock_executor):
         """Create a SagaCoordinatorNode instance for testing."""
         return SagaCoordinatorNode(
             saga_name="test_saga",
             timeout=300.0,
             enable_monitoring=False,
+            executor=mock_executor,
         )
 
     def test_create_saga(self, saga_coordinator):
@@ -160,13 +167,15 @@ class TestSagaCoordinatorNode:
         # Create saga with completed steps
         saga_coordinator.execute(operation="create_saga")
 
-        # Add and "complete" steps
+        # Add and "complete" steps with all required attributes
         for i in range(3):
             step = MagicMock()
             step.step_id = f"step_{i}"
             step.name = f"step{i+1}"
             step.state = "completed"
             step.compensation_node_id = f"comp_node{i+1}"
+            step.compensation_parameters = {}
+            step.result = {"status": "success"}
             saga_coordinator.steps.append(step)
 
         saga_coordinator.current_step_index = 2

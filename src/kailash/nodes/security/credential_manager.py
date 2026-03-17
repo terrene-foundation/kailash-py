@@ -6,12 +6,15 @@ multiple credential sources, validation, and secure handling.
 """
 
 import json
+import logging
 import os
 import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Literal, Optional
 
 from kailash.nodes.base import Node, NodeParameter
+
+logger = logging.getLogger(__name__)
 
 
 class CredentialManagerNode(Node):
@@ -21,9 +24,9 @@ class CredentialManagerNode(Node):
     Supports multiple credential sources:
     - Environment variables
     - JSON files
-    - AWS Secrets Manager (simulated)
-    - Azure Key Vault (simulated)
-    - HashiCorp Vault (simulated)
+    - AWS Secrets Manager (requires boto3: pip install kailash[aws-secrets])
+    - Azure Key Vault (requires azure libs: pip install kailash[azure-secrets])
+    - HashiCorp Vault (requires hvac: pip install kailash[vault])
 
     Example:
         ```python
@@ -199,44 +202,144 @@ class CredentialManagerNode(Node):
         return None
 
     def _fetch_from_vault(self, credential_name: str) -> Optional[Dict[str, Any]]:
-        """Simulate fetching from HashiCorp Vault."""
-        # In production, this would use hvac client
-        # For now, return simulated data for testing
-        if credential_name == "test_vault_creds":
-            return {
-                "api_key": "vault_simulated_key_123456",
-                "metadata": {
-                    "version": 1,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                },
-            }
+        """Fetch credentials from HashiCorp Vault using the hvac library.
+
+        Requires the hvac package: pip install kailash[vault]
+        Uses VAULT_ADDR and VAULT_TOKEN environment variables for authentication.
+        """
+        try:
+            import hvac
+        except ImportError:
+            raise ImportError(
+                "HashiCorp Vault support requires the 'hvac' library. "
+                "Install it with: pip install 'kailash[vault]' or pip install hvac"
+            )
+
+        vault_addr = os.environ.get("VAULT_ADDR")
+        vault_token = os.environ.get("VAULT_TOKEN")
+
+        if not vault_addr:
+            logger.warning("VAULT_ADDR environment variable not set")
+            return None
+
+        if not vault_token:
+            logger.warning("VAULT_TOKEN environment variable not set")
+            return None
+
+        client = hvac.Client(url=vault_addr, token=vault_token)
+
+        if not client.is_authenticated():
+            logger.error("Vault authentication failed")
+            return None
+
+        # Try KV v2 first, then v1
+        try:
+            # KV v2 (default mount path: secret)
+            mount_point = os.environ.get("VAULT_MOUNT_POINT", "secret")
+            response = client.secrets.kv.v2.read_secret_version(
+                path=credential_name,
+                mount_point=mount_point,
+            )
+            data = response.get("data", {}).get("data", {})
+            if data:
+                return data
+        except Exception as e:
+            logger.debug(f"KV v2 read failed, trying v1: {e}")
+
+        try:
+            # KV v1 fallback
+            response = client.secrets.kv.v1.read_secret(
+                path=credential_name,
+                mount_point=os.environ.get("VAULT_MOUNT_POINT", "secret"),
+            )
+            data = response.get("data", {})
+            if data:
+                return data
+        except Exception as e:
+            logger.warning(f"Vault read failed for '{credential_name}': {e}")
+
         return None
 
     def _fetch_from_aws_secrets(self, credential_name: str) -> Optional[Dict[str, Any]]:
-        """Simulate fetching from AWS Secrets Manager."""
-        # In production, this would use boto3 client
-        # For now, return simulated data for testing
-        if credential_name == "test_aws_creds":
-            return {
-                "username": "aws_user",
-                "password": "aws_simulated_password_123",
-                "engine": "postgres",
-                "host": "test.rds.amazonaws.com",
-            }
+        """Fetch credentials from AWS Secrets Manager using boto3.
+
+        Requires the boto3 package: pip install kailash[aws-secrets]
+        Uses standard AWS credential chain (env vars, instance profile, etc.)
+        """
+        try:
+            import boto3
+        except ImportError:
+            raise ImportError(
+                "AWS Secrets Manager support requires the 'boto3' library. "
+                "Install it with: pip install 'kailash[aws-secrets]' or pip install boto3"
+            )
+
+        region = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+
+        try:
+            client = boto3.client("secretsmanager", region_name=region)
+            response = client.get_secret_value(SecretId=credential_name)
+
+            # AWS returns either SecretString (JSON) or SecretBinary
+            if "SecretString" in response:
+                secret_string = response["SecretString"]
+                try:
+                    return json.loads(secret_string)
+                except json.JSONDecodeError:
+                    return {"value": secret_string}
+            elif "SecretBinary" in response:
+                return {"value": response["SecretBinary"].decode("utf-8")}
+
+        except Exception as e:
+            logger.warning(
+                f"AWS Secrets Manager read failed for '{credential_name}': {e}"
+            )
+
         return None
 
     def _fetch_from_azure_keyvault(
         self, credential_name: str
     ) -> Optional[Dict[str, Any]]:
-        """Simulate fetching from Azure Key Vault."""
-        # In production, this would use azure-keyvault-secrets client
-        # For now, return simulated data for testing
-        if credential_name == "test_azure_creds":
-            return {
-                "client_id": "azure_client_123",
-                "client_secret": "azure_secret_456",
-                "tenant_id": "azure_tenant_789",
-            }
+        """Fetch credentials from Azure Key Vault.
+
+        Requires azure-keyvault-secrets and azure-identity packages:
+            pip install kailash[azure-secrets]
+        Uses DefaultAzureCredential for authentication.
+        """
+        try:
+            from azure.identity import DefaultAzureCredential
+            from azure.keyvault.secrets import SecretClient
+        except ImportError:
+            raise ImportError(
+                "Azure Key Vault support requires 'azure-keyvault-secrets' and "
+                "'azure-identity'. Install with: pip install 'kailash[azure-secrets]' "
+                "or pip install azure-keyvault-secrets azure-identity"
+            )
+
+        vault_url = os.environ.get("AZURE_VAULT_URL")
+        if not vault_url:
+            logger.warning("AZURE_VAULT_URL environment variable not set")
+            return None
+
+        try:
+            credential = DefaultAzureCredential()
+            client = SecretClient(vault_url=vault_url, credential=credential)
+
+            # Azure Key Vault secret names cannot contain underscores,
+            # so we convert underscores to hyphens
+            secret_name = credential_name.replace("_", "-")
+            secret = client.get_secret(secret_name)
+
+            if secret.value:
+                # Try to parse as JSON first
+                try:
+                    return json.loads(secret.value)
+                except json.JSONDecodeError:
+                    return {"value": secret.value}
+
+        except Exception as e:
+            logger.warning(f"Azure Key Vault read failed for '{credential_name}': {e}")
+
         return None
 
     def _validate_credential(self, credential: Dict[str, Any]) -> bool:
@@ -319,8 +422,14 @@ class CredentialManagerNode(Node):
                         credentials = result
                         source = src
                         break
+                except ImportError:
+                    # Re-raise ImportError so users get the install hint
+                    raise
                 except Exception as e:
-                    # Log error but continue to next source
+                    logger.debug(
+                        f"Credential source '{src}' failed for "
+                        f"'{self.credential_name}': {e}"
+                    )
                     continue
 
         if not credentials:
@@ -355,7 +464,7 @@ class CredentialManagerNode(Node):
             "metadata": {
                 "credential_type": self.credential_type,
                 "fetched_at": datetime.now(timezone.utc).isoformat(),
-                "rotation_detected": False,  # Placeholder for rotation detection
+                "rotation_detected": False,
             },
         }
 

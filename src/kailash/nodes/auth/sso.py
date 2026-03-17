@@ -40,27 +40,11 @@ def _validate_saml_response(saml_response_data: str) -> Dict[str, Any]:
     Returns:
         Dict containing validation results
     """
-    # Simulate SAML response validation
     # In production, this would use proper SAML libraries like python3-saml
-    try:
-        # Decode base64 SAML response
-        decoded_response = base64.b64decode(saml_response_data).decode("utf-8")
-
-        # Simple XML parsing for demonstration
-        root = ET.fromstring(decoded_response)
-
-        # Extract basic user information
-        return {
-            "authenticated": True,
-            "user_id": "test.user@company.com",
-            "attributes": {
-                "email": "test.user@company.com",
-                "firstName": "Test",
-                "lastName": "User",
-            },
-        }
-    except Exception:
-        return {"authenticated": False, "error": "Invalid SAML response"}
+    raise NotImplementedError(
+        "SAML response validation requires a SAML library (e.g., python3-saml). "
+        "Install the library and provide a concrete implementation."
+    )
 
 
 @register_node()
@@ -853,30 +837,14 @@ class SSOAuthenticationNode(SecurityMixin, PerformanceMixin, LoggingMixin, Node)
                 raise ValueError(f"User info request failed: {str(e)}")
 
     async def _authenticate_ldap(self, username: str, password: str) -> Dict[str, Any]:
-        """Authenticate user against LDAP/Active Directory."""
-        # Simulation of LDAP authentication
-        # In production, use actual LDAP library like python-ldap
+        """Authenticate user against LDAP/Active Directory.
 
-        ldap_server = self.ldap_settings.get("server")
-        base_dn = self.ldap_settings.get("base_dn")
-
-        # Mock LDAP authentication for demo
-        if username and password and len(password) >= 6:
-            return {
-                "authenticated": True,
-                "attributes": {
-                    "cn": username,
-                    "mail": f"{username}@{ldap_server}",
-                    "givenName": (
-                        username.split(".")[0] if "." in username else username
-                    ),
-                    "sn": username.split(".")[-1] if "." in username else "User",
-                    "memberOf": ["CN=Users,OU=Groups,DC=company,DC=com"],
-                    "department": "IT",
-                },
-            }
-        else:
-            return {"authenticated": False}
+        Requires an LDAP library (e.g., python-ldap or ldap3).
+        """
+        raise NotImplementedError(
+            "LDAP authentication requires an LDAP library (e.g., python-ldap, ldap3). "
+            "Install the library and provide a concrete implementation."
+        )
 
     def _extract_saml_attributes(self, saml_root: ET.Element) -> Dict[str, Any]:
         """Extract user attributes from SAML assertion."""

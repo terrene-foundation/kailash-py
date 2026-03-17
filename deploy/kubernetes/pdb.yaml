@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kailash-server
+  labels:
+    app: kailash
+    component: server
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: kailash
+      component: server

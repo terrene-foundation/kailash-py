@@ -34,8 +34,8 @@ class TestValidationMetricsCollector:
         """Test basic initialization of metrics collector."""
         collector = ValidationMetricsCollector(enable_detailed_logging=True)
 
-        assert collector.metrics == []
-        assert collector.security_violations == []
+        assert len(collector.metrics) == 0
+        assert len(collector.security_violations) == 0
         assert collector.enable_detailed_logging is True
         assert collector._cache_stats == {"hits": 0, "misses": 0}
 

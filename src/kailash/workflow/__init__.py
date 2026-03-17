@@ -15,6 +15,7 @@ from kailash.workflow.cycle_debugger import (
 from kailash.workflow.cycle_profiler import CycleProfiler, PerformanceMetrics
 from kailash.workflow.graph import Connection, NodeInstance, Workflow
 from kailash.workflow.mermaid_visualizer import MermaidVisualizer
+from kailash.workflow.dlq import DLQItem, PersistentDLQ
 from kailash.workflow.resilience import (
     CircuitBreakerConfig,
     RetryPolicy,
@@ -52,6 +53,8 @@ __all__ = [
     "CircuitBreakerConfig",
     "WorkflowResilience",
     "apply_resilience_to_workflow",
+    "PersistentDLQ",
+    "DLQItem",
     "WorkflowCycleTemplates",
     "BusinessWorkflowTemplates",
 ]

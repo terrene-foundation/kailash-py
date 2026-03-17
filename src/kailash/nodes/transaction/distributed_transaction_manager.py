@@ -272,6 +272,9 @@ class DistributedTransactionManagerNode(AsyncNode):
         self.completed_at: Optional[datetime] = None
         self.error_message: Optional[str] = None
 
+        # Node executor for saga/2PC (allows injection for testing)
+        self._executor = kwargs.pop("executor", None)
+
         # Pattern coordinators
         self._saga_coordinator = None
         self._2pc_coordinator = None
@@ -639,6 +642,7 @@ class DistributedTransactionManagerNode(AsyncNode):
         from .saga_coordinator import SagaCoordinatorNode
 
         # Create saga coordinator
+        executor_kwargs = {"executor": self._executor} if self._executor else {}
         self._saga_coordinator = SagaCoordinatorNode(
             saga_name=self.transaction_name,
             saga_id=self.transaction_id,
@@ -647,6 +651,7 @@ class DistributedTransactionManagerNode(AsyncNode):
             ),
             state_storage=self.state_storage,
             storage_config=self.storage_config,
+            **executor_kwargs,
         )
         self._active_coordinator = self._saga_coordinator
 
@@ -815,11 +820,15 @@ class DistributedTransactionManagerNode(AsyncNode):
         if self.selected_pattern == TransactionPattern.SAGA:
             from .saga_coordinator import SagaCoordinatorNode
 
+            recovery_executor_kwargs = (
+                {"executor": self._executor} if self._executor else {}
+            )
             self._saga_coordinator = SagaCoordinatorNode(
                 saga_name=self.transaction_name,
                 saga_id=transaction_id,
                 state_storage=self.state_storage,
                 storage_config=self.storage_config,
+                **recovery_executor_kwargs,
             )
             self._active_coordinator = self._saga_coordinator
             # Load the saga state
@@ -906,6 +915,9 @@ class DistributedTransactionManagerNode(AsyncNode):
             # Create a DTM-specific storage wrapper that uses transaction_id instead of saga_id
             class DTMDatabaseStorage:
                 def __init__(self, db_pool, table_name):
+                    from .saga_state_storage import _validate_table_name
+
+                    _validate_table_name(table_name)
                     self.db_pool = db_pool
                     self.table_name = table_name
 

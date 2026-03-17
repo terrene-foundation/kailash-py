@@ -509,24 +509,20 @@ class PredictiveWarmer:
         }
 
     async def _execute_warming(self, decision: WarmingDecision):
-        """Execute a warming decision."""
-        if decision.edge_node not in self.warmed_nodes:
-            # Simulate warming the edge node
-            print(
-                f"Warming edge node {decision.edge_node} "
-                f"(confidence: {decision.confidence:.2f}, "
-                f"reason: {decision.reasoning})"
-            )
+        """Execute a warming decision.
 
+        Requires a concrete edge infrastructure integration to pre-allocate
+        resources, load data, establish connections, and run health checks.
+        """
+        if decision.edge_node not in self.warmed_nodes:
             self.warmed_nodes.add(decision.edge_node)
             self.predictions_made += 1
 
-            # TODO: Actual edge node warming implementation
-            # This would involve:
-            # 1. Pre-allocating resources
-            # 2. Loading necessary data
-            # 3. Establishing connections
-            # 4. Running health checks
+            raise NotImplementedError(
+                "Edge node warming requires infrastructure integration. "
+                "Provide a concrete _execute_warming() in a subclass that "
+                "pre-allocates resources, loads data, and runs health checks."
+            )
 
     def evaluate_prediction(self, edge_node: str, was_used: bool):
         """Evaluate a prediction after the fact.

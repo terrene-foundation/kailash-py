@@ -2,9 +2,21 @@
 
 import asyncio
 import json
+import re
 from abc import ABC, abstractmethod
 from datetime import UTC, datetime
 from typing import Any, Dict, List, Optional
+
+_TABLE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _validate_table_name(name: str) -> None:
+    """Raise ValueError if name is not a safe SQL identifier."""
+    if not _TABLE_NAME_RE.match(name):
+        raise ValueError(
+            f"Invalid table name '{name}': must match ^[a-zA-Z_][a-zA-Z0-9_]*$"
+        )
+
 
 try:
     import redis.asyncio as redis
@@ -134,6 +146,7 @@ class PostgreSQLStorage(StorageBackend):
         password: str = "",
         table_name: str = "storage",
     ):
+        _validate_table_name(table_name)
         self.host = host
         self.port = port
         self.database = database
@@ -282,6 +295,7 @@ class PostgreSQLEventStorage:
         password: str = "",
         table_name: str = "events",
     ):
+        _validate_table_name(table_name)
         self.host = host
         self.port = port
         self.database = database

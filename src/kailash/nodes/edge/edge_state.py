@@ -614,11 +614,14 @@ class EdgeStateMachine(EdgeNode):
                     break
 
     async def _replicate_to_edge(self, edge: EdgeLocation):
-        """Replicate state to specific edge."""
-        # In production, this would use edge-to-edge communication
-        await asyncio.sleep(0.02)  # Simulate replication
+        """Replicate state to specific edge.
 
-        self.logger.debug(f"Replicated state {self.state_id} to edge {edge.name}")
+        Requires edge-to-edge communication transport (gRPC, HTTP, etc.).
+        """
+        raise NotImplementedError(
+            "State replication requires an edge transport implementation. "
+            "Provide a concrete _replicate_to_edge() in a subclass."
+        )
 
     async def migrate_to_edge(
         self, target_edge: EdgeLocation, state_data: Optional[Dict[str, Any]] = None

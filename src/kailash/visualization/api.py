@@ -470,6 +470,44 @@ class DashboardAPIServer:
                 if websocket in self._websocket_connections:
                     self._websocket_connections.remove(websocket)
 
+        @self.app.websocket("/api/v1/metrics/ws")
+        async def websocket_metrics_push(websocket: WebSocket):
+            """WebSocket endpoint that pushes metrics at the dashboard update interval.
+
+            Unlike ``/api/v1/metrics/stream`` which waits for client messages,
+            this endpoint actively pushes the latest metrics snapshot to the
+            client at the configured ``update_interval``.  This is the
+            endpoint consumed by the live dashboard HTML page.
+            """
+            await websocket.accept()
+            self._websocket_connections.append(websocket)
+
+            try:
+                while True:
+                    current_metrics = self.dashboard.get_current_metrics()
+                    if current_metrics:
+                        payload = {
+                            "type": "metrics",
+                            "timestamp": current_metrics.timestamp.isoformat(),
+                            "active_tasks": current_metrics.active_tasks,
+                            "completed_tasks": current_metrics.completed_tasks,
+                            "failed_tasks": current_metrics.failed_tasks,
+                            "total_cpu_usage": current_metrics.total_cpu_usage,
+                            "total_memory_usage": current_metrics.total_memory_usage,
+                            "throughput": current_metrics.throughput,
+                            "avg_task_duration": current_metrics.avg_task_duration,
+                        }
+                        await websocket.send_json(payload)
+
+                    await asyncio.sleep(self.dashboard.config.update_interval)
+            except WebSocketDisconnect:
+                self.logger.info("WebSocket /ws client disconnected")
+            except Exception as e:
+                self.logger.error(f"WebSocket /ws error: {e}")
+            finally:
+                if websocket in self._websocket_connections:
+                    self._websocket_connections.remove(websocket)
+
     async def _generate_report_background(
         self,
         run_id: str,

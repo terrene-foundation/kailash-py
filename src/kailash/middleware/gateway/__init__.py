@@ -5,12 +5,15 @@ This module provides:
 - Automatic deduplication
 - Event sourcing for full auditability
 - Long-running request support
+- SQLite persistent backend for EventStore
 """
 
 from .checkpoint_manager import CheckpointManager
 from .deduplicator import RequestDeduplicator
 from .durable_request import DurableRequest, RequestState
 from .event_store import EventStore, RequestEvent
+from .event_store_backend import EventStoreBackend
+from .event_store_sqlite import SqliteEventStoreBackend
 
 __all__ = [
     "DurableRequest",
@@ -18,5 +21,7 @@ __all__ = [
     "CheckpointManager",
     "RequestDeduplicator",
     "EventStore",
+    "EventStoreBackend",
     "RequestEvent",
+    "SqliteEventStoreBackend",
 ]

@@ -281,7 +281,18 @@ class TestDurableRequest:
     async def test_workflow_creation(self):
         """Test workflow creation from request."""
         request = DurableRequest()
-        request.metadata.body = {"workflow": {"name": "TestWorkflow", "nodes": []}}
+        request.metadata.body = {
+            "workflow": {
+                "name": "TestWorkflow",
+                "nodes": [
+                    {
+                        "type": "PythonCodeNode",
+                        "id": "step1",
+                        "params": {"code": "result = 1"},
+                    },
+                ],
+            }
+        }
 
         await request._create_workflow()
 

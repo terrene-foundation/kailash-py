@@ -1,8 +1,8 @@
 """
 Enhanced MCP Client for Kailash Middleware
 
-Integrates existing Kailash MCP client implementations with middleware-specific
-features for agent-frontend communication and real-time updates.
+Integrates real MCP protocol client with middleware-specific features for
+agent-frontend communication and real-time updates.
 """
 
 import asyncio
@@ -12,20 +12,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-# Import Kailash SDK components
-from kailash.nodes.base import Node, NodeParameter
-from kailash.nodes.code import PythonCodeNode
-from kailash.runtime.local import LocalRuntime
-from kailash.workflow.builder import WorkflowBuilder
-
-# Import existing Kailash MCP components
-try:
-    from kailash.mcp_server import MCPClient
-
-    _KAILASH_MCP_AVAILABLE = True
-except ImportError:
-    _KAILASH_MCP_AVAILABLE = False
-
 # Import middleware components
 from ..communication.events import EventStream, EventType
 from ..core.agent_ui import AgentUIMiddleware
@@ -33,8 +19,20 @@ from ..core.agent_ui import AgentUIMiddleware
 logger = logging.getLogger(__name__)
 
 
+# ---- MCP protocol transport helpers ----
+
+try:
+    from mcp import ClientSession
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+    from mcp.client.sse import sse_client
+
+    _MCP_AVAILABLE = True
+except ImportError:
+    _MCP_AVAILABLE = False
+
+
 class MCPClientConfig:
-    """Configuration for Middleware MCP Client using Kailash patterns."""
+    """Configuration for Middleware MCP Client using real MCP protocol."""
 
     def __init__(self):
         self.name = "kailash-middleware-mcp-client"
@@ -55,7 +53,7 @@ class MCPClientConfig:
 
 
 class MCPServerConnection:
-    """Represents a connection to an MCP server using Kailash patterns."""
+    """Represents a live MCP protocol connection to a server."""
 
     def __init__(
         self,
@@ -75,29 +73,68 @@ class MCPServerConnection:
 
         # Capabilities cache
         self.server_capabilities = {}
-        self.available_tools = {}
-        self.available_resources = {}
+        self.available_tools: Dict[str, Any] = {}
+        self.available_resources: Dict[str, Any] = {}
 
-        # Kailash MCP client if available
-        self.mcp_client = None
-        if _KAILASH_MCP_AVAILABLE:
-            try:
-                self.mcp_client = MCPClient()
-            except Exception as e:
-                logger.warning(f"Could not initialize MCP client: {e}")
+        # MCP session (set during connect)
+        self._session: Optional[Any] = None
+        self._read_stream = None
+        self._write_stream = None
+        self._cleanup_tasks: List[Any] = []
 
     async def connect(self) -> bool:
-        """Connect to MCP server using Kailash patterns."""
+        """Connect to MCP server using real MCP protocol transport.
+
+        Supports two transport modes via connection_config:
+        - "stdio": launches a subprocess (requires "command" and optional "args")
+        - "sse":   connects to an HTTP SSE endpoint (requires "url")
+        """
+        if not _MCP_AVAILABLE:
+            logger.error(
+                "mcp library is not installed. "
+                "Install it with: pip install 'mcp[cli]>=1.23.0'"
+            )
+            return False
+
+        self.connection_attempts += 1
+        transport = self.connection_config.get("transport", "stdio")
+
         try:
-            self.connection_attempts += 1
+            if transport == "stdio":
+                command = self.connection_config.get("command")
+                args = self.connection_config.get("args", [])
+                env = self.connection_config.get("env")
+                if not command:
+                    raise ValueError(
+                        "stdio transport requires 'command' in connection_config"
+                    )
 
-            # Use existing Kailash MCP client if available
-            if self.mcp_client:
-                # This would use the actual MCP client connection
-                # For now, simulate connection
-                pass
+                params = StdioServerParameters(
+                    command=command,
+                    args=args,
+                    env=env,
+                )
+                read_stream, write_stream = await self._enter_cm(stdio_client(params))
+            elif transport == "sse":
+                url = self.connection_config.get("url")
+                if not url:
+                    raise ValueError(
+                        "sse transport requires 'url' in connection_config"
+                    )
+                read_stream, write_stream = await self._enter_cm(sse_client(url))
+            else:
+                raise ValueError(f"Unsupported transport: {transport}")
 
-            # Simulate successful connection
+            self._read_stream = read_stream
+            self._write_stream = write_stream
+
+            # Create MCP session
+            session = await self._enter_cm(ClientSession(read_stream, write_stream))
+            self._session = session
+
+            # Initialize the session (MCP handshake)
+            await session.initialize()
+
             self.connected = True
             self.last_connection = datetime.now(timezone.utc)
 
@@ -122,88 +159,62 @@ class MCPServerConnection:
             logger.error(f"Failed to connect to MCP server {self.server_name}: {e}")
             return False
 
+    async def _enter_cm(self, cm):
+        """Enter an async context manager and track it for cleanup."""
+        result = await cm.__aenter__()
+        self._cleanup_tasks.append(cm)
+        return result
+
     async def _discover_capabilities(self):
-        """Discover server capabilities using Kailash workflows."""
+        """Discover server capabilities via real MCP protocol calls."""
+        if not self._session:
+            return
 
-        # Create capability discovery workflow
-        discovery_workflow = WorkflowBuilder()
+        session = self._session
 
-        discoverer = PythonCodeNode(
-            name="discover_capabilities",
-            code="""
-# Discover MCP server capabilities using Kailash patterns
-server_name = input_data.get('server_name')
-
-# Simulate capability discovery
-capabilities = {
-    'server_info': {
-        'name': server_name,
-        'version': '1.0.0',
-        'implementation': 'Kailash MCP Server'
-    },
-    'features': {
-        'tools': True,
-        'resources': True,
-        'prompts': True,
-        'streaming': True
-    }
-}
-
-# Simulate available tools
-tools = {
-    f'{server_name}_search': {
-        'description': f'Search tool for {server_name}',
-        'parameters': {
-            'query': {'type': 'string', 'required': True}
+        # Build server_capabilities from the session info
+        self.server_capabilities = {
+            "server_info": {
+                "name": self.server_name,
+            },
+            "features": {
+                "tools": True,
+                "resources": True,
+            },
         }
-    },
-    f'{server_name}_process': {
-        'description': f'Process data with {server_name}',
-        'parameters': {
-            'data': {'type': 'object', 'required': True}
-        }
-    }
-}
 
-# Simulate available resources
-resources = {
-    f'{server_name}://data': {
-        'description': f'Data resources from {server_name}',
-        'type': 'application/json'
-    }
-}
+        # Discover tools via tools/list
+        try:
+            tools_result = await session.list_tools()
+            for tool in tools_result.tools:
+                self.available_tools[tool.name] = {
+                    "description": tool.description or "",
+                    "parameters": (
+                        tool.inputSchema if hasattr(tool, "inputSchema") else {}
+                    ),
+                }
+        except Exception as e:
+            logger.warning(f"Could not list tools from {self.server_name}: {e}")
 
-result = {
-    'capabilities': capabilities,
-    'tools': tools,
-    'resources': resources,
-    'discovery_time': datetime.now().isoformat()
-}
-""",
-        )
-
-        discovery_workflow.add_node(discoverer)
-        workflow = discovery_workflow.build()
-
-        # Execute discovery
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(
-            workflow, parameters={"server_name": self.server_name}
-        )
-
-        discovery_result = results.get("discover_capabilities", {})
-
-        if discovery_result:
-            self.server_capabilities = discovery_result.get("capabilities", {})
-            self.available_tools = discovery_result.get("tools", {})
-            self.available_resources = discovery_result.get("resources", {})
+        # Discover resources via resources/list
+        try:
+            resources_result = await session.list_resources()
+            for resource in resources_result.resources:
+                self.available_resources[str(resource.uri)] = {
+                    "description": resource.description or "",
+                    "name": resource.name,
+                }
+        except Exception as e:
+            logger.warning(f"Could not list resources from {self.server_name}: {e}")
 
     async def call_tool(
         self, tool_name: str, arguments: Dict[str, Any], session_id: str = None
     ) -> Dict[str, Any]:
-        """Call MCP tool using Kailash patterns."""
+        """Call an MCP tool on the connected server.
 
-        if not self.connected:
+        Uses the real MCP tools/call protocol method.
+        """
+        if not self.connected or not self._session:
             return {
                 "success": False,
                 "error": f"Not connected to server {self.server_name}",
@@ -216,135 +227,131 @@ result = {
                 "available_tools": list(self.available_tools.keys()),
             }
 
-        # Create tool execution workflow
-        execution_workflow = WorkflowBuilder()
+        try:
+            result = await self._session.call_tool(tool_name, arguments)
 
-        executor = PythonCodeNode(
-            name="execute_tool",
-            code="""
-# Execute MCP tool using Kailash patterns
-tool_name = input_data.get('tool_name')
-arguments = input_data.get('arguments', {})
-server_name = input_data.get('server_name')
+            # MCP call_tool returns a CallToolResult with content list
+            content_parts = []
+            for item in result.content:
+                if hasattr(item, "text"):
+                    content_parts.append(item.text)
+                elif hasattr(item, "data"):
+                    content_parts.append(item.data)
 
-# Simulate tool execution
-execution_result = {
-    'tool_name': tool_name,
-    'server_name': server_name,
-    'arguments': arguments,
-    'result': f'Executed {tool_name} on {server_name} with args: {arguments}',
-    'execution_time': datetime.now().isoformat(),
-    'success': True
-}
-
-result = {'tool_result': execution_result}
-""",
-        )
-
-        execution_workflow.add_node(executor)
-        workflow = execution_workflow.build()
-
-        # Execute tool call
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(
-            workflow,
-            parameters={
+            tool_result = {
                 "tool_name": tool_name,
-                "arguments": arguments,
                 "server_name": self.server_name,
-            },
-        )
+                "result": (
+                    content_parts[0] if len(content_parts) == 1 else content_parts
+                ),
+                "is_error": getattr(result, "isError", False),
+                "execution_time": datetime.now(timezone.utc).isoformat(),
+                "success": not getattr(result, "isError", False),
+            }
 
-        tool_result = results.get("execute_tool", {}).get("tool_result", {})
+            # Emit middleware event
+            if self.client.event_stream:
+                await self.client._emit_client_event(
+                    "tool_executed",
+                    {
+                        "server_name": self.server_name,
+                        "tool_name": tool_name,
+                        "arguments": arguments,
+                        "session_id": session_id,
+                        "success": tool_result["success"],
+                    },
+                )
 
-        # Emit middleware event
-        if self.client.event_stream:
-            await self.client._emit_client_event(
-                "tool_executed",
-                {
-                    "server_name": self.server_name,
-                    "tool_name": tool_name,
-                    "arguments": arguments,
-                    "session_id": session_id,
-                    "success": tool_result.get("success", False),
-                },
-            )
+            return {
+                "success": True,
+                "server_name": self.server_name,
+                "tool_result": tool_result,
+            }
 
-        return {
-            "success": True,
-            "server_name": self.server_name,
-            "tool_result": tool_result,
-        }
+        except Exception as e:
+            logger.error(f"Tool call {tool_name} on {self.server_name} failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "server_name": self.server_name,
+            }
 
     async def get_resource(
         self, resource_uri: str, session_id: str = None
     ) -> Dict[str, Any]:
-        """Get MCP resource using Kailash patterns."""
-
-        if not self.connected:
+        """Read an MCP resource via the real resources/read protocol method."""
+        if not self.connected or not self._session:
             return {
                 "success": False,
                 "error": f"Not connected to server {self.server_name}",
             }
 
-        # Create resource access workflow
-        access_workflow = WorkflowBuilder()
+        try:
+            result = await self._session.read_resource(resource_uri)
 
-        accessor = PythonCodeNode(
-            name="access_resource",
-            code="""
-# Access MCP resource using Kailash patterns
-resource_uri = input_data.get('resource_uri')
-server_name = input_data.get('server_name')
+            # MCP read_resource returns a ReadResourceResult with contents
+            content_parts = []
+            for item in result.contents:
+                if hasattr(item, "text"):
+                    content_parts.append(item.text)
+                elif hasattr(item, "blob"):
+                    content_parts.append(item.blob)
 
-# Simulate resource access
-resource_data = {
-    'uri': resource_uri,
-    'server_name': server_name,
-    'content': f'Resource content from {resource_uri} on {server_name}',
-    'content_type': 'application/json',
-    'access_time': datetime.now().isoformat(),
-    'success': True
-}
+            resource_data = {
+                "uri": resource_uri,
+                "server_name": self.server_name,
+                "content": (
+                    content_parts[0] if len(content_parts) == 1 else content_parts
+                ),
+                "content_type": "application/json",
+                "access_time": datetime.now(timezone.utc).isoformat(),
+                "success": True,
+            }
 
-result = {'resource_data': resource_data}
-""",
-        )
+            # Emit middleware event
+            if self.client.event_stream:
+                await self.client._emit_client_event(
+                    "resource_accessed",
+                    {
+                        "server_name": self.server_name,
+                        "resource_uri": resource_uri,
+                        "session_id": session_id,
+                        "success": True,
+                    },
+                )
 
-        access_workflow.add_node(accessor)
-        workflow = access_workflow.build()
+            return {
+                "success": True,
+                "server_name": self.server_name,
+                "resource_data": resource_data,
+            }
 
-        # Execute resource access
-        runtime = LocalRuntime()
-        results, _ = runtime.execute(
-            workflow,
-            parameters={"resource_uri": resource_uri, "server_name": self.server_name},
-        )
-
-        resource_data = results.get("access_resource", {}).get("resource_data", {})
-
-        # Emit middleware event
-        if self.client.event_stream:
-            await self.client._emit_client_event(
-                "resource_accessed",
-                {
-                    "server_name": self.server_name,
-                    "resource_uri": resource_uri,
-                    "session_id": session_id,
-                    "success": resource_data.get("success", False),
-                },
+        except Exception as e:
+            logger.error(
+                f"Resource read {resource_uri} on {self.server_name} failed: {e}"
             )
-
-        return {
-            "success": True,
-            "server_name": self.server_name,
-            "resource_data": resource_data,
-        }
+            return {
+                "success": False,
+                "error": str(e),
+                "server_name": self.server_name,
+            }
 
     async def disconnect(self):
-        """Disconnect from MCP server."""
+        """Disconnect from MCP server and clean up transport resources."""
         if self.connected:
             self.connected = False
+
+            # Clean up async context managers in reverse order
+            for cm in reversed(self._cleanup_tasks):
+                try:
+                    await cm.__aexit__(None, None, None)
+                except Exception as e:
+                    logger.warning(f"Error during cleanup of {self.server_name}: {e}")
+
+            self._cleanup_tasks.clear()
+            self._session = None
+            self._read_stream = None
+            self._write_stream = None
 
             # Emit middleware event
             if self.client.event_stream:
@@ -358,10 +365,31 @@ result = {'resource_data': resource_data}
 
             logger.info(f"Disconnected from MCP server: {self.server_name}")
 
+    async def ping(self) -> bool:
+        """Check if the MCP server connection is still alive.
+
+        Returns:
+            True if the connection is healthy
+        """
+        if not self.connected or not self._session:
+            return False
+
+        try:
+            # Use MCP ping if available, otherwise list_tools as a health check
+            if hasattr(self._session, "send_ping"):
+                await self._session.send_ping()
+            else:
+                await self._session.list_tools()
+            return True
+        except Exception as e:
+            logger.warning(f"Ping failed for {self.server_name}: {e}")
+            self.connected = False
+            return False
+
 
 class MiddlewareMCPClient:
     """
-    Enhanced MCP Client built with Kailash SDK components.
+    Enhanced MCP Client built with real MCP protocol transport.
 
     Integrates with the middleware layer for real-time events,
     session management, and agent-UI communication.
@@ -381,9 +409,6 @@ class MiddlewareMCPClient:
         self.client_id = str(uuid.uuid4())
         self.server_connections: Dict[str, MCPServerConnection] = {}
 
-        # Kailash runtime for workflows
-        self.runtime = LocalRuntime()
-
         # Cache for tool/resource discovery
         self._capability_cache = {}
         self._cache_timestamps = {}
@@ -391,8 +416,15 @@ class MiddlewareMCPClient:
     async def add_server(
         self, server_name: str, connection_config: Dict[str, Any]
     ) -> bool:
-        """Add MCP server connection."""
+        """Add and connect to an MCP server.
 
+        Args:
+            server_name: Logical name for this server connection
+            connection_config: Transport configuration dict. Must include:
+                - "transport": "stdio" or "sse"
+                For stdio: "command" (str), optional "args" (list), "env" (dict)
+                For sse: "url" (str)
+        """
         if server_name in self.server_connections:
             logger.warning(f"Server {server_name} already exists")
             return False
@@ -400,8 +432,14 @@ class MiddlewareMCPClient:
         # Create server connection
         connection = MCPServerConnection(server_name, connection_config, self)
 
-        # Attempt to connect
-        success = await connection.connect()
+        # Attempt to connect with retries
+        success = False
+        for attempt in range(self.config.max_retries):
+            success = await connection.connect()
+            if success:
+                break
+            if attempt < self.config.max_retries - 1:
+                await asyncio.sleep(self.config.retry_delay)
 
         if success:
             self.server_connections[server_name] = connection
@@ -412,7 +450,11 @@ class MiddlewareMCPClient:
                     "server_added",
                     {
                         "server_name": server_name,
-                        "connection_config": connection_config,
+                        "connection_config": {
+                            k: v
+                            for k, v in connection_config.items()
+                            if k not in ("env",)  # Don't leak env vars
+                        },
                     },
                 )
 
@@ -499,6 +541,17 @@ class MiddlewareMCPClient:
                 results[server_name] = result
 
         return results
+
+    async def check_health(self) -> Dict[str, bool]:
+        """Check health of all server connections.
+
+        Returns:
+            Dict mapping server_name -> is_healthy
+        """
+        health = {}
+        for server_name, connection in self.server_connections.items():
+            health[server_name] = await connection.ping()
+        return health
 
     async def get_client_stats(self) -> Dict[str, Any]:
         """Get MCP client statistics."""

@@ -465,24 +465,15 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
     async def _authenticate_passwordless(
         self, credentials: Dict[str, Any], user_id: str, risk_context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Authenticate using passwordless methods (WebAuthn, FIDO2)."""
-        # Simulate WebAuthn/FIDO2 authentication
-        webauthn_data = credentials.get("webauthn_data")
-        if not webauthn_data:
-            return {"authenticated": False, "error": "WebAuthn data required"}
+        """Authenticate using passwordless methods (WebAuthn, FIDO2).
 
-        # In production, validate WebAuthn assertion
-        # For simulation, check if required fields are present
-        required_fields = ["authenticatorData", "signature", "clientDataJSON"]
-        if all(field in webauthn_data for field in required_fields):
-            return {
-                "authenticated": True,
-                "user_id": user_id,
-                "auth_method": "passwordless",
-                "authenticator_type": "webauthn",
-            }
-        else:
-            return {"authenticated": False, "error": "Invalid WebAuthn assertion"}
+        Requires a WebAuthn library (e.g., py_webauthn) for proper
+        assertion validation against registered credentials.
+        """
+        raise NotImplementedError(
+            "WebAuthn/FIDO2 authentication requires a WebAuthn library "
+            "(e.g., py_webauthn). Provide a concrete implementation."
+        )
 
     async def _authenticate_social(
         self, credentials: Dict[str, Any], user_id: str, risk_context: Dict[str, Any]
@@ -591,24 +582,15 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
     async def _authenticate_certificate(
         self, credentials: Dict[str, Any], user_id: str, risk_context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Authenticate using client certificate."""
-        certificate = credentials.get("client_certificate")
-        if not certificate:
-            return {"authenticated": False, "error": "Client certificate required"}
+        """Authenticate using client certificate.
 
-        # Simulate certificate validation
-        # In production, validate certificate against CA, check revocation, etc.
-        if "BEGIN CERTIFICATE" in certificate and "END CERTIFICATE" in certificate:
-            # Extract common name or subject from certificate (simulation)
-            cert_user_id = user_id or "cert_user"
-            return {
-                "authenticated": True,
-                "user_id": cert_user_id,
-                "auth_method": "certificate",
-                "certificate_subject": f"CN={cert_user_id}",
-            }
-        else:
-            return {"authenticated": False, "error": "Invalid certificate format"}
+        Requires a cryptography library (e.g., ``cryptography``) for proper
+        certificate parsing, CA chain validation, and revocation checking.
+        """
+        raise NotImplementedError(
+            "Client certificate authentication requires a cryptography library "
+            "for CA validation and revocation checking. Provide a concrete implementation."
+        )
 
     async def _validate_social_token(
         self, provider: str, access_token: str
@@ -913,9 +895,6 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
         if device_info.get("recognized", False):
             # Known device
             risk_score = 0.0
-        elif user_id and hash(f"{user_id}:{device_fingerprint}") % 5 == 0:
-            # Simulate device recognition for testing
-            risk_score = 0.0
         else:
             # Unknown device
             risk_score = 0.3
@@ -957,24 +936,14 @@ class EnterpriseAuthProviderNode(SecurityMixin, PerformanceMixin, LoggingMixin, 
     async def _assess_behavior_risk(
         self, user_id: str, risk_context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Assess risk based on user behavior patterns."""
-        risk_score = 0.0
-        factors = []
+        """Assess risk based on user behavior patterns.
 
-        # Simulate behavioral analysis
-        # In production, this would analyze historical patterns
-
-        # Check frequency of logins
-        if hash(f"{user_id}:frequency") % 4 == 0:
-            risk_score += 0.2
-            factors.append("unusual_login_frequency")
-
-        # Check geographic location changes
-        if risk_context.get("location") and hash(f"{user_id}:location") % 6 == 0:
-            risk_score += 0.3
-            factors.append("geographic_anomaly")
-
-        return {"score": risk_score, "factors": factors}
+        Requires historical login data and a behavioral analysis engine.
+        """
+        raise NotImplementedError(
+            "Behavioral risk assessment requires historical pattern analysis. "
+            "Provide a concrete implementation backed by a user activity store."
+        )
 
     async def _ai_risk_assessment(
         self, user_id: str, risk_context: Dict[str, Any], existing_factors: List[str]

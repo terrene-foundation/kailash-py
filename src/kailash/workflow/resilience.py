@@ -5,11 +5,15 @@ including retry policies, fallback nodes, and circuit breakers.
 """
 
 import asyncio
+import os
+import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Union
+
+from kailash.workflow.dlq import PersistentDLQ
 
 
 class RetryStrategy(Enum):
@@ -114,16 +118,33 @@ class CircuitBreakerConfig:
             self.state = "open"
 
 
+def _default_dlq_path() -> str:
+    """Return the DLQ path from env var or a tempdir default."""
+    return os.environ.get(
+        "KAILASH_DLQ_PATH",
+        os.path.join(tempfile.gettempdir(), "kailash_dlq.db"),
+    )
+
+
 class WorkflowResilience:
     """Mixin class to add resilience features to workflows."""
 
-    def __init__(self):
-        """Initialize resilience features."""
+    def __init__(self, dlq_path: str = ""):
+        """Initialize resilience features.
+
+        Parameters
+        ----------
+        dlq_path:
+            Filesystem path for the persistent dead letter queue database.
+            Defaults to KAILASH_DLQ_PATH env var or a system temp directory.
+        """
+        if not dlq_path:
+            dlq_path = _default_dlq_path()
         self._fallback_nodes: Dict[str, List[Any]] = {}
         self._retry_policies: Dict[str, RetryPolicy] = {}
         self._circuit_breakers: Dict[str, CircuitBreakerConfig] = {}
         self._execution_history: List[Dict[str, Any]] = []
-        self._dead_letter_queue: List[Dict[str, Any]] = []
+        self._dead_letter_queue: PersistentDLQ = PersistentDLQ(dlq_path)
         self._node_metrics: Dict[str, Dict[str, Any]] = {}
 
     def configure_retry(
@@ -191,6 +212,7 @@ class WorkflowResilience:
 
     def get_resilience_metrics(self) -> Dict[str, Any]:
         """Get execution metrics for monitoring."""
+        dlq_stats = self._dead_letter_queue.get_stats()
         return {
             "node_metrics": self._node_metrics,
             "circuit_breakers": {
@@ -201,7 +223,8 @@ class WorkflowResilience:
                 }
                 for name, breaker in self._circuit_breakers.items()
             },
-            "dead_letter_queue_size": len(self._dead_letter_queue),
+            "dead_letter_queue_size": dlq_stats["total"],
+            "dead_letter_queue_stats": dlq_stats,
             "retry_policies": {
                 name: {
                     "max_retries": policy.max_retries,
@@ -213,11 +236,11 @@ class WorkflowResilience:
 
     def get_dead_letter_queue(self) -> List[Dict[str, Any]]:
         """Get failed executions for manual intervention."""
-        return self._dead_letter_queue
+        return self._dead_letter_queue.get_all()
 
     def clear_dead_letter_queue(self):
         """Clear the dead letter queue after processing."""
-        self._dead_letter_queue = []
+        self._dead_letter_queue.clear()
 
     def reset_circuit_breaker(self, node_id: str):
         """Manually reset a circuit breaker."""
@@ -229,8 +252,19 @@ class WorkflowResilience:
             breaker.last_failure_time = None
 
 
-def apply_resilience_to_workflow(workflow_class):
-    """Decorator to add resilience features to a workflow class."""
+def apply_resilience_to_workflow(workflow_class, dlq_path: str = ""):
+    """Decorator to add resilience features to a workflow class.
+
+    Parameters
+    ----------
+    workflow_class:
+        The workflow class to augment with resilience features.
+    dlq_path:
+        Filesystem path for the persistent dead letter queue database.
+        Defaults to KAILASH_DLQ_PATH env var or a system temp directory.
+    """
+    if not dlq_path:
+        dlq_path = _default_dlq_path()
 
     # Store original methods
     original_init = workflow_class.__init__
@@ -243,7 +277,7 @@ def apply_resilience_to_workflow(workflow_class):
         self._retry_policies = {}
         self._circuit_breakers = {}
         self._execution_history = []
-        self._dead_letter_queue = []
+        self._dead_letter_queue = PersistentDLQ(dlq_path)
         self._node_metrics = {}
 
     # Add resilience methods to the class

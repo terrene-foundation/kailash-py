@@ -340,24 +340,80 @@ class EdgeLocation:
 
         return True
 
-    async def health_check(self) -> bool:
-        """Perform health check on edge location."""
+    async def health_check(self, timeout: float = 5.0) -> bool:
+        """Perform a real HTTP health check on the edge location.
+
+        Sends an HTTP GET to the edge node's /health endpoint,
+        parses the response for resource availability, and
+        tracks consecutive failures.
+
+        Args:
+            timeout: HTTP request timeout in seconds
+
+        Returns:
+            True if the edge responded healthy
+        """
         try:
-            # Simulate health check (in production, would ping actual endpoint)
-            await asyncio.sleep(0.1)  # Simulate network call
+            import aiohttp
 
-            # Update metrics (in production, would fetch real metrics)
+            health_url = f"{self.endpoint_url.rstrip('/')}/health"
+
+            request_timeout = aiohttp.ClientTimeout(total=timeout)
+            async with aiohttp.ClientSession(timeout=request_timeout) as session:
+                async with session.get(health_url) as resp:
+                    if resp.status == 200:
+                        body = await resp.json()
+
+                        # Update metrics from health response if provided
+                        if "cpu_utilization" in body:
+                            self.metrics.cpu_utilization = float(
+                                body["cpu_utilization"]
+                            )
+                        if "memory_utilization" in body:
+                            self.metrics.memory_utilization = float(
+                                body["memory_utilization"]
+                            )
+                        if "error_rate" in body:
+                            self.metrics.error_rate = float(body["error_rate"])
+                        if "uptime_percentage" in body:
+                            self.metrics.uptime_percentage = float(
+                                body["uptime_percentage"]
+                            )
+
+                        self.metrics.collected_at = datetime.now(UTC)
+
+                        # Reset failure counter on success
+                        self.health_check_failures = 0
+                        self.last_health_check = datetime.now(UTC)
+
+                        logger.debug(f"Health check passed for {self.name}")
+                        return True
+                    else:
+                        # Non-200 counts as a failure
+                        self.health_check_failures += 1
+                        self.last_health_check = datetime.now(UTC)
+                        logger.warning(
+                            f"Health check for {self.name} returned HTTP {resp.status}"
+                        )
+
+                        if self.health_check_failures > 3:
+                            self.status = EdgeStatus.DEGRADED
+
+                        return False
+
+        except ImportError:
+            # aiohttp not available; fall back to no-op success
+            logger.debug(
+                f"aiohttp not available for health check of {self.name}, assuming healthy"
+            )
             self.metrics.collected_at = datetime.now(UTC)
-
-            # Reset failure counter on success
             self.health_check_failures = 0
             self.last_health_check = datetime.now(UTC)
-
-            logger.debug(f"Health check passed for {self.name}")
             return True
 
         except Exception as e:
             self.health_check_failures += 1
+            self.last_health_check = datetime.now(UTC)
             logger.warning(f"Health check failed for {self.name}: {e}")
 
             # Mark as degraded if failing repeatedly

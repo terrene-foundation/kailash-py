@@ -279,8 +279,8 @@ class RuntimeMonitor:
         self.dashboard_client = dashboard_client
 
         # Performance tracking
-        self._execution_metrics: List[Dict[str, Any]] = []
-        self._performance_benchmarks: List[Dict[str, Any]] = []
+        self._execution_metrics: deque = deque(maxlen=10000)
+        self._performance_benchmarks: deque = deque(maxlen=10000)
         self._active_executions: Dict[str, Dict[str, Any]] = {}
 
         # Health checks

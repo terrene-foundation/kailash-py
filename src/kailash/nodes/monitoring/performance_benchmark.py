@@ -2149,16 +2149,10 @@ class PerformanceBenchmarkNode(SecurityMixin, PerformanceMixin, LoggingMixin, No
         if not metric_type:
             return {"success": False, "error": "metric_type required"}
 
-        # Simulate training on historical data
-        samples_used = params.get("training_samples", 1000)
-
-        return {
-            "success": True,
-            "metric_type": metric_type,
-            "algorithm": "isolation_forest",
-            "samples_used": samples_used,
-            "training_completed": datetime.now(UTC).isoformat(),
-        }
+        raise NotImplementedError(
+            "Anomaly detector training requires a machine learning library "
+            "(e.g., scikit-learn IsolationForest). Provide a concrete implementation."
+        )
 
     def _detect_anomaly(
         self, metric_type: str, metric_data: Dict[str, Any]

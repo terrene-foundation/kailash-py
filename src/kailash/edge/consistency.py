@@ -206,10 +206,15 @@ class StrongConsistencyManager(ConsistencyManager):
     async def _prepare_write(
         self, transaction_id: str, replica: str, key: str, value: Any
     ) -> bool:
-        """Prepare phase of 2PC."""
-        # Simulate prepare (in production, this would be an RPC)
-        await asyncio.sleep(0.01)
-        return True
+        """Prepare phase of 2PC.
+
+        In production, this would issue an RPC to the replica. Requires
+        a real transport implementation (gRPC, HTTP, etc.).
+        """
+        raise NotImplementedError(
+            "2PC prepare requires a replica transport implementation. "
+            "Provide a concrete _prepare_write() in a subclass."
+        )
 
     async def _commit_write(
         self, transaction_id: str, replica: str, key: str, value: Any
@@ -228,8 +233,15 @@ class StrongConsistencyManager(ConsistencyManager):
         await asyncio.gather(*abort_tasks, return_exceptions=True)
 
     async def _abort_replica(self, transaction_id: str, replica: str):
-        """Abort on a single replica."""
-        await asyncio.sleep(0.01)  # Simulate abort
+        """Abort on a single replica.
+
+        In production, this would issue an abort RPC to the replica.
+        Requires a real transport implementation.
+        """
+        raise NotImplementedError(
+            "2PC abort requires a replica transport implementation. "
+            "Provide a concrete _abort_replica() in a subclass."
+        )
 
     def _check_consistency_level(
         self, successful: int, total: int, level: ConsistencyLevel

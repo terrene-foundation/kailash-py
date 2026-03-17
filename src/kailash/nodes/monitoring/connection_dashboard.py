@@ -29,9 +29,10 @@ import asyncio
 import json
 import logging
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Deque, Dict, List, Optional, Set
 
 import aiohttp_cors
 from aiohttp import web
@@ -89,6 +90,8 @@ class MetricsCache:
         self._data: Dict[str, List[Dict[str, Any]]] = {}
         self._last_cleanup = time.time()
 
+    _MAX_ENTRIES_PER_METRIC = 3600  # 1 hour at 1-second intervals
+
     def add(self, metric_name: str, value: Dict[str, Any]):
         """Add metric value to cache."""
         if metric_name not in self._data:
@@ -96,6 +99,12 @@ class MetricsCache:
 
         value["timestamp"] = time.time()
         self._data[metric_name].append(value)
+
+        # Cap list at max entries
+        if len(self._data[metric_name]) > self._MAX_ENTRIES_PER_METRIC:
+            self._data[metric_name] = self._data[metric_name][
+                -self._MAX_ENTRIES_PER_METRIC :
+            ]
 
         # Periodic cleanup
         if time.time() - self._last_cleanup > 3600:  # Every hour
@@ -165,7 +174,7 @@ class ConnectionDashboardNode(Node):
         # Alert system
         self._alert_rules: Dict[str, AlertRule] = {}
         self._active_alerts: Dict[str, Alert] = {}
-        self._alert_history: List[Alert] = []
+        self._alert_history: Deque[Alert] = deque(maxlen=1000)
 
         # Update task
         self._update_task: Optional[asyncio.Task] = None
@@ -375,6 +384,9 @@ class ConnectionDashboardNode(Node):
             }
         });
 
+        // Helper to safely set text content
+        function setText(el, value) { el.textContent = String(value); }
+
         // Update functions
         function updatePools(pools) {
             const container = document.getElementById('pools');
@@ -384,45 +396,44 @@ class ConnectionDashboardNode(Node):
                 const healthClass = pool.health_score > 80 ? 'health-good' :
                                   pool.health_score > 60 ? 'health-warning' : 'health-critical';
 
-                container.innerHTML += `
-                    <div class="pool-card">
-                        <h3>${name}</h3>
+                const card = document.createElement('div');
+                card.className = 'pool-card';
 
-                        <div class="health-bar">
-                            <div class="health-fill ${healthClass}" style="width: ${pool.health_score}%"></div>
-                        </div>
+                const title = document.createElement('h3');
+                setText(title, name);
+                card.appendChild(title);
 
-                        <div class="metric">
-                            <div class="metric-label">Active Connections</div>
-                            <div class="metric-value">${pool.active_connections}</div>
-                        </div>
+                const healthBar = document.createElement('div');
+                healthBar.className = 'health-bar';
+                const healthFill = document.createElement('div');
+                healthFill.className = 'health-fill ' + healthClass;
+                healthFill.style.width = pool.health_score + '%';
+                healthBar.appendChild(healthFill);
+                card.appendChild(healthBar);
 
-                        <div class="metric">
-                            <div class="metric-label">Total Connections</div>
-                            <div class="metric-value">${pool.total_connections}</div>
-                        </div>
+                const metrics = [
+                    ['Active Connections', pool.active_connections],
+                    ['Total Connections', pool.total_connections],
+                    ['Utilization', (pool.utilization * 100).toFixed(1) + '%'],
+                    ['Queries/sec', pool.queries_per_second.toFixed(1)],
+                    ['Avg Query Time', pool.avg_query_time_ms.toFixed(1) + 'ms'],
+                    ['Error Rate', (pool.error_rate * 100).toFixed(2) + '%'],
+                ];
+                for (const [label, value] of metrics) {
+                    const metricDiv = document.createElement('div');
+                    metricDiv.className = 'metric';
+                    const labelDiv = document.createElement('div');
+                    labelDiv.className = 'metric-label';
+                    setText(labelDiv, label);
+                    const valueDiv = document.createElement('div');
+                    valueDiv.className = 'metric-value';
+                    setText(valueDiv, value);
+                    metricDiv.appendChild(labelDiv);
+                    metricDiv.appendChild(valueDiv);
+                    card.appendChild(metricDiv);
+                }
 
-                        <div class="metric">
-                            <div class="metric-label">Utilization</div>
-                            <div class="metric-value">${(pool.utilization * 100).toFixed(1)}%</div>
-                        </div>
-
-                        <div class="metric">
-                            <div class="metric-label">Queries/sec</div>
-                            <div class="metric-value">${pool.queries_per_second.toFixed(1)}</div>
-                        </div>
-
-                        <div class="metric">
-                            <div class="metric-label">Avg Query Time</div>
-                            <div class="metric-value">${pool.avg_query_time_ms.toFixed(1)}ms</div>
-                        </div>
-
-                        <div class="metric">
-                            <div class="metric-label">Error Rate</div>
-                            <div class="metric-value">${(pool.error_rate * 100).toFixed(2)}%</div>
-                        </div>
-                    </div>
-                `;
+                container.appendChild(card);
             }
         }
 
@@ -432,16 +443,21 @@ class ConnectionDashboardNode(Node):
 
             if (alerts.length === 0) return;
 
-            container.innerHTML = '<h2>Active Alerts</h2>';
+            const heading = document.createElement('h2');
+            setText(heading, 'Active Alerts');
+            container.appendChild(heading);
 
             for (const alert of alerts) {
-                const alertClass = `alert-${alert.severity}`;
-                container.innerHTML += `
-                    <div class="alert ${alertClass}">
-                        <strong>${alert.message}</strong> -
-                        ${new Date(alert.triggered_at * 1000).toLocaleTimeString()}
-                    </div>
-                `;
+                const div = document.createElement('div');
+                div.className = 'alert alert-' + alert.severity;
+                const strong = document.createElement('strong');
+                setText(strong, alert.message);
+                div.appendChild(strong);
+                const time = document.createTextNode(
+                    ' - ' + new Date(alert.triggered_at * 1000).toLocaleTimeString()
+                );
+                div.appendChild(time);
+                container.appendChild(div);
             }
         }
 
@@ -534,7 +550,7 @@ class ConnectionDashboardNode(Node):
                         "message": alert.message,
                         "duration": alert.duration(),
                     }
-                    for alert in self._alert_history[-20:]  # Last 20 alerts
+                    for alert in list(self._alert_history)[-20:]  # Last 20 alerts
                 ],
             }
         )
@@ -756,6 +772,16 @@ class ConnectionDashboardNode(Node):
                     alert.resolved_at = time.time()
 
                     logger.info(f"Alert resolved: {rule.name}")
+
+        # Prune resolved alerts older than 1 hour from _active_alerts
+        cutoff = time.time() - 3600
+        stale_keys = [
+            k
+            for k, a in self._active_alerts.items()
+            if a.resolved and a.resolved_at is not None and a.resolved_at < cutoff
+        ]
+        for k in stale_keys:
+            del self._active_alerts[k]
 
     async def _broadcast(self, data: Dict[str, Any]):
         """Broadcast data to all WebSocket clients."""

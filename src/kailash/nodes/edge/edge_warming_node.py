@@ -339,17 +339,16 @@ class EdgeWarmingNode(AsyncNode):
         }
 
     async def _warm_single_node(self, edge_node: str, resources: Dict[str, float]):
-        """Warm a single edge node."""
-        # TODO: Implement actual edge warming
-        # This would involve:
-        # 1. Connecting to edge infrastructure
-        # 2. Pre-allocating resources
-        # 3. Loading necessary data/models
-        # 4. Running health checks
+        """Warm a single edge node.
 
-        # For now, simulate warming
-        self.logger.info(f"Warming edge node {edge_node} with resources {resources}")
-        await asyncio.sleep(0.1)  # Simulate warming time
+        Requires a concrete edge infrastructure integration. A subclass
+        should connect to the edge, pre-allocate resources, load
+        necessary data/models, and run health checks.
+        """
+        raise NotImplementedError(
+            "Edge node warming requires infrastructure integration. "
+            "Provide a concrete _warm_single_node() in a subclass."
+        )
 
     async def _evaluate_prediction(self, kwargs: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate a prediction."""

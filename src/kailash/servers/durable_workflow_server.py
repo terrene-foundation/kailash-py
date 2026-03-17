@@ -1,7 +1,9 @@
-"""Durable workflow server implementation.
+"""Durable workflow server with request checkpointing and recovery.
 
-This module provides DurableWorkflowServer - a renamed and improved version of
-DurableAPIGateway with request durability and checkpointing capabilities.
+This module provides :class:`DurableWorkflowServer`, which extends
+:class:`WorkflowServer` with request durability features: automatic
+checkpointing, idempotent deduplication, event-sourced audit trail,
+and recovery from the latest checkpoint via :class:`DurableRequest`.
 """
 
 import asyncio
@@ -353,7 +355,12 @@ class DurableWorkflowServer(WorkflowServer):
 
         @self.app.post("/durability/requests/{request_id}/recover")
         async def recover_request(request_id: str):
-            """Attempt to recover a failed request."""
+            """Recover a failed request by resuming from its latest checkpoint.
+
+            Creates a new :class:`DurableRequest`, restores the checkpoint
+            state (including the :class:`ExecutionTracker` so already-completed
+            nodes are skipped), and re-executes.
+            """
             checkpoint = await self.checkpoint_manager.load_latest_checkpoint(
                 request_id
             )
@@ -362,11 +369,30 @@ class DurableWorkflowServer(WorkflowServer):
                     status_code=404, detail="Request checkpoint not found"
                 )
 
-            # TODO: Implement request recovery logic
-            return {
-                "message": f"Recovery initiated for request {request_id}",
-                "checkpoint": checkpoint.to_dict(),
-            }
+            # Build a DurableRequest and attach the checkpoint manager
+            durable_request = DurableRequest(
+                request_id=request_id,
+                checkpoint_manager=self.checkpoint_manager,
+            )
+            self.active_requests[request_id] = durable_request
+
+            try:
+                result = await durable_request.resume(
+                    checkpoint_id=checkpoint.checkpoint_id
+                )
+                return {
+                    "message": f"Recovery completed for request {request_id}",
+                    "checkpoint": checkpoint.to_dict(),
+                    "result": result,
+                }
+            except Exception as e:
+                logger.error("Recovery failed for request %s: %s", request_id, e)
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Recovery failed: {e}",
+                )
+            finally:
+                self.active_requests.pop(request_id, None)
 
         @self.app.get("/durability/events")
         async def list_events(limit: int = 100, offset: int = 0):

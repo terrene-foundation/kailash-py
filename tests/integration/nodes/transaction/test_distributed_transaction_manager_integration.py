@@ -15,6 +15,7 @@ import pytest
 import pytest_asyncio
 import redis
 
+from kailash.nodes.transaction.node_executor import MockNodeExecutor
 from kailash.nodes.transaction.distributed_transaction_manager import (
     AvailabilityLevel,
     ConsistencyLevel,
@@ -285,6 +286,7 @@ class TestDistributedTransactionManagerIntegration:
     async def test_pattern_selection_with_real_coordinators(self, redis_client):
         """Test automatic pattern selection creates correct coordinators."""
         # Test 1: Should select Saga pattern
+        mock_executor = MockNodeExecutor()
         saga_manager = DistributedTransactionManagerNode(
             transaction_name="saga_pattern_test",
             state_storage="redis",
@@ -292,6 +294,7 @@ class TestDistributedTransactionManagerIntegration:
                 "redis_client": redis_client,
                 "key_prefix": "integration:saga:",
             },
+            executor=mock_executor,
         )
 
         await saga_manager.async_run(
@@ -507,6 +510,7 @@ class TestDistributedTransactionManagerIntegration:
         ]
 
         for i, test_case in enumerate(test_cases):
+            req_mock_executor = MockNodeExecutor()
             manager = DistributedTransactionManagerNode(
                 transaction_name=test_case["name"],
                 state_storage="redis",
@@ -514,6 +518,7 @@ class TestDistributedTransactionManagerIntegration:
                     "redis_client": redis_client,
                     "key_prefix": f"integration:req:{i}:",
                 },
+                executor=req_mock_executor,
             )
 
             await manager.async_run(

@@ -4,18 +4,21 @@ The Saga pattern provides a way to manage distributed transactions by breaking t
 into a series of local transactions, each with a compensating action for rollback.
 """
 
+import asyncio
 import json
 import logging
 import time
 import uuid
+from collections import deque
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Deque, Dict, List, Optional, Tuple
 
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
 from kailash.sdk_exceptions import NodeExecutionError
 
+from .node_executor import NodeExecutor, RegistryNodeExecutor
 from .saga_state_storage import SagaStateStorage, StorageFactory
 
 logger = logging.getLogger(__name__)
@@ -61,36 +64,43 @@ class SagaStep:
 class SagaCoordinatorNode(AsyncNode):
     """Orchestrates distributed transactions using the Saga pattern.
 
-    The Saga Coordinator manages the execution of a series of steps, each representing
-    a local transaction. If any step fails, the coordinator executes compensating
-    actions for all previously completed steps in reverse order.
+    The Saga Coordinator manages the execution of a series of steps, each
+    representing a local transaction.  If any step fails, the coordinator
+    executes compensating actions for all previously completed steps in
+    reverse order.
 
     Features:
-    - Step-by-step transaction execution
+    - Step-by-step transaction execution via a pluggable
+      :class:`NodeExecutor` (real nodes, not stubs)
     - Automatic compensation on failure
-    - State persistence and recovery
-    - Monitoring and observability
+    - State persistence and recovery via :class:`SagaStateStorage`
+    - Monitoring and observability (event log)
     - Configurable retry policies
 
     Examples:
-        >>> # Create a saga
-        >>> saga = SagaCoordinatorNode()
-        >>> result = await saga.execute(
-        ...     operation="create_saga",
-        ...     saga_name="order_processing",
-        ...     timeout=600.0
-        ... )
+        The node exposes an ``operation`` parameter that selects the action.
+        All interaction goes through :meth:`async_run`::
 
-        >>> # Add steps
-        >>> result = await saga.execute(
-        ...     operation="add_step",
-        ...     name="validate_order",
-        ...     node_id="ValidationNode",
-        ...     compensation_node_id="CancelOrderNode"
-        ... )
+            saga = SagaCoordinatorNode(saga_name="order_processing")
 
-        >>> # Execute saga
-        >>> result = await saga.execute(operation="execute_saga")
+            # 1. Create the saga
+            result = await saga.async_run(operation="create_saga",
+                                          saga_name="order_processing",
+                                          timeout=600.0)
+
+            # 2. Add steps (each referencing registered node types)
+            await saga.async_run(operation="add_step",
+                                 name="validate_order",
+                                 node_id="ValidationNode",
+                                 parameters={"order_id": "123"},
+                                 compensation_node_id="CancelOrderNode")
+
+            # 3. Execute -- runs all steps; compensates on failure
+            result = await saga.async_run(operation="execute_saga")
+            assert result["status"] in ("success", "failed")
+
+            # 4. Inspect status at any time
+            status = await saga.async_run(operation="get_status")
     """
 
     def __init__(self, **kwargs):
@@ -113,7 +123,12 @@ class SagaCoordinatorNode(AsyncNode):
         self.saga_context: Dict[str, Any] = {}
         self.start_time: Optional[float] = None
         self.end_time: Optional[float] = None
-        self.saga_history: List[Dict[str, Any]] = []
+        self.saga_history: deque = deque(maxlen=10000)
+
+        # Node executor for running step and compensation nodes
+        self._executor: NodeExecutor = (
+            kwargs.pop("executor", None) or RegistryNodeExecutor()
+        )
 
         # State persistence
         storage_config = kwargs.pop("storage_config", {})
@@ -210,8 +225,12 @@ class SagaCoordinatorNode(AsyncNode):
 
         try:
             return await operations[operation](runtime_inputs)
+        except (asyncio.CancelledError, KeyboardInterrupt, SystemExit):
+            raise
         except Exception as e:
-            logger.error(f"Saga coordinator error: {e}")
+            logger.error(
+                "Saga coordinator error during '%s': %s", operation, e, exc_info=True
+            )
             return {
                 "status": "error",
                 "saga_id": self.saga_id,
@@ -361,12 +380,16 @@ class SagaCoordinatorNode(AsyncNode):
         )
 
         try:
-            # Simulate step execution (in real implementation, would call actual node)
-            # For now, return success
-            result = {
-                "status": "success",
-                "data": {"step_result": f"Result of {step.name}"},
-            }
+            # Execute real node via NodeExecutor
+            result = await self._executor.execute(
+                step.node_id,
+                {**step.parameters, **self.saga_context},
+                timeout=self.timeout,
+            )
+
+            # Ensure result has a status key for the saga protocol
+            if "status" not in result:
+                result["status"] = "success"
 
             step.state = "completed"
             step.result = result
@@ -427,7 +450,17 @@ class SagaCoordinatorNode(AsyncNode):
                     },
                 )
 
-                # Simulate compensation (in real implementation, would call actual node)
+                # Execute real compensation node
+                comp_params = {
+                    **(step.compensation_parameters or {}),
+                    "original_result": step.result,
+                    **self.saga_context,
+                }
+                await self._executor.execute(
+                    step.compensation_node_id,
+                    comp_params,
+                    timeout=self.timeout,
+                )
                 step.state = "compensated"
                 compensated_steps.append(step.name)
 
@@ -439,7 +472,13 @@ class SagaCoordinatorNode(AsyncNode):
                 )
 
             except Exception as e:
-                logger.error(f"Compensation failed for step {step.name}: {e}")
+                logger.error(
+                    "Compensation failed for step %s (saga=%s): %s",
+                    step.name,
+                    self.saga_id,
+                    e,
+                    exc_info=True,
+                )
                 compensation_errors.append(
                     {
                         "step": step.name,
@@ -538,7 +577,7 @@ class SagaCoordinatorNode(AsyncNode):
         return {
             "status": "success",
             "saga_id": self.saga_id,
-            "history": self.saga_history,
+            "history": list(self.saga_history),
             "total_events": len(self.saga_history),
         }
 
@@ -569,7 +608,7 @@ class SagaCoordinatorNode(AsyncNode):
             "start_time": self.start_time,
             "end_time": self.end_time,
             "timestamp": datetime.now(UTC).isoformat(),
-            "saga_history": self.saga_history,
+            "saga_history": list(self.saga_history),
         }
 
         success = await self._state_storage.save_state(self.saga_id, state_data)
@@ -610,7 +649,7 @@ class SagaCoordinatorNode(AsyncNode):
         self.saga_context = state_data["context"]
         self.start_time = state_data.get("start_time")
         self.end_time = state_data.get("end_time")
-        self.saga_history = state_data.get("saga_history", [])
+        self.saga_history = deque(state_data.get("saga_history", []), maxlen=10000)
 
         # Restore steps
         self.steps = []

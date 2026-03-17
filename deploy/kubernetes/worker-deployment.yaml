@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kailash-worker
+  labels:
+    app: kailash
+    component: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: kailash
+      component: worker
+  template:
+    metadata:
+      labels:
+        app: kailash
+        component: worker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: kailash-worker
+          image: kailash-server:latest
+          command: ["python", "-m", "kailash.runtime.distributed"]
+          args: ["--worker"]
+          ports:
+            - name: metrics
+              containerPort: 8001
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: kailash-config
+          env:
+            - name: KAILASH_WORKER_CONCURRENCY
+              value: "4"
+            - name: KAILASH_WORKER_HEARTBEAT_INTERVAL
+              value: "30"
+            - name: KAILASH_WORKER_DEAD_TIMEOUT
+              value: "90"
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -c
+                - "import redis; r = redis.from_url('redis://redis:6379/0'); r.ping()"
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+      terminationGracePeriodSeconds: 60

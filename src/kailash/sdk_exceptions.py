@@ -403,6 +403,30 @@ class KailashWorkflowException(WorkflowException):
     """
 
 
+class WorkflowCancelledError(WorkflowExecutionError):
+    """Raised when a workflow is cancelled during execution.
+
+    This typically occurs when:
+    - A cancellation token is triggered while a workflow is running
+    - A DurableRequest is cancelled via its cancel() method
+    - An external system requests workflow termination
+
+    Attributes:
+        completed_nodes: List of node IDs that completed before cancellation.
+        cancelled_at_node: The node ID where cancellation was detected (if any).
+    """
+
+    def __init__(
+        self,
+        message: str = "Workflow execution was cancelled",
+        completed_nodes: list[str] | None = None,
+        cancelled_at_node: str | None = None,
+    ):
+        self.completed_nodes = completed_nodes or []
+        self.cancelled_at_node = cancelled_at_node
+        super().__init__(message)
+
+
 # Legacy exception name compatibility for tests and backwards compatibility
 KailashRuntimeError = RuntimeExecutionError
 KailashValidationError = NodeValidationError
