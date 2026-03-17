@@ -26,6 +26,7 @@
 - **Comprehensive observability** -- Prometheus `/metrics` endpoint, OpenTelemetry tracing with per-node spans, comprehensive execution audit trail (NODE_EXECUTED/FAILED events with inputs/outputs), WebSocket live dashboard, search attributes for cross-execution queries.
 - **Workflow interaction** -- Send signals to running workflows (`SignalChannel`), query workflow state (`QueryRegistry`), pause/resume execution, cooperative cancellation, built-in scheduling (cron + interval), workflow versioning with semver registry, continue-as-new for infinite-duration workflows.
 - **Scale-out ready** -- Distributed circuit breaker (Redis-backed with Lua atomic transitions), multi-worker task queue architecture, resource quotas with semaphore-based concurrency control, coordinated graceful shutdown, Kubernetes deployment manifests.
+- **Progressive infrastructure** -- Start with zero config (SQLite), scale to multi-worker PostgreSQL/MySQL by changing environment variables. Dialect-portable SQL via QueryDialect strategy pattern. SQL task queue with `SKIP LOCKED`, worker heartbeat registry, exactly-once idempotent execution. No code changes between Level 0 (dev) and Level 2 (production).
 - **Infrastructure-agnostic** -- `LocalRuntime` runs entirely in-process. No server cluster, no external database, no message broker. Deploy anywhere: any cloud, any region, on-prem, edge, air-gapped. Zero vendor lock-in.
 - **Foundation for three application frameworks** -- [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen) (AI agents with trust), [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus) (multi-channel deploy), and [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) (zero-config database) are all built on this Core SDK.
 
@@ -47,6 +48,11 @@
 |   140+ Nodes    |  WorkflowBuilder   |  Runtime (Sync + Async)   |
 |   MCP Server    |  Cyclic Workflows  |  CARE Trust Layer          |
 |                 |  Conditional Exec  |  Trust Verification        |
++------------------------------------------------------------------+
+|                    Progressive Infrastructure                     |
+|                                                                   |
+|   QueryDialect  |  ConnectionManager |  StoreFactory (L0/L1/L2)  |
+|   SQL TaskQueue |  WorkerRegistry    |  IdempotentExecutor        |
 +------------------------------------------------------------------+
 |                    Enterprise Capabilities                        |
 |                                                                   |
@@ -276,7 +282,7 @@ Start with zero config, scale to multi-worker by changing environment variables.
 | **2** | + `KAILASH_QUEUE_URL=redis://...`       | Multi-worker parallel execution with task queue           |
 | **3** | _(v1.1+)_                               | Leader election, distributed locks, global ordering       |
 
-Full guide: [Progressive Infrastructure](docs/00-authority/progressive-infrastructure.md) | Quick setup: [Multi-Worker Quickstart](docs/00-authority/multi-worker-quickstart.md)
+Full guide: [Progressive Infrastructure](docs/enterprise-infrastructure/01-overview.md) | Quick setup: [Multi-Worker Quickstart](docs/guides/multi-worker-quickstart.md)
 
 ---
 

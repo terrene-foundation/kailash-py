@@ -21,6 +21,37 @@ The changelog has been reorganized into individual files for better management. 
 
 The core API (WorkflowBuilder, LocalRuntime, AsyncLocalRuntime, Node, 140+ nodes) is now under semver stability guarantees. No breaking changes until 2.0.0.
 
+#### Added
+
+- **Progressive Infrastructure (Level 0/1/2)** — Start with zero config (SQLite), scale to multi-worker PostgreSQL/MySQL by setting environment variables. No application code changes required.
+  - `KAILASH_DATABASE_URL` switches all stores to PostgreSQL or MySQL
+  - `KAILASH_QUEUE_URL` enables multi-worker task distribution (Redis or SQL-backed)
+  - `StoreFactory` auto-detects configuration and creates appropriate backends
+- **QueryDialect strategy pattern** (`kailash.db`) — Dialect-portable SQL generation across PostgreSQL, MySQL 8.0+, and SQLite from the same code. Canonical `?` placeholders translated automatically per dialect.
+- **ConnectionManager with transaction support** — Async database connection manager with `transaction()` context manager for multi-statement atomicity across all three databases.
+- **5 dialect-portable store backends** (`kailash.infrastructure`) — DBEventStoreBackend, DBCheckpointStore, DBDeadLetterQueue, DBExecutionStore, DBIdempotencyStore. All share a single ConnectionManager.
+- **SQL-backed task queue** — `SQLTaskQueue` with `FOR UPDATE SKIP LOCKED` (PostgreSQL/MySQL) and `BEGIN IMMEDIATE` (SQLite) for concurrent dequeue without contention.
+- **SQLWorkerRegistry** — Worker heartbeat tracking and dead worker reaping with transactional task recovery.
+- **IdempotentExecutor** — Execution-level exactly-once semantics with claim-then-execute-then-store pattern and TTL-based cache expiration.
+- **Queue factory** (`create_task_queue()`) — Auto-detect queue backend from `KAILASH_QUEUE_URL` (Redis, PostgreSQL, MySQL, SQLite, or file path).
+- **Schema versioning** via `kailash_meta` table with downgrade protection. `migration.py` utilities for version checking.
+- **SQL identifier validation** — All table/column names in dynamic SQL validated against `^[a-zA-Z_][a-zA-Z0-9_]*$` to prevent injection.
+- **228 unit tests + 141 integration tests** for infrastructure layer, parameterized across SQLite, PostgreSQL, and MySQL.
+- **5 reference docs** (`docs/enterprise-infrastructure/`) covering overview, store backends, task queues, idempotency, and migration guide.
+- **Multi-worker quickstart guide** (`docs/guides/multi-worker-quickstart.md`) with 3 progressive example applications.
+
+#### Fixed
+
+- **BRPOPLPUSH → BLMOVE** — Redis 7.0+ compatibility for distributed task queue (`distributed.py`)
+- **asyncpg lazy import** — `storage_backends.py` no longer crashes at import time without `kailash[postgres]`
+- **DatabaseStateStorage stub** — `_ensure_table_exists()` fully implemented with schema + index creation
+- **Worker deserialization** — `_execute_workflow_sync()` uses `Workflow.from_dict()`/`to_dict()` for round-trip serialization
+- **WorkflowVisualizer tests** — Updated from removed matplotlib API to Mermaid/DOT API
+- **Health monitor tests** — Fixed flaky HTTP mocks (aiohttp, not httpx)
+- **Saga state storage tests** — Fixed `_initialized` attribute access after initialization refactor
+- **Distributed runtime tests** — Updated mock from `brpoplpush` to `blmove`
+- **Legacy fluent API test** — Updated to expect `WorkflowValidationError` (removed in v1.0.0)
+
 #### Changed
 
 - Version: 0.13.0 -> 1.0.0

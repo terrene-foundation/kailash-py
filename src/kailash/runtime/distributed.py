@@ -6,7 +6,7 @@ Tasks are enqueued to a Redis-backed task queue and processed by worker instance
 that can run on separate machines.
 
 Key components:
-    - TaskQueue: Redis-backed queue with reliable delivery (BRPOPLPUSH pattern),
+    - TaskQueue: Redis-backed queue with reliable delivery (BLMOVE pattern),
       visibility timeouts, and automatic dead-letter handling.
     - DistributedRuntime: Extends BaseRuntime to enqueue workflows to the task
       queue instead of executing them locally.
@@ -151,7 +151,7 @@ class TaskResult:
 class TaskQueue:
     """Redis-backed task queue with reliable delivery.
 
-    Uses the BRPOPLPUSH pattern for reliable delivery: tasks are atomically
+    Uses the BLMOVE pattern for reliable delivery: tasks are atomically
     moved from the pending queue to a processing list when dequeued. If a
     worker crashes, visibility timeout expiry makes the task eligible for
     re-delivery.
@@ -236,7 +236,7 @@ class TaskQueue:
         return task.task_id
 
     def dequeue(self, timeout: int = 5) -> Optional[TaskMessage]:
-        """Dequeue a task using BRPOPLPUSH for reliable delivery.
+        """Dequeue a task using BLMOVE for reliable delivery.
 
         Atomically moves the task from the pending queue to the processing
         list. If the worker crashes, the task remains in the processing list
@@ -379,7 +379,7 @@ class TaskQueue:
     def _remove_from_processing(self, task_id: str) -> bool:
         """Remove a task from the processing list by scanning for its task_id.
 
-        Since BRPOPLPUSH stores the full JSON, we need to scan and match.
+        Since BLMOVE stores the full JSON, we need to scan and match.
 
         Args:
             task_id: Task identifier to remove.
@@ -618,7 +618,7 @@ class Worker:
         self._worker_id = worker_id or f"worker-{uuid.uuid4().hex[:12]}"
         self._runtime_factory = runtime_factory
         self._running = False
-        self._tasks: List[asyncio.Task] = []
+        self._tasks: set[asyncio.Task] = set()
         self._semaphore: Optional[asyncio.Semaphore] = None
         self._redis_client = None
 
@@ -716,7 +716,7 @@ class Worker:
                 # Acquire semaphore for concurrency control
                 await self._semaphore.acquire()
                 async_task = asyncio.create_task(self._execute_task(task))
-                self._tasks.append(async_task)
+                self._tasks.add(async_task)
                 async_task.add_done_callback(self._task_done)
 
             except asyncio.CancelledError:
@@ -730,7 +730,7 @@ class Worker:
         if self._semaphore:
             self._semaphore.release()
         if task in self._tasks:
-            self._tasks.remove(task)
+            self._tasks.discard(task)
 
     async def _execute_task(self, task: TaskMessage):
         """Execute a single task and store the result.

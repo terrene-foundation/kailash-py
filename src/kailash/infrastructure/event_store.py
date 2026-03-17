@@ -11,7 +11,7 @@ Table: ``kailash_events``
 
 Schema::
 
-    id          INTEGER PRIMARY KEY AUTOINCREMENT
+    id          INTEGER PRIMARY KEY
     stream_key  TEXT NOT NULL
     sequence    INTEGER NOT NULL
     event_type  TEXT NOT NULL
@@ -59,25 +59,27 @@ class DBEventStoreBackend:
         await self._conn.execute(
             f"""
             CREATE TABLE IF NOT EXISTS {self.TABLE_NAME} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                stream_key TEXT NOT NULL,
+                {self._conn.dialect.auto_id_column()},
+                stream_key {self._conn.dialect.text_column(indexed=True)} NOT NULL,
                 sequence INTEGER NOT NULL,
                 event_type TEXT NOT NULL,
                 data TEXT NOT NULL,
-                timestamp TEXT NOT NULL,
+                timestamp {self._conn.dialect.text_column(indexed=True)} NOT NULL,
                 UNIQUE(stream_key, sequence)
             )
             """
         )
         # Index for fast lookups by stream_key
-        await self._conn.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_{self.TABLE_NAME}_stream "
-            f"ON {self.TABLE_NAME}(stream_key)"
+        await self._conn.create_index(
+            f"idx_{self.TABLE_NAME}_stream",
+            self.TABLE_NAME,
+            "stream_key",
         )
         # Index for timestamp-based pruning
-        await self._conn.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_{self.TABLE_NAME}_timestamp "
-            f"ON {self.TABLE_NAME}(timestamp)"
+        await self._conn.create_index(
+            f"idx_{self.TABLE_NAME}_timestamp",
+            self.TABLE_NAME,
+            "timestamp",
         )
         logger.info("EventStore table '%s' initialized", self.TABLE_NAME)
 
@@ -108,28 +110,30 @@ class DBEventStoreBackend:
         if not events:
             return
 
-        # Determine the next sequence number for this stream.
-        row = await self._conn.fetchone(
-            f"SELECT COALESCE(MAX(sequence), 0) AS max_seq "
-            f"FROM {self.TABLE_NAME} WHERE stream_key = ?",
-            key,
-        )
-        next_seq = (row["max_seq"] if row else 0) + 1
         now = datetime.now(timezone.utc).isoformat()
 
-        for i, event in enumerate(events):
-            event_type = event.get("type", "unknown")
-            data_json = json.dumps(event)
-            await self._conn.execute(
-                f"INSERT INTO {self.TABLE_NAME} "
-                f"(stream_key, sequence, event_type, data, timestamp) "
-                f"VALUES (?, ?, ?, ?, ?)",
+        async with self._conn.transaction() as tx:
+            # Determine the next sequence number atomically within txn.
+            row = await tx.fetchone(
+                f"SELECT COALESCE(MAX(sequence), 0) AS max_seq "
+                f"FROM {self.TABLE_NAME} WHERE stream_key = ?",
                 key,
-                next_seq + i,
-                event_type,
-                data_json,
-                now,
             )
+            next_seq = (row["max_seq"] if row else 0) + 1
+
+            for i, event in enumerate(events):
+                event_type = event.get("type", "unknown")
+                data_json = json.dumps(event)
+                await tx.execute(
+                    f"INSERT INTO {self.TABLE_NAME} "
+                    f"(stream_key, sequence, event_type, data, timestamp) "
+                    f"VALUES (?, ?, ?, ?, ?)",
+                    key,
+                    next_seq + i,
+                    event_type,
+                    data_json,
+                    now,
+                )
 
         logger.debug(
             "Appended %d event(s) to stream '%s' (seq %d..%d)",
@@ -199,20 +203,21 @@ class DBEventStoreBackend:
         int
             Number of events deleted.
         """
-        # Count first so we can report how many were removed.
-        count_row = await self._conn.fetchone(
-            f"SELECT COUNT(*) AS cnt FROM {self.TABLE_NAME} WHERE timestamp < ?",
-            timestamp,
-        )
-        deleted = count_row["cnt"] if count_row else 0
-
-        if deleted > 0:
-            await self._conn.execute(
-                f"DELETE FROM {self.TABLE_NAME} WHERE timestamp < ?",
+        async with self._conn.transaction() as tx:
+            count_row = await tx.fetchone(
+                f"SELECT COUNT(*) AS cnt FROM {self.TABLE_NAME} WHERE timestamp < ?",
                 timestamp,
             )
-            logger.info("Deleted %d event(s) older than %s", deleted, timestamp)
+            deleted = count_row["cnt"] if count_row else 0
 
+            if deleted > 0:
+                await tx.execute(
+                    f"DELETE FROM {self.TABLE_NAME} WHERE timestamp < ?",
+                    timestamp,
+                )
+
+        if deleted > 0:
+            logger.info("Deleted %d event(s) older than %s", deleted, timestamp)
         return deleted
 
     async def count(self, key: str) -> int:

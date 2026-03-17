@@ -15,7 +15,7 @@ Copy-paste ready templates for the most frequently used Kailash SDK nodes with w
 ## Quick Reference
 
 - **PythonCodeNode**: Custom Python logic, most flexible
-- **CSVReaderNode**: Read CSV files with pandas
+- **CSVReaderNode**: Read CSV files
 - **JSONWriterNode**: Write JSON output
 - **HTTPRequestNode**: API calls (GET/POST)
 - **LLMAgentNode**: AI/LLM integration
@@ -53,6 +53,7 @@ results, run_id = runtime.execute(workflow.build())
 ## Node Patterns
 
 ### Pattern 1: CSV Reading and Writing
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -66,7 +67,7 @@ workflow.add_node("CSVReaderNode", "reader", {
 # Process data
 workflow.add_node("PythonCodeNode", "process", {
     "code": """
-import pandas as pd
+import pandas as pd  # requires: pip install pandas
 df = pd.DataFrame(data)
 df['total'] = df['quantity'] * df['price']
 result = df.to_dict('records')
@@ -86,6 +87,7 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Pattern 2: PythonCodeNode with Filtering
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -116,6 +118,7 @@ print(f"Filtered {results['filter']['result']['count']} items")
 ```
 
 ### Pattern 3: HTTP API Requests
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -146,6 +149,7 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Pattern 4: LLM Agent Integration
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -184,6 +188,7 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Pattern 5: Conditional Routing with SwitchNode
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -218,6 +223,7 @@ results, run_id = runtime.execute(workflow.build())
 ```
 
 ### Pattern 6: Data Transformation
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -229,7 +235,7 @@ workflow.add_node("CSVReaderNode", "reader", {
 # Transform
 workflow.add_node("PythonCodeNode", "transform", {
     "code": """
-import pandas as pd
+import pandas as pd  # requires: pip install pandas
 df = pd.DataFrame(data)
 # Add calculated columns
 df['full_name'] = df['first_name'] + ' ' + df['last_name']
@@ -256,18 +262,21 @@ results, run_id = runtime.execute(workflow.build())
 ## Common Mistakes
 
 ### ❌ Mistake 1: Wrong Result Access for PythonCodeNode
+
 ```python
 # Wrong - Missing 'result' nesting
 value = results['processor']['count']  # KeyError
 ```
 
 ### ✅ Fix: Use Correct Nesting
+
 ```python
 # Correct - PythonCodeNode wraps output in 'result'
 value = results['processor']['result']['count']  # ✓
 ```
 
 ### ❌ Mistake 2: Not Handling First Iteration in Cycles
+
 ```python
 # Wrong - Assuming parameters exist
 workflow.add_node("PythonCodeNode", "proc", {
@@ -276,6 +285,7 @@ workflow.add_node("PythonCodeNode", "proc", {
 ```
 
 ### ✅ Fix: Use try/except for Cycles
+
 ```python
 # Correct - Handle first iteration
 workflow.add_node("PythonCodeNode", "proc", {
@@ -290,12 +300,14 @@ result = {'value': value + 1}
 ```
 
 ### ❌ Mistake 3: Incorrect Port Names in Connections
+
 ```python
 # Wrong - Using wrong output port name
 workflow.add_connection("csv_reader", "output", "processor", "input")
 ```
 
 ### ✅ Fix: Use Correct Port Names
+
 ```python
 # Correct - CSVReaderNode outputs to 'data' port
 workflow.add_connection("csv_reader", "data", "processor", "data")
@@ -312,11 +324,13 @@ workflow.add_connection("csv_reader", "data", "processor", "data")
 ## When to Escalate to Subagent
 
 Use `sdk-navigator` subagent when:
+
 - Finding specific nodes for your use case
 - Exploring all 110+ available nodes
 - Understanding node capabilities
 
 Use `pattern-expert` subagent when:
+
 - Designing complex multi-node workflows
 - Optimizing workflow patterns
 - Creating reusable workflow components
@@ -332,7 +346,7 @@ Use `pattern-expert` subagent when:
 - 💡 **PythonCodeNode is your friend**: Use it for quick transformations and logic
 - 💡 **Always wrap in 'result'**: PythonCodeNode expects `result = {...}`
 - 💡 **Check port names**: Each node has specific input/output ports
-- 💡 **Use pandas for data**: Import pandas in PythonCodeNode for data manipulation
+- 💡 **Use pandas for data**: Install pandas (`pip install pandas`) and import in PythonCodeNode for data manipulation
 - 💡 **Test incrementally**: Build workflows node by node, test each connection
 
 ## Version Notes

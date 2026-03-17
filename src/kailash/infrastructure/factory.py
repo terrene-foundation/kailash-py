@@ -163,8 +163,8 @@ class StoreFactory:
             )
 
         await self._conn.execute(
-            "CREATE TABLE IF NOT EXISTS kailash_meta "
-            "(key TEXT PRIMARY KEY, value TEXT)"
+            f"CREATE TABLE IF NOT EXISTS kailash_meta "
+            f"(key {self._conn.dialect.text_column(indexed=True)} PRIMARY KEY, value TEXT)"
         )
 
         row = await self._conn.fetchone(

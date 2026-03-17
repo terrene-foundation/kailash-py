@@ -167,3 +167,99 @@ class TestQueueNames:
         msg3 = await task_queue.dequeue(queue_name="alpha", worker_id="w")
         assert msg3 is not None
         assert msg3.task_id == "a1"
+
+
+@pytest.mark.asyncio
+class TestPurgeCompleted:
+    async def test_purge_completed_removes_completed_tasks(self, task_queue):
+        """purge_completed removes all tasks with status 'completed'."""
+        # Enqueue, dequeue, and complete two tasks
+        await task_queue.enqueue({"d": 1}, task_id="c1")
+        await task_queue.enqueue({"d": 2}, task_id="c2")
+        await task_queue.dequeue(worker_id="w")
+        await task_queue.dequeue(worker_id="w")
+        await task_queue.complete("c1")
+        await task_queue.complete("c2")
+
+        stats_before = await task_queue.get_stats()
+        assert stats_before.get("completed", 0) == 2
+
+        count = await task_queue.purge_completed()
+        assert count == 2
+
+        stats_after = await task_queue.get_stats()
+        assert stats_after.get("completed", 0) == 0
+
+    async def test_purge_completed_with_older_than(self, task_queue):
+        """purge_completed with older_than only removes tasks completed before that timestamp."""
+        # Enqueue, dequeue, and complete two tasks
+        await task_queue.enqueue({"d": 1}, task_id="old-1")
+        await task_queue.enqueue({"d": 2}, task_id="new-1")
+        await task_queue.dequeue(worker_id="w")
+        await task_queue.complete("old-1")
+        await task_queue.dequeue(worker_id="w")
+        await task_queue.complete("new-1")
+
+        # Force old-1 to have an updated_at far in the past
+        past = time.time() - 3600  # 1 hour ago
+        await task_queue._conn.execute(
+            f"UPDATE {task_queue._table} SET updated_at = ? WHERE task_id = ?",
+            past,
+            "old-1",
+        )
+
+        # Use a cutoff between old-1 (1 hour ago) and new-1 (just now)
+        cutoff = time.time() - 60  # 1 minute ago
+
+        # Purge only tasks older than cutoff
+        count = await task_queue.purge_completed(older_than=cutoff)
+        assert count == 1  # only old-1
+
+        stats = await task_queue.get_stats()
+        assert stats.get("completed", 0) == 1  # new-1 remains
+
+    async def test_purge_completed_on_empty_table_is_safe(self, task_queue):
+        """purge_completed on an empty queue returns 0 without errors."""
+        count = await task_queue.purge_completed()
+        assert count == 0
+
+    async def test_purge_completed_does_not_remove_pending_tasks(self, task_queue):
+        """purge_completed only removes 'completed' tasks, not pending/processing/failed."""
+        # Enqueue three tasks
+        await task_queue.enqueue({"d": 1}, task_id="stay-pending")
+        await task_queue.enqueue({"d": 2}, task_id="stay-processing")
+        await task_queue.enqueue({"d": 3}, task_id="to-complete")
+
+        # Dequeue all three in FIFO order
+        msg1 = await task_queue.dequeue(worker_id="w")  # stay-pending
+        assert msg1 is not None
+        assert msg1.task_id == "stay-pending"
+
+        msg2 = await task_queue.dequeue(worker_id="w")  # stay-processing
+        assert msg2 is not None
+        assert msg2.task_id == "stay-processing"
+
+        msg3 = await task_queue.dequeue(worker_id="w")  # to-complete
+        assert msg3 is not None
+        assert msg3.task_id == "to-complete"
+
+        # Put stay-pending back to pending via fail (under max_attempts)
+        await task_queue.fail("stay-pending", error="retry")
+        # Leave stay-processing in processing state
+        # Complete to-complete
+        await task_queue.complete("to-complete")
+
+        stats_before = await task_queue.get_stats()
+        assert stats_before.get("completed", 0) == 1
+        assert stats_before.get("pending", 0) == 1
+        assert stats_before.get("processing", 0) == 1
+
+        # Purge completed
+        count = await task_queue.purge_completed()
+        assert count == 1
+
+        # Verify non-completed tasks still exist
+        stats_after = await task_queue.get_stats()
+        assert stats_after.get("completed", 0) == 0
+        assert stats_after.get("pending", 0) == 1
+        assert stats_after.get("processing", 0) == 1

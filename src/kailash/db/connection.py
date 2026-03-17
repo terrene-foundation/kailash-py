@@ -9,6 +9,7 @@ are imported lazily and produce clear errors if missing.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -90,6 +91,24 @@ class ConnectionManager:
             self._pool = None
             logger.info("ConnectionManager closed for %s", db_type.value)
 
+    async def create_index(self, index_name: str, table: str, columns: str) -> None:
+        """Create an index, ignoring if it already exists.
+
+        Uses ``CREATE INDEX IF NOT EXISTS`` on PostgreSQL/SQLite and
+        catches duplicate-index errors on MySQL (which does not support
+        ``IF NOT EXISTS`` for indexes).
+        """
+        if self.dialect.database_type == DatabaseType.MYSQL:
+            try:
+                await self.execute(f"CREATE INDEX {index_name} ON {table}({columns})")
+            except Exception:
+                # MySQL raises error 1061 if index already exists
+                pass
+        else:
+            await self.execute(
+                f"CREATE INDEX IF NOT EXISTS {index_name} ON {table}({columns})"
+            )
+
     # ------------------------------------------------------------------
     # Query execution
     # ------------------------------------------------------------------
@@ -135,6 +154,61 @@ class ConnectionManager:
         self._check_initialized()
         translated = self.dialect.translate_query(query)
         return await self._fetchone_raw(translated, args)
+
+    @contextlib.asynccontextmanager
+    async def transaction(self):
+        """Async context manager for multi-statement transactions.
+
+        Yields a ``TransactionProxy`` that provides ``execute``, ``fetch``,
+        and ``fetchone`` methods operating within a single transaction.
+
+        On normal exit the transaction is committed; on exception it is
+        rolled back.
+
+        Usage::
+
+            async with conn.transaction() as tx:
+                await tx.execute("INSERT INTO ...", ...)
+                row = await tx.fetchone("SELECT ...", ...)
+        """
+        self._check_initialized()
+        db_type = self.dialect.database_type
+
+        if db_type == DatabaseType.SQLITE:
+            # SQLite: single connection, use BEGIN/COMMIT/ROLLBACK
+            await self._pool.execute("BEGIN IMMEDIATE")
+            try:
+                yield _TransactionProxy(self, db_type, conn=self._pool)
+                await self._pool.commit()
+            except BaseException:
+                await self._pool.rollback()
+                raise
+
+        elif db_type == DatabaseType.POSTGRESQL:
+            # PostgreSQL: acquire connection, use transaction block
+            async with self._pool.acquire() as pg_conn:
+                tr = pg_conn.transaction()
+                await tr.start()
+                try:
+                    yield _TransactionProxy(self, db_type, conn=pg_conn)
+                    await tr.commit()
+                except BaseException:
+                    await tr.rollback()
+                    raise
+
+        elif db_type == DatabaseType.MYSQL:
+            # MySQL: acquire connection, begin transaction
+            async with self._pool.acquire() as my_conn:
+                await my_conn.begin()
+                try:
+                    yield _TransactionProxy(self, db_type, conn=my_conn)
+                    await my_conn.commit()
+                except BaseException:
+                    await my_conn.rollback()
+                    raise
+
+        else:
+            raise ValueError(f"Unsupported database type for transactions: {db_type}")
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -271,3 +345,79 @@ class ConnectionManager:
             db=parsed.path.lstrip("/") if parsed.path else "",
         )
         logger.debug("MySQL pool created")
+
+
+class _TransactionProxy:
+    """Lightweight proxy that executes queries within a transaction.
+
+    Created by :meth:`ConnectionManager.transaction`; do not instantiate
+    directly.
+    """
+
+    def __init__(
+        self, manager: ConnectionManager, db_type: DatabaseType, conn: Any
+    ) -> None:
+        self._manager = manager
+        self._db_type = db_type
+        self._conn = conn
+
+    async def execute(self, query: str, *args: Any) -> Any:
+        """Execute a query within the transaction."""
+        translated = self._manager.dialect.translate_query(query)
+        if self._db_type == DatabaseType.SQLITE:
+            cursor = await self._conn.execute(translated, args)
+            return cursor
+        elif self._db_type == DatabaseType.POSTGRESQL:
+            return await self._conn.execute(translated, *args)
+        elif self._db_type == DatabaseType.MYSQL:
+            async with self._conn.cursor() as cur:
+                await cur.execute(translated, args)
+                return cur
+        raise ValueError(f"Unsupported database type: {self._db_type}")
+
+    async def fetch(self, query: str, *args: Any) -> List[Dict[str, Any]]:
+        """Fetch all rows within the transaction."""
+        translated = self._manager.dialect.translate_query(query)
+        if self._db_type == DatabaseType.SQLITE:
+            cursor = await self._conn.execute(translated, args)
+            rows = await cursor.fetchall()
+            if rows and hasattr(rows[0], "keys"):
+                return [dict(row) for row in rows]
+            if rows and cursor.description:
+                columns = [desc[0] for desc in cursor.description]
+                return [dict(zip(columns, row)) for row in rows]
+            return []
+        elif self._db_type == DatabaseType.POSTGRESQL:
+            return [dict(row) for row in await self._conn.fetch(translated, *args)]
+        elif self._db_type == DatabaseType.MYSQL:
+            async with self._conn.cursor() as cur:
+                await cur.execute(translated, args)
+                columns = [desc[0] for desc in cur.description]
+                rows = await cur.fetchall()
+                return [dict(zip(columns, row)) for row in rows]
+        raise ValueError(f"Unsupported database type: {self._db_type}")
+
+    async def fetchone(self, query: str, *args: Any) -> Optional[Dict[str, Any]]:
+        """Fetch a single row within the transaction."""
+        translated = self._manager.dialect.translate_query(query)
+        if self._db_type == DatabaseType.SQLITE:
+            cursor = await self._conn.execute(translated, args)
+            row = await cursor.fetchone()
+            if row is None:
+                return None
+            if hasattr(row, "keys"):
+                return dict(row)
+            if cursor.description:
+                columns = [desc[0] for desc in cursor.description]
+                return dict(zip(columns, row))
+            return None
+        elif self._db_type == DatabaseType.POSTGRESQL:
+            row = await self._conn.fetchrow(translated, *args)
+            return dict(row) if row else None
+        elif self._db_type == DatabaseType.MYSQL:
+            async with self._conn.cursor() as cur:
+                await cur.execute(translated, args)
+                columns = [desc[0] for desc in cur.description]
+                row = await cur.fetchone()
+                return dict(zip(columns, row)) if row else None
+        raise ValueError(f"Unsupported database type: {self._db_type}")

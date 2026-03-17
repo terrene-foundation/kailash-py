@@ -224,7 +224,9 @@ class TestDatabaseStateStorage:
         """Create a DatabaseStateStorage instance."""
         pool, _ = mock_pool
         with patch.object(DatabaseStateStorage, "_ensure_table_exists"):
-            return DatabaseStateStorage(pool)
+            storage = DatabaseStateStorage(pool)
+            storage._initialized = True  # Skip async table creation in unit tests
+            return storage
 
     @pytest.mark.asyncio
     async def test_save_state(self, storage, mock_pool):

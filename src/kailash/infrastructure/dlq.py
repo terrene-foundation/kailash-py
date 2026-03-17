@@ -79,29 +79,32 @@ class DBDeadLetterQueue:
         await self._conn.execute(
             f"""
             CREATE TABLE IF NOT EXISTS {self.TABLE_NAME} (
-                id TEXT PRIMARY KEY,
+                id {self._conn.dialect.text_column(indexed=True)} PRIMARY KEY,
                 workflow_id TEXT NOT NULL,
                 error TEXT NOT NULL,
                 payload TEXT NOT NULL,
-                created_at TEXT NOT NULL,
+                created_at {self._conn.dialect.text_column(indexed=True)} NOT NULL,
                 retry_count INTEGER NOT NULL DEFAULT 0,
                 max_retries INTEGER NOT NULL DEFAULT 3,
-                next_retry_at TEXT,
-                status TEXT NOT NULL DEFAULT 'pending'
+                next_retry_at {self._conn.dialect.text_column(indexed=True)},
+                status {self._conn.dialect.text_column(indexed=True)} NOT NULL DEFAULT 'pending'
             )
             """
         )
-        await self._conn.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_{self.TABLE_NAME}_status "
-            f"ON {self.TABLE_NAME}(status)"
+        await self._conn.create_index(
+            f"idx_{self.TABLE_NAME}_status",
+            self.TABLE_NAME,
+            "status",
         )
-        await self._conn.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_{self.TABLE_NAME}_next_retry "
-            f"ON {self.TABLE_NAME}(next_retry_at)"
+        await self._conn.create_index(
+            f"idx_{self.TABLE_NAME}_next_retry",
+            self.TABLE_NAME,
+            "next_retry_at",
         )
-        await self._conn.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_{self.TABLE_NAME}_created "
-            f"ON {self.TABLE_NAME}(created_at)"
+        await self._conn.create_index(
+            f"idx_{self.TABLE_NAME}_created",
+            self.TABLE_NAME,
+            "created_at",
         )
         logger.info("DLQ table '%s' initialized", self.TABLE_NAME)
 

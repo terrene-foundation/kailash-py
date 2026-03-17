@@ -366,16 +366,25 @@ class TestHTTPHealthCheck:
             "api", "http://localhost:8080/health", expected_status=200
         )
 
-        # Mock response with different but acceptable status
+        # Mock aiohttp response with different but acceptable status (201 -> DEGRADED)
         mock_response = Mock()
-        mock_response.status_code = 201
-        mock_response.content = b"Created"
+        mock_response.status = 201
+        mock_response.read = AsyncMock(return_value=b"Created")
 
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
+        # aiohttp.ClientSession(timeout=...) is used as async context manager
+        # session.get(url) is used as async context manager
+        mock_get_ctx = AsyncMock()
+        mock_get_ctx.__aenter__.return_value = mock_response
+        mock_get_ctx.__aexit__.return_value = None
 
-        with patch("httpx.AsyncClient") as mock_async_client:
-            mock_async_client.return_value.__aenter__.return_value = mock_client
+        mock_session = Mock()
+        mock_session.get = Mock(return_value=mock_get_ctx)
+
+        mock_session_ctx = AsyncMock()
+        mock_session_ctx.__aenter__.return_value = mock_session
+        mock_session_ctx.__aexit__.return_value = None
+
+        with patch("aiohttp.ClientSession", return_value=mock_session_ctx):
             result = await check.check_health()
 
         assert result.service_name == "api"
@@ -387,16 +396,23 @@ class TestHTTPHealthCheck:
         """Test HTTP health check with error status."""
         check = HTTPHealthCheck("api", "http://localhost:8080/health")
 
-        # Mock response with error status
+        # Mock aiohttp response with error status (500 -> UNHEALTHY)
         mock_response = Mock()
-        mock_response.status_code = 500
-        mock_response.content = b"Internal Server Error"
+        mock_response.status = 500
+        mock_response.read = AsyncMock(return_value=b"Internal Server Error")
 
-        mock_client = AsyncMock()
-        mock_client.get.return_value = mock_response
+        mock_get_ctx = AsyncMock()
+        mock_get_ctx.__aenter__.return_value = mock_response
+        mock_get_ctx.__aexit__.return_value = None
 
-        with patch("httpx.AsyncClient") as mock_async_client:
-            mock_async_client.return_value.__aenter__.return_value = mock_client
+        mock_session = Mock()
+        mock_session.get = Mock(return_value=mock_get_ctx)
+
+        mock_session_ctx = AsyncMock()
+        mock_session_ctx.__aenter__.return_value = mock_session
+        mock_session_ctx.__aexit__.return_value = None
+
+        with patch("aiohttp.ClientSession", return_value=mock_session_ctx):
             result = await check.check_health()
 
         assert result.service_name == "api"

@@ -11,7 +11,7 @@ Table: ``kailash_checkpoints``
 
 Schema::
 
-    key         TEXT PRIMARY KEY
+    checkpoint_key TEXT PRIMARY KEY
     data        BLOB NOT NULL
     size_bytes  INTEGER NOT NULL
     compressed  BOOLEAN NOT NULL DEFAULT 0
@@ -56,10 +56,10 @@ class DBCheckpointStore:
         await self._conn.execute(
             f"""
             CREATE TABLE IF NOT EXISTS {self.TABLE_NAME} (
-                key TEXT PRIMARY KEY,
-                data BLOB NOT NULL,
+                checkpoint_key {self._conn.dialect.text_column(indexed=True)} PRIMARY KEY,
+                data {self._conn.dialect.blob_type()} NOT NULL,
                 size_bytes INTEGER NOT NULL,
-                compressed BOOLEAN NOT NULL DEFAULT 0,
+                compressed BOOLEAN NOT NULL {self._conn.dialect.boolean_default(False)},
                 created_at TEXT NOT NULL,
                 accessed_at TEXT NOT NULL
             )
@@ -95,39 +95,31 @@ class DBCheckpointStore:
         # mark it as compressed.
         compressed = data[:2] == b"\x1f\x8b" if len(data) >= 2 else False
 
-        # Use INSERT OR REPLACE for upsert across all dialects that support it.
-        # For full dialect portability via QueryDialect.upsert(), we would need
-        # to add the method call, but INSERT OR REPLACE works on SQLite and
-        # ON CONFLICT ... DO UPDATE works identically.  We use the
-        # dialect-neutral approach here.
-        existing = await self._conn.fetchone(
-            f"SELECT key FROM {self.TABLE_NAME} WHERE key = ?",
-            key,
+        # Atomic upsert using dialect-aware ON CONFLICT / ON DUPLICATE KEY.
+        upsert_sql, param_cols = self._conn.dialect.upsert(
+            self.TABLE_NAME,
+            columns=[
+                "checkpoint_key",
+                "data",
+                "size_bytes",
+                "compressed",
+                "created_at",
+                "accessed_at",
+            ],
+            conflict_keys=["checkpoint_key"],
+            update_columns=["data", "size_bytes", "compressed", "accessed_at"],
         )
-
-        if existing:
-            await self._conn.execute(
-                f"UPDATE {self.TABLE_NAME} "
-                f"SET data = ?, size_bytes = ?, compressed = ?, accessed_at = ? "
-                f"WHERE key = ?",
-                data,
-                size_bytes,
-                compressed,
-                now,
-                key,
-            )
-        else:
-            await self._conn.execute(
-                f"INSERT INTO {self.TABLE_NAME} "
-                f"(key, data, size_bytes, compressed, created_at, accessed_at) "
-                f"VALUES (?, ?, ?, ?, ?, ?)",
-                key,
-                data,
-                size_bytes,
-                compressed,
-                now,
-                now,
-            )
+        # Build parameter values in the order returned by upsert()
+        params_map = {
+            "checkpoint_key": key,
+            "data": data,
+            "size_bytes": size_bytes,
+            "compressed": compressed,
+            "created_at": now,
+            "accessed_at": now,
+        }
+        params = [params_map[col] for col in param_cols]
+        await self._conn.execute(upsert_sql, *params)
 
         logger.debug(
             "Saved checkpoint '%s' (%d bytes, compressed=%s)",
@@ -150,7 +142,7 @@ class DBCheckpointStore:
             The stored data, or ``None`` if the key does not exist.
         """
         row = await self._conn.fetchone(
-            f"SELECT data FROM {self.TABLE_NAME} WHERE key = ?",
+            f"SELECT data FROM {self.TABLE_NAME} WHERE checkpoint_key = ?",
             key,
         )
 
@@ -160,7 +152,7 @@ class DBCheckpointStore:
         # Update accessed_at timestamp
         now = datetime.now(timezone.utc).isoformat()
         await self._conn.execute(
-            f"UPDATE {self.TABLE_NAME} SET accessed_at = ? WHERE key = ?",
+            f"UPDATE {self.TABLE_NAME} SET accessed_at = ? WHERE checkpoint_key = ?",
             now,
             key,
         )
@@ -178,7 +170,7 @@ class DBCheckpointStore:
             Checkpoint identifier.
         """
         await self._conn.execute(
-            f"DELETE FROM {self.TABLE_NAME} WHERE key = ?",
+            f"DELETE FROM {self.TABLE_NAME} WHERE checkpoint_key = ?",
             key,
         )
         logger.debug("Deleted checkpoint '%s'", key)
@@ -196,9 +188,13 @@ class DBCheckpointStore:
         list[str]
             Matching keys in alphabetical order.
         """
-        like_pattern = f"{prefix}%"
+        # Escape LIKE wildcards in prefix to prevent unintended matches.
+        # Use '!' as escape character — works across all SQL dialects.
+        escaped = prefix.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+        like_pattern = f"{escaped}%"
         rows = await self._conn.fetch(
-            f"SELECT key FROM {self.TABLE_NAME} " f"WHERE key LIKE ? ORDER BY key ASC",
+            f"SELECT checkpoint_key FROM {self.TABLE_NAME} "
+            f"WHERE checkpoint_key LIKE ? ESCAPE '!' ORDER BY checkpoint_key ASC",
             like_pattern,
         )
-        return [row["key"] for row in rows]
+        return [row["checkpoint_key"] for row in rows]

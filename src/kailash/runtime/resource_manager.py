@@ -26,7 +26,10 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Type, Union
 
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None  # Optional: pip install kailash[monitoring]
 
 from kailash.sdk_exceptions import CircuitBreakerOpenError, ResourceLimitExceededError
 

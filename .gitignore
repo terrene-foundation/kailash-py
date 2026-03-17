@@ -55,6 +55,8 @@ mcp_registry.db
 mcp_registry.json
 test-env
 *.db
+*.db-wal
+*.db-shm
 default.db
 
 # Kaizen checkpoints (local agent state)

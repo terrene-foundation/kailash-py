@@ -25,10 +25,7 @@ except ImportError:
         import aioredis as redis
     except ImportError:
         redis = None
-try:
-    import asyncpg
-except ImportError:
-    asyncpg = None
+asyncpg = None  # Lazy-loaded in PostgreSQLStorage methods
 
 
 class StorageBackend(ABC):
@@ -161,12 +158,19 @@ class PostgreSQLStorage(StorageBackend):
         self.username = username
         self.password = password
         self.table_name = table_name
-        self._pool: Optional[asyncpg.Pool] = None
+        self._pool = None
 
-    async def _get_pool(self) -> asyncpg.Pool:
-        """Get PostgreSQL connection pool."""
+    async def _get_pool(self):
+        """Get PostgreSQL connection pool (lazy-imports asyncpg)."""
         if self._pool is None:
-            self._pool = await asyncpg.create_pool(
+            try:
+                import asyncpg as _asyncpg
+            except ImportError as exc:
+                raise ImportError(
+                    "asyncpg is required for PostgreSQL storage. "
+                    "Install it with: pip install kailash[postgres]"
+                ) from exc
+            self._pool = await _asyncpg.create_pool(
                 host=self.host,
                 port=self.port,
                 database=self.database,
@@ -315,12 +319,19 @@ class PostgreSQLEventStorage:
         self.username = username
         self.password = password
         self.table_name = table_name
-        self._pool: Optional[asyncpg.Pool] = None
+        self._pool = None
 
-    async def _get_pool(self) -> asyncpg.Pool:
-        """Get PostgreSQL connection pool."""
+    async def _get_pool(self):
+        """Get PostgreSQL connection pool (lazy-imports asyncpg)."""
         if self._pool is None:
-            self._pool = await asyncpg.create_pool(
+            try:
+                import asyncpg as _asyncpg
+            except ImportError as exc:
+                raise ImportError(
+                    "asyncpg is required for PostgreSQL storage. "
+                    "Install it with: pip install kailash[postgres]"
+                ) from exc
+            self._pool = await _asyncpg.create_pool(
                 host=self.host,
                 port=self.port,
                 database=self.database,

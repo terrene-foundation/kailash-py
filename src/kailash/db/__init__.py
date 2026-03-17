@@ -26,6 +26,11 @@ from kailash.db.dialect import (
     SQLiteDialect,
     detect_dialect,
 )
+from kailash.db.migration import (
+    SCHEMA_VERSION,
+    check_schema_version,
+    stamp_schema_version,
+)
 from kailash.db.registry import resolve_database_url, resolve_queue_url
 
 __all__ = [
@@ -34,8 +39,11 @@ __all__ = [
     "MySQLDialect",
     "PostgresDialect",
     "QueryDialect",
+    "SCHEMA_VERSION",
     "SQLiteDialect",
+    "check_schema_version",
     "detect_dialect",
     "resolve_database_url",
     "resolve_queue_url",
+    "stamp_schema_version",
 ]

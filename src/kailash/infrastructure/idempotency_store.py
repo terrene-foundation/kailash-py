@@ -65,19 +65,20 @@ class DBIdempotencyStore:
         await self._conn.execute(
             f"""
             CREATE TABLE IF NOT EXISTS {self.TABLE_NAME} (
-                idempotency_key TEXT PRIMARY KEY,
+                idempotency_key {self._conn.dialect.text_column(indexed=True)} PRIMARY KEY,
                 fingerprint TEXT NOT NULL,
                 response_data TEXT NOT NULL,
                 status_code INTEGER NOT NULL,
-                headers TEXT DEFAULT '{{}}',
+                headers VARCHAR(4096) NOT NULL DEFAULT '{{}}',
                 created_at TEXT NOT NULL,
-                expires_at TEXT NOT NULL
+                expires_at {self._conn.dialect.text_column(indexed=True)} NOT NULL
             )
             """
         )
-        await self._conn.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_idempotency_expires "
-            f"ON {self.TABLE_NAME} (expires_at)"
+        await self._conn.create_index(
+            "idx_idempotency_expires",
+            self.TABLE_NAME,
+            "expires_at",
         )
         logger.info("IdempotencyStore table '%s' initialized", self.TABLE_NAME)
 
@@ -197,11 +198,6 @@ class DBIdempotencyStore:
         # Claims get a generous TTL (5 minutes) to allow processing time
         expires_at = (now + timedelta(minutes=5)).isoformat()
 
-        # Check if key already exists (and is not expired)
-        existing = await self.get(key)
-        if existing is not None:
-            return False
-
         _cols = [
             "idempotency_key",
             "fingerprint",
@@ -214,22 +210,27 @@ class DBIdempotencyStore:
         sql = self._conn.dialect.insert_ignore(
             self.TABLE_NAME, _cols, ["idempotency_key"]
         )
-        await self._conn.execute(
-            sql,
-            key,
-            fingerprint,
-            "{}",  # Empty placeholder response
-            0,  # status_code=0 indicates a claim in progress
-            "{}",
-            created_at,
-            expires_at,
-        )
 
-        # Verify the claim succeeded by checking the fingerprint
-        row = await self._conn.fetchone(
-            f"SELECT fingerprint FROM {self.TABLE_NAME} WHERE idempotency_key = ?",
-            key,
-        )
+        # Atomic claim: INSERT IGNORE then verify fingerprint in one txn
+        async with self._conn.transaction() as tx:
+            await tx.execute(
+                sql,
+                key,
+                fingerprint,
+                "{}",  # Empty placeholder response
+                0,  # status_code=0 indicates a claim in progress
+                "{}",
+                created_at,
+                expires_at,
+            )
+
+            # Verify the claim succeeded by checking the fingerprint
+            row = await tx.fetchone(
+                f"SELECT fingerprint FROM {self.TABLE_NAME} "
+                f"WHERE idempotency_key = ?",
+                key,
+            )
+
         if row is not None and row["fingerprint"] == fingerprint:
             logger.debug("Idempotency claimed: key=%s", key)
             return True

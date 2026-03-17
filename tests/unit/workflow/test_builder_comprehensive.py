@@ -164,21 +164,10 @@ class TestWorkflowBuilderAddNodePatterns:
         assert self.builder.nodes["test_node"]["config"]["param"] == "value"
 
     def test_add_node_pattern_2_legacy_fluent(self):
-        """Test Pattern 2: add_node('node_id', NodeClass, param=value)."""
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-
-            result = self.builder.add_node("test_node", MockNode, param="value")
-
-            # Legacy API returns self for fluent chaining
-            assert result == self.builder
-            assert len(w) == 1
-            assert issubclass(w[0].category, DeprecationWarning)
-            assert "Legacy fluent API usage detected" in str(w[0].message)
-
-        assert "test_node" in self.builder.nodes
-        assert self.builder.nodes["test_node"]["type"] == "MockNode"
-        assert self.builder.nodes["test_node"]["config"]["param"] == "value"
+        """Test Pattern 2: add_node('node_id', NodeClass, param=value) raises error in v1.0.0."""
+        # Legacy fluent API was removed in v1.0.0 — verify it raises WorkflowValidationError
+        with pytest.raises(WorkflowValidationError, match="removed in v1.0.0"):
+            self.builder.add_node("test_node", MockNode, param="value")
 
     def test_add_node_pattern_3_alternative(self):
         """Test Pattern 3: add_node(NodeClass, 'node_id', param=value)."""

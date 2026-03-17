@@ -30,10 +30,14 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from kailash.db.connection import ConnectionManager
+
+# Maximum entries in the in-memory execution store before LRU eviction.
+_MAX_INMEMORY_ENTRIES = 10000
 
 logger = logging.getLogger(__name__)
 
@@ -65,9 +69,9 @@ class DBExecutionStore:
         await self._conn.execute(
             f"""
             CREATE TABLE IF NOT EXISTS {self.TABLE_NAME} (
-                run_id TEXT PRIMARY KEY,
-                workflow_id TEXT,
-                status TEXT NOT NULL DEFAULT 'pending',
+                run_id {self._conn.dialect.text_column(indexed=True)} PRIMARY KEY,
+                workflow_id {self._conn.dialect.text_column(indexed=True)},
+                status {self._conn.dialect.text_column(indexed=True)} NOT NULL DEFAULT 'pending',
                 parameters TEXT,
                 result TEXT,
                 error TEXT,
@@ -78,17 +82,20 @@ class DBExecutionStore:
             )
             """
         )
-        await self._conn.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_executions_status "
-            f"ON {self.TABLE_NAME} (status)"
+        await self._conn.create_index(
+            "idx_executions_status",
+            self.TABLE_NAME,
+            "status",
         )
-        await self._conn.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_executions_workflow "
-            f"ON {self.TABLE_NAME} (workflow_id)"
+        await self._conn.create_index(
+            "idx_executions_workflow",
+            self.TABLE_NAME,
+            "workflow_id",
         )
-        await self._conn.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_executions_started "
-            f"ON {self.TABLE_NAME} (started_at)"
+        await self._conn.create_index(
+            "idx_executions_started",
+            self.TABLE_NAME,
+            "started_at",
         )
         logger.info("ExecutionStore table '%s' initialized", self.TABLE_NAME)
 
@@ -272,8 +279,9 @@ class InMemoryExecutionStore:
     single-process usage where persistence is not required.
     """
 
-    def __init__(self) -> None:
-        self._store: Dict[str, Dict[str, Any]] = {}
+    def __init__(self, max_entries: int = _MAX_INMEMORY_ENTRIES) -> None:
+        self._store: OrderedDict[str, Dict[str, Any]] = OrderedDict()
+        self._max_entries = max_entries
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -297,6 +305,9 @@ class InMemoryExecutionStore:
         worker_id: Optional[str] = None,
     ) -> None:
         """Record the start of a workflow execution in memory."""
+        # Evict oldest entries when at capacity
+        while len(self._store) >= self._max_entries:
+            self._store.popitem(last=False)
         now = datetime.now(timezone.utc).isoformat()
         self._store[run_id] = {
             "run_id": run_id,

@@ -62,6 +62,7 @@ if __name__ == "__main__":
 ## Template Variations
 
 ### CLI/Script Template (Sync)
+
 ```python
 #!/usr/bin/env python3
 """CLI Workflow Template for synchronous execution"""
@@ -99,6 +100,7 @@ if __name__ == "__main__":
 ```
 
 ### Docker/FastAPI Template (Async)
+
 ```python
 """FastAPI Workflow Template for asynchronous execution"""
 
@@ -142,6 +144,7 @@ async def execute_workflow(request: WorkflowRequest):
 ```
 
 ### Data Processing Template
+
 ```python
 """Data Processing Workflow Template"""
 
@@ -161,9 +164,9 @@ def create_etl_workflow(input_file: str, output_file: str):
     # Transform
     workflow.add_node("PythonCodeNode", "transform", {
         "code": """
-import pandas as pd
+import pandas as pd  # requires: pip install pandas
 df = pd.DataFrame(data)
-# TODO: Add your transformation logic
+# Add your transformation logic
 df['processed'] = df['value'] * 2
 result = df.to_dict('records')
 """
@@ -194,19 +197,21 @@ if __name__ == "__main__":
 ## Template Customization Guide
 
 ### Step 1: Choose Your Nodes
+
 Replace placeholders with actual node types based on your needs:
 
-| Need | Node Type | Example Config |
-|------|-----------|----------------|
-| **Read CSV** | `CSVReaderNode` | `{"file_path": "data.csv"}` |
-| **Read JSON** | `JSONReaderNode` | `{"file_path": "data.json"}` |
-| **API Call** | `HTTPRequestNode` | `{"url": "https://...", "method": "GET"}` |
+| Need               | Node Type              | Example Config                                 |
+| ------------------ | ---------------------- | ---------------------------------------------- |
+| **Read CSV**       | `CSVReaderNode`        | `{"file_path": "data.csv"}`                    |
+| **Read JSON**      | `JSONReaderNode`       | `{"file_path": "data.json"}`                   |
+| **API Call**       | `HTTPRequestNode`      | `{"url": "https://...", "method": "GET"}`      |
 | **Database Query** | `AsyncSQLDatabaseNode` | `{"connection_string": "...", "query": "..."}` |
-| **LLM Processing** | `LLMAgentNode` | `{"provider": "openai", "model": "gpt-4"}` |
-| **Custom Logic** | `PythonCodeNode` | `{"code": "result = {...}"}` |
-| **Write CSV** | `CSVWriterNode` | `{"file_path": "output.csv"}` |
+| **LLM Processing** | `LLMAgentNode`         | `{"provider": "openai", "model": "gpt-4"}`     |
+| **Custom Logic**   | `PythonCodeNode`       | `{"code": "result = {...}"}`                   |
+| **Write CSV**      | `CSVWriterNode`        | `{"file_path": "output.csv"}`                  |
 
 ### Step 2: Define Data Flow
+
 Connect your nodes using the 4-parameter pattern:
 
 ```python
@@ -219,6 +224,7 @@ workflow.add_connection(
 ```
 
 ### Step 3: Add Error Handling
+
 ```python
 try:
     results, run_id = runtime.execute(workflow.build())
@@ -238,12 +244,14 @@ except Exception as e:
 ## When to Escalate to Subagent
 
 Use `pattern-expert` subagent when:
+
 - Need custom node development
 - Implementing complex cyclic workflows
 - Advanced parameter passing patterns
 - Performance optimization required
 
 Use `tdd-implementer` subagent when:
+
 - Implementing test-first development
 - Need complete test coverage strategy
 - Building production-grade workflows
@@ -251,6 +259,7 @@ Use `tdd-implementer` subagent when:
 ## Documentation References
 
 ### Primary Sources
+
 - **Essential Pattern**: [`CLAUDE.md` (lines 106-137)](../../../../CLAUDE.md#L106-L137)
 
 ### Related Documentation

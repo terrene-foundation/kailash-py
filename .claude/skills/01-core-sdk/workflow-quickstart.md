@@ -64,6 +64,7 @@ print(results["processor"]["result"]["count"])  # Access via 'result' key
 ## Enhanced API Patterns (v0.6.6+)
 
 ### Auto ID Generation
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -76,6 +77,7 @@ workflow.add_connection(reader_id, "result", processor_id, "input_data")
 ```
 
 ### Flexible API Styles
+
 All these patterns are equivalent and work correctly:
 
 ```python
@@ -95,47 +97,54 @@ processor_id = workflow.add_node("PythonCodeNode", {"code": "..."})
 ## Key Parameters / Options
 
 ### add_node(node_type, node_id, config)
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `node_type` | str | Yes | Node class name as string (e.g., "CSVReaderNode") |
-| `node_id` | str | Yes* | Unique identifier for this node (*optional with auto-ID) |
-| `config` | dict | Yes | Node configuration parameters |
+
+| Parameter   | Type | Required | Description                                               |
+| ----------- | ---- | -------- | --------------------------------------------------------- |
+| `node_type` | str  | Yes      | Node class name as string (e.g., "CSVReaderNode")         |
+| `node_id`   | str  | Yes\*    | Unique identifier for this node (\*optional with auto-ID) |
+| `config`    | dict | Yes      | Node configuration parameters                             |
 
 ### add_connection(from_node, from_output, to_node, to_input)
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `from_node` | str | Yes | Source node ID |
-| `from_output` | str | Yes | Output field name from source |
-| `to_node` | str | Yes | Target node ID |
-| `to_input` | str | Yes | Input field name on target |
+
+| Parameter     | Type | Required | Description                   |
+| ------------- | ---- | -------- | ----------------------------- |
+| `from_node`   | str  | Yes      | Source node ID                |
+| `from_output` | str  | Yes      | Output field name from source |
+| `to_node`     | str  | Yes      | Target node ID                |
+| `to_input`    | str  | Yes      | Input field name on target    |
 
 ## Common Mistakes
 
 ### ❌ Mistake 1: Missing .build() Call
+
 ```python
 # Wrong - missing .build()
 results, run_id = runtime.execute(workflow)  # ERROR!
 ```
 
 ### ✅ Fix: Always Call .build()
+
 ```python
 # Correct
 results, run_id = runtime.execute(workflow.build())  # ✓
 ```
 
 ### ❌ Mistake 2: Wrong Connection Parameters (Only 3)
+
 ```python
 # Wrong - only 3 parameters (deprecated)
 workflow.add_connection("reader", "processor", "data")
 ```
 
 ### ✅ Fix: Use 4 Parameters
+
 ```python
 # Correct - 4 parameters (source + output → target + input)
 workflow.add_connection("reader", "data", "processor", "data")
 ```
 
 ### ❌ Mistake 3: Instance-Based Nodes
+
 ```python
 # Wrong - instance-based (deprecated)
 from kailash.nodes import CSVReaderNode
@@ -143,18 +152,21 @@ workflow.add_node("reader", CSVReaderNode(file_path="data.csv"))
 ```
 
 ### ✅ Fix: String-Based Nodes
+
 ```python
 # Correct - string-based (production pattern)
 workflow.add_node("CSVReaderNode", "reader", {"file_path": "data.csv"})
 ```
 
 ### ❌ Mistake 4: Wrong Execution Pattern
+
 ```python
 # Wrong - workflow doesn't have execute() method
 workflow.execute(runtime)  # ERROR!
 ```
 
 ### ✅ Fix: Runtime Executes Workflow
+
 ```python
 # Correct - runtime executes workflow
 runtime.execute(workflow.build())  # ✓
@@ -172,6 +184,7 @@ runtime.execute(workflow.build())  # ✓
 ## When to Escalate to Subagent
 
 Use `pattern-expert` subagent when:
+
 - Implementing complex cyclic workflows
 - Designing multi-path conditional logic
 - Debugging advanced parameter passing issues
@@ -179,6 +192,7 @@ Use `pattern-expert` subagent when:
 - Optimizing workflow performance
 
 Use `sdk-navigator` subagent when:
+
 - Need to find specific nodes for your use case
 - Looking for workflow examples in specific domains (finance, healthcare, etc.)
 - Exploring advanced features and enterprise patterns
@@ -186,6 +200,7 @@ Use `sdk-navigator` subagent when:
 ## Documentation References
 
 ### Primary Sources
+
 - **Essential Pattern**: [`CLAUDE.md` (lines 106-137)](../../../CLAUDE.md#L106-L137)
 
 ### Related Documentation
@@ -195,6 +210,7 @@ Use `sdk-navigator` subagent when:
 ## Examples
 
 ### Example 1: Simple CSV Processing
+
 ```python
 from kailash.workflow.builder import WorkflowBuilder
 from kailash.runtime.local import LocalRuntime
@@ -209,7 +225,7 @@ workflow.add_node("CSVReaderNode", "read_data", {
 # Transform data with PythonCodeNode
 workflow.add_node("PythonCodeNode", "transform", {
     "code": """
-import pandas as pd
+import pandas as pd  # requires: pip install pandas
 df = pd.DataFrame(data)
 df['total'] = df['quantity'] * df['price']
 result = df.to_dict('records')
@@ -232,6 +248,7 @@ print(f"Processed {len(results['transform']['result']['result'])} records")  # N
 ```
 
 ### Example 2: Data Processing ETL
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -266,6 +283,7 @@ print(f"Processed {results['load']['result']['saved']} items")
 ```
 
 ### Example 3: API Data Collection
+
 ```python
 workflow = WorkflowBuilder()
 
@@ -301,12 +319,12 @@ results, run_id = runtime.execute(workflow.build())
 
 ## Troubleshooting
 
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| `AttributeError: 'WorkflowBuilder' object has no attribute 'execute'` | Calling `.execute()` on workflow instead of runtime | Use `runtime.execute(workflow.build())` - see [`error-missing-build`](../../5-cross-cutti../15-error-troubleshooting/error-missing-build.md) |
-| `Node 'X' not found in workflow` | Node ID mismatch in connections | Verify node IDs match exactly between `add_node()` and `add_connection()` |
-| `TypeError: add_connection() takes 5 positional arguments but 4 were given` | Using old 3-parameter syntax | Update to 4 parameters: `(from_node, from_output, to_node, to_input)` |
-| `ValidationError: Missing required parameter 'X'` | Node config missing required fields | Check node documentation or use `node-patterns-common` for examples |
+| Issue                                                                       | Cause                                               | Solution                                                                                                                                     |
+| --------------------------------------------------------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AttributeError: 'WorkflowBuilder' object has no attribute 'execute'`       | Calling `.execute()` on workflow instead of runtime | Use `runtime.execute(workflow.build())` - see [`error-missing-build`](../../5-cross-cutti../15-error-troubleshooting/error-missing-build.md) |
+| `Node 'X' not found in workflow`                                            | Node ID mismatch in connections                     | Verify node IDs match exactly between `add_node()` and `add_connection()`                                                                    |
+| `TypeError: add_connection() takes 5 positional arguments but 4 were given` | Using old 3-parameter syntax                        | Update to 4 parameters: `(from_node, from_output, to_node, to_input)`                                                                        |
+| `ValidationError: Missing required parameter 'X'`                           | Node config missing required fields                 | Check node documentation or use `node-patterns-common` for examples                                                                          |
 
 ## Quick Tips
 

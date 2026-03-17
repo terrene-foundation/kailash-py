@@ -28,6 +28,35 @@ __all__ = [
     "detect_dialect",
 ]
 
+_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+_JSON_PATH_RE = re.compile(r"^[a-zA-Z0-9_.]+$")
+
+
+def _validate_identifier(name: str) -> None:
+    """Validate a SQL identifier (table or column name).
+
+    Raises
+    ------
+    ValueError
+        If *name* contains characters that could enable SQL injection.
+    """
+    if not _IDENTIFIER_RE.match(name):
+        raise ValueError(
+            f"Invalid SQL identifier '{name}': must match [a-zA-Z_][a-zA-Z0-9_]*"
+        )
+
+
+def _validate_json_path(path: str) -> None:
+    """Validate a JSON extraction path.
+
+    Raises
+    ------
+    ValueError
+        If *path* contains characters that could enable SQL injection.
+    """
+    if not _JSON_PATH_RE.match(path):
+        raise ValueError(f"Invalid JSON path '{path}': must match [a-zA-Z0-9_.]+")
+
 
 # ---------------------------------------------------------------------------
 # DatabaseType enum
@@ -121,10 +150,53 @@ class QueryDialect(ABC):
 
         Returns SQL with ``?`` placeholders.
         """
+        _validate_identifier(table)
+        for col in columns:
+            _validate_identifier(col)
+        for key in conflict_keys:
+            _validate_identifier(key)
         cols = ", ".join(columns)
         placeholders = ", ".join(["?"] * len(columns))
         conflict = ", ".join(conflict_keys)
         return f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT ({conflict}) DO NOTHING"
+
+    def auto_id_column(self) -> str:
+        """Return the auto-incrementing primary key column DDL fragment.
+
+        PostgreSQL: ``id SERIAL PRIMARY KEY``
+        MySQL: ``id INTEGER PRIMARY KEY AUTO_INCREMENT``
+        SQLite: ``id INTEGER PRIMARY KEY``
+        """
+        return "id INTEGER PRIMARY KEY"
+
+    def text_column(self, indexed: bool = False) -> str:
+        """Return the text column type.
+
+        For indexed columns, MySQL requires ``VARCHAR(255)`` instead of
+        ``TEXT`` because MySQL cannot index ``TEXT`` without a key length.
+
+        Parameters
+        ----------
+        indexed:
+            If ``True``, returns a type suitable for use in indexes/unique
+            constraints.  Default ``False`` returns unbounded ``TEXT``.
+        """
+        return "TEXT"
+
+    def boolean_default(self, value: bool) -> str:
+        """Return a boolean default expression.
+
+        PostgreSQL: ``DEFAULT TRUE`` / ``DEFAULT FALSE``
+        MySQL/SQLite: ``DEFAULT 1`` / ``DEFAULT 0``
+        """
+        return f"DEFAULT {1 if value else 0}"
+
+    def blob_type(self) -> str:
+        """Return the binary data column type.
+
+        PostgreSQL: ``BYTEA``, MySQL/SQLite: ``BLOB``.
+        """
+        return "BLOB"
 
     @abstractmethod
     def json_column_type(self) -> str:
@@ -181,8 +253,15 @@ class PostgresDialect(QueryDialect):
         conflict_keys: List[str],
         update_columns: Optional[List[str]] = None,
     ) -> Tuple[str, List[str]]:
+        _validate_identifier(table)
+        for col in columns:
+            _validate_identifier(col)
+        for key in conflict_keys:
+            _validate_identifier(key)
         if update_columns is None:
             update_columns = [c for c in columns if c not in conflict_keys]
+        for col in update_columns:
+            _validate_identifier(col)
 
         placeholders = ", ".join(self.placeholder(i) for i in range(len(columns)))
         col_list = ", ".join(columns)
@@ -195,10 +274,21 @@ class PostgresDialect(QueryDialect):
         )
         return sql, list(columns)
 
+    def auto_id_column(self) -> str:
+        return "id SERIAL PRIMARY KEY"
+
+    def boolean_default(self, value: bool) -> str:
+        return f"DEFAULT {'TRUE' if value else 'FALSE'}"
+
+    def blob_type(self) -> str:
+        return "BYTEA"
+
     def json_column_type(self) -> str:
         return "JSONB"
 
     def json_extract(self, column: str, path: str) -> str:
+        _validate_identifier(column)
+        _validate_json_path(path)
         return f"{column}->>'{path}'"
 
     def for_update_skip_locked(self) -> str:
@@ -230,8 +320,15 @@ class MySQLDialect(QueryDialect):
         conflict_keys: List[str],
         update_columns: Optional[List[str]] = None,
     ) -> Tuple[str, List[str]]:
+        _validate_identifier(table)
+        for col in columns:
+            _validate_identifier(col)
+        for key in conflict_keys:
+            _validate_identifier(key)
         if update_columns is None:
             update_columns = [c for c in columns if c not in conflict_keys]
+        for col in update_columns:
+            _validate_identifier(col)
 
         placeholders = ", ".join(self.placeholder(i) for i in range(len(columns)))
         col_list = ", ".join(columns)
@@ -246,14 +343,37 @@ class MySQLDialect(QueryDialect):
     def insert_ignore(
         self, table: str, columns: List[str], conflict_keys: List[str]
     ) -> str:
+        _validate_identifier(table)
+        for col in columns:
+            _validate_identifier(col)
+        for key in conflict_keys:
+            _validate_identifier(key)
         cols = ", ".join(columns)
-        placeholders = ", ".join(["%s"] * len(columns))
+        placeholders = ", ".join(["?"] * len(columns))
         return f"INSERT IGNORE INTO {table} ({cols}) VALUES ({placeholders})"
+
+    def auto_id_column(self) -> str:
+        return "id INTEGER PRIMARY KEY AUTO_INCREMENT"
+
+    def text_column(self, indexed: bool = False) -> str:
+        return "VARCHAR(255)" if indexed else "TEXT"
+
+    def blob_type(self) -> str:
+        return "LONGBLOB"
+
+    def create_index_prefix(self) -> str:
+        """Return the CREATE INDEX statement prefix.
+
+        MySQL does not support ``IF NOT EXISTS`` on ``CREATE INDEX``.
+        """
+        return "CREATE INDEX"
 
     def json_column_type(self) -> str:
         return "JSON"
 
     def json_extract(self, column: str, path: str) -> str:
+        _validate_identifier(column)
+        _validate_json_path(path)
         return f"JSON_EXTRACT({column}, '$.{path}')"
 
     def for_update_skip_locked(self) -> str:
@@ -287,8 +407,15 @@ class SQLiteDialect(QueryDialect):
         conflict_keys: List[str],
         update_columns: Optional[List[str]] = None,
     ) -> Tuple[str, List[str]]:
+        _validate_identifier(table)
+        for col in columns:
+            _validate_identifier(col)
+        for key in conflict_keys:
+            _validate_identifier(key)
         if update_columns is None:
             update_columns = [c for c in columns if c not in conflict_keys]
+        for col in update_columns:
+            _validate_identifier(col)
 
         placeholders = ", ".join("?" for _ in columns)
         col_list = ", ".join(columns)
@@ -305,6 +432,8 @@ class SQLiteDialect(QueryDialect):
         return "TEXT"
 
     def json_extract(self, column: str, path: str) -> str:
+        _validate_identifier(column)
+        _validate_json_path(path)
         return f"json_extract({column}, '$.{path}')"
 
     def for_update_skip_locked(self) -> str:

@@ -74,18 +74,22 @@ class TestRedisEnqueueDequeueExecute:
         from kailash.runtime.local import LocalRuntime
         from kailash.workflow.builder import WorkflowBuilder
 
-        # 1. Build a simple 2-node workflow: StartNode -> PythonCodeNode
+        # 1. Build a simple 2-node workflow: PythonCodeNode -> PythonCodeNode
         builder = WorkflowBuilder()
-        builder.add_node("StartNode", "start", {})
+        builder.add_node(
+            "PythonCodeNode",
+            "start",
+            {"code": "result = {'value': 21}"},
+        )
         builder.add_node(
             "PythonCodeNode",
             "compute",
             {
                 "code": "result = input_data.get('value', 0) * 2",
-                "input_data": "{{start.output}}",
+                "input_data": "{{start.result}}",
             },
         )
-        builder.connect("start", "output", "compute", "input_data")
+        builder.connect("start", "compute", from_output="result", to_input="input_data")
         workflow = builder.build()
 
         # 2. Enqueue via DistributedRuntime
@@ -112,10 +116,10 @@ class TestRedisEnqueueDequeueExecute:
 
         # 4. Execute via LocalRuntime (simulating what Worker does)
         local_runtime = LocalRuntime()
-        built = reconstructed.build() if hasattr(reconstructed, "build") else reconstructed
-        results, local_run_id = local_runtime.execute(
-            built, parameters=task.parameters
+        built = (
+            reconstructed.build() if hasattr(reconstructed, "build") else reconstructed
         )
+        results, local_run_id = local_runtime.execute(built, parameters=task.parameters)
 
         assert results is not None, "Execution must produce results"
         logger.info("Execution results: %s", results)
@@ -137,7 +141,7 @@ class TestRedisEnqueueDequeueExecute:
 
         # Build a trivial workflow
         builder = WorkflowBuilder()
-        builder.add_node("StartNode", "start", {})
+        builder.add_node("PythonCodeNode", "start", {"code": "result = 42"})
         workflow = builder.build()
 
         # Enqueue
@@ -175,10 +179,13 @@ class TestRedisEnqueueDequeueExecute:
         # Verify result is stored
         result = queue.get_result(run_id)
         assert result is not None, "Worker must store a result after execution"
-        assert result.status in ("completed", "failed"), (
-            f"Expected completed or failed, got {result.status}"
+        assert result.status in (
+            "completed",
+            "failed",
+        ), f"Expected completed or failed, got {result.status}"
+        logger.info(
+            "Worker result: status=%s, data=%s", result.status, result.result_data
         )
-        logger.info("Worker result: status=%s, data=%s", result.status, result.result_data)
 
     async def test_queue_metrics(self, _flush_redis):
         """Queue length and processing length are correctly tracked."""

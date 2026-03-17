@@ -19,10 +19,13 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+
+_TABLE_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +115,11 @@ class SQLTaskQueue:
         table_name: str = "kailash_task_queue",
         default_visibility_timeout: int = 300,
     ) -> None:
+        if not _TABLE_NAME_RE.match(table_name):
+            raise ValueError(
+                f"Invalid table name '{table_name}': "
+                f"must match [a-zA-Z_][a-zA-Z0-9_]*"
+            )
         self._conn = conn
         self._table = table_name
         self._default_visibility_timeout = default_visibility_timeout
@@ -125,12 +133,13 @@ class SQLTaskQueue:
         if self._initialized:
             return
 
+        _tc = self._conn.dialect.text_column(indexed=True)
         await self._conn.execute(
             f"CREATE TABLE IF NOT EXISTS {self._table} ("
-            "task_id TEXT PRIMARY KEY, "
-            "queue_name TEXT NOT NULL DEFAULT 'default', "
+            f"task_id {_tc} PRIMARY KEY, "
+            f"queue_name {_tc} NOT NULL DEFAULT 'default', "
             "payload TEXT NOT NULL, "
-            "status TEXT NOT NULL DEFAULT 'pending', "
+            f"status {_tc} NOT NULL DEFAULT 'pending', "
             "created_at REAL NOT NULL, "
             "updated_at REAL NOT NULL, "
             "attempts INTEGER NOT NULL DEFAULT 0, "
@@ -142,15 +151,17 @@ class SQLTaskQueue:
         )
 
         # Index for efficient dequeue: pending tasks ordered by creation time
-        await self._conn.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_{self._table}_dequeue "
-            f"ON {self._table} (status, created_at)"
+        await self._conn.create_index(
+            f"idx_{self._table}_dequeue",
+            self._table,
+            "status, created_at",
         )
 
         # Index for stale processing detection
-        await self._conn.execute(
-            f"CREATE INDEX IF NOT EXISTS idx_{self._table}_stale "
-            f"ON {self._table} (status, updated_at)"
+        await self._conn.create_index(
+            f"idx_{self._table}_stale",
+            self._table,
+            "status, updated_at",
         )
 
         self._initialized = True
@@ -186,7 +197,11 @@ class SQLTaskQueue:
         """
         tid = task_id or str(uuid.uuid4())
         now = time.time()
-        vt = visibility_timeout if visibility_timeout is not None else self._default_visibility_timeout
+        vt = (
+            visibility_timeout
+            if visibility_timeout is not None
+            else self._default_visibility_timeout
+        )
 
         await self._conn.execute(
             f"INSERT INTO {self._table} "
@@ -234,35 +249,38 @@ class SQLTaskQueue:
         now = time.time()
         lock_clause = self._conn.dialect.for_update_skip_locked()
 
-        # Find the oldest pending task
-        select_sql = (
-            f"SELECT task_id FROM {self._table} "
-            f"WHERE queue_name = ? AND status = 'pending' "
-            f"ORDER BY created_at ASC LIMIT 1"
-        )
-        if lock_clause:
-            select_sql += f" {lock_clause}"
+        # Atomic dequeue: SELECT + UPDATE within a single transaction
+        async with self._conn.transaction() as tx:
+            # Find the oldest pending task
+            select_sql = (
+                f"SELECT task_id FROM {self._table} "
+                f"WHERE queue_name = ? AND status = 'pending' "
+                f"ORDER BY created_at ASC LIMIT 1"
+            )
+            if lock_clause:
+                select_sql += f" {lock_clause}"
 
-        row = await self._conn.fetchone(select_sql, queue_name)
-        if row is None:
-            return None
+            row = await tx.fetchone(select_sql, queue_name)
+            if row is None:
+                return None
 
-        tid = row["task_id"]
+            tid = row["task_id"]
 
-        # Claim the task
-        await self._conn.execute(
-            f"UPDATE {self._table} SET status = 'processing', "
-            "worker_id = ?, updated_at = ?, attempts = attempts + 1 "
-            "WHERE task_id = ? AND status = 'pending'",
-            worker_id,
-            now,
-            tid,
-        )
+            # Claim the task
+            await tx.execute(
+                f"UPDATE {self._table} SET status = 'processing', "
+                "worker_id = ?, updated_at = ?, attempts = attempts + 1 "
+                "WHERE task_id = ? AND status = 'pending'",
+                worker_id,
+                now,
+                tid,
+            )
 
-        # Fetch the full task
-        full = await self._conn.fetchone(
-            f"SELECT * FROM {self._table} WHERE task_id = ?", tid
-        )
+            # Fetch the full task
+            full = await tx.fetchone(
+                f"SELECT * FROM {self._table} WHERE task_id = ?", tid
+            )
+
         if full is None or full["status"] != "processing":
             return None  # Another worker claimed it
 
@@ -300,27 +318,30 @@ class SQLTaskQueue:
             Error description.
         """
         now = time.time()
-        row = await self._conn.fetchone(
-            f"SELECT attempts, max_attempts FROM {self._table} WHERE task_id = ?",
-            task_id,
-        )
-        if row is None:
-            logger.warning("Cannot fail task %s: not found", task_id)
-            return
 
-        if row["attempts"] >= row["max_attempts"]:
-            new_status = "dead_lettered"
-        else:
-            new_status = "pending"
+        async with self._conn.transaction() as tx:
+            row = await tx.fetchone(
+                f"SELECT attempts, max_attempts FROM {self._table} WHERE task_id = ?",
+                task_id,
+            )
+            if row is None:
+                logger.warning("Cannot fail task %s: not found", task_id)
+                return
 
-        await self._conn.execute(
-            f"UPDATE {self._table} SET status = ?, error = ?, "
-            "updated_at = ?, worker_id = '' WHERE task_id = ?",
-            new_status,
-            error,
-            now,
-            task_id,
-        )
+            if row["attempts"] >= row["max_attempts"]:
+                new_status = "dead_lettered"
+            else:
+                new_status = "pending"
+
+            await tx.execute(
+                f"UPDATE {self._table} SET status = ?, error = ?, "
+                "updated_at = ?, worker_id = '' WHERE task_id = ?",
+                new_status,
+                error,
+                now,
+                task_id,
+            )
+
         logger.debug("Task %s -> %s (error: %s)", task_id, new_status, error[:80])
 
     async def requeue_stale(self, queue_name: str = "default") -> int:
