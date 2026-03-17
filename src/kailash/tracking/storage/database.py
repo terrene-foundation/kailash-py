@@ -2,6 +2,7 @@
 
 import json
 import logging
+import math
 import re
 import threading
 from datetime import UTC, datetime
@@ -435,6 +436,8 @@ class SQLiteStorage(StorageBackend):
         if isinstance(value, int):
             return ("int", None, value, None, None)
         if isinstance(value, float):
+            if not math.isfinite(value):
+                raise ValueError(f"Search attribute values must be finite: {value}")
             return ("float", None, None, value, None)
         if isinstance(value, datetime):
             return ("datetime", None, None, None, value.isoformat())
@@ -783,7 +786,9 @@ class SQLiteStorage(StorageBackend):
                 query += " AND result = ?"
                 params.append(filters["result"])
 
-            query += " ORDER BY timestamp DESC"
+            query += " ORDER BY timestamp DESC LIMIT ?"
+            limit = min(filters.get("limit", 10000), 10000)
+            params.append(limit)
 
             cursor.execute(query, params)
 

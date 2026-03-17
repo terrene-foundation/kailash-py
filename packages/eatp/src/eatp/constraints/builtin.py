@@ -39,6 +39,7 @@ Created: 2026-02-08
 
 import fnmatch
 import logging
+import math
 import re
 from datetime import datetime, time, timezone
 from typing import Any, Dict, List, Optional, Set, Union
@@ -96,6 +97,8 @@ class CostLimitDimension(ConstraintDimension):
         except (TypeError, ValueError) as e:
             raise ValueError(f"Cannot parse cost limit: {value}") from e
 
+        if not math.isfinite(parsed):
+            raise ValueError(f"Cost limit must be finite: {parsed}")
         if parsed < 0:
             raise ValueError(f"Cost limit must be non-negative: {parsed}")
 
