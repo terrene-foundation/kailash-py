@@ -147,16 +147,19 @@ done
 2. Run linting and formatting checks (`black --check`, `ruff check`)
 3. Update CHANGELOG.md for each package being released
 4. Security review (MANDATORY)
-5. **Update README.md** (MANDATORY for minor/major releases)
-   - Verify "Why Kailash?" section reflects new capabilities
-   - Update architecture diagram version number
-   - Verify all feature claims match actual implementation (no overselling)
+5. **Update README.md** (MANDATORY for minor/major releases — BLOCKS release if skipped)
+   - Verify "Why Kailash?" section reflects new capabilities added in this release
+   - Update architecture diagram version number to match release version
+   - Verify all feature claims match actual implementation (no overselling — R4 audit checks this)
    - Check that new entry points, CLI commands, or REST endpoints are documented
-6. **Verify Sphinx docs build** (MANDATORY)
-   - Run `cd docs && python build_docs.py` locally — must succeed
-   - Verify new module docstrings appear in API reference
-   - Check that docstrings updated during implementation (TODO-035 pattern) are accurate
+   - Run: `grep -c 'v0.XX.X' README.md` to confirm version appears
+   - **BLOCK release if README still references old version or omits major new features**
+6. **Verify Sphinx docs build** (MANDATORY — BLOCKS release if build fails)
+   - Run `cd docs && python build_docs.py` locally — must succeed with zero errors
+   - Verify new module docstrings appear in API reference (spot-check 3 new modules)
+   - Check that docstrings updated during implementation are accurate (no stale "TODO" or "simulated" claims)
    - The `docs-deploy.yml` CI workflow auto-deploys on push to main when `docs/**`, `README.md`, or `CHANGELOG.md` change
+   - **BLOCK release if Sphinx build fails or new modules are missing from API reference**
 
 #### Step 4: Build and Validate
 

@@ -48,7 +48,17 @@ Improve skills in their canonical locations (e.g., `skills/01-core-sdk/`, `skill
 - Skills must be as detailed as possible so agents can deliver most of their work just by using them
 - Should REFERENCE instead of repeating the knowledge base in `docs/`
 
-### 4. Red team the agents and skills
+### 4. Update README.md and documentation (MANDATORY)
+
+After updating agents and skills, ensure user-facing documentation reflects the new capabilities:
+
+1. **README.md** — Verify "Why Kailash?" section includes all new capabilities. Update version numbers in architecture diagram. Ensure no feature claims exceed actual implementation.
+2. **Docstrings** — Verify all modified source files have accurate docstrings (no stale claims from pre-implementation state). Run `grep -r "TODO\|FIXME\|STUB" src/` to catch stragglers.
+3. **Sphinx docs build** — Run `cd docs && python build_docs.py` locally to verify the docs build succeeds and new modules appear in the API reference. The CI workflow (`docs-deploy.yml`) auto-deploys on push to main, but a local build catches errors before push.
+
+**This step was missed in the v0.13.0 release and caught post-release. Never skip it.**
+
+### 5. Red team the agents and skills
 
 Validate that generated agents and skills are correct, complete, and secure.
 
