@@ -36,6 +36,7 @@ Examples:
 
 import asyncio
 import hashlib
+import json
 import logging
 import threading
 import time
@@ -183,6 +184,25 @@ def _get_execution_planner():
 
         _DynamicExecutionPlanner = DynamicExecutionPlanner
     return _DynamicExecutionPlanner
+
+
+def _safe_serialize(data: Any, max_size: int = 10000) -> Any:
+    """Serialize data for audit trail, truncating oversized values.
+
+    Args:
+        data: The data to serialize.
+        max_size: Maximum JSON string length before truncation.
+
+    Returns:
+        The original data if within limits, or a truncation summary dict.
+    """
+    try:
+        s = json.dumps(data)
+        if len(s) > max_size:
+            return {"_truncated": True, "_size": len(s), "_preview": s[:1000]}
+        return data
+    except (TypeError, ValueError):
+        return {"_type": str(type(data)), "_str": str(data)[:1000]}
 
 
 class LocalRuntime(
@@ -702,6 +722,7 @@ class LocalRuntime(
         task_manager: TaskManager | None = None,
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
         cancellation_token: CancellationToken | None = None,
+        search_attributes: Optional[Dict[str, Any]] = None,
     ) -> tuple[dict[str, Any], str | None]:
         """
         Execute a workflow synchronously.
@@ -804,6 +825,7 @@ class LocalRuntime(
                         task_manager=task_manager,
                         parameters=parameters,
                         cancellation_token=cancellation_token,
+                        search_attributes=search_attributes,
                     )
             else:
                 return self._execute_sync(
@@ -811,6 +833,7 @@ class LocalRuntime(
                     task_manager=task_manager,
                     parameters=parameters,
                     cancellation_token=cancellation_token,
+                    search_attributes=search_attributes,
                 )
         except RuntimeError:
             # No event loop running, use persistent loop
@@ -844,6 +867,7 @@ class LocalRuntime(
                             task_manager=task_manager,
                             parameters=parameters,
                             cancellation_token=cancellation_token,
+                            search_attributes=search_attributes,
                         )
                     )
             else:
@@ -854,6 +878,7 @@ class LocalRuntime(
                         task_manager=task_manager,
                         parameters=parameters,
                         cancellation_token=cancellation_token,
+                        search_attributes=search_attributes,
                     )
                 )
 
@@ -864,6 +889,7 @@ class LocalRuntime(
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
         cancellation_token: CancellationToken | None = None,
         execution_tracker: ExecutionTracker | None = None,
+        search_attributes: Optional[Dict[str, Any]] = None,
     ) -> tuple[dict[str, Any], str | None]:
         """Execute a workflow asynchronously (for AsyncLocalRuntime compatibility).
 
@@ -876,6 +902,8 @@ class LocalRuntime(
                 When provided, completed nodes are skipped and their cached
                 outputs are replayed.  New completions are recorded into the
                 tracker for subsequent checkpoint captures.
+            search_attributes: Optional typed key-value pairs for indexing
+                and querying workflow runs.
 
         Returns:
             Tuple of (results dict, run_id).
@@ -892,6 +920,7 @@ class LocalRuntime(
             parameters=parameters,
             cancellation_token=cancellation_token,
             execution_tracker=execution_tracker,
+            search_attributes=search_attributes,
         )
 
     # === Signal/Query Public API (TODO-010) ===
@@ -1415,6 +1444,7 @@ class LocalRuntime(
         task_manager: TaskManager | None = None,
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
         cancellation_token: CancellationToken | None = None,
+        search_attributes: Optional[Dict[str, Any]] = None,
     ) -> tuple[dict[str, Any], str | None]:
         """Execute workflow synchronously when already in an event loop.
 
@@ -1427,6 +1457,7 @@ class LocalRuntime(
             task_manager: Optional task manager for tracking.
             parameters: Optional parameter overrides per node.
             cancellation_token: Optional token to request cancellation.
+            search_attributes: Optional typed key-value pairs for indexing.
 
         Returns:
             Tuple of (results dict, run_id).
@@ -1455,6 +1486,7 @@ class LocalRuntime(
                         task_manager=task_manager,
                         parameters=parameters,
                         cancellation_token=cancellation_token,
+                        search_attributes=search_attributes,
                     )
                 )
                 result_container.append(result)
@@ -1498,6 +1530,7 @@ class LocalRuntime(
         parameters: dict[str, dict[str, Any]] | dict[str, Any] | None = None,
         cancellation_token: CancellationToken | None = None,
         execution_tracker: ExecutionTracker | None = None,
+        search_attributes: Optional[Dict[str, Any]] = None,
     ) -> tuple[dict[str, Any], str | None]:
         """Core async execution implementation with enterprise features.
 
@@ -1517,6 +1550,7 @@ class LocalRuntime(
             parameters: Optional parameter overrides per node.
             cancellation_token: Optional token to request cancellation.
             execution_tracker: Optional tracker for checkpoint/restore.
+            search_attributes: Optional typed key-value pairs for indexing.
 
         Returns:
             Tuple of (results dict, run_id).
@@ -1651,6 +1685,16 @@ class LocalRuntime(
                             "user_context": self._serialize_user_context(),
                         },
                     )
+                    # Set search attributes on the new run
+                    if search_attributes and run_id:
+                        try:
+                            task_manager.set_search_attributes(
+                                run_id, search_attributes
+                            )
+                        except Exception as sa_err:
+                            self.logger.warning(
+                                f"Failed to set search attributes: {sa_err}"
+                            )
                 except Exception as e:
                     self.logger.warning(f"Failed to create task run: {e}")
                     # Continue without tracking
@@ -2032,6 +2076,21 @@ class LocalRuntime(
         # Track completed nodes for cancellation reporting
         completed_nodes: list[str] = []
 
+        # Execution audit trail: collect detailed events for forensic traceability
+        _audit_events: list[dict] = []
+        _workflow_start_time = time.monotonic()
+
+        # Emit WORKFLOW_STARTED event
+        _audit_events.append(
+            {
+                "type": "WORKFLOW_STARTED",
+                "workflow_id": getattr(workflow, "workflow_id", "") or "",
+                "workflow_name": getattr(workflow, "name", "") or "",
+                "node_count": len(execution_order),
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
+
         # Execute each node
         for node_id in execution_order:
             # Cancellation check: between node executions, check token
@@ -2284,6 +2343,19 @@ class LocalRuntime(
                     f"Node {node_id} completed successfully in {performance_metrics.duration:.3f}s"
                 )
 
+                # Execution audit trail: NODE_EXECUTED event
+                _audit_events.append(
+                    {
+                        "type": "NODE_EXECUTED",
+                        "node_id": node_id,
+                        "node_type": node_instance.__class__.__name__,
+                        "inputs": _safe_serialize(inputs),
+                        "outputs": _safe_serialize(outputs),
+                        "duration_ms": performance_metrics.duration * 1000,
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    }
+                )
+
                 # OpenTelemetry tracing (TODO-014): end node span on success
                 _tracer.set_attribute(
                     _node_span, "node.duration_s", performance_metrics.duration
@@ -2305,6 +2377,19 @@ class LocalRuntime(
 
                 failed_nodes.append(node_id)
                 self.logger.error(f"Node {node_id} failed: {e}", exc_info=self.debug)
+
+                # Execution audit trail: NODE_FAILED event
+                _node_fail_time = time.monotonic()
+                _audit_events.append(
+                    {
+                        "type": "NODE_FAILED",
+                        "node_id": node_id,
+                        "node_type": node_instance.__class__.__name__,
+                        "inputs": _safe_serialize(inputs),
+                        "error": str(e),
+                        "timestamp": datetime.now(UTC).isoformat(),
+                    }
+                )
 
                 # Update task status
                 if task and task_manager:
@@ -2350,6 +2435,65 @@ class LocalRuntime(
 
         # Clean up workflow context
         self._current_workflow_context = None
+
+        # Execution audit trail: WORKFLOW_COMPLETED or WORKFLOW_FAILED
+        _workflow_total_ms = (time.monotonic() - _workflow_start_time) * 1000
+        if failed_nodes:
+            _audit_events.append(
+                {
+                    "type": "WORKFLOW_FAILED",
+                    "workflow_id": getattr(workflow, "workflow_id", "") or "",
+                    "error": f"Failed nodes: {failed_nodes}",
+                    "nodes_completed": len(completed_nodes),
+                    "failed_node_id": failed_nodes[-1] if failed_nodes else None,
+                    "total_duration_ms": _workflow_total_ms,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+            )
+        else:
+            _audit_events.append(
+                {
+                    "type": "WORKFLOW_COMPLETED",
+                    "workflow_id": getattr(workflow, "workflow_id", "") or "",
+                    "total_duration_ms": _workflow_total_ms,
+                    "nodes_executed": len(completed_nodes),
+                    "nodes_skipped": len(execution_order) - len(completed_nodes),
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+            )
+
+        # Persist audit trail events via task_manager storage if available
+        if task_manager and hasattr(task_manager.storage, "save_audit_events"):
+            try:
+                from uuid import uuid4 as _uuid4
+
+                enriched_events = []
+                for evt in _audit_events:
+                    enriched_events.append(
+                        {
+                            "event_id": str(_uuid4()),
+                            "event_type": evt.get("type", "UNKNOWN"),
+                            "timestamp": evt.get("timestamp", ""),
+                            "trace_id": run_id or "",
+                            "result": (
+                                "failure"
+                                if evt.get("type", "").endswith("FAILED")
+                                else "success"
+                            ),
+                            "workflow_id": evt.get("workflow_id", ""),
+                            "node_id": evt.get("node_id"),
+                            "context": evt,
+                        }
+                    )
+                task_manager.storage.save_audit_events(enriched_events)
+            except Exception as audit_err:
+                self.logger.warning(
+                    "Failed to persist execution audit trail: %s", audit_err
+                )
+
+        # Store audit events in workflow context for programmatic access
+        if workflow_context is not None:
+            workflow_context["_audit_trail"] = _audit_events
 
         # OpenTelemetry tracing (TODO-014): end workflow span
         if failed_nodes:

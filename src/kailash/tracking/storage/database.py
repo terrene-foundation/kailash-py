@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import threading
 from datetime import UTC, datetime
 from typing import Any
@@ -12,12 +13,15 @@ from .base import StorageBackend
 
 logger = logging.getLogger(__name__)
 
+# Regex for validating search attribute names (safe identifier pattern)
+_ATTR_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
 
 class SQLiteStorage(StorageBackend):
     """Optimized SQLite storage backend with WAL mode and inline metrics."""
 
     # Schema version for migrations
-    SCHEMA_VERSION = 1
+    SCHEMA_VERSION = 2
 
     def __init__(self, db_path: str | None = None):
         """Initialize with optimized pragmas and WAL mode.
@@ -85,16 +89,29 @@ class SQLiteStorage(StorageBackend):
             "SELECT version FROM schema_version ORDER BY version DESC LIMIT 1"
         )
         result = cursor.fetchone()
-        current_version = result[0] if result else 0
+        try:
+            current_version = int(result[0]) if result else 0
+        except (TypeError, ValueError):
+            current_version = 0
 
-        # Only initialize if schema doesn't exist
+        # Fresh database: create all schemas
         if current_version == 0:
             self._create_schema_v1()
+            self._create_schema_v2()
             cursor.execute(
                 "INSERT INTO schema_version (version, upgraded_at) VALUES (?, ?)",
                 (self.SCHEMA_VERSION, datetime.now(UTC).isoformat()),
             )
             self.conn.commit()
+        else:
+            # Incremental migrations
+            if current_version < 2:
+                self._migrate_to_v2()
+                cursor.execute(
+                    "INSERT INTO schema_version (version, upgraded_at) VALUES (?, ?)",
+                    (2, datetime.now(UTC).isoformat()),
+                )
+                self.conn.commit()
 
     def _create_schema_v1(self) -> None:
         """Create schema version 1 with inlined metrics and audit events."""
@@ -192,6 +209,237 @@ class SQLiteStorage(StorageBackend):
         )
 
         self.conn.commit()
+
+    def _create_schema_v2(self) -> None:
+        """Create schema version 2: workflow search attributes table."""
+        cursor = self.conn.cursor()
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS workflow_search_attributes (
+                run_id      TEXT NOT NULL,
+                attr_name   TEXT NOT NULL,
+                attr_type   TEXT NOT NULL CHECK (attr_type IN ('text', 'int', 'float', 'datetime', 'bool')),
+                text_value  TEXT,
+                int_value   INTEGER,
+                float_value REAL,
+                dt_value    TEXT,
+                PRIMARY KEY (run_id, attr_name)
+            )
+        """
+        )
+
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sa_name_text ON workflow_search_attributes(attr_name, text_value)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_sa_name_int ON workflow_search_attributes(attr_name, int_value)"
+        )
+
+        self.conn.commit()
+
+    def _migrate_to_v2(self) -> None:
+        """Migrate from schema v1 to v2: add workflow_search_attributes table."""
+        self._create_schema_v2()
+
+    def upsert_search_attributes(self, run_id: str, attributes: dict[str, Any]) -> None:
+        """Upsert typed search attributes for a workflow run.
+
+        Auto-detects attribute types and stores values in the appropriate
+        typed column for efficient querying.
+
+        Args:
+            run_id: Workflow run ID.
+            attributes: Key-value pairs to store. Values are auto-typed as
+                text, int, float, datetime, or bool.
+
+        Raises:
+            ValueError: If an attribute name is invalid.
+        """
+        if not attributes:
+            return
+
+        with self._lock:
+            cursor = self.conn.cursor()
+
+            for attr_name, attr_value in attributes.items():
+                # Validate attribute name
+                if not _ATTR_NAME_RE.match(attr_name):
+                    raise ValueError(
+                        f"Invalid attribute name '{attr_name}': "
+                        "must match ^[a-zA-Z_][a-zA-Z0-9_]*$"
+                    )
+
+                # Auto-detect type and set appropriate column
+                attr_type, text_val, int_val, float_val, dt_val = (
+                    self._classify_attribute(attr_value)
+                )
+
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO workflow_search_attributes
+                    (run_id, attr_name, attr_type, text_value, int_value, float_value, dt_value)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                    (
+                        run_id,
+                        attr_name,
+                        attr_type,
+                        text_val,
+                        int_val,
+                        float_val,
+                        dt_val,
+                    ),
+                )
+
+            self.conn.commit()
+
+    def search_runs(
+        self,
+        filters: dict[str, Any],
+        order_by: str = "created_at DESC",
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict]:
+        """Search workflow runs by search attribute filters.
+
+        Builds a parameterized query that JOINs workflow_search_attributes
+        with workflow_runs, applying one sub-condition per filter entry.
+
+        Args:
+            filters: Attribute name-value pairs to match.
+            order_by: SQL ORDER BY clause (column must be from workflow_runs).
+                      Only ``created_at``, ``started_at``, ``ended_at``,
+                      ``workflow_name``, and ``status`` are accepted (with
+                      optional ``ASC``/``DESC``).
+            limit: Maximum number of results (capped at 1000).
+            offset: Number of results to skip.
+
+        Returns:
+            List of workflow run dicts matching all filters.
+        """
+        # Validate order_by to prevent SQL injection
+        allowed_columns = {
+            "created_at",
+            "started_at",
+            "ended_at",
+            "workflow_name",
+            "status",
+        }
+        order_parts = order_by.strip().split()
+        if not order_parts:
+            order_by = "created_at DESC"
+        else:
+            col = order_parts[0]
+            direction = order_parts[1].upper() if len(order_parts) > 1 else "DESC"
+            if col not in allowed_columns:
+                raise ValueError(
+                    f"Invalid order_by column '{col}'. "
+                    f"Allowed: {sorted(allowed_columns)}"
+                )
+            if direction not in ("ASC", "DESC"):
+                raise ValueError(
+                    f"Invalid order_by direction '{direction}'. Allowed: ASC, DESC"
+                )
+            order_by = f"w.{col} {direction}"
+
+        # Cap limit
+        limit = min(max(1, limit), 1000)
+        offset = max(0, offset)
+
+        with self._lock:
+            cursor = self.conn.cursor()
+
+            if not filters:
+                # No attribute filters -- return recent runs
+                query = f"SELECT w.* FROM workflow_runs w ORDER BY {order_by} LIMIT ? OFFSET ?"
+                cursor.execute(query, (limit, offset))
+            else:
+                # Build JOINs for each filter attribute
+                params: list[Any] = []
+                join_clauses = []
+                where_clauses = []
+
+                for i, (attr_name, attr_value) in enumerate(filters.items()):
+                    # Validate attribute name
+                    if not _ATTR_NAME_RE.match(attr_name):
+                        raise ValueError(
+                            f"Invalid filter attribute name '{attr_name}': "
+                            "must match ^[a-zA-Z_][a-zA-Z0-9_]*$"
+                        )
+
+                    alias = f"sa{i}"
+                    join_clauses.append(
+                        f"JOIN workflow_search_attributes {alias} "
+                        f"ON w.run_id = {alias}.run_id"
+                    )
+                    where_clauses.append(f"{alias}.attr_name = ?")
+                    params.append(attr_name)
+
+                    # Determine which typed column to compare
+                    attr_type, text_val, int_val, float_val, dt_val = (
+                        self._classify_attribute(attr_value)
+                    )
+                    if attr_type == "int":
+                        where_clauses.append(f"{alias}.int_value = ?")
+                        params.append(int_val)
+                    elif attr_type == "float":
+                        where_clauses.append(f"{alias}.float_value = ?")
+                        params.append(float_val)
+                    elif attr_type == "datetime":
+                        where_clauses.append(f"{alias}.dt_value = ?")
+                        params.append(dt_val)
+                    elif attr_type == "bool":
+                        where_clauses.append(f"{alias}.int_value = ?")
+                        params.append(int_val)
+                    else:
+                        where_clauses.append(f"{alias}.text_value = ?")
+                        params.append(text_val)
+
+                joins_sql = " ".join(join_clauses)
+                where_sql = " AND ".join(where_clauses)
+                query = (
+                    f"SELECT DISTINCT w.* FROM workflow_runs w "
+                    f"{joins_sql} WHERE {where_sql} "
+                    f"ORDER BY {order_by} LIMIT ? OFFSET ?"
+                )
+                params.extend([limit, offset])
+                cursor.execute(query, params)
+
+            rows = cursor.fetchall()
+            columns = [desc[0] for desc in cursor.description]
+
+            results = []
+            for row in rows:
+                data = dict(zip(columns, row, strict=False))
+                if data.get("metadata"):
+                    try:
+                        data["metadata"] = json.loads(data["metadata"])
+                    except (json.JSONDecodeError, TypeError):
+                        data["metadata"] = {}
+                results.append(data)
+
+            return results
+
+    @staticmethod
+    def _classify_attribute(
+        value: Any,
+    ) -> tuple[str, str | None, int | None, float | None, str | None]:
+        """Classify a Python value into the search attribute type system.
+
+        Returns:
+            Tuple of (attr_type, text_value, int_value, float_value, dt_value).
+        """
+        if isinstance(value, bool):
+            return ("bool", None, 1 if value else 0, None, None)
+        if isinstance(value, int):
+            return ("int", None, value, None, None)
+        if isinstance(value, float):
+            return ("float", None, None, value, None)
+        if isinstance(value, datetime):
+            return ("datetime", None, None, None, value.isoformat())
+        # Default: text
+        return ("text", str(value), None, None, None)
 
     def save_run(self, run: WorkflowRun) -> None:
         """Save a workflow run."""
@@ -598,6 +846,7 @@ class SQLiteStorage(StorageBackend):
         with self._lock:
             cursor = self.conn.cursor()
             cursor.execute("DELETE FROM tasks")
+            cursor.execute("DELETE FROM workflow_search_attributes")
             cursor.execute("DELETE FROM workflow_runs")
             cursor.execute("DELETE FROM audit_events")
             self.conn.commit()

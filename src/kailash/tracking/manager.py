@@ -882,6 +882,159 @@ class TaskManager:
 
         return tasks
 
+    def set_search_attributes(self, run_id: str, attributes: dict[str, Any]) -> None:
+        """Set (upsert) search attributes on a workflow run.
+
+        Args:
+            run_id: Workflow run ID.
+            attributes: Key-value pairs to store.
+
+        Raises:
+            TaskException: If run_id is empty.
+            StorageException: If storage operation fails.
+        """
+        if not run_id:
+            raise TaskException("Run ID is required")
+        if not attributes:
+            return
+
+        try:
+            if hasattr(self.storage, "upsert_search_attributes"):
+                self.storage.upsert_search_attributes(run_id, attributes)
+            else:
+                self.logger.warning(
+                    "Storage backend does not support search attributes"
+                )
+        except ValueError:
+            raise
+        except Exception as e:
+            raise StorageException(
+                f"Failed to set search attributes for run '{run_id}': {e}"
+            ) from e
+
+        self.logger.info(f"Set {len(attributes)} search attributes on run {run_id}")
+
+    def search_runs(
+        self,
+        filters: dict[str, Any],
+        order_by: str = "created_at DESC",
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict]:
+        """Search workflow runs by attribute filters.
+
+        Args:
+            filters: Attribute name-value pairs to match.
+            order_by: Order by clause (column + direction).
+            limit: Maximum results.
+            offset: Results to skip.
+
+        Returns:
+            List of workflow run dicts matching all filters.
+
+        Raises:
+            StorageException: If storage operation fails.
+        """
+        try:
+            if hasattr(self.storage, "search_runs"):
+                return self.storage.search_runs(
+                    filters=filters,
+                    order_by=order_by,
+                    limit=limit,
+                    offset=offset,
+                )
+            else:
+                self.logger.warning("Storage backend does not support search_runs")
+                return []
+        except ValueError:
+            raise
+        except Exception as e:
+            raise StorageException(f"Failed to search runs: {e}") from e
+
+    def get_execution_audit_trail(self, run_id: str) -> list[dict]:
+        """Get a comprehensive execution audit trail for a run.
+
+        Combines task records with timing and audit events into a
+        chronological list of everything that happened during the run.
+
+        Args:
+            run_id: Workflow run ID.
+
+        Returns:
+            Chronological list of audit trail entries.
+
+        Raises:
+            TaskException: If run_id is empty.
+            StorageException: If storage operation fails.
+        """
+        if not run_id:
+            raise TaskException("Run ID is required")
+
+        trail: list[dict] = []
+
+        try:
+            # Get workflow run metadata
+            run = self.get_run(run_id)
+            if run:
+                trail.append(
+                    {
+                        "type": "WORKFLOW_RUN",
+                        "run_id": run.run_id,
+                        "workflow_name": run.workflow_name,
+                        "status": run.status,
+                        "started_at": (
+                            run.started_at.isoformat() if run.started_at else None
+                        ),
+                        "ended_at": (
+                            run.ended_at.isoformat() if run.ended_at else None
+                        ),
+                        "metadata": run.metadata,
+                    }
+                )
+
+            # Get all tasks for this run with timing
+            tasks = self.storage.list_tasks(run_id)
+            for task in tasks:
+                entry = {
+                    "type": "TASK_RECORD",
+                    "task_id": task.task_id,
+                    "node_id": task.node_id,
+                    "node_type": task.node_type,
+                    "status": task.status,
+                    "started_at": (
+                        task.started_at.isoformat() if task.started_at else None
+                    ),
+                    "ended_at": (task.ended_at.isoformat() if task.ended_at else None),
+                    "error": task.error,
+                }
+                if task.metrics:
+                    entry["duration"] = task.metrics.duration
+                trail.append(entry)
+
+            # Get audit events if storage supports them
+            if hasattr(self.storage, "query_audit_events"):
+                audit_events = self.storage.query_audit_events(trace_id=run_id)
+                for event in audit_events:
+                    trail.append(
+                        {
+                            "type": "AUDIT_EVENT",
+                            **event,
+                        }
+                    )
+
+            # Sort chronologically by timestamp/started_at
+            def sort_key(entry: dict) -> str:
+                return entry.get("timestamp") or entry.get("started_at") or ""
+
+            trail.sort(key=sort_key)
+
+        except Exception as e:
+            raise StorageException(
+                f"Failed to get execution audit trail for run '{run_id}': {e}"
+            ) from e
+
+        return trail
+
     def get_workflow_tasks(self, workflow_id: str) -> list[TaskRun]:
         """Get all tasks for a workflow.
 
