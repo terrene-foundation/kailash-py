@@ -79,10 +79,6 @@ mfa = [
 microsoft = [
     "msal>=1.32.3",
 ]
-# Visualization (workflow graph rendering, performance charts)
-viz = [
-    "matplotlib>=3.5",
-]
 # Monitoring (Prometheus metrics, resource tracking)
 monitoring = [
     "prometheus-client>=0.22.1",
@@ -161,7 +157,7 @@ docs = [
 ]
 # Everything (restores pre-1.0 behavior)
 all = [
-    "kailash[server,cli,http,database,postgres,mysql,files,auth,mfa,microsoft,viz,monitoring,distributed,mcp,scheduler,otel]",
+    "kailash[server,cli,http,database,postgres,mysql,files,auth,mfa,microsoft,monitoring,distributed,mcp,scheduler,otel]",
     "kailash-dataflow>=1.0.0,<2.0.0",
     "kailash-nexus>=1.4.2",
     "kailash-kaizen>=1.2.5",
