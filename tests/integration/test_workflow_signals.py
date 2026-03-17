@@ -271,7 +271,7 @@ class TestWorkflowServerSignalEndpoints:
                 json={},
             )
             assert response.status_code == 404
-            assert "No active workflow found" in response.json()["error"]
+            assert "Workflow not found" in response.json()["error"]
 
     @pytest.mark.asyncio
     async def test_query_endpoint_with_runtime(self):
@@ -330,7 +330,7 @@ class TestWorkflowServerSignalEndpoints:
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.get("/workflows/test-run-789/queries/missing")
             assert response.status_code == 404
-            assert "No handler registered" in response.json()["error"]
+            assert "not found" in response.json()["error"]
 
     @pytest.mark.asyncio
     async def test_signal_endpoint_empty_body(self):
