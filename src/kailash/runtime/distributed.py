@@ -249,7 +249,9 @@ class TaskQueue:
             A TaskMessage if one was available, None otherwise.
         """
         client = self._get_client()
-        raw = client.brpoplpush(self._queue_key, self._processing_key, timeout=timeout)
+        raw = client.blmove(
+            self._queue_key, self._processing_key, timeout, "RIGHT", "LEFT"
+        )
         if raw is None:
             return None
 
@@ -556,8 +558,8 @@ class DistributedRuntime(BaseRuntime):
     def _serialize_workflow(self, workflow: Workflow) -> Dict[str, Any]:
         """Serialize a workflow for queue transport.
 
-        Extracts the essential workflow structure (nodes, connections,
-        parameters) into a JSON-serializable dict.
+        Uses Workflow.to_dict() for round-trip compatible serialization.
+        The Worker deserializes with Workflow.from_dict().
 
         Args:
             workflow: The workflow to serialize.
@@ -565,34 +567,7 @@ class DistributedRuntime(BaseRuntime):
         Returns:
             JSON-serializable workflow representation.
         """
-        data: Dict[str, Any] = {
-            "workflow_id": getattr(workflow, "workflow_id", None),
-            "nodes": {},
-            "connections": [],
-        }
-
-        # Serialize nodes
-        if hasattr(workflow, "graph") and hasattr(workflow.graph, "nodes"):
-            for node_id in workflow.graph.nodes:
-                node = workflow.graph.nodes[node_id]
-                data["nodes"][node_id] = {
-                    "type": node.get("type", type(node.get("instance", "")).__name__),
-                    "config": node.get("config", {}),
-                }
-
-        # Serialize connections
-        if hasattr(workflow, "graph") and hasattr(workflow.graph, "edges"):
-            for src, tgt, edge_data in workflow.graph.edges(data=True):
-                data["connections"].append(
-                    {
-                        "source": src,
-                        "source_output": edge_data.get("source_output", "output"),
-                        "target": tgt,
-                        "target_input": edge_data.get("target_input", "input"),
-                    }
-                )
-
-        return data
+        return workflow.to_dict()
 
 
 class Worker:
@@ -825,7 +800,8 @@ class Worker:
     def _execute_workflow_sync(self, runtime, task: TaskMessage) -> Dict[str, Any]:
         """Synchronously execute a workflow from task data.
 
-        This is run inside an executor to avoid blocking the async loop.
+        Deserializes the workflow from the task's JSON payload using
+        Workflow.from_dict(), then executes it with the provided runtime.
 
         Args:
             runtime: The local runtime to use for execution.
@@ -834,10 +810,12 @@ class Worker:
         Returns:
             The workflow execution results.
         """
-        raise NotImplementedError(
-            "Workflow deserialization not yet implemented. "
-            "Use LocalRuntime for direct execution."
-        )
+        from kailash.workflow.graph import Workflow
+
+        workflow = Workflow.from_dict(task.workflow_data)
+        built = workflow.build() if hasattr(workflow, "build") else workflow
+        results, run_id = runtime.execute(built, parameters=task.parameters)
+        return results
 
     # -- Heartbeat --
 

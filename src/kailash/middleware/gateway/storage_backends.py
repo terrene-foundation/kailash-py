@@ -25,7 +25,10 @@ except ImportError:
         import aioredis as redis
     except ImportError:
         redis = None
-import asyncpg
+try:
+    import asyncpg
+except ImportError:
+    asyncpg = None
 
 
 class StorageBackend(ABC):
@@ -146,6 +149,11 @@ class PostgreSQLStorage(StorageBackend):
         password: str = "",
         table_name: str = "storage",
     ):
+        if asyncpg is None:
+            raise ImportError(
+                "asyncpg is required for PostgreSQL storage. "
+                "Install with: pip install kailash[postgres]"
+            )
         _validate_table_name(table_name)
         self.host = host
         self.port = port
@@ -295,6 +303,11 @@ class PostgreSQLEventStorage:
         password: str = "",
         table_name: str = "events",
     ):
+        if asyncpg is None:
+            raise ImportError(
+                "asyncpg is required for PostgreSQL event storage. "
+                "Install with: pip install kailash[postgres]"
+            )
         _validate_table_name(table_name)
         self.host = host
         self.port = port

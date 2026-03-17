@@ -279,13 +279,39 @@ class DatabaseStateStorage(SagaStateStorage):
         self._ensure_table_exists()
 
     def _ensure_table_exists(self):
-        """Ensure the saga states table exists."""
-        # Table creation is handled externally in tests
-        # In production, this would use proper database migrations
-        pass
+        """Ensure the saga states table exists.
+
+        Uses lazy async initialization on first operation since __init__ is sync.
+        """
+        self._initialized = False
+
+    async def _ensure_initialized(self) -> None:
+        """Create table on first use (idempotent)."""
+        if self._initialized:
+            return
+        async with self.db_pool.acquire() as conn:
+            await conn.execute(
+                f"""
+                CREATE TABLE IF NOT EXISTS {self.table_name} (
+                    saga_id TEXT PRIMARY KEY,
+                    saga_name TEXT,
+                    state TEXT,
+                    state_data JSONB NOT NULL,
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """
+            )
+            await conn.execute(
+                f"""
+                CREATE INDEX IF NOT EXISTS idx_{self.table_name}_state
+                ON {self.table_name} (state)
+            """
+            )
+        self._initialized = True
 
     async def save_state(self, saga_id: str, state_data: Dict[str, Any]) -> bool:
         """Save saga state to database."""
+        await self._ensure_initialized()
         try:
             async with self.db_pool.acquire() as conn:
                 # PostgreSQL example with JSONB
@@ -318,6 +344,7 @@ class DatabaseStateStorage(SagaStateStorage):
 
     async def load_state(self, saga_id: str) -> Optional[Dict[str, Any]]:
         """Load saga state from database."""
+        await self._ensure_initialized()
         try:
             async with self.db_pool.acquire() as conn:
                 query = f"""
@@ -338,6 +365,7 @@ class DatabaseStateStorage(SagaStateStorage):
 
     async def delete_state(self, saga_id: str) -> bool:
         """Delete saga state from database."""
+        await self._ensure_initialized()
         try:
             async with self.db_pool.acquire() as conn:
                 query = f"DELETE FROM {self.table_name} WHERE saga_id = $1"
@@ -356,6 +384,7 @@ class DatabaseStateStorage(SagaStateStorage):
         self, filter_criteria: Optional[Dict[str, Any]] = None
     ) -> List[str]:
         """List saga IDs from database."""
+        await self._ensure_initialized()
         try:
             async with self.db_pool.acquire() as conn:
                 if not filter_criteria:
