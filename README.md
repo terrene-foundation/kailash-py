@@ -265,6 +265,21 @@ if result.allowed:
 
 ---
 
+## Progressive Infrastructure
+
+Start with zero config, scale to multi-worker by changing environment variables. No application code changes required.
+
+| Level | What You Set                            | What You Get                                              |
+| ----- | --------------------------------------- | --------------------------------------------------------- |
+| **0** | Nothing                                 | SQLite stores, in-memory execution, single process        |
+| **1** | `KAILASH_DATABASE_URL=postgresql://...` | All stores persist to PostgreSQL/MySQL, queryable history |
+| **2** | + `KAILASH_QUEUE_URL=redis://...`       | Multi-worker parallel execution with task queue           |
+| **3** | _(v1.1+)_                               | Leader election, distributed locks, global ordering       |
+
+Full guide: [Progressive Infrastructure](docs/00-authority/progressive-infrastructure.md) | Quick setup: [Multi-Worker Quickstart](docs/00-authority/multi-worker-quickstart.md)
+
+---
+
 ## Testing
 
 ```bash

@@ -64,7 +64,9 @@ from kailash.infrastructure.execution_store import (
     InMemoryExecutionStore,
 )
 from kailash.infrastructure.factory import SCHEMA_VERSION, StoreFactory
+from kailash.infrastructure.idempotency import IdempotentExecutor
 from kailash.infrastructure.idempotency_store import DBIdempotencyStore
+from kailash.infrastructure.task_queue import SQLTaskQueue
 
 __all__ = [
     "DBCheckpointStore",
@@ -72,7 +74,9 @@ __all__ = [
     "DBEventStoreBackend",
     "DBExecutionStore",
     "DBIdempotencyStore",
+    "IdempotentExecutor",
     "InMemoryExecutionStore",
     "SCHEMA_VERSION",
+    "SQLTaskQueue",
     "StoreFactory",
 ]
