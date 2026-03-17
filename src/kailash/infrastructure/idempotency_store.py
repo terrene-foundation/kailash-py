@@ -149,11 +149,20 @@ class DBIdempotencyStore:
         response_json = json.dumps(response_data)
         headers_json = json.dumps(headers)
 
+        _cols = [
+            "idempotency_key",
+            "fingerprint",
+            "response_data",
+            "status_code",
+            "headers",
+            "created_at",
+            "expires_at",
+        ]
+        sql = self._conn.dialect.insert_ignore(
+            self.TABLE_NAME, _cols, ["idempotency_key"]
+        )
         await self._conn.execute(
-            f"INSERT OR IGNORE INTO {self.TABLE_NAME} "
-            f"(idempotency_key, fingerprint, response_data, status_code, "
-            f"headers, created_at, expires_at) "
-            f"VALUES (?, ?, ?, ?, ?, ?, ?)",
+            sql,
             key,
             fingerprint,
             response_json,
@@ -193,11 +202,20 @@ class DBIdempotencyStore:
         if existing is not None:
             return False
 
+        _cols = [
+            "idempotency_key",
+            "fingerprint",
+            "response_data",
+            "status_code",
+            "headers",
+            "created_at",
+            "expires_at",
+        ]
+        sql = self._conn.dialect.insert_ignore(
+            self.TABLE_NAME, _cols, ["idempotency_key"]
+        )
         await self._conn.execute(
-            f"INSERT OR IGNORE INTO {self.TABLE_NAME} "
-            f"(idempotency_key, fingerprint, response_data, status_code, "
-            f"headers, created_at, expires_at) "
-            f"VALUES (?, ?, ?, ?, ?, ?, ?)",
+            sql,
             key,
             fingerprint,
             "{}",  # Empty placeholder response

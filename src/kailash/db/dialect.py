@@ -111,6 +111,21 @@ class QueryDialect(ABC):
             column names in parameter-binding order.
         """
 
+    def insert_ignore(
+        self, table: str, columns: List[str], conflict_keys: List[str]
+    ) -> str:
+        """Generate INSERT ... ignore-on-conflict statement.
+
+        PostgreSQL/SQLite: ``INSERT INTO ... ON CONFLICT (keys) DO NOTHING``
+        MySQL: ``INSERT IGNORE INTO ...``
+
+        Returns SQL with ``?`` placeholders.
+        """
+        cols = ", ".join(columns)
+        placeholders = ", ".join(["?"] * len(columns))
+        conflict = ", ".join(conflict_keys)
+        return f"INSERT INTO {table} ({cols}) VALUES ({placeholders}) ON CONFLICT ({conflict}) DO NOTHING"
+
     @abstractmethod
     def json_column_type(self) -> str:
         """Return the native JSON column type.
@@ -227,6 +242,13 @@ class MySQLDialect(QueryDialect):
             f"ON DUPLICATE KEY UPDATE {update_set}"
         )
         return sql, list(columns)
+
+    def insert_ignore(
+        self, table: str, columns: List[str], conflict_keys: List[str]
+    ) -> str:
+        cols = ", ".join(columns)
+        placeholders = ", ".join(["%s"] * len(columns))
+        return f"INSERT IGNORE INTO {table} ({cols}) VALUES ({placeholders})"
 
     def json_column_type(self) -> str:
         return "JSON"
