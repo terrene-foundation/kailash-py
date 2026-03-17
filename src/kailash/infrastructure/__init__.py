@@ -10,7 +10,7 @@ layer.
 All SQL uses canonical ``?`` placeholders — ConnectionManager translates
 to the target dialect automatically.
 
-Usage::
+Usage (manual wiring)::
 
     from kailash.db import ConnectionManager
     from kailash.infrastructure import (
@@ -39,6 +39,19 @@ Usage::
 
     idempotency = DBIdempotencyStore(mgr)
     await idempotency.initialize()
+
+Usage (auto-detection via StoreFactory)::
+
+    from kailash.infrastructure import StoreFactory
+
+    factory = StoreFactory()           # auto-detects from KAILASH_DATABASE_URL
+    event_store = await factory.create_event_store()
+    checkpoint  = await factory.create_checkpoint_store()
+    dlq         = await factory.create_dlq()
+    exec_store  = await factory.create_execution_store()
+    idempotency = await factory.create_idempotency_store()
+    # ... use stores ...
+    await factory.close()
 """
 
 from __future__ import annotations
@@ -50,6 +63,7 @@ from kailash.infrastructure.execution_store import (
     DBExecutionStore,
     InMemoryExecutionStore,
 )
+from kailash.infrastructure.factory import SCHEMA_VERSION, StoreFactory
 from kailash.infrastructure.idempotency_store import DBIdempotencyStore
 
 __all__ = [
@@ -59,4 +73,6 @@ __all__ = [
     "DBExecutionStore",
     "DBIdempotencyStore",
     "InMemoryExecutionStore",
+    "SCHEMA_VERSION",
+    "StoreFactory",
 ]
