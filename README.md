@@ -22,8 +22,11 @@
 
 - **Only workflow engine with cryptographic trust chains** -- CARE/EATP provides human-origin tracking, constraint propagation, trust verification, and RFC 3161 timestamped audit trails. No other framework has anything comparable.
 - **140+ production-ready workflow nodes** -- AI, API, code execution, data, database, file, logic, monitoring, and transform nodes out of the box.
-- **Embeddable runtime with no external dependencies** -- `LocalRuntime` runs entirely in-process. No server cluster, no external database, no message broker. Works in CLI tools, serverless functions, and embedded applications.
-- **Sync and async runtime parity** -- `LocalRuntime` and `AsyncLocalRuntime` share the same API and return identical `(results, run_id)` structures. Use sync for scripts, async for Docker/FastAPI.
+- **Production-grade durability** -- Real distributed transactions (saga + 2PC with pluggable transport), checkpoint-based workflow resume without duplicate side effects, persistent event store (SQLite WAL), dead letter queue with exponential backoff retry. 72 security findings resolved across 4 red team rounds.
+- **Comprehensive observability** -- Prometheus `/metrics` endpoint, OpenTelemetry tracing with per-node spans, comprehensive execution audit trail (NODE_EXECUTED/FAILED events with inputs/outputs), WebSocket live dashboard, search attributes for cross-execution queries.
+- **Workflow interaction** -- Send signals to running workflows (`SignalChannel`), query workflow state (`QueryRegistry`), pause/resume execution, cooperative cancellation, built-in scheduling (cron + interval), workflow versioning with semver registry, continue-as-new for infinite-duration workflows.
+- **Scale-out ready** -- Distributed circuit breaker (Redis-backed with Lua atomic transitions), multi-worker task queue architecture, resource quotas with semaphore-based concurrency control, coordinated graceful shutdown, Kubernetes deployment manifests.
+- **Infrastructure-agnostic** -- `LocalRuntime` runs entirely in-process. No server cluster, no external database, no message broker. Deploy anywhere: any cloud, any region, on-prem, edge, air-gapped. Zero vendor lock-in.
 - **Foundation for three application frameworks** -- [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen) (AI agents with trust), [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus) (multi-channel deploy), and [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) (zero-config database) are all built on this Core SDK.
 
 ---
@@ -39,7 +42,7 @@
 |   CARE/EATP Trust        API + CLI + MCP      @db.model           |
 |   Multi-Agent Coord.     Auth + RBAC          11 Nodes/Model      |
 +------------------------------------------------------------------+
-|                    Core SDK v0.12.5                                |
+|                    Core SDK v0.13.0                                |
 |                                                                   |
 |   140+ Nodes    |  WorkflowBuilder   |  Runtime (Sync + Async)   |
 |   MCP Server    |  Cyclic Workflows  |  CARE Trust Layer          |
@@ -254,8 +257,8 @@ if result.allowed:
 
 ### Ecosystem Frameworks
 
-| Framework                                                       | Version | Key Capabilities                                                                                   |
-| --------------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| Framework                                                                                        | Version | Key Capabilities                                                                                   |
+| ------------------------------------------------------------------------------------------------ | ------- | -------------------------------------------------------------------------------------------------- |
 | [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen)     | v1.2.5  | Signature-based AI agents, multi-agent coordination, CARE/EATP trust, FallbackRouter, MCP sessions |
 | [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus)       | v1.4.2  | Multi-channel deploy (API+CLI+MCP), handler pattern, NexusAuthPlugin, presets, middleware API      |
 | [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) | v0.12.4 | 11 nodes per model, PostgreSQL/MySQL/SQLite parity, auto-wired multi-tenancy, async transactions   |
@@ -284,12 +287,12 @@ pytest tests/e2e/ --timeout=10
 
 ## Documentation
 
-| Resource                                                                     | Description                                         |
-| ---------------------------------------------------------------------------- | --------------------------------------------------- |
+| Resource                                                                                                      | Description                                         |
+| ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | [Kaizen Guide](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen#readme)     | AI agents, signatures, multi-modal, CARE/EATP trust |
 | [Nexus Guide](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus#readme)       | Multi-channel platform, auth, middleware, handlers  |
 | [DataFlow Guide](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow#readme) | Database operations, models, queries, multi-tenancy |
-| [Sphinx Docs](docs/)                                                         | Full API reference and guides                       |
+| [Sphinx Docs](docs/)                                                                                          | Full API reference and guides                       |
 
 ---
 
