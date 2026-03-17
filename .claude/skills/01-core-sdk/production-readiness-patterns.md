@@ -199,6 +199,87 @@ def _validate_redis_url(url: str) -> None:
         raise ValueError(f"Invalid Redis URL scheme: {url}")
 ```
 
+## 11. No Silent No-Op Defaults
+
+Extension points must NEVER default to silently succeeding without doing work. R4 found that `LocalNodeTransport(executor=None)` returned always-succeed results — a CTO reviewing code would flag this as a test stub.
+
+```python
+# WRONG: silent no-op default
+class LocalNodeTransport:
+    def __init__(self, executor=None):
+        self._executor = executor  # None = silently succeed
+
+    async def prepare(self, ...):
+        if self._executor is None:
+            return TransportResult(success=True)  # FAKE SUCCESS
+
+# RIGHT: default to real implementation
+class LocalNodeTransport:
+    def __init__(self, executor=None):
+        if executor is None:
+            from .node_executor import RegistryNodeExecutor
+            self._executor = RegistryNodeExecutor()
+        else:
+            self._executor = executor
+```
+
+## 12. Integration Test Participant Pattern
+
+Integration tests (Tier 2/3) must use REAL registered nodes, never mocks. Create a `TestParticipantNode` via conftest:
+
+```python
+# tests/integration/nodes/transaction/conftest.py
+@register_node("TestParticipantNode")
+class TestParticipantNode(AsyncNode):
+    """Real node for 2PC integration tests — handles prepare/commit/abort."""
+    invocations = []  # Class-level tracking for assertions
+
+    async def async_run(self, **inputs):
+        operation = inputs.get("operation", "prepare")
+        TestParticipantNode.invocations.append({"operation": operation})
+        return {"status": "success", "vote": "prepared"}
+```
+
+## 13. Execution Audit Trail
+
+Every node execution must be traceable. Emit structured events:
+
+```python
+# After each node executes:
+audit_event = {
+    "type": "NODE_EXECUTED",
+    "node_id": node_id,
+    "node_type": node.__class__.__name__,
+    "inputs": _safe_serialize(inputs, max_size=10000),
+    "outputs": _safe_serialize(result, max_size=10000),
+    "duration_ms": duration_ms,
+    "timestamp": datetime.utcnow().isoformat(),
+}
+# _safe_serialize truncates >10KB payloads with preview
+```
+
+## 14. Search Attributes (EAV Pattern)
+
+For queryable workflow metadata, use Entity-Attribute-Value with typed columns:
+
+```python
+# Setting attributes
+runtime.execute(workflow, search_attributes={
+    "customer_id": "cust-123",
+    "experiment": "ablation-v3",
+    "priority": 1,
+})
+
+# Querying across executions
+results = task_manager.search_runs(
+    filters={"customer_id": "cust-123", "status": "completed"},
+    order_by="created_at DESC",
+    limit=50,
+)
+```
+
+Validate attribute names against `^[a-zA-Z_][a-zA-Z0-9_]*$`. Validate float values with `math.isfinite()`. Cap query limit at 1000.
+
 ## Cross-References
 
 - `src/kailash/nodes/transaction/node_executor.py` — Pattern 1 reference implementation
