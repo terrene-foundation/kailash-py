@@ -701,7 +701,7 @@ class RealtimeMiddleware:
             inputs = message.get("inputs", {})
 
             try:
-                execution_id = await self.agent_ui.execute_workflow(
+                execution_id = await self.agent_ui.execute(
                     session_id, workflow_id, inputs
                 )
                 await self.connection_manager.send_to_connection(

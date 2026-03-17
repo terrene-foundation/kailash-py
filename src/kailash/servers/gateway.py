@@ -152,32 +152,3 @@ def create_basic_gateway(**kwargs) -> WorkflowServer:
     Suitable for development and testing scenarios.
     """
     return create_gateway(server_type="basic", **kwargs)
-
-
-# Backward compatibility - maintain the existing create_gateway signature
-# but issue deprecation warning for old usage patterns
-def create_gateway_legacy(agent_ui_middleware=None, auth_manager=None, **kwargs):
-    """Legacy create_gateway function for backward compatibility.
-
-    This function maintains compatibility with the old APIGateway-based
-    create_gateway function. New code should use the new create_gateway()
-    function which creates EnterpriseWorkflowServer by default.
-    """
-    import warnings
-
-    warnings.warn(
-        "Legacy create_gateway usage detected. Consider migrating to the new "
-        "create_gateway() function which creates EnterpriseWorkflowServer by default. "
-        "See migration guide for details.",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-
-    # For now, delegate to the old APIGateway implementation
-    from ..middleware.communication.api_gateway import (
-        create_gateway as old_create_gateway,
-    )
-
-    return old_create_gateway(
-        agent_ui_middleware=agent_ui_middleware, auth_manager=auth_manager, **kwargs
-    )

@@ -1,6 +1,11 @@
 # CI/CD Infrastructure for Python SDK
 
-Patterns and principles for CI/CD pipelines in the `kailash` Python SDK build repository. Covers GitHub Actions workflows, multi-platform wheel building, test matrices, documentation deployment, and release automation.
+> **IMPORTANT**: These are REFERENCE PATTERNS only. Do NOT automatically create `.github/workflows/` files.
+> GitHub Actions minutes are a paid, finite resource. Always ask the user first and present
+> cost implications before creating any workflow. See `/deploy` command's "CI/CD GitHub Actions"
+> section for the required approval flow.
+
+Patterns and principles for CI/CD pipelines. Covers GitHub Actions workflows, multi-platform wheel building, test matrices, documentation deployment, and release automation. Use these patterns as templates when the user explicitly requests CI/CD setup.
 
 ## GitHub Actions Workflow Patterns
 
@@ -79,19 +84,19 @@ jobs:
 For pure Python packages:
 
 ```yaml
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install build
-      - run: python -m build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
+build:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - run: pip install build
+    - run: python -m build
+    - uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: dist/
 ```
 
 ### Tag-Triggered Publishing
@@ -106,11 +111,11 @@ jobs:
   # ... build jobs above ...
 
   publish-testpypi:
-    needs: [build-wheels]  # or [build] for pure Python
+    needs: [build-wheels] # or [build] for pure Python
     runs-on: ubuntu-latest
     environment: testpypi
     permissions:
-      id-token: write  # for trusted publisher (OIDC)
+      id-token: write # for trusted publisher (OIDC)
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -152,20 +157,20 @@ jobs:
 
 ### Python Version Strategy
 
-| Python Version | Support Level | Notes |
-| -------------- | ------------- | ----- |
-| 3.10 | Minimum supported | Test on CI |
-| 3.11 | Supported | Test on CI |
-| 3.12 | Primary / Latest | Test on CI, build docs |
-| 3.13+ | Future | Add when stable |
+| Python Version | Support Level     | Notes                  |
+| -------------- | ----------------- | ---------------------- |
+| 3.10           | Minimum supported | Test on CI             |
+| 3.11           | Supported         | Test on CI             |
+| 3.12           | Primary / Latest  | Test on CI, build docs |
+| 3.13+          | Future            | Add when stable        |
 
 ### OS Strategy
 
-| OS | When to Include | Notes |
-| -- | --------------- | ----- |
-| Linux (ubuntu-latest) | Always | Primary platform |
-| macOS (macos-latest) | If platform-specific code or Rust bindings | ARM (M1+) |
-| Windows (windows-latest) | If platform-specific code or Rust bindings | MSVC toolchain |
+| OS                       | When to Include                            | Notes            |
+| ------------------------ | ------------------------------------------ | ---------------- |
+| Linux (ubuntu-latest)    | Always                                     | Primary platform |
+| macOS (macos-latest)     | If platform-specific code or Rust bindings | ARM (M1+)        |
+| Windows (windows-latest) | If platform-specific code or Rust bindings | MSVC toolchain   |
 
 ### Matrix Optimization
 
@@ -215,10 +220,10 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[docs]"
-      - run: cd docs && make html  # or: mkdocs build
+      - run: cd docs && make html # or: mkdocs build
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/_build/html  # or: site/
+          path: docs/_build/html # or: site/
       - uses: actions/deploy-pages@v4
 ```
 
@@ -275,13 +280,13 @@ Runner setup:
 
 ### Common Failure Patterns
 
-| Symptom | Likely Cause | Fix |
-| ------- | ------------ | --- |
-| Wheel build fails on Linux | Missing system deps | Add `apt-get install` step |
-| Wheel build fails on macOS | Wrong SDK version | Pin macOS runner version |
-| Tests pass locally, fail on CI | Environment difference | Check Python version, OS, env vars |
-| Publishing fails | Auth misconfigured | Check trusted publisher or token setup |
-| Cross-compile fails | Missing target toolchain | Use appropriate cross-compile action |
+| Symptom                        | Likely Cause             | Fix                                    |
+| ------------------------------ | ------------------------ | -------------------------------------- |
+| Wheel build fails on Linux     | Missing system deps      | Add `apt-get install` step             |
+| Wheel build fails on macOS     | Wrong SDK version        | Pin macOS runner version               |
+| Tests pass locally, fail on CI | Environment difference   | Check Python version, OS, env vars     |
+| Publishing fails               | Auth misconfigured       | Check trusted publisher or token setup |
+| Cross-compile fails            | Missing target toolchain | Use appropriate cross-compile action   |
 
 ### Debugging Commands
 

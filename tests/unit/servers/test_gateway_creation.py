@@ -22,7 +22,6 @@ from src.kailash.servers.gateway import (
     create_durable_gateway,
     create_enterprise_gateway,
     create_gateway,
-    create_gateway_legacy,
 )
 
 
@@ -191,24 +190,6 @@ class TestGatewayCreation:
                 "Created EnterpriseWorkflowServer with features" in str(call)
                 for call in mock_logger.info.call_args_list
             )
-
-    @patch("src.kailash.middleware.communication.api_gateway.create_gateway")
-    def test_create_gateway_legacy_deprecation(self, mock_old_create_gateway):
-        """Test that legacy create_gateway function shows deprecation warning."""
-        mock_old_create_gateway.return_value = Mock()
-
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-
-            create_gateway_legacy(agent_ui_middleware=Mock(), auth_manager=Mock())
-
-            # Should have issued deprecation warning
-            assert len(w) == 1
-            assert issubclass(w[0].category, DeprecationWarning)
-            assert "Legacy create_gateway usage detected" in str(w[0].message)
-
-            # Should have called old function
-            mock_old_create_gateway.assert_called_once()
 
     def test_create_gateway_kwargs_passthrough(self):
         """Test that additional kwargs are passed through to server constructor."""

@@ -37,12 +37,12 @@
 +------------------------------------------------------------------+
 |                    Application Frameworks                         |
 |                                                                   |
-|   Kaizen v1.2.5          Nexus v1.4.2        DataFlow v0.12.4    |
+|   Kaizen v1.2.5          Nexus v1.4.2        DataFlow v1.0.0     |
 |   AI Agents              Multi-Channel        Zero-Config DB      |
 |   CARE/EATP Trust        API + CLI + MCP      @db.model           |
 |   Multi-Agent Coord.     Auth + RBAC          11 Nodes/Model      |
 +------------------------------------------------------------------+
-|                    Core SDK v0.13.0                                |
+|                    Core SDK v1.0.0                                 |
 |                                                                   |
 |   140+ Nodes    |  WorkflowBuilder   |  Runtime (Sync + Async)   |
 |   MCP Server    |  Cyclic Workflows  |  CARE Trust Layer          |

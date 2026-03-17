@@ -354,29 +354,25 @@ class Workflow:
                 f"Cannot connect node '{source_node}' to itself unless it's a cycle"
             )
 
-        # Validate cycle parameters and issue deprecation warning
+        # Validate cycle parameters
         if cycle:
-            # Issue deprecation warning for cycle usage via connect()
-            # Skip warning if called from CycleBuilder (check stack)
+            # Only allow cycle=True from internal CycleBuilder calls
             import inspect
 
             frame = inspect.currentframe()
             caller_frame = frame.f_back if frame else None
             caller_filename = caller_frame.f_code.co_filename if caller_frame else ""
 
-            # Only warn if NOT called from CycleBuilder
+            # External callers must use CycleBuilder
             if "cycle_builder.py" not in caller_filename:
-                warnings.warn(
-                    "Using workflow.connect() with cycle=True is deprecated and will be removed in v0.2.0. "
-                    "Use the new CycleBuilder API instead:\n"
+                raise WorkflowValidationError(
+                    "Direct cycle=True in connect() was removed in v1.0.0. "
+                    "Use the CycleBuilder API instead:\n"
                     "  workflow.create_cycle('cycle_name')\\\n"
                     "    .connect(source_node, target_node)\\\n"
                     "    .max_iterations(N)\\\n"
                     "    .converge_when('condition')\\\n"
-                    "    .build()\n"
-                    "See Phase 5 API documentation for details.",
-                    DeprecationWarning,
-                    stacklevel=2,
+                    "    .build()"
                 )
 
             # Import enhanced exceptions for better error messaging

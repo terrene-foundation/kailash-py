@@ -633,33 +633,12 @@ class TestWorkflowBuilderFluentAPI:
         _ensure_mock_nodes_registered()
 
     @pytest.mark.requires_isolation
-    def test_add_node_fluent_deprecated(self):
-        """Test deprecated add_node_fluent method."""
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
+    def test_legacy_fluent_api_raises_error(self):
+        """Test that legacy fluent API raises WorkflowValidationError in v1.0."""
+        from kailash.sdk_exceptions import WorkflowValidationError
 
-            result = self.builder.add_node_fluent("node1", MockNode, param="value")
-
-            assert result == self.builder
-            assert len(w) == 1
-            assert issubclass(w[0].category, DeprecationWarning)
-            assert "Fluent API is deprecated" in str(w[0].message)
-
-        assert "node1" in self.builder.nodes
-        assert self.builder.nodes["node1"]["type"] == "MockNode"
-        assert self.builder.nodes["node1"]["config"]["param"] == "value"
-
-    @pytest.mark.requires_isolation
-    def test_add_node_fluent_with_string_type(self):
-        """Test add_node_fluent with string node type."""
-        with warnings.catch_warnings(record=True):
-            warnings.simplefilter("always")
-
-            self.builder.add_node_fluent("node1", "MockNode", param="value")
-
-        assert "node1" in self.builder.nodes
-        assert self.builder.nodes["node1"]["type"] == "MockNode"
-        assert self.builder.nodes["node1"]["config"]["param"] == "value"
+        with pytest.raises(WorkflowValidationError, match="removed in v1.0.0"):
+            self.builder.add_node("node1", MockNode, param="value")
 
     @pytest.mark.requires_isolation
     def test_add_node_instance_method(self):

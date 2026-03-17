@@ -157,7 +157,7 @@ Usage Examples
     >>> execution_id = await agent_ui.execute(
     ...     session_id, workflow_id, inputs={}
     ... )
-    >>> # Note: execute_workflow() is deprecated and will be removed in v1.0.0
+    >>> # Note: execute_workflow() was removed in v1.0.0 — use execute() instead
 
 Production Deployment
 --------------------
