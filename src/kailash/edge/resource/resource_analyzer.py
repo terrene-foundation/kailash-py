@@ -12,8 +12,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
-from scipy import stats
+from kailash._math_utils import fft_magnitudes, linregress, mean, stdev
 
 
 class ResourceType(Enum):
@@ -250,16 +249,14 @@ class ResourceAnalyzer:
 
             if len(utilizations) > 1:
                 # Linear regression for trend
-                slope, intercept, r_value, _, _ = stats.linregress(
-                    timestamps, utilizations
-                )
+                slope, intercept, r_value = linregress(timestamps, utilizations)
 
                 trends[key] = {
                     "current": utilizations[-1],
-                    "average": np.mean(utilizations),
-                    "min": np.min(utilizations),
-                    "max": np.max(utilizations),
-                    "std_dev": np.std(utilizations),
+                    "average": mean(utilizations),
+                    "min": min(utilizations),
+                    "max": max(utilizations),
+                    "std_dev": stdev(utilizations),
                     "trend_slope": slope,
                     "trend_direction": (
                         "increasing"
@@ -384,39 +381,44 @@ class ResourceAnalyzer:
             # Extract utilization time series
             utilizations = [m.utilization for m in metrics]
 
-            # Simple FFT-based periodicity detection
-            fft = np.fft.fft(utilizations)
-            frequencies = np.fft.fftfreq(len(utilizations))
+            # Simple DFT-based periodicity detection
+            frequencies, magnitudes = fft_magnitudes(utilizations)
 
-            # Find dominant frequency
-            dominant_idx = np.argmax(np.abs(fft[1 : len(fft) // 2])) + 1
-            if np.abs(fft[dominant_idx]) > len(utilizations) * 0.1:
-                period = (
-                    1 / frequencies[dominant_idx]
-                    if frequencies[dominant_idx] != 0
+            if magnitudes:
+                # Find dominant frequency (skip DC component at index 0)
+                dominant_idx = (
+                    max(range(1, len(magnitudes)), key=lambda k: magnitudes[k])
+                    if len(magnitudes) > 1
                     else 0
                 )
+                dominant_magnitude = (
+                    magnitudes[dominant_idx] if dominant_idx < len(magnitudes) else 0
+                )
+                dominant_freq = (
+                    frequencies[dominant_idx] if dominant_idx < len(frequencies) else 0
+                )
 
-                if period > 0:
-                    node, rtype = key.split(":")
-                    return ResourcePattern(
-                        pattern_type="periodic",
-                        confidence=min(
-                            np.abs(fft[dominant_idx]) / len(utilizations), 1.0
-                        ),
-                        edge_nodes=[node],
-                        resource_types=[ResourceType(rtype)],
-                        characteristics={
-                            "period_seconds": abs(period * self.analysis_interval),
-                            "amplitude": np.std(utilizations),
-                            "improvement": "15-25%",
-                        },
-                        recommendations=[
-                            f"Implement predictive scaling with {abs(period * self.analysis_interval):.0f}s period",
-                            "Use time-based resource allocation",
-                            "Consider workload scheduling optimization",
-                        ],
-                    )
+                if dominant_magnitude > len(utilizations) * 0.1:
+                    period = 1 / dominant_freq if dominant_freq != 0 else 0
+
+                    if period > 0:
+                        node, rtype = key.split(":")
+                        return ResourcePattern(
+                            pattern_type="periodic",
+                            confidence=min(dominant_magnitude / len(utilizations), 1.0),
+                            edge_nodes=[node],
+                            resource_types=[ResourceType(rtype)],
+                            characteristics={
+                                "period_seconds": abs(period * self.analysis_interval),
+                                "amplitude": stdev(utilizations),
+                                "improvement": "15-25%",
+                            },
+                            recommendations=[
+                                f"Implement predictive scaling with {abs(period * self.analysis_interval):.0f}s period",
+                                "Use time-based resource allocation",
+                                "Consider workload scheduling optimization",
+                            ],
+                        )
 
         return None
 
@@ -430,11 +432,11 @@ class ResourceAnalyzer:
                 continue
 
             utilizations = [m.utilization for m in metrics]
-            mean = np.mean(utilizations)
-            std = np.std(utilizations)
+            mean_val = mean(utilizations)
+            std_val = stdev(utilizations)
 
             # Count spikes
-            spikes = sum(1 for u in utilizations if u > mean + 2 * std)
+            spikes = sum(1 for u in utilizations if u > mean_val + 2 * std_val)
 
             if spikes > len(utilizations) * 0.1:  # More than 10% are spikes
                 node, rtype = key.split(":")
@@ -477,7 +479,7 @@ class ResourceAnalyzer:
             timestamps = list(range(len(utilizations)))
 
             # Linear regression
-            slope, _, r_value, _, _ = stats.linregress(timestamps, utilizations)
+            slope, _, r_value = linregress(timestamps, utilizations)
 
             # Significant positive trend
             if slope > 0.1 and abs(r_value) > 0.7:
@@ -517,7 +519,7 @@ class ResourceAnalyzer:
                 continue
 
             node, rtype = key.split(":")
-            recent_util = np.mean([m.utilization for m in list(metrics)[-10:]])
+            recent_util = mean([m.utilization for m in list(metrics)[-10:]])
 
             by_type[ResourceType(rtype)].append(recent_util)
             node_utils[node] = recent_util
@@ -526,13 +528,14 @@ class ResourceAnalyzer:
         imbalanced_resources = []
         for rtype, utils in by_type.items():
             if len(utils) > 1:
-                cv = np.std(utils) / np.mean(utils) if np.mean(utils) > 0 else 0
+                mean_utils = mean(utils)
+                cv = stdev(utils) / mean_utils if mean_utils > 0 else 0
                 if cv > 0.5:  # Coefficient of variation > 0.5
                     imbalanced_resources.append(rtype)
 
         if imbalanced_resources:
             # Find over and under utilized nodes
-            avg_util = np.mean(list(node_utils.values()))
+            avg_util = mean(list(node_utils.values()))
             over_utilized = [n for n, u in node_utils.items() if u > avg_util + 20]
             under_utilized = [n for n, u in node_utils.items() if u < avg_util - 20]
 
@@ -584,7 +587,7 @@ class ResourceAnalyzer:
             high_util_count = sum(1 for m in recent if m.utilization > 85)
 
             if high_util_count > len(recent) * 0.8:
-                avg_util = np.mean([m.utilization for m in recent])
+                avg_util = mean([m.utilization for m in recent])
 
                 self.bottlenecks.append(
                     Bottleneck(
@@ -618,14 +621,15 @@ class ResourceAnalyzer:
 
             # Look for allocation/deallocation patterns
             utils = [m.utilization for m in metrics]
-            changes = np.diff(utils)
+            changes = [utils[i + 1] - utils[i] for i in range(len(utils) - 1)]
 
             # High variation suggests allocation issues
-            if np.std(changes) > 10:
+            changes_std = stdev(changes) if len(changes) >= 2 else 0.0
+            if changes_std > 10:
                 self.bottlenecks.append(
                     Bottleneck(
                         bottleneck_type=BottleneckType.ALLOCATION,
-                        severity=min(np.std(changes) / 20, 1.0),
+                        severity=min(changes_std / 20, 1.0),
                         edge_node=node,
                         resource_type=ResourceType(rtype),
                         description=f"Inefficient {rtype} allocation patterns",
@@ -658,16 +662,17 @@ class ResourceAnalyzer:
                 if "wait_time" in m.metadata:
                     wait_times.append(m.metadata["wait_time"])
 
-            if wait_times and np.mean(wait_times) > 100:  # 100ms average wait
+            if wait_times and mean(wait_times) > 100:  # 100ms average wait
+                avg_wait = mean(wait_times)
                 self.bottlenecks.append(
                     Bottleneck(
                         bottleneck_type=BottleneckType.CONTENTION,
-                        severity=min(np.mean(wait_times) / 500, 1.0),
+                        severity=min(avg_wait / 500, 1.0),
                         edge_node=node,
                         resource_type=ResourceType(rtype),
-                        description=f"High {rtype} contention (avg wait: {np.mean(wait_times):.0f}ms)",
+                        description=f"High {rtype} contention (avg wait: {avg_wait:.0f}ms)",
                         impact={
-                            "latency_increase": f"{np.mean(wait_times):.0f}ms",
+                            "latency_increase": f"{avg_wait:.0f}ms",
                             "throughput_reduction": "significant",
                             "user_experience": "degraded",
                         },
@@ -739,12 +744,12 @@ class ResourceAnalyzer:
             hist_utils = [m.utilization for m in historical]
             recent_utils = [m.utilization for m in recent]
 
-            mean = np.mean(hist_utils)
-            std = np.std(hist_utils)
+            hist_mean = mean(hist_utils)
+            hist_std = stdev(hist_utils)
 
             # Check for anomalies
             for i, util in enumerate(recent_utils):
-                z_score = (util - mean) / std if std > 0 else 0
+                z_score = (util - hist_mean) / hist_std if hist_std > 0 else 0
 
                 if abs(z_score) > self.anomaly_threshold:
                     self.anomalies.append(
@@ -753,10 +758,13 @@ class ResourceAnalyzer:
                             "edge_node": node,
                             "resource_type": rtype,
                             "value": util,
-                            "expected_range": [mean - 2 * std, mean + 2 * std],
+                            "expected_range": [
+                                hist_mean - 2 * hist_std,
+                                hist_mean + 2 * hist_std,
+                            ],
                             "z_score": z_score,
                             "severity": "high" if abs(z_score) > 4 else "medium",
-                            "description": f"Unusual {rtype} utilization: {util:.1f}% (expected: {mean:.1f}±{std:.1f}%)",
+                            "description": f"Unusual {rtype} utilization: {util:.1f}% (expected: {hist_mean:.1f}±{hist_std:.1f}%)",
                         }
                     )
 

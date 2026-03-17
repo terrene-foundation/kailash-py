@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-import numpy as np
+from kailash._math_utils import mean, median
 
 logger = logging.getLogger(__name__)
 
@@ -240,7 +240,7 @@ class QueryPatternTracker:
         if not execution_times:
             return None
 
-        avg_execution_time = np.mean(execution_times)
+        avg_execution_time = mean(execution_times)
 
         # Calculate frequency (queries per minute)
         time_span = (
@@ -256,7 +256,7 @@ class QueryPatternTracker:
 
         # Calculate typical result size
         result_sizes = [e.result_size for e in executions if e.result_size > 0]
-        typical_result_size = int(np.median(result_sizes)) if result_sizes else 0
+        typical_result_size = int(median(result_sizes)) if result_sizes else 0
 
         # Find sequence patterns
         follows_queries = []
@@ -360,7 +360,7 @@ class QueryPatternTracker:
                 delays.append(delay.total_seconds())
 
         if delays:
-            avg_delay_seconds = np.mean(delays)
+            avg_delay_seconds = mean(delays)
             return timedelta(seconds=avg_delay_seconds)
         else:
             return timedelta(seconds=30)  # Default 30 seconds

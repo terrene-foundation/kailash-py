@@ -46,7 +46,6 @@ cli = [
 # HTTP nodes (sync + async API calls)
 http = [
     "aiohttp>=3.12.4",
-    "httpx>=0.25.0",
     "requests>=2.32.3",
 ]
 # Database (SQLAlchemy + SQLite async)
@@ -80,14 +79,9 @@ mfa = [
 microsoft = [
     "msal>=1.32.3",
 ]
-# Data science, ML, and visualization
-data-science = [
+# Visualization (workflow graph rendering, performance charts)
+viz = [
     "matplotlib>=3.5",
-    "numpy>=2.2.5",
-    "pandas>=2.2.3",
-    "plotly>=6.2.0",
-    "scipy>=1.15.3",
-    "scikit-learn>=1.6.1",
 ]
 # Monitoring (Prometheus metrics, resource tracking)
 monitoring = [
@@ -167,7 +161,7 @@ docs = [
 ]
 # Everything (restores pre-1.0 behavior)
 all = [
-    "kailash[server,cli,http,database,postgres,mysql,files,auth,mfa,microsoft,data-science,monitoring,distributed,mcp,scheduler,otel]",
+    "kailash[server,cli,http,database,postgres,mysql,files,auth,mfa,microsoft,viz,monitoring,distributed,mcp,scheduler,otel]",
     "kailash-dataflow>=1.0.0,<2.0.0",
     "kailash-nexus>=1.4.2",
     "kailash-kaizen>=1.2.5",

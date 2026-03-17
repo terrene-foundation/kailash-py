@@ -29,13 +29,17 @@ The core API (WorkflowBuilder, LocalRuntime, AsyncLocalRuntime, Node, 140+ nodes
 - Sub-package dependency pins updated to `kailash>=1.0.0,<2.0.0`
 - `WorkflowGraph` import now emits `DeprecationWarning` (use `Workflow` instead, removal in 2.0)
 - Legacy middleware (`AgentUIMiddleware`, `AIChatMiddleware`, `APIGateway`, `RealtimeMiddleware`) no longer exported from `kailash` top-level; import from `kailash.middleware` instead
-- **Dependencies slimmed from 34 to 4 mandatory packages**. Core install (`pip install kailash`) now only requires `jsonschema`, `networkx`, `pydantic`, `pyyaml`. All other dependencies moved to optional extras. Use `pip install kailash[all]` to restore the pre-1.0 behavior, or install only what you need: `kailash[server]`, `kailash[http]`, `kailash[database]`, `kailash[auth]`, `kailash[data-science]`, `kailash[monitoring]`, `kailash[distributed]`, `kailash[mcp]`, etc.
+- **Dependencies slimmed from 34 to 4 mandatory packages**. Core install (`pip install kailash`) now only requires `jsonschema`, `networkx`, `pydantic`, `pyyaml`. All other dependencies moved to optional extras. Use `pip install kailash[all]` to restore the pre-1.0 behavior, or install only what you need: `kailash[server]`, `kailash[http]`, `kailash[database]`, `kailash[auth]`, `kailash[viz]`, `kailash[monitoring]`, `kailash[distributed]`, `kailash[mcp]`, etc.
+- **Replaced numpy/scipy/scikit-learn with stdlib `_math_utils`** — pure Python implementations of mean, stdev, median, percentile, linregress, dot product, norm, FFT. No scientific computing packages required for core SDK operation.
 - `WorkflowVisualizer` is now lazy-loaded (requires `kailash[data-science]` for matplotlib)
 - Server classes (`WorkflowServer`, `create_gateway`, etc.) now lazy-loaded (requires `kailash[server]`)
 
 #### Removed (Breaking)
 
 - **`twilio`** dependency removed entirely (no code in the SDK used it)
+- **`pandas`**, **`scipy`**, **`scikit-learn`**, **`plotly`** removed from optional extras (replaced with stdlib or existing fallbacks)
+- **`httpx`** removed from `http` extra (consolidated to `aiohttp` + `requests`)
+- **`data-science`** extra renamed to **`viz`** (now just `matplotlib`)
 - **`setup.py`** removed from all packages — `pyproject.toml` is the single source of truth
 - **Legacy fluent API**: `add_node("node_id", NodeClass, param=value)` pattern removed (deprecated since v0.8.0). Use `add_node("NodeType", "node_id", {"param": value})`
 - **`cycle=True` in `connect()`**: Direct `workflow.connect(a, b, cycle=True)` removed (deprecated since v0.2.0). Use `CycleBuilder` API
