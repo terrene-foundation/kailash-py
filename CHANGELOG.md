@@ -15,6 +15,56 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [0.13.0] - 2026-03-17
+
+**Production Readiness Release**
+
+35 production readiness TODOs implemented, 72 security findings resolved across 4 red team rounds, 14 hardened patterns codified.
+
+#### Added
+
+- Real saga execution via NodeExecutor protocol (M1/M2) — no more simulated results
+- Real 2PC participant transport: LocalNodeTransport + HttpTransport with SSRF prevention (M3)
+- Workflow checkpoint state capture/restore via ExecutionTracker (M4/M5)
+- DurableRequest.\_create_workflow with schema validation (M6)
+- Prometheus /metrics endpoint on all server classes (M7)
+- SQLite EventStore backend with WAL mode (S1)
+- Workflow signals and queries: SignalChannel + QueryRegistry + REST endpoints + SignalWaitNode (S2)
+- Built-in workflow scheduler via APScheduler integration (S3)
+- Persistent dead letter queue with exponential backoff retry (S4)
+- Distributed circuit breaker via Redis with Lua atomic transitions (S5)
+- OpenTelemetry tracing with graceful degradation (S6)
+- Coordinated graceful shutdown via ShutdownCoordinator (S7)
+- Workflow versioning with semver registry (S8)
+- Multi-worker task queue architecture (S9)
+- Continue-as-new pattern for infinite-duration workflows (N1)
+- WebSocket-based live monitoring dashboard (N2)
+- Kubernetes deployment manifests + Helm chart (N3)
+- System-wide resource quotas with semaphore-based concurrency control (N4)
+- Default persistent EventStore backend via KAILASH_EVENT_STORE_PATH env var (N5)
+- Workflow pause/resume controller (N6)
+- Connection dashboard integration into main server (N7)
+- Comprehensive execution audit trail: NODE_EXECUTED/FAILED + WORKFLOW lifecycle events
+- Search attributes: typed EAV table with indexed cross-execution queries
+- Edge migration, MCP client/executor, credential backends, LDAP, API gateway implementations
+- TestParticipantNode for real (NO MOCKING) integration tests
+
+#### Security
+
+- 72 findings resolved across 4 red team rounds (R1: 62, R2: 3, R3: 2, R4: 5)
+- SSRF prevention with DNS rebinding protection
+- SQL injection prevention via table name + filter key + attribute name regex validation
+- Bounded collections (deque maxlen) on all long-lived lists/dicts
+- math.isfinite() on all numeric configuration fields including EATP CostLimitDimension
+- CancelledError/KeyboardInterrupt/SystemExit re-raising in saga coordinator
+- Node type allowlist blocking PythonCodeNode/AsyncPythonCodeNode by default
+- SQLite 0o600 file permissions including WAL/SHM (re-applied after first write)
+- Rate limiting on signal/query endpoints with periodic key eviction
+- Response header allowlist on proxy handler
+- Generic API error messages (no str(e) in responses)
+- Redis URL scheme validation
+- No silent no-op defaults (LocalNodeTransport defaults to RegistryNodeExecutor)
+
 ### [0.12.1] - 2026-02-22
 
 **V4 Audit Hardening Patch**

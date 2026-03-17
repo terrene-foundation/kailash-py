@@ -44,7 +44,7 @@ except ImportError:
 # For backward compatibility
 WorkflowGraph = Workflow
 
-__version__ = "0.12.5"
+__version__ = "0.13.0"
 
 __all__ = [
     # Core workflow components
