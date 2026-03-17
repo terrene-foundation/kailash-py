@@ -75,7 +75,11 @@ class TestTwoPhaseCommitRedisIntegration:
         assert stored_data is not None
 
         # Add participants
-        participants = ["payment_service", "inventory_service", "audit_service"]
+        participants = [
+            "TestParticipantNode",
+            "TestParticipantNode",
+            "TestParticipantNode",
+        ]
         for participant_id in participants:
             result = await coordinator.async_run(
                 operation="add_participant",
@@ -107,11 +111,13 @@ class TestTwoPhaseCommitRedisIntegration:
     @pytest.mark.asyncio
     async def test_2pc_successful_transaction_with_persistence(self, redis_client):
         """Test complete 2PC transaction with Redis persistence."""
+        # No mock transport — uses real RegistryNodeExecutor + TestParticipantNode
         coordinator = TwoPhaseCommitCoordinatorNode(
             transaction_name="successful_2pc",
-            participants=["service1", "service2"],
+            participants=["TestParticipantNode", "TestParticipantNode"],
             state_storage="redis",
             storage_config={"redis_client": redis_client, "key_prefix": "test:2pc:"},
+            # Uses default RegistryNodeExecutor — TestParticipantNode registered via conftest
         )
 
         # Begin transaction
@@ -141,11 +147,13 @@ class TestTwoPhaseCommitRedisIntegration:
     @pytest.mark.asyncio
     async def test_2pc_abort_transaction_with_persistence(self, redis_client):
         """Test aborting 2PC transaction with persistence."""
+        # No mock transport — uses real RegistryNodeExecutor + TestParticipantNode
         coordinator = TwoPhaseCommitCoordinatorNode(
             transaction_name="abort_test",
-            participants=["service1", "service2"],
+            participants=["TestParticipantNode", "TestParticipantNode"],
             state_storage="redis",
             storage_config={"redis_client": redis_client, "key_prefix": "test:2pc:"},
+            # Uses default RegistryNodeExecutor — TestParticipantNode registered via conftest
         )
 
         # Begin transaction
@@ -172,14 +180,16 @@ class TestTwoPhaseCommitRedisIntegration:
 
         # Create multiple coordinators concurrently
         for i in range(num_transactions):
+            # No mock transport — uses real RegistryNodeExecutor + TestParticipantNode
             coordinator = TwoPhaseCommitCoordinatorNode(
                 transaction_name=f"concurrent_2pc_{i}",
-                participants=[f"service_{i}_1", f"service_{i}_2"],
+                participants=["TestParticipantNode", "TestParticipantNode"],
                 state_storage="redis",
                 storage_config={
                     "redis_client": redis_client,
                     "key_prefix": "test:2pc:concurrent:",
                 },
+                # Uses default RegistryNodeExecutor — TestParticipantNode registered via conftest
             )
 
             result = await coordinator.async_run(
@@ -280,11 +290,13 @@ class TestTwoPhaseCommitDatabaseIntegration:
 
         async def run_test():
             # Create coordinator with database storage
+            # No mock transport — uses real RegistryNodeExecutor + TestParticipantNode
             coordinator = TwoPhaseCommitCoordinatorNode(
                 transaction_name="db_2pc_test",
-                participants=["payment_db", "inventory_db"],
+                participants=["TestParticipantNode", "TestParticipantNode"],
                 state_storage="database",
                 storage_config={"db_pool": db_pool, "table_name": "test_2pc_states"},
+                # Uses default RegistryNodeExecutor — TestParticipantNode registered via conftest
             )
 
             # Begin transaction
@@ -330,11 +342,17 @@ class TestTwoPhaseCommitDatabaseIntegration:
 
         async def run_test():
             # Create first coordinator and begin transaction
+            # No mock transport — uses real RegistryNodeExecutor + TestParticipantNode
             coordinator1 = TwoPhaseCommitCoordinatorNode(
                 transaction_name="recovery_test",
-                participants=["service_a", "service_b", "service_c"],
+                participants=[
+                    "TestParticipantNode",
+                    "TestParticipantNode",
+                    "TestParticipantNode",
+                ],
                 state_storage="database",
                 storage_config={"db_pool": db_pool, "table_name": "test_2pc_states"},
+                # Uses default RegistryNodeExecutor — TestParticipantNode registered via conftest
             )
 
             begin_result = await coordinator1.async_run(
@@ -345,6 +363,7 @@ class TestTwoPhaseCommitDatabaseIntegration:
             transaction_id = begin_result["transaction_id"]
 
             # Simulate coordinator failure by creating new instance
+            # Real RegistryNodeExecutor — TestParticipantNode registered via conftest
             coordinator2 = TwoPhaseCommitCoordinatorNode(
                 state_storage="database",
                 storage_config={"db_pool": db_pool, "table_name": "test_2pc_states"},
@@ -379,14 +398,16 @@ class TestTwoPhaseCommitDatabaseIntegration:
             transaction_ids = []
 
             for i in range(3):
+                # No mock transport — uses real RegistryNodeExecutor + TestParticipantNode
                 coordinator = TwoPhaseCommitCoordinatorNode(
                     transaction_name=f"isolation_test_{i}",
-                    participants=[f"db_service_{i}"],
+                    participants=["TestParticipantNode"],
                     state_storage="database",
                     storage_config={
                         "db_pool": db_pool,
                         "table_name": "test_2pc_states",
                     },
+                    # Uses default RegistryNodeExecutor — TestParticipantNode registered via conftest
                 )
 
                 begin_result = await coordinator.async_run(
@@ -442,6 +463,7 @@ class TestTwoPhaseCommitStorageIntegration:
     async def test_memory_storage_fallback(self):
         """Test fallback to memory storage when services unavailable."""
         # Create coordinator with invalid Redis config
+        # No mock transport — uses real RegistryNodeExecutor + TestParticipantNode
         coordinator = TwoPhaseCommitCoordinatorNode(
             transaction_name="fallback_test",
             state_storage="redis",
@@ -449,6 +471,7 @@ class TestTwoPhaseCommitStorageIntegration:
                 "redis_client": None,  # Invalid client
                 "key_prefix": "test:fallback:",
             },
+            # Uses default RegistryNodeExecutor — TestParticipantNode registered via conftest
         )
 
         # Should still work with memory storage fallback
@@ -460,7 +483,7 @@ class TestTwoPhaseCommitStorageIntegration:
 
         # Add participant and execute
         await coordinator.async_run(
-            operation="add_participant", participant_id="fallback_service"
+            operation="add_participant", participant_id="TestParticipantNode"
         )
 
         execution_result = await coordinator.async_run(operation="execute_transaction")
@@ -470,6 +493,7 @@ class TestTwoPhaseCommitStorageIntegration:
     async def test_database_storage_fallback(self):
         """Test fallback to memory storage for invalid database config."""
         # Create coordinator with invalid database config
+        # No mock transport — uses real RegistryNodeExecutor + TestParticipantNode
         coordinator = TwoPhaseCommitCoordinatorNode(
             transaction_name="db_fallback_test",
             state_storage="database",
@@ -477,6 +501,7 @@ class TestTwoPhaseCommitStorageIntegration:
                 "db_pool": None,  # Invalid pool
                 "table_name": "invalid_table",
             },
+            # Uses default RegistryNodeExecutor — TestParticipantNode registered via conftest
         )
 
         # Should still work with memory storage fallback
@@ -488,7 +513,7 @@ class TestTwoPhaseCommitStorageIntegration:
 
         # Execute transaction
         await coordinator.async_run(
-            operation="add_participant", participant_id="db_fallback_service"
+            operation="add_participant", participant_id="TestParticipantNode"
         )
 
         execution_result = await coordinator.async_run(operation="execute_transaction")

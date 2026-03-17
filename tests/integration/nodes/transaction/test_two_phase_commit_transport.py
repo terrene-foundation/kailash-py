@@ -420,10 +420,15 @@ class TestTwoPhaseCommitDefaultTransportBackwardCompat:
 
     @pytest.mark.asyncio
     async def test_default_transport_commit(self):
-        """Default transport (no executor) always succeeds like the old mock."""
+        """Default transport with MockNodeExecutor succeeds."""
+        # Real RegistryNodeExecutor — TestParticipantNode registered via conftest
         coordinator = TwoPhaseCommitCoordinatorNode(
             transaction_name="compat_test",
-            participants=["svc1", "svc2", "svc3"],
+            participants=[
+                "TestParticipantNode",
+                "TestParticipantNode",
+                "TestParticipantNode",
+            ],
         )
 
         await coordinator.async_run(

@@ -80,11 +80,12 @@ class TestProtocolConformance:
 
 
 class TestLocalNodeTransportNoExecutor:
-    """LocalNodeTransport with no executor (backward-compatible no-op mode)."""
+    """LocalNodeTransport with default executor (RegistryNodeExecutor)."""
 
     @pytest.fixture
     def transport(self):
-        return LocalNodeTransport()
+        # Use MockNodeExecutor since test participant IDs aren't real registered nodes
+        return LocalNodeTransport(executor=MockNodeExecutor())
 
     @pytest.fixture
     def participant(self):

@@ -12,6 +12,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from kailash.nodes.transaction.node_executor import MockNodeExecutor
+from kailash.nodes.transaction.participant_transport import LocalNodeTransport
 from kailash.nodes.transaction.two_phase_commit import (
     ParticipantVote,
     TransactionState,
@@ -497,7 +499,8 @@ class TestTwoPhaseCommitCoordinatorNode:
     @pytest.mark.asyncio
     async def test_mock_prepare_request(self):
         """Test mock prepare request implementation."""
-        coordinator = TwoPhaseCommitCoordinatorNode()
+        mock_transport = LocalNodeTransport(executor=MockNodeExecutor())
+        coordinator = TwoPhaseCommitCoordinatorNode(transport=mock_transport)
         participant = TwoPhaseCommitParticipant("test_service", "http://test/2pc")
 
         await coordinator._send_prepare_request(participant)
@@ -508,9 +511,11 @@ class TestTwoPhaseCommitCoordinatorNode:
 
     @pytest.mark.asyncio
     async def test_mock_commit_request(self):
-        """Test mock commit request implementation."""
+        """Test commit request with real node execution."""
         coordinator = TwoPhaseCommitCoordinatorNode()
-        participant = TwoPhaseCommitParticipant("test_service", "http://test/2pc")
+        participant = TwoPhaseCommitParticipant(
+            "TestParticipantNode", "http://test/2pc"
+        )
 
         await coordinator._send_commit_request(participant)
 
@@ -519,9 +524,11 @@ class TestTwoPhaseCommitCoordinatorNode:
 
     @pytest.mark.asyncio
     async def test_mock_abort_request(self):
-        """Test mock abort request implementation."""
+        """Test abort request with real node execution."""
         coordinator = TwoPhaseCommitCoordinatorNode()
-        participant = TwoPhaseCommitParticipant("test_service", "http://test/2pc")
+        participant = TwoPhaseCommitParticipant(
+            "TestParticipantNode", "http://test/2pc"
+        )
 
         await coordinator._send_abort_request(participant)
 

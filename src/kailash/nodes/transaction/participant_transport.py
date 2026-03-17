@@ -192,10 +192,15 @@ class LocalNodeTransport:
         Args:
             executor: An object implementing the ``NodeExecutor`` protocol
                       (i.e. an ``async execute(node_type, params, timeout)``
-                      method).  When *None*, a default always-succeed mode
-                      is used.
+                      method).  When *None*, defaults to ``RegistryNodeExecutor``
+                      for real node execution.
         """
-        self._executor = executor
+        if executor is None:
+            from .node_executor import RegistryNodeExecutor
+
+            self._executor = RegistryNodeExecutor()
+        else:
+            self._executor = executor
 
     async def prepare(
         self,
@@ -206,10 +211,6 @@ class LocalNodeTransport:
         """Execute the participant's prepare logic locally."""
         pid = participant.participant_id
         logger.info("LocalNodeTransport: PREPARE %s for tx %s", pid, transaction_id)
-
-        if self._executor is None:
-            # Default no-op: always vote prepared (backward-compatible)
-            return TransportResult(success=True, vote="prepared")
 
         try:
             result = await self._executor.execute(
@@ -248,9 +249,6 @@ class LocalNodeTransport:
         pid = participant.participant_id
         logger.info("LocalNodeTransport: COMMIT %s for tx %s", pid, transaction_id)
 
-        if self._executor is None:
-            return TransportResult(success=True)
-
         try:
             result = await self._executor.execute(
                 pid,
@@ -280,9 +278,6 @@ class LocalNodeTransport:
         """Execute the participant's abort logic locally."""
         pid = participant.participant_id
         logger.info("LocalNodeTransport: ABORT %s for tx %s", pid, transaction_id)
-
-        if self._executor is None:
-            return TransportResult(success=True)
 
         try:
             result = await self._executor.execute(
