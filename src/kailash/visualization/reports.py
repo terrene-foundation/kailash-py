@@ -29,7 +29,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-import numpy as np
+from kailash._math_utils import mean, median, percentile, stdev
 
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskRun, TaskStatus
@@ -295,7 +295,7 @@ class WorkflowPerformanceReporter:
                 if t.metrics.cpu_usage
             ]
             if cpu_values:
-                summary.avg_cpu_usage = np.mean(cpu_values)
+                summary.avg_cpu_usage = mean(cpu_values)
 
             # Memory metrics
             memory_values = [
@@ -376,10 +376,10 @@ class WorkflowPerformanceReporter:
                 analysis["by_node_type"][node_type] = {
                     "count": len(type_tasks),
                     "completed": len(completed),
-                    "avg_duration": np.mean(durations) if durations else 0,
+                    "avg_duration": mean(durations) if durations else 0,
                     "max_duration": max(durations) if durations else 0,
-                    "avg_cpu": np.mean(cpu_values) if cpu_values else 0,
-                    "avg_memory": np.mean(memory_values) if memory_values else 0,
+                    "avg_cpu": mean(cpu_values) if cpu_values else 0,
+                    "avg_memory": mean(memory_values) if memory_values else 0,
                     "success_rate": len(completed) / len(type_tasks) * 100,
                 }
 
@@ -415,7 +415,7 @@ class WorkflowPerformanceReporter:
         # Find duration outliers
         durations = [t.metrics.duration for t in completed_tasks if t.metrics.duration]
         if durations:
-            duration_threshold = np.percentile(durations, 90)
+            duration_threshold = percentile(durations, 90)
             slow_tasks = [
                 t
                 for t in completed_tasks
@@ -445,7 +445,7 @@ class WorkflowPerformanceReporter:
             if t.metrics.memory_usage_mb
         ]
         if memory_values:
-            memory_threshold = np.percentile(memory_values, 90)
+            memory_threshold = percentile(memory_values, 90)
             memory_intensive_tasks = [
                 t
                 for t in completed_tasks
@@ -474,7 +474,7 @@ class WorkflowPerformanceReporter:
             t.metrics.cpu_usage for t in completed_tasks if t.metrics.cpu_usage
         ]
         if cpu_values:
-            cpu_threshold = np.percentile(cpu_values, 90)
+            cpu_threshold = percentile(cpu_values, 90)
             cpu_intensive_tasks = [
                 t
                 for t in completed_tasks
@@ -517,15 +517,15 @@ class WorkflowPerformanceReporter:
         ]
         if cpu_values:
             analysis["cpu_distribution"] = {
-                "mean": np.mean(cpu_values),
-                "median": np.median(cpu_values),
-                "std": np.std(cpu_values),
+                "mean": mean(cpu_values),
+                "median": median(cpu_values),
+                "std": stdev(cpu_values),
                 "min": min(cpu_values),
                 "max": max(cpu_values),
                 "percentiles": {
-                    "25th": np.percentile(cpu_values, 25),
-                    "75th": np.percentile(cpu_values, 75),
-                    "90th": np.percentile(cpu_values, 90),
+                    "25th": percentile(cpu_values, 25),
+                    "75th": percentile(cpu_values, 75),
+                    "90th": percentile(cpu_values, 90),
                 },
             }
 
@@ -537,16 +537,16 @@ class WorkflowPerformanceReporter:
         ]
         if memory_values:
             analysis["memory_distribution"] = {
-                "mean": np.mean(memory_values),
-                "median": np.median(memory_values),
-                "std": np.std(memory_values),
+                "mean": mean(memory_values),
+                "median": median(memory_values),
+                "std": stdev(memory_values),
                 "min": min(memory_values),
                 "max": max(memory_values),
                 "total": sum(memory_values),
                 "percentiles": {
-                    "25th": np.percentile(memory_values, 25),
-                    "75th": np.percentile(memory_values, 75),
-                    "90th": np.percentile(memory_values, 90),
+                    "25th": percentile(memory_values, 25),
+                    "75th": percentile(memory_values, 75),
+                    "90th": percentile(memory_values, 90),
                 },
             }
 

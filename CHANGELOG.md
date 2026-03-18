@@ -15,6 +15,71 @@ The changelog has been reorganized into individual files for better management. 
 
 ## Recent Releases
 
+### [1.0.0] - 2026-03-17
+
+**First Stable Release**
+
+The core API (WorkflowBuilder, LocalRuntime, AsyncLocalRuntime, Node, 140+ nodes) is now under semver stability guarantees. No breaking changes until 2.0.0.
+
+#### Added
+
+- **Progressive Infrastructure (Level 0/1/2)** — Start with zero config (SQLite), scale to multi-worker PostgreSQL/MySQL by setting environment variables. No application code changes required.
+  - `KAILASH_DATABASE_URL` switches all stores to PostgreSQL or MySQL
+  - `KAILASH_QUEUE_URL` enables multi-worker task distribution (Redis or SQL-backed)
+  - `StoreFactory` auto-detects configuration and creates appropriate backends
+- **QueryDialect strategy pattern** (`kailash.db`) — Dialect-portable SQL generation across PostgreSQL, MySQL 8.0+, and SQLite from the same code. Canonical `?` placeholders translated automatically per dialect.
+- **ConnectionManager with transaction support** — Async database connection manager with `transaction()` context manager for multi-statement atomicity across all three databases.
+- **5 dialect-portable store backends** (`kailash.infrastructure`) — DBEventStoreBackend, DBCheckpointStore, DBDeadLetterQueue, DBExecutionStore, DBIdempotencyStore. All share a single ConnectionManager.
+- **SQL-backed task queue** — `SQLTaskQueue` with `FOR UPDATE SKIP LOCKED` (PostgreSQL/MySQL) and `BEGIN IMMEDIATE` (SQLite) for concurrent dequeue without contention.
+- **SQLWorkerRegistry** — Worker heartbeat tracking and dead worker reaping with transactional task recovery.
+- **IdempotentExecutor** — Execution-level exactly-once semantics with claim-then-execute-then-store pattern and TTL-based cache expiration.
+- **Queue factory** (`create_task_queue()`) — Auto-detect queue backend from `KAILASH_QUEUE_URL` (Redis, PostgreSQL, MySQL, SQLite, or file path).
+- **Schema versioning** via `kailash_meta` table with downgrade protection. `migration.py` utilities for version checking.
+- **SQL identifier validation** — All table/column names in dynamic SQL validated against `^[a-zA-Z_][a-zA-Z0-9_]*$` to prevent injection.
+- **228 unit tests + 141 integration tests** for infrastructure layer, parameterized across SQLite, PostgreSQL, and MySQL.
+- **5 reference docs** (`docs/enterprise-infrastructure/`) covering overview, store backends, task queues, idempotency, and migration guide.
+- **Multi-worker quickstart guide** (`docs/guides/multi-worker-quickstart.md`) with 3 progressive example applications.
+
+#### Fixed
+
+- **BRPOPLPUSH → BLMOVE** — Redis 7.0+ compatibility for distributed task queue (`distributed.py`)
+- **asyncpg lazy import** — `storage_backends.py` no longer crashes at import time without `kailash[postgres]`
+- **DatabaseStateStorage stub** — `_ensure_table_exists()` fully implemented with schema + index creation
+- **Worker deserialization** — `_execute_workflow_sync()` uses `Workflow.from_dict()`/`to_dict()` for round-trip serialization
+- **WorkflowVisualizer tests** — Updated from removed matplotlib API to Mermaid/DOT API
+- **Health monitor tests** — Fixed flaky HTTP mocks (aiohttp, not httpx)
+- **Saga state storage tests** — Fixed `_initialized` attribute access after initialization refactor
+- **Distributed runtime tests** — Updated mock from `brpoplpush` to `blmove`
+- **Legacy fluent API test** — Updated to expect `WorkflowValidationError` (removed in v1.0.0)
+
+#### Changed
+
+- Version: 0.13.0 -> 1.0.0
+- DataFlow version: 0.12.4 -> 1.0.0
+- Classifier: Development Status :: 3 - Alpha -> 5 - Production/Stable
+- Sub-package dependency pins updated to `kailash>=1.0.0,<2.0.0`
+- `WorkflowGraph` import now emits `DeprecationWarning` (use `Workflow` instead, removal in 2.0)
+- Legacy middleware (`AgentUIMiddleware`, `AIChatMiddleware`, `APIGateway`, `RealtimeMiddleware`) no longer exported from `kailash` top-level; import from `kailash.middleware` instead
+- **Dependencies slimmed from 34 to 4 mandatory packages**. Core install (`pip install kailash`) now only requires `jsonschema`, `networkx`, `pydantic`, `pyyaml`. All other dependencies moved to optional extras. Use `pip install kailash[all]` to restore the pre-1.0 behavior, or install only what you need: `kailash[server]`, `kailash[http]`, `kailash[database]`, `kailash[auth]`, `kailash[viz]`, `kailash[monitoring]`, `kailash[distributed]`, `kailash[mcp]`, etc.
+- **Replaced numpy/scipy/scikit-learn with stdlib `_math_utils`** — pure Python implementations of mean, stdev, median, percentile, linregress, dot product, norm, FFT. No scientific computing packages required for core SDK operation.
+- `WorkflowVisualizer` is now lazy-loaded (requires `kailash[data-science]` for matplotlib)
+- Server classes (`WorkflowServer`, `create_gateway`, etc.) now lazy-loaded (requires `kailash[server]`)
+
+#### Removed (Breaking)
+
+- **`twilio`** dependency removed entirely (no code in the SDK used it)
+- **`pandas`**, **`scipy`**, **`scikit-learn`**, **`plotly`** removed from optional extras (replaced with stdlib or existing fallbacks)
+- **`httpx`** removed from `http` extra (consolidated to `aiohttp` + `requests`)
+- **`data-science`** extra renamed to **`viz`** (now just `matplotlib`)
+- **`setup.py`** removed from all packages — `pyproject.toml` is the single source of truth
+- **Legacy fluent API**: `add_node("node_id", NodeClass, param=value)` pattern removed (deprecated since v0.8.0). Use `add_node("NodeType", "node_id", {"param": value})`
+- **`cycle=True` in `connect()`**: Direct `workflow.connect(a, b, cycle=True)` removed (deprecated since v0.2.0). Use `CycleBuilder` API
+- **`create_gateway_legacy()`**: Removed from `kailash.servers.gateway` (use `create_gateway()`)
+- **`HTTPClientNode`**: Alias removed from `kailash.nodes.api` (use `HTTPRequestNode`)
+- **JWT backward-compat methods**: `generate_token()`, `verify_and_decode_token()`, `blacklist_token()`, `generate_refresh_token()` removed (use `create_access_token()`, `verify_token()`, `revoke_token()`, `create_refresh_token()`)
+- **`execute_workflow()`**: Removed from `AgentUIMiddleware` (use `execute()`)
+- **`add_node_fluent()`**: Method removed from `WorkflowBuilder`
+
 ### [0.13.0] - 2026-03-17
 
 **Production Readiness Release**

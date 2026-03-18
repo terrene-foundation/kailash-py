@@ -258,9 +258,13 @@ class WorkflowBuilder:
             return self._add_node_current(args[0], args[1], args[2])
 
         elif len(args) >= 2 and isinstance(args[0], str):
-            # Pattern 2: Legacy fluent API - add_node("node_id", NodeClass, param=value)
-            if hasattr(args[1], "__name__") or isinstance(args[1], type):
-                return self._add_node_legacy_fluent(args[0], args[1], **kwargs)
+            if isinstance(args[1], type) or hasattr(args[1], "__name__"):
+                # Legacy fluent API removed in v1.0.0
+                raise WorkflowValidationError(
+                    f"Legacy fluent API (add_node('node_id', NodeClass, ...)) was removed in v1.0.0.\n"
+                    f"Use the current API instead:\n"
+                    f"  add_node('{getattr(args[1], '__name__', str(args[1]))}', '{args[0]}', {dict(kwargs) if kwargs else {{}}})"
+                )
             elif isinstance(args[1], str):
                 # Two strings - assume current API: add_node("NodeType", "node_id")
                 config = kwargs if kwargs else (args[2] if len(args) > 2 else {})
@@ -304,7 +308,6 @@ class WorkflowBuilder:
                 f"Invalid add_node signature. Received {len(args)} args: {[type(arg).__name__ for arg in args]}\n"
                 f"Supported patterns:\n"
                 f"  add_node('NodeType', 'node_id', {{'param': value}})  # Preferred\n"
-                f"  add_node('node_id', NodeClass, param=value)          # Legacy\n"
                 f"  add_node(NodeClass, 'node_id', param=value)          # Alternative\n"
                 f"Examples:\n"
                 f"  add_node('HTTPRequestNode', 'api_call', {{'url': 'https://api.com'}})\n"
@@ -316,38 +319,6 @@ class WorkflowBuilder:
     ) -> str:
         """Handle current API pattern: add_node('NodeType', 'node_id', {'param': value})"""
         return self._add_node_unified(node_type, node_id, config)
-
-    def _add_node_legacy_fluent(
-        self, node_id: str, node_class_or_type: Any, **config
-    ) -> "WorkflowBuilder":
-        """Handle legacy fluent API pattern: add_node('node_id', NodeClass, param=value)"""
-        import warnings
-
-        # If it's a class, validate it's a Node subclass
-        if isinstance(node_class_or_type, type) and not issubclass(
-            node_class_or_type, Node
-        ):
-            raise WorkflowValidationError(
-                f"Invalid node type: {node_class_or_type}. Expected a Node subclass or string."
-            )
-
-        warnings.warn(
-            f"Legacy fluent API usage detected. "
-            f"Migration guide:\n"
-            f"  OLD: add_node('{node_id}', {getattr(node_class_or_type, '__name__', str(node_class_or_type))}, {list(config.keys())})\n"
-            f"  NEW: add_node('{getattr(node_class_or_type, '__name__', str(node_class_or_type))}', '{node_id}', {config})\n"
-            f"Legacy support will be removed in v0.8.0",
-            DeprecationWarning,
-            stacklevel=3,
-        )
-
-        if hasattr(node_class_or_type, "__name__"):
-            node_type = node_class_or_type.__name__
-        else:
-            node_type = str(node_class_or_type)
-
-        self._add_node_unified(node_type, node_id, config)
-        return self  # Return self for fluent chaining
 
     def _add_node_alternative(
         self, node_class: type, node_id: str | None, **config
@@ -509,39 +480,6 @@ class WorkflowBuilder:
             return True
 
         return False
-
-    # Fluent API methods for backward compatibility
-    def add_node_fluent(
-        self, node_id: str, node_class_or_type: Any, **config
-    ) -> "WorkflowBuilder":
-        """
-        DEPRECATED: Fluent API for backward compatibility.
-        Use add_node(node_type, node_id, config) instead.
-
-        Args:
-            node_id: Node identifier
-            node_class_or_type: Node class or type
-            **config: Node configuration as keyword arguments
-
-        Returns:
-            Self for method chaining
-        """
-        import warnings
-
-        warnings.warn(
-            "Fluent API is deprecated. Use add_node(node_type, node_id, config) instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-
-        if hasattr(node_class_or_type, "__name__"):
-            # Node class
-            self.add_node(node_class_or_type.__name__, node_id, config)
-        else:
-            # Assume string type
-            self.add_node(str(node_class_or_type), node_id, config)
-
-        return self
 
     def add_node_instance(self, node_instance: Any, node_id: str | None = None) -> str:
         """

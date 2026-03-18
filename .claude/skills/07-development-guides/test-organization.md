@@ -46,7 +46,7 @@ tests/
 ├── conftest.py       # Shared fixtures
 └── utils/            # Test utilities
     ├── docker_config.py
-    └── docker-compose.test.yml
+    └── compose.yaml
 ```
 
 ## NO MOCKING Examples

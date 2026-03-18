@@ -39,14 +39,27 @@ Ensure red team agents peruse `workspaces/<project>/03-user-flows/` and fully un
 - Focus on intent, vision, and user requirements — never naive technical assertions
 - Every action and expectation from user must be evaluated against implementation
 
-### 3. Iterate until convergence
+### 3. Test-once protocol — do NOT re-run existing tests
 
-Continuously engage red team agents:
+The `/implement` phase already ran the full test suite and wrote `.test-results`. Red team agents MUST:
 
-- Identify root causes of gaps
-- Implement the most optimal and elegant fix
-- Test and ensure no regressions
-- Keep iterating until red team agents find no more gaps/issues/improvements
+1. **READ** `workspaces/<project>/.test-results` to verify all tests passed with 0 regressions
+2. **READ** test source files to verify coverage and quality — do NOT re-execute them
+3. **RUN** only NEW tests that red team writes (E2E user flow tests, Playwright/Marionette tests)
+4. If `.test-results` is missing or stale (commit hash doesn't match HEAD), flag it — don't silently re-run
+
+**When to re-run existing tests (exceptions):**
+
+- Red team suspects a specific test is wrong (tests the wrong thing) — re-run THAT test only
+- Infrastructure-dependent tests that /implement ran against SQLite but production uses PostgreSQL
+- Red team made code changes during convergence — re-run affected tests only, then update `.test-results`
+
+**Iterate until convergence** on gaps found through:
+
+- User flow validation (Playwright/Marionette — these are NEW tests, always run)
+- Code review findings that require fixes
+- Security audit findings that require fixes
+- After each fix, run only the affected tests + the new regression test for the fix
 
 ### 4. Report results
 

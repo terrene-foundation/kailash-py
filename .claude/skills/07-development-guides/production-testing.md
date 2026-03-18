@@ -5,6 +5,7 @@ You are an expert in production-quality testing for Kailash SDK. Guide users thr
 ## Core Responsibilities
 
 ### 1. 3-Tier Testing Strategy
+
 - **Tier 1**: Unit tests - Individual node testing
 - **Tier 2**: Integration tests - Multi-node workflows with real infrastructure
 - **Tier 3**: End-to-end tests - Complete workflows with external services
@@ -152,7 +153,7 @@ def test_complete_etl_pipeline():
     # Transform
     workflow.add_node("PythonCodeNode", "transform", {
         "code": """
-import pandas as pd
+import pandas as pd  # requires: pip install pandas
 df = pd.DataFrame(data)
 
 # Clean and transform
@@ -366,13 +367,170 @@ def test_workflow_performance():
 6. **Cleanup**: Always clean up test artifacts
 
 ## When to Engage
+
 - User asks about "production testing", "quality assurance", "testing strategy"
 - User needs testing guidance
 - User wants to improve test coverage
 - User has questions about test organization
 
+## 9. Infrastructure Testing Patterns
+
+Testing infrastructure stores (ConnectionManager, StoreFactory, task queues, idempotency) requires async fixtures, singleton cleanup, and transaction atomicity verification. All infrastructure tests run against real databases -- NO MOCKING.
+
+### Async Test Fixtures with ConnectionManager
+
+```python
+import pytest
+from kailash.db.connection import ConnectionManager
+
+@pytest.fixture
+async def conn():
+    """Provide an initialized in-memory SQLite ConnectionManager."""
+    cm = ConnectionManager("sqlite:///:memory:")
+    await cm.initialize()
+    yield cm
+    await cm.close()
+
+@pytest.fixture
+async def conn_with_table(conn):
+    """ConnectionManager with a pre-created test table."""
+    await conn.execute(
+        "CREATE TABLE test_store ("
+        "id TEXT PRIMARY KEY, "
+        "data TEXT NOT NULL, "
+        "status TEXT NOT NULL DEFAULT 'active'"
+        ")"
+    )
+    yield conn
+
+@pytest.mark.asyncio
+async def test_insert_and_fetch(conn_with_table):
+    """Test basic CRUD against real database."""
+    await conn_with_table.execute(
+        "INSERT INTO test_store (id, data) VALUES (?, ?)",
+        "record-1", '{"key": "value"}'
+    )
+    row = await conn_with_table.fetchone(
+        "SELECT * FROM test_store WHERE id = ?", "record-1"
+    )
+    assert row is not None
+    assert row["data"] == '{"key": "value"}'
+```
+
+### StoreFactory.reset() for Singleton Cleanup
+
+The `StoreFactory` is a singleton. Tests MUST reset it between test cases to prevent state leakage:
+
+```python
+import pytest
+from kailash.infrastructure.factory import StoreFactory
+
+@pytest.fixture(autouse=True)
+async def reset_store_factory():
+    """Reset the StoreFactory singleton between every test."""
+    yield
+    # Cleanup: close the old instance before resetting
+    old = StoreFactory._instance
+    if old is not None:
+        if old._conn is not None:
+            await old.close()
+    StoreFactory.reset()
+
+@pytest.mark.asyncio
+async def test_level0_returns_sqlite_event_store():
+    """StoreFactory with no URL returns Level 0 defaults."""
+    factory = StoreFactory(database_url=None)
+    await factory.initialize()
+    assert factory.is_level0
+    event_store = await factory.create_event_store()
+    # Level 0: SqliteEventStoreBackend (not DBEventStoreBackend)
+    assert type(event_store).__name__ == "SqliteEventStoreBackend"
+
+@pytest.mark.asyncio
+async def test_level1_returns_db_event_store():
+    """StoreFactory with SQLite URL returns Level 1 DB backends."""
+    factory = StoreFactory(database_url="sqlite:///:memory:")
+    await factory.initialize()
+    assert not factory.is_level0
+    event_store = await factory.create_event_store()
+    assert type(event_store).__name__ == "DBEventStoreBackend"
+```
+
+### Transaction Atomicity Verification
+
+Test that multi-statement operations are truly atomic:
+
+```python
+@pytest.mark.asyncio
+async def test_transaction_rollback_on_error(conn):
+    """Verify transaction rolls back ALL statements on failure."""
+    await conn.execute(
+        "CREATE TABLE atomic_test (id TEXT PRIMARY KEY, val INTEGER)"
+    )
+    await conn.execute(
+        "INSERT INTO atomic_test VALUES (?, ?)", "existing", 1
+    )
+
+    # Attempt a transaction that fails partway through
+    with pytest.raises(Exception):
+        async with conn.transaction() as tx:
+            await tx.execute(
+                "INSERT INTO atomic_test VALUES (?, ?)", "new-row", 2
+            )
+            # This will fail (duplicate primary key)
+            await tx.execute(
+                "INSERT INTO atomic_test VALUES (?, ?)", "existing", 3
+            )
+
+    # Verify 'new-row' was NOT persisted (transaction rolled back)
+    row = await conn.fetchone(
+        "SELECT * FROM atomic_test WHERE id = ?", "new-row"
+    )
+    assert row is None, "Transaction should have rolled back the first INSERT"
+
+@pytest.mark.asyncio
+async def test_dequeue_atomicity(conn):
+    """Verify task queue dequeue is atomic -- no double-processing."""
+    from kailash.infrastructure.task_queue import SQLTaskQueue
+
+    queue = SQLTaskQueue(conn)
+    await queue.initialize()
+
+    # Enqueue one task
+    task_id = await queue.enqueue({"job": "test"})
+
+    # Dequeue it
+    task = await queue.dequeue(worker_id="worker-1")
+    assert task is not None
+    assert task.task_id == task_id
+
+    # Second dequeue should return None (task already claimed)
+    task2 = await queue.dequeue(worker_id="worker-2")
+    assert task2 is None, "Task should not be dequeued twice"
+```
+
+### Infrastructure Red Team Checklist
+
+When reviewing SQL infrastructure code, verify:
+
+- [ ] All table/column names pass through `_validate_identifier()`
+- [ ] All multi-statement operations use `conn.transaction()`
+- [ ] All SQL uses `?` canonical placeholders (no `$1` or `%s`)
+- [ ] DDL uses `dialect.blob_type()` not hardcoded `BLOB`
+- [ ] Upserts use `dialect.upsert()` not check-then-act
+- [ ] In-memory stores have bounded size with LRU eviction
+- [ ] No `AUTOINCREMENT` in shared DDL
+- [ ] Database drivers imported lazily (inside methods)
+- [ ] `FOR UPDATE SKIP LOCKED` only used inside transactions
+- [ ] StoreFactory singleton is reset in test fixtures
+
+> For the full set of infrastructure SQL rules, see `.claude/rules/infrastructure-sql.md`.
+> For the complete enterprise infrastructure skills, see `.claude/skills/15-enterprise-infrastructure/`.
+
 ## Integration with Other Skills
+
 - Route to **testing-best-practices** for testing strategies
 - Route to **test-organization** for NO MOCKING policy
 - Route to **regression-testing** for regression testing
 - Route to **tdd-implementer** for test-first development
+- Route to **infrastructure-specialist** for infrastructure store testing patterns

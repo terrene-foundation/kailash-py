@@ -13,8 +13,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
-from scipy import stats
+from kailash._math_utils import linregress, mean, stdev
 
 # For time series forecasting
 try:
@@ -341,7 +340,7 @@ class PredictiveScaler:
         decision_record["evaluation"] = {
             "actual_usage": actual_usage,
             "accuracy_scores": accuracy_scores,
-            "average_accuracy": np.mean(accuracy_scores) if accuracy_scores else 0,
+            "average_accuracy": mean(accuracy_scores) if accuracy_scores else 0,
             "feedback": feedback,
             "evaluated_at": datetime.now().isoformat(),
         }
@@ -495,7 +494,7 @@ class PredictiveScaler:
             # Adjust confidence based on data quality
             if len(utilizations) > 100:
                 confidence += 0.1
-            if np.std(utilizations) < 10:  # Low variance
+            if stdev(utilizations) < 10:  # Low variance
                 confidence += 0.05
 
             return max(0, min(100, predicted_usage)), min(1.0, confidence)
@@ -529,7 +528,7 @@ class PredictiveScaler:
         time_values = [(t - timestamps[0]).total_seconds() for t in timestamps]
 
         # Linear regression
-        slope, intercept, r_value, _, _ = stats.linregress(time_values, utilizations)
+        slope, intercept, r_value = linregress(time_values, utilizations)
 
         # Predict future value
         future_time = time_values[-1] + horizon_seconds
@@ -570,7 +569,7 @@ class PredictiveScaler:
 
         # Linear regression for trend
         x = list(range(len(recent)))
-        slope, _, _, _, _ = stats.linregress(x, recent)
+        slope, _, _ = linregress(x, recent)
 
         return slope
 
@@ -904,7 +903,7 @@ class PredictiveScaler:
             Confidence intervals
         """
         # Simple confidence intervals based on historical variance
-        std_dev = np.std(forecast) if len(forecast) > 1 else 5.0
+        std_dev = stdev(forecast) if len(forecast) > 1 else 5.0
 
         return {
             "lower_95": [max(0, v - 1.96 * std_dev) for v in forecast],

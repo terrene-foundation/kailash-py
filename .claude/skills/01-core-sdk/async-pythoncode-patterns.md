@@ -21,13 +21,13 @@ Comprehensive guide for AsyncPythonCodeNode with full PythonCodeNode feature par
 
 ## Feature Parity Status (v0.9.30+)
 
-| Feature | PythonCodeNode | AsyncPythonCodeNode | Since |
-|---------|----------------|---------------------|-------|
-| Multi-output (export all variables) | ✅ | ✅ | v0.9.30 |
-| Template resolution (nested params) | ✅ | ✅ | v0.9.30 |
-| Exception handling (22 classes) | ✅ | ✅ | v0.9.29 |
-| Module whitelists | ✅ | ✅ | v0.9.30 |
-| Security sandbox | ✅ | ✅ | v0.9.28 |
+| Feature                             | PythonCodeNode | AsyncPythonCodeNode | Since   |
+| ----------------------------------- | -------------- | ------------------- | ------- |
+| Multi-output (export all variables) | ✅             | ✅                  | v0.9.30 |
+| Template resolution (nested params) | ✅             | ✅                  | v0.9.30 |
+| Exception handling (22 classes)     | ✅             | ✅                  | v0.9.29 |
+| Module whitelists                   | ✅             | ✅                  | v0.9.30 |
+| Security sandbox                    | ✅             | ✅                  | v0.9.28 |
 
 **IMPORTANT**: Both nodes now behave identically. Choose based on async needs, not features!
 
@@ -283,6 +283,7 @@ workflow.add_connection("async_prepare", "updated_at", "update_user", "updated_a
 ### ✅ USE AsyncPythonCodeNode FOR:
 
 **Async I/O Operations:**
+
 - Database queries (asyncpg, aiomysql, motor)
 - HTTP requests (aiohttp, httpx)
 - File operations (aiofiles)
@@ -290,12 +291,14 @@ workflow.add_connection("async_prepare", "updated_at", "update_user", "updated_a
 - Redis operations (redis.asyncio)
 
 **Concurrent Processing:**
+
 - Multiple API calls
 - Batch database operations
 - Parallel data fetching
 - Multiple file operations
 
 **Integration with Async Libraries:**
+
 - FastAPI applications
 - AsyncSQL operations
 - Async message queues
@@ -304,17 +307,19 @@ workflow.add_connection("async_prepare", "updated_at", "update_user", "updated_a
 ### ❌ USE PythonCodeNode INSTEAD FOR:
 
 **CPU-Bound Operations:**
-- Data processing calculations
-- pandas DataFrame operations
-- numpy computations
-- Statistical analysis
 
-**Blocking I/O:**
-- Visualization (matplotlib, seaborn, plotly)
+- Data processing calculations
+- DataFrame operations (requires `pip install pandas`)
+- Numerical computations (requires `pip install numpy`)
+- Statistical analysis (SDK includes `_math_utils` for basic stats)
+
+**Synchronous / Blocking I/O:**
+
 - Synchronous libraries
 - Simple calculations
 
 **Simple Logic:**
+
 - Basic conditionals
 - Data transformations
 - Simple mappings
@@ -355,6 +360,7 @@ error_details = error_message if 'error_message' in locals() else None
 ```
 
 **Available Exceptions** (v0.9.29+):
+
 - `NameError`, `AttributeError`, `ZeroDivisionError`
 - `StopIteration`, `AssertionError`, `ImportError`
 - `IOError`, `ArithmeticError`

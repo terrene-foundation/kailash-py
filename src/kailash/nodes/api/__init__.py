@@ -18,8 +18,6 @@ Design philosophy:
 - Enable both synchronous and asynchronous operation
 """
 
-import warnings
-
 from .auth import APIKeyNode, BasicAuthNode, OAuth2Node
 from .graphql import AsyncGraphQLClientNode, GraphQLClientNode
 from .http import AsyncHTTPRequestNode, HTTPRequestNode
@@ -35,22 +33,6 @@ from .rate_limiting import (
 )
 from .rest import AsyncRESTClientNode, RESTClientNode
 from .security import SecurityScannerNode
-
-# Backwards compatibility aliases
-HTTPClientNode = HTTPRequestNode  # Deprecated: Use HTTPRequestNode instead
-
-
-def __getattr__(name):
-    """Provide deprecation warnings for backwards compatibility."""
-    if name == "HTTPClientNode":
-        warnings.warn(
-            "HTTPClientNode is deprecated and will be removed in v0.3.0. "
-            "Use HTTPRequestNode instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return HTTPRequestNode
-    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
 __all__ = [
@@ -73,6 +55,4 @@ __all__ = [
     # Monitoring and Security
     "APIHealthCheckNode",
     "SecurityScannerNode",
-    # Backwards compatibility
-    "HTTPClientNode",  # Deprecated alias
 ]

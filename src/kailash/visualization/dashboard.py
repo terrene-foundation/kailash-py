@@ -29,7 +29,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-import numpy as np
+from kailash._math_utils import mean
 
 from kailash.tracking.manager import TaskManager
 from kailash.tracking.models import TaskStatus
@@ -231,11 +231,11 @@ class RealTimeDashboard:
                 ]
 
                 if cpu_values:
-                    metrics.total_cpu_usage = np.mean(cpu_values)
+                    metrics.total_cpu_usage = mean(cpu_values)
                 if memory_values:
                     metrics.total_memory_usage = sum(memory_values)
                 if duration_values:
-                    metrics.avg_task_duration = np.mean(duration_values)
+                    metrics.avg_task_duration = mean(duration_values)
 
                 # Calculate throughput (tasks/minute)
                 if len(self._metrics_history) > 1:

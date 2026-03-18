@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
+from kailash._math_utils import mean, stdev
 
 
 class CloudProvider(Enum):
@@ -790,8 +790,8 @@ class CostOptimizer:
             return 0.0
 
         # Calculate coefficient of variation
-        mean_usage = np.mean(usage_values)
-        std_usage = np.std(usage_values)
+        mean_usage = mean(usage_values)
+        std_usage = stdev(usage_values)
 
         if mean_usage == 0:
             return 0.0

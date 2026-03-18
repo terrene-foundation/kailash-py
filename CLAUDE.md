@@ -41,16 +41,16 @@ See `rules/e2e-god-mode.md` and `rules/no-stubs.md` for enforcement details.
 
 Phase commands replace the manual copy-paste workflow. Each loads the corresponding instruction template and checks workspace state.
 
-| Command      | Phase | Purpose                                            |
-| ------------ | ----- | -------------------------------------------------- |
-| `/analyze`   | 01    | Load analysis phase for current workspace          |
-| `/todos`     | 02    | Load todos phase; stops for human approval         |
-| `/implement` | 03    | Load implementation phase; repeat until todos done |
-| `/redteam`   | 04    | Load validation phase; red team with MCP tools     |
-| `/codify`    | 05    | Load codification phase; create agents & skills    |
+| Command      | Phase | Purpose                                                    |
+| ------------ | ----- | ---------------------------------------------------------- |
+| `/analyze`   | 01    | Load analysis phase for current workspace                  |
+| `/todos`     | 02    | Load todos phase; stops for human approval                 |
+| `/implement` | 03    | Load implementation phase; repeat until todos done         |
+| `/redteam`   | 04    | Load validation phase; red team with MCP tools             |
+| `/codify`    | 05    | Load codification phase; create agents & skills            |
 | `/deploy`    | —     | SDK release: PyPI publishing, docs deploy, CI (standalone) |
-| `/ws`        | —     | Read-only workspace status dashboard               |
-| `/wrapup`    | —     | Write session notes before ending                  |
+| `/ws`        | —     | Read-only workspace status dashboard                       |
+| `/wrapup`    | —     | Write session notes before ending                          |
 
 **Workspace detection**: Hooks automatically detect the active workspace and inject context. `session-start.js` shows workspace status on session start (human-facing). `user-prompt-rules-reminder.js` injects a 1-line `[WORKSPACE]` summary into Claude's context every turn (survives context compression).
 
@@ -58,19 +58,20 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 
 ## Rules Index
 
-| Concern                               | Rule File                    | Scope                                               |
-| ------------------------------------- | ---------------------------- | --------------------------------------------------- |
-| **Foundation independence**           | `rules/independence.md`      | **Global — overrides all**                          |
-| Agent orchestration & review mandates | `rules/agents.md`            | Global                                              |
-| SDK release & PyPI publishing         | `rules/deployment.md`        | `deploy/**`, `.github/workflows/**`, `pyproject.toml`, `CHANGELOG.md` |
-| E2E god-mode testing                  | `rules/e2e-god-mode.md`      | `tests/e2e/**`, `**/*e2e*`, `**/*playwright*`       |
-| API keys & model names                | `rules/env-models.md`        | `**/*.py`, `**/*.ts`, `**/*.js`, `.env*`            |
-| Git commits, branches, PRs            | `rules/git.md`               | Global                                              |
-| No stubs, TODOs, or placeholders      | `rules/no-stubs.md`          | Global                                              |
-| Kailash SDK execution patterns        | `rules/patterns.md`          | `**/*.py`, `**/*.ts`, `**/*.js`                     |
-| Security (secrets, injection)         | `rules/security.md`          | Global                                              |
-| 3-tier testing, no mocking Tiers 2-3  | `rules/testing.md`           | `tests/**`, `**/*test*`, `**/*spec*`, `conftest.py` |
-| Auto-generated workflow instincts     | `rules/learned-instincts.md` | Global                                              |
+| Concern                               | Rule File                     | Scope                                                                 |
+| ------------------------------------- | ----------------------------- | --------------------------------------------------------------------- |
+| **Foundation independence**           | `rules/independence.md`       | **Global — overrides all**                                            |
+| Agent orchestration & review mandates | `rules/agents.md`             | Global                                                                |
+| SDK release & PyPI publishing         | `rules/deployment.md`         | `deploy/**`, `.github/workflows/**`, `pyproject.toml`, `CHANGELOG.md` |
+| E2E god-mode testing                  | `rules/e2e-god-mode.md`       | `tests/e2e/**`, `**/*e2e*`, `**/*playwright*`                         |
+| API keys & model names                | `rules/env-models.md`         | `**/*.py`, `**/*.ts`, `**/*.js`, `.env*`                              |
+| Git commits, branches, PRs            | `rules/git.md`                | Global                                                                |
+| No stubs, TODOs, or placeholders      | `rules/no-stubs.md`           | Global                                                                |
+| Kailash SDK execution patterns        | `rules/patterns.md`           | `**/*.py`, `**/*.ts`, `**/*.js`                                       |
+| Security (secrets, injection)         | `rules/security.md`           | Global                                                                |
+| 3-tier testing, no mocking Tiers 2-3  | `rules/testing.md`            | `tests/**`, `**/*test*`, `**/*spec*`, `conftest.py`                   |
+| Auto-generated workflow instincts     | `rules/learned-instincts.md`  | Global                                                                |
+| Infrastructure SQL safety             | `rules/infrastructure-sql.md` | `src/kailash/db/**`, `src/kailash/infrastructure/**`                  |
 
 **Note**: Rules with path scoping are loaded only when editing matching files. Global rules load every session.
 
@@ -89,6 +90,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 - **nexus-specialist** — Multi-channel platform (API/CLI/MCP)
 - **kaizen-specialist** — AI agents, signatures, multi-agent coordination
 - **mcp-specialist** — MCP server implementation
+- **infrastructure-specialist** — Progressive infrastructure (Level 0/1/2), dialect-portable SQL, task queues, idempotency
 
 ### Core Implementation
 
@@ -129,7 +131,7 @@ Phase commands replace the manual copy-paste workflow. Each loads the correspond
 
 ## Skills Navigation
 
-For SDK implementation patterns, see `.claude/skills/` — organized by framework (`01-core-sdk` through `05-kailash-mcp`) and topic (`06-cheatsheets` through `28-coc-reference`).
+For SDK implementation patterns, see `.claude/skills/` — organized by framework (`01-core-sdk` through `05-kailash-mcp`), enterprise infrastructure (`15-enterprise-infrastructure`), and topic (`06-cheatsheets` through `28-coc-reference`).
 
 ## Critical Execution Rules
 

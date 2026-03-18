@@ -26,6 +26,7 @@
 - **Comprehensive observability** -- Prometheus `/metrics` endpoint, OpenTelemetry tracing with per-node spans, comprehensive execution audit trail (NODE_EXECUTED/FAILED events with inputs/outputs), WebSocket live dashboard, search attributes for cross-execution queries.
 - **Workflow interaction** -- Send signals to running workflows (`SignalChannel`), query workflow state (`QueryRegistry`), pause/resume execution, cooperative cancellation, built-in scheduling (cron + interval), workflow versioning with semver registry, continue-as-new for infinite-duration workflows.
 - **Scale-out ready** -- Distributed circuit breaker (Redis-backed with Lua atomic transitions), multi-worker task queue architecture, resource quotas with semaphore-based concurrency control, coordinated graceful shutdown, Kubernetes deployment manifests.
+- **Progressive infrastructure** -- Start with zero config (SQLite), scale to multi-worker PostgreSQL/MySQL by changing environment variables. Dialect-portable SQL via QueryDialect strategy pattern. SQL task queue with `SKIP LOCKED`, worker heartbeat registry, exactly-once idempotent execution. No code changes between Level 0 (dev) and Level 2 (production).
 - **Infrastructure-agnostic** -- `LocalRuntime` runs entirely in-process. No server cluster, no external database, no message broker. Deploy anywhere: any cloud, any region, on-prem, edge, air-gapped. Zero vendor lock-in.
 - **Foundation for three application frameworks** -- [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen) (AI agents with trust), [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus) (multi-channel deploy), and [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) (zero-config database) are all built on this Core SDK.
 
@@ -37,16 +38,21 @@
 +------------------------------------------------------------------+
 |                    Application Frameworks                         |
 |                                                                   |
-|   Kaizen v1.2.5          Nexus v1.4.2        DataFlow v0.12.4    |
+|   Kaizen v1.2.5          Nexus v1.4.2        DataFlow v1.0.0     |
 |   AI Agents              Multi-Channel        Zero-Config DB      |
 |   CARE/EATP Trust        API + CLI + MCP      @db.model           |
 |   Multi-Agent Coord.     Auth + RBAC          11 Nodes/Model      |
 +------------------------------------------------------------------+
-|                    Core SDK v0.13.0                                |
+|                    Core SDK v1.0.0                                 |
 |                                                                   |
 |   140+ Nodes    |  WorkflowBuilder   |  Runtime (Sync + Async)   |
 |   MCP Server    |  Cyclic Workflows  |  CARE Trust Layer          |
 |                 |  Conditional Exec  |  Trust Verification        |
++------------------------------------------------------------------+
+|                    Progressive Infrastructure                     |
+|                                                                   |
+|   QueryDialect  |  ConnectionManager |  StoreFactory (L0/L1/L2)  |
+|   SQL TaskQueue |  WorkerRegistry    |  IdempotentExecutor        |
 +------------------------------------------------------------------+
 |                    Enterprise Capabilities                        |
 |                                                                   |
@@ -262,6 +268,21 @@ if result.allowed:
 | [Kaizen](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-kaizen)     | v1.2.5  | Signature-based AI agents, multi-agent coordination, CARE/EATP trust, FallbackRouter, MCP sessions |
 | [Nexus](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-nexus)       | v1.4.2  | Multi-channel deploy (API+CLI+MCP), handler pattern, NexusAuthPlugin, presets, middleware API      |
 | [DataFlow](https://github.com/terrene-foundation/kailash-py/tree/main/packages/kailash-dataflow) | v0.12.4 | 11 nodes per model, PostgreSQL/MySQL/SQLite parity, auto-wired multi-tenancy, async transactions   |
+
+---
+
+## Progressive Infrastructure
+
+Start with zero config, scale to multi-worker by changing environment variables. No application code changes required.
+
+| Level | What You Set                            | What You Get                                              |
+| ----- | --------------------------------------- | --------------------------------------------------------- |
+| **0** | Nothing                                 | SQLite stores, in-memory execution, single process        |
+| **1** | `KAILASH_DATABASE_URL=postgresql://...` | All stores persist to PostgreSQL/MySQL, queryable history |
+| **2** | + `KAILASH_QUEUE_URL=redis://...`       | Multi-worker parallel execution with task queue           |
+| **3** | _(v1.1+)_                               | Leader election, distributed locks, global ordering       |
+
+Full guide: [Progressive Infrastructure](docs/enterprise-infrastructure/01-overview.md) | Quick setup: [Multi-Worker Quickstart](docs/guides/multi-worker-quickstart.md)
 
 ---
 

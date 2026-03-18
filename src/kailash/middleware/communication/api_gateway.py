@@ -529,7 +529,7 @@ class APIGateway:
         async def execute_workflow(request: WorkflowExecuteRequest, session_id: str):
             """Execute a workflow."""
             try:
-                execution_id = await self.agent_ui.execute_workflow(
+                execution_id = await self.agent_ui.execute(
                     session_id=session_id,
                     workflow_id=request.workflow_id,
                     inputs=request.inputs,

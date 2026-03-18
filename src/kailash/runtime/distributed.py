@@ -6,7 +6,7 @@ Tasks are enqueued to a Redis-backed task queue and processed by worker instance
 that can run on separate machines.
 
 Key components:
-    - TaskQueue: Redis-backed queue with reliable delivery (BRPOPLPUSH pattern),
+    - TaskQueue: Redis-backed queue with reliable delivery (BLMOVE pattern),
       visibility timeouts, and automatic dead-letter handling.
     - DistributedRuntime: Extends BaseRuntime to enqueue workflows to the task
       queue instead of executing them locally.
@@ -151,7 +151,7 @@ class TaskResult:
 class TaskQueue:
     """Redis-backed task queue with reliable delivery.
 
-    Uses the BRPOPLPUSH pattern for reliable delivery: tasks are atomically
+    Uses the BLMOVE pattern for reliable delivery: tasks are atomically
     moved from the pending queue to a processing list when dequeued. If a
     worker crashes, visibility timeout expiry makes the task eligible for
     re-delivery.
@@ -236,7 +236,7 @@ class TaskQueue:
         return task.task_id
 
     def dequeue(self, timeout: int = 5) -> Optional[TaskMessage]:
-        """Dequeue a task using BRPOPLPUSH for reliable delivery.
+        """Dequeue a task using BLMOVE for reliable delivery.
 
         Atomically moves the task from the pending queue to the processing
         list. If the worker crashes, the task remains in the processing list
@@ -249,7 +249,9 @@ class TaskQueue:
             A TaskMessage if one was available, None otherwise.
         """
         client = self._get_client()
-        raw = client.brpoplpush(self._queue_key, self._processing_key, timeout=timeout)
+        raw = client.blmove(
+            self._queue_key, self._processing_key, timeout, "RIGHT", "LEFT"
+        )
         if raw is None:
             return None
 
@@ -377,7 +379,7 @@ class TaskQueue:
     def _remove_from_processing(self, task_id: str) -> bool:
         """Remove a task from the processing list by scanning for its task_id.
 
-        Since BRPOPLPUSH stores the full JSON, we need to scan and match.
+        Since BLMOVE stores the full JSON, we need to scan and match.
 
         Args:
             task_id: Task identifier to remove.
@@ -556,8 +558,8 @@ class DistributedRuntime(BaseRuntime):
     def _serialize_workflow(self, workflow: Workflow) -> Dict[str, Any]:
         """Serialize a workflow for queue transport.
 
-        Extracts the essential workflow structure (nodes, connections,
-        parameters) into a JSON-serializable dict.
+        Uses Workflow.to_dict() for round-trip compatible serialization.
+        The Worker deserializes with Workflow.from_dict().
 
         Args:
             workflow: The workflow to serialize.
@@ -565,34 +567,7 @@ class DistributedRuntime(BaseRuntime):
         Returns:
             JSON-serializable workflow representation.
         """
-        data: Dict[str, Any] = {
-            "workflow_id": getattr(workflow, "workflow_id", None),
-            "nodes": {},
-            "connections": [],
-        }
-
-        # Serialize nodes
-        if hasattr(workflow, "graph") and hasattr(workflow.graph, "nodes"):
-            for node_id in workflow.graph.nodes:
-                node = workflow.graph.nodes[node_id]
-                data["nodes"][node_id] = {
-                    "type": node.get("type", type(node.get("instance", "")).__name__),
-                    "config": node.get("config", {}),
-                }
-
-        # Serialize connections
-        if hasattr(workflow, "graph") and hasattr(workflow.graph, "edges"):
-            for src, tgt, edge_data in workflow.graph.edges(data=True):
-                data["connections"].append(
-                    {
-                        "source": src,
-                        "source_output": edge_data.get("source_output", "output"),
-                        "target": tgt,
-                        "target_input": edge_data.get("target_input", "input"),
-                    }
-                )
-
-        return data
+        return workflow.to_dict()
 
 
 class Worker:
@@ -643,7 +618,7 @@ class Worker:
         self._worker_id = worker_id or f"worker-{uuid.uuid4().hex[:12]}"
         self._runtime_factory = runtime_factory
         self._running = False
-        self._tasks: List[asyncio.Task] = []
+        self._tasks: set[asyncio.Task] = set()
         self._semaphore: Optional[asyncio.Semaphore] = None
         self._redis_client = None
 
@@ -741,7 +716,7 @@ class Worker:
                 # Acquire semaphore for concurrency control
                 await self._semaphore.acquire()
                 async_task = asyncio.create_task(self._execute_task(task))
-                self._tasks.append(async_task)
+                self._tasks.add(async_task)
                 async_task.add_done_callback(self._task_done)
 
             except asyncio.CancelledError:
@@ -755,7 +730,7 @@ class Worker:
         if self._semaphore:
             self._semaphore.release()
         if task in self._tasks:
-            self._tasks.remove(task)
+            self._tasks.discard(task)
 
     async def _execute_task(self, task: TaskMessage):
         """Execute a single task and store the result.
@@ -825,7 +800,8 @@ class Worker:
     def _execute_workflow_sync(self, runtime, task: TaskMessage) -> Dict[str, Any]:
         """Synchronously execute a workflow from task data.
 
-        This is run inside an executor to avoid blocking the async loop.
+        Deserializes the workflow from the task's JSON payload using
+        Workflow.from_dict(), then executes it with the provided runtime.
 
         Args:
             runtime: The local runtime to use for execution.
@@ -834,10 +810,12 @@ class Worker:
         Returns:
             The workflow execution results.
         """
-        raise NotImplementedError(
-            "Workflow deserialization not yet implemented. "
-            "Use LocalRuntime for direct execution."
-        )
+        from kailash.workflow.graph import Workflow
+
+        workflow = Workflow.from_dict(task.workflow_data)
+        built = workflow.build() if hasattr(workflow, "build") else workflow
+        results, run_id = runtime.execute(built, parameters=task.parameters)
+        return results
 
     # -- Heartbeat --
 

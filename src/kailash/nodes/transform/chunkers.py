@@ -3,7 +3,7 @@
 import re
 from typing import Any, Optional
 
-import numpy as np
+from kailash._math_utils import dot, mean, norm, variance
 
 from kailash.nodes.base import Node, NodeParameter, register_node
 
@@ -231,7 +231,7 @@ class SemanticChunkerNode(Node):
                     window_similarities.append(similarity)
 
             # Check if this is a good boundary point
-            avg_similarity = np.mean(window_similarities) if window_similarities else 0
+            avg_similarity = mean(window_similarities) if window_similarities else 0
 
             if avg_similarity < similarity_threshold:
                 boundaries.append(i)
@@ -263,16 +263,13 @@ class SemanticChunkerNode(Node):
 
     def _cosine_similarity(self, vec1: list[float], vec2: list[float]) -> float:
         """Calculate cosine similarity between two vectors."""
-        vec1_np = np.array(vec1)
-        vec2_np = np.array(vec2)
-
-        norm1 = np.linalg.norm(vec1_np)
-        norm2 = np.linalg.norm(vec2_np)
+        norm1 = norm(vec1)
+        norm2 = norm(vec2)
 
         if norm1 == 0 or norm2 == 0:
             return 0.0
 
-        return np.dot(vec1_np, vec2_np) / (norm1 * norm2)
+        return dot(vec1, vec2) / (norm1 * norm2)
 
     def _create_chunks_from_boundaries(
         self,
@@ -571,13 +568,17 @@ class StatisticalChunkerNode(Node):
         if not embeddings:
             return 0.0
 
-        embeddings_array = np.array(embeddings)
-        mean_embedding = np.mean(embeddings_array, axis=0)
+        n_dims = len(embeddings[0])
+        # Calculate mean embedding (column-wise mean)
+        mean_embedding = [mean([emb[d] for emb in embeddings]) for d in range(n_dims)]
 
         # Calculate distances from mean
-        distances = [np.linalg.norm(emb - mean_embedding) for emb in embeddings_array]
+        distances = [
+            norm([emb[d] - mean_embedding[d] for d in range(n_dims)])
+            for emb in embeddings
+        ]
 
-        return np.var(distances)
+        return variance(distances) if len(distances) >= 2 else 0.0
 
     def _calculate_inter_chunk_variance(
         self, chunk1_embeddings: list[list[float]], chunk2_embeddings: list[list[float]]
@@ -586,12 +587,13 @@ class StatisticalChunkerNode(Node):
         if not chunk1_embeddings or not chunk2_embeddings:
             return 0.0
 
-        # Calculate centroids
-        centroid1 = np.mean(chunk1_embeddings, axis=0)
-        centroid2 = np.mean(chunk2_embeddings, axis=0)
+        n_dims = len(chunk1_embeddings[0])
+        # Calculate centroids (column-wise mean)
+        centroid1 = [mean([emb[d] for emb in chunk1_embeddings]) for d in range(n_dims)]
+        centroid2 = [mean([emb[d] for emb in chunk2_embeddings]) for d in range(n_dims)]
 
         # Return distance between centroids
-        return np.linalg.norm(centroid1 - centroid2)
+        return norm([centroid1[d] - centroid2[d] for d in range(n_dims)])
 
     def _find_length_based_boundaries(
         self,

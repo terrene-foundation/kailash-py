@@ -268,7 +268,7 @@ jobs:
             echo "ℹ️  Existing PostgreSQL containers detected, using them"
           else
             echo "Starting new PostgreSQL test container..."
-            docker-compose -f docker-compose.test.yml up -d postgres
+            docker compose -f compose.yaml up -d postgres
           fi
 
           # Start Redis test container
@@ -276,7 +276,7 @@ jobs:
             echo "ℹ️  Existing Redis containers detected, using them"
           else
             echo "Starting new Redis test container..."
-            docker-compose -f docker-compose.test.yml up -d redis
+            docker compose -f compose.yaml up -d redis
           fi
 
           # Start Ollama test container
@@ -284,7 +284,7 @@ jobs:
             echo "ℹ️  Existing Ollama containers detected, using them"
           else
             echo "Starting new Ollama test container..."
-            docker-compose -f docker-compose.test.yml up -d ollama
+            docker compose -f compose.yaml up -d ollama
           fi
 
           echo "Waiting for services to be ready..."

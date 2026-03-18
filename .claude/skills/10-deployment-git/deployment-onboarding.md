@@ -11,7 +11,7 @@ Run when `/deploy` is invoked and `deploy/deployment-config.md` does not exist a
 Analyze the project to understand what needs to be released. Check:
 
 - **Packages**: Main package (`kailash`) and sub-packages (`kailash-dataflow`, `kailash-nexus`, `kailash-kaizen`)
-- **Build system**: `pyproject.toml` (setuptools/hatch/maturin), `setup.py`, `setup.cfg`
+- **Build system**: `pyproject.toml` (setuptools) — single source of truth (no setup.py/setup.cfg)
 - **Existing CI**: `.github/workflows/` — what's already automated?
 - **Documentation**: sphinx `conf.py`, mkdocs.yml, docs/ directory — what doc system is in use?
 - **Test infrastructure**: pytest config, tox.ini, nox, test matrix setup
@@ -85,9 +85,9 @@ The onboarding process creates this file. Structure adapts to the project:
 
 ## Packages
 
-| Package | PyPI Name | Version Source | Build Backend |
-| ------- | --------- | -------------- | ------------- |
-| [name]  | [pypi-name] | [path to version] | [backend] |
+| Package | PyPI Name   | Version Source    | Build Backend |
+| ------- | ----------- | ----------------- | ------------- |
+| [name]  | [pypi-name] | [path to version] | [backend]     |
 
 ## Versioning Strategy
 

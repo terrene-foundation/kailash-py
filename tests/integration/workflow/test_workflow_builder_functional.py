@@ -864,33 +864,16 @@ class TestWorkflowBuilderAdvancedFeatures:
         except ImportError:
             pytest.skip("WorkflowBuilder not available")
 
-    def test_deprecated_fluent_methods(self):
-        """Test deprecated fluent API methods."""
+    def test_legacy_fluent_api_raises_error(self):
+        """Test that legacy fluent API raises error in v1.0."""
         try:
             from kailash.workflow.builder import WorkflowBuilder
+            from kailash.sdk_exceptions import WorkflowValidationError
 
             builder = WorkflowBuilder()
 
-            # Test deprecated add_node_fluent method
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")
-
-                result = builder.add_node_fluent(
-                    "fluent_node", "TestNode", param="value"
-                )
-
-                # Should generate deprecation warning
-                assert len(w) == 1
-                assert issubclass(w[0].category, DeprecationWarning)
-                assert "Fluent API is deprecated" in str(w[0].message)
-
-                # Should return self for chaining
-                # # # # # # # # assert result... - variable may not be defined - result variable may not be defined
-
-                # Node should be added
-                assert "fluent_node" in builder.nodes
-                # # assert builder.nodes["fluent_node"]["type"] == "TestNode"  # Node attributes not accessible directly  # Node attributes not accessible directly
-                # # assert builder.nodes["fluent_node"]["config"]["param"] == "value"  # Node attributes not accessible directly  # Node attributes not accessible directly
+            with pytest.raises(WorkflowValidationError, match="removed in v1.0.0"):
+                builder.add_node("fluent_node", type, param="value")
 
         except ImportError:
             pytest.skip("WorkflowBuilder not available")

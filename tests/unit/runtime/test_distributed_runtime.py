@@ -38,7 +38,7 @@ def _mock_redis_client():
     client = MagicMock()
     client.ping.return_value = True
     client.lpush.return_value = 1
-    client.brpoplpush.return_value = None
+    client.blmove.return_value = None
     client.llen.return_value = 0
     client.lrange.return_value = []
     client.lrem.return_value = 1
@@ -158,7 +158,7 @@ class TestTaskQueue:
         """dequeue returns a TaskMessage from the pending queue."""
         client = _mock_redis_client()
         task = _make_task()
-        client.brpoplpush.return_value = task.to_json()
+        client.blmove.return_value = task.to_json()
         queue = self._make_queue(client)
 
         result = queue.dequeue(timeout=1)
@@ -169,7 +169,7 @@ class TestTaskQueue:
     def test_dequeue_returns_none_when_empty(self):
         """dequeue returns None when no tasks are available."""
         client = _mock_redis_client()
-        client.brpoplpush.return_value = None
+        client.blmove.return_value = None
         queue = self._make_queue(client)
 
         result = queue.dequeue(timeout=0)
@@ -178,7 +178,7 @@ class TestTaskQueue:
     def test_dequeue_handles_malformed_json(self):
         """dequeue removes malformed entries and returns None."""
         client = _mock_redis_client()
-        client.brpoplpush.return_value = "not-valid-json{{"
+        client.blmove.return_value = "not-valid-json{{"
         queue = self._make_queue(client)
 
         result = queue.dequeue(timeout=0)
@@ -470,17 +470,17 @@ class TestWorker:
 
     @pytest.mark.asyncio
     async def test_execute_task_stores_result_on_success(self):
-        """_execute_task stores a failed result because deserialization is not implemented."""
+        """_execute_task stores a failed result when workflow deserialization fails."""
         worker, queue = self._make_worker()
         task = _make_task()
 
         await worker._execute_task(task)
         queue.store_result.assert_called_once()
         stored_result = queue.store_result.call_args[0][0]
-        # _execute_workflow_sync raises NotImplementedError until deserialization is built
+        # _execute_workflow_sync fails because "Echo" node is not in the registry
         assert stored_result.status == "failed"
         assert stored_result.worker_id == "test-worker-1"
-        assert "not yet implemented" in stored_result.error.lower()
+        assert stored_result.error != ""
         queue.nack.assert_called_once_with(task)
 
     @pytest.mark.asyncio

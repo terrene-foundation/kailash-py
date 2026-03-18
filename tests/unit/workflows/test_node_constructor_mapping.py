@@ -426,19 +426,14 @@ class TestMissingMethodsDetection:
 
             visualizer = WorkflowVisualizer()
 
-            # Methods that should exist
-            if hasattr(visualizer, "_draw_graph"):
-                import inspect
-
-                sig = inspect.signature(visualizer._draw_graph)
-                params = list(sig.parameters.keys())
-
-                # Should accept graph/workflow parameter
-                assert any(
-                    p in params for p in ["graph", "workflow"]
-                ), f"_draw_graph signature incorrect: {params}"
-            else:
-                pytest.fail("WorkflowVisualizer missing _draw_graph method")
+            # v1.0.0 uses Mermaid/DOT output instead of matplotlib
+            # Check for the actual methods that exist in the current API
+            required_methods = ["to_mermaid", "to_dot", "visualize", "save"]
+            missing_methods = [
+                m for m in required_methods if not hasattr(visualizer, m)
+            ]
+            if missing_methods:
+                pytest.fail(f"WorkflowVisualizer missing methods: {missing_methods}")
 
         except ImportError:
             pass  # ImportError will cause test failure as intended

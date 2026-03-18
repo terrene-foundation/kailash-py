@@ -472,16 +472,20 @@ class HTTPHealthCheck(HealthCheck):
         check_id = str(uuid4())
 
         try:
-            import httpx
+            import aiohttp
 
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(self.url)
+            timeout_cfg = aiohttp.ClientTimeout(total=self.timeout)
+            async with aiohttp.ClientSession(timeout=timeout_cfg) as session:
+                async with session.get(self.url) as response:
+                    content = await response.read()
+                    status_code = response.status
+                    content_length = len(content)
 
             response_time = (time.time() - start_time) * 1000
 
-            if response.status_code == self.expected_status:
+            if status_code == self.expected_status:
                 status = HealthStatus.HEALTHY
-            elif 200 <= response.status_code < 300:
+            elif 200 <= status_code < 300:
                 status = HealthStatus.DEGRADED
             else:
                 status = HealthStatus.UNHEALTHY
@@ -492,9 +496,9 @@ class HTTPHealthCheck(HealthCheck):
                 status=status,
                 response_time_ms=response_time,
                 details={
-                    "status_code": response.status_code,
+                    "status_code": status_code,
                     "expected_status": self.expected_status,
-                    "content_length": len(response.content),
+                    "content_length": content_length,
                 },
             )
 

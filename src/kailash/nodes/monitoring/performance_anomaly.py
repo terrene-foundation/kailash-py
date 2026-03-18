@@ -14,7 +14,7 @@ from datetime import UTC, datetime, timedelta
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
+from kailash._math_utils import mean, median, percentile, stdev
 
 from kailash.nodes.base import NodeParameter, register_node
 from kailash.nodes.base_async import AsyncNode
@@ -572,15 +572,15 @@ class PerformanceAnomalyNode(AsyncNode):
                     -self._detection_config["min_samples"] :
                 ]
                 values = [m.value for m in recent_metrics]
-                baseline.std_dev = float(np.std(values))
-                baseline.median = float(np.median(values))
+                baseline.std_dev = stdev(values)
+                baseline.median = median(values)
 
                 # Calculate percentiles
                 baseline.percentiles = {
-                    "p50": float(np.percentile(values, 50)),
-                    "p90": float(np.percentile(values, 90)),
-                    "p95": float(np.percentile(values, 95)),
-                    "p99": float(np.percentile(values, 99)),
+                    "p50": percentile(values, 50),
+                    "p90": percentile(values, 90),
+                    "p95": percentile(values, 95),
+                    "p99": percentile(values, 99),
                 }
 
                 # Update thresholds based on sensitivity
@@ -661,8 +661,8 @@ class PerformanceAnomalyNode(AsyncNode):
         if method == DetectionMethod.STATISTICAL:
             # Statistical analysis using Z-score and IQR
             if len(values) >= 10:
-                mean_val = np.mean(values)
-                std_val = np.std(values)
+                mean_val = mean(values)
+                std_val = stdev(values)
 
                 for metric in metrics:
                     if std_val > 0:
@@ -680,8 +680,8 @@ class PerformanceAnomalyNode(AsyncNode):
         elif method == DetectionMethod.IQR:
             # Interquartile Range method
             if len(values) >= 10:
-                q1 = np.percentile(values, 25)
-                q3 = np.percentile(values, 75)
+                q1 = percentile(values, 25)
+                q3 = percentile(values, 75)
                 iqr = q3 - q1
                 multiplier = self._detection_config.get("iqr_multiplier", 1.5)
 
@@ -705,8 +705,8 @@ class PerformanceAnomalyNode(AsyncNode):
                 window_size = min(10, len(values) // 2)
                 for i in range(window_size, len(metrics)):
                     window_values = values[i - window_size : i]
-                    rolling_avg = np.mean(window_values)
-                    rolling_std = np.std(window_values)
+                    rolling_avg = mean(window_values)
+                    rolling_std = stdev(window_values)
 
                     current_metric = metrics[i]
                     if rolling_std > 0:

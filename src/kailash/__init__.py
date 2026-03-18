@@ -4,52 +4,82 @@ The Kailash SDK provides a comprehensive framework for creating nodes and workfl
 that align with container-node architecture while allowing rapid prototyping.
 """
 
+import warnings
+
 from kailash.nodes.base import Node, NodeMetadata, NodeParameter
 from kailash.runtime.local import LocalRuntime
 from kailash.workflow.builder import WorkflowBuilder
 
 # Import key components for easier access
 from kailash.workflow.graph import Connection, NodeInstance, Workflow
-from kailash.workflow.visualization import WorkflowVisualizer
 
-# Import middleware components (enhanced in v0.4.0)
-try:
-    from kailash.middleware import (
-        AgentUIMiddleware,
-        AIChatMiddleware,
-        APIGateway,
-        RealtimeMiddleware,
-    )
 
-    # Import new server classes (v0.6.7+)
-    from kailash.servers import (
-        DurableWorkflowServer,
-        EnterpriseWorkflowServer,
-        WorkflowServer,
-    )
+def __getattr__(name):
+    """Lazy imports for optional dependencies and deprecation warnings."""
+    if name == "WorkflowVisualizer":
+        from kailash.workflow.visualization import WorkflowVisualizer
 
-    # Import updated create_gateway function with enterprise defaults
-    from kailash.servers.gateway import (
-        create_basic_gateway,
-        create_durable_gateway,
-        create_enterprise_gateway,
-        create_gateway,
-    )
+        return WorkflowVisualizer
+    if name == "WorkflowGraph":
+        warnings.warn(
+            "WorkflowGraph is deprecated and will be removed in v2.0.0. "
+            "Use Workflow instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return Workflow
+    if name in (
+        "AgentUIMiddleware",
+        "AIChatMiddleware",
+        "APIGateway",
+        "RealtimeMiddleware",
+    ):
+        warnings.warn(
+            f"{name} is no longer exported from kailash top-level. "
+            f"Import from kailash.middleware instead: from kailash.middleware import {name}",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from kailash import middleware
 
-    _MIDDLEWARE_AVAILABLE = True
-except ImportError:
-    _MIDDLEWARE_AVAILABLE = False
-    # Middleware dependencies not available
+        return getattr(middleware, name)
+    # Lazy server imports (require server extras)
+    _server_names = {
+        "WorkflowServer",
+        "DurableWorkflowServer",
+        "EnterpriseWorkflowServer",
+        "create_gateway",
+        "create_enterprise_gateway",
+        "create_durable_gateway",
+        "create_basic_gateway",
+    }
+    if name in _server_names:
+        try:
+            if name in (
+                "WorkflowServer",
+                "DurableWorkflowServer",
+                "EnterpriseWorkflowServer",
+            ):
+                from kailash import servers
 
-# For backward compatibility
-WorkflowGraph = Workflow
+                return getattr(servers, name)
+            else:
+                from kailash.servers import gateway
 
-__version__ = "0.13.0"
+                return getattr(gateway, name)
+        except ImportError:
+            raise ImportError(
+                f"{name} requires server dependencies. "
+                f"Install with: pip install kailash[server]"
+            ) from None
+    raise AttributeError(f"module 'kailash' has no attribute {name!r}")
+
+
+__version__ = "1.0.0"
 
 __all__ = [
     # Core workflow components
     "Workflow",
-    "WorkflowGraph",  # Backward compatibility
     "NodeInstance",
     "Connection",
     "WorkflowBuilder",
@@ -58,25 +88,12 @@ __all__ = [
     "NodeParameter",
     "NodeMetadata",
     "LocalRuntime",
+    # Server classes (lazy, require kailash[server])
+    "WorkflowServer",
+    "DurableWorkflowServer",
+    "EnterpriseWorkflowServer",
+    "create_gateway",
+    "create_enterprise_gateway",
+    "create_durable_gateway",
+    "create_basic_gateway",
 ]
-
-# Add middleware and servers to exports if available
-if _MIDDLEWARE_AVAILABLE:
-    __all__.extend(
-        [
-            # Legacy middleware
-            "AgentUIMiddleware",
-            "RealtimeMiddleware",
-            "APIGateway",
-            "AIChatMiddleware",
-            # New server classes
-            "WorkflowServer",
-            "DurableWorkflowServer",
-            "EnterpriseWorkflowServer",
-            # Gateway creation functions
-            "create_gateway",
-            "create_enterprise_gateway",
-            "create_durable_gateway",
-            "create_basic_gateway",
-        ]
-    )

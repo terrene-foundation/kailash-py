@@ -150,11 +150,11 @@ def test_both_runtimes(runtime_class):
 ### Docker Services Setup
 ```bash
 # Start test services
-cd tests/utils
-docker-compose -f docker-compose.test.yml up -d
+cd tests/infrastructure
+docker compose -f compose.yaml up -d
 
 # Verify services
-docker-compose -f docker-compose.test.yml ps
+docker compose -f compose.yaml ps
 ```
 
 ### Available Test Services
