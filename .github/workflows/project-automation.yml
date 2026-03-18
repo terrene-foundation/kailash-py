@@ -77,7 +77,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.schedule == '0 0 * * *' # Daily at midnight
     steps:
-      - uses: actions/stale@v9
+      - uses: actions/stale@v10
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           stale-issue-message: "👋 This issue has been inactive for 30 days. Please update or it will be closed."
